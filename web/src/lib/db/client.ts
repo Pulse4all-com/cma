@@ -41,7 +41,7 @@ export const CMA_SQLSTATE = {
 
 export class CmaDbError extends Error {
   readonly sqlState: CmaSqlState | 'DB_UNAVAILABLE' | 'DB_ERROR';
-  readonly detail?: string;
+  readonly detail: string | undefined;
   constructor(sqlState: CmaDbError['sqlState'], message: string, detail?: string) {
     super(message);
     this.name = 'CmaDbError';
@@ -99,7 +99,7 @@ function dbConfig() {
 // ---- Pool (one per process, survives Next.js dev reloads via globalThis) ---------------------
 
 type DbState = { connector: Connector; pool: pg.Pool };
-const g = globalThis as unknown as { __cmaDb?: Promise<DbState> };
+const g = globalThis as unknown as { __cmaDb?: Promise<DbState> | undefined };
 
 async function open(): Promise<DbState> {
   const cfg = dbConfig();
@@ -199,10 +199,20 @@ export function withTenant<T>(ctx: TenantContext, fn: (q: Querier) => Promise<T>
   }, fn);
 }
 
+/**
+ * The single row a statement must return. A missing row is a database contract breach, reported
+ * as DB_ERROR instead of an undefined surfacing somewhere later.
+ */
+export function one<R>(rows: R[], what: string): R {
+  const row = rows[0];
+  if (row === undefined) throw new CmaDbError('DB_ERROR', `${what} returned no row`);
+  return row;
+}
+
 /** For /api/health: a round trip without any tenant context. */
 export async function ping(): Promise<{ ok: true; user: string }> {
   return withoutTenant(async (q) => {
     const r = await q.query<{ u: string }>('select session_user as u');
-    return { ok: true, user: r.rows[0].u };
+    return { ok: true, user: one(r.rows, 'session_user').u };
   });
 }
