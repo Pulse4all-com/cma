@@ -2,14 +2,37 @@
 # Cloud Run cma-web. Triggered on main for changes under web/ (and this file);
 # the same file runs by hand with `gcloud builds submit`.
 #
+# The deploy sets ALL environment variables of the service (--set-env-vars), so
+# this file and the trigger's substitutions are the one place the service is
+# configured. Never change env vars on the service by hand: the next build
+# would silently undo it.
+#
 # Substitutions set on the trigger (or passed to builds submit):
 #   _IAP_AUDIENCE   /projects/<number>/global/backendServices/<backend id>
 #   _AUTH_MODE      iap   (mock only for a build that never meets a person)
-#   _DATA_MODE      mock  (api once the Postgres API exists)
+#   _DATA_MODE      api | mock   (api needs _DB_INSTANCE and _DB_USER)
+#   _DB_INSTANCE    <project>:<region>:<instance>   Cloud SQL connection name
+#   _DB_USER        <service account>@<project>.iam   IAM database user, member of cma_app
+#   _DB_NAME        cma
+#   _DB_POOL_MAX    connections per instance (default 5)
+#   _MAX_INSTANCES  Cloud Run ceiling (default 4); instances x pool must stay well
+#                   under the database's max_connections
 #   _REGION         europe-west4
 #   _SERVICE        cma-web
 #   _REPO           europe-west4-docker.pkg.dev/$PROJECT_ID/cma
 steps:
+  - id: check-config
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if [ "${_DATA_MODE}" = "api" ] && { [ -z "${_DB_INSTANCE}" ] || [ -z "${_DB_USER}" ]; }; then
+          echo "_DATA_MODE=api needs _DB_INSTANCE and _DB_USER on the trigger; nothing deployed"
+          exit 1
+        fi
+        echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX}"
+
   - id: build
     name: gcr.io/cloud-builders/docker
     dir: web
@@ -34,7 +57,8 @@ steps:
       - --region=${_REGION}
       - --image=${_REPO}/web:${SHORT_SHA}
       - --port=8080
-      - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA}
+      - --max-instances=${_MAX_INSTANCES}
+      - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA},CMA_DB_INSTANCE=${_DB_INSTANCE},CMA_DB_USER=${_DB_USER},CMA_DB_NAME=${_DB_NAME},CMA_DB_POOL_MAX=${_DB_POOL_MAX}
       - --quiet
 
 images:
@@ -48,6 +72,11 @@ substitutions:
   _AUTH_MODE: iap
   _DATA_MODE: mock
   _IAP_AUDIENCE: ""
+  _DB_INSTANCE: ""
+  _DB_USER: ""
+  _DB_NAME: cma
+  _DB_POOL_MAX: "5"
+  _MAX_INSTANCES: "4"
 
 options:
   dynamicSubstitutions: true
