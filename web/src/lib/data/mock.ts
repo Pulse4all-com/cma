@@ -8,7 +8,8 @@ import { dateKeyInZone } from "@/lib/time";
 import type { CmaData, DateKey, HoursSummary, Workday } from "./types";
 
 type Key = `${string}:${string}:${DateKey}`;
-const key = (me: Principal, date: DateKey): Key => `${me.tenantId}:${me.userId}:${date}`;
+const owner = (me: Principal) => `${me.tenantId}:${me.userId}:`;
+const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
 
 const store = new Map<Key, Workday>();
 
@@ -43,11 +44,13 @@ export const mockData: CmaData = {
    * employer and tenant are the test agent's.
    */
   async findPrincipal(identity) {
-    if (identity.subject === MOCK_IDENTITY.subject) return MOCK_PRINCIPAL;
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject === MOCK_IDENTITY.subject) {
+      return MOCK_PRINCIPAL;
+    }
     return {
       ...MOCK_PRINCIPAL,
       // one mock user per real person, so two testers do not share a clock
-      userId: `mock:${identity.subject}`,
+      userId: `mock:${identity.provider}:${identity.subject}`,
       displayName: identity.email,
     };
   },
@@ -78,7 +81,11 @@ export const mockData: CmaData = {
   },
 
   async getHours(me, range) {
-    const days = [...store.values()]
+    // Own hours only: hours are pay data, never a colleague's
+    const mine = owner(me);
+    const days = [...store.entries()]
+      .filter(([k]) => k.startsWith(mine))
+      .map(([, w]) => w)
       .filter((w) => w.date >= range.from && w.date <= range.to)
       .sort((a, b) => a.date.localeCompare(b.date))
       .map((w) => ({

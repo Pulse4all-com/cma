@@ -8,11 +8,19 @@
  * Authentication). Pure function, no Next.js imports, so it is testable alone.
  */
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
-import type { Identity } from "./identity";
 
 export const IAP_ISSUER = "https://cloud.google.com/iap";
 export const IAP_JWKS_URL = "https://www.gstatic.com/iap/verify/public_key-jwk";
+/** IAP's sub for a Google account: this prefix plus the stable numeric account id */
+export const IAP_GOOGLE_SUB_PREFIX = "accounts.google.com:";
 const CLOCK_TOLERANCE_S = 30;
+
+/** What the token proves; proxy.ts adds the provider ("google") */
+export interface IapIdentity {
+  /** Bare numeric Google account id, as stored in app_user_external_id (system google) */
+  subject: string;
+  email: string;
+}
 
 const keySets = new Map<string, JWTVerifyGetKey>();
 
@@ -35,7 +43,7 @@ export class IapVerifyError extends Error {
 export async function verifyIapJwt(
   token: string,
   opts: { audience: string; jwksUrl?: string },
-): Promise<Identity> {
+): Promise<IapIdentity> {
   if (!opts.audience) throw new IapVerifyError("IAP audience is not configured");
   let payload;
   try {
@@ -56,6 +64,13 @@ export async function verifyIapJwt(
   if (typeof payload.sub !== "string" || typeof payload.email !== "string") {
     throw new IapVerifyError("IAP token lacks sub or email");
   }
-  // sub is the stable Google account id, prefixed "accounts.google.com:"; stored as-is
-  return { subject: payload.sub, email: payload.email.toLowerCase() };
+  // Store and match the bare numeric id (README, Authentication; decision 5 Oct 2026).
+  // Anything else (another identity source behind IAP) is refused, not guessed at.
+  const id = payload.sub.startsWith(IAP_GOOGLE_SUB_PREFIX)
+    ? payload.sub.slice(IAP_GOOGLE_SUB_PREFIX.length)
+    : "";
+  if (!/^\d{1,64}$/.test(id)) {
+    throw new IapVerifyError("IAP token sub is not a Google account id");
+  }
+  return { subject: id, email: payload.email.toLowerCase() };
 }
