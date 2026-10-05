@@ -28,6 +28,8 @@ export interface Principal {
   organisationName: string;
   roleKey: string;
   locale: Locale;
+  /** IANA zone the user works in; calendar days and week boundaries follow it */
+  timeZone: string;
 }
 
 /** Outcome of the app_user check for a proven identity */
@@ -55,6 +57,7 @@ const mockPrincipal: Principal = {
   organisationName: "Newco",
   roleKey: "agent",
   locale: config.defaultLocale,
+  timeZone: "Europe/Madrid",
 };
 
 const mockProvider: IdentityProvider = {

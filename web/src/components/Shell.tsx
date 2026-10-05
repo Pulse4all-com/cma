@@ -1,7 +1,7 @@
 /**
  * App frame: top bar, left rail, content. Operational white page (7.1), the
- * rail on Background Blue. Shortcut keys are shown as keycaps; the key handler
- * itself arrives with the screens in the next increment.
+ * rail on Background Blue. Shortcut keys are shown as keycaps and wired through
+ * data-shortcut (see hooks/useKeyboardShortcuts).
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -10,6 +10,7 @@ import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
+import { Shortcuts } from "./Shortcuts";
 
 export type ShellPage = "my-day" | "my-hours";
 
@@ -31,6 +32,7 @@ export function Shell({
 
   return (
     <div className="grid h-full grid-cols-[var(--spacing-rail)_1fr] grid-rows-[var(--spacing-topbar)_1fr]">
+      <Shortcuts />
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
         <div className="flex items-center gap-4">
           <Image
@@ -53,6 +55,7 @@ export function Shell({
           </span>
           <Link
             href="/logout"
+            data-shortcut="l"
             className="inline-flex h-8 items-center gap-2 rounded-button border border-p4a-deepblue px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue"
           >
             {copy.nav.logOut}
@@ -70,6 +73,7 @@ export function Shell({
                 <Link
                   href={item.href}
                   aria-current={current ? "page" : undefined}
+                  data-shortcut={item.key}
                   className={[
                     "flex h-10 items-center justify-between rounded-button px-3 text-body",
                     current

@@ -4,6 +4,7 @@
  */
 import type { ReactNode } from "react";
 import { connection } from "next/server";
+import { redirect } from "next/navigation";
 import { getAccess, type Principal } from "@/lib/auth/identity";
 import { config } from "@/lib/config";
 import { t, type Copy } from "@/lib/copy";
@@ -21,7 +22,7 @@ export async function resolve(): Promise<Resolved> {
     // Behind IAP this cannot happen; without a verified identity we show nothing
     return { ok: false, page: <NoAccess copy={copy} /> };
   }
-  if (access.kind === "no_access") return { ok: false, page: <NoAccess copy={copy} /> };
+  if (access.kind === "no_access") redirect("/no-access");
   return { ok: true, me: access.principal, copy: t(access.principal.locale) };
 }
 

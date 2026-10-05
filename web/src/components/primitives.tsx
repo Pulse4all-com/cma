@@ -41,7 +41,7 @@ export function Button({
     <button
       type="button"
       className={[
-        "inline-flex items-center gap-3 rounded-button font-semibold",
+        "inline-flex items-center gap-3 whitespace-nowrap rounded-button font-semibold",
         "disabled:bg-p4a-bgblue disabled:text-p4a-muted disabled:opacity-60 disabled:hover:bg-p4a-bgblue",
         variantClass[variant],
         sizeClass[size],

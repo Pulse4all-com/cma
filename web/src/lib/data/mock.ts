@@ -4,18 +4,15 @@
  * must say so). Nothing here reaches a database.
  */
 import type { Principal } from "@/lib/auth/identity";
-import type { CmaData, DateKey, HoursSummary, Instant, Workday } from "./types";
+import { dateKeyInZone } from "@/lib/time";
+import type { CmaData, DateKey, HoursSummary, Workday } from "./types";
 
 type Key = `${string}:${string}:${DateKey}`;
 const key = (me: Principal, date: DateKey): Key => `${me.tenantId}:${me.userId}:${date}`;
 
 const store = new Map<Key, Workday>();
 
-function dateKeyOf(instant: Instant): DateKey {
-  return instant.slice(0, 10);
-}
-
-function minutesBetween(a: Instant, b: Instant): number {
+function minutesBetween(a: string, b: string): number {
   return Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000));
 }
 
@@ -30,8 +27,9 @@ function seedHistory(me: Principal, today: DateKey) {
     const date = d.toISOString().slice(0, 10);
     const k = key(me, date);
     if (store.has(k)) continue;
-    const startMin = 8 * 60 + ((i * 7) % 20);
-    const endMin = 17 * 60 + ((i * 11) % 35) - (i % 3 === 0 ? 30 : 0);
+    // UTC minutes; roughly 08:00 to 17:00 in Central European summer time
+    const startMin = 6 * 60 + ((i * 7) % 20);
+    const endMin = 15 * 60 + ((i * 11) % 35) - (i % 3 === 0 ? 30 : 0);
     const at = (m: number) =>
       new Date(d.getTime() + m * 60000).toISOString();
     store.set(k, { date, status: "ended", startedAt: at(startMin), endedAt: at(endMin) });
@@ -40,7 +38,7 @@ function seedHistory(me: Principal, today: DateKey) {
 
 export const mockData: CmaData = {
   async openWorkday(me, now) {
-    const date = dateKeyOf(now);
+    const date = dateKeyInZone(now, me.timeZone);
     seedHistory(me, date);
     const k = key(me, date);
     const existing = store.get(k);
@@ -55,7 +53,7 @@ export const mockData: CmaData = {
   },
 
   async endWorkday(me, now) {
-    const date = dateKeyOf(now);
+    const date = dateKeyInZone(now, me.timeZone);
     const current = store.get(key(me, date));
     if (!current) throw new Error("No open workday");
     if (current.status === "ended") return current;

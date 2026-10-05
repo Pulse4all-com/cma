@@ -43,7 +43,11 @@ export interface HoursSummary extends HoursRange {
 }
 
 export interface CmaData {
-  /** Login is clock-in: returns today's workday, opening it if none is open */
+  /**
+   * Login is clock-in: returns today's workday, opening it if none exists.
+   * An ended day stays ended (so a silent re-login after log out does not
+   * start a new one); the next workday starts on the next calendar day.
+   */
   openWorkday(me: Principal, now: Instant): Promise<Workday>;
   getWorkday(me: Principal, date: DateKey): Promise<Workday | null>;
   endWorkday(me: Principal, now: Instant): Promise<Workday>;
