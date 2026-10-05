@@ -21,6 +21,8 @@ export const config = {
   dataMode: pick<DataMode>("CMA_DATA_MODE", ["api", "mock"], "api"),
   /** IAP JWT audience: /projects/<number>/global/backendServices/<backend id> */
   iapAudience: process.env.IAP_AUDIENCE ?? "",
+  /** Override only for local verification against a test key set; default is Google's */
+  iapJwksUrl: process.env.IAP_JWKS_URL || undefined,
   /** Default copy language until the per-user preference exists (handover open item) */
   defaultLocale: pick("CMA_DEFAULT_LOCALE", ["en", "nl"] as const, "en"),
   /** Git short SHA injected by Cloud Build, "dev" locally */

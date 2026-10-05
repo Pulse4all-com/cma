@@ -3,7 +3,7 @@
  * It cannot persist, and the UI says so (handover: a mock that cannot persist
  * must say so). Nothing here reaches a database.
  */
-import type { Principal } from "@/lib/auth/identity";
+import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
 import { dateKeyInZone } from "@/lib/time";
 import type { CmaData, DateKey, HoursSummary, Workday } from "./types";
 
@@ -37,6 +37,21 @@ function seedHistory(me: Principal, today: DateKey) {
 }
 
 export const mockData: CmaData = {
+  /**
+   * Any verified identity may work as the test agent. A real person behind IAP
+   * sees their own email, so nobody mistakes the mock for their record; roles,
+   * employer and tenant are the test agent's.
+   */
+  async findPrincipal(identity) {
+    if (identity.subject === MOCK_IDENTITY.subject) return MOCK_PRINCIPAL;
+    return {
+      ...MOCK_PRINCIPAL,
+      // one mock user per real person, so two testers do not share a clock
+      userId: `mock:${identity.subject}`,
+      displayName: identity.email,
+    };
+  },
+
   async openWorkday(me, now) {
     const date = dateKeyInZone(now, me.timeZone);
     seedHistory(me, date);

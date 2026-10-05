@@ -8,7 +8,7 @@
  * Every call carries the Principal, so the implementation is tenant-aware and
  * can only return the caller's own data: hours are pay data, never a colleague's.
  */
-import type { Principal } from "@/lib/auth/identity";
+import type { Identity, Principal } from "@/lib/auth/identity";
 
 /** ISO 8601 instant, always UTC on the wire; screens format in the user's zone */
 export type Instant = string;
@@ -43,6 +43,11 @@ export interface HoursSummary extends HoursRange {
 }
 
 export interface CmaData {
+  /**
+   * The app_user check: who may work, with which role, tenant and employer,
+   * matched on the identity provider's stable id. null means "no access yet".
+   */
+  findPrincipal(identity: Identity): Promise<Principal | null>;
   /**
    * Login is clock-in: returns today's workday, opening it if none exists.
    * An ended day stays ended (so a silent re-login after log out does not

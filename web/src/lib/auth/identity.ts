@@ -2,16 +2,18 @@
  * Identity seam.
  *
  * Two layers, one list (README, Authentication):
- *  - Identity: who the visitor is, proven by the gate (IAP). Only the stable
- *    Google account id ("sub") is a match key; the email is display only.
- *  - Principal: who may work, from app_user: tenant, user, role, display name.
- *
- * In this increment getIdentity() and resolvePrincipal() come from the mock
- * provider. The IAP provider (JWT verification in proxy.ts) is the next step;
- * the app_user lookup against Postgres follows with the API.
+ *  - Identity: who the visitor is, proven by the gate. In iap mode proxy.ts
+ *    verifies IAP's signed token and passes the result on in request headers
+ *    that only proxy.ts can set. In mock mode proxy.ts passes a fixed test
+ *    identity the same way. Only the provider's stable id is a match key; the
+ *    email is display only.
+ *  - Principal: who may work, from app_user: tenant, user, role, employer. This
+ *    is data, so the data layer answers it (mock now, Postgres with the API).
  */
+import { headers } from "next/headers";
 import { config } from "@/lib/config";
 import type { Locale } from "@/lib/copy";
+import { data } from "@/lib/data";
 
 export interface Identity {
   /** Stable account id at the identity provider; the only match key */
@@ -37,19 +39,19 @@ export type Access =
   | { kind: "granted"; identity: Identity; principal: Principal }
   | { kind: "no_access"; identity: Identity };
 
-export interface IdentityProvider {
-  /** Returns null when the request carries no verified identity */
-  getIdentity(): Promise<Identity | null>;
-  resolveAccess(identity: Identity): Promise<Access>;
-}
+/** Set by proxy.ts only; it strips any incoming copy before setting its own */
+export const IDENTITY_HEADERS = {
+  subject: "x-cma-identity-sub",
+  email: "x-cma-identity-email",
+} as const;
 
-const mockIdentity: Identity = {
+export const MOCK_IDENTITY: Identity = {
   subject: "accounts.google.com:100000000000000000001",
   email: "agent.one@example.com",
 };
 
 /** Mirrors db/03_seed_dev_test_data.sql: Agent One, Newco, agent, Pulse4all subscriptions */
-const mockPrincipal: Principal = {
+export const MOCK_PRINCIPAL: Principal = {
   tenantId: "00000000-0000-7000-8000-000000000001",
   tenantName: "Pulse4all subscriptions",
   userId: "00000000-0000-7000-8000-000000000101",
@@ -60,24 +62,18 @@ const mockPrincipal: Principal = {
   timeZone: "Europe/Madrid",
 };
 
-const mockProvider: IdentityProvider = {
-  async getIdentity() {
-    return mockIdentity;
-  },
-  async resolveAccess(identity) {
-    return { kind: "granted", identity, principal: mockPrincipal };
-  },
-};
-
-function provider(): IdentityProvider {
-  if (config.authMode === "mock") return mockProvider;
-  // Replaced by the IAP provider in the next step
-  throw new Error("CMA_AUTH_MODE=iap is not wired yet; set CMA_AUTH_MODE=mock");
+/** The identity proxy.ts attached to this request, or null if it attached none */
+export async function getIdentity(): Promise<Identity | null> {
+  const h = await headers();
+  const subject = h.get(IDENTITY_HEADERS.subject);
+  const email = h.get(IDENTITY_HEADERS.email);
+  if (!subject || !email) return null;
+  return { subject, email };
 }
 
 export async function getAccess(): Promise<Access | null> {
-  const p = provider();
-  const identity = await p.getIdentity();
+  const identity = await getIdentity();
   if (!identity) return null;
-  return p.resolveAccess(identity);
+  const principal = await data().findPrincipal(identity);
+  return principal ? { kind: "granted", identity, principal } : { kind: "no_access", identity };
 }
