@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:copy": "node verify/copy.mjs",
+    "verify:theme": "node verify/theme.mjs",
+    "verify:layout": "node verify/layout.mjs",
+    "verify:iap": "node verify/iap-token.mjs",
+    "verify": "npm run verify:copy && npm run verify:theme && npm run verify:layout"
   },
   "dependencies": {
     "jose": "^6.2.12",
@@ -22,6 +27,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

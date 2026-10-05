@@ -1,0 +1,70 @@
+/**
+ * Verifier: layout at 1280 and 1920 px, the 1280 px gate below that, no
+ * horizontal scrolling, the shell dimensions from the tokens, and the keycaps
+ * that make the keyboard shortcuts discoverable. Saves screenshots under
+ * records/ for the release note.
+ *
+ *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
+ *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
+ *       1279 px and demands the app shell, expect FAIL, exit 1
+ */
+import { mkdirSync } from "node:fs";
+import { chromium } from "playwright";
+
+const BASE = process.env.BASE ?? "http://localhost:8080";
+const provoke = process.argv.includes("--provoke");
+const outDir = process.env.OUT_DIR ?? new URL("../../records/layout", import.meta.url).pathname;
+mkdirSync(outDir, { recursive: true });
+
+const problems = [];
+const b = await chromium.launch();
+
+async function expectShell(width, height) {
+  const p = await b.newPage({ viewport: { width, height } });
+  await p.goto(BASE + "/");
+  await p.waitForLoadState("networkidle");
+  const m = await p.evaluate(() => {
+    const nav = document.querySelector("nav");
+    const header = document.querySelector("header");
+    const main = document.querySelector("main");
+    return {
+      gateVisible: !!document.querySelector('[data-testid="desktop-only"]') && getComputedStyle(document.querySelector('[data-testid="desktop-only"]')).display !== "none",
+      scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      rail: nav ? nav.getBoundingClientRect().width : 0,
+      topbar: header ? header.getBoundingClientRect().height : 0,
+      content: main ? main.querySelector("div")?.getBoundingClientRect().width ?? 0 : 0,
+      keycaps: document.querySelectorAll("kbd").length,
+      focusable: [...document.querySelectorAll("a, button")].every((el) => el.tabIndex >= 0),
+    };
+  });
+  const tag = `${width}x${height}`;
+  if (m.gateVisible) problems.push(`${tag}: the desktop-only gate is showing instead of the app`);
+  if (m.scrollX) problems.push(`${tag}: page scrolls horizontally`);
+  if (Math.round(m.rail) !== 216) problems.push(`${tag}: rail is ${m.rail}px, token says 216`);
+  if (Math.round(m.topbar) !== 56) problems.push(`${tag}: top bar is ${m.topbar}px, token says 56`);
+  if (m.content > 896) problems.push(`${tag}: content column is ${m.content}px, wider than max-w-4xl`);
+  if (m.keycaps < 3) problems.push(`${tag}: only ${m.keycaps} keycaps visible, expected nav keys and log out`);
+  if (!m.focusable) problems.push(`${tag}: an interactive element is not focusable`);
+  await p.screenshot({ path: `${outDir}/${tag}.png` });
+  await p.close();
+}
+
+async function expectGate(width, height) {
+  const p = await b.newPage({ viewport: { width, height } });
+  await p.goto(BASE + "/");
+  const gate = await p.locator('[data-testid="desktop-only"]').isVisible();
+  const shell = await p.locator("nav").isVisible();
+  if (!gate || shell) problems.push(`${width}x${height}: expected the desktop-only gate, got the app`);
+  await p.screenshot({ path: `${outDir}/${width}x${height}-gate.png` });
+  await p.close();
+}
+
+await expectShell(1280, 800);
+await expectShell(1920, 1080);
+if (provoke) await expectShell(1279, 800);
+else await expectGate(1279, 800);
+await b.close();
+
+for (const x of problems) console.log("  " + x);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+process.exit(problems.length === 0 ? 0 : 1);
