@@ -1,0 +1,19 @@
+verify/api.mjs against http://localhost:8080  (--provoke: every check must FAIL)
+
+FAIL  identity in two tenants is refused           got 403, wanted 200
+FAIL  unknown identity is refused                  got 403, wanted 200
+FAIL  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759, wanted 00000000-0000-7000-8000-00000000beef
+FAIL  two users have two different days            got false, wanted true
+FAIL  hours show the caller's own day              got ["2026-10-05T14:43:11.517Z","2026-10-05T15:22:43.897Z"], wanted ["2026-10-05T15:22:43.897Z","2026-10-05T14:43:11.517Z"]
+FAIL  a user parameter cannot redirect hours       got {"from":"2026-09-22","to":"2026-10-05","days":[{"date":"2026, wanted {"from":"2026-09-22","to":"2026-10-05","days":[{"date":"2026
+FAIL  correction leaves no past day open or capped got [0,true,true], wanted [1,false,true]
+FAIL  end needs the request header                 got 400, wanted 200
+FAIL  cross-site end is refused                    got 403, wanted 200
+FAIL  end ends the own day                         got ended, wanted working
+FAIL  login after end does not reopen              got ["ended","2026-10-05T15:22:44.459Z"], wanted ["working",null]
+FAIL  a second end changes nothing                 got true, wanted false
+FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]
+FAIL  the other user's day is untouched            got working, wanted ended
+FAIL  hours range is bounded to 92 days            got 400, wanted 200
+
+ALL 15 PROVOKED CHECKS FAILED, as they must

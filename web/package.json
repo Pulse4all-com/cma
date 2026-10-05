@@ -12,6 +12,7 @@
     "verify:theme": "node verify/theme.mjs",
     "verify:layout": "node verify/layout.mjs",
     "verify:iap": "node verify/iap-token.mjs",
+    "verify:api": "node verify/api.mjs",
     "verify": "npm run verify:copy && npm run verify:theme && npm run verify:layout"
   },
   "dependencies": {
