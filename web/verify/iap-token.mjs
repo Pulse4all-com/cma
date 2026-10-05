@@ -21,7 +21,7 @@ const jwk = { ...(await exportJWK(good.publicKey)), kid: "test-key", alg: "ES256
 createServer((req, res) => {
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify({ keys: [jwk] }));
-}).listen(9998);
+}).listen(JWKS_PORT);
 
 async function token(opts = {}) {
   const key = opts.evil ? evil.privateKey : good.privateKey;
@@ -36,7 +36,7 @@ async function token(opts = {}) {
     .sign(key);
 }
 
-const base = "http://localhost:8095";
+const base = process.env.BASE ?? "http://localhost:8094";
 async function hit(name, headers) {
   const r = await fetch(base + "/", { headers, redirect: "manual" });
   const body = await r.text();
