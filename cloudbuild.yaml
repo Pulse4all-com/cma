@@ -50,6 +50,7 @@ substitutions:
   _IAP_AUDIENCE: ""
 
 options:
+  dynamicSubstitutions: true
   # Required when the build runs as a user-managed service account
   logging: CLOUD_LOGGING_ONLY
   machineType: E2_HIGHCPU_8
