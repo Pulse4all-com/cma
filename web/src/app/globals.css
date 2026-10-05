@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/*
+  Pulse4all design tokens for the CMA (Pulse4all-Style.md sections 2, 3, 7).
+  Tailwind v4 reads tokens from CSS, so this file replaces tailwind.config.ts.
+  The default Tailwind palette is removed on purpose: every colour in the app
+  is a brand or semantic token, which the theme verifier can check.
+*/
+@theme {
+  --color-*: initial;
+
+  /* brand */
+  --color-white: #ffffff;
+  --color-p4a-sand: #fffdf6;
+  --color-p4a-offwhite: #fdfbf1;
+  --color-p4a-bgblue: #eaf4fc;
+  --color-p4a-bgblue-dark: #e3eefd;
+  --color-p4a-lightblue: #9ecff5;
+  --color-p4a-denim: #3b6fb3;
+  --color-p4a-deepblue: #265ba4;
+  --color-p4a-heading: #2e61a6;
+  --color-p4a-green: #27ae6f;
+  --color-p4a-rose: #f4d9d0;
+  --color-p4a-inkt: #0b133d;
+  --color-p4a-body: #1c2127;
+  --color-p4a-grey: #666666;
+
+  /* semantic (project defaults, section 2.3) */
+  --color-p4a-success: #27ae6f;
+  --color-p4a-success-surface: #e6f6ee;
+  --color-p4a-warning: #c98a1b;
+  --color-p4a-warning-surface: #fbf1dc;
+  --color-p4a-error: #b8433c;
+  --color-p4a-error-surface: #f8e4e1;
+  --color-p4a-neutral-surface: #f3f4f6;
+  --color-p4a-border: #d9e2ec;
+  --color-p4a-muted: #5b6472;
+
+  /* type: Montserrat is the only typeface; loaded locally in layout.tsx */
+  --font-sans: var(--font-montserrat), "Segoe UI", Arial, sans-serif;
+
+  /* dense operational scale (section 3.3, one notch down) */
+  --text-title: 24px;
+  --text-title--line-height: 1.3;
+  --text-panel: 18px;
+  --text-panel--line-height: 1.4;
+  --text-body: 14px;
+  --text-body--line-height: 1.6;
+  --text-small: 13px;
+  --text-small--line-height: 1.4;
+  --text-caption: 12px;
+  --text-caption--line-height: 1.4;
+  --text-clock: 56px;
+  --text-clock--line-height: 1.1;
+
+  /* shape */
+  --radius-button: 4px;
+  --radius-input: 4px;
+  --radius-card: 15px;
+
+  /* layout */
+  --spacing-rail: 13.5rem; /* 216px left navigation */
+  --spacing-topbar: 3.5rem; /* 56px */
+  --breakpoint-desk: 80rem; /* 1280px, the desktop-only gate */
+}
+
+:root {
+  color-scheme: light only;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--color-white);
+  color: var(--color-p4a-body);
+  font-size: 14px;
+}
+
+/* Times and amounts line up in tables and in the clock */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section 7.2: focus ring 2px Light Blue, offset 2px, on everything interactive */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-p4a-lightblue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
