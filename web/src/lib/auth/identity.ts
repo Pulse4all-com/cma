@@ -4,9 +4,9 @@
  * Two layers, one list (README, Authentication):
  *  - Identity: who the visitor is, proven by the gate. In iap mode proxy.ts
  *    verifies IAP's signed token and passes the result on in request headers
- *    that only proxy.ts can set. In mock mode proxy.ts passes a fixed test
- *    identity the same way. Only the provider's stable id is a match key; the
- *    email is display only.
+ *    that only proxy.ts can set. In mock mode proxy.ts passes a test identity
+ *    the same way. Only the provider plus the provider's stable id form the
+ *    match key; the email is display only.
  *  - Principal: who may work, from app_user: tenant, user, role, employer. This
  *    is data, so the data layer answers it (mock now, Postgres with the API).
  */
@@ -16,7 +16,13 @@ import type { Locale } from "@/lib/copy";
 import { data } from "@/lib/data";
 
 export interface Identity {
-  /** Stable account id at the identity provider; the only match key */
+  /**
+   * The identity system that proved the subject, as stored in
+   * app_user_external_id.system: "google" behind IAP, "mock" in dev.
+   * A data value, never a code path: another provider is another value.
+   */
+  provider: string;
+  /** Stable account id at the identity provider; with provider, the only match key */
   subject: string;
   /** Display only, never used for matching */
   email: string;
@@ -41,16 +47,31 @@ export type Access =
 
 /** Set by proxy.ts only; it strips any incoming copy before setting its own */
 export const IDENTITY_HEADERS = {
+  provider: "x-cma-identity-provider",
   subject: "x-cma-identity-sub",
   email: "x-cma-identity-email",
 } as const;
 
+/**
+ * Dev test identities live under system "mock" (db/06_seed_dev_time_model.sql:
+ * agent-one, agent-two, supervisor, manager), so a mock subject can never match
+ * or impersonate a real Google row.
+ */
+export const MOCK_PROVIDER = "mock";
+
+/** The default mock identity when a request does not choose one */
 export const MOCK_IDENTITY: Identity = {
-  subject: "accounts.google.com:100000000000000000001",
-  email: "agent.one@example.com",
+  provider: MOCK_PROVIDER,
+  subject: "agent-one",
+  email: "agent-one@example.com",
 };
 
-/** Mirrors db/03_seed_dev_test_data.sql: Agent One, Newco, agent, Pulse4all subscriptions */
+/** Mock-mode identity for any test subject; the email is display only */
+export function mockIdentity(subject: string): Identity {
+  return { provider: MOCK_PROVIDER, subject, email: `${subject}@example.com` };
+}
+
+/** Mirrors the in-memory mock data: Agent One, Newco, agent, Pulse4all subscriptions */
 export const MOCK_PRINCIPAL: Principal = {
   tenantId: "00000000-0000-7000-8000-000000000001",
   tenantName: "Pulse4all subscriptions",
@@ -65,10 +86,11 @@ export const MOCK_PRINCIPAL: Principal = {
 /** The identity proxy.ts attached to this request, or null if it attached none */
 export async function getIdentity(): Promise<Identity | null> {
   const h = await headers();
+  const provider = h.get(IDENTITY_HEADERS.provider);
   const subject = h.get(IDENTITY_HEADERS.subject);
   const email = h.get(IDENTITY_HEADERS.email);
-  if (!subject || !email) return null;
-  return { subject, email };
+  if (!provider || !subject || !email) return null;
+  return { provider, subject, email };
 }
 
 export async function getAccess(): Promise<Access | null> {
