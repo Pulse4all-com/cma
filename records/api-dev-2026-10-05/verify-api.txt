@@ -1,0 +1,19 @@
+verify/api.mjs against http://localhost:8080
+
+PASS  identity in two tenants is refused           got 403
+PASS  unknown identity is refused                  got 403
+PASS  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759
+PASS  two users have two different days            got false
+PASS  hours show the caller's own day              got ["2026-10-05T14:43:11.517Z","2026-10-05T15:22:43.897Z"]
+PASS  a user parameter cannot redirect hours       got {"from":"2026-09-22","to":"2026-10-05","days":[{"date":"2026
+PASS  correction leaves no past day open or capped got [0,true,true]
+PASS  end needs the request header                 got 400
+PASS  cross-site end is refused                    got 403
+PASS  end ends the own day                         got ended
+PASS  login after end does not reopen              got ["ended","2026-10-05T15:22:44.459Z"]
+PASS  a second end changes nothing                 got true
+PASS  log out on an ended day changes nothing      got [303,true]
+PASS  the other user's day is untouched            got working
+PASS  hours range is bounded to 92 days            got 400
+
+ALL 15 PASS
