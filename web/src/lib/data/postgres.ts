@@ -1,7 +1,7 @@
 import "server-only";
 import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
-import { CmaDbError, withTenant, withoutTenant, type TenantContext } from "@/lib/db/client";
+import { CmaDbError, one, withTenant, withoutTenant, type TenantContext } from "@/lib/db/client";
 import type { CmaData, DateKey, HoursRange, HoursSummary, Workday } from "./types";
 
 /**
@@ -71,13 +71,14 @@ export const postgresData: CmaData = {
         [identity.provider, identity.subject],
       ),
     );
-    if (tenants.rows.length === 0) return null;
+    const match = tenants.rows[0];
+    if (!match) return null;
     if (tenants.rows.length > 1) {
       // No tenant picker yet; never guess. Count only: the subject is a personal identifier.
       console.warn(`[cma-data] identity (${identity.provider}) matches ${tenants.rows.length} tenants; no tenant picker yet`);
       return null;
     }
-    const tenantId = tenants.rows[0].tenant_id;
+    const tenantId = match.tenant_id;
 
     // 2. Inside that tenant, as cma_app under row-level security: the app_user check
     return withTenant({ tenantId }, async (q) => {
@@ -131,7 +132,7 @@ export const postgresData: CmaData = {
     // Returns today's day, open or ended, creating it if needed; an ended day stays ended
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<HeaderRow>(`select ${HEADER} from cma.open_workday()`);
-      return toWorkday(r.rows[0]);
+      return toWorkday(one(r.rows, "open_workday"));
     });
   },
 
@@ -142,7 +143,8 @@ export const postgresData: CmaData = {
         `select ${HEADER} from cma.workday_summary where ${OWN} and business_date = $1::date`,
         [date],
       );
-      return r.rows[0] ? toWorkday(r.rows[0]) : null;
+      const row = r.rows[0];
+      return row ? toWorkday(row) : null;
     });
   },
 
@@ -159,7 +161,7 @@ export const postgresData: CmaData = {
       // Same as the mock: ending an ended day returns it, so a repeated log out is harmless
       if (w.status === "ended") return toWorkday(w);
       const ended = await q.query<HeaderRow>(`select ${HEADER} from cma.end_workday($1)`, [w.id]);
-      return toWorkday(ended.rows[0]);
+      return toWorkday(one(ended.rows, "end_workday"));
     });
   },
 
