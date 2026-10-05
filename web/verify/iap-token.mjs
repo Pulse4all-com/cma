@@ -10,7 +10,8 @@ import { generateKeyPair, exportJWK, SignJWT } from "jose";
  *   node verify/iap-token.mjs
  * Env: BASE (default http://localhost:8094), JWKS_PORT (default 9999), AUD.
  * Every invalid token must get 401; a valid one 200 with the token's email;
- * a spoofed x-cma-identity header must never win. Exit code 1 on any failure.
+ * a spoofed x-cma-identity header must never win; the mock subject switch
+ * (header, ?as=) must do nothing in iap mode. Exit code 1 on any failure.
  */
 const AUD = process.env.AUD ?? "/projects/467777891162/global/backendServices/1234567890";
 const JWKS_PORT = Number(process.env.JWKS_PORT ?? 9999);
@@ -30,38 +31,43 @@ async function token(opts = {}) {
     .setProtectedHeader({ alg: "ES256", kid: "test-key" })
     .setIssuer(opts.iss ?? "https://cloud.google.com/iap")
     .setAudience(opts.aud ?? AUD)
-    .setSubject("accounts.google.com:118133858486581853996")
+    .setSubject(opts.sub ?? "accounts.google.com:118133858486581853996")
     .setIssuedAt(opts.iat ?? now)
     .setExpirationTime(opts.exp ?? now + 600)
     .sign(key);
 }
 
 const base = process.env.BASE ?? "http://localhost:8094";
-async function hit(name, headers) {
-  const r = await fetch(base + "/", { headers, redirect: "manual" });
+async function hit(name, headers, path = "/") {
+  const r = await fetch(base + path, { headers, redirect: "manual" });
   const body = await r.text();
   const who = body.match(/Signed in as<!-- --> <span[^>]*>([^<]*)/)?.[1] ?? "";
-  console.log(name.padEnd(28), r.status, r.headers.get("x-cma-auth") ?? "", who);
-  return r.status;
+  console.log(name.padEnd(32), r.status, r.headers.get("x-cma-auth") ?? "", who);
+  return { status: r.status, body };
 }
+const status = async (...a) => (await hit(...a)).status;
+/** 200, the token's identity shown, the spoofed one nowhere */
+const tokenWins = ({ status, body }) =>
+  status === 200 && body.includes("martin@pulse4all.com") && !body.includes("ceo@pulse4all.com") && !body.includes("manager@example.com");
 
 const results = [];
-results.push(await hit("valid token", { "x-goog-iap-jwt-assertion": await token() }) === 200);
-results.push(await hit("no token", {}) === 401);
-results.push(await hit("wrong audience", { "x-goog-iap-jwt-assertion": await token({ aud: "/projects/1/global/backendServices/2" }) }) === 401);
-results.push(await hit("wrong issuer", { "x-goog-iap-jwt-assertion": await token({ iss: "https://accounts.google.com" }) }) === 401);
-results.push(await hit("expired", { "x-goog-iap-jwt-assertion": await token({ exp: Math.floor(Date.now()/1000) - 120 }) }) === 401);
-results.push(await hit("future issue", { "x-goog-iap-jwt-assertion": await token({ iat: Math.floor(Date.now()/1000) + 600, exp: Math.floor(Date.now()/1000) + 1200 }) }) === 401);
-results.push(await hit("wrong signer", { "x-goog-iap-jwt-assertion": await token({ evil: true }) }) === 401);
-results.push(await hit("garbage", { "x-goog-iap-jwt-assertion": "abc.def.ghi" }) === 401);
-results.push(await hit("spoofed identity, no token", { "x-cma-identity-sub": "accounts.google.com:1", "x-cma-identity-email": "ceo@pulse4all.com" }) === 401);
-const spoof = await fetch(base + "/", { headers: { "x-goog-iap-jwt-assertion": await token(), "x-cma-identity-email": "ceo@pulse4all.com" } });
-const spoofBody = await spoof.text();
-const spoofOk = spoof.status === 200 && spoofBody.includes("martin@pulse4all.com") && !spoofBody.includes("ceo@pulse4all.com");
-console.log("spoofed header + valid token".padEnd(28), spoof.status, spoofOk ? "identity from token, header ignored" : "FAIL");
-results.push(spoofOk);
+results.push(await status("valid token", { "x-goog-iap-jwt-assertion": await token() }) === 200);
+results.push(await status("no token", {}) === 401);
+results.push(await status("wrong audience", { "x-goog-iap-jwt-assertion": await token({ aud: "/projects/1/global/backendServices/2" }) }) === 401);
+results.push(await status("wrong issuer", { "x-goog-iap-jwt-assertion": await token({ iss: "https://accounts.google.com" }) }) === 401);
+results.push(await status("expired", { "x-goog-iap-jwt-assertion": await token({ exp: Math.floor(Date.now()/1000) - 120 }) }) === 401);
+results.push(await status("future issue", { "x-goog-iap-jwt-assertion": await token({ iat: Math.floor(Date.now()/1000) + 600, exp: Math.floor(Date.now()/1000) + 1200 }) }) === 401);
+results.push(await status("wrong signer", { "x-goog-iap-jwt-assertion": await token({ evil: true }) }) === 401);
+results.push(await status("garbage", { "x-goog-iap-jwt-assertion": "abc.def.ghi" }) === 401);
+results.push(await status("sub without google prefix", { "x-goog-iap-jwt-assertion": await token({ sub: "118133858486581853996" }) }) === 401);
+results.push(await status("sub not a numeric id", { "x-goog-iap-jwt-assertion": await token({ sub: "accounts.google.com:agent-one" }) }) === 401);
+results.push(await status("spoofed identity, no token", { "x-cma-identity-provider": "mock", "x-cma-identity-sub": "agent-one", "x-cma-identity-email": "ceo@pulse4all.com" }) === 401);
+results.push(tokenWins(await hit("spoofed email + valid token", { "x-goog-iap-jwt-assertion": await token(), "x-cma-identity-email": "ceo@pulse4all.com" })));
+results.push(tokenWins(await hit("spoofed provider + valid token", { "x-goog-iap-jwt-assertion": await token(), "x-cma-identity-provider": "mock", "x-cma-identity-sub": "manager" })));
+results.push(tokenWins(await hit("mock header in iap mode", { "x-goog-iap-jwt-assertion": await token(), "x-cma-mock-subject": "manager" })));
+results.push(tokenWins(await hit("?as= in iap mode (no 303)", { "x-goog-iap-jwt-assertion": await token() }, "/?as=manager")));
 const health = await fetch(base + "/api/health");
-console.log("health without token".padEnd(28), health.status);
+console.log("health without token".padEnd(32), health.status);
 results.push(health.status === 200);
 const ok = results.every(Boolean);
 console.log(ok ? "\nALL PASS" : "\nSOME FAILED");
