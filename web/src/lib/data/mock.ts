@@ -4,6 +4,7 @@
  * must say so). Nothing here reaches a database.
  */
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
+import { CmaDbError } from "@/lib/db/client";
 import { dateKeyInZone } from "@/lib/time";
 import type { CmaData, DateKey, HoursSummary, Workday } from "./types";
 
@@ -73,7 +74,8 @@ export const mockData: CmaData = {
   async endWorkday(me, now) {
     const date = dateKeyInZone(now, me.timeZone);
     const current = store.get(key(me, date));
-    if (!current) throw new Error("No open workday");
+    // Same contract as the Postgres implementation: no day today is CMA02 (not found)
+    if (!current) throw new CmaDbError("CMA02", "no workday today");
     if (current.status === "ended") return current;
     const ended: Workday = { ...current, status: "ended", endedAt: now };
     store.set(key(me, date), ended);
