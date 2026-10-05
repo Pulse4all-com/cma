@@ -363,7 +363,7 @@ Roadmap
 Each step is delivered as increments; every increment goes to production once it is verified in dev (see Release flow).
 
 Foundation. Google Cloud projects, Cloud SQL Postgres (EU), access and security, tenant and role model in the schema. Done 4 October 2026: dev infrastructure (3 Oct), migration 0001 verified in dev, prod project created and 0001 verified there (4 Oct).
-Workspace V1: workday and hours. The first screens at workspace.pulse4all.app: login, start and end the workday, own hours per day, week and month. Migration 0002 ports the time model from the Neon/Netlify trial under the CMA conventions. Needs no sync and no integrations. Login through Google Workspace and IAP (see Authentication). Before the first real agent uses it: the app's user check and IAP token verification, prod on dedicated core with high availability, heads-up to Yordi, then the gate opens from cma@ to the pulse4all.com domain.
+Workspace V1: workday and hours. The first screens at workspace.pulse4all.app: login, start and end the workday, own hours per day, week and month. Migration 0002 writes the time model fresh under the CMA conventions; the trial's agent UI source (p4a-agent-ui-src.zip: the My account panel, theme, building blocks, copy file) and its decisions are input. Desktop only (minimum 1280 px, keyboard-first), no offline mode. Needs no sync and no integrations. Login through Google Workspace and IAP (see Authentication). Before the first real agent uses it: the app's user check and IAP token verification, prod on dedicated core with high availability, heads-up to Yordi, then the gate opens from cma@ to the pulse4all.com domain.
 Sync. Ingest API on Cloud Run with its service account as cma_app member and one key per tenant. HubSpot and Aircall adapters (Make scenarios) mapping into the canonical entities through the ingest API. BigQuery connection on cma_read with bq_reader (Joshua), BigQuery in the same region as Cloud SQL.
 Data first (in parallel). The data prerequisites from the KPIs section in HubSpot and Aircall, plus Shopify orders into HubSpot. First KPI reports for Kira can run from BigQuery as soon as sync and clean data are in place, before the CMA UI exists.
 CMA V1 for Pulse4all subscriptions, rest of the slice. Statuses (with flags), teams and sites, roster, skills; the scheduler for auto-logout.
@@ -377,7 +377,7 @@ Later modules follow the Target scope table.
 Out of scope
 Post-call outcome logging. Already handled in HubSpot and Aircall.
 Callpit. The earlier agent cockpit is parked; the CMA starts fresh.
-The Neon/Netlify trial (Workspace, agent UI, queue engine; see the AgentUI handover of 4 October 2026). It was concepting and testing, not production. Its designs, tests and the validated hours export are input for the CMA; its code and databases are not carried over as-is.
+The Neon/Netlify trial (Workspace, agent UI, queue engine; see the AgentUI handover of 4 October 2026). It was concepting and testing, not production. Its UI source and decisions are input for the CMA; its code is not carried over as-is. The trial's Workspace schema and validated hours export are not available, so the hours export is rebuilt and re-validated against an anonymised copy of the Steam hours CSV.
 Customer data in the UI. The CMA steers people; customer work happens in HubSpot and Aircall.
 Invoicing. The CMA produces approved hours and outcomes per employer; invoices are made in NetSuite.
 A second CRM or telephony adapter before there is a second customer. Design for it, do not build it.
@@ -407,11 +407,14 @@ Date	Decision	Why
 4 Oct 2026	workspace.pulse4all.app runs through a global external Application Load Balancer with IAP in front of Cloud Run; DNS stays at IONOS with one A record	Cloud Run domain mapping is preview and not recommended for production; IAP keeps the site closed to anyone outside the team during the build
 4 Oct 2026	Authentication V2 for Pulse4all is Google Workspace through IAP; the CMA's app_user is the single list of who may work; identity matched on the Google account id	Every user, Newco agents included, has a full pulse4all.com account: no extra login system or licence cost, offboarding follows the Google account. The V1 HubSpot-id screen is not built
 4 Oct 2026	Code in the private GitHub repository Pulse4all-com/cma, owned by a Pulse4all organisation; builds in Cloud Build	Ownership independent of personal accounts; a later move to an EU-hosted Git service stays cheap. EU sovereignty of the code is revisited at Roadmap step 9 together with the rest of the stack
+4 Oct 2026	The CMA is desktop only (minimum 1280 px, keyboard-first, dense UI scale) and has no offline mode	Agents work at office workstations; without internet calling stops too. Mobile views for managers would be a separate decision
+4 Oct 2026	Migration 0002 is written fresh, not ported; the trial's UI source and decisions are input	The trial's Workspace schema was never kept as files; the port was a rewrite under CMA conventions anyway
 Open decisions
 Per customer: a separate Cloud SQL instance or project, or a separate database on a shared instance (IAM users and the superuser are instance-level, so instance or project per customer is the stronger boundary); decide at the first external customer.
 App stack for the CMA and the ingest API: TypeScript on Node; Next.js as in the trial, or a separate API and frontend.
 Hours registration and employment status: Wet DBA if Newco agents are freelancers, and Spain's daily working-time registration duty (whether the CMA becomes that record, retention); with Yordi and Arno before real use.
-Copy language of the Workspace for multilingual Newco agents (English, Dutch, per user).
+Copy language of the Workspace for multilingual Newco agents (English, Dutch, per user); the trial's copy file already holds Dutch and English.
+Forgotten clock-outs: the trial closed the shift at the last disposition, which the CMA does not have. Proposed: leave open and flag for correction in step 2, close at the last Aircall or HubSpot activity once Sync runs.
 Parallel run against the Steam Connect hours export before Steam is switched off for hours.
 Product and legal setup for offering the CMA to other companies: Pulse4all product or separate entity, naming, where the Google Cloud folder lives, processor role and data processing agreement per customer (with Yordi and Mark).
 Competitive check against workforce-management tools that integrate with Aircall (Assembled, Playvox, injixo, Surfboard) before the external pitch.
