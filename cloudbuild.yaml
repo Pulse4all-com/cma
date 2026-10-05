@@ -1,0 +1,57 @@
+# Cloud Build: build the web image, push it to Artifact Registry, deploy to
+# Cloud Run cma-web. Triggered on main for changes under web/ (and this file);
+# the same file runs by hand with `gcloud builds submit`.
+#
+# Substitutions set on the trigger (or passed to builds submit):
+#   _IAP_AUDIENCE   /projects/<number>/global/backendServices/<backend id>
+#   _AUTH_MODE      iap   (mock only for a build that never meets a person)
+#   _DATA_MODE      mock  (api once the Postgres API exists)
+#   _REGION         europe-west4
+#   _SERVICE        cma-web
+#   _REPO           europe-west4-docker.pkg.dev/$PROJECT_ID/cma
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    dir: web
+    args:
+      - build
+      - --build-arg=CMA_VERSION=${SHORT_SHA}
+      - --tag=${_REPO}/web:${SHORT_SHA}
+      - --tag=${_REPO}/web:latest
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REPO}/web"]
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --region=${_REGION}
+      - --image=${_REPO}/web:${SHORT_SHA}
+      - --port=8080
+      - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA}
+      - --quiet
+
+images:
+  - ${_REPO}/web:${SHORT_SHA}
+  - ${_REPO}/web:latest
+
+substitutions:
+  _REGION: europe-west4
+  _SERVICE: cma-web
+  _REPO: europe-west4-docker.pkg.dev/${PROJECT_ID}/cma
+  _AUTH_MODE: iap
+  _DATA_MODE: mock
+  _IAP_AUDIENCE: ""
+
+options:
+  # Required when the build runs as a user-managed service account
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

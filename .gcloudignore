@@ -1,0 +1,6 @@
+# What `gcloud builds submit` leaves out of the upload
+.git
+web/node_modules
+web/.next
+records
+*.zip

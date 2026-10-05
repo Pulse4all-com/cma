@@ -13,7 +13,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { config as appConfig } from "@/lib/config";
 import { IDENTITY_HEADERS, MOCK_IDENTITY } from "@/lib/auth/identity";
-import { verifyIapJwt } from "@/lib/auth/iap";
+import { IapVerifyError, verifyIapJwt } from "@/lib/auth/iap";
 
 export async function proxy(request: NextRequest) {
   const headers = new Headers(request.headers);
@@ -34,7 +34,10 @@ export async function proxy(request: NextRequest) {
     headers.set(IDENTITY_HEADERS.email, identity.email);
     return NextResponse.next({ request: { headers } });
   } catch (e) {
-    console.warn("iap: token rejected", e instanceof Error ? e.message : e);
+    // Log the underlying reason (jose error code or fetch failure), never the token
+    const cause = e instanceof IapVerifyError && e.cause instanceof Error ? e.cause : undefined;
+    const code = cause && "code" in cause ? ` ${String((cause as { code: unknown }).code)}` : "";
+    console.warn(`iap: token rejected: ${e instanceof Error ? e.message : String(e)}${cause ? ` (${cause.name}${code}: ${cause.message})` : ""}`);
     return unauthenticated("invalid");
   }
 }
