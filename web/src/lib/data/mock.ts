@@ -6,7 +6,7 @@
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/db/client";
 import { dateKeyInZone } from "@/lib/time";
-import type { CmaData, DateKey, HoursSummary, Workday } from "./types";
+import type { CmaData, DateKey, HoursSummary, Instant, WorkStatus, Workday } from "./types";
 
 type Key = `${string}:${string}:${DateKey}`;
 const owner = (me: Principal) => `${me.tenantId}:${me.userId}:`;
@@ -14,8 +14,31 @@ const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
 
 const store = new Map<Key, Workday>();
 
-function minutesBetween(a: string, b: string): number {
-  return Math.max(0, Math.round((Date.parse(b) - Date.parse(a)) / 60000));
+/**
+ * Fixture data, not app logic: a fictional status list shaped like a tenant's work_status rows
+ * (the default ladder of the seed). The screens never branch on these keys or names.
+ */
+const MOCK_STATUSES: WorkStatus[] = [
+  { key: "available", name: "Available", isWorking: true, isDefault: true },
+  { key: "training", name: "Training", isWorking: true, isDefault: false },
+  { key: "meeting", name: "Meeting", isWorking: true, isDefault: false },
+  { key: "break", name: "Break", isWorking: false, isDefault: false },
+  { key: "lunch", name: "Lunch", isWorking: false, isDefault: false },
+];
+const DEFAULT_STATUS = MOCK_STATUSES.find((s) => s.isDefault)!;
+
+function secondsBetween(a: Instant, b: Instant): number {
+  return Math.max(0, Math.floor((Date.parse(b) - Date.parse(a)) / 1000));
+}
+
+/** Worked seconds of a day up to `now`: closed stretches plus the running one */
+function workedSeconds(w: Workday, now: Instant): number {
+  return w.clock.closedSeconds + (w.clock.runningSince ? secondsBetween(w.clock.runningSince, now) : 0);
+}
+
+/** Closes the running stretch at `now`; the result has nothing running */
+function closeStretch(w: Workday, now: Instant): Workday["clock"] {
+  return { closedSeconds: workedSeconds(w, now), runningSince: null };
 }
 
 /** A fortnight of fictional history so the hours screen has something to show */
@@ -34,7 +57,14 @@ function seedHistory(me: Principal, today: DateKey) {
     const endMin = 15 * 60 + ((i * 11) % 35) - (i % 3 === 0 ? 30 : 0);
     const at = (m: number) =>
       new Date(d.getTime() + m * 60000).toISOString();
-    store.set(k, { date, status: "ended", startedAt: at(startMin), endedAt: at(endMin) });
+    store.set(k, {
+      date,
+      status: "ended",
+      startedAt: at(startMin),
+      endedAt: at(endMin),
+      statusKey: null,
+      clock: { closedSeconds: (endMin - startMin) * 60, runningSince: null },
+    });
   }
 }
 
@@ -62,7 +92,14 @@ export const mockData: CmaData = {
     const k = key(me, date);
     const existing = store.get(k);
     if (existing) return existing;
-    const fresh: Workday = { date, status: "working", startedAt: now, endedAt: null };
+    const fresh: Workday = {
+      date,
+      status: "working",
+      startedAt: now,
+      endedAt: null,
+      statusKey: DEFAULT_STATUS.key,
+      clock: { closedSeconds: 0, runningSince: DEFAULT_STATUS.isWorking ? now : null },
+    };
     store.set(k, fresh);
     return fresh;
   },
@@ -77,14 +114,43 @@ export const mockData: CmaData = {
     // Same contract as the Postgres implementation: no day today is CMA02 (not found)
     if (!current) throw new CmaDbError("CMA02", "no workday today");
     if (current.status === "ended") return current;
-    const ended: Workday = { ...current, status: "ended", endedAt: now };
+    const ended: Workday = {
+      ...current,
+      status: "ended",
+      endedAt: now,
+      statusKey: null,
+      clock: closeStretch(current, now),
+    };
     store.set(key(me, date), ended);
     return ended;
+  },
+
+  async listStatuses() {
+    return MOCK_STATUSES;
+  },
+
+  async setStatus(me, statusKey, now) {
+    const date = dateKeyInZone(now, me.timeZone);
+    const current = store.get(key(me, date));
+    // Same contract as cma.set_status: CMA02 no day or unknown key, CMA03 ended day
+    if (!current) throw new CmaDbError("CMA02", "no workday today");
+    if (current.status === "ended") throw new CmaDbError("CMA03", "workday already ended");
+    const next = MOCK_STATUSES.find((s) => s.key === statusKey);
+    if (!next) throw new CmaDbError("CMA02", "unknown work status");
+    const closed = closeStretch(current, now);
+    const updated: Workday = {
+      ...current,
+      statusKey: next.key,
+      clock: { closedSeconds: closed.closedSeconds, runningSince: next.isWorking ? now : null },
+    };
+    store.set(key(me, date), updated);
+    return updated;
   },
 
   async getHours(me, range) {
     // Own hours only: hours are pay data, never a colleague's
     const mine = owner(me);
+    const now = new Date().toISOString();
     const days = [...store.entries()]
       .filter(([k]) => k.startsWith(mine))
       .map(([, w]) => w)
@@ -94,7 +160,7 @@ export const mockData: CmaData = {
         date: w.date,
         startedAt: w.startedAt,
         endedAt: w.endedAt,
-        minutes: minutesBetween(w.startedAt, w.endedAt ?? new Date().toISOString()),
+        minutes: Math.floor(workedSeconds(w, now) / 60),
       }));
     const summary: HoursSummary = {
       ...range,

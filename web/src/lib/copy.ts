@@ -38,6 +38,8 @@ const en = {
     dayEnded: "Your workday has ended",
     dayEndedBody: "Thanks for today. Log out when you leave, or close this tab.",
     endedAt: "Ended at",
+    statusLabel: "Status",
+    statusFailed: "Your status could not be changed. Try again.",
     startedAt: "Started at",
   },
   myHours: {
@@ -111,6 +113,8 @@ const nl: Copy = {
     dayEnded: "Je werkdag is beëindigd",
     dayEndedBody: "Bedankt voor vandaag. Log uit als je weggaat, of sluit dit tabblad.",
     endedAt: "Beëindigd om",
+    statusLabel: "Status",
+    statusFailed: "Je status kon niet worden gewijzigd. Probeer het opnieuw.",
     startedAt: "Gestart om",
   },
   myHours: {

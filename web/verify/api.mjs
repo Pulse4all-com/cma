@@ -10,7 +10,8 @@
  * Needs the dev seed (06) and the fixture db/08_fixture_api_verify_dev.sql. Ends the test
  * supervisor's workday of today (dev data); safe to rerun on the same day.
  *
- * Themes: identity and tenant, own data only, a correction row, an ended day stays ended.
+ * Themes: identity and tenant, own data only, a correction row, an ended day stays ended,
+ * status changes from the tenant's own list.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -131,6 +132,41 @@ const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
 expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?from=${longFrom}&to=${today}`)).status, 400, 200);
 
 // ---- verdict --------------------------------------------------------------------------------
+
+// ---- work status (cma.set_status) ------------------------------------------------------------
+// Agent Two's day today is open (only the supervisor's day was ended above). No key or name is
+// assumed: the verifier picks from the tenant's own list.
+const setStatus = (s, body, headers = { "x-cma-request": "1" }) =>
+  call(s, "/api/v1/me/status", {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+
+const statuses = (await get(AGENT, "/api/v1/me/statuses")).body?.data ?? [];
+expect("status list has exactly one default", statuses.filter((s) => s.isDefault).length, 1, 0);
+
+const before = (await get(AGENT, "/api/v1/me/day")).body?.data;
+const target = statuses.find((s) => s.key !== before?.statusKey);
+expect("status change needs the request header",
+  (await setStatus(AGENT, { key: target?.key }, {})).status, 400, 200);
+expect("cross-site status change is refused",
+  (await setStatus(AGENT, { key: target?.key }, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+
+await setStatus(AGENT, { key: target?.key });
+expect("status change is stored on the own day",
+  (await get(AGENT, "/api/v1/me/day")).body?.data?.statusKey, target?.key, before?.statusKey);
+
+expect("unknown status key is a 404",
+  (await setStatus(AGENT, { key: "verify-no-such-status" })).status, 404, 200);
+
+await end(SUPERVISOR);   // already ended above; ending again changes nothing
+expect("an ended day refuses a status change",
+  (await setStatus(SUPERVISOR, { key: target?.key })).status, 409, 200);
+
+// Leave Agent Two in the status the run found (dev data; not a check)
+if (before?.statusKey) await setStatus(AGENT, { key: before.statusKey });
+
 const passed = results.filter(Boolean).length;
 const n = results.length;
 if (PROVOKE) {
