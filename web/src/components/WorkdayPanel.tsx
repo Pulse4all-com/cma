@@ -2,12 +2,17 @@
 
 /**
  * The heart of My day: the running clock. One memorable element, everything
- * else quiet. Ticks every second from the server-provided start instant, so a
- * tab left open all day stays right without polling.
+ * else quiet. Ticks every second from the server-provided clock (closed seconds
+ * plus the running stretch), so a tab left open all day stays right without
+ * polling, and it pauses while the current status is not a working one.
+ *
+ * Status buttons come from the tenant's own list in its order; no key or name
+ * is known here. A change goes through POST /api/v1/me/status, the same path
+ * the API verifier proves.
  */
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Workday } from "@/lib/data";
+import type { WorkStatus, Workday } from "@/lib/data";
 import type { Copy } from "@/lib/copy";
 import { Badge, Button, Card } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -21,8 +26,13 @@ function subscribe(onTick: () => void) {
 const nowSeconds = () => Math.floor(Date.now() / 1000) * 1000;
 const serverNow = () => null;
 
-function elapsed(from: string, to: number): string {
-  const s = Math.max(0, Math.floor((to - Date.parse(from)) / 1000));
+/** Worked seconds at `now` (ms), or the closed part alone before the client clock starts */
+function worked(clock: Workday["clock"], now: number | null): number {
+  if (now === null || !clock.runningSince) return clock.closedSeconds;
+  return clock.closedSeconds + Math.max(0, Math.floor((now - Date.parse(clock.runningSince)) / 1000));
+}
+
+function hms(s: number): string {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
@@ -31,11 +41,14 @@ function elapsed(from: string, to: number): string {
 
 export function WorkdayPanel({
   workday,
+  statuses,
   startedLabel,
   endedLabel,
   copy,
 }: {
   workday: Workday;
+  /** The tenant's active statuses, in the tenant's order */
+  statuses: WorkStatus[];
   /** Pre-formatted in the user's zone and locale on the server */
   startedLabel: string;
   endedLabel: string | null;
@@ -45,7 +58,23 @@ export function WorkdayPanel({
   const now = useSyncExternalStore(subscribe, nowSeconds, serverNow);
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [statusFailed, setStatusFailed] = useState(false);
   const working = workday.status === "working";
+  const current = statuses.find((s) => s.key === workday.statusKey);
+
+  function changeStatus(key: string) {
+    setStatusFailed(false);
+    startTransition(async () => {
+      const res = await fetch("/api/v1/me/status", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-cma-request": "1" },
+        body: JSON.stringify({ key }),
+      });
+      if (!res.ok) setStatusFailed(true);
+      // Also after a refusal: the day may have ended in another tab
+      router.refresh();
+    });
+  }
 
   function confirmEnd() {
     startTransition(async () => {
@@ -75,7 +104,9 @@ export function WorkdayPanel({
   return (
     <Card>
       <div className="flex items-center gap-3">
-        <Badge tone="success">{copy.myDay.working}</Badge>
+        <Badge tone={current && !current.isWorking ? "neutral" : "success"}>
+          {current?.name ?? copy.myDay.working}
+        </Badge>
         <span className="text-small text-p4a-muted">
           {copy.myDay.workingSince} <span className="tabular text-p4a-body">{startedLabel}</span>
         </span>
@@ -86,8 +117,36 @@ export function WorkdayPanel({
         className="tabular text-clock font-semibold text-p4a-heading"
         aria-live="off"
       >
-        {now === null ? elapsed(workday.startedAt, Date.parse(workday.startedAt)) : elapsed(workday.startedAt, now)}
+        {hms(worked(workday.clock, now))}
       </p>
+      <div className="mt-6">
+        <p className="text-caption text-p4a-grey">{copy.myDay.statusLabel}</p>
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={copy.myDay.statusLabel}>
+          {statuses.map((s, i) => {
+            const isCurrent = s.key === workday.statusKey;
+            const digit = i < 9 ? String(i + 1) : undefined;
+            return (
+              <Button
+                key={s.key}
+                variant="outlined"
+                size="md"
+                shortcut={digit}
+                data-shortcut={digit}
+                aria-pressed={isCurrent}
+                disabled={isCurrent || pending}
+                onClick={() => changeStatus(s.key)}
+              >
+                {s.name}
+              </Button>
+            );
+          })}
+        </div>
+        {statusFailed ? (
+          <p role="alert" className="mt-2 text-small text-p4a-body">
+            {copy.myDay.statusFailed}
+          </p>
+        ) : null}
+      </div>
       <div className="mt-6">
         <Button
           variant="outlined"

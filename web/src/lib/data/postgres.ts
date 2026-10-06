@@ -1,8 +1,8 @@
 import "server-only";
 import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
-import { CmaDbError, one, withTenant, withoutTenant, type TenantContext } from "@/lib/db/client";
-import type { CmaData, DateKey, HoursRange, HoursSummary, Workday } from "./types";
+import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
+import type { CmaData, DateKey, HoursRange, HoursSummary, Workday, WorkStatus } from "./types";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -12,8 +12,8 @@ import type { CmaData, DateKey, HoursRange, HoursSummary, Workday } from "./type
  *  - Own data only through the database: every read filters on cma.current_user_id(), the
  *    transaction's acting user, never on an id passed in. A bug that hands over a colleague's id
  *    still cannot read a colleague's hours.
- *  - The database clock decides: open_workday() and end_workday() are called without a time, so
- *    they use now(). The `now` arguments of the interface exist for the mock only.
+ *  - The database clock decides: open_workday(), set_status() and end_workday() are called without
+ *    a time, so they use now(). The `now` arguments of the interface exist for the mock only.
  *  - "Today" is the business date in the user's zone, computed in SQL (cma.business_date with
  *    cma.user_timezone), so the app server's zone never matters.
  *  - Errors surface as CmaDbError with the function's SQLSTATE (CMA01 to CMA05); SQL text never
@@ -36,16 +36,56 @@ type SummaryRow = HeaderRow & { working_seconds: number };
 
 const HEADER = "business_date, status, started_at, ended_at";
 
+type DayRow = HeaderRow & {
+  status_key: string | null;
+  closed_seconds: number;
+  running_since: Date | null;
+};
+
+/**
+ * One own workday with its current status and the clock's inputs. Worked time counts intervals in
+ * statuses with is_working; a capped interval (forgotten clock-out) counts as closed and never runs.
+ * `dateSql` is TODAY or a bound parameter, never caller text.
+ */
+async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<DayRow[]> {
+  const r = await q.query<DayRow>(
+    `select s.business_date, s.status, s.started_at, s.ended_at,
+            ws.key                                   as status_key,
+            coalesce(c.closed_seconds, 0)::int       as closed_seconds,
+            c.running_since
+       from cma.workday_summary s
+       left join cma.work_status ws
+              on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
+       left join lateral (
+         select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
+                max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped)  as running_since
+           from cma.time_interval i
+           join cma.work_status iws
+             on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id
+          where i.workday_id = s.workday_id
+       ) c on true
+      where s.${OWN} and s.business_date = ${dateSql}`,
+    params,
+  );
+  return r.rows;
+}
+
 function ctx(me: Principal): TenantContext {
   return { tenantId: me.tenantId, userId: me.userId };
 }
 
-function toWorkday(r: HeaderRow): Workday {
+function toWorkday(r: DayRow): Workday {
+  const ended = r.status === "ended";
   return {
     date: r.business_date,
-    status: r.status === "ended" ? "ended" : "working",
+    status: ended ? "ended" : "working",
     startedAt: r.started_at.toISOString(),
     endedAt: r.ended_at ? r.ended_at.toISOString() : null,
+    statusKey: ended ? null : r.status_key,
+    clock: {
+      closedSeconds: r.closed_seconds,
+      runningSince: !ended && r.running_since ? r.running_since.toISOString() : null,
+    },
   };
 }
 
@@ -131,19 +171,16 @@ export const postgresData: CmaData = {
   async openWorkday(me: Principal): Promise<Workday> {
     // Returns today's day, open or ended, creating it if needed; an ended day stays ended
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<HeaderRow>(`select ${HEADER} from cma.open_workday()`);
-      return toWorkday(one(r.rows, "open_workday"));
+      const opened = await q.query<{ business_date: string }>(`select business_date from cma.open_workday()`);
+      const date = one(opened.rows, "open_workday").business_date;
+      return toWorkday(one(await readDay(q, "$1::date", [date]), "open_workday"));
     });
   },
 
   async getWorkday(me: Principal, date: DateKey): Promise<Workday | null> {
     assertDate(date, "date");
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<HeaderRow>(
-        `select ${HEADER} from cma.workday_summary where ${OWN} and business_date = $1::date`,
-        [date],
-      );
-      const row = r.rows[0];
+      const row = (await readDay(q, "$1::date", [date]))[0];
       return row ? toWorkday(row) : null;
     });
   },
@@ -151,17 +188,42 @@ export const postgresData: CmaData = {
   async endWorkday(me: Principal): Promise<Workday> {
     return withTenant(ctx(me), async (q) => {
       // Lock today's own row so two tabs cannot both end it
-      const today = await q.query<HeaderRow & { id: string }>(
-        `select id, ${HEADER} from cma.workday
+      const today = await q.query<{ id: string; status: "open" | "ended" }>(
+        `select id, status from cma.workday
           where tenant_id = cma.current_tenant_id() and ${OWN} and business_date = ${TODAY}
           for update`,
       );
       const w = today.rows[0];
       if (!w) throw new CmaDbError("CMA02", "no workday today");
       // Same as the mock: ending an ended day returns it, so a repeated log out is harmless
-      if (w.status === "ended") return toWorkday(w);
-      const ended = await q.query<HeaderRow>(`select ${HEADER} from cma.end_workday($1)`, [w.id]);
-      return toWorkday(one(ended.rows, "end_workday"));
+      if (w.status !== "ended") await q.query(`select 1 from cma.end_workday($1)`, [w.id]);
+      return toWorkday(one(await readDay(q, TODAY, []), "end_workday"));
+    });
+  },
+
+  async listStatuses(me: Principal): Promise<WorkStatus[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_default: boolean }>(
+        `select key, name, is_working, is_default
+           from cma.work_status
+          where tenant_id = cma.current_tenant_id() and status = 'active'
+          order by sort_order, key`,
+      );
+      return r.rows.map((s) => ({ key: s.key, name: s.name, isWorking: s.is_working, isDefault: s.is_default }));
+    });
+  },
+
+  async setStatus(me: Principal, key: string): Promise<Workday> {
+    return withTenant(ctx(me), async (q) => {
+      // Today's own day; set_status locks it and enforces own day, not ended, active key
+      const today = await q.query<{ id: string }>(
+        `select id from cma.workday
+          where tenant_id = cma.current_tenant_id() and ${OWN} and business_date = ${TODAY}`,
+      );
+      const w = today.rows[0];
+      if (!w) throw new CmaDbError("CMA02", "no workday today");
+      await q.query(`select 1 from cma.set_status($1, $2)`, [w.id, key]);
+      return toWorkday(one(await readDay(q, TODAY, []), "set_status"));
     });
   },
 

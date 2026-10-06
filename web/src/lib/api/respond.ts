@@ -94,3 +94,17 @@ export function dateParam(value: string | null, name: string): string {
 export function daysInclusive(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
 }
+
+/** The JSON body of a write as an object, or a 400. Read after assertSameSiteWrite. */
+export async function jsonBody(request: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiError(400, "invalid_body", "Body must be JSON");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "invalid_body", "Body must be a JSON object");
+  }
+  return body as Record<string, unknown>;
+}

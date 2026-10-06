@@ -11,7 +11,10 @@ export default async function MyDayPage() {
   if (!r.ok) return r.page;
   const { me, copy } = r;
 
-  const workday = await data().openWorkday(me, new Date().toISOString());
+  const [workday, statuses] = await Promise.all([
+    data().openWorkday(me, new Date().toISOString()),
+    data().listStatuses(me),
+  ]);
 
   return (
     <Shell copy={copy} me={me} active="my-day">
@@ -21,6 +24,7 @@ export default async function MyDayPage() {
       </PageTitle>
       <WorkdayPanel
         workday={workday}
+        statuses={statuses}
         startedLabel={fmtTime(workday.startedAt, me.timeZone, me.locale)}
         endedLabel={workday.endedAt ? fmtTime(workday.endedAt, me.timeZone, me.locale) : null}
         copy={copy}
