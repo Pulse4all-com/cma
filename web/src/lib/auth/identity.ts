@@ -35,6 +35,11 @@ export interface Principal {
   displayName: string;
   organisationName: string;
   roleKey: string;
+  /**
+   * Permission keys from the catalog (cma.user_permissions), for showing or hiding screens only.
+   * Screens check a permission, never a role key. The database checks again on every call.
+   */
+  permissions: string[];
   locale: Locale;
   /** IANA zone the user works in; calendar days and week boundaries follow it */
   timeZone: string;
@@ -79,6 +84,7 @@ export const MOCK_PRINCIPAL: Principal = {
   displayName: "Agent One",
   organisationName: "Newco",
   roleKey: "agent",
+  permissions: ["workday.own"],
   locale: config.defaultLocale,
   timeZone: "Europe/Madrid",
 };

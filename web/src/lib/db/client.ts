@@ -28,8 +28,8 @@ import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-co
 
 // ---- Error translation -----------------------------------------------------------------------
 
-/** SQLSTATEs raised by the write functions of migration 0002. The API maps codes, not text. */
-export type CmaSqlState = 'CMA01' | 'CMA02' | 'CMA03' | 'CMA04' | 'CMA05';
+/** SQLSTATEs raised by the functions of migrations 0002 and 0003. The API maps codes, not text. */
+export type CmaSqlState = 'CMA01' | 'CMA02' | 'CMA03' | 'CMA04' | 'CMA05' | 'CMA06';
 
 export const CMA_SQLSTATE = {
   CMA01: 'no acting user or user inactive',
@@ -37,6 +37,7 @@ export const CMA_SQLSTATE = {
   CMA03: 'workday already ended',
   CMA04: 'invalid correction or event',
   CMA05: 'tenant configuration missing',
+  CMA06: 'not permitted',
 } as const satisfies Record<CmaSqlState, string>;
 
 export class CmaDbError extends Error {

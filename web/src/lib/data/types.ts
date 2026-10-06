@@ -71,6 +71,77 @@ export interface HoursSummary extends HoursRange {
   days: HoursDay[];
 }
 
+/**
+ * Team data (migration 0003), for people holding workday.team. The database checks the permission
+ * on every call (CMA06); these shapes carry staff data, never customer data.
+ */
+export interface TeamDay {
+  userId: string;
+  displayName: string;
+  /** Employer, for hours per employer */
+  organisationName: string;
+  date: DateKey;
+  /** The day's own zone; the editor shows its times in this zone, not the viewer's */
+  timeZone: string;
+  status: "open" | "ended";
+  startedAt: Instant;
+  endedAt: Instant | null;
+  /** Working minutes (is_working), the figure My hours shows */
+  minutes: number;
+  /** Paid minutes (is_paid), for payroll */
+  paidMinutes: number;
+  /** Open past its business day: hours stop at the day's end until someone corrects it */
+  isCapped: boolean;
+  needsCorrection: boolean;
+  hasCorrection: boolean;
+}
+
+export interface TeamHours extends HoursRange {
+  days: TeamDay[];
+}
+
+export type TimeEventKind = "start" | "status" | "end" | "void";
+
+/** One row of a day, effective or not: corrections never remove a row */
+export interface TimeEvent {
+  id: string;
+  kind: TimeEventKind;
+  statusKey: string | null;
+  statusName: string | null;
+  at: Instant;
+  recordedAt: Instant;
+  source: "user" | "system" | "correction";
+  /** The event this row replaces or cancels */
+  supersedes: string | null;
+  reason: string | null;
+  approvedByName: string | null;
+  /** False once a later correction replaced or voided it, and for the void row itself */
+  isEffective: boolean;
+}
+
+export interface TeamDayDetail {
+  /** null when the person has no day on this date */
+  day: TeamDay | null;
+  events: TimeEvent[];
+}
+
+/** One change of a correction; see cma.correct_workday */
+export interface CorrectionChange {
+  kind: TimeEventKind;
+  /** ISO 8601 with an offset; required except for void */
+  at?: Instant;
+  /** Required for start and status */
+  statusKey?: string;
+  /** The event this change replaces; required for void */
+  supersedes?: string;
+}
+
+export interface Correction {
+  /** Required, 3 to 500 characters, stored on every row of the edit */
+  reason: string;
+  changes: CorrectionChange[];
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -93,4 +164,14 @@ export interface CmaData {
    */
   setStatus(me: Principal, key: string, now: Instant): Promise<Workday>;
   getHours(me: Principal, range: HoursRange): Promise<HoursSummary>;
+  /** Hours per person per day; all people of the tenant, or one. Needs workday.team (CMA06) */
+  getTeamHours(me: Principal, range: HoursRange, userId: string | null): Promise<TeamHours>;
+  /** One person's day with every event, for the day editor. Needs workday.team (CMA06) */
+  getTeamDay(me: Principal, userId: string, date: DateKey): Promise<TeamDayDetail>;
+  /**
+   * Corrects one person's day in one transaction (cma.correct_workday); on a date without a day
+   * this is Add day. The caller is the approver. Own day CMA06, unknown person or status CMA02,
+   * invalid edit CMA04. Answers the day as it now stands.
+   */
+  correctWorkday(me: Principal, userId: string, date: DateKey, correction: Correction): Promise<TeamDayDetail>;
 }

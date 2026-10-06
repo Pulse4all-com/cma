@@ -8,6 +8,11 @@ import { CmaDbError } from "@/lib/db/client";
 import { dateKeyInZone } from "@/lib/time";
 import type { CmaData, DateKey, HoursSummary, Instant, WorkStatus, Workday } from "./types";
 
+/** Same answer as the database for a caller without workday.team */
+function assertTeam(me: Principal): void {
+  if (!me.permissions.includes("workday.team")) throw new CmaDbError("CMA06", "not permitted");
+}
+
 type Key = `${string}:${string}:${DateKey}`;
 const owner = (me: Principal) => `${me.tenantId}:${me.userId}:`;
 const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
@@ -172,5 +177,23 @@ export const mockData: CmaData = {
       totalMinutes: days.reduce((sum, d) => sum + d.minutes, 0),
     };
     return summary;
+  },
+
+  // Team data: the mock has one fictional agent and no team. The mock principal holds no
+  // workday.team, so these answer as the database would for an agent (CMA06). Mock team data comes
+  // with the Hours screen (increment c2).
+  async getTeamHours(me, range) {
+    assertTeam(me);
+    return { ...range, days: [] };
+  },
+
+  async getTeamDay(me) {
+    assertTeam(me);
+    return { day: null, events: [] };
+  },
+
+  async correctWorkday(me) {
+    assertTeam(me);
+    throw new CmaDbError("CMA02", "no such person in the mock");
   },
 };

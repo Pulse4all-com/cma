@@ -4,11 +4,13 @@ import { getAccess, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/db/client";
 
 /**
- * Shared plumbing for the /api/v1/me routes.
+ * Shared plumbing for the /api/v1 routes.
  *
  * Same rules as the screens: the identity comes from proxy.ts only, the principal from the
- * data layer only, and there is no tenant or user parameter anywhere, so a caller can only
- * ever read or change their own day. Every answer is no-store: hours are pay data.
+ * data layer only, and there is never a tenant parameter. The /me routes take no user parameter,
+ * so a caller can only read or change their own day. The /team routes take a user id; the
+ * database decides whether the caller may use it (workday.team, CMA06), never this layer.
+ * Every answer is no-store: hours are pay data.
  *
  * Body shape: { data: ... } on success, { error: { code, message } } otherwise.
  */
@@ -30,13 +32,14 @@ function fail(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status, headers: NO_STORE });
 }
 
-/** SQLSTATEs of migration 0002 and connection failures, as HTTP. Never the SQL text. */
+/** SQLSTATEs of migrations 0002 and 0003 and connection failures, as HTTP. Never the SQL text. */
 const DB_STATUS: Record<CmaDbError["sqlState"], [number, string]> = {
   CMA01: [403, "not_active"],
   CMA02: [404, "not_found"],
   CMA03: [409, "already_ended"],
   CMA04: [400, "invalid"],
   CMA05: [500, "tenant_configuration_missing"],
+  CMA06: [403, "not_permitted"],
   DB_UNAVAILABLE: [503, "database_unavailable"],
   DB_ERROR: [500, "database_error"],
 };
@@ -88,6 +91,14 @@ export function dateParam(value: string | null, name: string): string {
     throw new ApiError(400, "invalid_date", `${name} must be a date in YYYY-MM-DD`);
   }
   return value;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** An id in canonical uuid form, or a 400. Whether it exists or may be used is the database's answer. */
+export function uuidParam(value: string | null | undefined, name: string): string {
+  if (!value || !UUID_RE.test(value)) throw new ApiError(400, "invalid_id", `${name} must be an id`);
+  return value.toLowerCase();
 }
 
 /** Whole days from a to b, inclusive */

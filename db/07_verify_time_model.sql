@@ -81,7 +81,7 @@ order by 1;
 set role cma_owner;
 select version, description, applied_by, applied_at::date from cma.schema_migration order by 1;
 reset role;
--- expect: 0001 and 0002, applied_by your IAM login
+-- expect: 0001 and 0002 (and 0003 once applied), applied_by your IAM login
 
 -- B. Configuration as a reader: status ladder per tenant, time zones ------------------------------------
 select t.slug, s.key, s.is_working, s.is_productive, s.is_paid, s.is_billable, s.is_default
@@ -235,6 +235,7 @@ select set_config('app.user_id', (select id::text from cma.app_user where email 
 select cma.has_permission(cma.current_user_id(), 'workday.team') as agent_may_correct;   -- expect: false
 select cma.correct_time_event((cma.open_workday()).id, 'end', now(), null, null, 'I forgot', cma.current_user_id());
 -- expected error: user ... may not correct time (needs workday.team)  (SQLSTATE CMA04)
+--   after migration 0003: user ... lacks permission workday.team  (SQLSTATE CMA06)
 rollback;
 
 -- J. A correction row needs reason and approver, even for the owner ---------------------------- expected error
