@@ -1,15 +1,21 @@
 -- Verify CMA migration 0003a (team_people). Run as yourself in Cloud SQL Studio, one block at a
--- time; every block ends in rollback and changes nothing.
+-- time; every block ends in rollback and changes nothing. Your own login has no direct rights on
+-- schema cma, so every block first switches role (cma_owner to read, cma_app to act as the app).
 --   dev:  blocks A, B, C, D (B to D use the dev seed's mock identities)
 --   prod: blocks A and E (E runs as you: replace the email)
--- A block passes when its last select shows PASS. A refusal check that fails stops the block with
--- an error that starts with FAIL. To provoke: in B demand count(*) >= 1000; in C expect 'CMA01'.
+-- Studio shows one result per statement: pick the last one in "All results". A block passes when
+-- it shows PASS; a refusal that does not happen stops the block with an error starting with FAIL.
+-- To provoke: in B demand count(*) >= 1000; in C expect 'CMA01'.
+-- Verified 6 October 2026: dev A-D PASS (4 people), prod A and E PASS (2 people).
 
 -- A. The function and the migration row exist ---------------------------------------------------
+begin;
+set local role cma_owner;
 select 'A function and migration row' as check,
        case when to_regprocedure('cma.team_people()') is not null
              and exists (select 1 from cma.schema_migration where version = '0003a')
             then 'PASS' else 'FAIL' end as result;
+rollback;
 
 -- B. The test supervisor sees the people of the tenant, Agent Two included (dev) --------------------
 begin;
@@ -60,6 +66,7 @@ rollback;
 
 -- E. You see the people of your tenant (prod; replace the email) ----------------------------------
 begin;
+set local role cma_owner;
 select set_config('app.tenant_id', tenant_id::text, true),
        set_config('app.user_id', id::text, true)
 from cma.app_user where email = 'martin@pulse4all.com';
