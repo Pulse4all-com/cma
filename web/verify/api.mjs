@@ -7,10 +7,12 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and the fixture db/08_fixture_api_verify_dev.sql. Ends the test
- * supervisor's workday of today (dev data); safe to rerun on the same day.
+ * Needs the dev seed (06) and migration 0003. Ends the test supervisor's workday of today and, as
+ * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
+ * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
+ * date more than 400 days back (dev data). Safe to rerun on the same day.
  *
- * Themes: identity and tenant, own data only, a correction row, an ended day stays ended,
+ * Themes: identity and tenant, own data only, corrections (team routes), an ended day stays ended,
  * status changes from the tenant's own list.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
@@ -95,14 +97,104 @@ expect("hours show the caller's own day",
 const redirected = (await get(SUPERVISOR, `/api/v1/me/hours?${range}&userId=${meA.userId}&user=${AGENT}`)).body.data;
 expect("a user parameter cannot redirect hours", redirected, hoursS, hoursA);
 
-// ---- a correction row ----------------------------------------------------------------------
-// The seed leaves Agent Two a forgotten clock-out (open, capped at the end of its day); the fixture
-// closes it with a supervisor correction. Afterwards no past day may be open, and every past day
-// must count its exact minutes from start to end, not a capped day.
-const past = hoursA.days.filter((d) => d.date < today);
+// ---- corrections (cma.correct_workday), 12 checks ------------------------------------------
+// The supervisor holds workday.team and is the approver of their own corrections (V1). No key or
+// name is assumed: the start status is the tenant's default.
+const statusList = (await get(AGENT, "/api/v1/me/statuses")).body?.data ?? [];
+const defaultStatus = statusList.find((s) => s.isDefault);
+const worked = (minutes) => (defaultStatus?.isWorking ? minutes : 0);
+const daysAgo = (n) => dateKey(new Date(Date.now() - n * 86_400_000), meA.timeZone);
+const teamHours = async (s, f, t, userId) =>
+  (await get(s, `/api/v1/team/hours?from=${f}&to=${t}${userId ? `&userId=${userId}` : ""}`));
+const correct = (s, userId, date, body, headers = { "x-cma-request": "1" }) =>
+  call(s, `/api/v1/team/days/${userId}/${date}/corrections`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+const anEnd = { reason: "Verifier check (dev)", changes: [{ kind: "end", at: new Date().toISOString() }] };
+
+expect("an agent cannot read team hours", (await teamHours(AGENT, from, today)).status, 403, 200);
+
+// The verifier's logins of earlier days are forgotten clock-outs by now. It closes them itself, one
+// minute after their start: dev data whose length does not matter.
+const leftovers = ((await teamHours(SUPERVISOR, daysAgo(91), today, meA.userId)).body?.data?.days ?? [])
+  .filter((d) => d.status === "open" && d.date < today);
+let notClosed = 0;
+for (const d of leftovers) {
+  const r = await correct(SUPERVISOR, meA.userId, d.date, {
+    reason: "Verifier: closes its own login of that day (dev)",
+    changes: [{ kind: "end", at: new Date(Date.parse(d.startedAt) + 60_000).toISOString() }],
+  });
+  if (!(r.status === 200 && r.body?.data?.day?.status === "ended" && r.body?.data?.day?.hasCorrection)) notClosed++;
+}
+if (leftovers.length) console.log(`      (closed ${leftovers.length} leftover day(s): ${leftovers.map((d) => d.date).join(", ")})`);
+expect("the supervisor closes open past days", notClosed, 0, 1);
+
+expect("a correction needs the request header", (await correct(SUPERVISOR, meA.userId, today, anEnd, {})).status, 400, 200);
+expect("cross-site correction is refused",
+  (await correct(SUPERVISOR, meA.userId, today, anEnd, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+expect("a correction needs a reason",
+  (await correct(SUPERVISOR, meA.userId, today, { ...anEnd, reason: " " })).status, 400, 200);
+expect("nobody corrects their own day", (await correct(SUPERVISOR, meS.userId, today, anEnd)).status, 403, 200);
+expect("an agent cannot correct", (await correct(AGENT, meS.userId, today, anEnd)).status, 403, 200);
+expect("an unknown person is a 404",
+  (await correct(SUPERVISOR, "00000000-0000-7000-8000-00000000dead", daysAgo(1), {
+    reason: "Verifier check (dev)", changes: [{ kind: "start", statusKey: defaultStatus?.key, at: new Date().toISOString() }],
+  })).status, 404, 200);
+expect("a future date is refused",
+  (await correct(SUPERVISOR, meA.userId, daysAgo(-1), {
+    reason: "Verifier check (dev)", changes: [{ kind: "start", statusKey: defaultStatus?.key, at: new Date().toISOString() }],
+  })).status, 400, 200);
+
+// Add day on the first free date more than 400 days back. Times in UTC with Z: 08:00 to 12:00 UTC
+// lies inside that business day for every zone from UTC-7 to UTC+11.
+let freeDate = null;
+for (let k = 0; k < 10 && !freeDate; k++) {
+  const newest = 400 + k * 92;
+  const taken = new Set(((await teamHours(SUPERVISOR, daysAgo(newest + 91), daysAgo(newest), meA.userId)).body?.data?.days ?? [])
+    .map((d) => d.date));
+  for (let i = 0; i < 92 && !freeDate; i++) if (!taken.has(daysAgo(newest + i))) freeDate = daysAgo(newest + i);
+}
+const added = await correct(SUPERVISOR, meA.userId, freeDate, {
+  reason: "Verifier: forgot to clock in (dev)",
+  changes: [
+    { kind: "start", statusKey: defaultStatus?.key, at: `${freeDate}T08:00:00Z` },
+    { kind: "end", at: `${freeDate}T12:00:00Z` },
+  ],
+});
+const addedDay = added.body?.data?.day;
+expect("add day creates the missing day",
+  [added.status, addedDay?.status, addedDay?.hasCorrection, addedDay?.minutes],
+  [200, "ended", true, worked(240)],
+  [404, null, false, 241]);
+
+expect("an event before the start is refused",
+  (await correct(SUPERVISOR, meA.userId, freeDate, {
+    reason: "Verifier check (dev)", changes: [{ kind: "status", statusKey: defaultStatus?.key, at: `${freeDate}T07:00:00Z` }],
+  })).status, 400, 200);
+
+const oldEnd = (added.body?.data?.events ?? []).find((e) => e.kind === "end" && e.isEffective);
+const moved = await correct(SUPERVISOR, meA.userId, freeDate, {
+  reason: "Verifier: end time confirmed later (dev)",
+  changes: [{ kind: "end", at: `${freeDate}T13:00:00Z`, supersedes: oldEnd?.id }],
+});
+const movedEvents = moved.body?.data?.events ?? [];
+expect("a replaced event stays visible",
+  [movedEvents.some((e) => e.id === oldEnd?.id && !e.isEffective),
+   movedEvents.filter((e) => e.kind === "end" && e.isEffective).length,
+   moved.body?.data?.day?.minutes],
+  [true, 1, worked(300)],
+  [false, 2, 241]);
+
+// ---- no past day open ----------------------------------------------------------------------
+// After the closing above, no past day may be open, and every past day must count its exact
+// minutes from start to end, not a capped day.
+const hoursAfter = (await get(AGENT, `/api/v1/me/hours?${range}`)).body.data;
+const past = hoursAfter.days.filter((d) => d.date < today);
 const openPast = past.filter((d) => !d.endedAt).map((d) => d.date);
 const allExact = past.every((d) => d.endedAt && d.minutes === Math.floor((Date.parse(d.endedAt) - Date.parse(d.startedAt)) / 60000));
-if (openPast.length) console.log(`      (open past days ${openPast.join(", ")}: run db/08_fixture_api_verify_dev.sql in Cloud SQL Studio on dev)`);
+if (openPast.length) console.log(`      (open past days ${openPast.join(", ")})`);
 expect("correction leaves no past day open or capped", [openPast.length, allExact, past.length > 0], [0, true, true], [1, false, true]);
 
 // ---- an ended day stays ended --------------------------------------------------------------

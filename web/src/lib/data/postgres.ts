@@ -2,7 +2,9 @@ import "server-only";
 import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
-import type { CmaData, DateKey, HoursRange, HoursSummary, Workday, WorkStatus } from "./types";
+import type {
+  CmaData, DateKey, HoursRange, HoursSummary, TeamDay, TeamDayDetail, TimeEvent, Workday, WorkStatus,
+} from "./types";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -106,6 +108,80 @@ function assertDate(d: string, name: string): void {
   if (!DATE_RE.test(d)) throw new CmaDbError("DB_ERROR", `${name} must be YYYY-MM-DD`);
 }
 
+// ---- Team (migration 0003): cma.team_hours, cma.team_day, cma.correct_workday ----------------
+// These read other people's days, so the permission check is inside each function (workday.team,
+// CMA06), in the same transaction as the read: never a check here followed by a plain query.
+
+type TeamRow = {
+  user_id: string;
+  display_name: string;
+  organisation_name: string;
+  business_date: string;
+  timezone: string;
+  status: "open" | "ended";
+  started_at: Date;
+  ended_at: Date | null;
+  working_seconds: number;
+  paid_seconds: number;
+  is_capped: boolean;
+  needs_correction: boolean;
+  has_correction: boolean;
+};
+
+type EventRow = {
+  event_id: string;
+  kind: TimeEvent["kind"];
+  status_key: string | null;
+  status_name: string | null;
+  occurred_at: Date;
+  recorded_at: Date;
+  source: TimeEvent["source"];
+  supersedes_event_id: string | null;
+  reason: string | null;
+  approved_by_name: string | null;
+  is_effective: boolean;
+};
+
+function toTeamDay(r: TeamRow): TeamDay {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    organisationName: r.organisation_name,
+    date: r.business_date,
+    timeZone: r.timezone,
+    status: r.status,
+    startedAt: r.started_at.toISOString(),
+    endedAt: r.ended_at ? r.ended_at.toISOString() : null,
+    minutes: Math.floor(r.working_seconds / 60),
+    paidMinutes: Math.floor(r.paid_seconds / 60),
+    isCapped: r.is_capped,
+    needsCorrection: r.needs_correction,
+    hasCorrection: r.has_correction,
+  };
+}
+
+function toTimeEvent(r: EventRow): TimeEvent {
+  return {
+    id: r.event_id,
+    kind: r.kind,
+    statusKey: r.status_key,
+    statusName: r.status_name,
+    at: r.occurred_at.toISOString(),
+    recordedAt: r.recorded_at.toISOString(),
+    source: r.source,
+    supersedes: r.supersedes_event_id,
+    reason: r.reason,
+    approvedByName: r.approved_by_name,
+    isEffective: r.is_effective,
+  };
+}
+
+async function readTeamDay(q: Querier, userId: string, date: DateKey): Promise<TeamDayDetail> {
+  const day = await q.query<TeamRow>(`select * from cma.team_hours($2::date, $2::date, $1::uuid)`, [userId, date]);
+  const events = await q.query<EventRow>(`select * from cma.team_day($1::uuid, $2::date)`, [userId, date]);
+  return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent) };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
@@ -133,6 +209,7 @@ export const postgresData: CmaData = {
         organisation_name: string;
         time_zone: string;
         role_key: string | null;
+        permissions: string[];
       }>(
         `select u.id                         as user_id,
                 u.display_name,
@@ -145,7 +222,8 @@ export const postgresData: CmaData = {
                    join cma.app_role r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
                   where ur.tenant_id = u.tenant_id and ur.user_id = u.id
                   order by ur.granted_at, r.key
-                  limit 1)                   as role_key
+                  limit 1)                   as role_key,
+                array(select p from cma.user_permissions(u.id) p order by 1) as permissions
            from cma.app_user_external_id x
            join cma.app_user u      on u.tenant_id = x.tenant_id and u.id = x.user_id
            join cma.tenant t        on t.id = u.tenant_id
@@ -166,6 +244,7 @@ export const postgresData: CmaData = {
         displayName: row.display_name,
         organisationName: row.organisation_name,
         roleKey: row.role_key,
+        permissions: row.permissions,
         locale: config.defaultLocale,
         timeZone: row.time_zone,
       };
@@ -249,6 +328,38 @@ export const postgresData: CmaData = {
         endedAt: row.ended_at ? row.ended_at.toISOString() : null,
       }));
       return { ...range, days, totalMinutes: days.reduce((sum, d) => sum + d.minutes, 0) };
+    });
+  },
+
+  async getTeamHours(me, range, userId) {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<TeamRow>(
+        `select * from cma.team_hours($1::date, $2::date, $3::uuid)`,
+        [range.from, range.to, userId],
+      );
+      return { ...range, days: r.rows.map(toTeamDay) };
+    });
+  },
+
+  async getTeamDay(me, userId, date) {
+    assertDate(date, "date");
+    return withTenant(ctx(me), (q) => readTeamDay(q, userId, date));
+  },
+
+  async correctWorkday(me, userId, date, correction) {
+    assertDate(date, "date");
+    return withTenant(ctx(me), async (q) => {
+      // The function validates everything again; the route's checks only give clearer 400s
+      await q.query(`select 1 from cma.correct_workday($1::uuid, $2::date, $3::jsonb, $4)`, [
+        userId,
+        date,
+        JSON.stringify(correction.changes),
+        correction.reason,
+      ]);
+      // A new statement sees the edit (one transaction, read committed)
+      return readTeamDay(q, userId, date);
     });
   },
 };
