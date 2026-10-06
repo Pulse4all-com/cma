@@ -53,7 +53,7 @@ function expect(name, actual, expected, provoked) {
   const want = PROVOKE ? provoked : expected;
   const pass = JSON.stringify(actual) === JSON.stringify(want);
   results.push(pass);
-  const shown = (v) => (typeof v === "string" ? v : JSON.stringify(v)).slice(0, 60);
+  const shown = (v) => String(typeof v === "string" ? v : JSON.stringify(v)).slice(0, 60);
   console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(44)} got ${shown(actual)}${pass ? "" : `, wanted ${shown(want)}`}`);
 }
 
@@ -133,7 +133,7 @@ expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?
 
 // ---- verdict --------------------------------------------------------------------------------
 
-// ---- work status (cma.set_status) ------------------------------------------------------------
+// ---- work status (cma.set_status), 7 checks ------------------------------------------------------------
 // Agent Two's day today is open (only the supervisor's day was ended above). No key or name is
 // assumed: the verifier picks from the tenant's own list.
 const setStatus = (s, body, headers = { "x-cma-request": "1" }) =>
@@ -154,8 +154,11 @@ expect("cross-site status change is refused",
   (await setStatus(AGENT, { key: target?.key }, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
 
 await setStatus(AGENT, { key: target?.key });
+const after = (await get(AGENT, "/api/v1/me/day")).body?.data;
 expect("status change is stored on the own day",
-  (await get(AGENT, "/api/v1/me/day")).body?.data?.statusKey, target?.key, before?.statusKey);
+  after?.statusKey ?? null, target?.key ?? "(no other status to switch to)", before?.statusKey ?? null);
+expect("status since moves to the change",
+  Date.parse(after?.statusSince ?? "") > Date.parse(before?.statusSince ?? before?.startedAt ?? ""), true, false);
 
 expect("unknown status key is a 404",
   (await setStatus(AGENT, { key: "verify-no-such-status" })).status, 404, 200);

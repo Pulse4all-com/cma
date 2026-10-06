@@ -36,6 +36,8 @@ export interface Workday {
   endedAt: Instant | null;
   /** Key of the current work status; null once the day has ended */
   statusKey: string | null;
+  /** When the current status began; null once the day has ended */
+  statusSince: Instant | null;
   clock: WorkdayClock;
 }
 

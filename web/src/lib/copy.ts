@@ -21,7 +21,7 @@ const en = {
   },
   shell: {
     signedInAs: "Signed in as",
-    shortcutsHint: "Keys 1 and 2 switch pages, L logs out, Esc closes a dialog",
+    shortcutsHint: "Keys 1 and 2 switch pages, S picks a status on My day, L logs out, Esc closes a dialog",
     version: "Version",
     testData: "Test data: nothing you do here is saved",
   },
@@ -96,7 +96,7 @@ const nl: Copy = {
   },
   shell: {
     signedInAs: "Ingelogd als",
-    shortcutsHint: "Toets 1 en 2 wisselen van pagina, L logt uit, Esc sluit een venster",
+    shortcutsHint: "Toets 1 en 2 wisselen van pagina, S kiest een status op Mijn dag, L logt uit, Esc sluit een venster",
     version: "Versie",
     testData: "Testgegevens: niets wat je hier doet wordt bewaard",
   },

@@ -26,6 +26,7 @@ export default async function MyDayPage() {
         workday={workday}
         statuses={statuses}
         startedLabel={fmtTime(workday.startedAt, me.timeZone, me.locale)}
+        statusSinceLabel={workday.statusSince ? fmtTime(workday.statusSince, me.timeZone, me.locale) : null}
         endedLabel={workday.endedAt ? fmtTime(workday.endedAt, me.timeZone, me.locale) : null}
         copy={copy}
       />

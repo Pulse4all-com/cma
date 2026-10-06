@@ -38,6 +38,7 @@ const HEADER = "business_date, status, started_at, ended_at";
 
 type DayRow = HeaderRow & {
   status_key: string | null;
+  status_since: Date | null;
   closed_seconds: number;
   running_since: Date | null;
 };
@@ -52,13 +53,15 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
     `select s.business_date, s.status, s.started_at, s.ended_at,
             ws.key                                   as status_key,
             coalesce(c.closed_seconds, 0)::int       as closed_seconds,
-            c.running_since
+            c.running_since,
+            c.status_since
        from cma.workday_summary s
        left join cma.work_status ws
               on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
        left join lateral (
          select sum(i.seconds) filter (where iws.is_working and (not i.is_open or i.is_capped)) as closed_seconds,
-                max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped)  as running_since
+                max(i.from_at) filter (where iws.is_working and i.is_open and not i.is_capped)  as running_since,
+                max(i.from_at) filter (where i.is_open and not i.is_capped)                     as status_since
            from cma.time_interval i
            join cma.work_status iws
              on iws.tenant_id = cma.current_tenant_id() and iws.id = i.status_id
@@ -82,6 +85,7 @@ function toWorkday(r: DayRow): Workday {
     startedAt: r.started_at.toISOString(),
     endedAt: r.ended_at ? r.ended_at.toISOString() : null,
     statusKey: ended ? null : r.status_key,
+    statusSince: !ended && r.status_since ? r.status_since.toISOString() : null,
     clock: {
       closedSeconds: r.closed_seconds,
       runningSince: !ended && r.running_since ? r.running_since.toISOString() : null,
