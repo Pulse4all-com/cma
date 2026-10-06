@@ -7,13 +7,14 @@
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "verify:copy": "node verify/copy.mjs",
     "verify:theme": "node verify/theme.mjs",
     "verify:layout": "node verify/layout.mjs",
     "verify:iap": "node verify/iap-token.mjs",
     "verify:api": "node verify/api.mjs",
-    "verify": "npm run verify:copy && npm run verify:theme && npm run verify:layout"
+    "verify:corrections": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/corrections.mjs",
+    "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:theme && npm run verify:layout"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",

@@ -29,6 +29,11 @@ export function addDays(key: DateKey, days: number): DateKey {
   return d.toISOString().slice(0, 10);
 }
 
+/** Whole days from a to b (0 when equal) */
+export function daysBetween(a: DateKey, b: DateKey): number {
+  return Math.round((toUtcDate(b).getTime() - toUtcDate(a).getTime()) / 86_400_000);
+}
+
 /** Monday of the week that holds the date */
 export function startOfWeek(key: DateKey): DateKey {
   const dow = toUtcDate(key).getUTCDay(); // 0 = Sunday
@@ -57,16 +62,27 @@ export function fmtTime(instant: Instant, timeZone: string, locale: Locale): str
   return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(instant));
 }
 
-/** 12 March 2026 / 12 maart 2026 (style guide section 4) */
-export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" = "long"): string {
+/**
+ * long:    Thu 12 March 2026 / do 12 maart 2026 (style guide section 4)
+ * short:   12 Mar
+ * compact: Thu 12 Mar, for table rows
+ */
+export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | "compact" = "long"): string {
   const d = toUtcDate(key);
   return new Intl.DateTimeFormat(intlLocale[locale], {
     timeZone: "UTC",
-    weekday: style === "long" ? "short" : undefined,
+    weekday: style === "short" ? undefined : "short",
     day: "numeric",
     month: style === "long" ? "long" : "short",
     year: style === "long" ? "numeric" : undefined,
   }).format(d);
+}
+
+/** The zone's short name at an instant (CEST, BST), for times shown in someone else's zone */
+export function fmtZoneShort(instant: Instant, timeZone: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, timeZoneName: "short" })
+    .formatToParts(new Date(instant))
+    .find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
 
 /** 7h 12m */

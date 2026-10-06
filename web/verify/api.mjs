@@ -7,7 +7,7 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migration 0003. Ends the test supervisor's workday of today and, as
+ * Needs the dev seed (06) and migrations 0003 and 0003a. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
@@ -44,9 +44,6 @@ const login = (s) => call(s, "/", { redirect: "follow" });
 
 function dateKey(d, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
-}
-function localHHMM(iso, tz) {
-  return new Intl.DateTimeFormat("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
 }
 
 const results = [];
@@ -115,6 +112,13 @@ const correct = (s, userId, date, body, headers = { "x-cma-request": "1" }) =>
 const anEnd = { reason: "Verifier check (dev)", changes: [{ kind: "end", at: new Date().toISOString() }] };
 
 expect("an agent cannot read team hours", (await teamHours(AGENT, from, today)).status, 403, 200);
+
+// ---- team people (cma.team_people), 2 checks: who Add day and the person filter can offer ------
+expect("an agent cannot list the team", (await get(AGENT, "/api/v1/team/people")).status, 403, 200);
+const people = await get(SUPERVISOR, "/api/v1/team/people");
+expect("the supervisor lists the people, agent included",
+  [people.status, (people.body?.data ?? []).some((p) => p.userId === meA.userId && !!p.timeZone)],
+  [200, true], [200, false]);
 
 // The verifier's logins of earlier days are forgotten clock-outs by now. It closes them itself, one
 // minute after their start: dev data whose length does not matter.
