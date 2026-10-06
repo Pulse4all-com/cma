@@ -3,10 +3,11 @@
 /**
  * The interactive part of Team hours: the person filter, Add day, the table and the day editor.
  * Rows arrive formatted from the server (each in its own zone); this component only navigates and
- * opens the editor. Keyboard: P focuses the person filter, A opens Add day, arrows move between
- * the Correct buttons, Enter opens one.
+ * opens the editor. Keyboard: P focuses the person filter, A opens Add day, Down or Up anywhere on
+ * the page enters the table, arrows move between the Correct buttons, Enter opens one, and closing
+ * the editor returns focus to the row it came from.
  */
-import { useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
@@ -61,10 +62,39 @@ export function TeamHoursView({
   const router = useRouter();
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [opened, setOpened] = useState(0);
+  const body = useRef<HTMLTableSectionElement>(null);
+  /** The button that opened the editor, so focus can return to that row */
+  const opener = useRef<HTMLElement | null>(null);
+
+  // Down or Up outside the table (not while typing, not in a dialog) enters it, like S on My day
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector("dialog[open]")) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName) || active.isContentEditable)) return;
+      const tbody = body.current;
+      if (!tbody || (active && tbody.contains(active))) return;
+      const buttons = Array.from(tbody.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
+      const first = e.key === "ArrowDown" ? buttons[0] : buttons[buttons.length - 1];
+      if (!first) return;
+      e.preventDefault();
+      first.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   function open(next: EditorTarget) {
+    opener.current = document.activeElement as HTMLElement | null;
     setOpened((n) => n + 1);
     setTarget(next);
+  }
+
+  function close() {
+    setTarget(null);
+    // After the dialog has gone, back to the row (or the Add day button) it came from
+    requestAnimationFrame(() => opener.current?.focus());
   }
 
   function filter(userId: string) {
@@ -73,7 +103,7 @@ export function TeamHoursView({
   }
 
   /** Arrow keys move between the Correct buttons, like the status buttons on My day */
-  function move(e: KeyboardEvent<HTMLTableSectionElement>) {
+  function move(e: ReactKeyboardEvent<HTMLTableSectionElement>) {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
     const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -126,9 +156,12 @@ export function TeamHoursView({
               <th className={th} aria-label={t.correct} />
             </tr>
           </thead>
-          <tbody onKeyDown={move}>
+          <tbody ref={body} onKeyDown={move}>
             {rows.map((r) => (
-              <tr key={r.key} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
+              <tr
+                key={r.key}
+                className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50 focus-within:bg-p4a-bgblue"
+              >
                 <td className="whitespace-nowrap px-3">{r.dateLabel}</td>
                 <td className="whitespace-nowrap px-3">{r.displayName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
@@ -176,6 +209,7 @@ export function TeamHoursView({
           </tfoot>
         </table>
       )}
+      {rows.length > 0 ? <p className="mt-3 text-caption text-p4a-grey">{t.keysHint}</p> : null}
 
       {target ? (
         <DayEditor
@@ -187,9 +221,9 @@ export function TeamHoursView({
           statuses={statuses}
           copy={copy}
           locale={locale}
-          onClose={() => setTarget(null)}
+          onClose={close}
           onSaved={() => {
-            setTarget(null);
+            close();
             router.refresh();
           }}
         />
