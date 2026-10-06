@@ -4,8 +4,10 @@
 -- is rolled back, so nothing stays behind (also no audit rows). Runs in dev and prod alike.
 -- Keep the output as the release record in records/0003-<env>-<date>/.
 --
--- Block C reports each refusal as a notice: expect 10 lines "PASS ..." and no "FAIL". A refusal with
--- an unexpected code is not caught and stops the block with an error, which is also a failure.
+-- Block C checks 10 refusals. Each expected refusal is caught and logged as a notice "PASS ..."
+-- (Cloud SQL Studio does not show notices). A refusal that does not happen raises the error
+-- "FAIL ...", and one with an unexpected code stops the block with that error: no error means all
+-- 10 passed.
 
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -135,7 +137,7 @@ do $$ begin
   perform cma.correct_workday(current_setting('verify.lead')::uuid, current_setting('verify.day')::date,
     jsonb_build_array(jsonb_build_object('kind', 'start', 'statusKey', current_setting('verify.default'),
                                          'at', current_setting('verify.at09'))), 'Own day');
-  raise notice 'FAIL  own day: accepted';
+  raise exception 'FAIL  own day: accepted';
 exception when sqlstate 'CMA06' then raise notice 'PASS  nobody corrects their own day (CMA06)';
 end $$;
 
@@ -146,7 +148,7 @@ do $$ begin
                       jsonb_build_object('kind', 'status', 'statusKey', current_setting('verify.other'),
                                          'at', current_setting('verify.at08')::timestamptz - interval '1 day')),
     'Status before the start');
-  raise notice 'FAIL  status before the start: accepted';
+  raise exception 'FAIL  status before the start: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a status before the start is refused (CMA04)';
 end $$;
 
@@ -155,7 +157,7 @@ do $$ begin
     jsonb_build_array(jsonb_build_object('kind', 'start', 'statusKey', current_setting('verify.default'),
                                          'at', current_setting('verify.at09'))),   -- yesterday's 09:00, not the day before
     'Outside the day');
-  raise notice 'FAIL  time outside the day: accepted';
+  raise exception 'FAIL  time outside the day: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a time outside the corrected day is refused (CMA04)';
 end $$;
 
@@ -164,7 +166,7 @@ do $$ begin
     jsonb_build_array(jsonb_build_object('kind', 'start', 'statusKey', current_setting('verify.default'),
                                          'at', (current_setting('verify.day')::date - 1)::text || 'T09:00:00')),
     'No offset');
-  raise notice 'FAIL  time without offset: accepted';
+  raise exception 'FAIL  time without offset: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a time without offset is refused (CMA04)';
 end $$;
 
@@ -173,7 +175,7 @@ do $$ begin
     jsonb_build_array(jsonb_build_object('kind', 'start', 'statusKey', current_setting('verify.default'),
                                          'at', current_setting('verify.at09')::timestamptz + interval '2 days')),
     'Tomorrow');
-  raise notice 'FAIL  future date: accepted';
+  raise exception 'FAIL  future date: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a future date is refused (CMA04)';
 end $$;
 
@@ -181,7 +183,7 @@ do $$ begin
   perform cma.correct_workday(current_setting('verify.agent')::uuid, current_setting('verify.day')::date - 1,
     jsonb_build_array(jsonb_build_object('kind', 'end', 'at', current_setting('verify.at17')::timestamptz - interval '1 day')),
     'No start');
-  raise notice 'FAIL  new day without a start: accepted';
+  raise exception 'FAIL  new day without a start: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a new day must begin with its start (CMA04)';
 end $$;
 
@@ -189,7 +191,7 @@ do $$ begin
   perform cma.correct_workday(current_setting('verify.agent')::uuid, current_setting('verify.day')::date,
     jsonb_build_array(jsonb_build_object('kind', 'status', 'statusKey', current_setting('verify.default'),
                                          'at', current_setting('verify.at09'))), '  ');
-  raise notice 'FAIL  empty reason: accepted';
+  raise exception 'FAIL  empty reason: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  a correction needs a reason (CMA04)';
 end $$;
 
@@ -197,7 +199,7 @@ do $$ begin
   perform cma.correct_workday('00000000-0000-7000-8000-00000000dead', current_setting('verify.day')::date,
     jsonb_build_array(jsonb_build_object('kind', 'start', 'statusKey', current_setting('verify.default'),
                                          'at', current_setting('verify.at09'))), 'Unknown person');
-  raise notice 'FAIL  unknown user: accepted';
+  raise exception 'FAIL  unknown user: accepted';
 exception when sqlstate 'CMA02' then raise notice 'PASS  an unknown user is not found (CMA02)';
 end $$;
 
@@ -206,14 +208,14 @@ do $$ begin
     (select id from cma.workday where user_id = current_setting('verify.agent')::uuid),
     'status', current_setting('verify.at12')::timestamptz, current_setting('verify.default'), null,
     'Someone else approves', current_setting('verify.agent')::uuid);
-  raise notice 'FAIL  approver other than the acting user: accepted';
+  raise exception 'FAIL  approver other than the acting user: accepted';
 exception when sqlstate 'CMA04' then raise notice 'PASS  the approver is the person making the correction (CMA04)';
 end $$;
 
 do $$ begin
   perform set_config('app.user_id', current_setting('verify.agent'), true);
   perform cma.team_hours(current_setting('verify.day')::date, current_setting('verify.day')::date);
-  raise notice 'FAIL  agent reads team hours: accepted';
+  raise exception 'FAIL  agent reads team hours: accepted';
 exception when sqlstate 'CMA06' then raise notice 'PASS  team hours need workday.team (CMA06)';
 end $$;
 
