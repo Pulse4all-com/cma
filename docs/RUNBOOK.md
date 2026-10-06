@@ -82,12 +82,12 @@ Test users: `agent-two`, `supervisor`, `manager` (one tenant each), `agent-one` 
 Against dev, through the proxy from step 4:
 
 ```bash
-cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 15 PASS
-node verify/api.mjs --provoke; echo "exit $?"                     # ALL 15 PROVOKED CHECKS FAILED, exit 0
+cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 34 PASS
+node verify/api.mjs --provoke; echo "exit $?"                     # ALL 34 PROVOKED CHECKS FAILED, exit 0
 ```
 
-If the correction check fails after a fresh dev seed, run `db/08_fixture_api_verify_dev.sql` in Cloud SQL
-Studio on **dev**. Keep outputs as evidence:
+The verifier closes Agent Two's open past days itself (as the supervisor); no fixture runs first.
+Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
 The other verifiers (`copy`, `theme`, `layout`, `iap-token`) run against a local server; see the header
