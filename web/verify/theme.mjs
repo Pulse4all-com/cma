@@ -42,7 +42,7 @@ for (const hex of css.matchAll(/#[0-9a-f]{6}\b/gi)) {
 
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
-for (const path of ["/", "/hours", "/logout", "/no-access"]) {
+for (const path of ["/", "/hours", "/team/hours", "/logout", "/no-access"]) {
   await p.goto(BASE + path);
   await p.waitForLoadState("networkidle");
   if (provoke && path === "/") {
@@ -80,5 +80,5 @@ await b.close();
 
 const unique = [...new Set(problems)];
 for (const x of unique) console.log("  " + x);
-console.log(unique.length === 0 ? "theme: PASS (4 pages, palette, Montserrat, heading and body colours)" : `theme: FAIL (${unique.length} problems)`);
+console.log(unique.length === 0 ? "theme: PASS (5 pages, palette, Montserrat, heading and body colours)" : `theme: FAIL (${unique.length} problems)`);
 process.exit(unique.length === 0 ? 0 : 1);

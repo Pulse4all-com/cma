@@ -96,6 +96,15 @@ export interface TeamDay {
   hasCorrection: boolean;
 }
 
+/** A person whose time is kept, for Add day and the person filter (cma.team_people) */
+export interface TeamPerson {
+  userId: string;
+  displayName: string;
+  organisationName: string;
+  /** The person's zone; a new day opens in it */
+  timeZone: string;
+}
+
 export interface TeamHours extends HoursRange {
   days: TeamDay[];
 }
@@ -166,6 +175,8 @@ export interface CmaData {
   getHours(me: Principal, range: HoursRange): Promise<HoursSummary>;
   /** Hours per person per day; all people of the tenant, or one. Needs workday.team (CMA06) */
   getTeamHours(me: Principal, range: HoursRange, userId: string | null): Promise<TeamHours>;
+  /** The people whose time is kept: active, holding workday.own. Needs workday.team (CMA06) */
+  listTeamPeople(me: Principal): Promise<TeamPerson[]>;
   /** One person's day with every event, for the day editor. Needs workday.team (CMA06) */
   getTeamDay(me: Principal, userId: string, date: DateKey): Promise<TeamDayDetail>;
   /**

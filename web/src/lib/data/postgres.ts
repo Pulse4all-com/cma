@@ -3,7 +3,7 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  CmaData, DateKey, HoursRange, HoursSummary, TeamDay, TeamDayDetail, TimeEvent, Workday, WorkStatus,
+  CmaData, DateKey, HoursRange, HoursSummary, TeamDay, TeamDayDetail, TeamPerson, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -108,7 +108,7 @@ function assertDate(d: string, name: string): void {
   if (!DATE_RE.test(d)) throw new CmaDbError("DB_ERROR", `${name} must be YYYY-MM-DD`);
 }
 
-// ---- Team (migration 0003): cma.team_hours, cma.team_day, cma.correct_workday ----------------
+// ---- Team (migrations 0003, 0003a): cma.team_hours, cma.team_day, cma.correct_workday, cma.team_people
 // These read other people's days, so the permission check is inside each function (workday.team,
 // CMA06), in the same transaction as the read: never a check here followed by a plain query.
 
@@ -340,6 +340,20 @@ export const postgresData: CmaData = {
         [range.from, range.to, userId],
       );
       return { ...range, days: r.rows.map(toTeamDay) };
+    });
+  },
+
+  async listTeamPeople(me): Promise<TeamPerson[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ user_id: string; display_name: string; organisation_name: string; timezone: string }>(
+        `select * from cma.team_people()`,
+      );
+      return r.rows.map((p) => ({
+        userId: p.user_id,
+        displayName: p.display_name,
+        organisationName: p.organisation_name,
+        timeZone: p.timezone,
+      }));
     });
   },
 

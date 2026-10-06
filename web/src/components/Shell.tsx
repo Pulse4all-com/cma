@@ -12,23 +12,34 @@ import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
 import { Shortcuts } from "./Shortcuts";
 
-export type ShellPage = "my-day" | "my-hours";
+export type ShellPage = "my-day" | "my-hours" | "team-hours";
+
+type NavItem = { page: ShellPage; href: "/" | "/hours" | "/team/hours"; label: string; permission?: string };
 
 export function Shell({
   copy,
   me,
   active,
+  wide = false,
   children,
 }: {
   copy: Copy;
   me: Principal;
   active: ShellPage;
+  /** Report screens with wide tables; operational screens keep the narrow column */
+  wide?: boolean;
   children: ReactNode;
 }) {
-  const nav: { page: ShellPage; href: "/" | "/hours"; label: string; key: string }[] = [
-    { page: "my-day", href: "/", label: copy.nav.myDay, key: "1" },
-    { page: "my-hours", href: "/hours", label: copy.nav.myHours, key: "2" },
+  // Screens check a permission, never a role key; the database checks again on every call.
+  // Keys follow the visible order, so every person's pages are numbered 1, 2, 3 without gaps.
+  const items: NavItem[] = [
+    { page: "my-day", href: "/", label: copy.nav.myDay },
+    { page: "my-hours", href: "/hours", label: copy.nav.myHours },
+    { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
   ];
+  const nav = items
+    .filter((i) => !i.permission || me.permissions.includes(i.permission))
+    .map((i, n) => ({ ...i, key: String(n + 1) }));
 
   return (
     <div className="grid h-full grid-cols-[var(--spacing-rail)_1fr] grid-rows-[var(--spacing-topbar)_1fr]">
@@ -97,7 +108,7 @@ export function Shell({
       </nav>
 
       <main className="overflow-y-auto bg-white px-10 py-8">
-        <div className="max-w-4xl">{children}</div>
+        <div className={wide ? "max-w-6xl" : "max-w-4xl"}>{children}</div>
       </main>
     </div>
   );
