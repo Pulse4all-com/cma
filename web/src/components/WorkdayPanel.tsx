@@ -8,9 +8,12 @@
  *
  * Status buttons come from the tenant's own list in its order; no key or name
  * is known here. A change goes through POST /api/v1/me/status, the same path
- * the API verifier proves.
+ * the API verifier proves. Keyboard: S moves focus into the status buttons,
+ * arrows move between them, Enter picks one. Bare digits stay with the pages,
+ * so a tenant can have any number of statuses without clashing shortcuts.
  */
-import { useState, useSyncExternalStore, useTransition } from "react";
+import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { WorkStatus, Workday } from "@/lib/data";
 import type { Copy } from "@/lib/copy";
@@ -43,6 +46,7 @@ export function WorkdayPanel({
   workday,
   statuses,
   startedLabel,
+  statusSinceLabel,
   endedLabel,
   copy,
 }: {
@@ -51,6 +55,7 @@ export function WorkdayPanel({
   statuses: WorkStatus[];
   /** Pre-formatted in the user's zone and locale on the server */
   startedLabel: string;
+  statusSinceLabel: string | null;
   endedLabel: string | null;
   copy: Copy;
 }) {
@@ -61,6 +66,38 @@ export function WorkdayPanel({
   const [statusFailed, setStatusFailed] = useState(false);
   const working = workday.status === "working";
   const current = statuses.find((s) => s.key === workday.statusKey);
+  const group = useRef<HTMLDivElement>(null);
+
+  /** The buttons that can be chosen now (the current status is disabled) */
+  function choosable(): HTMLButtonElement[] {
+    return Array.from(group.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+  }
+
+  /** The S shortcut clicks the group itself: move focus to the first choosable status */
+  function enterGroup(e: ReactMouseEvent<HTMLDivElement>) {
+    if (e.target !== e.currentTarget) return;
+    choosable()[0]?.focus();
+  }
+
+  function moveInGroup(e: ReactKeyboardEvent<HTMLDivElement>) {
+    const buttons = choosable();
+    if (buttons.length === 0) return;
+    if (e.key === "Escape") {
+      (document.activeElement as HTMLElement | null)?.blur();
+      return;
+    }
+    const i = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const last = buttons.length - 1;
+    const next =
+      e.key === "ArrowRight" || e.key === "ArrowDown" ? (i < 0 || i === last ? 0 : i + 1)
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? (i <= 0 ? last : i - 1)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    buttons[next]?.focus();
+  }
 
   function changeStatus(key: string) {
     setStatusFailed(false);
@@ -107,8 +144,13 @@ export function WorkdayPanel({
         <Badge tone={current && !current.isWorking ? "neutral" : "success"}>
           {current?.name ?? copy.myDay.working}
         </Badge>
-        <span className="text-small text-p4a-muted">
-          {copy.myDay.workingSince} <span className="tabular text-p4a-body">{startedLabel}</span>
+        {statusSinceLabel ? (
+          <span className="text-small text-p4a-muted">
+            {copy.myDay.workingSince} <span className="tabular text-p4a-body">{statusSinceLabel}</span>
+          </span>
+        ) : null}
+        <span className="ml-auto text-small text-p4a-muted">
+          {copy.myDay.startedAt} <span className="tabular text-p4a-body">{startedLabel}</span>
         </span>
       </div>
       <p className="mt-6 text-caption text-p4a-grey">{copy.myDay.workedToday}</p>
@@ -121,17 +163,23 @@ export function WorkdayPanel({
       </p>
       <div className="mt-6">
         <p className="text-caption text-p4a-grey">{copy.myDay.statusLabel}</p>
-        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={copy.myDay.statusLabel}>
-          {statuses.map((s, i) => {
+        <div
+          ref={group}
+          className="mt-2 flex flex-wrap gap-2"
+          role="group"
+          aria-label={copy.myDay.statusLabel}
+          tabIndex={-1}
+          data-shortcut="s"
+          onClick={enterGroup}
+          onKeyDown={moveInGroup}
+        >
+          {statuses.map((s) => {
             const isCurrent = s.key === workday.statusKey;
-            const digit = i < 9 ? String(i + 1) : undefined;
             return (
               <Button
                 key={s.key}
                 variant="outlined"
                 size="md"
-                shortcut={digit}
-                data-shortcut={digit}
                 aria-pressed={isCurrent}
                 disabled={isCurrent || pending}
                 onClick={() => changeStatus(s.key)}
