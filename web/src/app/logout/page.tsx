@@ -16,7 +16,7 @@ export default async function LogOutPage() {
   const dayOpen = today?.status === "working";
 
   return (
-    <Shell copy={copy} me={me} active="my-day">
+    <Shell copy={copy} me={me} active="welcome">
       <PageTitle>{copy.logOut.title}</PageTitle>
       <Card>
         <p className="text-body">{dayOpen ? copy.logOut.body : copy.logOut.bodyDayEnded}</p>

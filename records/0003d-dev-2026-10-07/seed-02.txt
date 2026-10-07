@@ -1,0 +1,19 @@
+# 2026-10-07T09:31:47Z cma-dev-pg db/02_seed_pulse4all.sql
+DO
+SET
+            create_tenant             
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+            create_tenant             
+--------------------------------------
+ 01a10573-6fe6-7163-8d9a-d11967a61ced
+(1 row)
+
+INSERT 0 0
+INSERT 0 0
+DO
+DO
+DO
+# exit 0

@@ -58,7 +58,7 @@ export function GroupLegend({ groups, copy }: { groups: GroupSeconds; copy: Copy
   );
 }
 
-/** One bar per status in the tenant's order; the bar's length is its share of clocked time */
+/** One bar per status in the tenant's order; the bar's length is scaled to the largest status, the share of clocked time is printed next to it */
 export function StatusBars({
   statuses, clockedSeconds, copy, locale,
 }: { statuses: StatusTotal[]; clockedSeconds: number; copy: Copy; locale: Locale }) {

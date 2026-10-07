@@ -1,6 +1,7 @@
 /**
- * The left navigation as data: groups of pages, each page with the permission it needs. Shell
- * renders it; pages use firstPage() to send someone without a clock to a page they may see.
+ * The left navigation as data: Welcome as a page of its own above the groups, then groups of
+ * pages, each page with the permission it needs (null: everyone with a role). Shell renders it;
+ * pages use firstPage() to send someone without a clock to a page they may see.
  * Screens check a permission, never a role key; the database checks again on every call.
  * No runtime imports beyond types, so a client module may import the cookie prefix from here.
  */
@@ -10,38 +11,57 @@ import type { Copy } from "@/lib/copy";
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
-export type NavIcon = "clock" | "chart";
-export type ShellPage = "my-day" | "my-hours" | "team-hours" | "dashboard";
-export type NavHref = "/" | "/hours" | "/team/hours" | "/reports/dashboard";
+export type NavIcon = "home" | "clock" | "chart";
+export type ShellPage = "welcome" | "my-day" | "my-hours" | "team-hours" | "dashboard";
+export type NavHref = "/" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
 
 export interface NavItem {
   page: ShellPage;
   href: NavHref;
   label: string;
-  permission: string;
+  /** The permission that shows the page; null means every person with a role */
+  permission: string | null;
 }
 
-export interface NavSection {
+/** A page that stands on its own in the rail, with its icon */
+export interface NavPage {
+  kind: "page";
+  item: NavItem;
+  icon: NavIcon;
+}
+
+/** A group of pages that opens and closes */
+export interface NavGroupEntry {
+  kind: "group";
   id: string;
   label: string;
   icon: NavIcon;
   items: NavItem[];
 }
 
-/** Every group and page; a new module adds its group here */
-export function navSections(copy: Copy): NavSection[] {
+export type NavEntry = NavPage | NavGroupEntry;
+
+/** Every page and group in rail order; a new module adds its group here */
+export function navEntries(copy: Copy): NavEntry[] {
   return [
     {
+      kind: "page",
+      icon: "home",
+      item: { page: "welcome", href: "/", label: copy.nav.welcome, permission: null },
+    },
+    {
+      kind: "group",
       id: "time",
       label: copy.nav.time,
       icon: "clock",
       items: [
-        { page: "my-day", href: "/", label: copy.nav.myDay, permission: "workday.own" },
+        { page: "my-day", href: "/day", label: copy.nav.myDay, permission: "workday.own" },
         { page: "my-hours", href: "/hours", label: copy.nav.myHours, permission: "workday.own" },
         { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
       ],
     },
     {
+      kind: "group",
       id: "reports",
       label: copy.nav.reports,
       icon: "chart",
@@ -52,25 +72,39 @@ export function navSections(copy: Copy): NavSection[] {
   ];
 }
 
-export type VisibleSection = Omit<NavSection, "items"> & { items: (NavItem & { key: string })[] };
+export type VisibleItem = NavItem & { key: string };
+export type VisibleEntry =
+  | { kind: "page"; icon: NavIcon; item: VisibleItem }
+  | { kind: "group"; id: string; label: string; icon: NavIcon; items: VisibleItem[] };
+
+function mayOpen(me: Principal, item: NavItem): boolean {
+  return item.permission === null || me.permissions.includes(item.permission);
+}
 
 /**
- * The groups and pages this person may see. Keys follow the visible order across all groups, so
+ * The pages and groups this person may see. Keys follow the visible order across the rail, so
  * every person's pages are numbered 1, 2, 3 without gaps, whether a group is open or closed.
  */
-export function visibleNav(me: Principal, copy: Copy): VisibleSection[] {
+export function visibleNav(me: Principal, copy: Copy): VisibleEntry[] {
   let n = 0;
-  return navSections(copy)
-    .map((section) => ({
-      ...section,
-      items: section.items
-        .filter((i) => me.permissions.includes(i.permission))
-        .map((i) => ({ ...i, key: String(++n) })),
-    }))
-    .filter((section) => section.items.length > 0);
+  const out: VisibleEntry[] = [];
+  for (const entry of navEntries(copy)) {
+    if (entry.kind === "page") {
+      if (mayOpen(me, entry.item)) out.push({ kind: "page", icon: entry.icon, item: { ...entry.item, key: String(++n) } });
+      continue;
+    }
+    const items = entry.items.filter((i) => mayOpen(me, i)).map((i) => ({ ...i, key: String(++n) }));
+    if (items.length > 0) out.push({ kind: "group", id: entry.id, label: entry.label, icon: entry.icon, items });
+  }
+  return out;
+}
+
+/** Every visible page in order, for numbering checks and the first page */
+export function visiblePages(me: Principal, copy: Copy): VisibleItem[] {
+  return visibleNav(me, copy).flatMap((e) => (e.kind === "page" ? [e.item] : e.items));
 }
 
 /** The first page this person may see, or null when there is none */
 export function firstPage(me: Principal, copy: Copy): NavHref | null {
-  return visibleNav(me, copy)[0]?.items[0]?.href ?? null;
+  return visiblePages(me, copy)[0]?.href ?? null;
 }

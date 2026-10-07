@@ -32,7 +32,7 @@ function fail(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status, headers: NO_STORE });
 }
 
-/** SQLSTATEs of migrations 0002 and 0003 and connection failures, as HTTP. Never the SQL text. */
+/** SQLSTATEs of migrations 0002, 0003 and their additions, and connection failures, as HTTP. Never the SQL text. */
 const DB_STATUS: Record<CmaDbError["sqlState"], [number, string]> = {
   CMA01: [403, "not_active"],
   CMA02: [404, "not_found"],

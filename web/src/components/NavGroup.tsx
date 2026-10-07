@@ -45,7 +45,7 @@ export function NavGroup({
           !open && current ? "bg-white" : "hover:bg-white/60",
         ].join(" ")}
       >
-        <Icon name={icon} />
+        <NavIconMark name={icon} />
         <span className="flex-1 text-left">{label}</span>
         <svg
           aria-hidden="true"
@@ -67,9 +67,25 @@ export function NavGroup({
   );
 }
 
-/** Line icons drawn in the text colour, so they follow the palette */
-function Icon({ name }: { name: NavIcon }) {
+/** Line icons drawn in the text colour, so they follow the palette; shared with the bare rail items */
+export function NavIconMark({ name }: { name: NavIcon }) {
   switch (name) {
+    case "home":
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3.5 9.5 10 4l6.5 5.5" />
+          <path d="M5.5 8.5v7.5h3.5v-4h2v4h3.5V8.5" />
+        </svg>
+      );
     case "clock":
       return (
         <svg

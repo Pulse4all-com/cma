@@ -24,6 +24,7 @@ begin
     (v_subs, 'newco',     'agent.two@example.com',  'Agent Two'),
     (v_subs, 'newco',     'supervisor@example.com', 'Test Supervisor'),
     (v_subs, 'pulse4all', 'manager@example.com',    'Test Manager'),
+    (v_subs, 'pulse4all', 'analyst@example.com',    'Test Analyst'),      -- analytics: no clock, the Dashboard only
     (v_inv,  'clubdeal',  'agent.one@example.com',  'Invest Agent One')   -- same email, other tenant: separate row
   ) as s(tenant_id, org_key, email, display_name)
   join cma.organisation o on o.tenant_id = s.tenant_id and o.key = s.org_key
@@ -36,6 +37,7 @@ begin
     (v_subs, 'agent.two@example.com',  'agent'),
     (v_subs, 'supervisor@example.com', 'supervisor'),
     (v_subs, 'manager@example.com',    'manager'),
+    (v_subs, 'analyst@example.com',    'analytics'),
     (v_inv,  'agent.one@example.com',  'agent')
   ) as s(tenant_id, email, role_key)
   join cma.app_user u on u.tenant_id = s.tenant_id and u.email = s.email
@@ -51,5 +53,19 @@ begin
   ) as s(tenant_id, email, ext)
   join cma.app_user u on u.tenant_id = s.tenant_id and u.email = s.email
   on conflict do nothing;
+end
+$$;
+
+-- A dev-only app link that needs a permission (after addition 0003d), so the API verifier can prove
+-- that a link is shown only to people holding it. Fictional address; nothing like it goes to prod.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.app_link') is not null then
+    insert into cma.app_link (tenant_id, key, label, address, permission_key, sort_order)
+    values (v_subs, 'team-sheet', 'Team sheet (test)', 'https://example.com/team-sheet', 'workday.team', 30)
+    on conflict (tenant_id, key) do nothing;
+  end if;
 end
 $$;

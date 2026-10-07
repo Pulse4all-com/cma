@@ -1,0 +1,7 @@
+# 2026-10-07T09:31:48Z cma-dev-pg db/06_seed_dev_time_model.sql
+DO
+SET
+DO
+psql:db/06_seed_dev_time_model.sql:99: NOTICE:  time model fixture already present, skipped
+DO
+# exit 0

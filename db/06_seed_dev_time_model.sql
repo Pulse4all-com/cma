@@ -4,7 +4,8 @@
 -- Three things for the dev web app:
 --   1. Login ids for the test users under system 'mock'. In dev the web app runs behind Cloud Run
 --      IAM (gcloud run services proxy), not IAP, so its identity is the mock identity with
---      provider 'mock' and subject 'agent-one', 'agent-two', ... (web/src/lib/auth). A mock subject
+--      provider 'mock' and subject 'agent-one', 'agent-two', 'supervisor', 'manager', 'analyst'
+--      (web/src/lib/auth). A mock subject
 --      can therefore never match a real Google row, in dev or anywhere else. Real pulse4all.com
 --      users get system 'google' with the account's numeric id, in the prod people seed.
 --   2. A personal time zone for Agent Two, so the user override is exercised next to the employer
@@ -36,6 +37,7 @@ begin
     (v_subs, 'agent.two@example.com',  'agent-two'),
     (v_subs, 'supervisor@example.com', 'supervisor'),
     (v_subs, 'manager@example.com',    'manager'),
+    (v_subs, 'analyst@example.com',    'analyst'),      -- analytics: no workday.own, so no clock (0003d)
     (v_inv,  'agent.one@example.com',  'agent-one')     -- same person in two tenants: the login shows a tenant picker
   ) as s(tenant_id, email, subject)
   join cma.app_user u on u.tenant_id = s.tenant_id and u.email = s.email

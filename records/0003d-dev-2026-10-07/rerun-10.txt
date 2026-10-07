@@ -1,0 +1,127 @@
+# 2026-10-07T09:31:50Z cma-dev-pg db/10_verify_corrections.sql
+DO
+      proname       | security_definer | app_may_call 
+--------------------+------------------+--------------
+ assert_permission  | f                | t
+ correct_time_event | f                | t
+ correct_workday    | f                | t
+ refresh_workday    | f                | t
+ team_day           | f                | t
+ team_hours         | f                | t
+(6 rows)
+
+SET
+ version |                                                             description                                                              |      applied_by      | applied_at 
+---------+--------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                              | martin@pulse4all.com | 2026-10-04
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views | martin@pulse4all.com | 2026-10-05
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                   | martin@pulse4all.com | 2026-10-06
+ 0003a   | Team people: team_people for Add day and the person filter                                                                           | martin@pulse4all.com | 2026-10-06
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads               | martin@pulse4all.com | 2026-10-07
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                    | martin@pulse4all.com | 2026-10-07
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                   | martin@pulse4all.com | 2026-10-07
+(7 rows)
+
+RESET
+SET
+ events_before_start 
+---------------------
+                   0
+(1 row)
+
+RESET
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a115b4-758f-7a89-9b81-820221ef1da9 | 01a115b4-758e-77f3-8c3b-083d4b58309b
+(1 row)
+
+              set_config              |    set_config    | set_config | set_config 
+--------------------------------------+------------------+------------+------------
+ 01a115b4-758f-7a89-9b81-820221ef1da9 | Europe/Amsterdam | available  | training
+(1 row)
+
+ set_config 
+------------
+ 2026-10-06
+(1 row)
+
+        set_config         
+---------------------------
+ 2026-10-06T06:00:00+00:00
+ 2026-10-06T07:00:00+00:00
+ 2026-10-06T09:00:00+00:00
+ 2026-10-06T10:00:00+00:00
+ 2026-10-06T15:00:00+00:00
+(5 rows)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status | working_h | has_correction 
+--------+-----------+----------------
+ ended  |      8.00 | t
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status | ends_at_11 | working_h 
+--------+------------+-----------
+ ended  | t          |      2.00
+(1 row)
+
+  kind  | status_key |   source   | is_effective | approved_by_name | has_reason 
+--------+------------+------------+--------------+------------------+------------
+ start  | available  | correction | t            | Verify Lead      | t
+ end    |            | correction | t            | Verify Lead      | t
+ status | training   | correction | f            | Verify Lead      | t
+ end    |            | correction | f            | Verify Lead      | t
+ void   |            | correction | f            | Verify Lead      | t
+(5 rows)
+
+ display_name | status | working_h | needs_correction | has_correction 
+--------------+--------+-----------+------------------+----------------
+ Verify Agent | ended  |      2.00 | f                | t
+(1 row)
+
+psql:db/10_verify_corrections.sql:142: NOTICE:  PASS  nobody corrects their own day (CMA06)
+DO
+psql:db/10_verify_corrections.sql:153: NOTICE:  PASS  a status before the start is refused (CMA04)
+DO
+psql:db/10_verify_corrections.sql:162: NOTICE:  PASS  a time outside the corrected day is refused (CMA04)
+DO
+psql:db/10_verify_corrections.sql:171: NOTICE:  PASS  a time without offset is refused (CMA04)
+DO
+psql:db/10_verify_corrections.sql:180: NOTICE:  PASS  a future date is refused (CMA04)
+DO
+psql:db/10_verify_corrections.sql:188: NOTICE:  PASS  a new day must begin with its start (CMA04)
+DO
+psql:db/10_verify_corrections.sql:196: NOTICE:  PASS  a correction needs a reason (CMA04)
+DO
+psql:db/10_verify_corrections.sql:204: NOTICE:  PASS  an unknown user is not found (CMA02)
+DO
+psql:db/10_verify_corrections.sql:213: NOTICE:  PASS  the approver is the person making the correction (CMA04)
+DO
+psql:db/10_verify_corrections.sql:220: NOTICE:  PASS  team hours need workday.team (CMA06)
+DO
+ROLLBACK
+# exit 0

@@ -4,7 +4,9 @@
  * Heading, body text is Inkt Body, and every colour painted on screen comes
  * from the palette, SVG fills and strokes of the charts included. Also checks the
  * stylesheet removes Tailwind's default palette, so an off-brand class fails at
- * build time. The Dashboard is checked as the test supervisor, so its charts render.
+ * build time. The Dashboard is checked as the test supervisor, so its charts render;
+ * My day is checked without a day (the Clock in card) and, as Agent Two after the
+ * start route, with the clock and the status buttons.
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
@@ -43,11 +45,14 @@ for (const hex of css.matchAll(/#[0-9a-f]{6}\b/gi)) {
 
 const b = await chromium.launch();
 const pages = [
-  { path: "/" }, { path: "/hours" }, { path: "/team/hours" },
+  { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },
+  { path: "/hours" }, { path: "/team/hours" },
   { path: "/reports/dashboard?range=month", subject: "supervisor" },
   { path: "/logout" }, { path: "/no-access" },
 ];
-for (const { path, subject } of pages) {
+for (const { path, subject, start } of pages) {
+  // Clock in is an action: open the day through the route, so the page shows the clock
+  if (start) await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
   const ctx = await b.newContext({
     viewport: { width: 1440, height: 900 },
     extraHTTPHeaders: subject ? { "x-cma-mock-subject": subject } : {},
@@ -95,5 +100,5 @@ await b.close();
 
 const unique = [...new Set(problems)];
 for (const x of unique) console.log("  " + x);
-console.log(unique.length === 0 ? "theme: PASS (6 pages, palette incl. chart fills, Montserrat, heading and body colours)" : `theme: FAIL (${unique.length} problems)`);
+console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours)` : `theme: FAIL (${unique.length} problems)`);
 process.exit(unique.length === 0 ? 0 : 1);

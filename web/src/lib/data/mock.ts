@@ -8,14 +8,29 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
-  CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, StatusTimeRow, TeamDay,
-  TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  AppLink, CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, StatusTimeRow,
+  TeamDay, TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
 
 /** Same answer as the database for a caller without workday.team */
 function assertTeam(me: Principal): void {
   if (!me.permissions.includes("workday.team")) throw new CmaDbError("CMA06", "not permitted");
 }
+
+/** Same answer as the database (0003d) when a day would be created for someone whose time is not kept */
+function assertTimeKept(me: Principal): void {
+  if (!me.permissions.includes("workday.own")) throw new CmaDbError("CMA06", "time is not kept for this person");
+}
+
+/**
+ * Fixture links shaped like cma.app_link rows: fictional labels and addresses, one of them for
+ * people holding workday.team only. The screens never branch on a key or a label.
+ */
+const MOCK_LINKS: (AppLink & { permission: string | null })[] = [
+  { key: "crm", label: "CRM (test)", address: "https://example.com/crm", permission: null },
+  { key: "phone", label: "Phone (test)", address: "https://example.com/phone", permission: null },
+  { key: "team-sheet", label: "Team sheet (test)", address: "https://example.com/team-sheet", permission: "workday.team" },
+];
 
 /** Same answer as the database for a caller without performance.team (addition 0003c) */
 function assertPerformance(me: Principal): void {
@@ -40,7 +55,16 @@ type Key = `${string}:${string}:${DateKey}`;
 const owner = (me: Principal) => `${me.tenantId}:${me.userId}:`;
 const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
 
-const store = new Map<Key, Workday>();
+/**
+ * The in-memory state lives on globalThis: every page and route handler is its own bundle in the
+ * standalone server, so a module-level Map would exist once per bundle and a day opened through
+ * the start route would be invisible to the page that renders it (seen 7 October 2026, increment
+ * e, when Clock in moved from the page to a route).
+ */
+type MockState = { store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean };
+const g = globalThis as unknown as { __cmaMock?: MockState };
+const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false });
+const store = state.store;
 
 /**
  * Fixture data, not app logic: a fictional status list shaped like a tenant's work_status rows
@@ -116,8 +140,7 @@ const TEAM: TeamPerson[] = [
 
 type MockEvent = TimeEvent;
 /** userId -> business date -> every event of that day, effective or not */
-const teamStore = new Map<string, Map<DateKey, MockEvent[]>>();
-let teamSeeded = false;
+const teamStore = state.teamStore;
 
 function localMs(date: DateKey, time: string, timeZone: string): number {
   // The earlier instant when a time occurs twice; fixture times avoid the skipped hour
@@ -238,8 +261,8 @@ function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusCh
  * clocked in, a forgotten clock-out, a missing day, and a day corrected afterwards.
  */
 function seedTeam() {
-  if (teamSeeded) return;
-  teamSeeded = true;
+  if (state.teamSeeded) return;
+  state.teamSeeded = true;
   const now = Date.now();
   TEAM.forEach((p, n) => {
     const days = new Map<DateKey, MockEvent[]>();
@@ -324,12 +347,15 @@ export const mockData: CmaData = {
     };
   },
 
-  async openWorkday(me, now) {
+  async startWorkday(me, now) {
     const date = dateKeyInZone(now, me.timeZone);
-    seedHistory(me, date);
     const k = key(me, date);
     const existing = store.get(k);
     if (existing) return existing;
+    // Same contract as cma.open_workday after 0003d: nothing exists yet, so only a person whose
+    // time is kept gets a day
+    assertTimeKept(me);
+    seedHistory(me, date);
     const fresh: Workday = {
       date,
       status: "working",
@@ -344,6 +370,8 @@ export const mockData: CmaData = {
   },
 
   async getWorkday(me, date) {
+    // The fictional history exists for anyone whose time is kept, whether or not they clocked in yet
+    if (me.permissions.includes("workday.own")) seedHistory(me, dateKeyInZone(new Date(), me.timeZone));
     return store.get(key(me, date)) ?? null;
   },
 
@@ -390,6 +418,7 @@ export const mockData: CmaData = {
 
   async getHours(me, range) {
     // Own hours only: hours are pay data, never a colleague's
+    if (me.permissions.includes("workday.own")) seedHistory(me, dateKeyInZone(new Date(), me.timeZone));
     const mine = owner(me);
     const now = new Date().toISOString();
     const days = [...store.entries()]
@@ -559,5 +588,12 @@ export const mockData: CmaData = {
       a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
       a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
     return { ...range, rows };
+  },
+
+  /** The fixture links this person may see, as cma.app_links filters them */
+  async listAppLinks(me) {
+    return MOCK_LINKS
+      .filter((l) => l.permission === null || me.permissions.includes(l.permission))
+      .map(({ key, label, address }) => ({ key, label, address }));
   },
 };

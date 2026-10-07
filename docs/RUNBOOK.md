@@ -75,18 +75,19 @@ curl -s localhost:8080/api/health; echo                         # version = $sha
 
 Look at it as a test user: `curl -s -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me`, or in
 the browser through Cloud Shell's **Web preview** (port 8080) with `/?as=supervisor` once to switch user.
-Test users: `agent-two`, `supervisor`, `manager` (one tenant each), `agent-one` (two tenants: refused on purpose).
+Test users: `agent-two`, `supervisor`, `manager`, `analyst` (one tenant each; the analyst has no clock), `agent-one` (two tenants: refused on purpose).
 
 ## 5. Verifiers
 
 Against dev, through the proxy from step 4:
 
 ```bash
-cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 34 PASS
-node verify/api.mjs --provoke; echo "exit $?"                     # ALL 34 PROVOKED CHECKS FAILED, exit 0
+cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 59 PASS
+node verify/api.mjs --provoke; echo "exit $?"                     # ALL 59 PROVOKED CHECKS FAILED, exit 0
 ```
 
-The verifier closes Agent Two's open past days itself (as the supervisor); no fixture runs first.
+The verifier clocks Agent Two in through the start route (a visit opens nothing since increment e) and
+closes Agent Two's open past days itself (as the supervisor); no fixture runs first.
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 

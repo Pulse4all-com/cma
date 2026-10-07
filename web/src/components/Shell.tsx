@@ -1,8 +1,9 @@
 /**
  * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
- * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Pages sit
- * in groups in the rail (Time, Reports; the model lives in lib/nav). Shortcut keys are shown as
- * keycaps and wired through data-shortcut (see hooks/useKeyboardShortcuts).
+ * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Welcome is
+ * a page of its own at the top of the rail; the other pages sit in groups (Time, Reports; the
+ * model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
+ * (see hooks/useKeyboardShortcuts).
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -13,7 +14,7 @@ import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
 import { NAV_COOKIE_PREFIX, visibleNav, type ShellPage } from "@/lib/nav";
-import { NavGroup } from "./NavGroup";
+import { NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 
 export type { ShellPage };
@@ -75,38 +76,60 @@ export async function Shell({
 
       <nav aria-label={copy.app.name} className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
         <ul className="flex flex-col gap-2">
-          {nav.map((section) => (
-            <NavGroup
-              key={section.id}
-              id={section.id}
-              label={section.label}
-              icon={section.icon}
-              defaultOpen={jar.get(`${NAV_COOKIE_PREFIX}${section.id}`)?.value === "open"}
-              current={section.items.some((i) => i.page === active)}
-            >
-              {section.items.map((item) => {
-                const current = item.page === active;
-                return (
-                  <li key={item.page}>
-                    <Link
-                      href={item.href}
-                      aria-current={current ? "page" : undefined}
-                      data-shortcut={item.key}
-                      className={[
-                        "flex h-10 items-center justify-between rounded-button px-3 text-body",
-                        current
-                          ? "bg-white font-semibold text-p4a-deepblue"
-                          : "text-p4a-body hover:bg-white/60",
-                      ].join(" ")}
-                    >
-                      {item.label}
-                      <Keycap>{item.key}</Keycap>
-                    </Link>
-                  </li>
-                );
-              })}
-            </NavGroup>
-          ))}
+          {nav.map((entry) => {
+            if (entry.kind === "page") {
+              const current = entry.item.page === active;
+              return (
+                <li key={entry.item.page}>
+                  <Link
+                    href={entry.item.href}
+                    aria-current={current ? "page" : undefined}
+                    data-shortcut={entry.item.key}
+                    className={[
+                      "flex h-10 items-center gap-3 rounded-button px-3 text-body font-semibold",
+                      current ? "bg-white text-p4a-deepblue" : "text-p4a-heading hover:bg-white/60",
+                    ].join(" ")}
+                  >
+                    <NavIconMark name={entry.icon} />
+                    <span className="flex-1">{entry.item.label}</span>
+                    <Keycap>{entry.item.key}</Keycap>
+                  </Link>
+                </li>
+              );
+            }
+            return (
+              <NavGroup
+                key={entry.id}
+                id={entry.id}
+                label={entry.label}
+                icon={entry.icon}
+                defaultOpen={jar.get(`${NAV_COOKIE_PREFIX}${entry.id}`)?.value === "open"}
+                current={entry.items.some((i) => i.page === active)}
+              >
+                {entry.items.map((item) => {
+                  const current = item.page === active;
+                  return (
+                    <li key={item.page}>
+                      <Link
+                        href={item.href}
+                        aria-current={current ? "page" : undefined}
+                        data-shortcut={item.key}
+                        className={[
+                          "flex h-10 items-center justify-between rounded-button px-3 text-body",
+                          current
+                            ? "bg-white font-semibold text-p4a-deepblue"
+                            : "text-p4a-body hover:bg-white/60",
+                        ].join(" ")}
+                      >
+                        {item.label}
+                        <Keycap>{item.key}</Keycap>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </NavGroup>
+            );
+          })}
         </ul>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
           <p>{copy.shell.shortcutsHint}</p>
