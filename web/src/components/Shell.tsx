@@ -1,7 +1,8 @@
 /**
- * App frame: top bar, left rail, content. Operational white page (7.1), the
- * rail on Background Blue. Shortcut keys are shown as keycaps and wired through
- * data-shortcut (see hooks/useKeyboardShortcuts).
+ * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
+ * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Pages sit
+ * in groups in the rail (Time first; later modules add their own group). Shortcut keys are
+ * shown as keycaps and wired through data-shortcut (see hooks/useKeyboardShortcuts).
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -10,11 +11,13 @@ import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
+import { NavGroup, type NavIcon } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 
 export type ShellPage = "my-day" | "my-hours" | "team-hours";
 
 type NavItem = { page: ShellPage; href: "/" | "/hours" | "/team/hours"; label: string; permission?: string };
+type NavSection = { id: string; label: string; icon: NavIcon; items: NavItem[] };
 
 export function Shell({
   copy,
@@ -31,15 +34,29 @@ export function Shell({
   children: ReactNode;
 }) {
   // Screens check a permission, never a role key; the database checks again on every call.
-  // Keys follow the visible order, so every person's pages are numbered 1, 2, 3 without gaps.
-  const items: NavItem[] = [
-    { page: "my-day", href: "/", label: copy.nav.myDay },
-    { page: "my-hours", href: "/hours", label: copy.nav.myHours },
-    { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
+  // Keys follow the visible order across all groups, so every person's pages are numbered
+  // 1, 2, 3 without gaps, whether a group is open or closed.
+  const sections: NavSection[] = [
+    {
+      id: "time",
+      label: copy.nav.time,
+      icon: "clock",
+      items: [
+        { page: "my-day", href: "/", label: copy.nav.myDay },
+        { page: "my-hours", href: "/hours", label: copy.nav.myHours },
+        { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
+      ],
+    },
   ];
-  const nav = items
-    .filter((i) => !i.permission || me.permissions.includes(i.permission))
-    .map((i, n) => ({ ...i, key: String(n + 1) }));
+  let n = 0;
+  const nav = sections
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .filter((i) => !i.permission || me.permissions.includes(i.permission))
+        .map((i) => ({ ...i, key: String(++n) })),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <div className="grid h-full grid-cols-[var(--spacing-rail)_1fr] grid-rows-[var(--spacing-topbar)_1fr]">
@@ -76,28 +93,38 @@ export function Shell({
       </header>
 
       <nav aria-label={copy.app.name} className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
-        <ul className="flex flex-col gap-1">
-          {nav.map((item) => {
-            const current = item.page === active;
-            return (
-              <li key={item.page}>
-                <Link
-                  href={item.href}
-                  aria-current={current ? "page" : undefined}
-                  data-shortcut={item.key}
-                  className={[
-                    "flex h-10 items-center justify-between rounded-button px-3 text-body",
-                    current
-                      ? "bg-white font-semibold text-p4a-deepblue"
-                      : "text-p4a-body hover:bg-white/60",
-                  ].join(" ")}
-                >
-                  {item.label}
-                  <Keycap>{item.key}</Keycap>
-                </Link>
-              </li>
-            );
-          })}
+        <ul className="flex flex-col gap-2">
+          {nav.map((section) => (
+            <NavGroup
+              key={section.id}
+              id={section.id}
+              label={section.label}
+              icon={section.icon}
+              defaultOpen={section.items.some((i) => i.page === active)}
+            >
+              {section.items.map((item) => {
+                const current = item.page === active;
+                return (
+                  <li key={item.page}>
+                    <Link
+                      href={item.href}
+                      aria-current={current ? "page" : undefined}
+                      data-shortcut={item.key}
+                      className={[
+                        "flex h-10 items-center justify-between rounded-button px-3 text-body",
+                        current
+                          ? "bg-white font-semibold text-p4a-deepblue"
+                          : "text-p4a-body hover:bg-white/60",
+                      ].join(" ")}
+                    >
+                      {item.label}
+                      <Keycap>{item.key}</Keycap>
+                    </Link>
+                  </li>
+                );
+              })}
+            </NavGroup>
+          ))}
         </ul>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
           <p>{copy.shell.shortcutsHint}</p>
@@ -107,7 +134,7 @@ export function Shell({
         </div>
       </nav>
 
-      <main className="overflow-y-auto bg-white px-10 py-8">
+      <main className="overflow-y-auto bg-p4a-sand px-10 py-8">
         <div className={wide ? "max-w-6xl" : "max-w-4xl"}>{children}</div>
       </main>
     </div>
