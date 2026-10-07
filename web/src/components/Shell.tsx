@@ -1,7 +1,7 @@
 /**
  * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
  * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Welcome is
- * a page of its own at the top of the rail; the other pages sit in groups (Time, Reports; the
+ * a page of its own at the top of the rail; the other pages sit in groups (Live, Time, Reports; the
  * model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
  * (see hooks/useKeyboardShortcuts).
  */

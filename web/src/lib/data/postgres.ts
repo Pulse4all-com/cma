@@ -4,7 +4,7 @@ import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
   AppLink, CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, StatusTimeRow, TeamDay,
-  TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
+  TeamDayDetail, TeamNow, TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -275,6 +275,58 @@ function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
   };
 }
 
+// ---- Team now (addition 0003e): cma.team_now
+// One row per person whose time is kept, with today's day in the person's zone. The day part is
+// mapped with toWorkday, the same mapping as the own-day read, so a person's own row equals
+// GET /api/v1/me/day field for field. monitoring.live is checked inside the function (CMA06).
+
+type TeamNowDbRow = {
+  user_id: string; display_name: string; organisation_key: string | null; organisation_name: string; timezone: string;
+  business_date: string; workday_id: string | null; day_status: "open" | "ended" | null;
+  started_at: Date | null; ended_at: Date | null;
+  status_key: string | null; status_name: string | null; status_active: boolean | null;
+  is_working: boolean | null; is_productive: boolean | null; is_paid: boolean | null; is_billable: boolean | null;
+  status_since: Date | null; closed_seconds: number; running_since: Date | null;
+};
+
+function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
+  const day: Workday | null =
+    r.workday_id && r.day_status && r.started_at
+      ? toWorkday({
+          business_date: r.business_date,
+          status: r.day_status,
+          started_at: r.started_at,
+          ended_at: r.ended_at,
+          status_key: r.status_key,
+          status_since: r.status_since,
+          closed_seconds: Number(r.closed_seconds),
+          running_since: r.running_since,
+        })
+      : null;
+  const status =
+    day && day.status === "working" && r.status_key && r.status_name
+      ? {
+          key: r.status_key,
+          name: r.status_name,
+          isActive: r.status_active === true,
+          isWorking: r.is_working === true,
+          isProductive: r.is_productive === true,
+          isPaid: r.is_paid === true,
+          isBillable: r.is_billable === true,
+        }
+      : null;
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    organisationKey: r.organisation_key,
+    organisationName: r.organisation_name,
+    timeZone: r.timezone,
+    date: r.business_date,
+    day,
+    status,
+  };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
@@ -514,6 +566,21 @@ export const postgresData: CmaData = {
         [range.from, range.to, userId],
       );
       return { ...range, rows: r.rows.map(toStatusTimeRow) };
+    });
+  },
+
+  // Addition 0003e: team_now() checks monitoring.live and raises CMA06 otherwise, so the plain read
+  // of the status flags that follows runs only in a transaction where the check already passed
+  async getTeamNow(me): Promise<TeamNow> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<TeamNowDbRow>(`select * from cma.team_now()`);
+      const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
+        `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
+      );
+      return {
+        people: r.rows.map(toTeamNowPerson),
+        statusFlags: flags.rows.map((f) => ({ isWorking: f.is_working, isProductive: f.is_productive, isPaid: f.is_paid })),
+      };
     });
   },
 

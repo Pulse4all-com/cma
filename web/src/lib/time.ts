@@ -93,6 +93,15 @@ export function fmtZoneShort(instant: Instant, timeZone: string, locale: Locale)
     .find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
 
+/** True when two zones show the same clock time at an instant (Madrid and Amsterdam do, London does not) */
+export function sameOffset(instant: Instant, zoneA: string, zoneB: string): boolean {
+  const offset = (timeZone: string) =>
+    new Intl.DateTimeFormat("en", { timeZone, timeZoneName: "longOffset" })
+      .formatToParts(new Date(instant))
+      .find((p) => p.type === "timeZoneName")?.value ?? timeZone;
+  return offset(zoneA) === offset(zoneB);
+}
+
 /** 7h 12m */
 export function fmtMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);

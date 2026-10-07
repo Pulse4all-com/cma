@@ -9,7 +9,7 @@ import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
   AppLink, CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, StatusTimeRow,
-  TeamDay, TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  TeamDay, TeamDayDetail, TeamNow, TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
 
 /** Same answer as the database for a caller without workday.team */
@@ -35,6 +35,11 @@ const MOCK_LINKS: (AppLink & { permission: string | null })[] = [
 /** Same answer as the database for a caller without performance.team (addition 0003c) */
 function assertPerformance(me: Principal): void {
   if (!me.permissions.includes("performance.team")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/** Same answer as the database for a caller without monitoring.live (addition 0003e) */
+function assertLive(me: Principal): void {
+  if (!me.permissions.includes("monitoring.live")) throw new CmaDbError("CMA06", "not permitted");
 }
 
 /** Same answer as the database for a caller without workday.export */
@@ -271,6 +276,24 @@ function seedTeam() {
     let weekday = 0;
     for (let i = 0; i <= 14; i++) {
       const date = addDays(today, -i);
+      if (i === 0) {
+        // Today, relative to now, so the Live board shows every state at any hour: Ana at work after
+        // a break, Jordi on a break, Sanne in a meeting, Lucas clocked out, Emma not clocked in.
+        // Minutes before now, scaled down when the day is young so nothing lands on yesterday.
+        const elapsed = Math.max(60_000, now - localMs(date, "00:00", p.timeZone));
+        const scale = Math.min(1, elapsed / (310 * 60_000));
+        const ago = (minutes: number) => new Date(now - minutes * 60_000 * scale).toISOString();
+        const todayPlan: [TimeEvent["kind"], string, string | null][][] = [
+          [["start", ago(130), "available"], ["status", ago(70), "break"], ["status", ago(55), "available"]],
+          [["start", ago(200), "available"], ["status", ago(12), "break"]],
+          [["start", ago(95), "available"], ["status", ago(25), "meeting"]],
+          [["start", ago(300), "available"], ["status", ago(120), "lunch"], ["status", ago(90), "available"], ["end", ago(30), null]],
+          [],
+        ];
+        const events = (todayPlan[n] ?? []).map(([k, t, s]) => mockEvent(k, t, s, "user"));
+        if (events.length) days.set(date, events);
+        continue;
+      }
       const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
       if (dow === 0 || dow === 6) continue;
       weekday++;
@@ -322,10 +345,10 @@ export const mockData: CmaData = {
         userId: identity.subject === "supervisor" ? MOCK_SUPERVISOR_ID : MOCK_MANAGER_ID,
         displayName: identity.subject === "supervisor" ? "Test supervisor" : "Test manager",
         roleKey: identity.subject,
-        // As the default ladder: the manager also exports, the supervisor does not
+        // As the default ladder: the manager also exports, the supervisor does not; both watch the Live board
         permissions: identity.subject === "manager"
-          ? ["workday.own", "workday.team", "workday.export", "performance.team", "reports.view"]
-          : ["workday.own", "workday.team", "performance.team"],
+          ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view"]
+          : ["workday.own", "workday.team", "performance.team", "monitoring.live"],
       };
     }
     // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections
@@ -588,6 +611,52 @@ export const mockData: CmaData = {
       a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
       a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
     return { ...range, rows };
+  },
+
+  /** Today per person, the way cma.team_now derives it from the day's effective events */
+  async getTeamNow(me): Promise<TeamNow> {
+    assertLive(me);
+    seedTeam();
+    const people: TeamNowPerson[] = TEAM.map((p) => {
+      const date = dateKeyInZone(new Date(), p.timeZone);
+      const events = teamStore.get(p.userId)?.get(date) ?? [];
+      const live = effective(events);
+      const start = live.find((e) => e.kind === "start");
+      if (!start) {
+        return { userId: p.userId, displayName: p.displayName, organisationKey: p.organisationName.toLowerCase(),
+          organisationName: p.organisationName, timeZone: p.timeZone, date, day: null, status: null };
+      }
+      const end = live.find((e) => e.kind === "end") ?? null;
+      const marks = live.filter((e) => e.kind !== "end");
+      const last = marks[marks.length - 1]!;
+      const current = MOCK_STATUSES.find((x) => x.key === last.statusKey) ?? null;
+      // Closed stretches in working statuses; the last stretch is open while the day is
+      let closed = 0;
+      marks.forEach((e, i) => {
+        const s = MOCK_STATUSES.find((x) => x.key === e.statusKey);
+        const until = i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
+        if (s?.isWorking && until !== null) closed += Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000));
+      });
+      const day: Workday = {
+        date,
+        status: end ? "ended" : "working",
+        startedAt: start.at,
+        endedAt: end?.at ?? null,
+        statusKey: end ? null : last.statusKey,
+        statusSince: end ? null : last.at,
+        clock: { closedSeconds: closed, runningSince: !end && current?.isWorking ? last.at : null },
+      };
+      const status = !end && current
+        ? { key: current.key, name: current.name, isActive: true, isWorking: current.isWorking,
+            isProductive: current.isProductive, isPaid: MOCK_PAID.has(current.key), isBillable: MOCK_PAID.has(current.key) }
+        : null;
+      return { userId: p.userId, displayName: p.displayName, organisationKey: p.organisationName.toLowerCase(),
+        organisationName: p.organisationName, timeZone: p.timeZone, date, day, status };
+    });
+    return {
+      people,
+      statusFlags: MOCK_STATUSES.map((x) => ({ isWorking: x.isWorking, isProductive: x.isProductive, isPaid: MOCK_PAID.has(x.key) })),
+    };
   },
 
   /** The fixture links this person may see, as cma.app_links filters them */

@@ -52,14 +52,14 @@ async function expectShell(width, height) {
   await p.close();
 }
 
-// Mock identities as the default ladder: analyst (no clock), agent, supervisor. Everyone lands on
+// Mock identities as the default ladder: analyst (no clock, the Live board), agent, supervisor. Everyone lands on
 // Welcome; the Clock in button appears only for a person whose time is kept; My day sends the
 // analyst back to Welcome.
 async function expectNavigation() {
   const cases = [
-    ["analyst", ["/", "/reports/dashboard"], false],
+    ["analyst", ["/", "/live/board", "/reports/dashboard"], false],
     ["agent-one", ["/", "/day", "/hours"], true],
-    ["supervisor", ["/", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
+    ["supervisor", ["/", "/live/board", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
