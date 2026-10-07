@@ -2,11 +2,13 @@
 
 /**
  * A group in the left navigation (Time, later Roster, Messages, …): one button that opens and
- * closes its pages. Open by default when one of its pages is the current one. The pages keep
- * their own digit keys whether the group is open or closed, so a closed group never changes
- * the numbering a person has learned.
+ * closes its pages. Closed by default; the browser remembers the choice per group in a cookie
+ * (no personal data, one year), so every page renders the group as it was left. A closed group
+ * that holds the current page is highlighted, so the person still sees where they are. The pages
+ * keep their own digit keys whether the group is open or closed.
  */
 import { useState, type ReactNode } from "react";
+import { NAV_COOKIE_PREFIX } from "@/lib/nav";
 
 export type NavIcon = "clock";
 
@@ -15,23 +17,35 @@ export function NavGroup({
   label,
   icon,
   defaultOpen,
+  current,
   children,
 }: {
   id: string;
   label: string;
   icon: NavIcon;
   defaultOpen: boolean;
+  /** One of the group's pages is the current page */
+  current: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    document.cookie = `${NAV_COOKIE_PREFIX}${id}=${next ? "open" : "closed"}; path=/; max-age=31536000; samesite=lax; secure`;
+  }
   return (
     <li>
       <button
         type="button"
         aria-expanded={open}
         aria-controls={`nav-group-${id}`}
-        onClick={() => setOpen((o) => !o)}
-        className="flex h-10 w-full items-center gap-3 rounded-button px-3 text-body font-semibold text-p4a-heading hover:bg-white/60"
+        onClick={toggle}
+        className={[
+          "flex h-10 w-full items-center gap-3 rounded-button px-3 text-body font-semibold text-p4a-heading",
+          !open && current ? "bg-white" : "hover:bg-white/60",
+        ].join(" ")}
       >
         <Icon name={icon} />
         <span className="flex-1 text-left">{label}</span>
