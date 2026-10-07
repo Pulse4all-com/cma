@@ -1,0 +1,21 @@
+# 2026-10-07T06:14:58Z cma-prod-pg db/14_verify_tenant_settings.sql at d13a39f, provoked (verify.provoke = true)
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/14_provoke.sql:58: ERROR:  FAIL A2: expected the five export.csv settings in the catalog
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+psql:/tmp/14_provoke.sql:223: ERROR:  FAIL B5: the manager's value was not stored
+CONTEXT:  PL/pgSQL function inline_code_block line 69 at RAISE
+psql:/tmp/14_provoke.sql:245: ERROR:  FAIL C1: 0 Pulse4all export settings differ from the seed; rerun 02_seed_pulse4all.sql
+CONTEXT:  PL/pgSQL function inline_code_block line 16 at RAISE
+         tenant          |                                                                                              settings                                                                                              | verdict 
+-------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------
+ pulse4all-invest        | export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default) | PASS
+ pulse4all-subscriptions | export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default) | PASS
+(2 rows)
+
+# exit 0
