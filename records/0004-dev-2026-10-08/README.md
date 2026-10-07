@@ -1,0 +1,1 @@
+Placeholder: verify output of 22_verify_teams_skills.sql in dev, normal and provoked, written here from the Terminal through the Auth Proxy (MORNING_RUNBOOK.md, slice 1). Replace this file with verify-0004.txt and verify-0004-provoked.txt.

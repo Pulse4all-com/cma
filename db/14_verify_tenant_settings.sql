@@ -44,11 +44,12 @@ begin
     raise exception 'FAIL A6: readers may not call set_tenant_setting';
   end if;
 
-  -- workday.export: on every default manager role, on no other default role
+  -- workday.export: on every default manager role (and admin since 0004), on no other default role
   select count(*) into v_bad
   from cma.app_role ar
   where ar.is_system
-    and (ar.key = 'manager') <> exists (select 1 from cma.role_permission rp
+    -- the manager, and since migration 0004 the admin (a superset of the manager), hold it; nobody else
+    and (ar.key in ('manager', 'admin')) <> exists (select 1 from cma.role_permission rp
                                          where rp.tenant_id = ar.tenant_id and rp.role_id = ar.id
                                            and rp.permission_key = 'workday.export');
   if v_bad + v_provoke::int > 0 then
@@ -81,8 +82,14 @@ begin
     values (v_t1, 'verify-manager@example.invalid', 'Verify manager') returning id into v_manager;
     insert into cma.app_user (tenant_id, email, display_name)
     values (v_t1, 'verify-agent@example.invalid', 'Verify agent') returning id into v_agent;
+    -- the configuring role of the ladder: the manager until migration 0004, the admin (a superset
+    -- of the manager, with workday.export) since; picked by permission, not by key
     insert into cma.user_role (tenant_id, user_id, role_id)
-    select v_t1, v_manager, id from cma.app_role where tenant_id = v_t1 and key = 'manager';
+    select v_t1, v_manager, ar.id from cma.app_role ar
+    where ar.tenant_id = v_t1 and ar.is_system
+      and exists (select 1 from cma.role_permission rp where rp.tenant_id = ar.tenant_id and rp.role_id = ar.id and rp.permission_key = 'tenant.configure')
+      and exists (select 1 from cma.role_permission rp where rp.tenant_id = ar.tenant_id and rp.role_id = ar.id and rp.permission_key = 'workday.export')
+    order by ar.key limit 1;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select v_t1, v_agent, id from cma.app_role where tenant_id = v_t1 and key = 'agent';
     insert into cma.app_user (tenant_id, email, display_name)
