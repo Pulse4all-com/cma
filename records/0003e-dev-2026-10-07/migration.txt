@@ -1,0 +1,9 @@
+# 2026-10-07T12:44:39Z cma-dev-pg db/19_team_now.sql
+DO
+SET
+CREATE FUNCTION
+REVOKE
+GRANT
+INSERT 0 1
+RESET
+# exit 0
