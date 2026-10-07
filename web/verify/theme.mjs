@@ -6,7 +6,7 @@
  * stylesheet removes Tailwind's default palette, so an off-brand class fails at
  * build time. The Dashboard is checked as the test supervisor, so its charts render;
  * My day is checked without a day (the Clock in card) and, as Agent Two after the
- * start route, with the clock and the status buttons.
+ * start route, with the clock and the status buttons; the Live board as the supervisor.
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
@@ -48,6 +48,7 @@ const pages = [
   { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },
   { path: "/hours" }, { path: "/team/hours" },
   { path: "/reports/dashboard?range=month", subject: "supervisor" },
+  { path: "/live/board", subject: "supervisor" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 for (const { path, subject, start } of pages) {

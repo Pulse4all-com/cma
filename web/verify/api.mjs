@@ -7,7 +7,7 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migrations 0003, 0003a, 0003b, 0003c and 0003d. Ends the test supervisor's workday of today and, as
+ * Needs the dev seed (06) and migrations 0003, 0003a, 0003b, 0003c, 0003d and 0003e. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
@@ -15,7 +15,8 @@
  * Themes: identity and tenant, Clock in as an action (a visit opens nothing, the database refuses
  * someone whose time is not kept), own data only, corrections (team routes), an ended day stays
  * ended, status changes from the tenant's own list, the two export files in the tenant's format,
- * time per status for the Dashboard (the same minutes as Team hours), app links per person.
+ * time per status for the Dashboard (the same minutes as Team hours), app links per person, the
+ * team now for the Live board (a person's own entry equals the own-day read).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -348,6 +349,35 @@ expect("a link that needs a permission is hidden from the agent",
 expect("every link is https, for anyone with a role",
   [linksN.status, [...linksA, ...linksS, ...(linksN.body?.data ?? [])].every((l) => /^https:\/\//.test(l.address))],
   [200, true], [200, false]);
+
+// ---- team now (addition 0003e), 6 checks ---------------------------------------------------------
+// The Live board's read. Agent Two's day is open (started above), the supervisor's too. A person's
+// own entry must equal GET /api/v1/me/day field for field, because both come from the same
+// stretches; the analyst reads but is not listed (no clock); nobody without monitoring.live reads.
+const meN = (await get(ANALYST, "/api/v1/me")).body?.data ?? null;
+const nowA = await get(AGENT, "/api/v1/team/now");
+expect("an agent cannot read the team now", nowA.status, 403, 200);
+const nowRes = await download(SUPERVISOR, "/api/v1/team/now");
+let teamNow = { people: [], statusFlags: [] };
+try { teamNow = JSON.parse(nowRes.text).data ?? teamNow; } catch { /* left empty */ }
+expect("the supervisor reads the team now, never cached",
+  [nowRes.status, nowRes.headers.get("cache-control"), teamNow.people.length > 0, teamNow.statusFlags.length > 0],
+  [200, "no-store", true, true], [200, "public", true, true]);
+const ownDay = (await get(AGENT, "/api/v1/me/day")).body?.data ?? null;
+const agentEntry = teamNow.people.find((p) => p.userId === meA.userId) ?? null;
+expect("the agent's own entry equals the own-day read", agentEntry?.day ?? null, ownDay, { ...ownDay, statusSince: null });
+expect("the entry's status carries the day's status key with its flags",
+  [agentEntry?.status?.key ?? null, typeof agentEntry?.status?.isWorking, typeof agentEntry?.status?.isPaid],
+  [ownDay?.statusKey ?? null, "boolean", "boolean"], [ownDay?.statusKey ?? null, "boolean", "undefined"]);
+expect("someone without a day today is listed as not clocked in",
+  [teamNow.people.some((p) => p.day === null),
+   teamNow.people.filter((p) => p.day === null).every((p) => p.status === null && !!p.timeZone && !!p.date)],
+  [true, true], [true, false]);
+const nowN = await get(ANALYST, "/api/v1/team/now");
+expect("the analyst reads the board and is not on it",
+  [nowN.status, (nowN.body?.data?.people ?? []).some((p) => p.userId === meN?.userId),
+   (nowN.body?.data?.people ?? []).length === teamNow.people.length],
+  [200, false, true], [200, true, true]);
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);

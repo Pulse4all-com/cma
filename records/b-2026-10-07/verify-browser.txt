@@ -1,0 +1,4 @@
+theme: PASS (9 pages, palette incl. chart fills, Montserrat, heading and body colours)
+layout: PASS (1280, 1920, gate at 1279, Welcome and navigation for 3 identities; screenshots in /home/martin/cma/records/layout)
+theme: FAIL (4 problems)
+layout: FAIL (3 problems)

@@ -1,0 +1,19 @@
+# 2026-10-07T12:44:40Z cma-dev-pg /tmp/20_provoke.sql
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/20_provoke.sql:57: ERROR:  FAIL A3: team_now returns [user_id, display_name, organisation_key, organisation_name, timezone, business_date, workday_id, day_status, started_at, ended_at, status_key, status_name, status_active, is_working, is_productive, is_paid, is_billable, status_since, closed_seconds, running_since]
+CONTEXT:  PL/pgSQL function inline_code_block line 19 at RAISE
+psql:/tmp/20_provoke.sql:248: ERROR:  FAIL B2: team_now listed [Verify agent, Verify agent three, Verify agent two, Verify supervisor]
+CONTEXT:  PL/pgSQL function inline_code_block line 92 at RAISE
+         tenant          |   roles_with_monitoring_live   |       verdict        
+-------------------------+--------------------------------+----------------------
+ pulse4all-invest        | analytics, manager, supervisor | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | analytics, manager, supervisor | PROVOKED, NOT A PASS
+(2 rows)
+
+# exit 0

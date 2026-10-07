@@ -1,0 +1,17 @@
+# 2026-10-07T12:44:39Z cma-dev-pg db/20_verify_team_now.sql
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+         tenant          |   roles_with_monitoring_live   | verdict 
+-------------------------+--------------------------------+---------
+ pulse4all-invest        | analytics, manager, supervisor | PASS
+ pulse4all-subscriptions | analytics, manager, supervisor | PASS
+(2 rows)
+
+# exit 0

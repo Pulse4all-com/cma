@@ -11,9 +11,9 @@ import type { Copy } from "@/lib/copy";
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
-export type NavIcon = "home" | "clock" | "chart";
-export type ShellPage = "welcome" | "my-day" | "my-hours" | "team-hours" | "dashboard";
-export type NavHref = "/" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
+export type NavIcon = "home" | "live" | "clock" | "chart";
+export type ShellPage = "welcome" | "live-board" | "my-day" | "my-hours" | "team-hours" | "dashboard";
+export type NavHref = "/" | "/live/board" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
 
 export interface NavItem {
   page: ShellPage;
@@ -48,6 +48,17 @@ export function navEntries(copy: Copy): NavEntry[] {
       kind: "page",
       icon: "home",
       item: { page: "welcome", href: "/", label: copy.nav.welcome, permission: null },
+    },
+    {
+      // Live before Time (Martin, 7 October 2026): the screen a supervisor keeps open. Agents do not
+      // hold monitoring.live, so their keys do not move.
+      kind: "group",
+      id: "live",
+      label: copy.nav.live,
+      icon: "live",
+      items: [
+        { page: "live-board", href: "/live/board", label: copy.nav.liveBoard, permission: "monitoring.live" },
+      ],
     },
     {
       kind: "group",

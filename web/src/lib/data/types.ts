@@ -244,6 +244,50 @@ export interface Export<Row> {
 }
 
 /**
+ * The team now (addition 0003e, cma.team_now), for people holding monitoring.live: one person per
+ * row whose time is kept, with today's day in the person's zone as the own-day read shapes it, so
+ * a person's own row equals GET /api/v1/me/day field for field. Stable inputs only (closed seconds,
+ * running since, status since): the screen ticks on its own and two reads of an unchanged team
+ * are equal. The database checks the permission on every call (CMA06). Staff data, never
+ * customer data.
+ */
+export interface TeamNowStatus {
+  key: string;
+  name: string;
+  /** False for a status set inactive since; a day may still run in it */
+  isActive: boolean;
+  isWorking: boolean;
+  isProductive: boolean;
+  isPaid: boolean;
+  isBillable: boolean;
+}
+
+export interface TeamNowPerson {
+  userId: string;
+  displayName: string;
+  /** Employer key, for the employer filter; null for a person without an organisation */
+  organisationKey: string | null;
+  organisationName: string;
+  timeZone: string;
+  /** Today in the person's zone */
+  date: DateKey;
+  /** Today's day; null when the person has no day today (not clocked in) */
+  day: Workday | null;
+  /** The current status with its flags; null without a day and once the day has ended */
+  status: TeamNowStatus | null;
+}
+
+export interface TeamNow {
+  people: TeamNowPerson[];
+  /**
+   * The tenant's active statuses with the flags that decide a group, so the board shows a tile
+   * only for a group that at least one status belongs to (a tenant without paid pauses gets no
+   * Paid pause tile). Keys and names stay out: nothing on the board branches on them.
+   */
+  statusFlags: { isWorking: boolean; isProductive: boolean; isPaid: boolean }[];
+}
+
+/**
  * A button to another application on the Welcome page (cma.app_links, addition 0003d): the tenant's
  * own list, already filtered to what the caller may see. Deep links only, never customer data;
  * no address lives in code.
@@ -301,4 +345,6 @@ export interface CmaData {
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
   /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
   listAppLinks(me: Principal): Promise<AppLink[]>;
+  /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */
+  getTeamNow(me: Principal): Promise<TeamNow>;
 }
