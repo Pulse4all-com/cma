@@ -17,7 +17,8 @@
     "verify:csv": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/csv.mjs",
     "verify:dashboard": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/dashboard.mjs",
     "verify:live": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/live.mjs",
-    "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:csv && npm run verify:dashboard && npm run verify:live && npm run verify:theme && npm run verify:layout"
+    "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:csv && npm run verify:dashboard && npm run verify:live && npm run verify:team && npm run verify:theme && npm run verify:layout",
+    "verify:team": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/team.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",

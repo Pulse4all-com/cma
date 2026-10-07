@@ -52,7 +52,7 @@ async function expectShell(width, height) {
   await p.close();
 }
 
-// Mock identities as the default ladder: analyst (no clock, the Live board), agent, supervisor. Everyone lands on
+// Mock identities as the default ladder: analyst (no clock, the Live board), agent, supervisor, manager, admin. Everyone lands on
 // Welcome; the Clock in button appears only for a person whose time is kept; My day sends the
 // analyst back to Welcome.
 async function expectNavigation() {
@@ -60,6 +60,10 @@ async function expectNavigation() {
     ["analyst", ["/", "/live/board", "/reports/dashboard"], false],
     ["agent-one", ["/", "/day", "/hours"], true],
     ["supervisor", ["/", "/live/board", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
+    // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
+    // the supervisor and the agent see no Team group, so their keys do not move
+    ["manager", ["/", "/live/board", "/team/people", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
+    ["admin", ["/", "/live/board", "/team/people", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -104,5 +108,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome and navigation for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome and navigation for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

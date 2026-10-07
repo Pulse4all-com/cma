@@ -13,7 +13,7 @@
  * change by the second take the instant as an argument, so a tab left open ticks without polling
  * and the server's rows stay equal between two reads of an unchanged team.
  */
-import type { Instant, TeamNowPerson, WorkdayClock } from "./data/types";
+import type { Instant, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
 import { GROUPS, groupOf, type Group } from "./dashboard.ts";
@@ -69,12 +69,36 @@ export interface LiveFilter {
   group: LiveGroup | "";
   /** An employer key, or "" for every employer */
   employer: string;
+  /** A team key, or "" for every team (migration 0004); needs the memberships */
+  team?: string;
 }
 
-export function filterRows(rows: LiveRow[], f: LiveFilter): LiveRow[] {
+/** Team keys per person from the current memberships (cma.team_members_now) */
+export function teamKeysByUser(memberships: TeamMembership[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const m of memberships) out.set(m.userId, [...(out.get(m.userId) ?? []), m.teamKey].sort());
+  return out;
+}
+
+export function filterRows(rows: LiveRow[], f: LiveFilter, memberships: TeamMembership[] = []): LiveRow[] {
+  const byUser = teamKeysByUser(memberships);
   return rows.filter((r) =>
     (f.group === "" || r.group === f.group) &&
-    (f.employer === "" || (r.person.organisationKey ?? "") === f.employer));
+    (f.employer === "" || (r.person.organisationKey ?? "") === f.employer) &&
+    (!f.team || (byUser.get(r.person.userId) ?? []).includes(f.team)));
+}
+
+export interface TeamOption {
+  key: string;
+  name: string;
+}
+
+/** The teams anyone on the board is in, by name; a person without a team is in none of them */
+export function teamsOf(rows: LiveRow[], memberships: TeamMembership[]): TeamOption[] {
+  const onBoard = new Set(rows.map((r) => r.person.userId));
+  const out = new Map<string, string>();
+  for (const m of memberships) if (onBoard.has(m.userId)) out.set(m.teamKey, m.teamName);
+  return [...out.entries()].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
 }
 
 export interface EmployerOption {

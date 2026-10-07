@@ -304,6 +304,111 @@ export interface AppLink {
   address: string;
 }
 
+/**
+ * The Team screen (migration 0004): people with role, employer, teams and skills, for people
+ * holding users.manage_agents (agents, supervisors and other non-managing roles) or
+ * users.manage_all (everyone). The database decides who is listed and who may be edited (CMA06).
+ * Staff data, never customer data; the login id never travels back to a screen.
+ */
+export type SkillDimension = "language" | "work_type" | "channel";
+
+export interface SkillLevel {
+  level: number;
+  name: string;
+}
+
+/** One entry of the tenant's skill catalog with its dimension's scale (empty: held or not) */
+export interface SkillInfo {
+  dimension: SkillDimension;
+  key: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  levels: SkillLevel[];
+}
+
+/** An active employer of the tenant (cma.organisations), for the Add a person dialog */
+export interface OrganisationInfo {
+  key: string;
+  name: string;
+  /** The zone a new person follows when they have none of their own */
+  timeZone: string;
+}
+
+/** A current team of the tenant */
+export interface TeamInfo {
+  key: string;
+  name: string;
+  /** Market tokens the team serves (ISO 3166-1 alpha-2 by convention) */
+  markets: string[];
+  sortOrder: number;
+  memberCount: number;
+}
+
+/** A role of the tenant's ladder, with whether the caller may assign it */
+export interface RoleInfo {
+  key: string;
+  name: string;
+  isSystem: boolean;
+  /** Holds users.manage_agents, users.manage_all or tenant.configure: only users.manage_all assigns it */
+  isManaging: boolean;
+  assignable: boolean;
+  permissions: string[];
+}
+
+export interface PersonSkill {
+  dimension: SkillDimension;
+  key: string;
+  name: string;
+  /** null for a binary dimension */
+  level: number | null;
+  levelName: string | null;
+}
+
+export interface DirectoryPerson {
+  userId: string;
+  email: string;
+  displayName: string;
+  isActive: boolean;
+  organisationKey: string | null;
+  organisationName: string;
+  timeZone: string;
+  /** null for a person without a role (may not work yet) */
+  roleKey: string | null;
+  roleName: string | null;
+  isManaging: boolean;
+  /** Active and holding workday.own: the clock runs for this person */
+  timeKept: boolean;
+  teams: { key: string; name: string }[];
+  skills: PersonSkill[];
+  /** Whether the caller may change this person; never for oneself */
+  mayEdit: boolean;
+}
+
+export interface AddPersonInput {
+  email: string;
+  displayName: string;
+  organisationKey: string;
+  roleKey: string;
+  /** The identity provider as stored in app_user_external_id.system (google behind IAP, mock in dev) */
+  loginSystem: string;
+  loginId: string;
+  timeZone: string | null;
+}
+
+/** A skill to set on a person: the level for a scaled dimension, left out for a binary one */
+export interface SkillInput {
+  key: string;
+  level?: number;
+}
+
+/** A person's current team, for the Live board's team filter (cma.team_members_now) */
+export interface TeamMembership {
+  userId: string;
+  teamKey: string;
+  teamName: string;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -352,4 +457,32 @@ export interface CmaData {
   listAppLinks(me: Principal): Promise<AppLink[]>;
   /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */
   getTeamNow(me: Principal): Promise<TeamNow>;
+  /** Current team memberships of everyone, for the Live board's team filter. Needs a watching or managing permission (CMA06) */
+  listTeamMembersNow(me: Principal): Promise<TeamMembership[]>;
+
+  // ---- Team screen (migration 0004): the database decides who is listed and editable (CMA06)
+  /** People with role, employer, teams and skills. Needs users.manage_agents or users.manage_all */
+  listDirectory(me: Principal): Promise<DirectoryPerson[]>;
+  /** The tenant's ladder with whether the caller may assign each role. Needs users.manage_agents or users.manage_all */
+  listRoles(me: Principal): Promise<RoleInfo[]>;
+  /** The tenant's current teams; any person of the tenant */
+  listTeams(me: Principal): Promise<TeamInfo[]>;
+  /** The tenant's active employers; any person of the tenant */
+  listOrganisations(me: Principal): Promise<OrganisationInfo[]>;
+  /** The tenant's skill catalog with the level scale per dimension; any person of the tenant */
+  listSkills(me: Principal): Promise<SkillInfo[]>;
+  /**
+   * Adds a person with a login id and one role (cma.add_person). Rerun-safe for the same person
+   * and id; a different id for an existing person, an id of another person or an inactive person
+   * is CMA03; a managing role without users.manage_all is CMA06. Answers the person's id.
+   */
+  addPerson(me: Principal, input: AddPersonInput): Promise<string>;
+  /** One role per person; own role or a managing role without users.manage_all is CMA06 */
+  setPersonRole(me: Principal, userId: string, roleKey: string): Promise<void>;
+  /** Deactivate or reactivate; oneself is CMA06 */
+  setPersonActive(me: Principal, userId: string, active: boolean): Promise<void>;
+  /** The full list of a person's teams; what is not in it ends. Unknown team CMA02 */
+  setPersonTeams(me: Principal, userId: string, teamKeys: string[]): Promise<void>;
+  /** The full list of a person's skills with levels; needs skills.manage too. Bad level CMA04 */
+  setPersonSkills(me: Principal, userId: string, skills: SkillInput[]): Promise<void>;
 }

@@ -11,7 +11,7 @@
  * (since, worked so far) from fixed instants.
  */
 import {
-  LIVE_GROUPS, employersOf, filterRows, fmtSeconds, liveGroupOf, liveRows, secondsSince, tiles, workedSeconds,
+  LIVE_GROUPS, employersOf, filterRows, fmtSeconds, liveGroupOf, liveRows, secondsSince, teamKeysByUser, teamsOf, tiles, workedSeconds,
 } from "../src/lib/live.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -87,6 +87,19 @@ expect("both filters combine", filterRows(rows, { group: "productive", employer:
 expect("no filter keeps everyone", filterRows(rows, { group: "", employer: "" }).length, 7, 6);
 expect("employers by name, a person without one left out", employersOf(rows), [{ key: "company", name: "Company" }, { key: "partner", name: "Partner" }],
   [{ key: "partner", name: "Partner" }, { key: "company", name: "Company" }]);
+
+// Teams (migration 0004): memberships as cma.team_members_now returns them; a person may be in several
+const memberships = [
+  { userId: "p1", teamKey: "zz", teamName: "Zulu" }, { userId: "p1", teamKey: "aa", teamName: "Alpha" },
+  { userId: "p2", teamKey: "aa", teamName: "Alpha" }, { userId: "p9", teamKey: "mm", teamName: "Not on the board" },
+];
+expect("team keys per person, sorted", Object.fromEntries(teamKeysByUser(memberships)), { p1: ["aa", "zz"], p2: ["aa"], p9: ["mm"] }, { p1: ["zz", "aa"], p2: ["aa"], p9: ["mm"] });
+expect("the team filter keeps the team's people across groups", filterRows(rows, { group: "", employer: "", team: "aa" }, memberships).map((r) => r.person.userId),
+  ["p1", "p2"], ["p1"]);
+expect("the team filter combines with the others", filterRows(rows, { group: "productive", employer: "partner", team: "zz" }, memberships).map((r) => r.person.userId), ["p1"], []);
+expect("no team filter without memberships changes nothing", filterRows(rows, { group: "", employer: "", team: "" }, []).length, 7, 2);
+expect("teams on the board by name, a team of nobody on it left out", teamsOf(rows, memberships), [{ key: "aa", name: "Alpha" }, { key: "zz", name: "Zulu" }],
+  [{ key: "aa", name: "Alpha" }, { key: "mm", name: "Not on the board" }, { key: "zz", name: "Zulu" }]);
 
 // The figures that tick, from fixed instants
 const nowMs = Date.parse("2026-10-07T09:00:30.000Z");

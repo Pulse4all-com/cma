@@ -105,6 +105,24 @@ export function NavIconMark({ name }: { name: NavIcon }) {
           <path d="M16 4a8.5 8.5 0 0 1 0 12" />
         </svg>
       );
+    case "people":
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="7.5" cy="7" r="2.75" />
+          <path d="M2.5 16a5 5 0 0 1 10 0" />
+          <circle cx="14" cy="8" r="2.25" />
+          <path d="M13.5 16.5h4a3.75 3.75 0 0 0-3-3.7" />
+        </svg>
+      );
     case "clock":
       return (
         <svg

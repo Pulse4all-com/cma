@@ -16,7 +16,9 @@
  * someone whose time is not kept), own data only, corrections (team routes), an ended day stays
  * ended, status changes from the tenant's own list, the two export files in the tenant's format,
  * time per status for the Dashboard (the same minutes as Team hours), app links per person, the
- * team now for the Live board (a person's own entry equals the own-day read).
+ * team now for the Live board (a person's own entry equals the own-day read), the Team screen
+ * (migration 0004: who is listed and editable, roles, teams, skills, adding a person) and the
+ * memberships for the Live board's team filter.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -27,6 +29,7 @@ const AGENT = "agent-two";
 const SUPERVISOR = "supervisor";
 const MANAGER = "manager";         // holds workday.export from the default ladder (0003b)
 const ANALYST = "analyst";         // analytics: no workday.own, so the database keeps no time for them (0003d)
+const ADMIN = "admin";             // admin (0004): users.manage_all and tenant.configure
 const NOBODY = "verify-nobody";
 const SPOOF_TENANT = "00000000-0000-7000-8000-00000000beef";
 
@@ -381,6 +384,81 @@ expect("the analyst reads the board and is not on it",
   [nowN.status, (nowN.body?.data?.people ?? []).some((p) => p.userId === meN?.userId),
    (nowN.body?.data?.people ?? []).length === teamNow.people.length],
   [200, false, true], [200, true, true]);
+
+
+// ---- the Team screen (migration 0004), 20 checks --------------------------------------------
+// The manager holds users.manage_agents and skills.manage, the admin users.manage_all. No role,
+// team or skill key is assumed: the checks read the tenant's own ladder and catalogs first.
+const json = (s, method, path, body, headers = { "x-cma-request": "1" }) =>
+  call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+const meM = (await get(MANAGER, "/api/v1/me")).body.data;
+const meAdm = (await get(ADMIN, "/api/v1/me")).body.data;
+const dirM = await get(MANAGER, "/api/v1/team/directory");
+const dirAdm = await get(ADMIN, "/api/v1/team/directory");
+const ids = (d) => (d.body?.data ?? []).map((p) => p.userId);
+expect("an agent cannot read the directory", (await get(AGENT, "/api/v1/team/directory")).status, 403, 200);
+expect("the manager lists the non-managing people and themselves, not the admin",
+  [dirM.status, ids(dirM).includes(meA.userId), ids(dirM).includes(meM.userId), ids(dirM).includes(meAdm.userId)],
+  [200, true, true, false], [200, true, true, true]);
+expect("the admin lists everyone and may not edit themselves",
+  [ids(dirAdm).includes(meM.userId), ids(dirAdm).includes(meAdm.userId),
+   dirAdm.body?.data?.find((p) => p.userId === meAdm.userId)?.mayEdit, dirAdm.body?.data?.find((p) => p.userId === meM.userId)?.mayEdit],
+  [true, true, false, true], [true, true, true, true]);
+const teams = (await get(ADMIN, "/api/v1/team/teams")).body?.data ?? [];
+const skills = (await get(ADMIN, "/api/v1/team/skills")).body?.data ?? [];
+const rolesM = (await get(MANAGER, "/api/v1/team/roles")).body?.data ?? [];
+const rolesAdm = (await get(ADMIN, "/api/v1/team/roles")).body?.data ?? [];
+const agentDir = dirAdm.body?.data?.find((p) => p.userId === meA.userId);
+expect("the directory's teams and skills come from the tenant's catalogs",
+  [agentDir?.teams.length > 0, agentDir?.teams.every((t) => teams.some((x) => x.key === t.key)),
+   agentDir?.skills.some((k) => k.level !== null && typeof k.levelName === "string"), agentDir?.skills.every((k) => skills.some((x) => x.key === k.key))],
+  [true, true, true, true], [true, true, false, true]);
+expect("the manager may assign non-managing roles only, the admin every role",
+  [rolesM.some((r) => r.isManaging && r.assignable), rolesM.some((r) => !r.isManaging && r.assignable), rolesAdm.every((r) => r.assignable)],
+  [false, true, true], [true, true, true]);
+const orgs = await get(AGENT, "/api/v1/team/organisations");
+expect("employers are listed with the zone a new person follows for any person of the tenant",
+  [orgs.status, (orgs.body?.data ?? []).length > 0, (orgs.body?.data ?? []).every((o) => typeof o.timeZone === "string" && o.key && o.name)],
+  [200, true, true], [403, true, true]);
+const managingRole = rolesAdm.find((r) => r.isManaging && r.key !== meAdm.roleKey)?.key ?? rolesAdm.find((r) => r.isManaging)?.key;
+const agentRole = agentDir?.roleKey;
+expect("a role change needs the request header", (await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/role`, { roleKey: agentRole }, {})).status, 400, 200);
+expect("cross-site role change is refused",
+  (await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/role`, { roleKey: agentRole }, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+expect("nobody changes their own role", (await json(ADMIN, "PUT", `/api/v1/team/directory/${meAdm.userId}/role`, { roleKey: agentRole })).status, 403, 200);
+expect("the manager cannot assign a managing role", (await json(MANAGER, "PUT", `/api/v1/team/directory/${meA.userId}/role`, { roleKey: managingRole })).status, 403, 200);
+expect("the manager cannot touch the admin", (await json(MANAGER, "PUT", `/api/v1/team/directory/${meAdm.userId}/active`, { active: false })).status, 403, 200);
+expect("nobody deactivates themselves", (await json(ADMIN, "PUT", `/api/v1/team/directory/${meAdm.userId}/active`, { active: false })).status, 403, 200);
+const originalTeams = agentDir?.teams.map((t) => t.key) ?? [];
+const otherTeam = teams.find((t) => !originalTeams.includes(t.key))?.key ?? teams[0]?.key;
+const changed = await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/teams`, { teamKeys: [otherTeam] });
+expect("the full team list replaces the memberships", changed.body?.data?.teams?.map((t) => t.key), [otherTeam], originalTeams);
+const restored = await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/teams`, { teamKeys: originalTeams });
+expect("and restoring it gives the original list", (restored.body?.data?.teams?.map((t) => t.key) ?? []).sort(), [...originalTeams].sort(), [otherTeam]);
+expect("an unknown team is a 404", (await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/teams`, { teamKeys: ["verify-no-such-team"] })).status, 404, 200);
+const scaled = skills.find((k) => k.levels.length > 0);
+expect("a level outside the scale is refused",
+  (await json(ADMIN, "PUT", `/api/v1/team/directory/${meA.userId}/skills`, { skills: [{ key: scaled?.key, level: 9 }] })).status, 400, 200);
+expect("the supervisor cannot set skills", (await json(SUPERVISOR, "PUT", `/api/v1/team/directory/${meA.userId}/skills`, { skills: [] })).status, 403, 200);
+// Add a person: rerun-safe for the same person and id; a different id for the same person is refused; a
+// managing role needs users.manage_all. The fictional person stays in dev (inactive at the end).
+const newPerson = { email: "verify-added@example.com", displayName: "Verify Added", organisationKey: orgs.body?.data?.[0]?.key,
+  roleKey: agentRole, loginSystem: "mock", loginId: "verify-added-login" };
+// An earlier run left this fictional person inactive: reactivate first, since add_person refuses an inactive person
+const earlier = dirAdm.body?.data?.find((p) => p.email === newPerson.email);
+if (earlier && !earlier.isActive) await json(ADMIN, "PUT", `/api/v1/team/directory/${earlier.userId}/active`, { active: true });
+const add1 = await json(MANAGER, "POST", "/api/v1/team/directory", newPerson);
+const add2 = await json(MANAGER, "POST", "/api/v1/team/directory", newPerson);
+expect("adding the same person again answers the same id", [add1.status, add2.status, add1.body?.data?.userId === add2.body?.data?.userId], [201, 201, true], [201, 201, false]);
+expect("a different login id for an existing person is refused", (await json(MANAGER, "POST", "/api/v1/team/directory", { ...newPerson, loginId: "verify-added-other" })).status, 409, 201);
+expect("the manager cannot add a person with a managing role",
+  (await json(MANAGER, "POST", "/api/v1/team/directory", { ...newPerson, email: "verify-added-manager@example.com", loginId: "verify-added-manager", roleKey: managingRole })).status, 403, 201);
+const off = await json(ADMIN, "PUT", `/api/v1/team/directory/${add1.body?.data?.userId}/active`, { active: false });
+expect("deactivating keeps the person listed as inactive", [off.status, off.body?.data?.isActive, off.body?.data?.timeKept], [200, false, false], [200, true, false]);
+expect("an agent cannot read the memberships", (await get(AGENT, "/api/v1/team/memberships")).status, 403, 200);
+const members = await get(SUPERVISOR, "/api/v1/team/memberships");
+expect("the supervisor reads the memberships for the board's team filter",
+  [members.status, (members.body?.data ?? []).some((m) => m.userId === meA.userId && teams.some((t) => t.key === m.teamKey))], [200, true], [200, false]);
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);

@@ -24,6 +24,11 @@ import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-co
  *   CMA_DB_NAME       cma                                     (default cma)
  *   CMA_DB_POOL_MAX   5                                       (per Cloud Run instance)
  *   CMA_DB_IP         PUBLIC | PRIVATE                        (default PUBLIC)
+ *
+ * Local only (never set on Cloud Run, which keeps the connector path above):
+ *   CMA_DB_HOST       127.0.0.1 or a socket directory    a plain PostgreSQL connection for running the
+ *   CMA_DB_PORT       5433                               API verifier against a local database before dev
+ *   CMA_DB_PASSWORD   optional                           sees a change (8 October 2026, night build)
  */
 
 // ---- Error translation -----------------------------------------------------------------------
@@ -99,10 +104,29 @@ function dbConfig() {
 
 // ---- Pool (one per process, survives Next.js dev reloads via globalThis) ---------------------
 
-type DbState = { connector: Connector; pool: pg.Pool };
+type DbState = { connector: Connector | null; pool: pg.Pool };
 const g = globalThis as unknown as { __cmaDb?: Promise<DbState> | undefined };
 
 async function open(): Promise<DbState> {
+  if (process.env.CMA_DB_HOST) {
+    // Local verification path: no connector, no IAM; the Cloud Run configuration never sets this
+    const pool = new pg.Pool({
+      host: process.env.CMA_DB_HOST,
+      port: Number(process.env.CMA_DB_PORT ?? 5432),
+      user: required('CMA_DB_USER'),
+      password: process.env.CMA_DB_PASSWORD || undefined,
+      database: process.env.CMA_DB_NAME ?? 'cma',
+      max: Number(process.env.CMA_DB_POOL_MAX ?? 5),
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+      application_name: 'cma-web-local',
+    });
+    pool.on('error', (err) => console.error('[cma-db] idle client error', err.message));
+    const shutdown = async () => { await pool.end(); };
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
+    return { connector: null, pool };
+  }
   const cfg = dbConfig();
   const connector = new Connector();
   const clientOpts = await connector.getOptions({

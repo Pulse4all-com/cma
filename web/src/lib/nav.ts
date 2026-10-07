@@ -11,16 +11,19 @@ import type { Copy } from "@/lib/copy";
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
-export type NavIcon = "home" | "live" | "clock" | "chart";
-export type ShellPage = "welcome" | "live-board" | "my-day" | "my-hours" | "team-hours" | "dashboard";
-export type NavHref = "/" | "/live/board" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
+export type NavIcon = "home" | "live" | "people" | "clock" | "chart";
+export type ShellPage = "welcome" | "live-board" | "people" | "my-day" | "my-hours" | "team-hours" | "dashboard";
+export type NavHref = "/" | "/live/board" | "/team/people" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
 
 export interface NavItem {
   page: ShellPage;
   href: NavHref;
   label: string;
-  /** The permission that shows the page; null means every person with a role */
-  permission: string | null;
+  /**
+   * The permission that shows the page; null means every person with a role. A list means any
+   * one of them (the Team screen: users.manage_agents or users.manage_all, migration 0004).
+   */
+  permission: string | readonly string[] | null;
 }
 
 /** A page that stands on its own in the rail, with its icon */
@@ -61,6 +64,17 @@ export function navEntries(copy: Copy): NavEntry[] {
       ],
     },
     {
+      // Team (night build, 7 October 2026): the people and, with 0005, the roster. After Live and before
+      // Time, so an agent's keys (Welcome, My day, My hours) do not move: agents hold none of these.
+      kind: "group",
+      id: "team",
+      label: copy.nav.team,
+      icon: "people",
+      items: [
+        { page: "people", href: "/team/people", label: copy.nav.people, permission: ["users.manage_agents", "users.manage_all"] },
+      ],
+    },
+    {
       kind: "group",
       id: "time",
       label: copy.nav.time,
@@ -88,8 +102,15 @@ export type VisibleEntry =
   | { kind: "page"; icon: NavIcon; item: VisibleItem }
   | { kind: "group"; id: string; label: string; icon: NavIcon; items: VisibleItem[] };
 
+/** True when the person holds the permission, or any of a list of them */
+export function holdsAny(me: Pick<Principal, "permissions">, permission: string | readonly string[] | null): boolean {
+  if (permission === null) return true;
+  if (typeof permission === "string") return me.permissions.includes(permission);
+  return permission.some((p) => me.permissions.includes(p));
+}
+
 function mayOpen(me: Principal, item: NavItem): boolean {
-  return item.permission === null || me.permissions.includes(item.permission);
+  return holdsAny(me, item.permission);
 }
 
 /**
