@@ -1,0 +1,363 @@
+# 2026-10-07T10:53:48Z cma-dev-pg db/07_verify_time_model.sql
+DO
+   relname   |   owner   | rls_on 
+-------------+-----------+--------
+ time_event  | cma_owner | t
+ work_status | cma_owner | t
+ workday     | cma_owner | t
+(3 rows)
+
+  tablename  | policyname |   roles   | cmd 
+-------------+------------+-----------+-----
+ time_event  | tenant_app | {cma_app} | ALL
+ work_status | tenant_app | {cma_app} | ALL
+ workday     | tenant_app | {cma_app} | ALL
+(3 rows)
+
+ table_name  
+-------------
+ time_event
+ work_status
+ workday
+(3 rows)
+
+         relname          |   owner   
+--------------------------+-----------
+ time_event_effective     | cma_owner
+ time_event_effective_all | cma_owner
+ time_interval            | cma_owner
+ time_interval_all        | cma_owner
+ workday_summary          | cma_owner
+ workday_summary_all      | cma_owner
+(6 rows)
+
+      table_name      
+----------------------
+ app_link
+ app_role
+ app_user
+ app_user_external_id
+ audit_log
+ channel
+ organisation
+ permission
+ role_permission
+ setting
+ tenant
+ tenant_setting
+ time_event
+ time_interval
+ user_role
+ work_status
+ workday
+ workday_summary
+(18 rows)
+
+SET
+ app_inserts_events | app_updates_events | app_deletes_events | app_deletes_workdays | app_deletes_statuses | app_reads_summary | app_reads_summary_all 
+--------------------+--------------------+--------------------+----------------------+----------------------+-------------------+-----------------------
+ t                  | f                  | f                  | f                    | f                    | t                 | f
+(1 row)
+
+RESET
+          proname           | security_definer | app_may_call 
+----------------------------+------------------+--------------
+ business_date              | f                | t
+ correct_time_event         | f                | t
+ end_workday                | f                | t
+ find_tenants_for_identity  | t                | t
+ has_permission             | f                | t
+ open_workday               | f                | t
+ refresh_workday            | f                | t
+ seed_default_work_statuses | f                | f
+ set_status                 | f                | t
+ user_permissions           | f                | t
+ user_timezone              | f                | t
+(11 rows)
+
+SET
+ version |                                                             description                                                              |      applied_by      | applied_at 
+---------+--------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                              | martin@pulse4all.com | 2026-10-04
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views | martin@pulse4all.com | 2026-10-05
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                   | martin@pulse4all.com | 2026-10-06
+ 0003a   | Team people: team_people for Add day and the person filter                                                                           | martin@pulse4all.com | 2026-10-06
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads               | martin@pulse4all.com | 2026-10-07
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                    | martin@pulse4all.com | 2026-10-07
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                   | martin@pulse4all.com | 2026-10-07
+(7 rows)
+
+RESET
+          slug           |         key          | is_working | is_productive | is_paid | is_billable | is_default 
+-------------------------+----------------------+------------+---------------+---------+-------------+------------
+ pulse4all-invest        | available            | t          | t             | t       | t           | t
+ pulse4all-invest        | training             | t          | f             | t       | t           | f
+ pulse4all-invest        | meeting              | t          | f             | t       | t           | f
+ pulse4all-invest        | break                | f          | f             | t       | t           | f
+ pulse4all-invest        | lunch                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | available_sales      | t          | t             | t       | t           | t
+ pulse4all-subscriptions | available            | t          | t             | t       | t           | f
+ pulse4all-subscriptions | available_operations | t          | t             | t       | t           | f
+ pulse4all-subscriptions | training             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | meeting              | t          | f             | t       | t           | f
+ pulse4all-subscriptions | coaching             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | break                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | lunch                | f          | f             | f       | f           | f
+(13 rows)
+
+          slug           |    key    |   timezone    
+-------------------------+-----------+---------------
+ pulse4all-invest        | clubdeal  | 
+ pulse4all-invest        | pulse4all | 
+ pulse4all-subscriptions | newco     | Europe/Madrid
+ pulse4all-subscriptions | pulse4all | 
+(4 rows)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a115ff-827f-7f61-a211-1faaaf732da0
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+ status | zero_length 
+--------+-------------
+ ended  | t
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+psql:db/07_verify_time_model.sql:119: ERROR:  workday 01a115ff-82b6-7c12-b96f-14209794967c is already ended; resuming is a correction
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a115ff-8310-755c-88d2-d5f70efacc47
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a115ff-8310-779b-85a7-7ee90a79045d
+(1 row)
+
+psql:db/07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 14 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+         email          | business_date | status | working_h | paid_h | is_capped | needs_correction | has_correction 
+------------------------+---------------+--------+-----------+--------+-----------+------------------+----------------
+ agent.one@example.com  | 2026-10-02    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.one@example.com  | 2026-10-03    | ended  |      5.92 |   5.92 | f         | f                | f
+ agent.one@example.com  | 2026-10-04    | ended  |      8.07 |   8.07 | f         | f                | t
+ agent.two@example.com  | 2025-08-15    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-16    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-17    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-18    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-19    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-20    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-21    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-22    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-23    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-24    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-25    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-26    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-27    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-28    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-29    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-30    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-08-31    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-01    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2025-09-02    | ended  |      5.00 |   5.00 | f         | f                | t
+ agent.two@example.com  | 2026-10-03    | ended  |      7.00 |   7.00 | f         | f                | t
+ agent.two@example.com  | 2026-10-04    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.two@example.com  | 2026-10-05    | ended  |      0.28 |   0.28 | f         | f                | t
+ agent.two@example.com  | 2026-10-06    | ended  |      4.12 |   4.12 | f         | f                | t
+ agent.two@example.com  | 2026-10-07    | open   |      7.02 |   7.02 | f         | f                | f
+ supervisor@example.com | 2026-10-05    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-06    | ended  |      0.00 |   0.00 | f         | f                | f
+ supervisor@example.com | 2026-10-07    | ended  |      0.00 |   0.00 | f         | f                | f
+(30 rows)
+
+ROLLBACK
+BEGIN
+SET
+ no_tenant_set 
+---------------
+             0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-6fe6-7163-8d9a-d11967a61ced
+(1 row)
+
+ invest_days 
+-------------
+           0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+ subs_days 
+-----------
+        30
+(1 row)
+
+ROLLBACK
+ reader_sees_all 
+-----------------
+              30
+(1 row)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:176: ERROR:  permission denied for view workday_summary_all
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:184: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+psql:db/07_verify_time_model.sql:190: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a10573-a796-7633-9237-b2defa7ca037
+(1 row)
+
+psql:db/07_verify_time_model.sql:205: ERROR:  a corrected time must lie in the past
+CONTEXT:  PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 50 at RAISE
+psql:db/07_verify_time_model.sql:209: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:db/07_verify_time_model.sql:216: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a115ff-84e2-772d-88ea-ae07a4242683
+(1 row)
+
+ agent_may_correct 
+-------------------
+ f
+(1 row)
+
+psql:db/07_verify_time_model.sql:236: ERROR:  user 01a115ff-84e2-772d-88ea-ae07a4242683 lacks permission workday.team
+CONTEXT:  PL/pgSQL function assert_permission(text) line 13 at RAISE
+PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a10573-6fcc-7245-99d0-a9a9b64c8759
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a115ff-8545-752b-87dc-58364281e7af
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+SET
+psql:db/07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
+DETAIL:  Failing row contains (01a115ff-8580-7db8-892b-b4cc3ff42a59, 01a10573-6fcc-7245-99d0-a9a9b64c8759, 01a115ff-856c-71c4-96b0-fad5fdfcea01, 01a115ff-8545-752b-87dc-58364281e7af, end, null, 2026-10-07 10:53:49.738094+00, 2026-10-07 10:53:49.824867+00, correction, null, null, null).
+ROLLBACK
+BEGIN
+SET
+          slug           
+-------------------------
+ pulse4all-invest
+ pulse4all-subscriptions
+(2 rows)
+
+ unknown_subject 
+-----------------
+               0
+(1 row)
+
+ wrong_system 
+--------------
+            0
+(1 row)
+
+ROLLBACK
+# exit 0
