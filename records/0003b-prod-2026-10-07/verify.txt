@@ -1,0 +1,18 @@
+# 2026-10-07T06:14:01Z cma-prod-pg db/14_verify_tenant_settings.sql at d13a39f
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+DO
+         tenant          |                                                                                              settings                                                                                              | verdict 
+-------------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------
+ pulse4all-invest        | export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default) | PASS
+ pulse4all-subscriptions | export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default) | PASS
+(2 rows)
+
+# exit 0
