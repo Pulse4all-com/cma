@@ -151,6 +151,64 @@ export interface Correction {
   changes: CorrectionChange[];
 }
 
+/** One effective tenant setting (cma.tenant_settings): the tenant's own value or the default */
+export interface TenantSetting {
+  key: string;
+  value: string;
+  isDefault: boolean;
+}
+
+/**
+ * Export data (migration 0003b), for people holding workday.export. The database checks the
+ * permission on every call (CMA06). Seconds, not minutes: the file decides how to write them.
+ */
+export interface ExportHoursRow {
+  userId: string;
+  displayName: string;
+  organisationName: string;
+  date: DateKey;
+  timeZone: string;
+  status: "open" | "ended";
+  startedAt: Instant;
+  endedAt: Instant | null;
+  workedSeconds: number;
+  productiveSeconds: number;
+  paidSeconds: number;
+  billableSeconds: number;
+  isCapped: boolean;
+  needsCorrection: boolean;
+  hasCorrection: boolean;
+}
+
+/** One stretch in a status, from its change to the next effective event of the day */
+export interface StatusChangeRow {
+  userId: string;
+  displayName: string;
+  organisationName: string;
+  date: DateKey;
+  timeZone: string;
+  statusKey: string;
+  statusName: string;
+  isWorking: boolean;
+  isProductive: boolean;
+  isPaid: boolean;
+  isBillable: boolean;
+  from: Instant;
+  /** null while the stretch is open, also when capped at the end of its business day */
+  to: Instant | null;
+  isOpen: boolean;
+  isCapped: boolean;
+  seconds: number;
+  /** Who entered the change that began it */
+  source: "user" | "system" | "correction";
+}
+
+/** An export read with the tenant's settings, from one transaction */
+export interface Export<Row> {
+  settings: TenantSetting[];
+  rows: Row[];
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -185,4 +243,10 @@ export interface CmaData {
    * invalid edit CMA04. Answers the day as it now stands.
    */
   correctWorkday(me: Principal, userId: string, date: DateKey, correction: Correction): Promise<TeamDayDetail>;
+  /** The tenant's effective settings (cma.tenant_settings); any user of the tenant */
+  listSettings(me: Principal): Promise<TenantSetting[]>;
+  /** Hours per person per day for a file, with the settings. Needs workday.export (CMA06) */
+  exportHours(me: Principal, range: HoursRange, userId: string | null): Promise<Export<ExportHoursRow>>;
+  /** Status stretches per person per day for a file, with the settings. Needs workday.export (CMA06) */
+  exportStatusChanges(me: Principal, range: HoursRange, userId: string | null): Promise<Export<StatusChangeRow>>;
 }

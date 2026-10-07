@@ -76,6 +76,15 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
   }));
   const sum = (f: (d: TeamDay) => number) => fmtMinutes(hours.days.reduce((n, d) => n + f(d), 0));
 
+  // The files cover exactly what the table shows: this period, this person or everyone
+  const exportQuery = new URLSearchParams({ from: period.from, to: period.to, ...(person ? { userId: person } : {}) });
+  const downloads = me.permissions.includes("workday.export") && !invalid
+    ? {
+        hours: `/api/v1/team/exports/hours?${exportQuery.toString()}`,
+        statusChanges: `/api/v1/team/exports/status-changes?${exportQuery.toString()}`,
+      }
+    : null;
+
   const query: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
 
@@ -115,6 +124,7 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
           statuses={statuses}
           copy={copy}
           locale={me.locale}
+          downloads={downloads}
         />
       </Card>
 

@@ -7,13 +7,13 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migrations 0003 and 0003a. Ends the test supervisor's workday of today and, as
+ * Needs the dev seed (06) and migrations 0003, 0003a and 0003b. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
  *
  * Themes: identity and tenant, own data only, corrections (team routes), an ended day stays ended,
- * status changes from the tenant's own list.
+ * status changes from the tenant's own list, the two export files in the tenant's format.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -22,6 +22,7 @@ const PROVOKE = process.argv.includes("--provoke");
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
 const AGENT = "agent-two";
 const SUPERVISOR = "supervisor";
+const MANAGER = "manager";         // holds workday.export from the default ladder (0003b)
 const NOBODY = "verify-nobody";
 const SPOOF_TENANT = "00000000-0000-7000-8000-00000000beef";
 
@@ -222,6 +223,53 @@ const afterLogout = (await get(SUPERVISOR, "/api/v1/me/day")).body.data;
 expect("log out on an ended day changes nothing", [logout.status, afterLogout.endedAt === E], [303, true], [303, false]);
 
 expect("the other user's day is untouched", (await get(AGENT, "/api/v1/me/day")).body.data.status, "working", "ended");
+
+// ---- exports (migration 0003b), 8 checks ------------------------------------------------------
+// The files follow the tenant's own settings: the verifier reads them and assumes no format.
+// Downloads never clock anyone in, so the manager is not logged in.
+async function download(subject, path) {
+  const res = await fetch(BASE + path, { headers: { "x-cma-mock-subject": subject }, redirect: "manual" });
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const text = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
+  return { status: res.status, headers: res.headers, bom: bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf, text };
+}
+const settingsRes = await get(AGENT, "/api/v1/settings");
+const setting = (k) => (settingsRes.body?.data ?? []).find((x) => x.key === k)?.value;
+expect("any person reads the tenant's export settings",
+  [settingsRes.status, (settingsRes.body?.data ?? []).filter((x) => x.key.startsWith("export.csv.")).length],
+  [200, 5], [200, 4]);
+const SEP = { comma: ",", semicolon: ";", tab: "\t" }[setting("export.csv.separator")] ?? ",";
+const exportRange = `from=${from}&to=${today}&userId=${meA.userId}`;
+
+expect("an agent cannot download hours",
+  (await download(AGENT, `/api/v1/team/exports/hours?${exportRange}`)).status, 403, 200);
+expect("workday.team alone cannot download status changes",
+  (await download(SUPERVISOR, `/api/v1/team/exports/status-changes?${exportRange}`)).status, 403, 200);
+
+const hoursFile = await download(MANAGER, `/api/v1/team/exports/hours?${exportRange}`);
+expect("the manager's hours file is a private download",
+  [hoursFile.status, hoursFile.headers.get("content-type")?.startsWith("text/csv"), hoursFile.headers.get("cache-control"),
+   hoursFile.headers.get("content-disposition")?.startsWith("attachment")],
+  [200, true, "no-store", true], [200, true, "public", true]);
+
+const hoursLines = hoursFile.text.replace(/^\uFEFF/, "").split("\r\n").filter(Boolean);
+expect("the file follows the tenant's format",
+  [hoursFile.bom, hoursLines[0]?.split(SEP).length],
+  [setting("export.csv.utf8_bom") === "true", 11], [setting("export.csv.utf8_bom") !== "true", 11]);
+
+const teamDays = (await teamHours(SUPERVISOR, from, today, meA.userId)).body?.data?.days ?? [];
+expect("one hours row per day, as Team hours",
+  [hoursLines.length - 1, teamDays.length > 0], [teamDays.length, true], [teamDays.length + 1, true]);
+
+const statusFile = await download(MANAGER, `/api/v1/team/exports/status-changes?${exportRange}`);
+const statusLines = statusFile.text.replace(/^\uFEFF/, "").split("\r\n").filter(Boolean);
+expect("every day has at least one status stretch",
+  [statusFile.status, statusLines[0]?.split(SEP).length, statusLines.length - 1 >= teamDays.length],
+  [200, 13, true], [200, 13, false]);
+
+const longStart = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
+expect("an export is bounded to 92 days",
+  (await download(MANAGER, `/api/v1/team/exports/hours?from=${longStart}&to=${today}`)).status, 400, 200);
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
