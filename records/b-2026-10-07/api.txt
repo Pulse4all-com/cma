@@ -1,0 +1,69 @@
+verify/api.mjs against http://127.0.0.1:8081
+
+PASS  identity in two tenants is refused           got 403
+PASS  unknown identity is refused                  got 403
+PASS  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759
+PASS  a visit opens no workday                     got null
+PASS  the database keeps no time for someone without a clock got 403
+PASS  start needs the request header               got 400
+PASS  cross-site start is refused                  got 403
+PASS  start opens the own day today                got ["2026-10-07",true]
+PASS  a second start is the same day               got true
+PASS  two users have two different days            got false
+PASS  hours show the caller's own day              got ["2026-10-07T03:52:11.491Z","2026-10-07T03:52:11.830Z"]
+PASS  a user parameter cannot redirect hours       got {"from":"2026-09-24","to":"2026-10-07","days":[{"date":"2026
+PASS  an agent cannot read team hours              got 403
+PASS  an agent cannot list the team                got 403
+PASS  the supervisor lists the people, agent included got [200,true]
+PASS  the supervisor closes open past days         got 0
+PASS  a correction needs the request header        got 400
+PASS  cross-site correction is refused             got 403
+PASS  a correction needs a reason                  got 400
+PASS  nobody corrects their own day                got 403
+PASS  an agent cannot correct                      got 403
+PASS  an unknown person is a 404                   got 404
+PASS  a future date is refused                     got 400
+PASS  add day creates the missing day              got [200,"ended",true,240]
+PASS  an event before the start is refused         got 400
+PASS  a replaced event stays visible               got [true,1,300]
+PASS  correction leaves no past day open or capped got [0,true,true]
+PASS  end needs the request header                 got 400
+PASS  cross-site end is refused                    got 403
+PASS  end ends the own day                         got ended
+PASS  start on an ended day changes nothing        got ["ended","2026-10-07T03:52:13.737Z"]
+PASS  a second end changes nothing                 got true
+PASS  log out on an ended day changes nothing      got [303,true]
+PASS  the other user's day is untouched            got working
+PASS  any person reads the tenant's export settings got [200,5]
+PASS  an agent cannot download hours               got 403
+PASS  workday.team alone cannot download status changes got 403
+PASS  the manager's hours file is a private download got [200,true,"no-store",true]
+PASS  the file follows the tenant's format         got [true,11]
+PASS  one hours row per day, as Team hours         got [5,true]
+PASS  every day has at least one status stretch    got [200,13,true]
+PASS  an export is bounded to 92 days              got 400
+PASS  an agent cannot read time per status         got 403
+PASS  the supervisor reads time per status, never cached got [200,"no-store",true]
+PASS  worked and paid per past day equal Team hours got [0,true]
+PASS  flags follow the tenant's own status list    got true
+PASS  the person filter returns that person only   got [true,true]
+PASS  time per status is bounded to 92 days        got 400
+PASS  a link that needs a permission is hidden from the agent got [true,true,true]
+PASS  every link is https, for anyone with a role  got [200,true]
+PASS  an agent cannot read the team now            got 403
+PASS  the supervisor reads the team now, never cached got [200,"no-store",true,true]
+PASS  the agent's own entry equals the own-day read got {"date":"2026-10-07","status":"working","startedAt":"2026-10
+PASS  the entry's status carries the day's status key with its flags got ["available_sales","boolean","boolean"]
+PASS  someone without a day today is listed as not clocked in got [true,true]
+PASS  the analyst reads the board and is not on it got [200,false,true]
+PASS  hours range is bounded to 92 days            got 400
+PASS  status list has exactly one default          got 1
+PASS  the status list shows no pay or billing flags got [true,true]
+PASS  status change needs the request header       got 400
+PASS  cross-site status change is refused          got 403
+PASS  status change is stored on the own day       got available_operations
+PASS  status since moves to the change             got true
+PASS  unknown status key is a 404                  got 404
+PASS  an ended day refuses a status change         got 409
+
+ALL 65 PASS
