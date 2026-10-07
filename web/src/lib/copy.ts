@@ -15,6 +15,7 @@ const en = {
     tagline: "Pulse4all contact center",
   },
   nav: {
+    time: "Time",
     myDay: "My day",
     myHours: "My hours",
     teamHours: "Team hours",
@@ -192,6 +193,7 @@ const nl: Copy = {
     tagline: "Pulse4all contactcenter",
   },
   nav: {
+    time: "Tijd",
     myDay: "Mijn dag",
     myHours: "Mijn uren",
     teamHours: "Teamuren",
