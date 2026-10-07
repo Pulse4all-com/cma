@@ -9,5 +9,6 @@ export async function endWorkdayAction(): Promise<void> {
   const access = await getAccess();
   if (!access || access.kind !== "granted") return;
   await data().endWorkday(access.principal, new Date().toISOString());
+  revalidatePath("/day");
   revalidatePath("/");
 }

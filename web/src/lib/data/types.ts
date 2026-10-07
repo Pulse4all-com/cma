@@ -243,6 +243,18 @@ export interface Export<Row> {
   rows: Row[];
 }
 
+/**
+ * A button to another application on the Welcome page (cma.app_links, addition 0003d): the tenant's
+ * own list, already filtered to what the caller may see. Deep links only, never customer data;
+ * no address lives in code.
+ */
+export interface AppLink {
+  key: string;
+  label: string;
+  /** https only, checked by the database */
+  address: string;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -250,11 +262,13 @@ export interface CmaData {
    */
   findPrincipal(identity: Identity): Promise<Principal | null>;
   /**
-   * Login is clock-in: returns today's workday, opening it if none exists.
-   * An ended day stays ended (so a silent re-login after log out does not
-   * start a new one); the next workday starts on the next calendar day.
+   * Clock in (increment e, 7 October 2026): an action, never a visit. Returns today's workday,
+   * opening it if none exists; an existing day is returned unchanged whether it is open or ended
+   * (an ended day stays ended, resuming is a correction). The database creates a day only for
+   * someone whose time is kept (workday.own): CMA06 otherwise.
    */
-  openWorkday(me: Principal, now: Instant): Promise<Workday>;
+  startWorkday(me: Principal, now: Instant): Promise<Workday>;
+  /** Reading never clocks in: null when there is no day on that date */
   getWorkday(me: Principal, date: DateKey): Promise<Workday | null>;
   endWorkday(me: Principal, now: Instant): Promise<Workday>;
   /** The tenant's active work statuses, in the tenant's order */
@@ -285,4 +299,6 @@ export interface CmaData {
   exportStatusChanges(me: Principal, range: HoursRange, userId: string | null): Promise<Export<StatusChangeRow>>;
   /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
+  /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
+  listAppLinks(me: Principal): Promise<AppLink[]>;
 }

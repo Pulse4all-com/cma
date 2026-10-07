@@ -18,6 +18,14 @@ export function dateKeyInZone(instant: Instant | Date, timeZone: string): DateKe
   return f.format(typeof instant === "string" ? new Date(instant) : instant);
 }
 
+/** The hour (0 to 23) of an instant in a zone, for a greeting by time of day */
+export function hourInZone(instant: Instant | Date, timeZone: string): number {
+  const part = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "numeric", hourCycle: "h23" })
+    .formatToParts(typeof instant === "string" ? new Date(instant) : instant)
+    .find((p) => p.type === "hour")?.value;
+  return Number(part ?? 0) % 24;
+}
+
 function toUtcDate(key: DateKey): Date {
   const [y, m, d] = key.split("-").map(Number) as [number, number, number];
   return new Date(Date.UTC(y, m - 1, d));

@@ -1,0 +1,28 @@
+# 2026-10-07T09:31:46Z cma-dev-pg db/17_clock_in_app_links.sql
+DO
+SET
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:db/17_clock_in_app_links.sql:328: NOTICE:  policy "tenant_app" for relation "app_link" does not exist, skipping
+psql:db/17_clock_in_app_links.sql:328: NOTICE:  policy "tenant_readonly" for relation "app_link" does not exist, skipping
+psql:db/17_clock_in_app_links.sql:328: NOTICE:  trigger "audit" for relation "app_link" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE VIEW
+INSERT 0 1
+RESET
+# exit 0

@@ -3,8 +3,8 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
+  AppLink, CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, StatusTimeRow, TeamDay,
+  TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -344,8 +344,9 @@ export const postgresData: CmaData = {
     });
   },
 
-  async openWorkday(me: Principal): Promise<Workday> {
-    // Returns today's day, open or ended, creating it if needed; an ended day stays ended
+  async startWorkday(me: Principal): Promise<Workday> {
+    // Clock in: today's day, open or ended, created if needed; an ended day stays ended. The
+    // database creates a day only for someone whose time is kept (0003d, CMA06 otherwise)
     return withTenant(ctx(me), async (q) => {
       const opened = await q.query<{ business_date: string }>(`select business_date from cma.open_workday()`);
       const date = one(opened.rows, "open_workday").business_date;
@@ -513,6 +514,15 @@ export const postgresData: CmaData = {
         [range.from, range.to, userId],
       );
       return { ...range, rows: r.rows.map(toStatusTimeRow) };
+    });
+  },
+
+  // Addition 0003d: the function filters on the acting user's permissions, so a link that needs
+  // one never reaches a screen that would have to hide it
+  async listAppLinks(me): Promise<AppLink[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; label: string; address: string }>(`select key, label, address from cma.app_links()`);
+      return r.rows.map((l) => ({ key: l.key, label: l.label, address: l.address }));
     });
   },
 };

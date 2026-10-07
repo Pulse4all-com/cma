@@ -7,14 +7,15 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migrations 0003, 0003a, 0003b and 0003c. Ends the test supervisor's workday of today and, as
+ * Needs the dev seed (06) and migrations 0003, 0003a, 0003b, 0003c and 0003d. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
  *
- * Themes: identity and tenant, own data only, corrections (team routes), an ended day stays ended,
- * status changes from the tenant's own list, the two export files in the tenant's format, time per
- * status for the Dashboard (the same minutes as Team hours).
+ * Themes: identity and tenant, Clock in as an action (a visit opens nothing, the database refuses
+ * someone whose time is not kept), own data only, corrections (team routes), an ended day stays
+ * ended, status changes from the tenant's own list, the two export files in the tenant's format,
+ * time per status for the Dashboard (the same minutes as Team hours), app links per person.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -24,6 +25,7 @@ const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guess
 const AGENT = "agent-two";
 const SUPERVISOR = "supervisor";
 const MANAGER = "manager";         // holds workday.export from the default ladder (0003b)
+const ANALYST = "analyst";         // analytics: no workday.own, so the database keeps no time for them (0003d)
 const NOBODY = "verify-nobody";
 const SPOOF_TENANT = "00000000-0000-7000-8000-00000000beef";
 
@@ -41,8 +43,9 @@ async function call(subject, path, init = {}) {
 const get = (s, p) => call(s, p);
 const post = (s, p, headers = {}) => call(s, p, { method: "POST", headers });
 const end = (s, headers = { "x-cma-request": "1" }) => post(s, "/api/v1/me/day/end", headers);
-/** Opening the app is the login, and the login is clock-in */
-const login = (s) => call(s, "/", { redirect: "follow" });
+/** Clock in is an action (increment e): the start route, never a visit */
+const start = (s, headers = { "x-cma-request": "1" }) => post(s, "/api/v1/me/day/start", headers);
+const visit = (s, path) => call(s, path, { redirect: "follow" });
 
 function dateKey(d, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -75,9 +78,24 @@ const meS = (await get(SUPERVISOR, "/api/v1/me")).body.data;
 const spoofed = await call(AGENT, `/api/v1/me?tenantId=${SPOOF_TENANT}`, { headers: { "x-cma-tenant-id": SPOOF_TENANT } });
 expect("tenant comes from the identity only", spoofed.body?.data?.tenantId, meA.tenantId, SPOOF_TENANT);
 
+// ---- clock in is an action (increment e, addition 0003d), 6 checks ---------------------------
+// The analyst holds performance.team and no workday.own: a visit to the landing page and to My day
+// opens nothing, and the start route is refused by the database (CMA06), not by the route.
+await visit(ANALYST, "/");
+await visit(ANALYST, "/day");
+expect("a visit opens no workday", (await get(ANALYST, "/api/v1/me/day")).body?.data ?? null, null, "a day");
+expect("the database keeps no time for someone without a clock", (await start(ANALYST)).status, 403, 200);
+expect("start needs the request header", (await start(AGENT, {})).status, 400, 200);
+expect("cross-site start is refused",
+  (await start(AGENT, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+const started = (await start(AGENT)).body?.data;
+const startedAgain = (await start(AGENT)).body?.data;
+expect("start opens the own day today", [started?.date, started?.status === "working" || started?.status === "ended"],
+  [dateKey(new Date(), meA.timeZone), true], [dateKey(new Date(), meA.timeZone), false]);
+expect("a second start is the same day", startedAgain?.startedAt === started?.startedAt, true, false);
+
 // ---- own data only -------------------------------------------------------------------------
-await login(AGENT);
-await login(SUPERVISOR);
+await start(SUPERVISOR);
 const dayA = (await get(AGENT, "/api/v1/me/day")).body.data;
 const dayS = (await get(SUPERVISOR, "/api/v1/me/day")).body.data;
 expect("two users have two different days", dayA.startedAt === dayS.startedAt, false, true);
@@ -216,9 +234,9 @@ const ended = await end(SUPERVISOR);
 const E = ended.body?.data?.endedAt ?? null;
 expect("end ends the own day", ended.body?.data?.status, "ended", "working");
 
-await login(SUPERVISOR);
-const afterLogin = (await get(SUPERVISOR, "/api/v1/me/day")).body.data;
-expect("login after end does not reopen", [afterLogin.status, afterLogin.endedAt], ["ended", E], ["working", null]);
+await visit(SUPERVISOR, "/");
+const afterStart = (await start(SUPERVISOR)).body?.data;
+expect("start on an ended day changes nothing", [afterStart?.status, afterStart?.endedAt], ["ended", E], ["working", null]);
 
 const again = await end(SUPERVISOR);
 expect("a second end changes nothing", again.body?.data?.endedAt === E, true, false);
@@ -317,6 +335,19 @@ expect("the person filter returns that person only",
 
 expect("time per status is bounded to 92 days",
   (await statusTime(SUPERVISOR, `from=${longStart}&to=${today}`)).status, 400, 200);
+
+// ---- app links (addition 0003d), 2 checks -----------------------------------------------------
+// The tenant's own list, filtered by the database on the person's permissions. No key or label is
+// assumed: the dev seed carries one link that needs workday.team, so the supervisor sees more.
+const linksA = (await get(AGENT, "/api/v1/me/app-links")).body?.data ?? [];
+const linksS = (await get(SUPERVISOR, "/api/v1/me/app-links")).body?.data ?? [];
+const linksN = await get(ANALYST, "/api/v1/me/app-links");
+expect("a link that needs a permission is hidden from the agent",
+  [linksA.length > 0, linksS.length > linksA.length, linksA.every((l) => linksS.some((x) => x.key === l.key))],
+  [true, true, true], [true, false, true]);
+expect("every link is https, for anyone with a role",
+  [linksN.status, [...linksA, ...linksS, ...(linksN.body?.data ?? [])].every((l) => /^https:\/\//.test(l.address))],
+  [200, true], [200, false]);
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);

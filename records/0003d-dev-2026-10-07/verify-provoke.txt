@@ -1,0 +1,19 @@
+# 2026-10-07T09:31:48Z cma-dev-pg db/18_verify_clock_in_app_links.sql, provoked
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/18_provoke.sql:70: ERROR:  FAIL A4: app_link must have row-level security, the tenant_app policy and the audit trigger
+CONTEXT:  PL/pgSQL function inline_code_block line 24 at RAISE
+psql:/tmp/18_provoke.sql:280: ERROR:  FAIL B2: expected 3 audit rows for the links of tenant one, got 3
+CONTEXT:  PL/pgSQL function inline_code_block line 61 at RAISE
+         tenant          |   roles_with_workday_own   |       active_app_links       |       verdict        
+-------------------------+----------------------------+------------------------------+----------------------
+ pulse4all-invest        | agent, manager, supervisor | hubspot, aircall             | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | agent, manager, supervisor | hubspot, aircall, team-sheet | PROVOKED, NOT A PASS
+(2 rows)
+
+# exit 0

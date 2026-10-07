@@ -2,9 +2,10 @@
  * Verifier: layout at 1280 and 1920 px, the 1280 px gate below that, no
  * horizontal scrolling, the shell dimensions from the tokens, and the keycaps
  * that make the keyboard shortcuts discoverable. Also the navigation per
- * permission: which pages each test identity sees, numbered 1, 2, 3 without
- * gaps, and that someone without a clock lands on their first page instead of
- * My day. Saves screenshots under records/ for the release note.
+ * permission: everyone lands on Welcome (increment e), which pages each test
+ * identity sees, numbered 1, 2, 3 without gaps, that someone without a clock
+ * is sent from My day to Welcome, and that the Clock in button is shown only to
+ * a person whose time is kept. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -51,14 +52,16 @@ async function expectShell(width, height) {
   await p.close();
 }
 
-// Mock identities as the default ladder: analyst (no clock), agent, supervisor
+// Mock identities as the default ladder: analyst (no clock), agent, supervisor. Everyone lands on
+// Welcome; the Clock in button appears only for a person whose time is kept; My day sends the
+// analyst back to Welcome.
 async function expectNavigation() {
   const cases = [
-    ["analyst", "/reports/dashboard", ["/reports/dashboard"]],
-    ["agent-one", "/", ["/", "/hours"]],
-    ["supervisor", "/", ["/", "/hours", "/team/hours", "/reports/dashboard"]],
+    ["analyst", ["/", "/reports/dashboard"], false],
+    ["agent-one", ["/", "/day", "/hours"], true],
+    ["supervisor", ["/", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
   ];
-  for (const [subject, landing, hrefs] of cases) {
+  for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -68,9 +71,17 @@ async function expectNavigation() {
       // The rail is the first nav; the period bar on a page is another
       [...(document.querySelector("nav")?.querySelectorAll("a[data-shortcut]") ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
     const want = hrefs.map((h, i) => [String(i + 1), h]);
-    if (path !== landing) problems.push(`${subject}: landed on ${path}, expected ${landing}`);
+    const hasClockIn = await p.locator('[data-testid="clock-in"]').count() > 0;
+    if (path !== "/") problems.push(`${subject}: landed on ${path}, expected Welcome at /`);
     if (JSON.stringify(links) !== JSON.stringify(want)) problems.push(`${subject}: navigation ${JSON.stringify(links)}, expected ${JSON.stringify(want)}`);
-    if (subject === "analyst") await p.screenshot({ path: `${outDir}/analyst-landing.png` });
+    if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
+    await p.screenshot({ path: `${outDir}/${subject}-welcome.png` });
+    if (!clock) {
+      await p.goto(BASE + "/day");
+      await p.waitForLoadState("networkidle");
+      const dayPath = new URL(p.url()).pathname;
+      if (dayPath !== "/") problems.push(`${subject}: My day answered ${dayPath}, expected to be sent to Welcome`);
+    }
     await ctx.close();
   }
 }
@@ -93,5 +104,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, navigation for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome and navigation for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

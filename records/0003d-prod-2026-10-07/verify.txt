@@ -1,0 +1,17 @@
+# 2026-10-07T09:33:33Z cma-prod-pg db/18_verify_clock_in_app_links.sql
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+         tenant          |   roles_with_workday_own   | active_app_links | verdict 
+-------------------------+----------------------------+------------------+---------
+ pulse4all-invest        | agent, manager, supervisor | hubspot, aircall | PASS
+ pulse4all-subscriptions | agent, manager, supervisor | hubspot, aircall | PASS
+(2 rows)
+
+# exit 0

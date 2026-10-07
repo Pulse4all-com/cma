@@ -76,3 +76,25 @@ begin
   end if;
 end
 $$;
+
+-- App links per tenant (after addition 0003d): the buttons on the Welcome page. Deep links to the
+-- applications the people of this tenant work in; no permission, so everyone with a role sees
+-- them. Only adds links a tenant does not have yet, so a later change on the configuration screen
+-- survives a rerun. Exact portal addresses replace the generic ones when Martin provides them.
+do $$
+begin
+  if to_regclass('cma.app_link') is not null then
+    insert into cma.app_link (tenant_id, key, label, address, permission_key, sort_order)
+    select t.id, l.key, l.label, l.address, null, l.sort_order
+    from (values
+      ('hubspot', 'HubSpot', 'https://app.hubspot.com/',       10),
+      ('aircall', 'Aircall', 'https://dashboard.aircall.io/',  20)
+    ) as l(key, label, address, sort_order)
+    cross join cma.tenant t
+    where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+    on conflict (tenant_id, key) do nothing;
+  else
+    raise notice 'cma.app_link does not exist yet (addition 0003d): rerun this seed after 17_clock_in_app_links.sql';
+  end if;
+end
+$$;

@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * The caller's own workday for ?date=YYYY-MM-DD, default today in the caller's zone.
- * Reading never clocks in: only the login (opening the app) opens a day. data is null when
- * there is no workday on that date.
+ * Reading never clocks in: only POST /api/v1/me/day/start opens a day (since increment e,
+ * 7 October 2026). data is null when there is no workday on that date.
  */
 export async function GET(request: NextRequest) {
   return forPrincipal(async (me) => {
