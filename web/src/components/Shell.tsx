@@ -6,11 +6,13 @@
  */
 import Image from "next/image";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
+import { NAV_COOKIE_PREFIX } from "@/lib/nav";
 import { NavGroup, type NavIcon } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 
@@ -19,7 +21,7 @@ export type ShellPage = "my-day" | "my-hours" | "team-hours";
 type NavItem = { page: ShellPage; href: "/" | "/hours" | "/team/hours"; label: string; permission?: string };
 type NavSection = { id: string; label: string; icon: NavIcon; items: NavItem[] };
 
-export function Shell({
+export async function Shell({
   copy,
   me,
   active,
@@ -48,6 +50,9 @@ export function Shell({
       ],
     },
   ];
+  // Groups start closed; each browser remembers per group whether it was left open (a cookie,
+  // so the page renders in that state without a flicker)
+  const jar = await cookies();
   let n = 0;
   const nav = sections
     .map((section) => ({
@@ -100,7 +105,8 @@ export function Shell({
               id={section.id}
               label={section.label}
               icon={section.icon}
-              defaultOpen={section.items.some((i) => i.page === active)}
+              defaultOpen={jar.get(`${NAV_COOKIE_PREFIX}${section.id}`)?.value === "open"}
+              current={section.items.some((i) => i.page === active)}
             >
               {section.items.map((item) => {
                 const current = item.page === active;
