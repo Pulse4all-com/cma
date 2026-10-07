@@ -120,6 +120,9 @@ function DayBlock({
             <Swatch group={agentGroupOf(current)} />
             {current.name}
           </span>
+        ) : workday.statusName ? (
+          // A status no longer in the choosable list: its name as stored, no colour (no flags here)
+          <span className="text-small">{workday.statusName}</span>
         ) : null}
       </div>
       <p className="mt-4 text-small text-p4a-muted">

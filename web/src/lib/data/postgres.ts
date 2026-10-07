@@ -41,6 +41,7 @@ const HEADER = "business_date, status, started_at, ended_at";
 
 type DayRow = HeaderRow & {
   status_key: string | null;
+  status_name: string | null;
   status_since: Date | null;
   closed_seconds: number;
   running_since: Date | null;
@@ -55,6 +56,7 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
   const r = await q.query<DayRow>(
     `select s.business_date, s.status, s.started_at, s.ended_at,
             ws.key                                   as status_key,
+            ws.name                                  as status_name,
             coalesce(c.closed_seconds, 0)::int       as closed_seconds,
             c.running_since,
             c.status_since
@@ -88,6 +90,7 @@ function toWorkday(r: DayRow): Workday {
     startedAt: r.started_at.toISOString(),
     endedAt: r.ended_at ? r.ended_at.toISOString() : null,
     statusKey: ended ? null : r.status_key,
+    statusName: ended ? null : r.status_name,
     statusSince: !ended && r.status_since ? r.status_since.toISOString() : null,
     clock: {
       closedSeconds: r.closed_seconds,
@@ -298,6 +301,7 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           started_at: r.started_at,
           ended_at: r.ended_at,
           status_key: r.status_key,
+          status_name: r.status_name,
           status_since: r.status_since,
           closed_seconds: Number(r.closed_seconds),
           running_since: r.running_since,

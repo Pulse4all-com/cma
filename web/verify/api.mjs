@@ -416,6 +416,10 @@ await setStatus(AGENT, { key: target?.key });
 const after = (await get(AGENT, "/api/v1/me/day")).body?.data;
 expect("status change is stored on the own day",
   after?.statusKey ?? null, target?.key ?? "(no other status to switch to)", before?.statusKey ?? null);
+// The name as stored travels with the day, so a status retired while someone is in it is still
+// named on My day and Welcome (increment f; the active list no longer carries it then)
+expect("the own day names its current status",
+  after?.statusName ?? null, target?.name ?? "(no other status to switch to)", before?.statusName ?? null);
 expect("status since moves to the change",
   Date.parse(after?.statusSince ?? "") > Date.parse(before?.statusSince ?? before?.startedAt ?? ""), true, false);
 

@@ -1,0 +1,10 @@
+copy: PASS (245 keys, en and nl)
+copy: FAIL (5 problems)
+ALL 26 PASS
+ALL 26 PROVOKED CHECKS FAILED, as they must
+ALL 15 PASS
+ALL 15 PROVOKED CHECKS FAILED, as they must
+ALL 17 PASS
+ALL 17 PROVOKED CHECKS FAILED, as they must
+ALL 21 PASS
+ALL 21 PROVOKED CHECKS FAILED, as they must
