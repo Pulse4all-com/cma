@@ -44,12 +44,14 @@ export interface Workday {
 /**
  * A status the caller can choose: the tenant's own list (work_status), in its order. Names are
  * tenant data, never copy, and no code branches on a key. Pay and billing flags stay out: the
- * screen only needs to know whether the clock runs.
+ * screen needs to know whether the clock runs and, for the status colour, whether the work is
+ * productive (since 7 October 2026). Whether a pause is paid is not shown to agents.
  */
 export interface WorkStatus {
   key: string;
   name: string;
   isWorking: boolean;
+  isProductive: boolean;
   isDefault: boolean;
 }
 
@@ -203,6 +205,38 @@ export interface StatusChangeRow {
   source: "user" | "system" | "correction";
 }
 
+/**
+ * Time per status (addition 0003c), for people holding performance.team: one row per person per
+ * business date per status, summed from the same stretches as Team hours. The database checks the
+ * permission on every call (CMA06). Flags as stored, so groups and colours come from them.
+ */
+export interface StatusTimeRow {
+  userId: string;
+  displayName: string;
+  organisationName: string;
+  date: DateKey;
+  timeZone: string;
+  statusKey: string;
+  statusName: string;
+  /** The tenant's order of its statuses */
+  sortOrder: number;
+  /** False for a status set inactive since; its history stays */
+  statusActive: boolean;
+  isWorking: boolean;
+  isProductive: boolean;
+  isPaid: boolean;
+  isBillable: boolean;
+  seconds: number;
+  /** How many stretches in this status that day */
+  stretches: number;
+  /** A stretch that runs to the end of a day not clocked out */
+  isCapped: boolean;
+}
+
+export interface TeamStatusTime extends HoursRange {
+  rows: StatusTimeRow[];
+}
+
 /** An export read with the tenant's settings, from one transaction */
 export interface Export<Row> {
   settings: TenantSetting[];
@@ -249,4 +283,6 @@ export interface CmaData {
   exportHours(me: Principal, range: HoursRange, userId: string | null): Promise<Export<ExportHoursRow>>;
   /** Status stretches per person per day for a file, with the settings. Needs workday.export (CMA06) */
   exportStatusChanges(me: Principal, range: HoursRange, userId: string | null): Promise<Export<StatusChangeRow>>;
+  /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
+  getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
 }

@@ -8,13 +8,18 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
-  CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, TeamDay, TeamDayDetail,
-  TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, StatusTimeRow, TeamDay,
+  TeamDayDetail, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
 
 /** Same answer as the database for a caller without workday.team */
 function assertTeam(me: Principal): void {
   if (!me.permissions.includes("workday.team")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/** Same answer as the database for a caller without performance.team (addition 0003c) */
+function assertPerformance(me: Principal): void {
+  if (!me.permissions.includes("performance.team")) throw new CmaDbError("CMA06", "not permitted");
 }
 
 /** Same answer as the database for a caller without workday.export */
@@ -42,11 +47,11 @@ const store = new Map<Key, Workday>();
  * (the default ladder of the seed). The screens never branch on these keys or names.
  */
 const MOCK_STATUSES: WorkStatus[] = [
-  { key: "available", name: "Available", isWorking: true, isDefault: true },
-  { key: "training", name: "Training", isWorking: true, isDefault: false },
-  { key: "meeting", name: "Meeting", isWorking: true, isDefault: false },
-  { key: "break", name: "Break", isWorking: false, isDefault: false },
-  { key: "lunch", name: "Lunch", isWorking: false, isDefault: false },
+  { key: "available", name: "Available", isWorking: true, isProductive: true, isDefault: true },
+  { key: "training", name: "Training", isWorking: true, isProductive: false, isDefault: false },
+  { key: "meeting", name: "Meeting", isWorking: true, isProductive: false, isDefault: false },
+  { key: "break", name: "Break", isWorking: false, isProductive: false, isDefault: false },
+  { key: "lunch", name: "Lunch", isWorking: false, isProductive: false, isDefault: false },
 ];
 const DEFAULT_STATUS = MOCK_STATUSES.find((s) => s.isDefault)!;
 /** Fixture pay flags (the seed's proposal: paid break, unpaid lunch); never shown to an agent */
@@ -98,6 +103,7 @@ function seedHistory(me: Principal, today: DateKey) {
 
 const MOCK_SUPERVISOR_ID = "00000000-0000-7000-8000-000000000102";
 const MOCK_MANAGER_ID = "00000000-0000-7000-8000-000000000103";
+const MOCK_ANALYST_ID = "00000000-0000-7000-8000-000000000104";
 
 /** Two employers and three zones, so the screen shows employer and zone handling */
 const TEAM: TeamPerson[] = [
@@ -214,7 +220,7 @@ function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusCh
       statusKey: e.statusKey ?? "",
       statusName: status?.name ?? e.statusKey ?? "",
       isWorking: !!status?.isWorking,
-      isProductive: !!status?.isWorking,
+      isProductive: !!status?.isProductive,
       isPaid: paid,
       isBillable: paid,
       from: e.at,
@@ -255,8 +261,12 @@ function seedTeam() {
         ["status", at("13:30"), "lunch"],
         ["status", at("14:00"), "available"],
       ];
+      // Working time that is not productive, so every group of the Dashboard has something to show
+      if ((weekday + n) % 3 === 0) plan.push(["status", at("15:30"), "meeting"], ["status", at("16:15"), "available"]);
+      if (n === 2 && weekday % 4 === 1) plan.push(["status", at("09:30"), "training"], ["status", at("10:30"), "available"]);
       const forgot = n === 3 && weekday === 2;  // Lucas: forgot to clock out
       if (!forgot) plan.push(["end", at("17:30", j), null]);
+      plan.sort((a, b) => Date.parse(a[1]) - Date.parse(b[1]));
       const events = plan.filter(([, t]) => Date.parse(t) <= now).map(([k, t, s]) => mockEvent(k, t, s, "user"));
       if (events.length === 0) continue;
       if (n === 1 && weekday === 4) {         // Jordi: an end time confirmed afterwards
@@ -291,8 +301,19 @@ export const mockData: CmaData = {
         roleKey: identity.subject,
         // As the default ladder: the manager also exports, the supervisor does not
         permissions: identity.subject === "manager"
-          ? ["workday.own", "workday.team", "workday.export"]
-          : ["workday.own", "workday.team"],
+          ? ["workday.own", "workday.team", "workday.export", "performance.team", "reports.view"]
+          : ["workday.own", "workday.team", "performance.team"],
+      };
+    }
+    // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject === "analyst") {
+      return {
+        ...MOCK_PRINCIPAL,
+        userId: MOCK_ANALYST_ID,
+        displayName: "Test analyst",
+        organisationName: "Pulse4all",
+        roleKey: "analytics",
+        permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
       };
     }
     return {
@@ -480,7 +501,8 @@ export const mockData: CmaData = {
         rows.push({
           userId: d.userId, displayName: d.displayName, organisationName: d.organisationName, date: d.date,
           timeZone: d.timeZone, status: d.status, startedAt: d.startedAt, endedAt: d.endedAt,
-          workedSeconds: d.minutes * 60, productiveSeconds: d.minutes * 60,
+          workedSeconds: d.minutes * 60,
+          productiveSeconds: statusRows(p, date, events).filter((r) => r.isProductive).reduce((n, r) => n + r.seconds, 0),
           paidSeconds: d.paidMinutes * 60, billableSeconds: d.paidMinutes * 60,
           isCapped: d.isCapped, needsCorrection: d.needsCorrection, hasCorrection: d.hasCorrection,
         });
@@ -502,5 +524,40 @@ export const mockData: CmaData = {
     }
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.from.localeCompare(b.from));
     return { settings: MOCK_SETTINGS, rows };
+  },
+
+  /** The stretches of statusRows summed per person, day and status, as cma.team_status_time does */
+  async getTeamStatusTime(me, range, userId) {
+    assertPerformance(me);
+    seedTeam();
+    const sums = new Map<string, StatusTimeRow>();
+    for (const p of TEAM) {
+      if (userId && p.userId !== userId) continue;
+      for (const [date, events] of teamStore.get(p.userId) ?? []) {
+        if (date < range.from || date > range.to || !events.length) continue;
+        for (const s of statusRows(p, date, events)) {
+          const k = `${s.userId}:${s.date}:${s.statusKey}`;
+          const row = sums.get(k);
+          if (row) {
+            row.seconds += s.seconds;
+            row.stretches += 1;
+            row.isCapped ||= s.isCapped;
+            continue;
+          }
+          const order = MOCK_STATUSES.findIndex((x) => x.key === s.statusKey);
+          sums.set(k, {
+            userId: s.userId, displayName: s.displayName, organisationName: s.organisationName, date: s.date,
+            timeZone: s.timeZone, statusKey: s.statusKey, statusName: s.statusName,
+            sortOrder: (order < 0 ? MOCK_STATUSES.length : order) * 10 + 10, statusActive: true,
+            isWorking: s.isWorking, isProductive: s.isProductive, isPaid: s.isPaid, isBillable: s.isBillable,
+            seconds: s.seconds, stretches: 1, isCapped: s.isCapped,
+          });
+        }
+      }
+    }
+    const rows = [...sums.values()].sort((a, b) =>
+      a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.userId.localeCompare(b.userId) ||
+      a.sortOrder - b.sortOrder || a.statusKey.localeCompare(b.statusKey));
+    return { ...range, rows };
   },
 };

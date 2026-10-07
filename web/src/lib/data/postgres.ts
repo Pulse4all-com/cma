@@ -3,8 +3,8 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, TeamDay, TeamDayDetail, TeamPerson,
-  TenantSetting, TimeEvent, Workday, WorkStatus,
+  CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -226,6 +226,33 @@ function toExportHoursRow(r: ExportHoursDbRow): ExportHoursRow {
   };
 }
 
+type StatusTimeDbRow = {
+  user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
+  status_key: string; status_name: string; sort_order: number; status_active: boolean; is_working: boolean;
+  is_productive: boolean; is_paid: boolean; is_billable: boolean; seconds: number; stretches: number; is_capped: boolean;
+};
+
+function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    organisationName: r.organisation_name,
+    date: r.business_date,
+    timeZone: r.timezone,
+    statusKey: r.status_key,
+    statusName: r.status_name,
+    sortOrder: r.sort_order,
+    statusActive: r.status_active,
+    isWorking: r.is_working,
+    isProductive: r.is_productive,
+    isPaid: r.is_paid,
+    isBillable: r.is_billable,
+    seconds: r.seconds,
+    stretches: r.stretches,
+    isCapped: r.is_capped,
+  };
+}
+
 function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
   return {
     userId: r.user_id,
@@ -352,13 +379,16 @@ export const postgresData: CmaData = {
 
   async listStatuses(me: Principal): Promise<WorkStatus[]> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ key: string; name: string; is_working: boolean; is_default: boolean }>(
-        `select key, name, is_working, is_default
+      // Pay and billing flags stay out: not agent information (decision of 6 October 2026)
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; is_default: boolean }>(
+        `select key, name, is_working, is_productive, is_default
            from cma.work_status
           where tenant_id = cma.current_tenant_id() and status = 'active'
           order by sort_order, key`,
       );
-      return r.rows.map((s) => ({ key: s.key, name: s.name, isWorking: s.is_working, isDefault: s.is_default }));
+      return r.rows.map((s) => ({
+        key: s.key, name: s.name, isWorking: s.is_working, isProductive: s.is_productive, isDefault: s.is_default,
+      }));
     });
   },
 
@@ -469,6 +499,20 @@ export const postgresData: CmaData = {
         [range.from, range.to, userId],
       );
       return { settings: await readSettings(q), rows: r.rows.map(toStatusChangeRow) };
+    });
+  },
+
+  // Addition 0003c: the permission (performance.team) is checked inside the function, in the same
+  // transaction as the read
+  async getTeamStatusTime(me, range, userId) {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<StatusTimeDbRow>(
+        `select * from cma.team_status_time($1::date, $2::date, $3::uuid)`,
+        [range.from, range.to, userId],
+      );
+      return { ...range, rows: r.rows.map(toStatusTimeRow) };
     });
   },
 };

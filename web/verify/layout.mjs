@@ -1,8 +1,10 @@
 /**
  * Verifier: layout at 1280 and 1920 px, the 1280 px gate below that, no
  * horizontal scrolling, the shell dimensions from the tokens, and the keycaps
- * that make the keyboard shortcuts discoverable. Saves screenshots under
- * records/ for the release note.
+ * that make the keyboard shortcuts discoverable. Also the navigation per
+ * permission: which pages each test identity sees, numbered 1, 2, 3 without
+ * gaps, and that someone without a clock lands on their first page instead of
+ * My day. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -49,6 +51,30 @@ async function expectShell(width, height) {
   await p.close();
 }
 
+// Mock identities as the default ladder: analyst (no clock), agent, supervisor
+async function expectNavigation() {
+  const cases = [
+    ["analyst", "/reports/dashboard", ["/reports/dashboard"]],
+    ["agent-one", "/", ["/", "/hours"]],
+    ["supervisor", "/", ["/", "/hours", "/team/hours", "/reports/dashboard"]],
+  ];
+  for (const [subject, landing, hrefs] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const path = new URL(p.url()).pathname;
+    const links = await p.evaluate(() =>
+      // The rail is the first nav; the period bar on a page is another
+      [...(document.querySelector("nav")?.querySelectorAll("a[data-shortcut]") ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
+    const want = hrefs.map((h, i) => [String(i + 1), h]);
+    if (path !== landing) problems.push(`${subject}: landed on ${path}, expected ${landing}`);
+    if (JSON.stringify(links) !== JSON.stringify(want)) problems.push(`${subject}: navigation ${JSON.stringify(links)}, expected ${JSON.stringify(want)}`);
+    if (subject === "analyst") await p.screenshot({ path: `${outDir}/analyst-landing.png` });
+    await ctx.close();
+  }
+}
+
 async function expectGate(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
   await p.goto(BASE + "/");
@@ -61,10 +87,11 @@ async function expectGate(width, height) {
 
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
+await expectNavigation();
 if (provoke) await expectShell(1279, 800);
 else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, navigation for 3 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

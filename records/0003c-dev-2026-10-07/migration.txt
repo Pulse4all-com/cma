@@ -1,0 +1,9 @@
+# 2026-10-07T07:33:03Z cma-dev-pg db/15_team_status_time.sql
+DO
+SET
+CREATE FUNCTION
+REVOKE
+GRANT
+INSERT 0 1
+RESET
+# exit 0

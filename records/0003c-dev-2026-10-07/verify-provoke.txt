@@ -1,0 +1,19 @@
+# 2026-10-07T07:33:03Z cma-dev-pg db/16_verify_team_status_time.sql, provoked
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/16_provoke.sql:48: ERROR:  FAIL A3: execute must be granted to cma_app only (not to cma_readonly or public)
+CONTEXT:  PL/pgSQL function inline_code_block line 17 at RAISE
+psql:/tmp/16_provoke.sql:255: ERROR:  FAIL B2: expected the four statuses with exact seconds, got 4 of 4 rows right
+CONTEXT:  PL/pgSQL function inline_code_block line 88 at RAISE
+         tenant          |  roles_with_performance_team   |       verdict        
+-------------------------+--------------------------------+----------------------
+ pulse4all-invest        | analytics, manager, supervisor | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | analytics, manager, supervisor | PROVOKED, NOT A PASS
+(2 rows)
+
+# exit 0

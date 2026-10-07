@@ -17,6 +17,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useRouter } from "next/navigation";
 import type { WorkStatus, Workday } from "@/lib/data";
 import type { Copy } from "@/lib/copy";
+import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
 import { Badge, Button, Card } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { endWorkdayAction } from "@/app/actions";
@@ -141,8 +142,11 @@ export function WorkdayPanel({
   return (
     <Card>
       <div className="flex items-center gap-3">
-        <Badge tone={current && !current.isWorking ? "neutral" : "success"}>
-          {current?.name ?? copy.myDay.working}
+        <Badge tone="neutral">
+          <span className="inline-flex items-center gap-2">
+            {current ? <StatusDot status={current} /> : null}
+            {current?.name ?? copy.myDay.working}
+          </span>
         </Badge>
         {statusSinceLabel ? (
           <span className="text-small text-p4a-muted">
@@ -184,7 +188,10 @@ export function WorkdayPanel({
                 disabled={isCurrent || pending}
                 onClick={() => changeStatus(s.key)}
               >
-                {s.name}
+                <span className="inline-flex items-center gap-2">
+                  <StatusDot status={s} />
+                  {s.name}
+                </span>
               </Button>
             );
           })}
@@ -219,4 +226,12 @@ export function WorkdayPanel({
       </ConfirmDialog>
     </Card>
   );
+}
+
+/**
+ * The status colour from its flags (lib/dashboard, the Dashboard's groups): productive, other work,
+ * or a pause. Whether a pause is paid is not shown to agents. Always next to the name.
+ */
+function StatusDot({ status }: { status: WorkStatus }) {
+  return <span aria-hidden="true" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${GROUP_BG[agentGroupOf(status)]}`} />;
 }
