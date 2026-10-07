@@ -327,7 +327,10 @@ expect("worked and paid per past day equal Team hours", [dayMismatches, pastTeam
 expect("flags follow the tenant's own status list",
   stRows.every((r) => {
     const s = statusList.find((x) => x.key === r.statusKey);
-    return !!s && s.isWorking === r.isWorking && s.isProductive === r.isProductive;
+    // A status retired since the stretch (statusActive false) is no longer in the active list the
+    // agent sees; its history stays, with the flags as stored (seen 7 October 2026, when the
+    // Subscriptions list replaced the universal 'available')
+    return s ? s.isWorking === r.isWorking && s.isProductive === r.isProductive : r.statusActive === false;
   }), true, false);
 
 const stAll = (await statusTime(SUPERVISOR, `from=${from}&to=${today}`)).body?.data?.rows ?? [];
