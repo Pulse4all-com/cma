@@ -8,13 +8,28 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
-  CmaData, CorrectionChange, DateKey, HoursSummary, Instant, TeamDay, TeamDayDetail, TeamPerson, TimeEvent, WorkStatus, Workday,
+  CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, TeamDay, TeamDayDetail,
+  TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
 
 /** Same answer as the database for a caller without workday.team */
 function assertTeam(me: Principal): void {
   if (!me.permissions.includes("workday.team")) throw new CmaDbError("CMA06", "not permitted");
 }
+
+/** Same answer as the database for a caller without workday.export */
+function assertExport(me: Principal): void {
+  if (!me.permissions.includes("workday.export")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/** Fixture settings shaped like cma.tenant_settings: the fictional tenant uses Dutch spreadsheet conventions */
+const MOCK_SETTINGS: TenantSetting[] = [
+  { key: "export.csv.date_format", value: "dd-mm-yyyy", isDefault: false },
+  { key: "export.csv.decimal_mark", value: "comma", isDefault: false },
+  { key: "export.csv.duration_format", value: "decimal_hours", isDefault: true },
+  { key: "export.csv.separator", value: "semicolon", isDefault: false },
+  { key: "export.csv.utf8_bom", value: "true", isDefault: true },
+];
 
 type Key = `${string}:${string}:${DateKey}`;
 const owner = (me: Principal) => `${me.tenantId}:${me.userId}:`;
@@ -177,6 +192,41 @@ function readTeamDay(userId: string, date: DateKey): TeamDayDetail {
   return { day: p && events.length ? teamDay(p, date, events) : null, events: withEffective(events) };
 }
 
+/** One day's status stretches, the way cma.time_interval derives them (billable = paid in the fixture) */
+function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusChangeRow[] {
+  const live = effective(events);
+  const end = live.find((e) => e.kind === "end") ?? null;
+  const today = dateKeyInZone(new Date(), p.timeZone);
+  const capped = !end && date < today;
+  const stop = end ? Date.parse(end.at) : capped ? localMs(addDays(date, 1), "00:00", p.timeZone) : Date.now();
+  const marks = live.filter((e) => e.kind !== "end");
+  return marks.map((e, i) => {
+    const next = marks[i + 1] ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
+    const until = Math.min(stop, next ?? stop);
+    const status = MOCK_STATUSES.find((x) => x.key === e.statusKey);
+    const paid = !!e.statusKey && MOCK_PAID.has(e.statusKey);
+    return {
+      userId: p.userId,
+      displayName: p.displayName,
+      organisationName: p.organisationName,
+      date,
+      timeZone: p.timeZone,
+      statusKey: e.statusKey ?? "",
+      statusName: status?.name ?? e.statusKey ?? "",
+      isWorking: !!status?.isWorking,
+      isProductive: !!status?.isWorking,
+      isPaid: paid,
+      isBillable: paid,
+      from: e.at,
+      to: next === null ? null : new Date(next).toISOString(),
+      isOpen: next === null,
+      isCapped: next === null && capped,
+      seconds: Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000)),
+      source: e.source,
+    };
+  });
+}
+
 /**
  * A fortnight of weekdays per person, with the cases the Hours screen must show: today still
  * clocked in, a forgotten clock-out, a missing day, and a day corrected afterwards.
@@ -239,7 +289,10 @@ export const mockData: CmaData = {
         userId: identity.subject === "supervisor" ? MOCK_SUPERVISOR_ID : MOCK_MANAGER_ID,
         displayName: identity.subject === "supervisor" ? "Test supervisor" : "Test manager",
         roleKey: identity.subject,
-        permissions: ["workday.own", "workday.team"],
+        // As the default ladder: the manager also exports, the supervisor does not
+        permissions: identity.subject === "manager"
+          ? ["workday.own", "workday.team", "workday.export"]
+          : ["workday.own", "workday.team"],
       };
     }
     return {
@@ -409,5 +462,45 @@ export const mockData: CmaData = {
     }
     days.set(date, events);
     return readTeamDay(userId, date);
+  },
+
+  async listSettings() {
+    return MOCK_SETTINGS;
+  },
+
+  async exportHours(me, range, userId) {
+    assertExport(me);
+    seedTeam();
+    const rows: ExportHoursRow[] = [];
+    for (const p of TEAM) {
+      if (userId && p.userId !== userId) continue;
+      for (const [date, events] of teamStore.get(p.userId) ?? []) {
+        if (date < range.from || date > range.to || !events.length) continue;
+        const d = teamDay(p, date, events);
+        rows.push({
+          userId: d.userId, displayName: d.displayName, organisationName: d.organisationName, date: d.date,
+          timeZone: d.timeZone, status: d.status, startedAt: d.startedAt, endedAt: d.endedAt,
+          workedSeconds: d.minutes * 60, productiveSeconds: d.minutes * 60,
+          paidSeconds: d.paidMinutes * 60, billableSeconds: d.paidMinutes * 60,
+          isCapped: d.isCapped, needsCorrection: d.needsCorrection, hasCorrection: d.hasCorrection,
+        });
+      }
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName));
+    return { settings: MOCK_SETTINGS, rows };
+  },
+
+  async exportStatusChanges(me, range, userId) {
+    assertExport(me);
+    seedTeam();
+    const rows: StatusChangeRow[] = [];
+    for (const p of TEAM) {
+      if (userId && p.userId !== userId) continue;
+      for (const [date, events] of teamStore.get(p.userId) ?? []) {
+        if (date >= range.from && date <= range.to && events.length) rows.push(...statusRows(p, date, events));
+      }
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date) || a.displayName.localeCompare(b.displayName) || a.from.localeCompare(b.from));
+    return { settings: MOCK_SETTINGS, rows };
   },
 };

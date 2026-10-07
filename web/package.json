@@ -14,7 +14,8 @@
     "verify:iap": "node verify/iap-token.mjs",
     "verify:api": "node verify/api.mjs",
     "verify:corrections": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/corrections.mjs",
-    "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:theme && npm run verify:layout"
+    "verify:csv": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/csv.mjs",
+    "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:csv && npm run verify:theme && npm run verify:layout"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",

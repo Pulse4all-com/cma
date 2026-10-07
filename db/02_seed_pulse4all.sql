@@ -56,3 +56,23 @@ begin
   end if;
 end
 $$;
+
+-- Export format per tenant (after migration 0003b): Dutch Excel conventions. Only sets values a
+-- tenant does not have yet, so a later change on the configuration screen survives a rerun.
+-- Duration format stays the catalog default until the Steam hours CSV is compared.
+do $$
+begin
+  if to_regclass('cma.tenant_setting') is not null then
+    insert into cma.tenant_setting (tenant_id, key, value)
+    select t.id, s.key, s.value
+    from (values
+      ('export.csv.separator',    'semicolon'),
+      ('export.csv.decimal_mark', 'comma'),
+      ('export.csv.date_format',  'dd-mm-yyyy')
+    ) as s(key, value)
+    cross join cma.tenant t
+    where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+    on conflict (tenant_id, key) do nothing;
+  end if;
+end
+$$;

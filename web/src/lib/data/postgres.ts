@@ -3,7 +3,8 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  CmaData, DateKey, HoursRange, HoursSummary, TeamDay, TeamDayDetail, TeamPerson, TimeEvent, Workday, WorkStatus,
+  CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, TeamDay, TeamDayDetail, TeamPerson,
+  TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -180,6 +181,71 @@ async function readTeamDay(q: Querier, userId: string, date: DateKey): Promise<T
   const day = await q.query<TeamRow>(`select * from cma.team_hours($2::date, $2::date, $1::uuid)`, [userId, date]);
   const events = await q.query<EventRow>(`select * from cma.team_day($1::uuid, $2::date)`, [userId, date]);
   return { day: day.rows[0] ? toTeamDay(day.rows[0]) : null, events: events.rows.map(toTimeEvent) };
+}
+
+// ---- Exports (migration 0003b): cma.export_hours, cma.export_status_changes, cma.tenant_settings
+// workday.export is checked inside each export function, in the same transaction as the read.
+// The settings are read in that same transaction, so a file never mixes two configurations.
+
+async function readSettings(q: Querier): Promise<TenantSetting[]> {
+  const r = await q.query<{ key: string; value: string; is_default: boolean }>(`select * from cma.tenant_settings()`);
+  return r.rows.map((x) => ({ key: x.key, value: x.value, isDefault: x.is_default }));
+}
+
+type ExportHoursDbRow = {
+  user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
+  status: "open" | "ended"; started_at: Date; ended_at: Date | null;
+  working_seconds: number; productive_seconds: number; paid_seconds: number;
+  billable_seconds: number; is_capped: boolean; needs_correction: boolean; has_correction: boolean;
+};
+
+type StatusChangeDbRow = {
+  user_id: string; display_name: string; organisation_name: string; business_date: string; timezone: string;
+  status_key: string; status_name: string; is_working: boolean; is_productive: boolean; is_paid: boolean;
+  is_billable: boolean; from_at: Date; to_at: Date | null; is_open: boolean; is_capped: boolean;
+  seconds: number; source: StatusChangeRow["source"];
+};
+
+function toExportHoursRow(r: ExportHoursDbRow): ExportHoursRow {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    organisationName: r.organisation_name,
+    date: r.business_date,
+    timeZone: r.timezone,
+    status: r.status,
+    startedAt: r.started_at.toISOString(),
+    endedAt: r.ended_at ? r.ended_at.toISOString() : null,
+    workedSeconds: r.working_seconds,
+    productiveSeconds: r.productive_seconds,
+    paidSeconds: r.paid_seconds,
+    billableSeconds: r.billable_seconds,
+    isCapped: r.is_capped,
+    needsCorrection: r.needs_correction,
+    hasCorrection: r.has_correction,
+  };
+}
+
+function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    organisationName: r.organisation_name,
+    date: r.business_date,
+    timeZone: r.timezone,
+    statusKey: r.status_key,
+    statusName: r.status_name,
+    isWorking: r.is_working,
+    isProductive: r.is_productive,
+    isPaid: r.is_paid,
+    isBillable: r.is_billable,
+    from: r.from_at.toISOString(),
+    to: r.to_at ? r.to_at.toISOString() : null,
+    isOpen: r.is_open,
+    isCapped: r.is_capped,
+    seconds: r.seconds,
+    source: r.source,
+  };
 }
 
 export const postgresData: CmaData = {
@@ -374,6 +440,35 @@ export const postgresData: CmaData = {
       ]);
       // A new statement sees the edit (one transaction, read committed)
       return readTeamDay(q, userId, date);
+    });
+  },
+
+  async listSettings(me) {
+    return withTenant(ctx(me), (q) => readSettings(q));
+  },
+
+  async exportHours(me, range, userId) {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      // The export function first: without workday.export it refuses before anything else is read
+      const r = await q.query<ExportHoursDbRow>(
+        `select * from cma.export_hours($1::date, $2::date, $3::uuid)`,
+        [range.from, range.to, userId],
+      );
+      return { settings: await readSettings(q), rows: r.rows.map(toExportHoursRow) };
+    });
+  },
+
+  async exportStatusChanges(me, range, userId) {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<StatusChangeDbRow>(
+        `select * from cma.export_status_changes($1::date, $2::date, $3::uuid)`,
+        [range.from, range.to, userId],
+      );
+      return { settings: await readSettings(q), rows: r.rows.map(toStatusChangeRow) };
     });
   },
 };

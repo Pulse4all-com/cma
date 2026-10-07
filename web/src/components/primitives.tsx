@@ -2,7 +2,7 @@
  * Building blocks per Pulse4all-Style.md section 7. Server components unless a
  * file says otherwise; they carry no state.
  */
-import type { ReactNode, ButtonHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, ReactNode, ButtonHTMLAttributes } from "react";
 
 type ButtonVariant = "primary" | "positive" | "outlined" | "text" | "destructive";
 type ButtonSize = "lg" | "md" | "sm";
@@ -52,6 +52,34 @@ export function Button({
       <span>{children}</span>
       {shortcut ? <Keycap>{shortcut}</Keycap> : null}
     </button>
+  );
+}
+
+/**
+ * A link that looks like a Button, for downloads: a plain anchor, so the browser saves the file
+ * and the keyboard shortcut (data-shortcut) activates it like any other control.
+ */
+export function LinkButton({
+  variant = "outlined",
+  size = "md",
+  shortcut,
+  className = "",
+  children,
+  ...rest
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { variant?: ButtonVariant; size?: ButtonSize; shortcut?: string }) {
+  return (
+    <a
+      className={[
+        "inline-flex items-center gap-3 whitespace-nowrap rounded-button font-semibold no-underline",
+        variantClass[variant],
+        sizeClass[size],
+        className,
+      ].join(" ")}
+      {...rest}
+    >
+      <span>{children}</span>
+      {shortcut ? <Keycap>{shortcut}</Keycap> : null}
+    </a>
   );
 }
 

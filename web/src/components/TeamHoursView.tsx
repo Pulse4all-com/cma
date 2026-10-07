@@ -3,7 +3,8 @@
 /**
  * The interactive part of Team hours: the person filter, Add day, the table and the day editor.
  * Rows arrive formatted from the server (each in its own zone); this component only navigates and
- * opens the editor. Keyboard: P focuses the person filter, A opens Add day, Down or Up anywhere on
+ * opens the editor. Keyboard: P focuses the person filter, A opens Add day, H and X download the
+ * hours and the status changes (with workday.export), Down or Up anywhere on
  * the page enters the table, arrows move between the Correct buttons, Enter opens one, and closing
  * the editor returns focus to the row it came from.
  */
@@ -12,7 +13,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { DateKey, TeamPerson, WorkStatus } from "@/lib/data";
-import { Badge, Button, Keycap } from "./primitives";
+import { Badge, Button, Keycap, LinkButton } from "./primitives";
 import { DayEditor, type EditorTarget } from "./DayEditor";
 
 export interface HoursRow {
@@ -44,6 +45,7 @@ export function TeamHoursView({
   statuses,
   copy,
   locale,
+  downloads,
 }: {
   rows: HoursRow[];
   totals: { worked: string; paid: string };
@@ -57,6 +59,8 @@ export function TeamHoursView({
   statuses: WorkStatus[];
   copy: Copy;
   locale: Locale;
+  /** Download links for the period and person shown; null without workday.export */
+  downloads: { hours: string; statusChanges: string } | null;
 }) {
   const t = copy.teamHours;
   const router = useRouter();
@@ -134,9 +138,21 @@ export function TeamHoursView({
             ))}
           </select>
         </label>
-        <Button variant="primary" shortcut="A" data-shortcut="a" onClick={() => open({ mode: "add" })}>
-          {t.addDay}
-        </Button>
+        <div className="flex items-end gap-3">
+          {downloads ? (
+            <>
+              <LinkButton href={downloads.hours} download shortcut="H" data-shortcut="h" title={copy.exports.hint}>
+                {copy.exports.downloadHours}
+              </LinkButton>
+              <LinkButton href={downloads.statusChanges} download shortcut="X" data-shortcut="x" title={copy.exports.hint}>
+                {copy.exports.downloadStatusChanges}
+              </LinkButton>
+            </>
+          ) : null}
+          <Button variant="primary" shortcut="A" data-shortcut="a" onClick={() => open({ mode: "add" })}>
+            {t.addDay}
+          </Button>
+        </div>
       </div>
 
       {rows.length === 0 ? (

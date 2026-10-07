@@ -119,3 +119,30 @@ export async function jsonBody(request: Request): Promise<Record<string, unknown
   }
   return body as Record<string, unknown>;
 }
+
+/**
+ * A CSV file as the answer: downloaded, never cached (hours are pay data). The name holds only
+ * ASCII characters the caller chose, never a person's name.
+ */
+export function csvFile(text: string, filename: string): NextResponse {
+  return new NextResponse(text, {
+    status: 200,
+    headers: {
+      ...NO_STORE,
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename.replace(/[^A-Za-z0-9._-]/g, "_")}"`,
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
+/** from, to (at most maxDays) and an optional userId from a team or export query */
+export function teamRangeParams(sp: URLSearchParams, maxDays: number): { from: string; to: string; userId: string | null } {
+  const from = dateParam(sp.get("from"), "from");
+  const to = dateParam(sp.get("to"), "to");
+  const days = daysInclusive(from, to);
+  if (days < 1) throw new ApiError(400, "invalid_range", "from must not be after to");
+  if (days > maxDays) throw new ApiError(400, "range_too_long", `at most ${maxDays} days per request`);
+  const userId = sp.has("userId") ? uuidParam(sp.get("userId"), "userId") : null;
+  return { from, to, userId };
+}
