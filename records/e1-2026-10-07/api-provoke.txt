@@ -1,0 +1,63 @@
+verify/api.mjs against http://localhost:8081  (--provoke: every check must FAIL)
+
+FAIL  identity in two tenants is refused           got 403, wanted 200
+FAIL  unknown identity is refused                  got 403, wanted 200
+FAIL  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759, wanted 00000000-0000-7000-8000-00000000beef
+FAIL  a visit opens no workday                     got null, wanted a day
+FAIL  the database keeps no time for someone without a clock got 403, wanted 200
+FAIL  start needs the request header               got 400, wanted 200
+FAIL  cross-site start is refused                  got 403, wanted 200
+FAIL  start opens the own day today                got ["2026-10-07",true], wanted ["2026-10-07",false]
+FAIL  a second start is the same day               got true, wanted false
+FAIL  two users have two different days            got false, wanted true
+FAIL  hours show the caller's own day              got ["2026-10-07T03:52:11.491Z","2026-10-07T03:52:11.830Z"], wanted ["2026-10-07T03:52:11.830Z","2026-10-07T03:52:11.491Z"]
+FAIL  a user parameter cannot redirect hours       got {"from":"2026-09-24","to":"2026-10-07","days":[{"date":"2026, wanted {"from":"2026-09-24","to":"2026-10-07","days":[{"date":"2026
+FAIL  an agent cannot read team hours              got 403, wanted 200
+FAIL  an agent cannot list the team                got 403, wanted 200
+FAIL  the supervisor lists the people, agent included got [200,true], wanted [200,false]
+FAIL  the supervisor closes open past days         got 0, wanted 1
+FAIL  a correction needs the request header        got 400, wanted 200
+FAIL  cross-site correction is refused             got 403, wanted 200
+FAIL  a correction needs a reason                  got 400, wanted 200
+FAIL  nobody corrects their own day                got 403, wanted 200
+FAIL  an agent cannot correct                      got 403, wanted 200
+FAIL  an unknown person is a 404                   got 404, wanted 200
+FAIL  a future date is refused                     got 400, wanted 200
+FAIL  add day creates the missing day              got [200,"ended",true,240], wanted [404,null,false,241]
+FAIL  an event before the start is refused         got 400, wanted 200
+FAIL  a replaced event stays visible               got [true,1,300], wanted [false,2,241]
+FAIL  correction leaves no past day open or capped got [0,true,true], wanted [1,false,true]
+FAIL  end needs the request header                 got 400, wanted 200
+FAIL  cross-site end is refused                    got 403, wanted 200
+FAIL  end ends the own day                         got ended, wanted working
+FAIL  start on an ended day changes nothing        got ["ended","2026-10-07T03:52:13.737Z"], wanted ["working",null]
+FAIL  a second end changes nothing                 got true, wanted false
+FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]
+FAIL  the other user's day is untouched            got working, wanted ended
+FAIL  any person reads the tenant's export settings got [200,5], wanted [200,4]
+FAIL  an agent cannot download hours               got 403, wanted 200
+FAIL  workday.team alone cannot download status changes got 403, wanted 200
+FAIL  the manager's hours file is a private download got [200,true,"no-store",true], wanted [200,true,"public",true]
+FAIL  the file follows the tenant's format         got [true,11], wanted [false,11]
+FAIL  one hours row per day, as Team hours         got [5,true], wanted [6,true]
+FAIL  every day has at least one status stretch    got [200,13,true], wanted [200,13,false]
+FAIL  an export is bounded to 92 days              got 400, wanted 200
+FAIL  an agent cannot read time per status         got 403, wanted 200
+FAIL  the supervisor reads time per status, never cached got [200,"no-store",true], wanted [200,"public",true]
+FAIL  worked and paid per past day equal Team hours got [0,true], wanted [1,true]
+FAIL  flags follow the tenant's own status list    got true, wanted false
+FAIL  the person filter returns that person only   got [true,true], wanted [true,false]
+FAIL  time per status is bounded to 92 days        got 400, wanted 200
+FAIL  a link that needs a permission is hidden from the agent got [true,true,true], wanted [true,false,true]
+FAIL  every link is https, for anyone with a role  got [200,true], wanted [200,false]
+FAIL  hours range is bounded to 92 days            got 400, wanted 200
+FAIL  status list has exactly one default          got 1, wanted 0
+FAIL  the status list shows no pay or billing flags got [true,true], wanted [true,false]
+FAIL  status change needs the request header       got 400, wanted 200
+FAIL  cross-site status change is refused          got 403, wanted 200
+FAIL  status change is stored on the own day       got training, wanted available
+FAIL  status since moves to the change             got true, wanted false
+FAIL  unknown status key is a 404                  got 404, wanted 200
+FAIL  an ended day refuses a status change         got 409, wanted 200
+
+ALL 59 PROVOKED CHECKS FAILED, as they must
