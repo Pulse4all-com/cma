@@ -1,0 +1,9 @@
+# 2026-10-07T07:35:06Z cma-prod-pg db/15_team_status_time.sql (PITR: True	True	7)
+DO
+SET
+CREATE FUNCTION
+REVOKE
+GRANT
+INSERT 0 1
+RESET
+# exit 0

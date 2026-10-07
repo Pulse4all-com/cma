@@ -7,13 +7,14 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migrations 0003, 0003a and 0003b. Ends the test supervisor's workday of today and, as
+ * Needs the dev seed (06) and migrations 0003, 0003a, 0003b and 0003c. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
  *
  * Themes: identity and tenant, own data only, corrections (team routes), an ended day stays ended,
- * status changes from the tenant's own list, the two export files in the tenant's format.
+ * status changes from the tenant's own list, the two export files in the tenant's format, time per
+ * status for the Dashboard (the same minutes as Team hours).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -275,6 +276,48 @@ const longStart = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
 expect("an export is bounded to 92 days",
   (await download(MANAGER, `/api/v1/team/exports/hours?from=${longStart}&to=${today}`)).status, 400, 200);
 
+// ---- time per status (addition 0003c), 6 checks ----------------------------------------------
+// The Dashboard's read. Worked and paid minutes per past day must equal Team hours for the same
+// person, because both come from the same stretches. Today is left out: its open stretch keeps
+// running between two reads. Reading never clocks anyone in. No status key is assumed.
+const statusTime = (s, q) => get(s, `/api/v1/team/status-time?${q}`);
+expect("an agent cannot read time per status", (await statusTime(AGENT, exportRange)).status, 403, 200);
+
+const stRes = await download(SUPERVISOR, `/api/v1/team/status-time?${exportRange}`);
+let stRows = [];
+try { stRows = JSON.parse(stRes.text).data?.rows ?? []; } catch { stRows = []; }
+expect("the supervisor reads time per status, never cached",
+  [stRes.status, stRes.headers.get("cache-control"), stRows.length > 0], [200, "no-store", true], [200, "public", true]);
+
+const perDay = new Map();
+for (const r of stRows) {
+  const d = perDay.get(r.date) ?? { worked: 0, paid: 0 };
+  if (r.isWorking) d.worked += r.seconds;
+  if (r.isPaid) d.paid += r.seconds;
+  perDay.set(r.date, d);
+}
+const pastTeamDays = teamDays.filter((d) => d.date < today);
+const dayMismatches =
+  pastTeamDays.filter((d) => {
+    const x = perDay.get(d.date);
+    return !x || Math.floor(x.worked / 60) !== d.minutes || Math.floor(x.paid / 60) !== d.paidMinutes;
+  }).length +
+  [...perDay.keys()].filter((date) => date < today && !pastTeamDays.some((d) => d.date === date)).length;
+expect("worked and paid per past day equal Team hours", [dayMismatches, pastTeamDays.length > 0], [0, true], [1, true]);
+
+expect("flags follow the tenant's own status list",
+  stRows.every((r) => {
+    const s = statusList.find((x) => x.key === r.statusKey);
+    return !!s && s.isWorking === r.isWorking && s.isProductive === r.isProductive;
+  }), true, false);
+
+const stAll = (await statusTime(SUPERVISOR, `from=${from}&to=${today}`)).body?.data?.rows ?? [];
+expect("the person filter returns that person only",
+  [new Set(stAll.map((r) => r.userId)).size > 1, stRows.every((r) => r.userId === meA.userId)], [true, true], [true, false]);
+
+expect("time per status is bounded to 92 days",
+  (await statusTime(SUPERVISOR, `from=${longStart}&to=${today}`)).status, 400, 200);
+
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
 expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?from=${longFrom}&to=${today}`)).status, 400, 200);
@@ -293,6 +336,10 @@ const setStatus = (s, body, headers = { "x-cma-request": "1" }) =>
 
 const statuses = (await get(AGENT, "/api/v1/me/statuses")).body?.data ?? [];
 expect("status list has exactly one default", statuses.filter((s) => s.isDefault).length, 1, 0);
+// The colour needs isProductive; whether a pause is paid is not agent information
+expect("the status list shows no pay or billing flags",
+  [statuses.length > 0, statuses.every((s) => !("isPaid" in s) && !("isBillable" in s) && typeof s.isProductive === "boolean")],
+  [true, true], [true, false]);
 
 const before = (await get(AGENT, "/api/v1/me/day")).body?.data;
 const target = statuses.find((s) => s.key !== before?.statusKey);

@@ -91,3 +91,10 @@ export function fmtMinutes(minutes: number): string {
   const m = minutes % 60;
   return h === 0 ? `${m}m` : `${h}h ${String(m).padStart(2, "0")}m`;
 }
+
+/** 82%, whole percents; "< 1%" for a small share that is not zero; a dash when there is nothing to divide by */
+export function fmtPercent(share: number | null, locale: Locale): string {
+  if (share === null) return "–";
+  const f = new Intl.NumberFormat(intlLocale[locale], { style: "percent", maximumFractionDigits: 0 });
+  return share > 0 && share < 0.005 ? `< ${f.format(0.01)}` : f.format(share);
+}

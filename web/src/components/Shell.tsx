@@ -1,8 +1,8 @@
 /**
  * App frame: top bar, left rail, content. White top bar, the rail on Background Blue, the content
  * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Pages sit
- * in groups in the rail (Time first; later modules add their own group). Shortcut keys are
- * shown as keycaps and wired through data-shortcut (see hooks/useKeyboardShortcuts).
+ * in groups in the rail (Time, Reports; the model lives in lib/nav). Shortcut keys are shown as
+ * keycaps and wired through data-shortcut (see hooks/useKeyboardShortcuts).
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -12,14 +12,11 @@ import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { Keycap } from "./primitives";
-import { NAV_COOKIE_PREFIX } from "@/lib/nav";
-import { NavGroup, type NavIcon } from "./NavGroup";
+import { NAV_COOKIE_PREFIX, visibleNav, type ShellPage } from "@/lib/nav";
+import { NavGroup } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 
-export type ShellPage = "my-day" | "my-hours" | "team-hours";
-
-type NavItem = { page: ShellPage; href: "/" | "/hours" | "/team/hours"; label: string; permission?: string };
-type NavSection = { id: string; label: string; icon: NavIcon; items: NavItem[] };
+export type { ShellPage };
 
 export async function Shell({
   copy,
@@ -36,32 +33,11 @@ export async function Shell({
   children: ReactNode;
 }) {
   // Screens check a permission, never a role key; the database checks again on every call.
-  // Keys follow the visible order across all groups, so every person's pages are numbered
-  // 1, 2, 3 without gaps, whether a group is open or closed.
-  const sections: NavSection[] = [
-    {
-      id: "time",
-      label: copy.nav.time,
-      icon: "clock",
-      items: [
-        { page: "my-day", href: "/", label: copy.nav.myDay },
-        { page: "my-hours", href: "/hours", label: copy.nav.myHours },
-        { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
-      ],
-    },
-  ];
+  // Keys follow the visible order across all groups (lib/nav).
+  const nav = visibleNav(me, copy);
   // Groups start closed; each browser remembers per group whether it was left open (a cookie,
   // so the page renders in that state without a flicker)
   const jar = await cookies();
-  let n = 0;
-  const nav = sections
-    .map((section) => ({
-      ...section,
-      items: section.items
-        .filter((i) => !i.permission || me.permissions.includes(i.permission))
-        .map((i) => ({ ...i, key: String(++n) })),
-    }))
-    .filter((section) => section.items.length > 0);
 
   return (
     <div className="grid h-full grid-cols-[var(--spacing-rail)_1fr] grid-rows-[var(--spacing-topbar)_1fr]">

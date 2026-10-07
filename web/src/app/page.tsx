@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { Shell } from "@/components/Shell";
 import { WorkdayPanel } from "@/components/WorkdayPanel";
 import { Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
+import { firstPage } from "@/lib/nav";
 import { fmtDate, fmtTime } from "@/lib/time";
 import { resolve } from "./access";
 
@@ -10,6 +12,9 @@ export default async function MyDayPage() {
   const r = await resolve();
   if (!r.ok) return r.page;
   const { me, copy } = r;
+  // Someone without a clock (analytics in the default ladder) must never open a workday by
+  // visiting: they land on the first page they may see
+  if (!me.permissions.includes("workday.own")) redirect(firstPage(me, copy) ?? "/no-access");
 
   const [workday, statuses] = await Promise.all([
     data().openWorkday(me, new Date().toISOString()),

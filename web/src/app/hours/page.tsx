@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { PeriodBar } from "@/components/PeriodBar";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
+import { firstPage } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { dateKeyInZone, fmtDate, fmtMinutes, fmtTime } from "@/lib/time";
 import { resolve } from "../access";
@@ -10,6 +12,8 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
   const r = await resolve();
   if (!r.ok) return r.page;
   const { me, copy } = r;
+  // Own hours exist only for people whose time is kept
+  if (!me.permissions.includes("workday.own")) redirect(firstPage(me, copy) ?? "/no-access");
 
   const sp = await searchParams;
   const today = dateKeyInZone(new Date(), me.timeZone);
