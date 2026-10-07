@@ -122,6 +122,7 @@ function seedHistory(me: Principal, today: DateKey) {
       startedAt: at(startMin),
       endedAt: at(endMin),
       statusKey: null,
+      statusName: null,
       statusSince: null,
       clock: { closedSeconds: (endMin - startMin) * 60, runningSince: null },
     });
@@ -385,6 +386,7 @@ export const mockData: CmaData = {
       startedAt: now,
       endedAt: null,
       statusKey: DEFAULT_STATUS.key,
+      statusName: DEFAULT_STATUS.name,
       statusSince: now,
       clock: { closedSeconds: 0, runningSince: DEFAULT_STATUS.isWorking ? now : null },
     };
@@ -409,6 +411,7 @@ export const mockData: CmaData = {
       status: "ended",
       endedAt: now,
       statusKey: null,
+      statusName: null,
       statusSince: null,
       clock: closeStretch(current, now),
     };
@@ -432,6 +435,7 @@ export const mockData: CmaData = {
     const updated: Workday = {
       ...current,
       statusKey: next.key,
+      statusName: next.name,
       statusSince: now,
       clock: { closedSeconds: closed.closedSeconds, runningSince: next.isWorking ? now : null },
     };
@@ -643,6 +647,7 @@ export const mockData: CmaData = {
         startedAt: start.at,
         endedAt: end?.at ?? null,
         statusKey: end ? null : last.statusKey,
+        statusName: end ? null : current?.name ?? last.statusKey,
         statusSince: end ? null : last.at,
         clock: { closedSeconds: closed, runningSince: !end && current?.isWorking ? last.at : null },
       };

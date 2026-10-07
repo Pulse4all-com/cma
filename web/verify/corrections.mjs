@@ -100,6 +100,22 @@ expect("nothing after the clock-out",
   ["endNotLast"], []);
 expect("an invalid time is refused", run(one("9.00"), "2026-10-05", []).rowProblems, { x: "time" }, {});
 
+// ---- a status no longer in use ------------------------------------------------------------------
+// The day above was clocked in "available"; the tenant has since retired it (as Pulse4all did on
+// 7 October 2026). Kept rows stay, a changed row needs a current status, the rule is off without a list.
+const ACTIVE = new Set(["break", "training"]);
+const withList = (rows, base = original) => check(base, rows, "2026-10-05", TZ, LATER, ACTIVE);
+expect("kept rows in a retired status send nothing", withList(moved).changes,
+  [{ kind: "end", at: "2026-10-05T18:00:00+02:00", supersedes: ID(4) }], []);
+const movedRetired = original.map((r) => (r.eventId === ID(3) ? { ...r, time: "11:20" } : r));
+expect("a changed row in a retired status is refused", withList(movedRetired).rowProblems, { [ID(3)]: "inactive" }, {});
+expect("a row that becomes the start needs a current status",
+  withList(original.filter((r) => r.eventId !== ID(1) && r.eventId !== ID(2))).rowProblems, { [ID(3)]: "inactive" }, {});
+expect("choosing a current status clears it",
+  withList(original.map((r) => (r.eventId === ID(3) ? { ...r, time: "11:20", statusKey: "training" } : r))).changes,
+  [{ kind: "status", at: "2026-10-05T11:20:00+02:00", statusKey: "training", supersedes: ID(3) }], []);
+expect("without a list the rule is off", run(movedRetired).rowProblems, {}, { [ID(3)]: "inactive" });
+
 const passed = results.filter(Boolean).length;
 const n = results.length;
 if (PROVOKE) {

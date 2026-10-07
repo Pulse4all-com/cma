@@ -3,9 +3,8 @@ import { Shell } from "@/components/Shell";
 import { TeamHoursView, type HoursRow } from "@/components/TeamHoursView";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type TeamDay } from "@/lib/data";
-import { offsetMinutesAt } from "@/lib/corrections";
 import { resolvePeriod } from "@/lib/period";
-import { dateKeyInZone, fmtDate, fmtMinutes, fmtTime, fmtZoneShort } from "@/lib/time";
+import { dateKeyInZone, fmtDate, fmtMinutes, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 import { resolve } from "../../access";
 
 /** team_hours answers at most 92 days per request */
@@ -64,11 +63,9 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
     timeZone: d.timeZone,
     inLabel: fmtTime(d.startedAt, d.timeZone, me.locale),
     outLabel: d.endedAt ? fmtTime(d.endedAt, d.timeZone, me.locale) : null,
-    // Only when the person's clock differs from the viewer's at that moment (London, not Amsterdam)
-    zoneLabel:
-      offsetMinutesAt(Date.parse(d.startedAt), d.timeZone) !== offsetMinutesAt(Date.parse(d.startedAt), me.timeZone)
-        ? fmtZoneShort(d.startedAt, d.timeZone, me.locale)
-        : null,
+    // Only when the person's clock differs from the viewer's at that moment (London, not Amsterdam);
+    // the Live board's rule, one definition
+    zoneLabel: sameOffset(d.startedAt, d.timeZone, me.timeZone) ? null : fmtZoneShort(d.startedAt, d.timeZone, me.locale),
     workedLabel: fmtMinutes(d.minutes),
     paidLabel: fmtMinutes(d.paidMinutes),
     chips: chips(d),

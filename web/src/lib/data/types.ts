@@ -36,6 +36,11 @@ export interface Workday {
   endedAt: Instant | null;
   /** Key of the current work status; null once the day has ended */
   statusKey: string | null;
+  /**
+   * Name of the current work status as stored, so the screen can name it even when it is no longer
+   * in the choosable list (retired while the person was in it); null once the day has ended
+   */
+  statusName: string | null;
   /** When the current status began; null once the day has ended */
   statusSince: Instant | null;
   clock: WorkdayClock;

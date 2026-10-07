@@ -84,6 +84,8 @@ export function DayEditor({
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const defaultStatus = statuses.find((s) => s.isDefault) ?? statuses[0];
+  /** The statuses that can be chosen now; a row may still show one that is no longer in use */
+  const activeKeys = useMemo(() => new Set(statuses.map((s) => s.key)), [statuses]);
   const choosable = people.filter((p) => p.userId !== meId);
 
   useEffect(() => {
@@ -127,8 +129,8 @@ export function DayEditor({
   }
 
   const checked = useMemo(
-    () => (who ? check(original, rows, date, who.timeZone, now ?? Number.MAX_SAFE_INTEGER) : null),
-    [who, original, rows, date, now],
+    () => (who ? check(original, rows, date, who.timeZone, now ?? Number.MAX_SAFE_INTEGER, activeKeys) : null),
+    [who, original, rows, date, now, activeKeys],
   );
   const reasonOk = reason.trim().length >= 3 && reason.trim().length <= 500;
   const dirty = reason.trim() !== "" || JSON.stringify(rows) !== JSON.stringify(initial);
@@ -180,6 +182,7 @@ export function DayEditor({
 
   const rowProblem: Record<RowProblem, string> = {
     time: t.problemTime, gap: t.problemGap, ambiguous: t.problemAmbiguous, future: t.problemFuture, status: t.problemStatus,
+    inactive: t.problemInactive,
   };
   const dayProblem: Record<DayProblem, string> = {
     empty: t.problemEmpty, firstIsEnd: t.problemFirstIsEnd, twoEnds: t.problemTwoEnds,
@@ -340,6 +343,12 @@ export function DayEditor({
                         }
                         className={`${field} min-w-48`}
                       >
+                        {r.statusKey && !activeKeys.has(r.statusKey) ? (
+                          // A status no longer in use, by the name its event carries: shown, not choosable
+                          <option value={`s:${r.statusKey}`} disabled>
+                            {events.find((e) => e.id === r.eventId)?.statusName ?? r.statusKey} · {t.inactiveStatus}
+                          </option>
+                        ) : null}
                         {statuses.map((s) => (
                           <option key={s.key} value={`s:${s.key}`}>
                             {s.name}

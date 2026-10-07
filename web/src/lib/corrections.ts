@@ -121,7 +121,7 @@ export function rowsFromEvents(events: TimeEvent[], timeZone: string): EditorRow
     });
 }
 
-export type RowProblem = "time" | "gap" | "ambiguous" | "future" | "status";
+export type RowProblem = "time" | "gap" | "ambiguous" | "future" | "status" | "inactive";
 export type DayProblem = "empty" | "firstIsEnd" | "twoEnds" | "endNotLast" | "noChange";
 
 export interface ResolvedRow extends EditorRow {
@@ -143,9 +143,16 @@ export interface Checked {
 
 /**
  * Checks the edited rows of `date` and computes the corrections against the starting rows.
- * `nowMs` is the client's clock: the database refuses times in the future anyway.
+ * `nowMs` is the client's clock: the database refuses times in the future anyway. `activeKeys`
+ * are the statuses that can be chosen now: a row that keeps a status no longer in use is fine
+ * while nothing about it changes (the diff sends nothing for it, history keeps the old key), but a
+ * changed row must carry an active status, because every change becomes a new event and the
+ * database refuses an inactive status for one (CMA02). Without `activeKeys` the rule is off.
  */
-export function check(original: EditorRow[], edited: EditorRow[], date: DateKey, timeZone: string, nowMs: number): Checked {
+export function check(
+  original: EditorRow[], edited: EditorRow[], date: DateKey, timeZone: string, nowMs: number,
+  activeKeys?: ReadonlySet<string>,
+): Checked {
   const rowProblems: Record<string, RowProblem> = {};
   const ambiguous: Record<string, LocalInstant[]> = {};
   const resolved: Omit<ResolvedRow, "kind">[] = [];
@@ -172,6 +179,15 @@ export function check(original: EditorRow[], edited: EditorRow[], date: DateKey,
     .sort((a, b) => a.r.ms - b.r.ms || a.i - b.i)
     .map(({ r }, i): ResolvedRow => ({ ...r, kind: r.end ? "end" : i === 0 ? "start" : "status" }));
 
+  if (activeKeys) {
+    const before = byEvent(original);
+    const kinds = originalKinds(original);
+    for (const r of sorted) {
+      if (r.end || !r.statusKey || activeKeys.has(r.statusKey)) continue;
+      if (!unchanged(before, kinds, r)) rowProblems[r.id] = "inactive";
+    }
+  }
+
   const dayProblems: DayProblem[] = [];
   if (edited.length === 0) dayProblems.push("empty");
   const ends = sorted.filter((r) => r.kind === "end");
@@ -195,12 +211,29 @@ function originalKinds(original: EditorRow[]): Map<string, TimeEventKind> {
   return m;
 }
 
+/** The starting rows by the event they show */
+function byEvent(original: EditorRow[]): Map<string, EditorRow> {
+  return new Map(original.filter((r) => r.eventId).map((r) => [r.eventId!, r]));
+}
+
+/**
+ * True when a row still shows its event as it was: same kind, time, offset and status. Such a
+ * row sends nothing; any other row with an event replaces it (one definition for the diff and
+ * for the inactive-status rule in check)
+ */
+function unchanged(before: Map<string, EditorRow>, kinds: Map<string, TimeEventKind>, r: ResolvedRow): boolean {
+  const b = r.eventId ? before.get(r.eventId) : undefined;
+  if (!b) return false;
+  return kinds.get(r.eventId!) === r.kind && b.time === r.time && b.offset === r.offset
+    && (r.kind === "end" || b.statusKey === r.statusKey);
+}
+
 /**
  * The smallest set of changes from `original` to `rows`. The start goes first, so Add day (no
  * starting rows) always begins with its start, as the database requires.
  */
 export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChange[] {
-  const before = new Map(original.filter((r) => r.eventId).map((r) => [r.eventId!, r]));
+  const before = byEvent(original);
   const kinds = originalKinds(original);
   const kept = new Set<string>();
   const out: CorrectionChange[] = [];
@@ -209,10 +242,7 @@ export function diff(original: EditorRow[], rows: ResolvedRow[]): CorrectionChan
     const change: CorrectionChange = { kind: r.kind, at: r.at, ...(r.kind === "end" ? {} : { statusKey: r.statusKey ?? undefined }) };
     if (r.eventId && before.has(r.eventId)) {
       kept.add(r.eventId);
-      const b = before.get(r.eventId)!;
-      const same = kinds.get(r.eventId) === r.kind && b.time === r.time && b.offset === r.offset
-        && (r.kind === "end" || b.statusKey === r.statusKey);
-      if (!same) out.push({ ...change, supersedes: r.eventId });
+      if (!unchanged(before, kinds, r)) out.push({ ...change, supersedes: r.eventId });
     } else {
       out.push(change);
     }

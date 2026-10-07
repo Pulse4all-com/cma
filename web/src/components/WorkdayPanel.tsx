@@ -145,7 +145,7 @@ export function WorkdayPanel({
         <Badge tone="neutral">
           <span className="inline-flex items-center gap-2">
             {current ? <StatusDot status={current} /> : null}
-            {current?.name ?? copy.myDay.working}
+            {current?.name ?? workday.statusName ?? copy.myDay.working}
           </span>
         </Badge>
         {statusSinceLabel ? (
