@@ -21,9 +21,9 @@ select cma.create_tenant('pulse4all-invest',        'Pulse4all Invest',        '
 insert into cma.organisation (tenant_id, key, name)
 select t.id, o.key, o.name
 from (values
-  ('pulse4all-subscriptions', 'pulse4all', 'Pulse4all B.V.'),
+  ('pulse4all-subscriptions', 'pulse4all', 'Pulse4all'),
   ('pulse4all-subscriptions', 'newco',     'Newco'),
-  ('pulse4all-invest',        'pulse4all', 'Pulse4all B.V.'),
+  ('pulse4all-invest',        'pulse4all', 'Pulse4all'),
   ('pulse4all-invest',        'clubdeal',  'Clubdeal')
 ) as o(tenant_slug, key, name)
 join cma.tenant t on t.slug = o.tenant_slug
