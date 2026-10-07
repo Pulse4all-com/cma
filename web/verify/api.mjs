@@ -122,14 +122,18 @@ expect("the supervisor lists the people, agent included",
   [200, true], [200, false]);
 
 // The verifier's logins of earlier days are forgotten clock-outs by now. It closes them itself, one
-// minute after their start: dev data whose length does not matter.
+// minute after the day's last effective event (an earlier end is refused when the status checks
+// changed the status that day): dev data whose length does not matter.
 const leftovers = ((await teamHours(SUPERVISOR, daysAgo(91), today, meA.userId)).body?.data?.days ?? [])
   .filter((d) => d.status === "open" && d.date < today);
 let notClosed = 0;
 for (const d of leftovers) {
+  const detail = (await get(SUPERVISOR, `/api/v1/team/days/${meA.userId}/${d.date}`)).body?.data;
+  const last = Math.max(Date.parse(d.startedAt),
+    ...(detail?.events ?? []).filter((e) => e.isEffective).map((e) => Date.parse(e.at)));
   const r = await correct(SUPERVISOR, meA.userId, d.date, {
     reason: "Verifier: closes its own login of that day (dev)",
-    changes: [{ kind: "end", at: new Date(Date.parse(d.startedAt) + 60_000).toISOString() }],
+    changes: [{ kind: "end", at: new Date(last + 60_000).toISOString() }],
   });
   if (!(r.status === 200 && r.body?.data?.day?.status === "ended" && r.body?.data?.day?.hasCorrection)) notClosed++;
 }
