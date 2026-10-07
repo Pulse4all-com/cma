@@ -11,7 +11,7 @@
 --   2. A personal time zone for Agent Two, so the user override is exercised next to the employer
 --      default (Newco: Europe/Madrid, set in 02_seed_pulse4all.sql).
 --   3. A short history written through the same functions the application uses: ended days, a
---      lunch, a forgotten clock-out fixed by the manager, and an open day from the day before
+--      pause, a forgotten clock-out fixed by the manager, and an open day from the day before
 --      yesterday that nobody ended. Written once; rerunning skips it.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -58,6 +58,12 @@ declare
   v_two      uuid := (select id from cma.app_user where tenant_id = v_subs and email = 'agent.two@example.com');
   v_manager  uuid := (select id from cma.app_user where tenant_id = v_subs and email = 'manager@example.com');
   v_tz       text := 'Europe/Madrid';
+  -- statuses from the tenant's own list (02), chosen by flag: the fixture assumes no key
+  v_default  text := (select key from cma.work_status
+                      where tenant_id = v_subs and is_default and status = 'active');
+  v_pause    text := (select key from cma.work_status
+                      where tenant_id = v_subs and not is_working and status = 'active'
+                      order by sort_order limit 1);
   w          cma.workday;
 begin
   if exists (select 1 from cma.workday where tenant_id = v_subs and user_id in (v_one, v_two)) then
@@ -71,8 +77,8 @@ begin
   -- Agent One, three days ago: a full day with lunch
   perform set_config('app.user_id', v_one::text, true);
   w := cma.open_workday(((current_date - 3) + time '09:00') at time zone v_tz);
-  perform cma.set_status(w.id, 'lunch',     ((current_date - 3) + time '13:00') at time zone v_tz);
-  perform cma.set_status(w.id, 'available', ((current_date - 3) + time '13:30') at time zone v_tz);
+  perform cma.set_status(w.id, v_pause,     ((current_date - 3) + time '13:00') at time zone v_tz);
+  perform cma.set_status(w.id, v_default,   ((current_date - 3) + time '13:30') at time zone v_tz);
   perform cma.end_workday(w.id,             ((current_date - 3) + time '17:30') at time zone v_tz);
 
   -- Agent One, two days ago: a short day

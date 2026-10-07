@@ -1,0 +1,20 @@
+# 2026-10-07T10:58:03Z cma-prod-pg statuses
+SET
+          slug           |         key          |          name          | is_working | is_productive | is_paid | is_billable | is_default | sort_order |  status  
+-------------------------+----------------------+------------------------+------------+---------------+---------+-------------+------------+------------+----------
+ pulse4all-invest        | available            | Available              | t          | t             | t       | t           | t          |         10 | active
+ pulse4all-invest        | training             | Training               | t          | f             | t       | t           | f          |         20 | active
+ pulse4all-invest        | meeting              | Meeting                | t          | f             | t       | t           | f          |         30 | active
+ pulse4all-invest        | break                | Break                  | f          | f             | t       | t           | f          |         40 | active
+ pulse4all-invest        | lunch                | Lunch                  | f          | f             | f       | f           | f          |         50 | active
+ pulse4all-subscriptions | available_sales      | Available - Sales      | t          | t             | t       | t           | t          |         10 | active
+ pulse4all-subscriptions | available_operations | Available - Operations | t          | t             | t       | t           | f          |         15 | active
+ pulse4all-subscriptions | training             | Training               | t          | f             | t       | t           | f          |         20 | active
+ pulse4all-subscriptions | meeting              | Meeting                | t          | f             | t       | t           | f          |         30 | active
+ pulse4all-subscriptions | coaching             | Coaching               | t          | f             | t       | t           | f          |         35 | active
+ pulse4all-subscriptions | break                | Break                  | f          | f             | f       | f           | f          |         40 | active
+ pulse4all-subscriptions | lunch                | Lunch                  | f          | f             | f       | f           | f          |         50 | active
+ pulse4all-subscriptions | available            | Available              | t          | t             | t       | t           | f          |         10 | inactive
+(13 rows)
+
+# exit 0

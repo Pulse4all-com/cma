@@ -1,6 +1,7 @@
 -- CMA seed: Pulse4all configuration
 -- Run as yourself (IAM login) after 01_foundation.sql, in dev and in prod. Safe to rerun.
--- Customer configuration, not schema: the two tenants, their organisations and their channels.
+-- Customer configuration, not schema: the two tenants, their organisations, their channels, the
+-- Subscriptions work statuses, the export settings and the app links.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -54,6 +55,53 @@ begin
   else
     raise notice 'organisation.timezone does not exist yet (migration 0002): rerun this seed after 05_time_model.sql';
   end if;
+end
+$$;
+
+-- Work statuses for Pulse4all Subscriptions (Martin, 7 October 2026; README: Display rules and the
+-- Decision log). Migration 0002 seeds the universal ladder (available, training, meeting, break,
+-- lunch) for every tenant; this block turns the Subscriptions list into Pulse4all's own:
+--   Available - Sales (the default) and Available - Operations, so availability hours report per
+--   work type from the first day; Coaching; Training, Meeting and Coaching paid and billable;
+--   Break and Lunch unpaid and not billable (time on another project is booked as Break); the
+--   universal 'available' goes inactive, so history keeps its stretches and no new one lands in it.
+-- Invest keeps the universal ladder until its own list is decided (Roadmap step 10).
+-- Rerun-safe: it only adds statuses the tenant does not have yet, retires 'available' only on the
+-- first run (while 'available_sales' does not exist), and changes the flags of 'break' only while
+-- the row still carries the universal ones, so a later change on the configuration screen
+-- (Roadmap step 5) survives a rerun. Existing days keep their events: an event references the
+-- status row, active or not; the clock, the reports and the exports read the flags as stored.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.work_status') is null then
+    raise notice 'cma.work_status does not exist yet (migration 0002): rerun this seed after 05_time_model.sql';
+    return;
+  end if;
+
+  -- 1. Retire the universal 'available' (first run only), which also frees the one default per tenant
+  update cma.work_status
+  set status = 'inactive', is_default = false
+  where tenant_id = v_subs and key = 'available' and status = 'active'
+    and not exists (select 1 from cma.work_status
+                    where tenant_id = v_subs and key = 'available_sales');
+
+  -- 2. Pulse4all's own statuses, in the order of the My day grid (universal rows keep their numbers:
+  --    training 20, meeting 30, break 40, lunch 50)
+  insert into cma.work_status (tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default, sort_order)
+  select v_subs, v.key, v.name, v.is_working, v.is_productive, v.is_paid, v.is_billable, v.is_default, v.sort_order
+  from (values
+    ('available_sales',      'Available - Sales',      true, true,  true, true, true,  10),
+    ('available_operations', 'Available - Operations', true, true,  true, true, false, 15),
+    ('coaching',             'Coaching',               true, false, true, true, false, 35)
+  ) as v(key, name, is_working, is_productive, is_paid, is_billable, is_default, sort_order)
+  on conflict (tenant_id, key) do nothing;
+
+  -- 3. Break: unpaid and not billable, like Lunch (the universal row is paid and billable)
+  update cma.work_status
+  set is_paid = false, is_billable = false
+  where tenant_id = v_subs and key = 'break' and is_paid and is_billable;
 end
 $$;
 
