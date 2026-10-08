@@ -47,11 +47,13 @@ begin
      or v_provoke then
     raise exception 'FAIL A4: app_link must have row-level security, the tenant_app policy and the audit trigger';
   end if;
+  -- Until 0005a the app only reads links; since 0005a (the configuration functions, 8 October 2026)
+  -- it inserts and updates them through cma.upsert_app_link() and cma.retire_app_link(). Delete: never.
   if not has_table_privilege('cma_app', 'cma.app_link', 'select')
-     or has_table_privilege('cma_app', 'cma.app_link', 'insert')
-     or has_table_privilege('cma_app', 'cma.app_link', 'update')
-     or has_table_privilege('cma_app', 'cma.app_link', 'delete') then
-    raise exception 'FAIL A5: cma_app must read app_link and not write it (writes come with the configuration screens)';
+     or has_table_privilege('cma_app', 'cma.app_link', 'delete')
+     or (has_table_privilege('cma_app', 'cma.app_link', 'insert') or has_table_privilege('cma_app', 'cma.app_link', 'update'))
+        <> exists (select 1 from cma.schema_migration where version = '0005a') then
+    raise exception 'FAIL A5: cma_app must read app_link, write it only since 0005a, and never delete from it';
   end if;
   if has_table_privilege('cma_readonly', 'cma.app_link', 'select')
      or not has_table_privilege('cma_readonly', 'cma_read.app_link', 'select') then
@@ -241,10 +243,25 @@ begin
       raise exception 'FAIL B10: a link without https came back';
     end if;
 
-    -- B11. the application cannot write links
+    -- B11. the application cannot write links as an agent: no table right before 0005a, and since
+    -- 0005a the write function refuses without tenant.configure (CMA06); a plain delete never works
     begin
       insert into cma.app_link (tenant_id, key, label, address) values (v_t1, 'verify-app', 'Verify app', 'https://example.invalid/app');
-      raise exception 'FAIL B11: cma_app inserted a link';
+      if not exists (select 1 from cma.schema_migration where version = '0005a') then
+        raise exception 'FAIL B11: cma_app inserted a link';
+      end if;
+    exception when insufficient_privilege then null;
+    end;
+    if exists (select 1 from cma.schema_migration where version = '0005a') then
+      begin
+        perform cma.upsert_app_link('verify-app2', 'Verify app', 'https://example.invalid/app');
+        raise exception 'FAIL B11: an agent wrote a link through upsert_app_link';
+      exception when sqlstate 'CMA06' then null;
+      end;
+    end if;
+    begin
+      delete from cma.app_link where key = 'verify-phone';
+      raise exception 'FAIL B11: cma_app deleted a link';
     exception when insufficient_privilege then null;
     end;
 
