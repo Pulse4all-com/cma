@@ -1,0 +1,1 @@
+Placeholder: the morning run of 27_verify_configuration.sql in dev (normal and provoked) and the reruns of 14, 16, 18, 20, 22 and 25 write their output here and delete this file (MORNING_RUNBOOK.md, slice 1).
