@@ -1,10 +1,25 @@
 import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import { data, dataIsMock } from "@/lib/data";
+import { data, dataIsMock, type TeamNowPerson, type TodayShift } from "@/lib/data";
 import { employersOf, liveRows, teamKeysByUser, teamsOf, tiles } from "@/lib/live";
+import { adherence, cellLabel } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 import { resolve } from "../../access";
+
+/** The planned shift and the flag next to it, from today's published entry and the day's clock */
+function shiftLine(
+  shift: TodayShift | undefined, person: TeamNowPerson, nowMs: number, tolerance: number,
+): BoardRow["shift"] {
+  if (!shift || !shift.isPublished) return { label: null, published: false, flag: null };
+  const planned = shift.kind ? { kind: shift.kind, start: shift.start, end: shift.end } : null;
+  const flag = adherence(planned, { startedAt: person.day?.startedAt ?? null, endedAt: person.day?.endedAt ?? null }, shift.date, person.timeZone, nowMs, tolerance);
+  return {
+    label: planned ? cellLabel({ kind: planned.kind, start: planned.start, end: planned.end, absenceName: shift.absenceName }) : null,
+    published: true,
+    flag,
+  };
+}
 
 /**
  * Live board (Live, first page of the Live group): who is on the clock right now, in which status
@@ -32,8 +47,14 @@ export default async function LiveBoardPage() {
     );
   }
 
-  // Two reads: the team now and, since 0004, the current team memberships for the filter
-  const [now, memberships] = await Promise.all([data().getTeamNow(me), data().listTeamMembersNow(me)]);
+  // Four reads: the team now, the current team memberships (0004), today's published shifts and the
+  // adherence tolerance (0005); the flags are derived here from the plan and the clock
+  const [now, memberships, shifts, settings] = await Promise.all([
+    data().getTeamNow(me), data().listTeamMembersNow(me), data().getRosterToday(me), data().listSettings(me),
+  ]);
+  const tolerance = Number(settings.find((x) => x.key === "roster.adherence_tolerance_minutes")?.value ?? 5);
+  const shiftOf = new Map(shifts.map((x) => [x.userId, x]));
+  const nowMs = new Date().getTime();
   const rows = liveRows(now.people);
   const teamKeys = teamKeysByUser(memberships);
   const teamName = new Map(memberships.map((m) => [m.teamKey, m.teamName]));
@@ -56,6 +77,7 @@ export default async function LiveBoardPage() {
     zoneLabel: person.day && !sameOffset(person.day.startedAt, person.timeZone, viewerZone)
       ? fmtZoneShort(person.day.startedAt, person.timeZone, me.locale) : null,
     teams: (teamKeys.get(person.userId) ?? []).map((key) => ({ key, name: teamName.get(key) ?? key })),
+    shift: shiftLine(shiftOf.get(person.userId), person, nowMs, tolerance),
   }));
 
   return (

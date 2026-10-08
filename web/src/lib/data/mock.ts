@@ -6,9 +6,9 @@
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
-import { addDays, dateKeyInZone } from "@/lib/time";
+import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {
-  AppLink, CmaData, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
@@ -67,9 +67,12 @@ const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
  * the start route would be invisible to the page that renders it (seen 7 October 2026, increment
  * e, when Clock in moved from the page to a route).
  */
-type MockState = { store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null };
+type MockState = {
+  store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null;
+  rosters: Map<string, MockRosterWeek> | null;
+};
 const g = globalThis as unknown as { __cmaMock?: MockState };
-const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null });
+const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null });
 const store = state.store;
 
 /**
@@ -437,6 +440,136 @@ function editable(me: Principal, userId: string): DirectoryPerson {
   if (!p) throw new CmaDbError("CMA02", "person not found");
   if (!(me.permissions.includes("users.manage_all") || !p.isManaging)) throw new CmaDbError("CMA06", "may not manage this person");
   return p;
+}
+
+
+// ---- the roster (migration 0005): fixture data, in memory --------------------------------------
+// One week per team (or the tenant) with its current cells and, once published, a copy of the cells
+// as published, so the agent keeps seeing the publication while the planner edits (as the
+// versioned entries of 0005 give it). Dates follow the current week, as the dev fixture does.
+
+type MockRosterWeek = {
+  teamKey: string | null;
+  weekStart: DateKey;
+  version: number;
+  publishedAt: Instant | null;
+  publishedByName: string | null;
+  /** `${userId}:${date}` -> current cell */
+  cells: Map<string, RosterEntry>;
+  /** The cells as of the last publish; null for a draft */
+  published: Map<string, RosterEntry> | null;
+};
+
+/** Fixture absence types shaped like cma.absence_type rows; the screens never branch on a key */
+const MOCK_ABSENCES: AbsenceType[] = [
+  { key: "off", name: "Day off", isPaid: false, sortOrder: 10, isActive: true },
+  { key: "leave", name: "Leave", isPaid: true, sortOrder: 20, isActive: true },
+  { key: "sick", name: "Sick", isPaid: true, sortOrder: 30, isActive: true },
+  { key: "public_holiday", name: "Public holiday", isPaid: true, sortOrder: 40, isActive: true },
+  { key: "other", name: "Other", isPaid: false, sortOrder: 50, isActive: true },
+];
+
+function assertRosterManage(me: Principal): void {
+  if (!me.permissions.includes("roster.manage")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+const rosterKey = (teamKey: string | null, weekStart: DateKey) => `${teamKey ?? ""}:${weekStart}`;
+
+function mockEntry(userId: string, date: DateKey, cell: RosterCellInput, by: string): RosterEntry | null {
+  if (cell.kind === "clear") return null;
+  const absence = cell.kind === "absence" ? MOCK_ABSENCES.find((a) => a.key === cell.absenceKey) : null;
+  if (cell.kind === "absence" && !absence) throw new CmaDbError("CMA02", "unknown absence type");
+  return {
+    entryId: crypto.randomUUID(), userId, date, kind: cell.kind,
+    start: cell.kind === "shift" ? `${cell.start}:00` : null, end: cell.kind === "shift" ? `${cell.end}:00` : null,
+    absenceKey: absence?.key ?? null, absenceName: absence?.name ?? null, note: cell.note ?? null,
+    recordedAt: new Date().toISOString(), recordedByName: by,
+  };
+}
+
+function rosterWeekOf(teamKey: string | null, weekStart: DateKey): MockRosterWeek {
+  const weeks = seedRosters();
+  const k = rosterKey(teamKey, weekStart);
+  let w = weeks.get(k);
+  if (!w) {
+    w = { teamKey, weekStart, version: 0, publishedAt: null, publishedByName: null, cells: new Map(), published: null };
+    weeks.set(k, w);
+  }
+  return w;
+}
+
+/** This week published for Team NL and Team Nordics (one cell changed afterwards), next week a draft for Team NL */
+function seedRosters(): Map<string, MockRosterWeek> {
+  if (state.rosters) return state.rosters;
+  state.rosters = new Map();
+  const today = dateKeyInZone(new Date(), "Europe/Amsterdam");
+  const week = startOfWeek(today);
+  const next = addDays(week, 7);
+  const by = "Test manager";
+  const put = (w: MockRosterWeek, userId: string, date: DateKey, cell: RosterCellInput) => {
+    const e = mockEntry(userId, date, cell, by);
+    if (e) w.cells.set(`${userId}:${date}`, e);
+  };
+  const publish = (w: MockRosterWeek) => {
+    w.version += 1;
+    w.publishedAt = new Date().toISOString();
+    w.publishedByName = by;
+    w.published = new Map([...w.cells].map(([k, e]) => [k, { ...e }]));
+  };
+  const nl = rosterWeekOf("nl", week);
+  const nordics = rosterWeekOf("nordics", week);
+  for (let i = 0; i < 5; i++) {
+    const d = addDays(week, i);
+    put(nl, MOCK_PRINCIPAL.userId, d, { kind: "shift", start: "09:00", end: "17:30" });
+    put(nl, TEAM[0]!.userId, d, { kind: "shift", start: "09:00", end: "17:30" });
+    put(nl, TEAM[2]!.userId, d, i === 2 ? { kind: "absence", absenceKey: "leave" } : { kind: "shift", start: "08:30", end: "17:00" });
+    if (i < 4) put(nordics, TEAM[4]!.userId, d, { kind: "shift", start: "10:00", end: "18:00" });
+  }
+  put(nordics, TEAM[4]!.userId, addDays(week, 4), { kind: "absence", absenceKey: "leave" });
+  publish(nl);
+  publish(nordics);
+  // One change after the publish: the planner shows it, the agent keeps the published time
+  put(nl, MOCK_PRINCIPAL.userId, addDays(week, 4), { kind: "shift", start: "09:00", end: "15:00", note: "Dentist, agreed with the team lead" });
+  const draft = rosterWeekOf("nl", next);
+  for (let i = 0; i < 5; i++) {
+    const d = addDays(next, i);
+    put(draft, MOCK_PRINCIPAL.userId, d, { kind: "shift", start: "09:00", end: "17:30" });
+    put(draft, TEAM[0]!.userId, d, i === 3 ? { kind: "absence", absenceKey: "off" } : { kind: "shift", start: "12:00", end: "20:00" });
+  }
+  return state.rosters;
+}
+
+function rosterHeaderOf(w: MockRosterWeek): RosterWeekHeader {
+  const team = w.teamKey ? MOCK_TEAMS.find((t) => t.key === w.teamKey) : null;
+  const changed = w.published !== null && (w.cells.size !== w.published.size ||
+    [...w.cells].some(([k, e]) => { const p = w.published!.get(k); return !p || p.entryId !== e.entryId; }));
+  return {
+    weekId: w.version > 0 || w.cells.size > 0 ? `mock:${rosterKey(w.teamKey, w.weekStart)}` : null,
+    teamKey: w.teamKey, teamName: team?.name ?? null, weekStart: w.weekStart,
+    status: w.version > 0 ? "published" : "draft", version: w.version, publishedAt: w.publishedAt, publishedByName: w.publishedByName,
+    entryCount: w.cells.size, changedSincePublish: changed,
+  };
+}
+
+/** The people on a roster's grid: whose time is kept, and for a team roster its members */
+function rosterPeopleOf(teamKey: string | null): DirectoryPerson[] {
+  return [...seedPeople().values()]
+    .filter((p) => p.isActive && p.timeKept && (!teamKey || p.teams.some((t) => t.key === teamKey)))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+/** The published cell of a person on a date across every roster, with the week it came from */
+function publishedCellFor(userId: string, date: DateKey): { entry: RosterEntry | null; week: MockRosterWeek } | null {
+  const weekStart = startOfWeek(date);
+  const person = seedPeople().get(userId);
+  for (const w of seedRosters().values()) {
+    if (w.weekStart !== weekStart || !w.published) continue;
+    if (w.teamKey && !person?.teams.some((t) => t.key === w.teamKey)) continue;
+    const entry = w.published.get(`${userId}:${date}`) ?? null;
+    if (entry) return { entry, week: w };
+  }
+  const covering = [...seedRosters().values()].find((w) => w.weekStart === weekStart && w.published && (!w.teamKey || person?.teams.some((t) => t.key === w.teamKey)));
+  return covering ? { entry: null, week: covering } : null;
 }
 
 export const mockData: CmaData = {
@@ -883,5 +1016,123 @@ export const mockData: CmaData = {
     });
     const order = (k: DirectoryPerson["skills"][number]) => MOCK_SKILLS.findIndex((s) => s.key === k.key);
     seedPeople().set(userId, { ...p, skills: next.sort((a, b) => order(a) - order(b)) });
+  },
+
+  // Roster (migration 0005): the cheap rules of the functions hold here too; the database proves the real ones
+  async getRosterWeek(me, weekStart, teamKey): Promise<RosterWeek> {
+    assertRosterManage(me);
+    if (teamKey && !MOCK_TEAMS.some((t) => t.key === teamKey)) throw new CmaDbError("CMA02", "unknown team");
+    const w = rosterWeekOf(teamKey, weekStart);
+    const people = rosterPeopleOf(teamKey);
+    const entries = [...w.cells.values()].filter((e) => people.some((p) => p.userId === e.userId));
+    const workTypes = MOCK_SKILLS.filter((s) => s.dimension === "work_type" && s.isActive);
+    const coverage = [] as RosterWeek["coverage"];
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(weekStart, i);
+      for (const skill of workTypes) {
+        const names = people
+          .filter((p) => p.skills.some((k) => k.key === skill.key) && entries.some((e) => e.userId === p.userId && e.date === date && e.kind === "shift"))
+          .map((p) => p.displayName);
+        if (names.length > 0) coverage.push({ date, skillKey: skill.key, skillName: skill.name, plannedPeople: names.length, peopleNames: names, target: skill.key === workTypes[0]?.key ? 2 : null });
+      }
+    }
+    return {
+      header: rosterHeaderOf(w),
+      people: people.map((p) => ({
+        userId: p.userId, displayName: p.displayName, organisationName: p.organisationName, timeZone: p.timeZone,
+        teamKeys: p.teams.map((t) => t.key), workTypeKeys: p.skills.filter((k) => k.dimension === "work_type").map((k) => k.key),
+      })),
+      entries,
+      coverage,
+    };
+  },
+
+  async listRosterWeeks(me, teamKey, range): Promise<RosterWeekSummary[]> {
+    assertRosterManage(me);
+    return [...seedRosters().values()]
+      .filter((w) => w.teamKey === teamKey && w.weekStart >= startOfWeek(range.from) && w.weekStart <= range.to && (w.version > 0 || w.cells.size > 0))
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+      .map((w) => ({
+        weekStart: w.weekStart, status: w.version > 0 ? "published" : "draft", version: w.version, publishedAt: w.publishedAt,
+        entryCount: w.cells.size, shiftCount: [...w.cells.values()].filter((e) => e.kind === "shift").length,
+      }));
+  },
+
+  async listAbsenceTypes() {
+    return MOCK_ABSENCES.filter((a) => a.isActive);
+  },
+
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterEntry | null> {
+    assertRosterManage(me);
+    const person = seedPeople().get(userId);
+    if (!person) throw new CmaDbError("CMA02", "unknown person");
+    if (date < weekStart || date > addDays(weekStart, 6)) throw new CmaDbError("CMA04", "date outside the week");
+    if (!rosterPeopleOf(teamKey).some((p) => p.userId === userId)) throw new CmaDbError("CMA04", "person not on this roster");
+    if (date < dateKeyInZone(new Date(), person.timeZone)) throw new CmaDbError("CMA04", "the past is not planned");
+    if (cell.kind === "shift" && (cell.end <= cell.start || cell.start === "24:00")) throw new CmaDbError("CMA04", "a shift ends after it starts, within the day");
+    for (const other of seedRosters().values()) {
+      if (other.weekStart === weekStart && other.teamKey !== teamKey && other.cells.has(`${userId}:${date}`)) {
+        throw new CmaDbError("CMA03", "already planned on another roster that day");
+      }
+    }
+    const w = rosterWeekOf(teamKey, weekStart);
+    const entry = mockEntry(userId, date, cell, me.displayName);
+    if (entry) w.cells.set(`${userId}:${date}`, entry);
+    else w.cells.delete(`${userId}:${date}`);
+    return entry;
+  },
+
+  async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
+    assertRosterManage(me);
+    const w = rosterWeekOf(teamKey, weekStart);
+    w.version += 1;
+    w.publishedAt = new Date().toISOString();
+    w.publishedByName = me.displayName;
+    w.published = new Map([...w.cells].map(([k, e]) => [k, { ...e }]));
+    return rosterHeaderOf(w);
+  },
+
+  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<number> {
+    assertRosterManage(me);
+    const from = rosterWeekOf(teamKey, fromWeekStart);
+    const to = rosterWeekOf(teamKey, toWeekStart);
+    const people = rosterPeopleOf(teamKey);
+    let n = 0;
+    for (const e of from.cells.values()) {
+      const person = people.find((p) => p.userId === e.userId);
+      if (!person) continue;
+      const offset = Math.round((Date.parse(e.date) - Date.parse(fromWeekStart)) / 86_400_000);
+      const date = addDays(toWeekStart, offset);
+      if (date < dateKeyInZone(new Date(), person.timeZone)) continue;
+      to.cells.set(`${e.userId}:${date}`, { ...e, entryId: crypto.randomUUID(), date, recordedAt: new Date().toISOString(), recordedByName: me.displayName });
+      n += 1;
+    }
+    return n;
+  },
+
+  async getMyRoster(me, range): Promise<MyRosterDay[]> {
+    if (!me.permissions.includes("roster.view")) throw new CmaDbError("CMA06", "not permitted");
+    const out: MyRosterDay[] = [];
+    for (let d = range.from; d <= range.to; d = addDays(d, 1)) {
+      const found = publishedCellFor(me.userId, d);
+      const e = found?.entry ?? null;
+      const team = found?.week.teamKey ? MOCK_TEAMS.find((t) => t.key === found.week.teamKey) : null;
+      out.push({
+        date: d, isPublished: found !== null, kind: e?.kind ?? null, start: e?.start ?? null, end: e?.end ?? null,
+        absenceKey: e?.absenceKey ?? null, absenceName: e?.absenceName ?? null, note: e?.note ?? null,
+        teamName: found ? team?.name ?? null : null, publishedAt: found?.week.publishedAt ?? null,
+      });
+    }
+    return out;
+  },
+
+  async getRosterToday(me): Promise<TodayShift[]> {
+    assertLive(me);
+    return [...seedPeople().values()].filter((p) => p.isActive && p.timeKept).map((p) => {
+      const date = dateKeyInZone(new Date(), p.timeZone);
+      const found = publishedCellFor(p.userId, date);
+      const e = found?.entry ?? null;
+      return { userId: p.userId, date, isPublished: found !== null, kind: e?.kind ?? null, start: e?.start ?? null, end: e?.end ?? null, absenceName: e?.absenceName ?? null };
+    });
   },
 };

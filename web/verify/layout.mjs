@@ -58,12 +58,13 @@ async function expectShell(width, height) {
 async function expectNavigation() {
   const cases = [
     ["analyst", ["/", "/live/board", "/reports/dashboard"], false],
-    ["agent-one", ["/", "/day", "/hours"], true],
-    ["supervisor", ["/", "/live/board", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
+    // Since 0005 My schedule (roster.view) follows My hours in the Time group
+    ["agent-one", ["/", "/day", "/hours", "/schedule"], true],
+    ["supervisor", ["/", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
-    // the supervisor and the agent see no Team group, so their keys do not move
-    ["manager", ["/", "/live/board", "/team/people", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
-    ["admin", ["/", "/live/board", "/team/people", "/day", "/hours", "/team/hours", "/reports/dashboard"], true],
+    // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
+    ["manager", ["/", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["admin", ["/", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -76,6 +77,9 @@ async function expectNavigation() {
       [...(document.querySelector("nav")?.querySelectorAll("a[data-shortcut]") ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
     const want = hrefs.map((h, i) => [String(i + 1), h]);
     const hasClockIn = await p.locator('[data-testid="clock-in"]').count() > 0;
+    // The shift sentence (0005): only for a person with a roster (roster.view), from the published fixture
+    const hasShiftLine = await p.locator('[data-testid="shift-line"]').count() > 0;
+    if (hasShiftLine !== clock) problems.push(`${subject}: shift line ${hasShiftLine ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
     if (path !== "/") problems.push(`${subject}: landed on ${path}, expected Welcome at /`);
     if (JSON.stringify(links) !== JSON.stringify(want)) problems.push(`${subject}: navigation ${JSON.stringify(links)}, expected ${JSON.stringify(want)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
@@ -108,5 +112,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome and navigation for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line and navigation for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

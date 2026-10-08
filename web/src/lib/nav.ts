@@ -12,8 +12,8 @@ import type { Copy } from "@/lib/copy";
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
 export type NavIcon = "home" | "live" | "people" | "clock" | "chart";
-export type ShellPage = "welcome" | "live-board" | "people" | "my-day" | "my-hours" | "team-hours" | "dashboard";
-export type NavHref = "/" | "/live/board" | "/team/people" | "/day" | "/hours" | "/team/hours" | "/reports/dashboard";
+export type ShellPage = "welcome" | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard";
+export type NavHref = "/" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard";
 
 export interface NavItem {
   page: ShellPage;
@@ -72,6 +72,7 @@ export function navEntries(copy: Copy): NavEntry[] {
       icon: "people",
       items: [
         { page: "people", href: "/team/people", label: copy.nav.people, permission: ["users.manage_agents", "users.manage_all"] },
+        { page: "roster", href: "/roster/planner", label: copy.nav.roster, permission: "roster.manage" },
       ],
     },
     {
@@ -82,6 +83,7 @@ export function navEntries(copy: Copy): NavEntry[] {
       items: [
         { page: "my-day", href: "/day", label: copy.nav.myDay, permission: "workday.own" },
         { page: "my-hours", href: "/hours", label: copy.nav.myHours, permission: "workday.own" },
+        { page: "my-schedule", href: "/schedule", label: copy.nav.mySchedule, permission: "roster.view" },
         { page: "team-hours", href: "/team/hours", label: copy.nav.teamHours, permission: "workday.team" },
       ],
     },

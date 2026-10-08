@@ -4,7 +4,8 @@ import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
 import { Badge, Card, Notice } from "@/components/primitives";
 import { agentGroupOf } from "@/lib/dashboard";
-import { data, dataIsMock, type AppLink, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
+import { data, dataIsMock, type AppLink, type MyRosterDay, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
+import { cellLabel } from "@/lib/roster";
 import type { Copy, Locale } from "@/lib/copy";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, fmtTime, hourInZone } from "@/lib/time";
 import { resolve } from "./access";
@@ -29,14 +30,23 @@ export default async function WelcomePage() {
   const hasClock = me.permissions.includes("workday.own");
   const hasTeam = me.permissions.includes("workday.team");
   const hasReports = me.permissions.includes("performance.team");
+  const hasRoster = me.permissions.includes("roster.view");
 
   // One read per block the person may see; reading never opens a day
-  const [workday, statuses, team, links] = await Promise.all([
+  const [workday, statuses, team, links, roster] = await Promise.all([
     hasClock ? data().getWorkday(me, today) : Promise.resolve(null),
     hasClock ? data().listStatuses(me) : Promise.resolve([] as WorkStatus[]),
     hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
     data().listAppLinks(me),
+    hasRoster ? data().getMyRoster(me, { from: today, to: today }) : Promise.resolve([] as MyRosterDay[]),
   ]);
+  // The shift sentence the greeting waited for (migration 0005): from the published roster only
+  const todayRoster = roster[0] ?? null;
+  const shiftLine = !hasRoster || !todayRoster ? null
+    : !todayRoster.isPublished ? t.rosterNotPublished
+    : todayRoster.kind === "shift" ? t.shiftToday.replace("{shift}", cellLabel({ kind: "shift", start: todayRoster.start, end: todayRoster.end, absenceName: null }))
+    : todayRoster.kind === "absence" ? t.absenceToday.replace("{absence}", todayRoster.absenceName ?? "")
+    : t.noShiftToday;
 
   const hour = hourInZone(now, me.timeZone);
   const greeting = (hour < 12 ? t.morning : hour < 18 ? t.afternoon : t.evening).replace("{name}", me.displayName);
@@ -44,7 +54,10 @@ export default async function WelcomePage() {
   return (
     <Shell copy={copy} me={me} active="welcome">
       <h1 className="text-title font-bold text-p4a-heading">{greeting}</h1>
-      <p className="mt-1 text-body text-p4a-muted">{fmtDate(today, me.locale)}</p>
+      <p className="mt-1 text-body text-p4a-muted">
+        {fmtDate(today, me.locale)}
+        {shiftLine ? <span data-testid="shift-line">{` · ${shiftLine}`}</span> : null}
+      </p>
 
       <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
         <div className="flex flex-col gap-6">

@@ -96,3 +96,22 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* The roster's print view: A4 landscape, the brand margins (section 8), nothing but the sheet */
+@page {
+  size: A4 landscape;
+  margin: 12mm 15mm;
+}
+
+@media print {
+  html,
+  body {
+    background: var(--color-white);
+  }
+  [data-testid="roster-print"] table {
+    page-break-inside: auto;
+  }
+  [data-testid="roster-print"] tr {
+    page-break-inside: avoid;
+  }
+}
