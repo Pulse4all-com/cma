@@ -59,7 +59,7 @@
   --radius-card: 15px;
 
   /* layout */
-  --spacing-rail: 13.5rem; /* 216px left navigation */
+  --spacing-rail: 16rem; /* 256px left navigation: room for "Configuration" with its icon, keycap and chevron, and for "Absences and coverage" on one line */
   --spacing-topbar: 3.5rem; /* 56px */
   --breakpoint-desk: 80rem; /* 1280px, the desktop-only gate */
 }

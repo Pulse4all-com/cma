@@ -86,7 +86,7 @@ export function LinkButton({
 /** Small keycap: the keyboard-first signpost, informative rather than decorative */
 export function Keycap({ children }: { children: ReactNode }) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded-button border border-current/30 px-1 font-sans text-caption font-semibold leading-none opacity-80">
+    <kbd className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-button border border-current/30 px-1 font-sans text-caption font-semibold leading-none opacity-80">
       {children}
     </kbd>
   );
