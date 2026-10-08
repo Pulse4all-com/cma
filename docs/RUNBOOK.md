@@ -75,15 +75,15 @@ curl -s localhost:8080/api/health; echo                         # version = $sha
 
 Look at it as a test user: `curl -s -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me`, or in
 the browser through Cloud Shell's **Web preview** (port 8080) with `/?as=supervisor` once to switch user.
-Test users: `agent-two`, `supervisor`, `manager`, `analyst` (one tenant each; the analyst has no clock), `agent-one` (two tenants: refused on purpose).
+Test users: `agent-two`, `supervisor`, `manager`, `admin`, `analyst` (one tenant each; the analyst has no clock; `admin` since the night build of 8 October 2026), `agent-one` (two tenants: refused on purpose).
 
 ## 5. Verifiers
 
 Against dev, through the proxy from step 4:
 
 ```bash
-cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 59 PASS
-node verify/api.mjs --provoke; echo "exit $?"                     # ALL 59 PROVOKED CHECKS FAILED, exit 0
+cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 111 PASS (since the night build of 8 October 2026)
+node verify/api.mjs --provoke; echo "exit $?"                     # ALL 111 PROVOKED CHECKS FAILED, exit 0
 ```
 
 The verifier clocks Agent Two in through the start route (a visit opens nothing since increment e) and
@@ -91,7 +91,7 @@ closes Agent Two's open past days itself (as the supervisor); no fixture runs fi
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
-The other verifiers (`copy`, `theme`, `layout`, `iap-token`) run against a local server; see the header
+The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
 of each script in `web/verify/` for its start command.
 
 ## 6. Logs
@@ -118,14 +118,17 @@ Database `cma`, IAM database authentication. You log in as yourself (reader by d
 
 ## 8. Add a person to prod
 
+Since the night build of 8 October 2026 this is a screen, not a script (`db/people_add_prod.template.sql` is retired).
+
 1. The person runs in **their own** Cloud Shell:
    `curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" https://www.googleapis.com/oauth2/v3/userinfo`
-   and sends you the `sub` (digits only).
-2. In Cloud SQL Studio on **prod**, paste `db/09_seed_people_prod.sql`. Add or adjust their line (tenant,
-   organisation key, email, name, role) and replace only their `GOOGLE_ID_…` placeholder with the digits.
-   Run. The result table shows them with `google_ids = 1`.
-3. Never commit the real id. If you added a line for a new person, commit it with the placeholder.
-4. They also need to pass the IAP gate: during the build only members of the `cma@pulse4all.com` group.
+   and sends you the `sub` (digits only). The id travels once; it is never committed anywhere.
+2. In the Workspace as an admin (or a manager, for a non-managing role): Team → People → Add a person (A):
+   name, email, employer, role, sign-in provider `google` (prefilled behind IAP), the digits as the account id,
+   the zone empty unless the person needs their own. Save. The person appears in the table at once.
+3. They also need to pass the IAP gate: during the build only members of the `cma@pulse4all.com` group; an agent
+   gets an IAP-only grant on `cma-web-backend` instead (README, Open decisions).
+4. Teams and skills: Edit on their row. The roster shows them on their teams' weeks from then on.
 
 ## 9. Change prod configuration
 
