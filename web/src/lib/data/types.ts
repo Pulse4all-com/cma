@@ -409,6 +409,122 @@ export interface TeamMembership {
   teamName: string;
 }
 
+
+/**
+ * The roster (migration 0005). The planner's reads and writes need roster.manage, the own schedule
+ * roster.view (published entries only), today's shifts monitoring.live; the database checks on
+ * every call (CMA06). Times are local hh:mm in each person's own zone, within the business day
+ * (no shift crosses midnight); dates are business dates. Staff data only.
+ */
+export interface AbsenceType {
+  key: string;
+  name: string;
+  isPaid: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface RosterWeekHeader {
+  /** null until the week has been written */
+  weekId: string | null;
+  /** null for a roster of the whole tenant */
+  teamKey: string | null;
+  teamName: string | null;
+  weekStart: DateKey;
+  status: "draft" | "published";
+  /** How many times published; 0 for a draft */
+  version: number;
+  publishedAt: Instant | null;
+  publishedByName: string | null;
+  entryCount: number;
+  /** Edited after the last publish: the agent still sees that publish until the next one */
+  changedSincePublish: boolean;
+}
+
+/** One row of the planner's grid: a person whose time is kept, on this roster this week */
+export interface RosterPerson {
+  userId: string;
+  displayName: string;
+  organisationName: string;
+  timeZone: string;
+  teamKeys: string[];
+  /** Work-type skill keys held now, for coverage */
+  workTypeKeys: string[];
+}
+
+export interface RosterEntry {
+  entryId: string;
+  userId: string;
+  date: DateKey;
+  kind: "shift" | "absence";
+  /** hh:mm:ss local; null for an absence */
+  start: string | null;
+  end: string | null;
+  absenceKey: string | null;
+  absenceName: string | null;
+  note: string | null;
+  recordedAt: Instant;
+  recordedByName: string;
+}
+
+export interface RosterCoverageRow {
+  date: DateKey;
+  skillKey: string;
+  skillName: string;
+  plannedPeople: number;
+  peopleNames: string[];
+  target: number | null;
+}
+
+export interface RosterWeek {
+  header: RosterWeekHeader;
+  people: RosterPerson[];
+  entries: RosterEntry[];
+  coverage: RosterCoverageRow[];
+}
+
+/** One week in the browse list: the state of the roster of a team (or the tenant) for that week */
+export interface RosterWeekSummary {
+  weekStart: DateKey;
+  status: "draft" | "published";
+  version: number;
+  publishedAt: Instant | null;
+  entryCount: number;
+  shiftCount: number;
+}
+
+/** A cell as the planner sets it; clear removes the entry */
+export type RosterCellInput =
+  | { kind: "shift"; start: string; end: string; note?: string | null }
+  | { kind: "absence"; absenceKey: string; note?: string | null }
+  | { kind: "clear" };
+
+/** One day of a person's own schedule: published entries only */
+export interface MyRosterDay {
+  date: DateKey;
+  /** False when no published roster covers this person on that date */
+  isPublished: boolean;
+  kind: "shift" | "absence" | null;
+  start: string | null;
+  end: string | null;
+  absenceKey: string | null;
+  absenceName: string | null;
+  note: string | null;
+  teamName: string | null;
+  publishedAt: Instant | null;
+}
+
+/** Today's published entry per person whose time is kept, for the Live board (cma.roster_today) */
+export interface TodayShift {
+  userId: string;
+  date: DateKey;
+  isPublished: boolean;
+  kind: "shift" | "absence" | null;
+  start: string | null;
+  end: string | null;
+  absenceName: string | null;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -485,4 +601,26 @@ export interface CmaData {
   setPersonTeams(me: Principal, userId: string, teamKeys: string[]): Promise<void>;
   /** The full list of a person's skills with levels; needs skills.manage too. Bad level CMA04 */
   setPersonSkills(me: Principal, userId: string, skills: SkillInput[]): Promise<void>;
+
+  // ---- Roster (migration 0005): the database checks roster.manage, roster.view or monitoring.live (CMA06)
+  /** The planner's week: header, people on the grid, current entries, coverage. Needs roster.manage */
+  getRosterWeek(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterWeek>;
+  /** The weeks of a team's (or the tenant's) roster between two dates, for browsing. Needs roster.manage */
+  listRosterWeeks(me: Principal, teamKey: string | null, range: HoursRange): Promise<RosterWeekSummary[]>;
+  /** The tenant's absence types, active ones; any person of the tenant */
+  listAbsenceTypes(me: Principal): Promise<AbsenceType[]>;
+  /**
+   * Sets one cell (cma.roster_set_entry): a new version of the entry, the old one ended; clear ends
+   * it. Past dates, a date outside the week, a person not on the grid, bad times are CMA04; another
+   * roster's entry on that date CMA03; an unknown absence CMA02. Answers the current entry, null after a clear.
+   */
+  setRosterEntry(me: Principal, weekStart: DateKey, teamKey: string | null, userId: string, date: DateKey, cell: RosterCellInput): Promise<RosterEntry | null>;
+  /** Publishes the week as it stands: version + 1. Answers the header */
+  publishRoster(me: Principal, weekStart: DateKey, teamKey: string | null): Promise<RosterWeekHeader>;
+  /** Copies the current cells of one week into another of the same scope; answers how many were written */
+  copyRosterWeek(me: Principal, fromWeekStart: DateKey, toWeekStart: DateKey, teamKey: string | null): Promise<number>;
+  /** The caller's own schedule, published entries only, one row per date; at most 92 days. Needs roster.view */
+  getMyRoster(me: Principal, range: HoursRange): Promise<MyRosterDay[]>;
+  /** Today's published entry per person whose time is kept, for the Live board. Needs monitoring.live */
+  getRosterToday(me: Principal): Promise<TodayShift[]>;
 }

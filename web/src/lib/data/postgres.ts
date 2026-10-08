@@ -3,7 +3,8 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  AppLink, CmaData, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, OrganisationInfo, RoleInfo, SkillInfo,
+  AbsenceType, AppLink, CmaData, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyRosterDay, OrganisationInfo,
+  RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
@@ -366,6 +367,44 @@ function toDirectoryPerson(r: DirectoryDbRow): DirectoryPerson {
   };
 }
 
+
+// ---- Roster (migration 0005): cma.roster_week, roster_people, roster_entries, roster_coverage,
+// roster_set_entry, roster_publish, roster_copy_week, roster_weeks, my_roster, roster_today,
+// absence_types. Every function checks its permission inside (roster.manage, roster.view or
+// monitoring.live, CMA06). Times stay local hh:mm:ss strings in the person's zone; dates are
+// business dates; the date type parser keeps both as strings.
+
+type RosterWeekDbRow = {
+  week_id: string | null; team_key: string | null; team_name: string | null; week_start: string; status: "draft" | "published";
+  version: number; published_at: Date | null; published_by_name: string | null; entry_count: number; changed_since_publish: boolean;
+};
+type RosterPersonDbRow = { user_id: string; display_name: string; organisation_name: string; timezone: string; team_keys: string[] | null; work_type_keys: string[] | null };
+type RosterEntryDbRow = {
+  entry_id: string; user_id: string; business_date: string; kind: "shift" | "absence"; start_time: string | null; end_time: string | null;
+  absence_key: string | null; absence_name: string | null; note: string | null; recorded_at: Date; recorded_by_name: string;
+};
+type CoverageDbRow = { business_date: string; skill_key: string; skill_name: string; planned_people: number; people_names: string[] | null; target: number | null };
+
+function toRosterHeader(r: RosterWeekDbRow): RosterWeekHeader {
+  return {
+    weekId: r.week_id, teamKey: r.team_key, teamName: r.team_name, weekStart: r.week_start, status: r.status, version: r.version,
+    publishedAt: r.published_at ? r.published_at.toISOString() : null, publishedByName: r.published_by_name,
+    entryCount: r.entry_count, changedSincePublish: r.changed_since_publish,
+  };
+}
+
+function toRosterEntry(r: RosterEntryDbRow): RosterEntry {
+  return {
+    entryId: r.entry_id, userId: r.user_id, date: r.business_date, kind: r.kind, start: r.start_time, end: r.end_time,
+    absenceKey: r.absence_key, absenceName: r.absence_name, note: r.note, recordedAt: r.recorded_at.toISOString(), recordedByName: r.recorded_by_name,
+  };
+}
+
+async function readRosterHeader(q: Querier, weekStart: DateKey, teamKey: string | null): Promise<RosterWeekHeader> {
+  const r = await q.query<RosterWeekDbRow>(`select * from cma.roster_week($1::date, $2)`, [weekStart, teamKey]);
+  return toRosterHeader(one(r.rows, "roster_week"));
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
@@ -706,5 +745,113 @@ export const postgresData: CmaData = {
 
   async setPersonSkills(me, userId, skills): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_person_skills($1::uuid, $2::jsonb)`, [userId, JSON.stringify(skills)]));
+  },
+
+  async getRosterWeek(me, weekStart, teamKey): Promise<RosterWeek> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) => {
+      // The header first: its permission check decides the rest of the transaction
+      const header = await readRosterHeader(q, weekStart, teamKey);
+      const people = await q.query<RosterPersonDbRow>(`select * from cma.roster_people($1::date, $2)`, [weekStart, teamKey]);
+      const entries = await q.query<RosterEntryDbRow>(`select * from cma.roster_entries($1::date, $2)`, [weekStart, teamKey]);
+      const coverage = await q.query<CoverageDbRow>(`select * from cma.roster_coverage($1::date, $2)`, [weekStart, teamKey]);
+      return {
+        header,
+        people: people.rows.map((p): RosterPerson => ({
+          userId: p.user_id, displayName: p.display_name, organisationName: p.organisation_name, timeZone: p.timezone,
+          teamKeys: p.team_keys ?? [], workTypeKeys: p.work_type_keys ?? [],
+        })),
+        entries: entries.rows.map(toRosterEntry),
+        coverage: coverage.rows.map((c): RosterCoverageRow => ({
+          date: c.business_date, skillKey: c.skill_key, skillName: c.skill_name, plannedPeople: c.planned_people,
+          peopleNames: c.people_names ?? [], target: c.target,
+        })),
+      };
+    });
+  },
+
+  async listRosterWeeks(me, teamKey, range): Promise<RosterWeekSummary[]> {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ week_start: string; status: "draft" | "published"; version: number; published_at: Date | null; entry_count: number; shift_count: number }>(
+        `select * from cma.roster_weeks($1, $2::date, $3::date)`, [teamKey, range.from, range.to],
+      );
+      return r.rows.map((w) => ({
+        weekStart: w.week_start, status: w.status, version: w.version, publishedAt: w.published_at ? w.published_at.toISOString() : null,
+        entryCount: w.entry_count, shiftCount: w.shift_count,
+      }));
+    });
+  },
+
+  async listAbsenceTypes(me): Promise<AbsenceType[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; is_paid: boolean; sort_order: number; status: string }>(`select * from cma.absence_types()`);
+      return r.rows.map((a) => ({ key: a.key, name: a.name, isPaid: a.is_paid, sortOrder: a.sort_order, isActive: a.status === "active" }));
+    });
+  },
+
+  async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterEntry | null> {
+    assertDate(weekStart, "weekStart");
+    assertDate(date, "date");
+    return withTenant(ctx(me), async (q) => {
+      const kind = cell.kind === "clear" ? null : cell.kind;
+      const start = cell.kind === "shift" ? cell.start : null;
+      const end = cell.kind === "shift" ? cell.end : null;
+      const absence = cell.kind === "absence" ? cell.absenceKey : null;
+      const note = cell.kind === "clear" ? null : cell.note ?? null;
+      await q.query(`select 1 from cma.roster_set_entry($1::date, $2, $3::uuid, $4::date, $5, $6::time, $7::time, $8, $9)`,
+        [weekStart, teamKey, userId, date, kind, start, end, absence, note]);
+      const r = await q.query<RosterEntryDbRow>(
+        `select * from cma.roster_entries($1::date, $2) e where e.user_id = $3::uuid and e.business_date = $4::date`,
+        [weekStart, teamKey, userId, date],
+      );
+      return r.rows[0] ? toRosterEntry(r.rows[0]) : null;
+    });
+  },
+
+  async publishRoster(me, weekStart, teamKey): Promise<RosterWeekHeader> {
+    assertDate(weekStart, "weekStart");
+    return withTenant(ctx(me), async (q) => {
+      await q.query(`select 1 from cma.roster_publish($1::date, $2)`, [weekStart, teamKey]);
+      return readRosterHeader(q, weekStart, teamKey);
+    });
+  },
+
+  async copyRosterWeek(me, fromWeekStart, toWeekStart, teamKey): Promise<number> {
+    assertDate(fromWeekStart, "from");
+    assertDate(toWeekStart, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ n: number }>(`select cma.roster_copy_week($1::date, $2::date, $3) as n`, [fromWeekStart, toWeekStart, teamKey]);
+      return Number(one(r.rows, "roster_copy_week").n);
+    });
+  },
+
+  async getMyRoster(me, range): Promise<MyRosterDay[]> {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{
+        business_date: string; is_published: boolean; kind: "shift" | "absence" | null; start_time: string | null; end_time: string | null;
+        absence_key: string | null; absence_name: string | null; note: string | null; team_name: string | null; published_at: Date | null;
+      }>(`select * from cma.my_roster($1::date, $2::date)`, [range.from, range.to]);
+      return r.rows.map((d) => ({
+        date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time,
+        absenceKey: d.absence_key, absenceName: d.absence_name, note: d.note, teamName: d.team_name,
+        publishedAt: d.published_at ? d.published_at.toISOString() : null,
+      }));
+    });
+  },
+
+  async getRosterToday(me): Promise<TodayShift[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{
+        user_id: string; business_date: string; is_published: boolean; kind: "shift" | "absence" | null;
+        start_time: string | null; end_time: string | null; absence_name: string | null;
+      }>(`select * from cma.roster_today()`);
+      return r.rows.map((d) => ({
+        userId: d.user_id, date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time, absenceName: d.absence_name,
+      }));
+    });
   },
 };

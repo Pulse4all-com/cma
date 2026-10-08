@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import type { Group } from "@/lib/dashboard";
 import type { WorkdayClock } from "@/lib/data";
+import type { Adherence } from "@/lib/roster";
 import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, secondsSince, workedSeconds } from "@/lib/live";
 import { groupLabels, Swatch } from "./DashboardCharts";
 import { Badge, Keycap } from "./primitives";
@@ -39,6 +40,8 @@ export interface BoardRow {
   zoneLabel: string | null;
   /** The person's current teams (migration 0004), for the team filter and the Team column */
   teams: { key: string; name: string }[];
+  /** Today's published shift (migration 0005) with the adherence flag derived on the server */
+  shift: { label: string | null; published: boolean; flag: Adherence | null };
 }
 
 const REFRESH_MS = 10_000;
@@ -100,6 +103,8 @@ export function LiveBoard({
   }, [router]);
 
   const labels = groupLabels(copy);
+  const flagLabel = (f: Adherence): string =>
+    f === "late" ? t.late : f === "leftEarly" ? t.leftEarly : f === "expected" ? t.expected : f === "absent" ? t.absent : f === "unplanned" ? t.unplanned : t.onTime;
   const label = (g: LiveGroup): { label: string; hint: string } =>
     g === "clockedOut" ? { label: t.clockedOut, hint: t.clockedOutHint }
     : g === "notClockedIn" ? { label: t.notClockedIn, hint: t.notClockedInHint }
@@ -200,6 +205,7 @@ export function LiveBoard({
               <th className={th}>{t.person}</th>
               <th className={th}>{t.employer}</th>
               <th className={th}>{t.team}</th>
+              <th className={th}>{t.shift}</th>
               <th className={th}>{t.status}</th>
               <th className={`${th} text-right`}>{t.since}</th>
               <th className={`${th} text-right`}>{t.clockedInAt}</th>
@@ -213,6 +219,16 @@ export function LiveBoard({
                 <td className="whitespace-nowrap px-3">{r.displayName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.teams.map((x) => x.name).join(", ")}</td>
+                <td className="whitespace-nowrap px-3">
+                  <span className="flex items-center gap-2">
+                    <span className={`tabular ${r.shift.label ? "" : "text-p4a-muted"}`}>
+                      {!r.shift.published ? t.shiftNotPublished : r.shift.label ?? t.noShift}
+                    </span>
+                    {r.shift.flag && r.shift.flag !== "onTime" ? (
+                      <Badge tone={r.shift.flag === "expected" || r.shift.flag === "unplanned" ? "info" : "warning"}>{flagLabel(r.shift.flag)}</Badge>
+                    ) : null}
+                  </span>
+                </td>
                 <td className="px-3">
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     {isGroup(r.group) ? <Swatch group={r.group} /> : null}

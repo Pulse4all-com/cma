@@ -7,7 +7,7 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seed (06) and migrations 0003, 0003a, 0003b, 0003c, 0003d and 0003e. Ends the test supervisor's workday of today and, as
+ * Needs the dev seeds (06, 24) and migrations 0003 to 0003e, 0004 and 0005. Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
@@ -462,6 +462,63 @@ expect("the supervisor reads the memberships for the board's team filter",
 
 // ---- bounds ---------------------------------------------------------------------------------
 const longFrom = dateKey(new Date(Date.now() - 92 * 86_400_000), meA.timeZone);
+// ---- the roster (migration 0005), 20 checks ----------------------------------------------------
+// The manager plans (roster.manage), the agent reads their own published schedule (roster.view),
+// the supervisor reads today's shifts for the board (monitoring.live). Two weeks ahead, on the
+// agent's own team, so the fixture's weeks stay as they are; every cell written is cleared again.
+const monday = (d) => { const x = new Date(d); x.setUTCDate(x.getUTCDate() - ((x.getUTCDay() + 6) % 7)); return x.toISOString().slice(0, 10); };
+const plusDays = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+const thisMonday = monday(`${today}T00:00:00Z`);
+const wk = plusDays(thisMonday, 14);
+const wk2 = plusDays(thisMonday, 21);
+const agentTeam = originalTeams[0];
+const absenceTypes = (await get(AGENT, "/api/v1/roster/absence-types")).body?.data ?? [];
+expect("any person reads the tenant's absence types", [absenceTypes.length > 0, absenceTypes.every((a) => a.key && a.name)], [true, true], [false, true]);
+expect("an agent cannot read the planner", (await get(AGENT, `/api/v1/roster/weeks/${wk}?team=${agentTeam}`)).status, 403, 200);
+expect("a week must start on a Monday", (await get(MANAGER, `/api/v1/roster/weeks/${plusDays(wk, 1)}?team=${agentTeam}`)).status, 400, 200);
+const planner = await get(MANAGER, `/api/v1/roster/weeks/${wk}?team=${agentTeam}`);
+expect("the manager reads the week with the agent on the grid",
+  [planner.status, planner.body?.data?.header?.weekStart, planner.body?.data?.header?.teamKey, (planner.body?.data?.people ?? []).some((p) => p.userId === meA.userId)],
+  [200, wk, agentTeam, true], [200, wk, agentTeam, false]);
+const cellsPath = `/api/v1/roster/weeks/${wk}/cells`;
+const shiftCell = { team: agentTeam, userId: meA.userId, date: wk, cell: { kind: "shift", start: "10:15", end: "18:00" } };
+expect("a cell write needs the request header", (await json(MANAGER, "PUT", cellsPath, shiftCell, {})).status, 400, 200);
+expect("a cross-site cell write is refused", (await json(MANAGER, "PUT", cellsPath, shiftCell, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+expect("an agent cannot write a cell", (await json(AGENT, "PUT", cellsPath, shiftCell)).status, 403, 200);
+const written = await json(MANAGER, "PUT", cellsPath, shiftCell);
+expect("a shift is written and read back with its times", [written.status, written.body?.data?.kind, written.body?.data?.start, written.body?.data?.end], [200, "shift", "10:15:00", "18:00:00"], [200, "shift", "10:15", "18:00"]);
+expect("the past is refused", (await json(MANAGER, "PUT", `/api/v1/roster/weeks/${plusDays(thisMonday, -7)}/cells`, { ...shiftCell, date: plusDays(thisMonday, -7) })).status, 400, 200);
+expect("a date outside the week is refused", (await json(MANAGER, "PUT", cellsPath, { ...shiftCell, date: plusDays(wk, 7) })).status, 400, 200);
+expect("a person not on this roster is refused", (await json(MANAGER, "PUT", cellsPath, { ...shiftCell, userId: meS.userId })).status, 400, 200);
+expect("a shift that ends before it starts is refused", (await json(MANAGER, "PUT", cellsPath, { ...shiftCell, cell: { kind: "shift", start: "22:00", end: "06:00" } })).status, 400, 200);
+expect("the same person on another roster that day is a conflict", (await json(MANAGER, "PUT", cellsPath, { ...shiftCell, team: null })).status, 409, 200);
+const published1 = await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk}/publish`, { team: agentTeam });
+const own1 = (await get(AGENT, `/api/v1/me/roster?from=${wk}&to=${wk}`)).body?.data?.[0];
+expect("after the publish the agent sees the shift", [published1.status, published1.body?.data?.status, own1?.isPublished, own1?.kind, own1?.start], [200, "published", true, "shift", "10:15:00"], [200, "draft", true, "shift", "10:15:00"]);
+await json(MANAGER, "PUT", cellsPath, { ...shiftCell, cell: { kind: "absence", absenceKey: absenceTypes[0]?.key } });
+const header2 = (await get(MANAGER, `/api/v1/roster/weeks/${wk}?team=${agentTeam}`)).body?.data?.header;
+const own2 = (await get(AGENT, `/api/v1/me/roster?from=${wk}&to=${wk}`)).body?.data?.[0];
+expect("an edit after the publish is flagged and the agent keeps the published shift", [header2?.changedSincePublish, own2?.kind, own2?.start], [true, "shift", "10:15:00"], [false, "absence", null]);
+const published2 = await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk}/publish`, { team: agentTeam });
+const own3 = (await get(AGENT, `/api/v1/me/roster?from=${wk}&to=${wk}`)).body?.data?.[0];
+expect("the second publish raises the version and the agent sees the absence", [published2.body?.data?.version > published1.body?.data?.version, own3?.kind, own3?.absenceKey], [true, "absence", absenceTypes[0]?.key], [false, "absence", absenceTypes[0]?.key]);
+const copied = await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk2}/copy`, { team: agentTeam, from: wk });
+expect("copying the week carries the cell into the next one", [copied.status, copied.body?.data?.copied >= 1], [200, true], [200, false]);
+const weeksList = (await get(MANAGER, `/api/v1/roster/weeks?team=${agentTeam}&from=${wk}&to=${plusDays(wk2, 6)}`)).body?.data ?? [];
+expect("the weeks list shows both weeks with their states",
+  [weeksList.find((w) => w.weekStart === wk)?.status, weeksList.find((w) => w.weekStart === wk2)?.status], ["published", "draft"], ["draft", "published"]);
+expect("the own schedule has one row per day and is bounded to 92 days",
+  [(await get(AGENT, `/api/v1/me/roster?from=${wk}&to=${plusDays(wk, 6)}`)).body?.data?.length, (await get(AGENT, `/api/v1/me/roster?from=${longFrom}&to=${today}`)).status], [7, 400], [6, 400]);
+expect("the analyst holds no roster", (await get(ANALYST, `/api/v1/me/roster?from=${today}&to=${today}`)).status, 403, 200);
+expect("an agent cannot read today's shifts", (await get(AGENT, "/api/v1/team/shifts-today")).status, 403, 200);
+const shiftsToday = await get(SUPERVISOR, "/api/v1/team/shifts-today");
+expect("the supervisor reads today's shifts with one row per person whose time is kept",
+  [shiftsToday.status, (shiftsToday.body?.data ?? []).some((x) => x.userId === meA.userId), (shiftsToday.body?.data ?? []).some((x) => x.userId === meN?.userId)], [200, true, false], [200, true, true]);
+// Leave the two weeks empty for the next run (dev data; not a check)
+await json(MANAGER, "PUT", cellsPath, { ...shiftCell, cell: { kind: "clear" } });
+await json(MANAGER, "PUT", `/api/v1/roster/weeks/${wk2}/cells`, { ...shiftCell, date: wk2, cell: { kind: "clear" } });
+await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk}/publish`, { team: agentTeam });
+
 expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?from=${longFrom}&to=${today}`)).status, 400, 200);
 
 // ---- verdict --------------------------------------------------------------------------------

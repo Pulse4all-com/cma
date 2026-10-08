@@ -51,6 +51,9 @@ const pages = [
   { path: "/reports/dashboard?range=month", subject: "supervisor" },
   { path: "/live/board", subject: "supervisor" },
   { path: "/team/people", subject: "admin" },
+  { path: "/roster/planner", subject: "manager" },
+  { path: "/roster/planner/print", subject: "manager" },
+  { path: "/schedule" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 for (const { path, subject, start } of pages) {

@@ -84,7 +84,7 @@ export const MOCK_PRINCIPAL: Principal = {
   displayName: "Agent One",
   organisationName: "Newco",
   roleKey: "agent",
-  permissions: ["workday.own"],
+  permissions: ["workday.own", "roster.view"],
   locale: config.defaultLocale,
   timeZone: "Europe/Madrid",
 };
