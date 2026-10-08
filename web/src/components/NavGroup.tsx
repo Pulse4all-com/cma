@@ -160,8 +160,9 @@ export function NavIconMark({ name }: { name: NavIcon }) {
           strokeLinecap="round"
           strokeLinejoin="round"
         >
-          <circle cx="10" cy="10" r="2.5" />
-          <path d="M10 2.75v2M10 15.25v2M2.75 10h2M15.25 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4" />
+          <circle cx="10" cy="10" r="3" />
+          <circle cx="10" cy="10" r="6" strokeDasharray="2.4 2.3" />
+          <path d="M10 1.5v2.25M10 16.25v2.25M1.5 10h2.25M16.25 10h2.25M4 4l1.6 1.6M14.4 14.4l1.6 1.6M4 16l1.6-1.6M14.4 5.6l1.6-1.6" />
         </svg>
       );
     case "chart":
