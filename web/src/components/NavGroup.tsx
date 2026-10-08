@@ -54,12 +54,12 @@ export function NavGroup({
         ].join(" ")}
       >
         <NavIconMark name={icon} />
-        <span className="flex-1 text-left">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
         {shortcut ? <Keycap>{shortcut.toUpperCase()}</Keycap> : null}
         <svg
           aria-hidden="true"
           viewBox="0 0 16 16"
-          className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -84,7 +84,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -100,7 +100,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -119,7 +119,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -137,7 +137,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -153,7 +153,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"
@@ -169,7 +169,7 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         <svg
           aria-hidden="true"
           viewBox="0 0 20 20"
-          className="h-5 w-5"
+          className="h-5 w-5 shrink-0"
           fill="none"
           stroke="currentColor"
           strokeWidth="1.75"

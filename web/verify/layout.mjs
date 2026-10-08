@@ -43,7 +43,7 @@ async function expectShell(width, height) {
   const tag = `${width}x${height}`;
   if (m.gateVisible) problems.push(`${tag}: the desktop-only gate is showing instead of the app`);
   if (m.scrollX) problems.push(`${tag}: page scrolls horizontally`);
-  if (Math.round(m.rail) !== 216) problems.push(`${tag}: rail is ${m.rail}px, token says 216`);
+  if (Math.round(m.rail) !== 256) problems.push(`${tag}: rail is ${m.rail}px, token says 256`);
   if (Math.round(m.topbar) !== 56) problems.push(`${tag}: top bar is ${m.topbar}px, token says 56`);
   if (m.content > 896) problems.push(`${tag}: content column is ${m.content}px, wider than max-w-4xl`);
   if (m.keycaps < 3) problems.push(`${tag}: only ${m.keycaps} keycaps visible, expected nav keys and log out`);

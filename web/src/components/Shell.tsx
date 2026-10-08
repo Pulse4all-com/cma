@@ -91,7 +91,7 @@ export async function Shell({
                     ].join(" ")}
                   >
                     <NavIconMark name={entry.icon} />
-                    <span className="flex-1">{entry.item.label}</span>
+                    <span className="min-w-0 flex-1 truncate">{entry.item.label}</span>
                     <Keycap>{entry.item.key}</Keycap>
                   </Link>
                 </li>
