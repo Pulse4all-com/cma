@@ -3,10 +3,10 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  AbsenceType, AppLink, CmaData, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyRosterDay, OrganisationInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo,
 } from "./types";
 
 /**
@@ -745,6 +745,102 @@ export const postgresData: CmaData = {
 
   async setPersonSkills(me, userId, skills): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_person_skills($1::uuid, $2::jsonb)`, [userId, JSON.stringify(skills)]));
+  },
+
+  // ---- Configuration (migration 0005a): every function checks tenant.configure inside (CMA06) ----
+
+  async listConfigStatuses(me): Promise<ConfigStatus[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; is_working: boolean; is_productive: boolean; is_paid: boolean; is_billable: boolean;
+                                 is_default: boolean; sort_order: number; status: string; usage_count: number }>(`select * from cma.work_statuses_all()`);
+      return r.rows.map((x) => ({
+        key: x.key, name: x.name, isWorking: x.is_working, isProductive: x.is_productive, isPaid: x.is_paid, isBillable: x.is_billable,
+        isDefault: x.is_default, sortOrder: x.sort_order, isActive: x.status === "active", usageCount: x.usage_count,
+      }));
+    });
+  },
+
+  async upsertConfigStatus(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_work_status($1, $2, $3, $4, $5, $6, $7)`,
+      [input.key, input.name, input.isWorking, input.isProductive, input.isPaid, input.isBillable, input.sortOrder]));
+  },
+
+  async setDefaultStatus(me, key): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_default_work_status($1)`, [key]));
+  },
+
+  async retireStatus(me, key): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.retire_work_status($1)`, [key]));
+  },
+
+  async listConfigAppLinks(me): Promise<ConfigAppLink[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; label: string; address: string; permission_key: string | null; sort_order: number; status: string }>(
+        `select * from cma.app_links_all()`);
+      return r.rows.map((x) => ({ key: x.key, label: x.label, address: x.address, permissionKey: x.permission_key, sortOrder: x.sort_order, isActive: x.status === "active" }));
+    });
+  },
+
+  async upsertAppLink(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_app_link($1, $2, $3, $4, $5)`,
+      [input.key, input.label, input.address, input.permissionKey, input.sortOrder]));
+  },
+
+  async retireAppLink(me, key): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.retire_app_link($1)`, [key]));
+  },
+
+  async listPermissions(me): Promise<PermissionInfo[]> {
+    return withTenant(ctx(me), async (q) => {
+      // The catalog is defined by migrations, not tenant data; the list is read after the links'
+      // own permission check, in the same transaction, so only a configurer sees it
+      await q.query(`select 1 from cma.app_links_all() limit 1`);
+      const r = await q.query<{ key: string; description: string }>(`select key, description from cma.permission order by key`);
+      return r.rows;
+    });
+  },
+
+  async upsertAbsenceType(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_absence_type($1, $2, $3, $4, 'active')`, [input.key, input.name, input.isPaid, input.sortOrder]));
+  },
+
+  async retireAbsenceType(me, key): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.retire_absence_type($1)`, [key]));
+  },
+
+  async listCoverageTargets(me): Promise<CoverageTargetRow[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ team_key: string; skill_key: string; weekday: number; min_count: number }>(`select * from cma.coverage_targets_all()`);
+      return r.rows.map((x) => ({ teamKey: x.team_key, skillKey: x.skill_key, weekday: x.weekday, minCount: x.min_count }));
+    });
+  },
+
+  async setCoverageTarget(me, teamKey, skillKey, weekday, minCount): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_coverage_target($1, $2, $3::smallint, $4)`, [teamKey, skillKey, weekday, minCount && minCount > 0 ? minCount : null]));
+  },
+
+  async upsertTeam(me, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_team($1, $2, $3::text[], $4)`, [input.key, input.name, input.markets, input.sortOrder]));
+  },
+
+  async dissolveTeam(me, key): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.dissolve_team($1)`, [key]));
+  },
+
+  async upsertSkill(me, input, active): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_skill($1, $2, $3, $4, $5)`, [input.dimension, input.key, input.name, input.sortOrder, active ? "active" : "inactive"]));
+  },
+
+  async setSkillLevels(me, dimension, levels): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_skill_levels($1, $2::jsonb)`, [dimension, JSON.stringify(levels)]));
+  },
+
+  async setTenantSetting(me, key, value): Promise<TenantSetting> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; value: string; is_default: boolean }>(`select * from cma.set_tenant_setting($1, $2)`, [key, value]);
+      const x = one(r.rows, "set_tenant_setting");
+      return { key: x.key, value: x.value, isDefault: x.is_default };
+    });
   },
 
   async getRosterWeek(me, weekStart, teamKey): Promise<RosterWeek> {

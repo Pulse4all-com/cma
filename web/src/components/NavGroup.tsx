@@ -7,8 +7,9 @@
  * that holds the current page is highlighted, so the person still sees where they are. The pages
  * keep their own digit keys whether the group is open or closed.
  */
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { NAV_COOKIE_PREFIX, type NavIcon } from "@/lib/nav";
+import { Keycap } from "./primitives";
 
 export function NavGroup({
   id,
@@ -16,6 +17,7 @@ export function NavGroup({
   icon,
   defaultOpen,
   current,
+  shortcut,
   children,
 }: {
   id: string;
@@ -24,14 +26,19 @@ export function NavGroup({
   defaultOpen: boolean;
   /** One of the group's pages is the current page */
   current: boolean;
+  /** A letter that opens the group and focuses its first page (an unnumbered group, 0005a) */
+  shortcut?: string;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const list = useRef<HTMLUListElement>(null);
 
   function toggle() {
     const next = !open;
     setOpen(next);
     document.cookie = `${NAV_COOKIE_PREFIX}${id}=${next ? "open" : "closed"}; path=/; max-age=31536000; samesite=lax; secure`;
+    // Opened by its letter: the first page gets the focus, so Enter opens it and the arrows move
+    if (next && shortcut) requestAnimationFrame(() => list.current?.querySelector<HTMLAnchorElement>("a")?.focus());
   }
   return (
     <li>
@@ -39,6 +46,7 @@ export function NavGroup({
         type="button"
         aria-expanded={open}
         aria-controls={`nav-group-${id}`}
+        data-shortcut={shortcut}
         onClick={toggle}
         className={[
           "flex h-10 w-full items-center gap-3 rounded-button px-3 text-body font-semibold text-p4a-heading",
@@ -47,6 +55,7 @@ export function NavGroup({
       >
         <NavIconMark name={icon} />
         <span className="flex-1 text-left">{label}</span>
+        {shortcut ? <Keycap>{shortcut.toUpperCase()}</Keycap> : null}
         <svg
           aria-hidden="true"
           viewBox="0 0 16 16"
@@ -60,7 +69,7 @@ export function NavGroup({
           <path d="M4 6l4 4 4-4" />
         </svg>
       </button>
-      <ul id={`nav-group-${id}`} className={open ? "mt-1 flex flex-col gap-1 pl-3" : "hidden"}>
+      <ul ref={list} id={`nav-group-${id}`} className={open ? "mt-1 flex flex-col gap-1 pl-3" : "hidden"}>
         {children}
       </ul>
     </li>
@@ -137,6 +146,22 @@ export function NavIconMark({ name }: { name: NavIcon }) {
         >
           <circle cx="10" cy="10" r="7.25" />
           <path d="M10 6v4l2.75 1.75" />
+        </svg>
+      );
+    case "gear":
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="10" cy="10" r="2.5" />
+          <path d="M10 2.75v2M10 15.25v2M2.75 10h2M15.25 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4" />
         </svg>
       );
     case "chart":

@@ -411,6 +411,90 @@ export interface TeamMembership {
 
 
 /**
+ * Configuration (migration 0005a), for people holding tenant.configure; the database checks on
+ * every read and write (CMA06). Everything here is tenant configuration: statuses with their
+ * flags, app links, absence types, coverage targets, export settings. No code branches on a key.
+ */
+export interface ConfigStatus {
+  key: string;
+  name: string;
+  isWorking: boolean;
+  isProductive: boolean;
+  isPaid: boolean;
+  isBillable: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+  /** Retired statuses keep their history and cannot be chosen */
+  isActive: boolean;
+  /** Time events recorded in this status; the flags of a status with any are frozen */
+  usageCount: number;
+}
+
+export interface ConfigStatusInput {
+  key: string;
+  name: string;
+  isWorking: boolean;
+  isProductive: boolean;
+  isPaid: boolean;
+  isBillable: boolean;
+  sortOrder: number;
+}
+
+export interface ConfigAppLink {
+  key: string;
+  label: string;
+  /** https only, checked by the database */
+  address: string;
+  /** null: everyone with a role */
+  permissionKey: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface ConfigAppLinkInput {
+  key: string;
+  label: string;
+  address: string;
+  permissionKey: string | null;
+  sortOrder: number;
+}
+
+/** A permission of the catalog, for the app link's permission choice */
+export interface PermissionInfo {
+  key: string;
+  description: string;
+}
+
+export interface AbsenceTypeInput {
+  key: string;
+  name: string;
+  isPaid: boolean;
+  sortOrder: number;
+}
+
+/** How many people holding a work type a team wants on an ISO weekday (1 Monday to 7 Sunday) */
+export interface CoverageTargetRow {
+  teamKey: string;
+  skillKey: string;
+  weekday: number;
+  minCount: number;
+}
+
+export interface TeamInput {
+  key: string;
+  name: string;
+  markets: string[];
+  sortOrder: number;
+}
+
+export interface SkillInputRow {
+  dimension: SkillDimension;
+  key: string;
+  name: string;
+  sortOrder: number;
+}
+
+/**
  * The roster (migration 0005). The planner's reads and writes need roster.manage, the own schedule
  * roster.view (published entries only), today's shifts monitoring.live; the database checks on
  * every call (CMA06). Times are local hh:mm in each person's own zone, within the business day
@@ -601,6 +685,40 @@ export interface CmaData {
   setPersonTeams(me: Principal, userId: string, teamKeys: string[]): Promise<void>;
   /** The full list of a person's skills with levels; needs skills.manage too. Bad level CMA04 */
   setPersonSkills(me: Principal, userId: string, skills: SkillInput[]): Promise<void>;
+
+  // ---- Configuration (migration 0005a): the database checks tenant.configure on every call (CMA06)
+  /** Every status with its flags, the default, active or retired, and its usage */
+  listConfigStatuses(me: Principal): Promise<ConfigStatus[]>;
+  /** Adds or changes a status; reactivates a retired key. Frozen flags CMA03, a bad key CMA04 */
+  upsertConfigStatus(me: Principal, input: ConfigStatusInput): Promise<void>;
+  /** The default must be an active working status (CMA03); unknown CMA02 */
+  setDefaultStatus(me: Principal, key: string): Promise<void>;
+  /** Retires a status: not the default, not the last working one (CMA03); unknown CMA02 */
+  retireStatus(me: Principal, key: string): Promise<void>;
+  /** Every app link, active or retired */
+  listConfigAppLinks(me: Principal): Promise<ConfigAppLink[]>;
+  /** Adds or changes a link; reactivates a retired key. Not https CMA04, unknown permission CMA02 */
+  upsertAppLink(me: Principal, input: ConfigAppLinkInput): Promise<void>;
+  retireAppLink(me: Principal, key: string): Promise<void>;
+  /** The permission catalog, for the link's permission choice */
+  listPermissions(me: Principal): Promise<PermissionInfo[]>;
+  /** Adds or changes an absence type; reactivates a retired key */
+  upsertAbsenceType(me: Principal, input: AbsenceTypeInput): Promise<void>;
+  retireAbsenceType(me: Principal, key: string): Promise<void>;
+  /** Every coverage target across teams */
+  listCoverageTargets(me: Principal): Promise<CoverageTargetRow[]>;
+  /** Sets a target; 0 or null clears it. Needs roster.manage as well (the function of 0005) */
+  setCoverageTarget(me: Principal, teamKey: string, skillKey: string, weekday: number, minCount: number | null): Promise<void>;
+  /** Adds or changes a team; a dissolved key is revived */
+  upsertTeam(me: Principal, input: TeamInput): Promise<void>;
+  /** Ends a team and its memberships; unknown CMA02 */
+  dissolveTeam(me: Principal, key: string): Promise<void>;
+  /** Adds or changes a skill; active true reactivates, false retires */
+  upsertSkill(me: Principal, input: SkillInputRow, active: boolean): Promise<void>;
+  /** Replaces a dimension's level scale; an empty list makes it binary. Levels in use CMA03 */
+  setSkillLevels(me: Principal, dimension: SkillDimension, levels: SkillLevel[]): Promise<void>;
+  /** Writes one tenant setting; null resets it to the catalog default. Unknown key CMA02, bad value CMA04 */
+  setTenantSetting(me: Principal, key: string, value: string | null): Promise<TenantSetting>;
 
   // ---- Roster (migration 0005): the database checks roster.manage, roster.view or monitoring.live (CMA06)
   /** The planner's week: header, people on the grid, current entries, coverage. Needs roster.manage */

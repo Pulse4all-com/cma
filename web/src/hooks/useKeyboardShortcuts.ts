@@ -27,7 +27,9 @@ export function useKeyboardShortcuts() {
 
       const key = e.key.toLowerCase();
       const scope = document.querySelector<HTMLElement>("dialog[open]") ?? document;
-      const el = scope.querySelector<HTMLElement>(`[data-shortcut="${key}"]`);
+      // A page's own control with the letter wins over the rail's (the Configuration group's C
+      // yields to Copy previous week and Custom range), so a page never loses a shortcut it shows
+      const el = scope.querySelector<HTMLElement>(`main [data-shortcut="${key}"]`) ?? scope.querySelector<HTMLElement>(`[data-shortcut="${key}"]`);
       if (!el) return;
       e.preventDefault();
       el.focus();

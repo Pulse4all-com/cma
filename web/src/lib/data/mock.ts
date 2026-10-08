@@ -8,7 +8,7 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {
-  AbsenceType, AppLink, CmaData, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
@@ -67,12 +67,16 @@ const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
  * the start route would be invisible to the page that renders it (seen 7 October 2026, increment
  * e, when Clock in moved from the page to a route).
  */
+type MockConfig = {
+  statuses: ConfigStatus[]; links: ConfigAppLink[]; absences: AbsenceType[]; targets: CoverageTargetRow[];
+  settings: TenantSetting[]; teams: TeamInfo[]; skills: SkillInfo[];
+};
 type MockState = {
   store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null;
-  rosters: Map<string, MockRosterWeek> | null;
+  rosters: Map<string, MockRosterWeek> | null; config: MockConfig | null;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
-const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null });
+const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null, config: null });
 const store = state.store;
 
 /**
@@ -469,6 +473,44 @@ const MOCK_ABSENCES: AbsenceType[] = [
   { key: "other", name: "Other", isPaid: false, sortOrder: 50, isActive: true },
 ];
 
+/** The permission catalog as the mock knows it (keys of the default ladder) */
+const MOCK_PERMISSIONS = [
+  "workday.own", "workday.team", "workday.export", "roster.view", "roster.manage", "skills.manage", "leads.accept", "leads.manage",
+  "performance.own", "performance.team", "monitoring.live", "messages.send", "quality.manage", "reports.view",
+  "users.manage_agents", "users.manage_all", "tenant.configure",
+].map((key) => ({ key, description: key }));
+
+/** Same answer as the database for a caller without tenant.configure (migration 0005a) */
+function assertConfigure(me: Principal): void {
+  if (!me.permissions.includes("tenant.configure")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/**
+ * The configuration screens' state in mock mode: copies of the fixture catalogs that the screens
+ * may change (nothing is saved, the page says so). Usage counts mirror the fixture days roughly:
+ * every status of the fixture list has time behind it, so its flags are frozen as in the database.
+ */
+function seedConfig(): MockConfig {
+  if (state.config) return state.config;
+  state.config = {
+    statuses: MOCK_STATUSES.map((x, i) => ({ ...x, isPaid: MOCK_PAID.has(x.key), isBillable: MOCK_PAID.has(x.key), sortOrder: (i + 1) * 10, isActive: true, usageCount: 12 - i })),
+    links: MOCK_LINKS.map((l, i) => ({ key: l.key, label: l.label, address: l.address, permissionKey: l.permission, sortOrder: (i + 1) * 10, isActive: true })),
+    absences: MOCK_ABSENCES.map((a) => ({ ...a })),
+    targets: [{ teamKey: "nl", skillKey: "sales", weekday: 1, minCount: 2 }, { teamKey: "nl", skillKey: "sales", weekday: 2, minCount: 2 }],
+    settings: MOCK_SETTINGS.map((x) => ({ ...x })),
+    teams: MOCK_TEAMS.map((t) => ({ ...t })),
+    skills: MOCK_SKILLS.map((x) => ({ ...x, levels: [...x.levels] })),
+  };
+  return state.config;
+}
+
+/** The catalog defaults, as cma.setting holds them, for the mock's reset */
+const MOCK_SETTING_DEFAULTS: Record<string, string> = {
+  "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
+  "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
+  "workday.auto_close_grace_minutes": "120",
+};
+
 function assertRosterManage(me: Principal): void {
   if (!me.permissions.includes("roster.manage")) throw new CmaDbError("CMA06", "not permitted");
 }
@@ -799,7 +841,7 @@ export const mockData: CmaData = {
   },
 
   async listSettings() {
-    return MOCK_SETTINGS;
+    return state.config ? state.config.settings.map((x) => ({ ...x })) : MOCK_SETTINGS;
   },
 
   async exportHours(me, range, userId) {
@@ -1058,8 +1100,150 @@ export const mockData: CmaData = {
       }));
   },
 
+  // ---- Configuration (migration 0005a): the same refusals as the database functions ----
+
+  async listConfigStatuses(me) {
+    assertConfigure(me);
+    return seedConfig().statuses.map((x) => ({ ...x }));
+  },
+
+  async upsertConfigStatus(me, input) {
+    assertConfigure(me);
+    if (!/^[a-z0-9_]+$/.test(input.key)) throw new CmaDbError("CMA04", "bad key");
+    const c = seedConfig();
+    const cur = c.statuses.find((x) => x.key === input.key);
+    if (!cur) {
+      c.statuses.push({ ...input, isDefault: false, isActive: true, usageCount: 0 });
+      return;
+    }
+    const flagsChange = cur.isWorking !== input.isWorking || cur.isProductive !== input.isProductive || cur.isPaid !== input.isPaid || cur.isBillable !== input.isBillable;
+    if (flagsChange && cur.usageCount > 0) throw new CmaDbError("CMA03", "flags frozen");
+    if (cur.isDefault && !input.isWorking) throw new CmaDbError("CMA03", "default must work");
+    Object.assign(cur, input, { isActive: true });
+  },
+
+  async setDefaultStatus(me, key) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const s = c.statuses.find((x) => x.key === key);
+    if (!s) throw new CmaDbError("CMA02", "unknown status");
+    if (!s.isActive || !s.isWorking) throw new CmaDbError("CMA03", "default must be an active working status");
+    for (const x of c.statuses) x.isDefault = x === s;
+  },
+
+  async retireStatus(me, key) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const s = c.statuses.find((x) => x.key === key);
+    if (!s) throw new CmaDbError("CMA02", "unknown status");
+    if (!s.isActive) return;
+    if (s.isDefault) throw new CmaDbError("CMA03", "the default cannot be retired");
+    if (s.isWorking && !c.statuses.some((x) => x !== s && x.isActive && x.isWorking)) throw new CmaDbError("CMA03", "the last working status");
+    s.isActive = false;
+  },
+
+  async listConfigAppLinks(me) {
+    assertConfigure(me);
+    return seedConfig().links.map((x) => ({ ...x }));
+  },
+
+  async upsertAppLink(me, input) {
+    assertConfigure(me);
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(input.key) || !/^https:\/\/[^\s]+$/.test(input.address)) throw new CmaDbError("CMA04", "bad link");
+    if (input.permissionKey && !MOCK_PERMISSIONS.some((p) => p.key === input.permissionKey)) throw new CmaDbError("CMA02", "unknown permission");
+    const c = seedConfig();
+    const cur = c.links.find((x) => x.key === input.key);
+    if (cur) Object.assign(cur, input, { isActive: true });
+    else c.links.push({ ...input, isActive: true });
+  },
+
+  async retireAppLink(me, key) {
+    assertConfigure(me);
+    const l = seedConfig().links.find((x) => x.key === key);
+    if (!l) throw new CmaDbError("CMA02", "unknown link");
+    l.isActive = false;
+  },
+
+  async listPermissions(me) {
+    assertConfigure(me);
+    return MOCK_PERMISSIONS;
+  },
+
+  async upsertAbsenceType(me, input) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const cur = c.absences.find((x) => x.key === input.key);
+    if (cur) Object.assign(cur, input, { isActive: true });
+    else c.absences.push({ ...input, isActive: true });
+  },
+
+  async retireAbsenceType(me, key) {
+    assertConfigure(me);
+    const a = seedConfig().absences.find((x) => x.key === key);
+    if (!a) throw new CmaDbError("CMA02", "unknown absence type");
+    a.isActive = false;
+  },
+
+  async listCoverageTargets(me) {
+    assertConfigure(me);
+    return seedConfig().targets.map((x) => ({ ...x }));
+  },
+
+  async setCoverageTarget(me, teamKey, skillKey, weekday, minCount) {
+    assertRosterManage(me);
+    const c = seedConfig();
+    if (!c.teams.some((t) => t.key === teamKey)) throw new CmaDbError("CMA04", "unknown team");
+    if (!c.skills.some((s) => s.key === skillKey && s.dimension === "work_type" && s.isActive)) throw new CmaDbError("CMA02", "unknown work type");
+    if (weekday < 1 || weekday > 7) throw new CmaDbError("CMA04", "weekday");
+    c.targets = c.targets.filter((x) => !(x.teamKey === teamKey && x.skillKey === skillKey && x.weekday === weekday));
+    if (minCount && minCount > 0) c.targets.push({ teamKey, skillKey, weekday, minCount });
+  },
+
+  async upsertTeam(me, input) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const cur = c.teams.find((t) => t.key === input.key);
+    if (cur) Object.assign(cur, input);
+    else c.teams.push({ ...input, memberCount: 0 });
+  },
+
+  async dissolveTeam(me, key) {
+    assertConfigure(me);
+    const c = seedConfig();
+    if (!c.teams.some((t) => t.key === key)) throw new CmaDbError("CMA02", "unknown team");
+    c.teams = c.teams.filter((t) => t.key !== key);
+  },
+
+  async upsertSkill(me, input, active) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const cur = c.skills.find((x) => x.key === input.key && x.dimension === input.dimension);
+    if (cur) Object.assign(cur, { name: input.name, sortOrder: input.sortOrder, isActive: active });
+    else c.skills.push({ ...input, isActive: active, levels: c.skills.find((x) => x.dimension === input.dimension)?.levels ?? [] });
+  },
+
+  async setSkillLevels(me, dimension, levels) {
+    assertConfigure(me);
+    const c = seedConfig();
+    for (const x of c.skills) if (x.dimension === dimension) x.levels = levels.map((l) => ({ ...l }));
+  },
+
+  async setTenantSetting(me, key, value) {
+    assertConfigure(me);
+    const c = seedConfig();
+    const cur = c.settings.find((x) => x.key === key);
+    const fallback = MOCK_SETTING_DEFAULTS[key];
+    if (!cur && fallback === undefined) throw new CmaDbError("CMA02", "unknown setting");
+    const next: TenantSetting = value === null
+      ? { key, value: fallback ?? cur!.value, isDefault: true }
+      : { key, value, isDefault: value === fallback };
+    if (cur) Object.assign(cur, next);
+    else c.settings.push(next);
+    return { ...next };
+  },
+
   async listAbsenceTypes() {
-    return MOCK_ABSENCES.filter((a) => a.isActive);
+    return (state.config ? state.config.absences : MOCK_ABSENCES).map((a) => ({ ...a }));
   },
 
   async setRosterEntry(me, weekStart, teamKey, userId, date, cell): Promise<RosterEntry | null> {

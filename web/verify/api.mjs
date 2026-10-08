@@ -18,7 +18,8 @@
  * time per status for the Dashboard (the same minutes as Team hours), app links per person, the
  * team now for the Live board (a person's own entry equals the own-day read), the Team screen
  * (migration 0004: who is listed and editable, roles, teams, skills, adding a person) and the
- * memberships for the Live board's team filter.
+ * memberships for the Live board's team filter, and the configuration screens (migration 0005a: statuses,
+ * app links, absence types, coverage targets, settings; the admin only, everything undone at the end).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -520,6 +521,82 @@ await json(MANAGER, "PUT", `/api/v1/roster/weeks/${wk2}/cells`, { ...shiftCell, 
 await json(MANAGER, "POST", `/api/v1/roster/weeks/${wk}/publish`, { team: agentTeam });
 
 expect("hours range is bounded to 92 days", (await get(AGENT, `/api/v1/me/hours?from=${longFrom}&to=${today}`)).status, 400, 200);
+
+// ---- configuration (migration 0005a), 24 checks --------------------------------------------------
+// The admin configures (tenant.configure); the manager and the agent are refused by the database.
+// Every write is undone at the end, so the dev tenant's configuration is as the run found it.
+const cfg = "/api/v1/configuration";
+const put = (s, path, body) => json(s, "PUT", path, body);
+const statusesBefore = await get(ADMIN, `${cfg}/statuses`);
+expect("an agent cannot read the status configuration", (await get(AGENT, `${cfg}/statuses`)).status, 403, 200);
+expect("the manager cannot read it either (tenant.configure left the manager row in 0004)", (await get(MANAGER, `${cfg}/statuses`)).status, 403, 200);
+expect("the admin reads every status with flags, default and usage",
+  [statusesBefore.status, (statusesBefore.body?.data ?? []).filter((x) => x.isDefault).length, (statusesBefore.body?.data ?? []).every((x) => typeof x.usageCount === "number" && typeof x.isPaid === "boolean")],
+  [200, 1, true], [200, 0, true]);
+const verifyStatus = { key: "verify_0005a", name: "Verify status", isWorking: true, isProductive: false, isPaid: true, isBillable: false, sortOrder: 990 };
+expect("a status write needs the request header", (await json(ADMIN, "PUT", `${cfg}/statuses`, verifyStatus, {})).status, 400, 200);
+expect("a cross-site status write is refused", (await json(ADMIN, "PUT", `${cfg}/statuses`, verifyStatus, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+expect("the manager cannot add a status", (await put(MANAGER, `${cfg}/statuses`, verifyStatus)).status, 403, 200);
+const addedS = await put(ADMIN, `${cfg}/statuses`, verifyStatus);
+expect("the admin adds a status and reads it back with its flags",
+  [addedS.status, (addedS.body?.data ?? []).find((x) => x.key === verifyStatus.key)?.isBillable ?? null, (addedS.body?.data ?? []).find((x) => x.key === verifyStatus.key)?.usageCount ?? null],
+  [200, false, 0], [200, true, 0]);
+expect("a bad key is a 400", (await put(ADMIN, `${cfg}/statuses`, { ...verifyStatus, key: "Bad Key" })).status, 400, 200);
+const editedS = await put(ADMIN, `${cfg}/statuses`, { ...verifyStatus, name: "Verify status renamed", isBillable: true });
+expect("flags and name change while no time is recorded in it",
+  [(editedS.body?.data ?? []).find((x) => x.key === verifyStatus.key)?.name, (editedS.body?.data ?? []).find((x) => x.key === verifyStatus.key)?.isBillable], ["Verify status renamed", true], ["Verify status", false]);
+// A status with time behind it (the fixture's days): its flags are frozen, its name is not
+const theDefault = (statusesBefore.body?.data ?? []).find((x) => x.isDefault);
+const used = (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0 && x.isActive) ?? (statusesBefore.body?.data ?? []).find((x) => x.usageCount > 0);
+expect("the flags of a status with time behind it are frozen (409)",
+  (await put(ADMIN, `${cfg}/statuses`, { ...used, isPaid: !used?.isPaid })).status, 409, 200);
+expect("the default cannot be retired (409)", (await put(ADMIN, `${cfg}/statuses/${theDefault?.key}/retired`)).status, 409, 200);
+const nowDefault = await put(ADMIN, `${cfg}/statuses/${verifyStatus.key}/default`);
+expect("the new status becomes the one default", (nowDefault.body?.data ?? []).filter((x) => x.isDefault).map((x) => x.key), [verifyStatus.key], [theDefault?.key]);
+await put(ADMIN, `${cfg}/statuses/${theDefault?.key}/default`);
+const retiredS = await put(ADMIN, `${cfg}/statuses/${verifyStatus.key}/retired`);
+expect("retire keeps the status, inactive; the agent's list no longer offers it",
+  [(retiredS.body?.data ?? []).find((x) => x.key === verifyStatus.key)?.isActive, ((await get(AGENT, "/api/v1/me/statuses")).body?.data ?? []).some((x) => x.key === verifyStatus.key)], [false, false], [true, false]);
+expect("an unknown status is a 404", (await put(ADMIN, `${cfg}/statuses/verify_no_such/default`)).status, 404, 200);
+
+// app links
+const linksBefore = (await get(ADMIN, `${cfg}/app-links`)).body?.data ?? [];
+const verifyLink = { key: "verify-0005a", label: "Verify link", address: "https://example.invalid/verify", permissionKey: "workday.team", sortOrder: 990 };
+expect("the manager cannot read the link configuration", (await get(MANAGER, `${cfg}/app-links`)).status, 403, 200);
+expect("a plain http address is a 400", (await put(ADMIN, `${cfg}/app-links`, { ...verifyLink, address: "http://example.invalid/" })).status, 400, 200);
+expect("an unknown permission is a 404", (await put(ADMIN, `${cfg}/app-links`, { ...verifyLink, permissionKey: "no.such_permission" })).status, 404, 200);
+await put(ADMIN, `${cfg}/app-links`, verifyLink);
+expect("the link reaches the supervisor and not the agent",
+  [((await get(SUPERVISOR, "/api/v1/me/app-links")).body?.data ?? []).some((l) => l.key === verifyLink.key), ((await get(AGENT, "/api/v1/me/app-links")).body?.data ?? []).some((l) => l.key === verifyLink.key)], [true, false], [false, false]);
+const retiredL = await put(ADMIN, `${cfg}/app-links/${verifyLink.key}/retired`);
+expect("a retired link stays listed inactive and leaves Welcome",
+  [(retiredL.body?.data ?? []).find((l) => l.key === verifyLink.key)?.isActive, ((await get(SUPERVISOR, "/api/v1/me/app-links")).body?.data ?? []).some((l) => l.key === verifyLink.key)], [false, false], [true, true]);
+expect("the permission catalog is read by the admin only",
+  [(await get(MANAGER, `${cfg}/permissions`)).status, ((await get(ADMIN, `${cfg}/permissions`)).body?.data ?? []).some((p) => p.key === "tenant.configure")], [403, true], [200, true]);
+
+// absence types, coverage targets, settings
+await put(ADMIN, `${cfg}/absence-types`, { key: "verify_abs", name: "Verify absence", isPaid: false, sortOrder: 990 });
+const retiredA = await put(ADMIN, `${cfg}/absence-types/verify_abs/retired`);
+expect("an absence type is added and retired; the planner's list drops it",
+  [(retiredA.body?.data ?? []).find((a) => a.key === "verify_abs")?.isActive, ((await get(AGENT, "/api/v1/roster/absence-types")).body?.data ?? []).some((a) => a.key === "verify_abs")], [false, false], [true, true]);
+const workType = ((await get(ADMIN, "/api/v1/team/skills")).body?.data ?? []).find((x) => x.dimension === "work_type" && x.isActive);
+const targetBefore = ((await get(ADMIN, `${cfg}/coverage-targets`)).body?.data ?? []).find((t) => t.teamKey === agentTeam && t.skillKey === workType?.key && t.weekday === 7)?.minCount ?? 0;
+const setT = await put(ADMIN, `${cfg}/coverage-targets`, { teamKey: agentTeam, skillKey: workType?.key, weekday: 7, minCount: 9 });
+expect("a coverage target is set per team, work type and weekday",
+  (setT.body?.data ?? []).find((t) => t.teamKey === agentTeam && t.skillKey === workType?.key && t.weekday === 7)?.minCount ?? null, 9, targetBefore);
+expect("weekday 8 is a 400", (await put(ADMIN, `${cfg}/coverage-targets`, { teamKey: agentTeam, skillKey: workType?.key, weekday: 8, minCount: 1 })).status, 400, 200);
+await put(ADMIN, `${cfg}/coverage-targets`, { teamKey: agentTeam, skillKey: workType?.key, weekday: 7, minCount: targetBefore });
+const sepBefore = ((await get(ADMIN, "/api/v1/settings")).body?.data ?? []).find((x) => x.key === "export.csv.separator");
+const setS = await put(ADMIN, `${cfg}/settings`, { key: "export.csv.separator", value: "tab" });
+expect("a setting is written and read back by any person",
+  [setS.body?.data?.value, ((await get(AGENT, "/api/v1/settings")).body?.data ?? []).find((x) => x.key === "export.csv.separator")?.value], ["tab", "tab"], [sepBefore?.value, sepBefore?.value]);
+expect("a value outside the catalog is a 400", (await put(ADMIN, `${cfg}/settings`, { key: "export.csv.separator", value: "pipe" })).status, 400, 200);
+expect("the agent cannot write a setting", (await put(AGENT, `${cfg}/settings`, { key: "export.csv.separator", value: "comma" })).status, 403, 200);
+await put(ADMIN, `${cfg}/settings`, { key: "export.csv.separator", value: sepBefore?.isDefault ? null : sepBefore?.value ?? null });
+const graceReset = await put(ADMIN, `${cfg}/settings`, { key: "workday.auto_close_grace_minutes", value: null });
+expect("the forgotten clock-out grace exists with its default", [graceReset.body?.data?.value, graceReset.body?.data?.isDefault], ["120", true], ["120", false]);
+// Nothing of the run stays: the status and the link stay retired rows with no time behind them (dev data; not a check)
+void linksBefore;
 
 // ---- verdict --------------------------------------------------------------------------------
 
