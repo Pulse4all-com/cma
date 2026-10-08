@@ -66,7 +66,7 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
           {h.status === "draft" ? <p className="mt-1 text-small text-p4a-warning">{t.printDraftNote}</p> : null}
           {h.changedSincePublish ? <p className="mt-1 text-small text-p4a-warning">{t.printChangedNote.replaceAll("{version}", String(h.version))}</p> : null}
         </div>
-        <Image src="/brand/logo-blue.png" alt="Pulse4all" width={141} height={28} className="h-7 w-auto" />
+        <Image src="/brand/logo-blue.png" alt="Pulse4all" width={141} height={28} className="h-7 w-auto" unoptimized />
       </header>
 
       {week.people.length === 0 ? (
@@ -93,12 +93,12 @@ export default async function RosterPrintPage({ searchParams }: PageProps<"/rost
                   const e = byKey.get(`${p.userId}:${d}`) ?? null;
                   return (
                     <td key={d} className={`${td} tabular ${e?.kind === "absence" ? "text-p4a-muted" : ""}`}>
-                      {cellLabel(e) || "–"}
+                      <span className="whitespace-nowrap">{cellLabel(e) || "–"}</span>
                       {e?.note ? <span className="block text-caption text-p4a-grey">{e.note}</span> : null}
                     </td>
                   );
                 })}
-                <td className={`${td} tabular text-right`}>{fmtMinutes(planned.get(p.userId) ?? 0)}</td>
+                <td className={`${td} tabular whitespace-nowrap text-right`}>{fmtMinutes(planned.get(p.userId) ?? 0)}</td>
               </tr>
             ))}
           </tbody>

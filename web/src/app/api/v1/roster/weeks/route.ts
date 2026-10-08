@@ -10,7 +10,8 @@ const MAX_DAYS = 732;
 
 /**
  * The weeks of a roster for browsing: ?team=<key> (or none for the whole tenant), from and to as
- * dates; one row per week that has been written, with its state, version and counts. Needs
+ * dates; one row per week in the range (a calendar: an unwritten week reads as a draft with version 0
+ * and no entries), with its state, version and counts. Needs
  * roster.manage (403 from the database). Named after the data (migration 0005).
  */
 export async function GET(request: NextRequest) {

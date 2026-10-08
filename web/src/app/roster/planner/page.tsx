@@ -41,11 +41,13 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
   const teamParam = typeof sp.team === "string" ? sp.team : null;
   const team = teamParam === "all" ? null : teams.some((x) => x.key === teamParam) ? teamParam : teams[0]?.key ?? null;
 
-  const [week, weeks, absences] = await Promise.all([
+  const [week, allWeeks, absences] = await Promise.all([
     data().getRosterWeek(me, weekStart, team),
     data().listRosterWeeks(me, team, { from: addDays(weekStart, -7 * WEEKS_AROUND), to: addDays(weekStart, 7 * WEEKS_AROUND + 6) }),
     data().listAbsenceTypes(me),
   ]);
+  // The list is a calendar (one row per week in the range, written or not); the browser shows the written ones
+  const weeks = allWeeks.filter((w) => w.version > 0 || w.entryCount > 0);
 
   return (
     <Shell copy={copy} me={me} active="roster" wide>
