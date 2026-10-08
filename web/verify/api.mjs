@@ -18,8 +18,9 @@
  * time per status for the Dashboard (the same minutes as Team hours), app links per person, the
  * team now for the Live board (a person's own entry equals the own-day read), the Team screen
  * (migration 0004: who is listed and editable, roles, teams, skills, adding a person) and the
- * memberships for the Live board's team filter, and the configuration screens (migration 0005a: statuses,
- * app links, absence types, coverage targets, settings; the admin only, everything undone at the end).
+ * memberships for the Live board's team filter, the configuration screens (migration 0005a: statuses,
+ * app links, absence types, coverage targets, settings; the admin only, everything undone at the end),
+ * and the own profile for My account (addition 0005b).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -356,6 +357,23 @@ expect("a link that needs a permission is hidden from the agent",
 expect("every link is https, for anyone with a role",
   [linksN.status, [...linksA, ...linksS, ...(linksN.body?.data ?? [])].every((l) => /^https:\/\//.test(l.address))],
   [200, true], [200, false]);
+
+// ---- my profile (addition 0005b), 5 checks ---------------------------------------------------
+// My account's read: the caller's own row only, whatever the request says, for anyone with access
+const pA = (await get(AGENT, "/api/v1/me/profile")).body?.data ?? {};
+const pS = (await get(SUPERVISOR, "/api/v1/me/profile")).body?.data ?? {};
+const pN = await get(ANALYST, "/api/v1/me/profile");
+expect("the profile is the caller's own row",
+  [pA.userId === meA.userId, pS.userId === meS.userId, pA.userId !== pS.userId], [true, true, true], [true, true, false]);
+expect("a query cannot pick another person's profile",
+  (await get(AGENT, `/api/v1/me/profile?userId=${meS.userId}`)).body?.data?.userId, meA.userId, meS.userId);
+expect("the profile names the person as /me does",
+  [pA.displayName === meA.displayName, pA.organisationName === meA.organisationName, pA.timeZone === meA.timeZone],
+  [true, true, true], [true, true, false]);
+expect("the profile says whose time is kept",
+  [pN.status, pN.body?.data?.timeKept, pA.timeKept, Array.isArray(pA.teams) && Array.isArray(pA.skills)],
+  [200, false, true, true], [200, true, true, true]);
+expect("an unknown identity gets no profile", (await get(NOBODY, "/api/v1/me/profile")).status, 403, 200);
 
 // ---- team now (addition 0003e), 6 checks ---------------------------------------------------------
 // The Live board's read. Agent Two's day is open (started above), the supervisor's too. A person's

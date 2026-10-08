@@ -385,6 +385,21 @@ export interface DirectoryPerson {
   mayEdit: boolean;
 }
 
+/** The caller's own details for My account (cma.my_profile, addition 0005b): their own row only */
+export interface MyProfile {
+  userId: string;
+  email: string;
+  displayName: string;
+  organisationName: string;
+  timeZone: string;
+  /** null for a person without a role */
+  roleName: string | null;
+  /** Active and holding workday.own: the clock runs for this person */
+  timeKept: boolean;
+  teams: { key: string; name: string }[];
+  skills: PersonSkill[];
+}
+
 export interface AddPersonInput {
   email: string;
   displayName: string;
@@ -741,4 +756,6 @@ export interface CmaData {
   getMyRoster(me: Principal, range: HoursRange): Promise<MyRosterDay[]>;
   /** Today's published entry per person whose time is kept, for the Live board. Needs monitoring.live */
   getRosterToday(me: Principal): Promise<TodayShift[]>;
+  /** The caller's own details, role, teams and skills for My account; no permission beyond being an active person */
+  getMyProfile(me: Principal): Promise<MyProfile>;
 }

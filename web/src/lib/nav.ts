@@ -14,7 +14,9 @@ export const NAV_COOKIE_PREFIX = "cma-nav-";
 export type NavIcon = "home" | "live" | "people" | "clock" | "chart" | "gear";
 export type ShellPage =
   | "welcome" | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
-  | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links";
+  | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
+  /** My account (0005b): opened from the name in the top bar, never a rail item */
+  | "account";
 export type NavHref =
   | "/" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links";

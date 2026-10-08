@@ -8,7 +8,7 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MyProfile, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
@@ -1318,5 +1318,16 @@ export const mockData: CmaData = {
       const e = found?.entry ?? null;
       return { userId: p.userId, date, isPublished: found !== null, kind: e?.kind ?? null, start: e?.start ?? null, end: e?.end ?? null, absenceName: e?.absenceName ?? null };
     });
+  },
+
+  async getMyProfile(me): Promise<MyProfile> {
+    // The seed's own entry when there is one (the mock principal is), else the principal alone
+    const p = seedPeople().get(me.userId);
+    return {
+      userId: me.userId, email: p?.email ?? "", displayName: p?.displayName ?? me.displayName,
+      organisationName: p?.organisationName ?? me.organisationName, timeZone: p?.timeZone ?? me.timeZone,
+      roleName: p?.roleName ?? MOCK_ROLES.find((r) => r.key === me.roleKey)?.name ?? null, timeKept: p?.timeKept ?? me.permissions.includes("workday.own"),
+      teams: p?.teams ?? [], skills: p?.skills ?? [],
+    };
   },
 };

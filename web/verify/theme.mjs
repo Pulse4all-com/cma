@@ -54,6 +54,8 @@ const pages = [
   { path: "/roster/planner", subject: "manager" },
   { path: "/roster/planner/print", subject: "manager" },
   { path: "/schedule" },
+  // My account (0005b): with teams and skills, and for someone without a clock
+  { path: "/account" }, { path: "/account", subject: "analyst" },
   // The configuration screens (0005a), as the admin
   { path: "/configuration/statuses", subject: "admin" }, { path: "/configuration/teams", subject: "admin" },
   { path: "/configuration/absences", subject: "admin" }, { path: "/configuration/exports", subject: "admin" },
