@@ -28,6 +28,8 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
+# The scheduler's job (migration 0005a): the same image runs it as a Cloud Run job with another command
+COPY --from=build --chown=app:app /app/jobs ./jobs
 USER app
 EXPOSE 8080
 CMD ["node", "server.js"]

@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   // No image optimizer: the only images are brand logos, and it removes sharp
   // and the optimizer's attack surface from the runtime image
   images: { unoptimized: true },
+  // The Cloud SQL connector stays a real module in the image (as pg already is), so the scheduler's
+  // job script (jobs/close-forgotten-workdays.mjs, migration 0005a) can import it from the same
+  // node_modules the server uses
+  serverExternalPackages: ["@google-cloud/cloud-sql-connector"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

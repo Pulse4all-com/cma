@@ -1,0 +1,1 @@
+Placeholder: the morning's scheduler proof in dev (verify/scheduler.mjs normal and provoked against dev through the proxy and the Auth Proxy, then one `gcloud run jobs execute … --wait` with its log) writes its output here and deletes this file (MORNING_RUNBOOK.md, slice 3). The night's local run is under docs/night-2026-10-09/local-records/.
