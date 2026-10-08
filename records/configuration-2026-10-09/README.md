@@ -1,1 +1,0 @@
-Placeholder: the morning's API verifier run against dev (normal and provoked, 138 checks) on the image of the configuration slice writes its output here and deletes this file (MORNING_RUNBOOK.md, slice 2). The night's local run is under docs/night-2026-10-09/local-records/.
