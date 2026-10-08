@@ -5,5 +5,5 @@ export const dynamic = "force-dynamic";
 
 /** The tenant's active absence types in order (cma.absence_types); any person of the tenant */
 export async function GET() {
-  return forPrincipal(async (me) => ok(await data().listAbsenceTypes(me)));
+  return forPrincipal(async (me) => ok((await data().listAbsenceTypes(me)).filter((a) => a.isActive)));
 }

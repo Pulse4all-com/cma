@@ -11,9 +11,13 @@ import type { Copy } from "@/lib/copy";
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
-export type NavIcon = "home" | "live" | "people" | "clock" | "chart";
-export type ShellPage = "welcome" | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard";
-export type NavHref = "/" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard";
+export type NavIcon = "home" | "live" | "people" | "clock" | "chart" | "gear";
+export type ShellPage =
+  | "welcome" | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
+  | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links";
+export type NavHref =
+  | "/" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
+  | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links";
 
 export interface NavItem {
   page: ShellPage;
@@ -40,6 +44,12 @@ export interface NavGroupEntry {
   label: string;
   icon: NavIcon;
   items: NavItem[];
+  /**
+   * A group whose pages carry no digit key (Configuration, 0005a: the admin's rail already has nine
+   * numbered pages). It opens from the rail and with its own letter, which a page's own control of
+   * the same letter wins over (hooks/useKeyboardShortcuts).
+   */
+  shortcut?: string;
 }
 
 export type NavEntry = NavPage | NavGroupEntry;
@@ -96,13 +106,30 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },
       ],
     },
+    {
+      // Configuration (0005a): tenant.configure only (the admin); agents, supervisors and managers never
+      // see the group. No digit keys: the group opens with C (page-first) and Enter opens a page.
+      kind: "group",
+      id: "configuration",
+      label: copy.nav.configuration,
+      icon: "gear",
+      shortcut: "c",
+      items: [
+        { page: "config-statuses", href: "/configuration/statuses", label: copy.nav.configStatuses, permission: "tenant.configure" },
+        { page: "config-teams", href: "/configuration/teams", label: copy.nav.configTeams, permission: "tenant.configure" },
+        { page: "config-absences", href: "/configuration/absences", label: copy.nav.configAbsences, permission: "tenant.configure" },
+        { page: "config-exports", href: "/configuration/exports", label: copy.nav.configExports, permission: "tenant.configure" },
+        { page: "config-app-links", href: "/configuration/app-links", label: copy.nav.configAppLinks, permission: "tenant.configure" },
+      ],
+    },
   ];
 }
 
-export type VisibleItem = NavItem & { key: string };
+/** key: the digit that opens the page, or null in an unnumbered group */
+export type VisibleItem = NavItem & { key: string | null };
 export type VisibleEntry =
   | { kind: "page"; icon: NavIcon; item: VisibleItem }
-  | { kind: "group"; id: string; label: string; icon: NavIcon; items: VisibleItem[] };
+  | { kind: "group"; id: string; label: string; icon: NavIcon; items: VisibleItem[]; shortcut?: string };
 
 /** True when the person holds the permission, or any of a list of them */
 export function holdsAny(me: Pick<Principal, "permissions">, permission: string | readonly string[] | null): boolean {
@@ -127,8 +154,8 @@ export function visibleNav(me: Principal, copy: Copy): VisibleEntry[] {
       if (mayOpen(me, entry.item)) out.push({ kind: "page", icon: entry.icon, item: { ...entry.item, key: String(++n) } });
       continue;
     }
-    const items = entry.items.filter((i) => mayOpen(me, i)).map((i) => ({ ...i, key: String(++n) }));
-    if (items.length > 0) out.push({ kind: "group", id: entry.id, label: entry.label, icon: entry.icon, items });
+    const items = entry.items.filter((i) => mayOpen(me, i)).map((i) => ({ ...i, key: entry.shortcut ? null : String(++n) }));
+    if (items.length > 0) out.push({ kind: "group", id: entry.id, label: entry.label, icon: entry.icon, items, shortcut: entry.shortcut });
   }
   return out;
 }

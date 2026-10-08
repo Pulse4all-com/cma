@@ -105,6 +105,7 @@ export async function Shell({
                 icon={entry.icon}
                 defaultOpen={jar.get(`${NAV_COOKIE_PREFIX}${entry.id}`)?.value === "open"}
                 current={entry.items.some((i) => i.page === active)}
+                shortcut={entry.shortcut}
               >
                 {entry.items.map((item) => {
                   const current = item.page === active;
@@ -113,7 +114,7 @@ export async function Shell({
                       <Link
                         href={item.href}
                         aria-current={current ? "page" : undefined}
-                        data-shortcut={item.key}
+                        data-shortcut={item.key ?? undefined}
                         className={[
                           "flex h-10 items-center justify-between rounded-button px-3 text-body",
                           current
@@ -122,7 +123,7 @@ export async function Shell({
                         ].join(" ")}
                       >
                         {item.label}
-                        <Keycap>{item.key}</Keycap>
+                        {item.key ? <Keycap>{item.key}</Keycap> : null}
                       </Link>
                     </li>
                   );

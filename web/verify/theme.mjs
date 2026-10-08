@@ -54,6 +54,10 @@ const pages = [
   { path: "/roster/planner", subject: "manager" },
   { path: "/roster/planner/print", subject: "manager" },
   { path: "/schedule" },
+  // The configuration screens (0005a), as the admin
+  { path: "/configuration/statuses", subject: "admin" }, { path: "/configuration/teams", subject: "admin" },
+  { path: "/configuration/absences", subject: "admin" }, { path: "/configuration/exports", subject: "admin" },
+  { path: "/configuration/app-links", subject: "admin" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 for (const { path, subject, start } of pages) {

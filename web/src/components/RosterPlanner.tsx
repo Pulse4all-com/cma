@@ -69,7 +69,8 @@ export function RosterPlanner({
   const [notice, setNotice] = useState<string | null>(null);
   const grid = useRef<HTMLTableSectionElement>(null);
 
-  const absenceOptions = absences.map((a) => ({ key: a.key, name: a.name }));
+  // A retired absence type (configuration, 0005a) keeps its history but cannot be typed
+  const absenceOptions = absences.filter((a) => a.isActive).map((a) => ({ key: a.key, name: a.name }));
   const key = (userId: string, date: string) => `${userId}:${date}`;
   const setState = (k: string, s: CellState) => setStates((m) => new Map(m).set(k, s));
 
