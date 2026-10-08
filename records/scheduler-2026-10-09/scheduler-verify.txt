@@ -1,0 +1,14 @@
+verify/scheduler.mjs against http://localhost:8080
+
+PASS  the forgotten day was written open as the owner      got true
+PASS  today's day is open before the job                   got working
+PASS  the job exits 0 and serves every tenant              got [0,true]
+PASS  the job closed exactly one day, the forgotten one    got 0,1
+PASS  the job's log names the date and no person           got [true,false,false]
+PASS  the forgotten day is ended at its business day's end got ["ended","2025-08-03T22:00:00.000Z"]
+PASS  the end is a system event                            got system
+PASS  the day stays flagged for a manager                  got [true,false]
+PASS  today's open day is untouched                        got working
+PASS  a second run closes nothing                          got [0,"0,0"]
+
+ALL 10 PASS
