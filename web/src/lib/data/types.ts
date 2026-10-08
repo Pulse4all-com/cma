@@ -483,7 +483,7 @@ export interface RosterWeek {
   coverage: RosterCoverageRow[];
 }
 
-/** One week in the browse list: the state of the roster of a team (or the tenant) for that week */
+/** One week of the range: the state of the roster of a team (or the tenant) for that week; an unwritten week is a draft at version 0 with no entries */
 export interface RosterWeekSummary {
   weekStart: DateKey;
   status: "draft" | "published";

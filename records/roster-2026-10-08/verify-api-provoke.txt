@@ -1,0 +1,115 @@
+verify/api.mjs against http://localhost:8081  (--provoke: every check must FAIL)
+
+FAIL  identity in two tenants is refused           got 403, wanted 200
+FAIL  unknown identity is refused                  got 403, wanted 200
+FAIL  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759, wanted 00000000-0000-7000-8000-00000000beef
+FAIL  a visit opens no workday                     got null, wanted a day
+FAIL  the database keeps no time for someone without a clock got 403, wanted 200
+FAIL  start needs the request header               got 400, wanted 200
+FAIL  cross-site start is refused                  got 403, wanted 200
+FAIL  start opens the own day today                got ["2026-10-08",true], wanted ["2026-10-08",false]
+FAIL  a second start is the same day               got true, wanted false
+FAIL  two users have two different days            got false, wanted true
+FAIL  hours show the caller's own day              got ["2026-10-08T08:02:25.017Z","2026-10-08T08:02:25.339Z"], wanted ["2026-10-08T08:02:25.339Z","2026-10-08T08:02:25.017Z"]
+FAIL  a user parameter cannot redirect hours       got {"from":"2026-09-25","to":"2026-10-08","days":[{"date":"2026, wanted {"from":"2026-09-25","to":"2026-10-08","days":[{"date":"2026
+FAIL  an agent cannot read team hours              got 403, wanted 200
+FAIL  an agent cannot list the team                got 403, wanted 200
+FAIL  the supervisor lists the people, agent included got [200,true], wanted [200,false]
+FAIL  the supervisor closes open past days         got 0, wanted 1
+FAIL  a correction needs the request header        got 400, wanted 200
+FAIL  cross-site correction is refused             got 403, wanted 200
+FAIL  a correction needs a reason                  got 400, wanted 200
+FAIL  nobody corrects their own day                got 403, wanted 200
+FAIL  an agent cannot correct                      got 403, wanted 200
+FAIL  an unknown person is a 404                   got 404, wanted 200
+FAIL  a future date is refused                     got 400, wanted 200
+FAIL  add day creates the missing day              got [200,"ended",true,240], wanted [404,null,false,241]
+FAIL  an event before the start is refused         got 400, wanted 200
+FAIL  a replaced event stays visible               got [true,1,300], wanted [false,2,241]
+FAIL  correction leaves no past day open or capped got [0,true,true], wanted [1,false,true]
+FAIL  end needs the request header                 got 400, wanted 200
+FAIL  cross-site end is refused                    got 403, wanted 200
+FAIL  end ends the own day                         got ended, wanted working
+FAIL  start on an ended day changes nothing        got ["ended","2026-10-08T08:02:27.261Z"], wanted ["working",null]
+FAIL  a second end changes nothing                 got true, wanted false
+FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]
+FAIL  the other user's day is untouched            got working, wanted ended
+FAIL  any person reads the tenant's export settings got [200,5], wanted [200,4]
+FAIL  an agent cannot download hours               got 403, wanted 200
+FAIL  workday.team alone cannot download status changes got 403, wanted 200
+FAIL  the manager's hours file is a private download got [200,true,"no-store",true], wanted [200,true,"public",true]
+FAIL  the file follows the tenant's format         got [true,11], wanted [false,11]
+FAIL  one hours row per day, as Team hours         got [6,true], wanted [7,true]
+FAIL  every day has at least one status stretch    got [200,13,true], wanted [200,13,false]
+FAIL  an export is bounded to 92 days              got 400, wanted 200
+FAIL  an agent cannot read time per status         got 403, wanted 200
+FAIL  the supervisor reads time per status, never cached got [200,"no-store",true], wanted [200,"public",true]
+FAIL  worked and paid per past day equal Team hours got [0,true], wanted [1,true]
+FAIL  flags follow the tenant's own status list    got true, wanted false
+FAIL  the person filter returns that person only   got [true,true], wanted [true,false]
+FAIL  time per status is bounded to 92 days        got 400, wanted 200
+FAIL  a link that needs a permission is hidden from the agent got [true,true,true], wanted [true,false,true]
+FAIL  every link is https, for anyone with a role  got [200,true], wanted [200,false]
+FAIL  an agent cannot read the team now            got 403, wanted 200
+FAIL  the supervisor reads the team now, never cached got [200,"no-store",true,true], wanted [200,"public",true,true]
+FAIL  the agent's own entry equals the own-day read got {"date":"2026-10-08","status":"working","startedAt":"2026-10, wanted {"date":"2026-10-08","status":"working","startedAt":"2026-10
+FAIL  the entry's status carries the day's status key with its flags got ["available_sales","boolean","boolean"], wanted ["available_sales","boolean","undefined"]
+FAIL  someone without a day today is listed as not clocked in got [true,true], wanted [true,false]
+FAIL  the analyst reads the board and is not on it got [200,false,true], wanted [200,true,true]
+FAIL  an agent cannot read the directory           got 403, wanted 200
+FAIL  the manager lists the non-managing people and themselves, not the admin got [200,true,true,false], wanted [200,true,true,true]
+FAIL  the admin lists everyone and may not edit themselves got [true,true,false,true], wanted [true,true,true,true]
+FAIL  the directory's teams and skills come from the tenant's catalogs got [true,true,true,true], wanted [true,true,false,true]
+FAIL  the manager may assign non-managing roles only, the admin every role got [false,true,true], wanted [true,true,true]
+FAIL  employers are listed with the zone a new person follows for any person of the tenant got [200,true,true], wanted [403,true,true]
+FAIL  a role change needs the request header       got 400, wanted 200
+FAIL  cross-site role change is refused            got 403, wanted 200
+FAIL  nobody changes their own role                got 403, wanted 200
+FAIL  the manager cannot assign a managing role    got 403, wanted 200
+FAIL  the manager cannot touch the admin           got 403, wanted 200
+FAIL  nobody deactivates themselves                got 403, wanted 200
+FAIL  the full team list replaces the memberships  got ["en"], wanted ["nordics"]
+FAIL  and restoring it gives the original list     got ["nordics"], wanted ["en"]
+FAIL  an unknown team is a 404                     got 404, wanted 200
+FAIL  a level outside the scale is refused         got 400, wanted 200
+FAIL  the supervisor cannot set skills             got 403, wanted 200
+FAIL  adding the same person again answers the same id got [201,201,true], wanted [201,201,false]
+FAIL  a different login id for an existing person is refused got 409, wanted 201
+FAIL  the manager cannot add a person with a managing role got 403, wanted 201
+FAIL  deactivating keeps the person listed as inactive got [200,false,false], wanted [200,true,false]
+FAIL  an agent cannot read the memberships         got 403, wanted 200
+FAIL  the supervisor reads the memberships for the board's team filter got [200,true], wanted [200,false]
+FAIL  any person reads the tenant's absence types  got [true,true], wanted [false,true]
+FAIL  an agent cannot read the planner             got 403, wanted 200
+FAIL  a week must start on a Monday                got 400, wanted 200
+FAIL  the manager reads the week with the agent on the grid got [200,"2026-10-19","nordics",true], wanted [200,"2026-10-19","nordics",false]
+FAIL  a cell write needs the request header        got 400, wanted 200
+FAIL  a cross-site cell write is refused           got 403, wanted 200
+FAIL  an agent cannot write a cell                 got 403, wanted 200
+FAIL  a shift is written and read back with its times got [200,"shift","10:15:00","18:00:00"], wanted [200,"shift","10:15","18:00"]
+FAIL  the past is refused                          got 400, wanted 200
+FAIL  a date outside the week is refused           got 400, wanted 200
+FAIL  a person not on this roster is refused       got 400, wanted 200
+FAIL  a shift that ends before it starts is refused got 400, wanted 200
+FAIL  the same person on another roster that day is a conflict got 409, wanted 200
+FAIL  after the publish the agent sees the shift   got [200,"published",true,"shift","10:15:00"], wanted [200,"draft",true,"shift","10:15:00"]
+FAIL  an edit after the publish is flagged and the agent keeps the published shift got [true,"shift","10:15:00"], wanted [false,"absence",null]
+FAIL  the second publish raises the version and the agent sees the absence got [true,"absence","off"], wanted [false,"absence","off"]
+FAIL  copying the week carries the cell into the next one got [200,true], wanted [200,false]
+FAIL  the weeks list shows both weeks with their states got ["published","draft"], wanted ["draft","published"]
+FAIL  the own schedule has one row per day and is bounded to 92 days got [7,400], wanted [6,400]
+FAIL  the analyst holds no roster                  got 403, wanted 200
+FAIL  an agent cannot read today's shifts          got 403, wanted 200
+FAIL  the supervisor reads today's shifts with one row per person whose time is kept got [200,true,false], wanted [200,true,true]
+FAIL  hours range is bounded to 92 days            got 400, wanted 200
+FAIL  status list has exactly one default          got 1, wanted 0
+FAIL  the status list shows no pay or billing flags got [true,true], wanted [true,false]
+FAIL  status change needs the request header       got 400, wanted 200
+FAIL  cross-site status change is refused          got 403, wanted 200
+FAIL  status change is stored on the own day       got available_operations, wanted available_sales
+FAIL  the own day names its current status         got Available - Operations, wanted Available - Sales
+FAIL  status since moves to the change             got true, wanted false
+FAIL  unknown status key is a 404                  got 404, wanted 200
+FAIL  an ended day refuses a status change         got 409, wanted 200
+
+ALL 111 PROVOKED CHECKS FAILED, as they must
