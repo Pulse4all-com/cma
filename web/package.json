@@ -20,7 +20,9 @@
     "verify:team": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/team.mjs",
     "verify:roster": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/roster.mjs",
     "verify": "npm run verify:copy && npm run verify:corrections && npm run verify:csv && npm run verify:dashboard && npm run verify:live && npm run verify:team && npm run verify:roster && npm run verify:configuration && npm run verify:theme && npm run verify:layout",
-    "verify:configuration": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/configuration.mjs"
+    "verify:configuration": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/configuration.mjs",
+    "verify:scheduler": "node verify/scheduler.mjs",
+    "job:close-forgotten": "node jobs/close-forgotten-workdays.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",
