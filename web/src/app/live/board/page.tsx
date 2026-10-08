@@ -2,7 +2,7 @@ import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
-import { employersOf, liveRows, tiles } from "@/lib/live";
+import { employersOf, liveRows, teamKeysByUser, teamsOf, tiles } from "@/lib/live";
 import { dateKeyInZone, fmtDate, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 import { resolve } from "../../access";
 
@@ -32,8 +32,11 @@ export default async function LiveBoardPage() {
     );
   }
 
-  const now = await data().getTeamNow(me);
+  // Two reads: the team now and, since 0004, the current team memberships for the filter
+  const [now, memberships] = await Promise.all([data().getTeamNow(me), data().listTeamMembersNow(me)]);
   const rows = liveRows(now.people);
+  const teamKeys = teamKeysByUser(memberships);
+  const teamName = new Map(memberships.map((m) => [m.teamKey, m.teamName]));
   const viewerZone = me.timeZone;
   const board: BoardRow[] = rows.map(({ person, group }) => ({
     userId: person.userId,
@@ -52,6 +55,7 @@ export default async function LiveBoardPage() {
     outLabel: person.day?.endedAt ? fmtTime(person.day.endedAt, person.timeZone, me.locale) : null,
     zoneLabel: person.day && !sameOffset(person.day.startedAt, person.timeZone, viewerZone)
       ? fmtZoneShort(person.day.startedAt, person.timeZone, me.locale) : null,
+    teams: (teamKeys.get(person.userId) ?? []).map((key) => ({ key, name: teamName.get(key) ?? key })),
   }));
 
   return (
@@ -71,6 +75,7 @@ export default async function LiveBoardPage() {
           rows={board}
           tiles={tiles(rows, now.statusFlags)}
           employers={employersOf(rows)}
+          teams={teamsOf(rows, memberships)}
           copy={copy}
         />
       )}

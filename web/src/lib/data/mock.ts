@@ -8,8 +8,9 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
-  AppLink, CmaData, CorrectionChange, DateKey, ExportHoursRow, HoursSummary, Instant, StatusChangeRow, StatusTimeRow,
-  TeamDay, TeamDayDetail, TeamNow, TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  AppLink, CmaData, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
+  TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
 
 /** Same answer as the database for a caller without workday.team */
@@ -66,9 +67,9 @@ const key = (me: Principal, date: DateKey): Key => `${owner(me)}${date}` as Key;
  * the start route would be invisible to the page that renders it (seen 7 October 2026, increment
  * e, when Clock in moved from the page to a route).
  */
-type MockState = { store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean };
+type MockState = { store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null };
 const g = globalThis as unknown as { __cmaMock?: MockState };
-const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false });
+const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null });
 const store = state.store;
 
 /**
@@ -134,6 +135,7 @@ function seedHistory(me: Principal, today: DateKey) {
 const MOCK_SUPERVISOR_ID = "00000000-0000-7000-8000-000000000102";
 const MOCK_MANAGER_ID = "00000000-0000-7000-8000-000000000103";
 const MOCK_ANALYST_ID = "00000000-0000-7000-8000-000000000104";
+const MOCK_ADMIN_ID = "00000000-0000-7000-8000-000000000105";
 
 /** Two employers and three zones, so the screen shows employer and zone handling */
 const TEAM: TeamPerson[] = [
@@ -329,6 +331,114 @@ function seedTeam() {
   });
 }
 
+
+// ---- the Team screen's fixture (migration 0004): catalog and people shaped like the directory ---
+
+/** Same answer as the database for a caller without users.manage_agents or users.manage_all */
+function assertManage(me: Principal): void {
+  if (!me.permissions.includes("users.manage_agents") && !me.permissions.includes("users.manage_all")) {
+    throw new CmaDbError("CMA06", "not permitted");
+  }
+}
+
+const MOCK_LEVELS = [
+  { level: 1, name: "Basic" }, { level: 2, name: "Good" }, { level: 3, name: "Fluent" }, { level: 4, name: "Native" },
+];
+
+/** Fictional catalog: keys and names are tenant data; nothing branches on them */
+/** Fixture employers shaped like cma.organisation rows, the two of the fictional tenant */
+const MOCK_ORGANISATIONS = [
+  { key: "pulse4all", name: "Pulse4all", timeZone: "Europe/Amsterdam" },
+  { key: "newco", name: "Newco", timeZone: "Europe/Madrid" },
+];
+
+const MOCK_TEAMS: TeamInfo[] = [
+  { key: "en", name: "Team EN", markets: ["gb", "ie"], sortOrder: 10, memberCount: 0 },
+  { key: "nl", name: "Team NL", markets: ["nl", "be"], sortOrder: 20, memberCount: 0 },
+  { key: "de", name: "Team DE", markets: ["de", "at", "ch"], sortOrder: 30, memberCount: 0 },
+  { key: "fr", name: "Team FR", markets: ["fr"], sortOrder: 40, memberCount: 0 },
+  { key: "nordics", name: "Team Nordics", markets: ["dk", "se", "no", "fi"], sortOrder: 50, memberCount: 0 },
+];
+const MOCK_SKILLS: SkillInfo[] = [
+  ...["en:English", "nl:Dutch", "de:German", "fr:French", "da:Danish", "sv:Swedish"].map((x, i) => {
+    const [key, name] = x.split(":") as [string, string];
+    return { dimension: "language" as const, key, name, sortOrder: (i + 1) * 10, isActive: true, levels: MOCK_LEVELS };
+  }),
+  ...["sales:Sales", "operations:Operations", "debt:Debt"].map((x, i) => {
+    const [key, name] = x.split(":") as [string, string];
+    return { dimension: "work_type" as const, key, name, sortOrder: (i + 1) * 10, isActive: true, levels: [] };
+  }),
+];
+/** The default ladder as rows, with the managing flag the database derives from the permissions */
+const MOCK_ROLES: Omit<RoleInfo, "assignable">[] = [
+  { key: "agent", name: "Agent", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "leads.accept", "performance.own"] },
+  { key: "analytics", name: "Analytics", isSystem: true, isManaging: false, permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"] },
+  { key: "supervisor", name: "Supervisor", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "workday.team", "performance.team", "monitoring.live", "messages.send"] },
+  { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export"] },
+  { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export"] },
+];
+
+function mockSkill(key: string, level: number | null): DirectoryPerson["skills"][number] {
+  const s = MOCK_SKILLS.find((x) => x.key === key)!;
+  return { dimension: s.dimension, key: s.key, name: s.name, level, levelName: level ? MOCK_LEVELS.find((l) => l.level === level)?.name ?? null : null };
+}
+
+function mockTeam(key: string) {
+  const t = MOCK_TEAMS.find((x) => x.key === key)!;
+  return { key: t.key, name: t.name };
+}
+
+/** The fictional team of five plus the test identities, as the directory would list them */
+function seedPeople(): Map<string, DirectoryPerson> {
+  if (state.people) return state.people;
+  const person = (
+    p: Pick<DirectoryPerson, "userId" | "displayName" | "organisationName" | "timeZone"> & { email: string; roleKey: string; teams?: string[]; skills?: [string, number | null][] },
+  ): DirectoryPerson => {
+    const role = MOCK_ROLES.find((r) => r.key === p.roleKey)!;
+    return {
+      userId: p.userId, email: p.email, displayName: p.displayName, isActive: true,
+      organisationKey: p.organisationName.toLowerCase(), organisationName: p.organisationName, timeZone: p.timeZone,
+      roleKey: role.key, roleName: role.name, isManaging: role.isManaging,
+      timeKept: role.permissions.includes("workday.own"),
+      teams: (p.teams ?? []).map(mockTeam),
+      skills: (p.skills ?? []).map(([k, l]) => mockSkill(k, l)),
+      mayEdit: false,
+    };
+  };
+  const list: DirectoryPerson[] = [
+    person({ ...TEAM[0]!, email: "ana.ferrer@example.com", roleKey: "agent", teams: ["nl", "en"], skills: [["nl", 4], ["en", 2], ["sales", null], ["operations", null]] }),
+    person({ ...TEAM[1]!, email: "jordi.puig@example.com", roleKey: "agent", teams: ["de"], skills: [["de", 3], ["en", 3], ["sales", null]] }),
+    person({ ...TEAM[2]!, email: "sanne.visser@example.com", roleKey: "supervisor", teams: ["nl"], skills: [["nl", 4], ["en", 3], ["operations", null], ["debt", null]] }),
+    person({ ...TEAM[3]!, email: "lucas.moreau@example.com", roleKey: "agent", teams: ["fr"], skills: [["fr", 4], ["en", 2], ["sales", null]] }),
+    person({ ...TEAM[4]!, email: "emma.clarke@example.com", roleKey: "agent", teams: ["en", "nordics"], skills: [["en", 4], ["da", 1], ["sales", null], ["debt", null]] }),
+    person({ userId: MOCK_PRINCIPAL.userId, displayName: "Agent One", organisationName: "Newco", timeZone: "Europe/Madrid", email: "agent-one@example.com", roleKey: "agent", teams: ["nl"], skills: [["nl", 4], ["sales", null]] }),
+    person({ userId: MOCK_SUPERVISOR_ID, displayName: "Test supervisor", organisationName: "Newco", timeZone: "Europe/Madrid", email: "supervisor@example.com", roleKey: "supervisor", teams: ["nl"] }),
+    person({ userId: MOCK_MANAGER_ID, displayName: "Test manager", organisationName: "Pulse4all", timeZone: "Europe/Amsterdam", email: "manager@example.com", roleKey: "manager" }),
+    person({ userId: MOCK_ANALYST_ID, displayName: "Test analyst", organisationName: "Pulse4all", timeZone: "Europe/Amsterdam", email: "analyst@example.com", roleKey: "analytics" }),
+    person({ userId: MOCK_ADMIN_ID, displayName: "Test admin", organisationName: "Pulse4all", timeZone: "Europe/Amsterdam", email: "admin@example.com", roleKey: "admin" }),
+  ];
+  state.people = new Map(list.map((p) => [p.userId, p]));
+  return state.people;
+}
+
+/** The directory as the database shapes it for this caller: who is listed, who may be edited */
+function directoryFor(me: Principal): DirectoryPerson[] {
+  const all = me.permissions.includes("users.manage_all");
+  return [...seedPeople().values()]
+    .filter((p) => all || p.userId === me.userId || !p.isManaging)
+    .map((p) => ({ ...p, mayEdit: p.userId !== me.userId && (all || !p.isManaging) }))
+    .sort((a, b) => Number(!a.isActive) - Number(!b.isActive) || a.displayName.localeCompare(b.displayName));
+}
+
+/** The database's answer when the caller may not change this person */
+function editable(me: Principal, userId: string): DirectoryPerson {
+  assertManage(me);
+  const p = seedPeople().get(userId);
+  if (!p) throw new CmaDbError("CMA02", "person not found");
+  if (!(me.permissions.includes("users.manage_all") || !p.isManaging)) throw new CmaDbError("CMA06", "may not manage this person");
+  return p;
+}
+
 export const mockData: CmaData = {
   /**
    * Any verified identity may work as the test agent. A real person behind IAP
@@ -346,10 +456,24 @@ export const mockData: CmaData = {
         userId: identity.subject === "supervisor" ? MOCK_SUPERVISOR_ID : MOCK_MANAGER_ID,
         displayName: identity.subject === "supervisor" ? "Test supervisor" : "Test manager",
         roleKey: identity.subject,
-        // As the default ladder: the manager also exports, the supervisor does not; both watch the Live board
+        // As the default ladder after 0004: the manager also exports, manages agents and skills and plans the
+        // roster; the supervisor does not; both watch the Live board
         permissions: identity.subject === "manager"
-          ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view"]
-          : ["workday.own", "workday.team", "performance.team", "monitoring.live"],
+          ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
+             "users.manage_agents", "skills.manage", "roster.manage", "roster.view"]
+          : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view"],
+      };
+    }
+    // The admin (0004): everything the manager has plus configuration and user management for everyone
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject === "admin") {
+      return {
+        ...MOCK_PRINCIPAL,
+        userId: MOCK_ADMIN_ID,
+        displayName: "Test admin",
+        organisationName: "Pulse4all",
+        roleKey: "admin",
+        permissions: ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
+                      "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view"],
       };
     }
     // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections
@@ -669,5 +793,95 @@ export const mockData: CmaData = {
     return MOCK_LINKS
       .filter((l) => l.permission === null || me.permissions.includes(l.permission))
       .map(({ key, label, address }) => ({ key, label, address }));
+  },
+
+  async listTeamMembersNow(me): Promise<TeamMembership[]> {
+    if (!["monitoring.live", "workday.team", "roster.manage", "users.manage_agents", "users.manage_all"].some((p) => me.permissions.includes(p))) {
+      throw new CmaDbError("CMA06", "not permitted");
+    }
+    return [...seedPeople().values()].flatMap((p) => p.teams.map((t) => ({ userId: p.userId, teamKey: t.key, teamName: t.name })));
+  },
+
+  // Team screen (0004): the cheap rules of the functions hold here too; the database proves the real ones
+  async listDirectory(me) {
+    assertManage(me);
+    return directoryFor(me);
+  },
+
+  async listRoles(me): Promise<RoleInfo[]> {
+    assertManage(me);
+    const all = me.permissions.includes("users.manage_all");
+    return MOCK_ROLES.map((r) => ({ ...r, assignable: all || !r.isManaging }));
+  },
+
+  async listTeams(): Promise<TeamInfo[]> {
+    const people = [...seedPeople().values()];
+    return MOCK_TEAMS.map((t) => ({ ...t, memberCount: people.filter((p) => p.isActive && p.teams.some((x) => x.key === t.key)).length }));
+  },
+
+  async listOrganisations() {
+    return MOCK_ORGANISATIONS;
+  },
+
+  async listSkills() {
+    return MOCK_SKILLS;
+  },
+
+  async addPerson(me, input) {
+    assertManage(me);
+    const role = MOCK_ROLES.find((r) => r.key === input.roleKey);
+    if (!role) throw new CmaDbError("CMA02", "unknown role");
+    if (role.isManaging && !me.permissions.includes("users.manage_all")) throw new CmaDbError("CMA06", "a managing role needs users.manage_all");
+    const email = input.email.trim().toLowerCase();
+    const existing = [...seedPeople().values()].find((p) => p.email === email);
+    if (existing) {
+      if (!existing.isActive) throw new CmaDbError("CMA03", "exists but is inactive");
+      return existing.userId;   // rerun-safe, as cma.add_person
+    }
+    const org = MOCK_ORGANISATIONS.find((o) => o.key === input.organisationKey);
+    if (!org) throw new CmaDbError("CMA02", "unknown employer");
+    const userId = crypto.randomUUID();
+    seedPeople().set(userId, {
+      userId, email, displayName: input.displayName.trim(), isActive: true,
+      organisationKey: org.key, organisationName: org.name, timeZone: input.timeZone ?? org.timeZone,
+      roleKey: role.key, roleName: role.name, isManaging: role.isManaging, timeKept: role.permissions.includes("workday.own"),
+      teams: [], skills: [], mayEdit: false,
+    });
+    return userId;
+  },
+
+  async setPersonRole(me, userId, roleKey) {
+    const p = editable(me, userId);
+    const role = MOCK_ROLES.find((r) => r.key === roleKey);
+    if (!role) throw new CmaDbError("CMA02", "unknown role");
+    if (role.isManaging && !me.permissions.includes("users.manage_all")) throw new CmaDbError("CMA06", "a managing role needs users.manage_all");
+    seedPeople().set(userId, { ...p, roleKey: role.key, roleName: role.name, isManaging: role.isManaging, timeKept: p.isActive && role.permissions.includes("workday.own") });
+  },
+
+  async setPersonActive(me, userId, active) {
+    const p = editable(me, userId);
+    const role = MOCK_ROLES.find((r) => r.key === p.roleKey);
+    seedPeople().set(userId, { ...p, isActive: active, timeKept: active && (role?.permissions.includes("workday.own") ?? false) });
+  },
+
+  async setPersonTeams(me, userId, teamKeys) {
+    const p = editable(me, userId);
+    for (const k of teamKeys) if (!MOCK_TEAMS.some((t) => t.key === k)) throw new CmaDbError("CMA02", "unknown team");
+    seedPeople().set(userId, { ...p, teams: MOCK_TEAMS.filter((t) => teamKeys.includes(t.key)).map((t) => mockTeam(t.key)) });
+  },
+
+  async setPersonSkills(me, userId, skills: SkillInput[]) {
+    const p = editable(me, userId);
+    if (!me.permissions.includes("skills.manage")) throw new CmaDbError("CMA06", "not permitted");
+    const next = skills.map((x) => {
+      const s = MOCK_SKILLS.find((k) => k.key === x.key);
+      if (!s) throw new CmaDbError("CMA02", "unknown skill");
+      const scaled = s.levels.length > 0;
+      if (scaled && (x.level === undefined || !s.levels.some((l) => l.level === x.level))) throw new CmaDbError("CMA04", "level outside the scale");
+      if (!scaled && x.level !== undefined) throw new CmaDbError("CMA04", "a binary skill takes no level");
+      return mockSkill(s.key, scaled ? x.level! : null);
+    });
+    const order = (k: DirectoryPerson["skills"][number]) => MOCK_SKILLS.findIndex((s) => s.key === k.key);
+    seedPeople().set(userId, { ...p, skills: next.sort((a, b) => order(a) - order(b)) });
   },
 };

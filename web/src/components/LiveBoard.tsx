@@ -16,7 +16,7 @@ import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import type { Group } from "@/lib/dashboard";
 import type { WorkdayClock } from "@/lib/data";
-import { type EmployerOption, type LiveGroup, type Tile, fmtSeconds, secondsSince, workedSeconds } from "@/lib/live";
+import { type EmployerOption, type LiveGroup, type TeamOption, type Tile, fmtSeconds, secondsSince, workedSeconds } from "@/lib/live";
 import { groupLabels, Swatch } from "./DashboardCharts";
 import { Badge, Keycap } from "./primitives";
 
@@ -37,6 +37,8 @@ export interface BoardRow {
   outLabel: string | null;
   /** Short zone name when the person's zone differs from the viewer's */
   zoneLabel: string | null;
+  /** The person's current teams (migration 0004), for the team filter and the Team column */
+  teams: { key: string; name: string }[];
 }
 
 const REFRESH_MS = 10_000;
@@ -55,11 +57,13 @@ export function LiveBoard({
   rows,
   tiles,
   employers,
+  teams,
   copy,
 }: {
   rows: BoardRow[];
   tiles: Tile[];
   employers: EmployerOption[];
+  teams: TeamOption[];
   copy: Copy;
 }) {
   const t = copy.live;
@@ -67,6 +71,7 @@ export function LiveBoard({
   const now = useSyncExternalStore(subscribe, nowSeconds, serverNow);
   const [group, setGroup] = useState<LiveGroup | "">("");
   const [employer, setEmployer] = useState("");
+  const [team, setTeam] = useState("");
 
   // The poll: every 10 seconds while visible, paused while hidden, once more on return
   useEffect(() => {
@@ -101,7 +106,8 @@ export function LiveBoard({
     : labels[g];
 
   const shown = rows.filter((r) =>
-    (group === "" || r.group === group) && (employer === "" || r.organisationKey === employer));
+    (group === "" || r.group === group) && (employer === "" || r.organisationKey === employer) &&
+    (team === "" || r.teams.some((x) => x.key === team)));
   // Before the client clock starts (the server render) the since figure is left blank and the
   // worked figure shows the closed part alone, as on My day
   const since = (r: BoardRow) =>
@@ -164,6 +170,21 @@ export function LiveBoard({
               ))}
             </select>
           </label>
+          {teams.length > 0 ? (
+            <label className="flex flex-col gap-2 text-small font-semibold">
+              <span className="flex items-center gap-2">
+                {t.team} <Keycap>T</Keycap>
+              </span>
+              <select value={team} data-shortcut="t" onChange={(e) => setTeam(e.target.value)} className={select}>
+                <option value="">{t.allTeams}</option>
+                {teams.map((x) => (
+                  <option key={x.key} value={x.key}>
+                    {x.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
         <p className="text-caption text-p4a-grey">
           {t.peopleShown.replace("{n}", String(shown.length)).replace("{total}", String(rows.length))} · {t.refreshHint}
@@ -178,6 +199,7 @@ export function LiveBoard({
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
               <th className={th}>{t.person}</th>
               <th className={th}>{t.employer}</th>
+              <th className={th}>{t.team}</th>
               <th className={th}>{t.status}</th>
               <th className={`${th} text-right`}>{t.since}</th>
               <th className={`${th} text-right`}>{t.clockedInAt}</th>
@@ -190,6 +212,7 @@ export function LiveBoard({
               <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite">
                 <td className="whitespace-nowrap px-3">{r.displayName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
+                <td className="whitespace-nowrap px-3 text-p4a-muted">{r.teams.map((x) => x.name).join(", ")}</td>
                 <td className="px-3">
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     {isGroup(r.group) ? <Swatch group={r.group} /> : null}

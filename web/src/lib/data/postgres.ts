@@ -3,8 +3,9 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  AppLink, CmaData, DateKey, ExportHoursRow, HoursRange, HoursSummary, StatusChangeRow, StatusTimeRow, TeamDay,
-  TeamDayDetail, TeamNow, TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
+  AppLink, CmaData, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, OrganisationInfo, RoleInfo, SkillInfo,
+  StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus,
 } from "./types";
 
 /**
@@ -331,6 +332,40 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
   };
 }
 
+
+// ---- Team screen (migration 0004): cma.directory, cma.roles, cma.teams, cma.skills and the writes
+// Who is listed and who may be edited is the database's answer (users.manage_agents or
+// users.manage_all inside each function, CMA06); this layer only reshapes rows. The login id a
+// person was added with is written once and never read back.
+
+type DirectoryDbRow = {
+  user_id: string; email: string; display_name: string; status: "active" | "inactive";
+  organisation_key: string | null; organisation_name: string; timezone: string;
+  role_key: string | null; role_name: string | null; role_granted_at: Date | null; is_managing: boolean;
+  time_kept: boolean; teams: { key: string; name: string }[];
+  skills: { dimension: SkillInfo["dimension"]; key: string; name: string; level: number | null; levelName: string | null }[];
+  may_edit: boolean;
+};
+
+function toDirectoryPerson(r: DirectoryDbRow): DirectoryPerson {
+  return {
+    userId: r.user_id,
+    email: r.email,
+    displayName: r.display_name,
+    isActive: r.status === "active",
+    organisationKey: r.organisation_key,
+    organisationName: r.organisation_name,
+    timeZone: r.timezone,
+    roleKey: r.role_key,
+    roleName: r.role_name,
+    isManaging: r.is_managing,
+    timeKept: r.time_kept,
+    teams: r.teams ?? [],
+    skills: (r.skills ?? []).map((k) => ({ dimension: k.dimension, key: k.key, name: k.name, level: k.level, levelName: k.levelName })),
+    mayEdit: r.may_edit,
+  };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
@@ -595,5 +630,81 @@ export const postgresData: CmaData = {
       const r = await q.query<{ key: string; label: string; address: string }>(`select key, label, address from cma.app_links()`);
       return r.rows.map((l) => ({ key: l.key, label: l.label, address: l.address }));
     });
+  },
+
+  async listTeamMembersNow(me): Promise<TeamMembership[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ user_id: string; team_key: string; team_name: string }>(`select * from cma.team_members_now()`);
+      return r.rows.map((m) => ({ userId: m.user_id, teamKey: m.team_key, teamName: m.team_name }));
+    });
+  },
+
+  async listDirectory(me): Promise<DirectoryPerson[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<DirectoryDbRow>(`select * from cma.directory()`);
+      return r.rows.map(toDirectoryPerson);
+    });
+  },
+
+  async listRoles(me): Promise<RoleInfo[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; is_system: boolean; is_managing: boolean; assignable: boolean; permissions: string[] }>(
+        `select * from cma.roles()`,
+      );
+      return r.rows.map((x) => ({
+        key: x.key, name: x.name, isSystem: x.is_system, isManaging: x.is_managing, assignable: x.assignable, permissions: x.permissions,
+      }));
+    });
+  },
+
+  async listTeams(me): Promise<TeamInfo[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; markets: string[]; sort_order: number; member_count: number }>(`select * from cma.teams()`);
+      return r.rows.map((x) => ({ key: x.key, name: x.name, markets: x.markets, sortOrder: x.sort_order, memberCount: x.member_count }));
+    });
+  },
+
+  async listOrganisations(me): Promise<OrganisationInfo[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ key: string; name: string; timezone: string }>(`select * from cma.organisations()`);
+      return r.rows.map((o) => ({ key: o.key, name: o.name, timeZone: o.timezone }));
+    });
+  },
+
+  async listSkills(me): Promise<SkillInfo[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ dimension: SkillInfo["dimension"]; key: string; name: string; sort_order: number; status: string; levels: { level: number; name: string }[] }>(
+        `select * from cma.skills()`,
+      );
+      return r.rows.map((x) => ({
+        dimension: x.dimension, key: x.key, name: x.name, sortOrder: x.sort_order, isActive: x.status === "active", levels: x.levels ?? [],
+      }));
+    });
+  },
+
+  async addPerson(me, input): Promise<string> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ id: string }>(
+        `select cma.add_person($1, $2, $3, $4, $5, $6, $7) as id`,
+        [input.email, input.displayName, input.organisationKey, input.roleKey, input.loginSystem, input.loginId, input.timeZone],
+      );
+      return one(r.rows, "add_person").id;
+    });
+  },
+
+  async setPersonRole(me, userId, roleKey): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_person_role($1::uuid, $2)`, [userId, roleKey]));
+  },
+
+  async setPersonActive(me, userId, active): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_person_active($1::uuid, $2)`, [userId, active]));
+  },
+
+  async setPersonTeams(me, userId, teamKeys): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_person_teams($1::uuid, $2::text[])`, [userId, teamKeys]));
+  },
+
+  async setPersonSkills(me, userId, skills): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_person_skills($1::uuid, $2::jsonb)`, [userId, JSON.stringify(skills)]));
   },
 };
