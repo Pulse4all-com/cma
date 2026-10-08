@@ -1,0 +1,14 @@
+verify/scheduler.mjs against http://localhost:8080  (--provoke: every check must FAIL)
+
+FAIL  the forgotten day was written open as the owner      got true, wanted false
+FAIL  today's day is open before the job                   got working, wanted ended
+FAIL  the job exits 0 and serves every tenant              got [0,true], wanted [1,true]
+FAIL  the job closed exactly one day, the forgotten one    got 0,1, wanted 0,0
+FAIL  the job's log names the date and no person           got [true,false,false], wanted [true,true,false]
+FAIL  the forgotten day is ended at its business day's end got ["ended","2025-08-27T22:00:00.000Z"], wanted ["open",null]
+FAIL  the end is a system event                            got system, wanted user
+FAIL  the day stays flagged for a manager                  got [true,false], wanted [false,false]
+FAIL  today's open day is untouched                        got working, wanted ended
+FAIL  a second run closes nothing                          got [0,"0,0"], wanted [0,"0,1"]
+
+ALL 10 PROVOKED CHECKS FAILED, as they must
