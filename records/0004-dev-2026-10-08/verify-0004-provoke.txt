@@ -1,0 +1,17 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/22p.sql:112: ERROR:  FAIL A2: cma_app cannot insert into cma.team
+CONTEXT:  PL/pgSQL function inline_code_block line 30 at RAISE
+psql:/tmp/22p.sql:440: ERROR:  FAIL B2: add_person is not rerun-safe (01a11a64-a06b-7ef1-9af0-e45dc0a3f322 then 01a11a64-a06b-7ef1-9af0-e45dc0a3f322)
+CONTEXT:  PL/pgSQL function inline_code_block line 66 at RAISE
+         tenant          | roles_that_configure | roles_managing_everyone | teams | skills |       verdict        
+-------------------------+----------------------+-------------------------+-------+--------+----------------------
+ pulse4all-invest        | admin                | admin                   |     0 |      0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | admin                | admin                   |     5 |     11 | PROVOKED, NOT A PASS
+(2 rows)
+
