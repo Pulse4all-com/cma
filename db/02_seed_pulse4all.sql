@@ -146,3 +146,48 @@ begin
   end if;
 end
 $$;
+
+-- Teams and skills for Pulse4all Subscriptions (after migration 0004; README: Teams and skills,
+-- decided 6 October 2026): Team EN, NL, DE, FR and Nordics with their markets (ISO 3166-1 alpha-2,
+-- to confirm with Arno), languages (ISO 639-1) and the work types Sales, Operations and Debt. The
+-- language scale Basic, Good, Fluent, Native comes from the migration. Only adds rows a tenant does
+-- not have yet, so a later change on the configuration screen survives a rerun. Invest gets its
+-- lists at the copy to Invest (Roadmap step 10).
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.team') is null then
+    raise notice 'cma.team does not exist yet (migration 0004): rerun this seed after 21_teams_skills.sql';
+    return;
+  end if;
+
+  insert into cma.team (tenant_id, key, name, markets, sort_order)
+  select v_subs, t.key, t.name, t.markets, t.sort_order
+  from (values
+    ('en',      'Team EN',      array['gb', 'ie'],             10),
+    ('nl',      'Team NL',      array['nl', 'be'],             20),
+    ('de',      'Team DE',      array['de', 'at', 'ch'],       30),
+    ('fr',      'Team FR',      array['fr'],                   40),
+    ('nordics', 'Team Nordics', array['dk', 'se', 'no', 'fi'], 50)
+  ) as t(key, name, markets, sort_order)
+  on conflict (tenant_id, key) do nothing;
+
+  insert into cma.skill (tenant_id, dimension, key, name, sort_order)
+  select v_subs, s.dimension, s.key, s.name, s.sort_order
+  from (values
+    ('language',  'en', 'English',    10),
+    ('language',  'nl', 'Dutch',      20),
+    ('language',  'de', 'German',     30),
+    ('language',  'fr', 'French',     40),
+    ('language',  'da', 'Danish',     50),
+    ('language',  'sv', 'Swedish',    60),
+    ('language',  'no', 'Norwegian',  70),
+    ('language',  'fi', 'Finnish',    80),
+    ('work_type', 'sales',      'Sales',      10),
+    ('work_type', 'operations', 'Operations', 20),
+    ('work_type', 'debt',       'Debt',       30)
+  ) as s(dimension, key, name, sort_order)
+  on conflict (tenant_id, dimension, key) do nothing;
+end
+$$;
