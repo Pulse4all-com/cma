@@ -1,0 +1,17 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/25p.sql:130: ERROR:  FAIL A2: cma_app may delete from cma.absence_type
+CONTEXT:  PL/pgSQL function inline_code_block line 30 at RAISE
+psql:/tmp/25p.sql:444: ERROR:  FAIL B1: an unwritten week reads (<NULL>, draft, 0, Team Alpha, 0)
+CONTEXT:  PL/pgSQL function inline_code_block line 73 at RAISE
+         tenant          | roles_with_roster_manage |      roles_with_roster_view       | absence_types | roster_weeks |       verdict        
+-------------------------+--------------------------+-----------------------------------+---------------+--------------+----------------------
+ pulse4all-invest        | admin, manager           | admin, agent, manager, supervisor |             5 |            0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | admin, manager           | admin, agent, manager, supervisor |             5 |            0 | PROVOKED, NOT A PASS
+(2 rows)
+

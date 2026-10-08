@@ -1,0 +1,15 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+         tenant          | roles_with_roster_manage |      roles_with_roster_view       | absence_types | roster_weeks | verdict 
+-------------------------+--------------------------+-----------------------------------+---------------+--------------+---------
+ pulse4all-invest        | admin, manager           | admin, agent, manager, supervisor |             5 |            0 | PASS
+ pulse4all-subscriptions | admin, manager           | admin, agent, manager, supervisor |             5 |            0 | PASS
+(2 rows)
+
