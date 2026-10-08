@@ -1,0 +1,6 @@
+pulse4all-subscriptions|export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default), roster.adherence_tolerance_minutes = 5 (default), workday.auto_close_grace_minutes = 120 (default)|PASS
+pulse4all-subscriptions|admin, analytics, manager, supervisor|PASS
+pulse4all-subscriptions|admin, agent, manager, supervisor|hubspot, aircall|PASS
+pulse4all-subscriptions|admin, analytics, manager, supervisor|PASS
+pulse4all-subscriptions|admin|admin|5|11|PASS
+pulse4all-subscriptions|admin, manager|admin, agent, manager, supervisor|5|1|PASS
