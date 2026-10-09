@@ -13,7 +13,7 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 
 | Environment | Done | Still to do |
 |---|---|---|
-| dev (`p4a-cma-dev`) | steps 1 to 5 by hand on 9 Oct 2026 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets); deployed (revision `cma-nocodb-00001`) and IAP on, 9 Oct 2026 | steps 8 and 9: first admin, connect `cma_read` |
+| dev (`p4a-cma-dev`) | steps 1 to 5 by hand on 9 Oct 2026 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets); deployed (revision `cma-nocodb-00001`) and IAP on, 9 Oct 2026 | step 9: connect `cma_read`; first admin created (martin@pulse4all.com, 9 Oct 2026, before the variable existed); invite-only signup is set by the variable `NC_INVITE_ONLY_SIGNUP` in the template, to be deployed |
 | prod (`p4a-cma-prod`) | nothing yet | all steps, with the same files |
 
 ## Pinned versions
@@ -83,8 +83,12 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    ```
    Expected, in that order: `run.googleapis.com/iap-enabled: 'true'`; only `roles/iap.httpsResourceAccessor` for `group:cma@pulse4all.com`; only `roles/run.invoker` for the IAP service agent (no `allUsers`); `302`.
    Then check in the **Browser**: the service URL asks for a Google login, and a person outside the group is refused.
-8. **First NocoDB admin, signup off.** In the **Browser**, open the service URL and create the first account (it becomes
-   the super admin). Then, in the account's settings, turn invite-only signup on so nobody else can register themselves.
+8. **First NocoDB admin, signup off.** The first account to sign up becomes the super admin. In the **Browser**, open
+   the service URL and create it before anyone else can. Public signup is closed by `NC_INVITE_ONLY_SIGNUP: "true"` in
+   `service.template.yaml`, so new users only join by invitation from the super admin. The account menu in NocoDB 2026.09
+   has no signup switch, so the variable is the control.
+   - dev: martin@pulse4all.com signed up on 9 Oct 2026, before the variable existed. Redeploy to apply it.
+   - prod: sign up first, then deploy with the variable (it is already in the template).
 9. **Connect database `cma`, schema `cma_read` only.** In NocoDB add an external data source (PostgreSQL):
    host `127.0.0.1`, port `5432`, user `cma-nocodb@PROJECT.iam`, empty password, database `cma`. In the source's
    schema selection pick `cma_read` and nothing else. Give team members the Viewer role, never Creator or Editor.

@@ -62,6 +62,9 @@ spec:
               value: "true"
             - name: NC_DISABLE_ERR_REPORTS
               value: "true"
+            # Public signup off: new users only by invitation from the super admin.
+            - name: NC_INVITE_ONLY_SIGNUP
+              value: "true"
         - name: cloud-sql-proxy
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4@sha256:88501f0a695a586988add1b8a206fdf3f29f9a1a3deeb9b45ef2b1481ea6be83
           args:
