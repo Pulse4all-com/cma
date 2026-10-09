@@ -2,13 +2,15 @@
 # Filled in by deploy.sh: project, project number, Cloud SQL instance and environment (dev or prod).
 # Image pins: NocoDB 2026.09.0 (published 2026-09-10; 2026.09.1 was under 14 days old on 2026-10-09),
 # Cloud SQL Auth Proxy 2.25.4 (built 2026-08-28; 2.26.0 was under 14 days old on 2026-10-09).
-# No IAP annotation and no public invoker yet: access is added in a later step.
+# IAP is on through the service annotation below; there is no public invoker (README, step 7).
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: cma-nocodb
   labels:
     cloud.googleapis.com/location: europe-west4
+  annotations:
+    run.googleapis.com/iap-enabled: 'true'
 spec:
   template:
     metadata:
