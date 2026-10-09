@@ -1,0 +1,15 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/29p.sql:59: ERROR:  FAIL A3: my_profile returns [user_id, email, display_name, organisation_key, organisation_name, timezone, role_key, role_name, time_kept, teams, skills]
+CONTEXT:  PL/pgSQL function inline_code_block line 19 at RAISE
+psql:/tmp/29p.sql:222: ERROR:  FAIL B1: the agent read 1 rows: (Verify agent, verify-employer, Europe/Madrid, agent, Agent, kept t)
+CONTEXT:  PL/pgSQL function inline_code_block line 76 at RAISE
+         tenant          | people |       verdict        
+-------------------------+--------+----------------------
+ pulse4all-invest        |      1 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |      6 | PROVOKED, NOT A PASS
+(2 rows)
+

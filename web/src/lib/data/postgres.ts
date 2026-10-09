@@ -3,7 +3,7 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyRosterDay, OrganisationInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo,
@@ -948,6 +948,21 @@ export const postgresData: CmaData = {
       return r.rows.map((d) => ({
         userId: d.user_id, date: d.business_date, isPublished: d.is_published, kind: d.kind, start: d.start_time, end: d.end_time, absenceName: d.absence_name,
       }));
+    });
+  },
+
+  async getMyProfile(me): Promise<MyProfile> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{
+        user_id: string; email: string; display_name: string; organisation_name: string; timezone: string;
+        role_name: string | null; time_kept: boolean; teams: DirectoryDbRow["teams"]; skills: DirectoryDbRow["skills"];
+      }>(`select * from cma.my_profile()`);
+      const p = one(r.rows, "my_profile");
+      return {
+        userId: p.user_id, email: p.email, displayName: p.display_name, organisationName: p.organisation_name, timeZone: p.timezone,
+        roleName: p.role_name, timeKept: p.time_kept, teams: p.teams ?? [],
+        skills: (p.skills ?? []).map((k) => ({ dimension: k.dimension, key: k.key, name: k.name, level: k.level, levelName: k.levelName })),
+      };
     });
   },
 };

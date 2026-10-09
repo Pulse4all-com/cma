@@ -60,7 +60,14 @@ export async function Shell({
         <div className="flex items-center gap-6 text-small">
           <span className="text-p4a-muted">
             {copy.shell.signedInAs}{" "}
-            <span className="font-semibold text-p4a-body">{me.displayName}</span>
+            <Link
+              href="/account"
+              title={copy.shell.openAccount}
+              aria-current={active === "account" ? "page" : undefined}
+              className="font-semibold text-p4a-body underline-offset-2 hover:text-p4a-deepblue hover:underline"
+            >
+              {me.displayName}
+            </Link>
             <span className="text-p4a-muted"> · {me.organisationName}</span>
           </span>
           <Link

@@ -89,7 +89,16 @@ async function expectNavigation() {
       : [];
     if (JSON.stringify(configLinks) !== JSON.stringify(wantConfig)) problems.push(`${subject}: configuration pages ${JSON.stringify(configLinks)}, expected ${JSON.stringify(wantConfig)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
+    // My account (0005b): the name in the top bar opens it, for everyone; it is never a rail item
+    const accountLinks = await p.evaluate(() => [...document.querySelectorAll('a[href="/account"]')].map((a) => a.closest("header, nav")?.tagName ?? ""));
+    if (JSON.stringify(accountLinks) !== JSON.stringify(["HEADER"])) problems.push(`${subject}: My account linked from ${JSON.stringify(accountLinks)}, expected the top bar only`);
     await p.screenshot({ path: `${outDir}/${subject}-welcome.png` });
+    await p.goto(BASE + "/account");
+    await p.waitForLoadState("networkidle");
+    const accountPath = new URL(p.url()).pathname;
+    const accountTitle = await p.locator("main h1").first().textContent().catch(() => null);
+    if (accountPath !== "/account" || !accountTitle) problems.push(`${subject}: My account answered ${accountPath} with title ${JSON.stringify(accountTitle)}`);
+    await p.screenshot({ path: `${outDir}/${subject}-account.png` });
     if (!clock) {
       await p.goto(BASE + "/day");
       await p.waitForLoadState("networkidle");
@@ -118,5 +127,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation and the Configuration group for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);
