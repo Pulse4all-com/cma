@@ -31,7 +31,7 @@
 ## Security and data
 - No secrets, tokens, passwords or connection strings in code, commits, PR descriptions or setup scripts.
 - No real personal or customer data in code, fixtures or tests; use the dev seed.
-- V1 authentication is for building and testing only; V2 (OAuth with HubSpot) must be in place before real go-live.
+- Authentication follows README (Authentication): Pulse4all signs in with Google Workspace through IAP; the app verifies IAP's signed token on every request and matches people on their external id, never on email. Never trust plain identity headers or weaken this check; mock identities exist in dev only.
 
 ## Instructions for Martin
 - Every command block in a PR description or reply is labelled with where it runs: **Studio** (SQL in Cloud SQL Studio, naming the instance cma-dev-pg or cma-prod-pg), **Terminal** (Cloud Shell, in ~/cma unless stated), **Browser** (a page or click path) or **File** (a repository path). Never mix SQL and shell in one block.
