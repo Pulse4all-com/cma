@@ -1,0 +1,147 @@
+verify/api.mjs against http://localhost:8080
+
+PASS  identity in two tenants is refused           got 403
+PASS  unknown identity is refused                  got 403
+PASS  tenant comes from the identity only          got 01a10573-6fcc-7245-99d0-a9a9b64c8759
+PASS  a visit opens no workday                     got null
+PASS  the database keeps no time for someone without a clock got 403
+PASS  start needs the request header               got 400
+PASS  cross-site start is refused                  got 403
+PASS  start opens the own day today                got ["2026-10-09",true]
+PASS  a second start is the same day               got true
+PASS  two users have two different days            got false
+PASS  hours show the caller's own day              got ["2026-10-09T04:05:24.035Z","2026-10-09T04:05:24.280Z"]
+PASS  a user parameter cannot redirect hours       got {"from":"2026-09-26","to":"2026-10-09","days":[{"date":"2026
+PASS  an agent cannot read team hours              got 403
+PASS  an agent cannot list the team                got 403
+PASS  the supervisor lists the people, agent included got [200,true]
+PASS  the supervisor closes open past days         got 0
+PASS  a correction needs the request header        got 400
+PASS  cross-site correction is refused             got 403
+PASS  a correction needs a reason                  got 400
+PASS  nobody corrects their own day                got 403
+PASS  an agent cannot correct                      got 403
+PASS  an unknown person is a 404                   got 404
+PASS  a future date is refused                     got 400
+PASS  add day creates the missing day              got [200,"ended",true,240]
+PASS  an event before the start is refused         got 400
+PASS  a replaced event stays visible               got [true,1,300]
+PASS  correction leaves no past day open or capped got [0,true,true]
+PASS  end needs the request header                 got 400
+PASS  cross-site end is refused                    got 403
+PASS  end ends the own day                         got ended
+PASS  start on an ended day changes nothing        got ["ended","2026-10-09T04:05:26.060Z"]
+PASS  a second end changes nothing                 got true
+PASS  log out on an ended day changes nothing      got [303,true]
+PASS  the other user's day is untouched            got working
+PASS  any person reads the tenant's export settings got [200,5]
+PASS  an agent cannot download hours               got 403
+PASS  workday.team alone cannot download status changes got 403
+PASS  the manager's hours file is a private download got [200,true,"no-store",true]
+PASS  the file follows the tenant's format         got [true,11]
+PASS  one hours row per day, as Team hours         got [7,true]
+PASS  every day has at least one status stretch    got [200,13,true]
+PASS  an export is bounded to 92 days              got 400
+PASS  an agent cannot read time per status         got 403
+PASS  the supervisor reads time per status, never cached got [200,"no-store",true]
+PASS  worked and paid per past day equal Team hours got [0,true]
+PASS  flags follow the tenant's own status list    got true
+PASS  the person filter returns that person only   got [true,true]
+PASS  time per status is bounded to 92 days        got 400
+PASS  a link that needs a permission is hidden from the agent got [true,true,true]
+PASS  every link is https, for anyone with a role  got [200,true]
+PASS  the profile is the caller's own row          got [true,true,true]
+PASS  a query cannot pick another person's profile got 01a10573-a796-7462-90d5-86fcd60753ee
+PASS  the profile names the person as /me does     got [true,true,true]
+PASS  the profile says whose time is kept          got [200,false,true,true]
+PASS  an unknown identity gets no profile          got 403
+PASS  an agent cannot read the team now            got 403
+PASS  the supervisor reads the team now, never cached got [200,"no-store",true,true]
+PASS  the agent's own entry equals the own-day read got {"date":"2026-10-09","status":"working","startedAt":"2026-10
+PASS  the entry's status carries the day's status key with its flags got ["available_sales","boolean","boolean"]
+PASS  someone without a day today is listed as not clocked in got [true,true]
+PASS  the analyst reads the board and is not on it got [200,false,true]
+PASS  an agent cannot read the directory           got 403
+PASS  the manager lists the non-managing people and themselves, not the admin got [200,true,true,false]
+PASS  the admin lists everyone and may not edit themselves got [true,true,false,true]
+PASS  the directory's teams and skills come from the tenant's catalogs got [true,true,true,true]
+PASS  the manager may assign non-managing roles only, the admin every role got [false,true,true]
+PASS  employers are listed with the zone a new person follows for any person of the tenant got [200,true,true]
+PASS  a role change needs the request header       got 400
+PASS  cross-site role change is refused            got 403
+PASS  nobody changes their own role                got 403
+PASS  the manager cannot assign a managing role    got 403
+PASS  the manager cannot touch the admin           got 403
+PASS  nobody deactivates themselves                got 403
+PASS  the full team list replaces the memberships  got ["en"]
+PASS  and restoring it gives the original list     got ["nordics"]
+PASS  an unknown team is a 404                     got 404
+PASS  a level outside the scale is refused         got 400
+PASS  the supervisor cannot set skills             got 403
+PASS  adding the same person again answers the same id got [201,201,true]
+PASS  a different login id for an existing person is refused got 409
+PASS  the manager cannot add a person with a managing role got 403
+PASS  deactivating keeps the person listed as inactive got [200,false,false]
+PASS  an agent cannot read the memberships         got 403
+PASS  the supervisor reads the memberships for the board's team filter got [200,true]
+PASS  any person reads the tenant's absence types  got [true,true]
+PASS  an agent cannot read the planner             got 403
+PASS  a week must start on a Monday                got 400
+PASS  the manager reads the week with the agent on the grid got [200,"2026-10-19","nordics",true]
+PASS  a cell write needs the request header        got 400
+PASS  a cross-site cell write is refused           got 403
+PASS  an agent cannot write a cell                 got 403
+PASS  a shift is written and read back with its times got [200,"shift","10:15:00","18:00:00"]
+PASS  the past is refused                          got 400
+PASS  a date outside the week is refused           got 400
+PASS  a person not on this roster is refused       got 400
+PASS  a shift that ends before it starts is refused got 400
+PASS  the same person on another roster that day is a conflict got 409
+PASS  after the publish the agent sees the shift   got [200,"published",true,"shift","10:15:00"]
+PASS  an edit after the publish is flagged and the agent keeps the published shift got [true,"shift","10:15:00"]
+PASS  the second publish raises the version and the agent sees the absence got [true,"absence","off"]
+PASS  copying the week carries the cell into the next one got [200,true]
+PASS  the weeks list shows both weeks with their states got ["published","draft"]
+PASS  the own schedule has one row per day and is bounded to 92 days got [7,400]
+PASS  the analyst holds no roster                  got 403
+PASS  an agent cannot read today's shifts          got 403
+PASS  the supervisor reads today's shifts with one row per person whose time is kept got [200,true,false]
+PASS  hours range is bounded to 92 days            got 400
+PASS  an agent cannot read the status configuration got 403
+PASS  the manager cannot read it either (tenant.configure left the manager row in 0004) got 403
+PASS  the admin reads every status with flags, default and usage got [200,1,true]
+PASS  a status write needs the request header      got 400
+PASS  a cross-site status write is refused         got 403
+PASS  the manager cannot add a status              got 403
+PASS  the admin adds a status and reads it back with its flags got [200,false,0]
+PASS  a bad key is a 400                           got 400
+PASS  flags and name change while no time is recorded in it got ["Verify status renamed",true]
+PASS  the flags of a status with time behind it are frozen (409) got 409
+PASS  the default cannot be retired (409)          got 409
+PASS  the new status becomes the one default       got ["verify_0005a"]
+PASS  retire keeps the status, inactive; the agent's list no longer offers it got [false,false]
+PASS  an unknown status is a 404                   got 404
+PASS  the manager cannot read the link configuration got 403
+PASS  a plain http address is a 400                got 400
+PASS  an unknown permission is a 404               got 404
+PASS  the link reaches the supervisor and not the agent got [true,false]
+PASS  a retired link stays listed inactive and leaves Welcome got [false,false]
+PASS  the permission catalog is read by the admin only got [403,true]
+PASS  an absence type is added and retired; the planner's list drops it got [false,false]
+PASS  a coverage target is set per team, work type and weekday got 9
+PASS  weekday 8 is a 400                           got 400
+PASS  a setting is written and read back by any person got ["tab","tab"]
+PASS  a value outside the catalog is a 400         got 400
+PASS  the agent cannot write a setting             got 403
+PASS  the forgotten clock-out grace exists with its default got ["120",true]
+PASS  status list has exactly one default          got 1
+PASS  the status list shows no pay or billing flags got [true,true]
+PASS  status change needs the request header       got 400
+PASS  cross-site status change is refused          got 403
+PASS  status change is stored on the own day       got available_operations
+PASS  the own day names its current status         got Available - Operations
+PASS  status since moves to the change             got true
+PASS  unknown status key is a 404                  got 404
+PASS  an ended day refuses a status change         got 409
+
+ALL 143 PASS
