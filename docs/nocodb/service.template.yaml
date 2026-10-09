@@ -1,0 +1,79 @@
+# NocoDB as a read-only table browser over cma_read (Cloud Run, Knative YAML).
+# Placeholders: __PROJECT__ (p4a-cma-dev), __PROJECT_NUMBER__, __INSTANCE__ (cma-dev-pg), __ENV__ (dev | prod).
+# Image pins: NocoDB 2026.09.0 (published 2026-09-10; 2026.09.1 was under 14 days old on 2026-10-09),
+# Cloud SQL Auth Proxy 2.25.4 (built 2026-08-28; 2.26.0 was under 14 days old on 2026-10-09).
+# No IAP annotation and no public invoker yet: access is added in a later step.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cma-nocodb
+  labels:
+    cloud.googleapis.com/location: europe-west4
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "true"
+        run.googleapis.com/container-dependencies: '{"nocodb":["cloud-sql-proxy"]}'
+    spec:
+      serviceAccountName: cma-nocodb@__PROJECT__.iam.gserviceaccount.com
+      timeoutSeconds: 300
+      containers:
+        - name: nocodb
+          image: docker.io/nocodb/nocodb:2026.09.0@sha256:4ccfc5114506b1725ffc63be56445fc6fe453a6e6d5cb56eb5f88f0540d4e56e
+          ports:
+            - containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 30
+          env:
+            - name: NC_DB_JSON
+              value: '{"client":"pg","connection":{"host":"127.0.0.1","port":5432,"user":"cma-nocodb@__PROJECT__.iam","password":"","database":"nocodb"}}'
+            - name: NC_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cma-__ENV__-nocodb-jwt-secret
+                  key: latest
+            - name: NC_CONNECTION_ENCRYPT_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cma-__ENV__-nocodb-encrypt-key
+                  key: latest
+            - name: NC_SITE_URL
+              value: https://cma-nocodb-__PROJECT_NUMBER__.europe-west4.run.app
+            # The external source (cma_read) is reached through the proxy sidecar on 127.0.0.1.
+            - name: NC_ALLOW_LOCAL_EXTERNAL_DBS
+              value: "true"
+            - name: NC_DISABLE_PG_DATA_REFLECTION
+              value: "true"
+            - name: NC_DISABLE_TELE
+              value: "true"
+            - name: NC_DISABLE_SUPPORT_CHAT
+              value: "true"
+            - name: NC_DISABLE_ERR_REPORTS
+              value: "true"
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.25.4@sha256:88501f0a695a586988add1b8a206fdf3f29f9a1a3deeb9b45ef2b1481ea6be83
+          args:
+            - --auto-iam-authn
+            - --port=5432
+            - --health-check
+            - --http-address=0.0.0.0
+            - --structured-logs
+            - __PROJECT__:europe-west4:__INSTANCE__
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
