@@ -13,7 +13,7 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 
 | Environment | Done | Still to do |
 |---|---|---|
-| dev (`p4a-cma-dev`) | steps 1 to 5 by hand on 9 Oct 2026 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets) | steps 6 to 9: deploy, IAP, first admin, connect `cma_read` |
+| dev (`p4a-cma-dev`) | steps 1 to 5 by hand on 9 Oct 2026 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets); deployed (revision `cma-nocodb-00001`) and IAP on, 9 Oct 2026 | steps 8 and 9: first admin, connect `cma_read` |
 | prod (`p4a-cma-prod`) | nothing yet | all steps, with the same files |
 
 ## Pinned versions
@@ -63,12 +63,25 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    ```
    It prints the service URL and the latest ready revision. The service has no public invoker; do not open it up.
 7. **IAP on the service** (Cloud Run's built-in IAP, no load balancer), for the group `cma@pulse4all.com`.
-   Check each command against the current Google documentation on the first run.
+   Verified on dev on 9 Oct 2026. `PROJECT_NUMBER` is 420011670185 for dev and 467777891162 for prod.
    ```bash
-   gcloud beta run services update cma-nocodb --region=europe-west4 --project=PROJECT --iap
-   gcloud beta iap web add-iam-policy-binding --project=PROJECT --resource-type=cloud-run --service=cma-nocodb --region=europe-west4 --member="group:cma@pulse4all.com" --role=roles/iap.httpsResourceAccessor
-   gcloud run services add-iam-policy-binding cma-nocodb --region=europe-west4 --project=PROJECT --member="serviceAccount:service-PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com" --role=roles/run.invoker
+   gcloud services enable iap.googleapis.com --project=PROJECT
+   gcloud run services update cma-nocodb --region=europe-west4 --project=PROJECT --iap
+   gcloud run services add-iam-policy-binding cma-nocodb --region=europe-west4 --project=PROJECT --member=serviceAccount:service-PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com --role=roles/run.invoker
+   gcloud iap web add-iam-policy-binding --project=PROJECT --region=europe-west4 --resource-type=cloud-run --service=cma-nocodb --member=group:cma@pulse4all.com --role=roles/iap.httpsResourceAccessor
    ```
+   Notes:
+   - `services update --iap` creates the IAP service agent itself. `gcloud services identity create` is beta-only in the current gcloud and not needed.
+   - `service.template.yaml` carries `run.googleapis.com/iap-enabled: 'true'` on the service, so a redeploy with `deploy.sh` keeps IAP on. For prod, enable the IAP API (the first command) before the first `deploy.sh prod`.
+
+   Checks, each in **Terminal**:
+   ```bash
+   gcloud run services describe cma-nocodb --region=europe-west4 --project=PROJECT --format=export | grep iap
+   gcloud iap web get-iam-policy --project=PROJECT --region=europe-west4 --resource-type=cloud-run --service=cma-nocodb
+   gcloud run services get-iam-policy cma-nocodb --region=europe-west4 --project=PROJECT
+   curl -s -o /dev/null -w '%{http_code}\n' SERVICE_URL
+   ```
+   Expected, in that order: `run.googleapis.com/iap-enabled: 'true'`; only `roles/iap.httpsResourceAccessor` for `group:cma@pulse4all.com`; only `roles/run.invoker` for the IAP service agent (no `allUsers`); `302`.
    Then check in the **Browser**: the service URL asks for a Google login, and a person outside the group is refused.
 8. **First NocoDB admin, signup off.** In the **Browser**, open the service URL and create the first account (it becomes
    the super admin). Then, in the account's settings, turn invite-only signup on so nobody else can register themselves.
