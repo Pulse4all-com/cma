@@ -14,7 +14,7 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 | Environment | Done | Still to do |
 |---|---|---|
 | dev (`p4a-cma-dev`) | complete on 9 Oct 2026: steps 1 to 9 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets, deploy, IAP, first admin martin@pulse4all.com, `cma_read` connected read-only) | nothing |
-| prod (`p4a-cma-prod`) | nothing yet | all steps, with the same files. Before prod: a data-protection heads-up to the compliance officer (NocoDB shows agent hours, which are personal data). Sign up the first admin immediately after the first deploy |
+| prod (`p4a-cma-prod`) | complete on 9 Oct 2026: revision `cma-nocodb-00001`, IAP on, first admin martin@pulse4all.com, data source `cma_read` connected read-only | nothing. NocoDB shows agent hours, which are personal data: decide which `cma_read` columns the team may see before handing out workspace roles |
 
 ## Pinned versions
 
@@ -37,7 +37,9 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    for r in roles/cloudsql.client roles/cloudsql.instanceUser; do
      gcloud projects add-iam-policy-binding PROJECT --member="serviceAccount:cma-nocodb@PROJECT.iam.gserviceaccount.com" --role="$r" --condition=None
    done
+   gcloud projects get-iam-policy PROJECT --flatten="bindings[].members" --filter="bindings.members:serviceAccount:cma-nocodb@PROJECT.iam.gserviceaccount.com" --format="value(bindings.role)"
    ```
+   Always run the `get-iam-policy` check after the two bindings. Expected: both `roles/cloudsql.client` and `roles/cloudsql.instanceUser`. On prod, `roles/cloudsql.client` was missing after the first run (two project policy changes in quick succession) and had to be added again; run the missing binding again.
 2. **IAM database user.**
    ```bash
    gcloud sql users create cma-nocodb@PROJECT.iam --instance=INSTANCE --project=PROJECT --type=cloud_iam_service_account
@@ -64,6 +66,11 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    It prints the service URL and the latest ready revision. The service has no public invoker; do not open it up.
 7. **IAP on the service** (Cloud Run's built-in IAP, no load balancer), for the group `cma@pulse4all.com`.
    Verified on dev on 9 Oct 2026. `PROJECT_NUMBER` is 420011670185 for dev and 467777891162 for prod.
+   On a new service, before `deploy.sh`, create the IAP service agent (beta command; it needs the IAP API enabled, so run the first line of the block below first if it fails):
+   ```bash
+   gcloud beta services identity create --service=iap.googleapis.com --project=PROJECT
+   ```
+   Then:
    ```bash
    gcloud services enable iap.googleapis.com --project=PROJECT
    gcloud run services update cma-nocodb --region=europe-west4 --project=PROJECT --iap
@@ -71,7 +78,8 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    gcloud iap web add-iam-policy-binding --project=PROJECT --region=europe-west4 --resource-type=cloud-run --service=cma-nocodb --member=group:cma@pulse4all.com --role=roles/iap.httpsResourceAccessor
    ```
    Notes:
-   - `services update --iap` creates the IAP service agent itself. `gcloud services identity create` is beta-only in the current gcloud and not needed.
+   - The IAP service agent must exist before the binding to `service-PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com` works: run `gcloud beta services identity create` (above) on a new service. Dev got it implicitly from `services update --iap`; prod needed it explicitly.
+   - If the browser shows "You don't have access" while both IAP bindings exist, wait a few minutes or use an incognito window: IAP can keep an earlier denial in a cookie.
    - `service.template.yaml` carries `run.googleapis.com/iap-enabled: 'true'` on the service, so a redeploy with `deploy.sh` keeps IAP on. For prod, enable the IAP API (the first command) before the first `deploy.sh prod`.
 
    Checks, each in **Terminal**:
@@ -91,7 +99,7 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    roles the owner hands out; new accounts get No Access by default. After each self-signup, check Invite Members
    and remove unknown accounts.
    - dev: martin@pulse4all.com signed up on 9 Oct 2026.
-   - prod: sign up the first admin immediately after the first deploy.
+   - prod: martin@pulse4all.com signed up on 9 Oct 2026. For any new service, sign up the first admin immediately after the first deploy.
 9. **Connect database `cma`, schema `cma_read` only** (verified on dev, 9 Oct 2026). In **Browser**:
    - Integrations → PostgreSQL connection "cma-ENV (cma_read)": host `127.0.0.1`, port `5432`, user
      `cma-nocodb@PROJECT.iam`, password any value such as `iam` (ignored, the proxy logs in with IAM), database `cma`,
