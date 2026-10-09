@@ -1,0 +1,5 @@
+cma-dev-pg, 9 October 2026, 29_verify_my_profile.sql as martin@pulse4all.com
+
+ tenant                  | people | verdict
+ pulse4all-invest        |      1 | PASS
+ pulse4all-subscriptions |      6 | PASS
