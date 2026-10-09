@@ -1,0 +1,133 @@
+DO
+SET
+DO
+INSERT 0 1
+INSERT 0 1
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE INDEX
+psql:db/30_ingest_crm_records.sql:260: NOTICE:  policy "tenant_app" for relation "integration_connection" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:260: NOTICE:  policy "tenant_readonly" for relation "integration_connection" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:260: NOTICE:  trigger "audit" for relation "integration_connection" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:261: NOTICE:  policy "tenant_app" for relation "connection_field" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:261: NOTICE:  policy "tenant_readonly" for relation "connection_field" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:261: NOTICE:  trigger "audit" for relation "connection_field" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:262: NOTICE:  policy "tenant_app" for relation "connection_pipeline" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:262: NOTICE:  policy "tenant_readonly" for relation "connection_pipeline" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:262: NOTICE:  trigger "audit" for relation "connection_pipeline" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:263: NOTICE:  policy "tenant_app" for relation "connection_stage" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:263: NOTICE:  policy "tenant_readonly" for relation "connection_stage" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:263: NOTICE:  trigger "audit" for relation "connection_stage" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:264: NOTICE:  policy "tenant_app" for relation "ingest_event" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:264: NOTICE:  policy "tenant_readonly" for relation "ingest_event" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:264: NOTICE:  trigger "audit" for relation "ingest_event" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:265: NOTICE:  policy "tenant_app" for relation "crm_record" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:265: NOTICE:  policy "tenant_readonly" for relation "crm_record" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:265: NOTICE:  trigger "audit" for relation "crm_record" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:266: NOTICE:  policy "tenant_app" for relation "crm_contact" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:266: NOTICE:  policy "tenant_readonly" for relation "crm_contact" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:266: NOTICE:  trigger "audit" for relation "crm_contact" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/30_ingest_crm_records.sql:267: NOTICE:  policy "tenant_app" for relation "crm_contact_ref" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:267: NOTICE:  policy "tenant_readonly" for relation "crm_contact_ref" does not exist, skipping
+psql:db/30_ingest_crm_records.sql:267: NOTICE:  trigger "audit" for relation "crm_contact_ref" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+DO
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+RESET

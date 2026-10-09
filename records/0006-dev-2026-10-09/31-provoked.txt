@@ -1,0 +1,17 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/31p.sql:142: ERROR:  FAIL A2: cma.crm_record lacks row-level security, its tenant policy or its audit trigger
+CONTEXT:  PL/pgSQL function inline_code_block line 24 at RAISE
+psql:/tmp/31p.sql:496: ERROR:  FAIL B1: upsert_connection gave 01a11f0b-da6e-77b4-ab55-efed2eaa8c1c then 01a11f0b-da6e-77b4-ab55-efed2eaa8c1c with key 0fe9d00959164b6dbb124f5c8db774d5
+CONTEXT:  PL/pgSQL function inline_code_block line 57 at RAISE
+         tenant          | ingest_users | connections | events | needs_review | records |       verdict        
+-------------------------+--------------+-------------+--------+--------------+---------+----------------------
+ pulse4all-invest        |            1 |           0 |      0 |            0 |       0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |            1 |           0 |      0 |            0 |       0 | PROVOKED, NOT A PASS
+(2 rows)
+
