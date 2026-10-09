@@ -13,8 +13,8 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 
 | Environment | Done | Still to do |
 |---|---|---|
-| dev (`p4a-cma-dev`) | steps 1 to 5 by hand on 9 Oct 2026 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets); deployed (revision `cma-nocodb-00001`) and IAP on, 9 Oct 2026 | step 9: connect `cma_read`; first admin created (martin@pulse4all.com, 9 Oct 2026, before the variable existed); invite-only signup is set by the variable `NC_INVITE_ONLY_SIGNUP` in the template, to be deployed |
-| prod (`p4a-cma-prod`) | nothing yet | all steps, with the same files |
+| dev (`p4a-cma-dev`) | complete on 9 Oct 2026: steps 1 to 9 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets, deploy, IAP, first admin martin@pulse4all.com, `cma_read` connected read-only) | nothing |
+| prod (`p4a-cma-prod`) | nothing yet | all steps, with the same files. Before prod: a data-protection heads-up to the compliance officer (NocoDB shows agent hours, which are personal data). Sign up the first admin immediately after the first deploy |
 
 ## Pinned versions
 
@@ -83,19 +83,27 @@ Every command below runs in **Terminal** (Cloud Shell) unless it says Studio. Re
    ```
    Expected, in that order: `run.googleapis.com/iap-enabled: 'true'`; only `roles/iap.httpsResourceAccessor` for `group:cma@pulse4all.com`; only `roles/run.invoker` for the IAP service agent (no `allUsers`); `302`.
    Then check in the **Browser**: the service URL asks for a Google login, and a person outside the group is refused.
-8. **First NocoDB admin, signup off.** The first account to sign up becomes the super admin. In the **Browser**, open
-   the service URL and create it before anyone else can. Public signup is closed by `NC_INVITE_ONLY_SIGNUP: "true"` in
-   `service.template.yaml`, so new users only join by invitation from the super admin. The account menu in NocoDB 2026.09
-   has no signup switch, so the variable is the control.
-   - dev: martin@pulse4all.com signed up on 9 Oct 2026, before the variable existed. Redeploy to apply it.
-   - prod: sign up first, then deploy with the variable (it is already in the template).
-9. **Connect database `cma`, schema `cma_read` only.** In NocoDB add an external data source (PostgreSQL):
-   host `127.0.0.1`, port `5432`, user `cma-nocodb@PROJECT.iam`, empty password, database `cma`. In the source's
-   schema selection pick `cma_read` and nothing else. Give team members the Viewer role, never Creator or Editor.
+8. **First NocoDB admin and signup.** The first account to sign up becomes the super admin. In the **Browser**, open
+   the service URL and create it before anyone else can. In NocoDB 2026.09.0 self-signup still works despite
+   `NC_INVITE_ONLY_SIGNUP: "true"` in `service.template.yaml` (tested on 9 Oct 2026; the variable is kept in case a later
+   version honours it). A test account created that day landed with workspace role "No Access" (no bases, no data)
+   and was removed. Access control is IAP (only the group `cma@pulse4all.com` reaches NocoDB) plus the workspace
+   roles the owner hands out; new accounts get No Access by default. After each self-signup, check Invite Members
+   and remove unknown accounts.
+   - dev: martin@pulse4all.com signed up on 9 Oct 2026.
+   - prod: sign up the first admin immediately after the first deploy.
+9. **Connect database `cma`, schema `cma_read` only** (verified on dev, 9 Oct 2026). In **Browser**:
+   - Integrations → PostgreSQL connection "cma-ENV (cma_read)": host `127.0.0.1`, port `5432`, user
+     `cma-nocodb@PROJECT.iam`, password any value such as `iam` (ignored, the proxy logs in with IAM), database `cma`,
+     schema `cma_read`, SSL off (the proxy encrypts to Cloud SQL).
+   - Base "CMA ENV (read-only)" → Connect External Data → source `cma_read` on that connection, Allow Data Write/Edit
+     off, Allow Schema Change off.
+   - Do not use Import Data or Sync data: they copy data into NocoDB.
+   - Give team members a read-only workspace role, never Creator or Editor.
 
 ## Notes
 
 - Autoscaling is 0 to 1, so the first request after idle waits for a cold start (the startup probe allows up to five minutes).
-- The proxy signs in with `--auto-iam-authn`, so no database password exists anywhere; NocoDB's own `NC_DB_JSON` has an empty password on purpose.
+- The proxy signs in with `--auto-iam-authn`, so no database password exists anywhere; NocoDB's own `NC_DB_JSON` has an empty password on purpose; the password in the connection form of step 9 is a placeholder.
 - The two secrets are the only secrets; never paste their values into a command, a commit or a PR.
 - The UI of NocoDB shows data from `cma_read`; the rule that the CMA's own UI shows no customer data applies to the CMA's screens, so decide before connecting a prod source which `cma_read` columns the team may see.
