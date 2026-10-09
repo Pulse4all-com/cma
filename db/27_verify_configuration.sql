@@ -8,6 +8,8 @@
 -- stops the script. The last result is the verdict. Run as your own IAM login, dev and prod.
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
+-- Adjusted with migration 0006 (9 October 2026): a tenant now has two system users (Scheduler
+-- and Ingest), so the scheduler is found by its address, scheduler@system.invalid.
 -- =============================================================================================
 
 do $$
@@ -59,15 +61,17 @@ begin
 
   -- A4. every active tenant has exactly one scheduler: a system user, active, with the system
   --     role scheduler (not assignable) holding only workday.close_forgotten, the login id
-  --     (scheduler, scheduler), no clock (time_is_kept false)
+  --     (scheduler, scheduler), no clock (time_is_kept false). Since migration 0006 a tenant has
+  --     a second system user (Ingest), so the scheduler is found by its address
   select count(*) into v_n from cma.tenant t
   where t.status = 'active'
-    and 1 <> (select count(*) from cma.app_user u where u.tenant_id = t.id and u.kind = 'system' and u.status = 'active');
+    and 1 <> (select count(*) from cma.app_user u where u.tenant_id = t.id and u.kind = 'system' and u.status = 'active'
+                and u.email = 'scheduler@system.invalid');
   if v_n <> 0 then
     raise exception 'FAIL A4: % tenant(s) without exactly one active system user', v_n;
   end if;
   select count(*) into v_n from cma.app_user u
-  where u.kind = 'system'
+  where u.kind = 'system' and u.email = 'scheduler@system.invalid'
     and not exists (select 1 from cma.user_role ur join cma.app_role r on r.tenant_id = ur.tenant_id and r.id = ur.role_id
                     where ur.tenant_id = u.tenant_id and ur.user_id = u.id and r.key = 'scheduler' and r.is_system and not r.is_assignable);
   if v_n <> 0 then
@@ -80,7 +84,7 @@ begin
     raise exception 'FAIL A4: % scheduler role(s) with other permissions than workday.close_forgotten', v_n;
   end if;
   select count(*) into v_n from cma.app_user u
-  where u.kind = 'system'
+  where u.kind = 'system' and u.email = 'scheduler@system.invalid'
     and (not exists (select 1 from cma.app_user_external_id x where x.tenant_id = u.tenant_id and x.user_id = u.id and x.system = 'scheduler' and x.external_id = 'scheduler')
          or cma.time_is_kept(u.id));
   if v_n <> 0 then
@@ -177,8 +181,8 @@ begin
     join cma.app_role ar on ar.tenant_id = v_t1 and ar.key = x.role_key;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select v_t2, v_a_t2, ar.id from cma.app_role ar where ar.tenant_id = v_t2 and ar.key = 'agent';
-    select id into v_sched1 from cma.app_user where tenant_id = v_t1 and kind = 'system';
-    select id into v_sched_t2 from cma.app_user where tenant_id = v_t2 and kind = 'system';
+    select id into v_sched1 from cma.app_user where tenant_id = v_t1 and kind = 'system' and email = 'scheduler@system.invalid';
+    select id into v_sched_t2 from cma.app_user where tenant_id = v_t2 and kind = 'system' and email = 'scheduler@system.invalid';
     select id into v_default from cma.work_status where tenant_id = v_t1 and is_default;
     if v_sched1 is null or v_sched_t2 is null or v_default is null then
       raise exception 'FAIL B0: create_tenant did not seed the scheduler user or the default status';
@@ -535,7 +539,7 @@ $$;
 
 -- Verdict: per tenant, the scheduler user, the roles that configure, the grace, the statuses and links
 select t.slug as tenant,
-       (select count(*) from cma.app_user u where u.tenant_id = t.id and u.kind = 'system' and u.status = 'active') as scheduler_users,
+       (select count(*) from cma.app_user u where u.tenant_id = t.id and u.kind = 'system' and u.status = 'active' and u.email = 'scheduler@system.invalid') as scheduler_users,
        coalesce((select string_agg(ar.key, ', ' order by ar.key) from cma.app_role ar
                  where ar.tenant_id = t.id and exists (select 1 from cma.role_permission rp
                    where rp.tenant_id = ar.tenant_id and rp.role_id = ar.id and rp.permission_key = 'workday.close_forgotten')), '(none)') as roles_with_close_forgotten,
