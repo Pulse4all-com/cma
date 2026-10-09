@@ -78,8 +78,7 @@ grant cma_owner to postgres with inherit false, set true;
 --   gcloud sql users create cma-ingest@<project>.iam --instance=<instance> --type=cloud_iam_service_account
 --   grant cma_app to "cma-ingest@<project>.iam";
 --
--- NocoDB (read-only, later). One login user per NocoDB connection, pointed at schema cma_read;
--- password via gcloud as for bq_reader:
---   create role nocodb_reader login;
---   grant cma_readonly to nocodb_reader;
---   alter role nocodb_reader set search_path = cma_read;
+-- NocoDB (read-only table browser). No password login: NocoDB runs as the Cloud Run service cma-nocodb under
+-- its own service account, through a Cloud SQL Auth Proxy sidecar with automatic IAM authentication. The
+-- database user is cma-nocodb@<project>.iam, granted cma_readonly (and, on database nocodb, rights for its
+-- own metadata) by docs/nocodb/grants.sql. Setup order and commands: docs/nocodb/README.md.

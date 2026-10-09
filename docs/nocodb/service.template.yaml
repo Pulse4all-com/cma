@@ -1,5 +1,5 @@
 # NocoDB as a read-only table browser over cma_read (Cloud Run, Knative YAML).
-# Placeholders: __PROJECT__ (p4a-cma-dev), __PROJECT_NUMBER__, __INSTANCE__ (cma-dev-pg), __ENV__ (dev | prod).
+# Filled in by deploy.sh: project, project number, Cloud SQL instance and environment (dev or prod).
 # Image pins: NocoDB 2026.09.0 (published 2026-09-10; 2026.09.1 was under 14 days old on 2026-10-09),
 # Cloud SQL Auth Proxy 2.25.4 (built 2026-08-28; 2.26.0 was under 14 days old on 2026-10-09).
 # No IAP annotation and no public invoker yet: access is added in a later step.
