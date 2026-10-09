@@ -44,6 +44,28 @@ gh pr merge --squash --delete-branch && git log --oneline -1
 A merge to `main` that touches `web/**` or `cloudbuild.yaml` builds and deploys **prod** automatically.
 README, `db/` and `records/` changes do not build.
 
+## 2a. A pull request from Claude Code
+
+Claude Code on the web (claude.ai/code) works on a branch and opens a pull request; it never merges.
+It has already run the build, typecheck, lint and the pure verifiers; you run the rest and merge.
+
+```bash
+cd ~/cma && gh pr checkout <number>
+nvm use 22
+cd ~/cma/web && npm ci --no-audit --no-fund 2>&1 | tail -1     # only when package.json changed
+npm run build 2>&1 | tail -15; echo "build exit: ${PIPESTATUS[0]}"   # must be 0
+```
+
+When `web/` or `db/` changed, run the verifiers that need a server or a database (section 5: `api`,
+`theme`, `layout`, `iap-token`, `scheduler`) and every `db/` script the pull request adds, as in section 7.
+Then merge:
+
+```bash
+gh pr merge <number> --squash --delete-branch && git log --oneline -1
+```
+
+A merge to `main` that touches `web/**` or `cloudbuild.yaml` builds and deploys **prod** automatically.
+
 ## 3. Watch the prod build
 
 ```bash
