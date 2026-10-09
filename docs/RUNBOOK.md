@@ -184,6 +184,21 @@ Then fix forward with a new commit. The next build sends traffic to the new revi
 Back to mock data in prod (screens keep working, nothing is saved): set `_DATA_MODE` to `mock` with
 section 9 and run the trigger. Data already in Postgres stays where it is.
 
+## 10a. Rotating the postgres password
+
+In **Terminal**, with `INSTANCE` (`cma-dev-pg` or `cma-prod-pg`), `PROJECT` and `ENV` (`dev` or `prod`) replaced:
+
+```bash
+NEWPW="$(openssl rand -base64 48 | tr -d '\n/+=' | cut -c1-36)-Ka7" && gcloud sql users set-password postgres --instance=INSTANCE --project=PROJECT --password="$NEWPW" && printf '%s' "$NEWPW" | gcloud secrets versions add cma-ENV-postgres-password --project=PROJECT --data-file=- ; unset NEWPW
+```
+
+Then disable the older versions of the secret (`gcloud secrets versions list cma-ENV-postgres-password --project=PROJECT`, then `gcloud secrets versions disable VERSION --secret=cma-ENV-postgres-password --project=PROJECT` for each one except the newest).
+
+- Cloud SQL's password policy needs a lowercase letter, an uppercase letter, a digit and a non-alphanumeric character; the `-Ka7` suffix guarantees all four.
+- The commands are chained with `&&` so the secret is only updated if `set-password` succeeds; `unset` runs either way.
+- After `gcloud secrets versions access`, always run `clear`, and never share the terminal output (a screenshot counts).
+- Rotated: `cma-prod-pg` on 9 October 2026 (secret version 4), after the value appeared in a screenshot.
+
 ## 11. Before you finish
 
 - `git status` in `~/cma` is clean, `main` is up to date, open branches are merged or deleted
