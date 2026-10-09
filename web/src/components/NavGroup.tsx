@@ -47,6 +47,7 @@ export function NavGroup({
         aria-expanded={open}
         aria-controls={`nav-group-${id}`}
         data-shortcut={shortcut}
+        aria-keyshortcuts={shortcut ? shortcut.toUpperCase() : undefined}
         onClick={toggle}
         className={[
           "flex h-10 w-full items-center gap-3 rounded-button px-3 text-body font-semibold text-p4a-heading",
@@ -55,7 +56,8 @@ export function NavGroup({
       >
         <NavIconMark name={icon} />
         <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-        {shortcut ? <Keycap>{shortcut.toUpperCase()}</Keycap> : null}
+        {/* The letter works open or closed; its keycap shows only while the group is open (Martin, 9 October 2026) */}
+        {shortcut && open ? <Keycap>{shortcut.toUpperCase()}</Keycap> : null}
         <svg
           aria-hidden="true"
           viewBox="0 0 16 16"
