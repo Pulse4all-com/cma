@@ -2,3 +2,6 @@
 # Filled-in copies of the add-a-person template never enter the repository
 db/people_add_*.sql
 !db/people_add_prod.template.sql
+
+# Rendered HubSpot projects (hubspot/render.mjs); uploaded from Cloud Shell, never committed
+hubspot/build/
