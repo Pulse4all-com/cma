@@ -1,0 +1,245 @@
+DO
+SET
+DO
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+CREATE FUNCTION
+REVOKE
+INSERT 0 8
+psql:db/32_intake_core.sql:157: NOTICE:  relation "market" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/32_intake_core.sql:169: NOTICE:  relation "market_alias" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/32_intake_core.sql:185: NOTICE:  relation "business_hours" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:db/32_intake_core.sql:215: NOTICE:  relation "business_holiday" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+psql:db/32_intake_core.sql:240: NOTICE:  column "settings" of relation "integration_connection" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+psql:db/32_intake_core.sql:248: NOTICE:  column "slot" of relation "connection_field" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:252: NOTICE:  constraint "connection_field_check1" of relation "connection_field" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+DO
+psql:db/32_intake_core.sql:272: NOTICE:  column "slot" of relation "crm_contact_ref" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+DO
+psql:db/32_intake_core.sql:285: NOTICE:  column "currency" of relation "crm_contact" already exists, skipping
+ALTER TABLE
+psql:db/32_intake_core.sql:286: NOTICE:  column "store" of relation "crm_contact" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:292: NOTICE:  column "amount" of relation "crm_record" already exists, skipping
+ALTER TABLE
+psql:db/32_intake_core.sql:293: NOTICE:  column "currency" of relation "crm_record" already exists, skipping
+ALTER TABLE
+psql:db/32_intake_core.sql:294: NOTICE:  column "source_channel" of relation "crm_record" already exists, skipping
+ALTER TABLE
+psql:db/32_intake_core.sql:295: NOTICE:  column "category" of relation "crm_record" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:303: NOTICE:  column "is_lead" of relation "connection_pipeline" already exists, skipping
+ALTER TABLE
+COMMENT
+psql:db/32_intake_core.sql:334: NOTICE:  relation "crm_call" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/32_intake_core.sql:336: NOTICE:  relation "crm_call_occurred_idx" already exists, skipping
+CREATE INDEX
+psql:db/32_intake_core.sql:337: NOTICE:  relation "crm_call_hash_idx" already exists, skipping
+CREATE INDEX
+psql:db/32_intake_core.sql:350: NOTICE:  relation "connection_call_outcome" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/32_intake_core.sql:372: NOTICE:  relation "crm_association" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/32_intake_core.sql:374: NOTICE:  relation "crm_association_to_idx" already exists, skipping
+CREATE INDEX
+psql:db/32_intake_core.sql:393: NOTICE:  relation "connection_form" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:db/32_intake_core.sql:419: NOTICE:  relation "form_submission" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/32_intake_core.sql:421: NOTICE:  relation "form_submission_submitted_idx" already exists, skipping
+CREATE INDEX
+psql:db/32_intake_core.sql:422: NOTICE:  relation "form_submission_contact_idx" already exists, skipping
+CREATE INDEX
+psql:db/32_intake_core.sql:435: NOTICE:  relation "sync_cursor" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/32_intake_core.sql:458: NOTICE:  relation "sync_run" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/32_intake_core.sql:460: NOTICE:  relation "sync_run_started_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:db/32_intake_core.sql:485: NOTICE:  policy "tenant_readonly" for relation "market" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:486: NOTICE:  policy "tenant_readonly" for relation "market_alias" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:487: NOTICE:  policy "tenant_readonly" for relation "business_hours" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:488: NOTICE:  policy "tenant_readonly" for relation "business_holiday" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:489: NOTICE:  policy "tenant_readonly" for relation "crm_call" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:490: NOTICE:  policy "tenant_readonly" for relation "connection_call_outcome" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:491: NOTICE:  policy "tenant_readonly" for relation "crm_association" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:492: NOTICE:  policy "tenant_readonly" for relation "connection_form" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:493: NOTICE:  policy "tenant_readonly" for relation "form_submission" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:494: NOTICE:  policy "tenant_readonly" for relation "sync_cursor" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:495: NOTICE:  policy "tenant_readonly" for relation "sync_run" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+GRANT
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+RESET
