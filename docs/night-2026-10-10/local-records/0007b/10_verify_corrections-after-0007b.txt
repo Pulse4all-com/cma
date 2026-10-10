@@ -1,0 +1,133 @@
+DO
+      proname       | security_definer | app_may_call 
+--------------------+------------------+--------------
+ assert_permission  | f                | t
+ correct_time_event | f                | t
+ correct_workday    | f                | t
+ refresh_workday    | f                | t
+ team_day           | f                | t
+ team_hours         | f                | t
+(6 rows)
+
+SET
+ version |                                                                                                                                     description                                                                                                                                      |      applied_by      | applied_at 
+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                                                                                                                                                                              | martin@pulse4all.com | 2026-10-10
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views                                                                                                                                                 | martin@pulse4all.com | 2026-10-10
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                                                                                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0003a   | Team people: team_people for Add day and the person filter                                                                                                                                                                                                                           | martin@pulse4all.com | 2026-10-10
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads                                                                                                                                                               | martin@pulse4all.com | 2026-10-10
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                                                                                                                                                                    | martin@pulse4all.com | 2026-10-10
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                                                                                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0003e   | Team now: today's day and current status per person whose time is kept, for the Live board, needs monitoring.live                                                                                                                                                                    | martin@pulse4all.com | 2026-10-10
+ 0004    | Teams and skills: team, team_member, skill, skill_level, user_skill; the admin role, users.manage split into users.manage_agents and users.manage_all; directory, add_person and the people and catalog functions                                                                    | martin@pulse4all.com | 2026-10-10
+ 0005    | Roster: absence types, roster weeks with publications, versioned entries (shift or absence within the business day), coverage targets, the planner functions, the own schedule and today's shift reads, the adherence tolerance setting                                              | martin@pulse4all.com | 2026-10-10
+ 0005a   | Configuration: work status, app link, absence type and coverage target functions for tenant.configure; the scheduler system user and role per tenant with workday.close_forgotten; cma.close_forgotten_workdays() and the auto-close grace setting; a system end keeps a day flagged | martin@pulse4all.com | 2026-10-10
+ 0005b   | My profile: cma.my_profile(), the acting person's own details, role, teams and skills for the My account page                                                                                                                                                                        | martin@pulse4all.com | 2026-10-10
+ 0006    | Ingest and CRM records: connections with field mapping, pipelines and stages, the ingest log, thin CRM records and contacts with refs, the Ingest system user, crm_records_per_day                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0007    | Intake core: markets with aliases, office hours and holidays, business time, connection settings and slots, CRM calls, call outcomes, associations, forms and submissions, sync cursors and runs, contact forget, people's ids in other systems                                      | martin@pulse4all.com | 2026-10-10
+ 0007b   | Commerce: stores (one per connection, unique handle), customers, orders with lines replaced as a set, order_kind (first, repeat, renewal, unknown) from the prior order count and the renewal settings, reclassified when a setting changes, the store in connection_config          | martin@pulse4all.com | 2026-10-10
+(15 rows)
+
+RESET
+SET
+ events_before_start 
+---------------------
+                   0
+(1 row)
+
+RESET
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a12455-8837-7478-8243-f822941e179f | 01a12455-8836-7a52-a2fc-7ecf686023b2
+(1 row)
+
+              set_config              |    set_config    |   set_config    |      set_config      
+--------------------------------------+------------------+-----------------+----------------------
+ 01a12455-8837-7478-8243-f822941e179f | Europe/Amsterdam | available_sales | available_operations
+(1 row)
+
+ set_config 
+------------
+ 2026-10-09
+(1 row)
+
+        set_config         
+---------------------------
+ 2026-10-09T06:00:00+00:00
+ 2026-10-09T07:00:00+00:00
+ 2026-10-09T09:00:00+00:00
+ 2026-10-09T10:00:00+00:00
+ 2026-10-09T15:00:00+00:00
+(5 rows)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status | working_h | has_correction 
+--------+-----------+----------------
+ ended  |      8.00 | t
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+ status | ends_at_11 | working_h 
+--------+------------+-----------
+ ended  | t          |      2.00
+(1 row)
+
+  kind  |      status_key      |   source   | is_effective | approved_by_name | has_reason 
+--------+----------------------+------------+--------------+------------------+------------
+ start  | available_sales      | correction | t            | Verify Lead      | t
+ end    |                      | correction | t            | Verify Lead      | t
+ status | available_operations | correction | f            | Verify Lead      | t
+ end    |                      | correction | f            | Verify Lead      | t
+ void   |                      | correction | f            | Verify Lead      | t
+(5 rows)
+
+ display_name | status | working_h | needs_correction | has_correction 
+--------------+--------+-----------+------------------+----------------
+ Verify Agent | ended  |      2.00 | f                | t
+(1 row)
+
+psql:/home/user/cma/db/10_verify_corrections.sql:142: NOTICE:  PASS  nobody corrects their own day (CMA06)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:153: NOTICE:  PASS  a status before the start is refused (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:162: NOTICE:  PASS  a time outside the corrected day is refused (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:171: NOTICE:  PASS  a time without offset is refused (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:180: NOTICE:  PASS  a future date is refused (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:188: NOTICE:  PASS  a new day must begin with its start (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:196: NOTICE:  PASS  a correction needs a reason (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:204: NOTICE:  PASS  an unknown user is not found (CMA02)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:213: NOTICE:  PASS  the approver is the person making the correction (CMA04)
+DO
+psql:/home/user/cma/db/10_verify_corrections.sql:220: NOTICE:  PASS  team hours need workday.team (CMA06)
+DO
+ROLLBACK

@@ -1,0 +1,74 @@
+DO
+SET
+DO
+psql:/home/user/cma/db/36_commerce.sql:75: NOTICE:  relation "commerce_store" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/home/user/cma/db/36_commerce.sql:103: NOTICE:  relation "commerce_customer" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:/home/user/cma/db/36_commerce.sql:105: NOTICE:  relation "commerce_customer_created_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/36_commerce.sql:106: NOTICE:  relation "commerce_customer_source_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+psql:/home/user/cma/db/36_commerce.sql:159: NOTICE:  relation "commerce_order" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+psql:/home/user/cma/db/36_commerce.sql:163: NOTICE:  relation "commerce_order_created_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/36_commerce.sql:164: NOTICE:  relation "commerce_order_customer_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/36_commerce.sql:181: NOTICE:  relation "commerce_order_line" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:/home/user/cma/db/36_commerce.sql:187: NOTICE:  policy "tenant_readonly" for relation "commerce_store" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:/home/user/cma/db/36_commerce.sql:188: NOTICE:  policy "tenant_readonly" for relation "commerce_customer" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:/home/user/cma/db/36_commerce.sql:189: NOTICE:  policy "tenant_readonly" for relation "commerce_order" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:/home/user/cma/db/36_commerce.sql:190: NOTICE:  policy "tenant_readonly" for relation "commerce_order_line" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+RESET
