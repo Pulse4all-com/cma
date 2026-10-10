@@ -15,15 +15,16 @@ A heads-up, no action needed unless you see a problem. From the coming days, the
 
 **What the CMA writes into HubSpot**: on the contact a Shopify customer belongs to, the Shopify customer id(s), store, number of orders and amount spent, and country, currency and language only when they are empty. This replaces what Make does today for these fields; every write is logged in the CMA and in HubSpot's property history. The HubSpot app holds read access plus write access on contacts for this.
 
-**Who sees it**: the Workspace shows counts and ids, never customer data; links open HubSpot, where the existing access rules apply. Readers (BigQuery for Joshua's reporting, NocoDB for the build team) see the reporting views with the same ids. Dev holds test data only.
+**Who sees it**: the Workspace shows counts and ids, never customer data; links open HubSpot, where the existing access rules apply. Readers (BigQuery for Joshua's reporting, NocoDB for the build team) see the reporting views with the same ids. I also want to let Claude (Anthropic) query those reporting views through BigQuery, read-only, so I can ask questions about the data; query results then pass through Anthropic, and the views include staff data such as names and working hours. I would start on dev (test data only) and switch it on for prod only if you see no objection. Dev holds test data only.
 
 **Retention**: follows the source. A deletion in HubSpot or Shopify removes the attributes in the CMA; a HubSpot GDPR deletion also clears the hashes linked to that contact. Ids and times remain for counts.
 
 **Also new for you since the last note**: staff ids in other systems (HubSpot owner id, Aircall user id) on each agent's CMA profile, used to attribute calls and speed to lead per agent (the employee-monitoring point we already have open).
 
-Two questions, whenever you have time:
+Three questions, whenever you have time:
 1. Is the purpose (operational reporting and lead alerts) covered by our current processing records for HubSpot, Aircall and Shopify, or does the CMA need its own entry?
 2. NocoDB lets the build team browse these ids. Fine as is during the build, or should those views be hidden there?
+3. Claude querying the prod reporting views: fine, or under conditions?
 
 Thanks,
 Martin
