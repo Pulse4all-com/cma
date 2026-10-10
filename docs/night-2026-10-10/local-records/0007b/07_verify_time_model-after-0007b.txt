@@ -1,0 +1,391 @@
+DO
+   relname   |   owner   | rls_on 
+-------------+-----------+--------
+ time_event  | cma_owner | t
+ work_status | cma_owner | t
+ workday     | cma_owner | t
+(3 rows)
+
+  tablename  | policyname |   roles   | cmd 
+-------------+------------+-----------+-----
+ time_event  | tenant_app | {cma_app} | ALL
+ work_status | tenant_app | {cma_app} | ALL
+ workday     | tenant_app | {cma_app} | ALL
+(3 rows)
+
+ table_name  
+-------------
+ time_event
+ work_status
+ workday
+(3 rows)
+
+          relname           |   owner   
+----------------------------+-----------
+ roster_published_entry     | cma_owner
+ roster_published_entry_all | cma_owner
+ time_event_effective       | cma_owner
+ time_event_effective_all   | cma_owner
+ time_interval              | cma_owner
+ time_interval_all          | cma_owner
+ workday_summary            | cma_owner
+ workday_summary_all        | cma_owner
+(8 rows)
+
+       table_name        
+-------------------------
+ absence_type
+ app_link
+ app_role
+ app_user
+ app_user_external_id
+ audit_log
+ business_holiday
+ business_hours
+ channel
+ commerce_customer
+ commerce_order
+ commerce_order_line
+ commerce_store
+ connection_call_outcome
+ connection_form
+ connection_pipeline
+ connection_stage
+ coverage_target
+ crm_association
+ crm_call
+ crm_contact
+ crm_contact_ref
+ crm_record
+ crm_record_detail
+ form_submission
+ ingest_event
+ integration_connection
+ market
+ market_alias
+ organisation
+ permission
+ role_permission
+ roster_entry
+ roster_publication
+ roster_published_entry
+ roster_week
+ setting
+ skill
+ skill_level
+ sync_run
+ team
+ team_member
+ tenant
+ tenant_setting
+ time_event
+ time_interval
+ user_role
+ user_skill
+ work_status
+ workday
+ workday_summary
+(51 rows)
+
+SET
+ app_inserts_events | app_updates_events | app_deletes_events | app_deletes_workdays | app_deletes_statuses | app_reads_summary | app_reads_summary_all 
+--------------------+--------------------+--------------------+----------------------+----------------------+-------------------+-----------------------
+ t                  | f                  | f                  | f                    | f                    | t                 | f
+(1 row)
+
+RESET
+          proname           | security_definer | app_may_call 
+----------------------------+------------------+--------------
+ business_date              | f                | t
+ correct_time_event         | f                | t
+ end_workday                | f                | t
+ find_tenants_for_identity  | t                | t
+ has_permission             | f                | t
+ open_workday               | f                | t
+ refresh_workday            | f                | t
+ seed_default_work_statuses | f                | f
+ set_status                 | f                | t
+ user_permissions           | f                | t
+ user_timezone              | f                | t
+(11 rows)
+
+SET
+ version |                                                                                                                                     description                                                                                                                                      |      applied_by      | applied_at 
+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                                                                                                                                                                              | martin@pulse4all.com | 2026-10-10
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views                                                                                                                                                 | martin@pulse4all.com | 2026-10-10
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                                                                                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0003a   | Team people: team_people for Add day and the person filter                                                                                                                                                                                                                           | martin@pulse4all.com | 2026-10-10
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads                                                                                                                                                               | martin@pulse4all.com | 2026-10-10
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                                                                                                                                                                    | martin@pulse4all.com | 2026-10-10
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                                                                                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0003e   | Team now: today's day and current status per person whose time is kept, for the Live board, needs monitoring.live                                                                                                                                                                    | martin@pulse4all.com | 2026-10-10
+ 0004    | Teams and skills: team, team_member, skill, skill_level, user_skill; the admin role, users.manage split into users.manage_agents and users.manage_all; directory, add_person and the people and catalog functions                                                                    | martin@pulse4all.com | 2026-10-10
+ 0005    | Roster: absence types, roster weeks with publications, versioned entries (shift or absence within the business day), coverage targets, the planner functions, the own schedule and today's shift reads, the adherence tolerance setting                                              | martin@pulse4all.com | 2026-10-10
+ 0005a   | Configuration: work status, app link, absence type and coverage target functions for tenant.configure; the scheduler system user and role per tenant with workday.close_forgotten; cma.close_forgotten_workdays() and the auto-close grace setting; a system end keeps a day flagged | martin@pulse4all.com | 2026-10-10
+ 0005b   | My profile: cma.my_profile(), the acting person's own details, role, teams and skills for the My account page                                                                                                                                                                        | martin@pulse4all.com | 2026-10-10
+ 0006    | Ingest and CRM records: connections with field mapping, pipelines and stages, the ingest log, thin CRM records and contacts with refs, the Ingest system user, crm_records_per_day                                                                                                   | martin@pulse4all.com | 2026-10-10
+ 0007    | Intake core: markets with aliases, office hours and holidays, business time, connection settings and slots, CRM calls, call outcomes, associations, forms and submissions, sync cursors and runs, contact forget, people's ids in other systems                                      | martin@pulse4all.com | 2026-10-10
+ 0007b   | Commerce: stores (one per connection, unique handle), customers, orders with lines replaced as a set, order_kind (first, repeat, renewal, unknown) from the prior order count and the renewal settings, reclassified when a setting changes, the store in connection_config          | martin@pulse4all.com | 2026-10-10
+(15 rows)
+
+RESET
+          slug           |         key          | is_working | is_productive | is_paid | is_billable | is_default 
+-------------------------+----------------------+------------+---------------+---------+-------------+------------
+ pulse4all-invest        | available            | t          | t             | t       | t           | t
+ pulse4all-invest        | training             | t          | f             | t       | t           | f
+ pulse4all-invest        | meeting              | t          | f             | t       | t           | f
+ pulse4all-invest        | break                | f          | f             | t       | t           | f
+ pulse4all-invest        | lunch                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | available_sales      | t          | t             | t       | t           | t
+ pulse4all-subscriptions | available            | t          | t             | t       | t           | f
+ pulse4all-subscriptions | available_operations | t          | t             | t       | t           | f
+ pulse4all-subscriptions | training             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | meeting              | t          | f             | t       | t           | f
+ pulse4all-subscriptions | coaching             | t          | f             | t       | t           | f
+ pulse4all-subscriptions | break                | f          | f             | f       | f           | f
+ pulse4all-subscriptions | lunch                | f          | f             | f       | f           | f
+(13 rows)
+
+          slug           |    key    |   timezone    
+-------------------------+-----------+---------------
+ pulse4all-invest        | clubdeal  | 
+ pulse4all-invest        | pulse4all | 
+ pulse4all-subscriptions | newco     | Europe/Madrid
+ pulse4all-subscriptions | pulse4all | 
+(4 rows)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a12455-873e-7a50-8d84-a9722f85dbe6
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+ status | zero_length 
+--------+-------------
+ ended  | t
+(1 row)
+
+ status 
+--------
+ ended
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:119: ERROR:  workday 01a12455-8747-7301-aa17-70168a6f380b is already ended; resuming is a correction
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a12455-8750-7cf5-b8d3-26490eb3fe81
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12455-8750-7e5a-aa1a-f18b6c86e832
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
+CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 14 at RAISE
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+         email         | business_date | status | working_h | paid_h | is_capped | needs_correction | has_correction 
+-----------------------+---------------+--------+-----------+--------+-----------+------------------+----------------
+ agent.one@example.com | 2026-10-07    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.one@example.com | 2026-10-08    | ended  |      5.92 |   5.92 | f         | f                | f
+ agent.one@example.com | 2026-10-09    | ended  |      8.07 |   8.07 | f         | f                | t
+ agent.two@example.com | 2026-10-08    | open   |     14.00 |  14.00 | t         | t                | f
+ agent.two@example.com | 2026-10-09    | ended  |      8.00 |   8.00 | f         | f                | f
+(5 rows)
+
+ROLLBACK
+BEGIN
+SET
+ no_tenant_set 
+---------------
+             0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12455-5865-7beb-bea0-88d85dbbd66d
+(1 row)
+
+ invest_days 
+-------------
+           0
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+ subs_days 
+-----------
+         5
+(1 row)
+
+ROLLBACK
+ reader_sees_all 
+-----------------
+               5
+(1 row)
+
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:176: ERROR:  permission denied for view workday_summary_all
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:184: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:190: ERROR:  permission denied for table time_event
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12455-58b8-77d5-a492-422e22b978da
+(1 row)
+
+ kind 
+------
+ end
+(1 row)
+
+ business_date | status | working_h | needs_correction | has_correction 
+---------------+--------+-----------+------------------+----------------
+ 2026-10-08    | ended  |      8.00 | f                | t
+ 2026-10-09    | ended  |      8.00 | f                | f
+(2 rows)
+
+ kind |   source   | has_reason | approved_by_manager | actor_is_manager | actor_db_role 
+------+------------+------------+---------------------+------------------+---------------
+ end  | correction | t          | t                   | t                | cma_app
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a12455-876d-75d1-8a5a-bf471eaaa4ef
+(1 row)
+
+ agent_may_correct 
+-------------------
+ f
+(1 row)
+
+psql:/home/user/cma/db/07_verify_time_model.sql:236: ERROR:  user 01a12455-876d-75d1-8a5a-bf471eaaa4ef lacks permission workday.team
+CONTEXT:  PL/pgSQL function assert_permission(text) line 13 at RAISE
+PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12455-5858-7d09-89e0-4b555e62c4f3
+(1 row)
+
+INSERT 0 2
+INSERT 0 2
+SET
+              set_config              
+--------------------------------------
+ 01a12455-8774-71d4-82f3-24c0d57f2b91
+(1 row)
+
+ status 
+--------
+ open
+(1 row)
+
+SET
+psql:/home/user/cma/db/07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
+DETAIL:  Failing row contains (01a12455-8778-72e0-a520-f305d8a12ad0, 01a12455-5858-7d09-89e0-4b555e62c4f3, 01a12455-8776-718a-90ba-cde054ac9347, 01a12455-8774-71d4-82f3-24c0d57f2b91, end, null, 2026-10-10 05:42:27.443669+00, 2026-10-10 05:42:27.448186+00, correction, null, null, null).
+ROLLBACK
+BEGIN
+SET
+          slug           
+-------------------------
+ pulse4all-invest
+ pulse4all-subscriptions
+(2 rows)
+
+ unknown_subject 
+-----------------
+               0
+(1 row)
+
+ wrong_system 
+--------------
+            0
+(1 row)
+
+ROLLBACK
