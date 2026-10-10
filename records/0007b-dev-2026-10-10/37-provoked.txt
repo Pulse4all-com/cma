@@ -1,0 +1,23 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:140: ERROR:  FAIL A1: migration 0007b not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+psql:/tmp/provoke.sql:244: ERROR:  FAIL B1: stores are verify-gb:Verify GB:GB:GBP:Europe/London,verify-nl:Verify NL:NL:EUR:Europe/Amsterdam (same id: t)
+CONTEXT:  PL/pgSQL function inline_code_block line 37 at RAISE
+psql:/tmp/provoke.sql:364: ERROR:  FAIL C1: customers gave inserted,inserted and hold 120.51, GBP, 2
+CONTEXT:  PL/pgSQL function inline_code_block line 33 at RAISE
+psql:/tmp/provoke.sql:586: ERROR:  FAIL D1: orders gave 5001=inserted:first,5002=inserted:repeat,5003=inserted:unknown and 5001 holds {"id":"01a127b3-3e75-7bf1-a049-1d079622a90e","tenant_id":"01a127b3-3e46-744e-a0ee-b45586d454c2","connection_id":"01a127b3-3e63-74cc-8265-5ddd383b1437","source_system":"verify_shop","source_id":"5001","order_name":"#1001","customer_source_id":"1001","source_created_at":"2026-10-01T10:00:00+00:00","processed_at":"2026-10-01T10:00:05+00:00","source_updated_at":"2026-10-01T10:00:00+00:00","cancelled_at":null,"cancel_reason":null,"is_test":false,"currency":"GBP","total_amount":99.90,"subtotal_amount":90.00,"tax_amount":9.90,"discount_amount":0.00,"refunded_amount":0.00,"financial_status":"PAID","fulfillment_status":"UNFULFILLED","source_name":"web","app_ref":null,"landing_host":"shop.example.com","landing_path":"/products/verify","utm":{"medium": "cpc", "source": "verify", "campaign": "42"},"referring_host":"search.example.com","tags":["alpha","beta"],"prior_orders_count":0,"prior_count_exact":true,"order_kind":"first","source_deleted_at":null,"synced_at":"2026-10-10T21:23:40.738037+00:00","raw":{"cancel_reason": null}}
+CONTEXT:  PL/pgSQL function inline_code_block line 49 at RAISE
+psql:/tmp/provoke.sql:731: ERROR:  FAIL E1: provoked
+CONTEXT:  PL/pgSQL function inline_code_block line 55 at RAISE
+         tenant          | stores | customers | orders | order_lines |       verdict        
+-------------------------+--------+-----------+--------+-------------+----------------------
+ pulse4all-invest        |      0 |         0 |      0 |           0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |      0 |         0 |      0 |           0 | PROVOKED, NOT A PASS
+(2 rows)
+
