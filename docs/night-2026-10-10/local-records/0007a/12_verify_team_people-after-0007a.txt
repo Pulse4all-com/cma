@@ -1,0 +1,71 @@
+BEGIN
+SET
+            check             | result 
+------------------------------+--------
+ A function and migration row | PASS
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12453-ad62-7aa4-b8d5-e746b2d0f449
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12453-adc3-7682-b6d7-eb925b55973a
+(1 row)
+
+             check             | result | people 
+-------------------------------+--------+--------
+ B supervisor lists the people | PASS   |      5
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12453-ad62-7aa4-b8d5-e746b2d0f449
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a12453-adc3-76b4-a1c9-bddecdf8554e
+(1 row)
+
+DO
+           check            | result 
+----------------------------+--------
+ C agent refused with CMA06 | PASS
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a12453-ad62-7aa4-b8d5-e746b2d0f449
+(1 row)
+
+DO
+                check                | result 
+-------------------------------------+--------
+ D no acting user refused with CMA01 | PASS
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+ set_config | set_config 
+------------+------------
+(0 rows)
+
+SET
+psql:12_verify_team_people.sql:77: ERROR:  this needs app.user_id, the acting user
+CONTEXT:  PL/pgSQL function assert_permission(text) line 6 at RAISE
+SQL statement "SELECT cma.assert_permission('workday.team')"
+PL/pgSQL function team_people() line 4 at PERFORM
+ROLLBACK
