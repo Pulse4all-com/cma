@@ -1,0 +1,34 @@
+# Cloud Build for the ingest image: build and push only. Not wired to a trigger: docs/ingest/deploy.sh
+# runs it with `gcloud builds submit ingest --config=ingest/cloudbuild.yaml` in the target project and
+# then deploys the service itself, so the service's settings live in one place (deploy.sh).
+#
+# Substitutions:
+#   _VERSION   the short sha of the commit the image is built from (shown by GET /health)
+#   _REPO      europe-west4-docker.pkg.dev/$PROJECT_ID/cma
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=INGEST_VERSION=${_VERSION}
+      - --tag=${_REPO}/ingest:${_VERSION}
+      - --tag=${_REPO}/ingest:latest
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, --all-tags, "${_REPO}/ingest"]
+
+images:
+  - ${_REPO}/ingest:${_VERSION}
+  - ${_REPO}/ingest:latest
+
+substitutions:
+  _VERSION: dev
+  _REPO: europe-west4-docker.pkg.dev/${PROJECT_ID}/cma
+
+options:
+  dynamicSubstitutions: true
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 900s
