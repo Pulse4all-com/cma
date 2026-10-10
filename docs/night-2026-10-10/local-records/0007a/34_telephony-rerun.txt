@@ -1,0 +1,96 @@
+DO
+SET
+DO
+psql:34_telephony.sql:89: NOTICE:  relation "telephony_call" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+psql:34_telephony.sql:93: NOTICE:  relation "telephony_call_started_idx" already exists, skipping
+CREATE INDEX
+psql:34_telephony.sql:94: NOTICE:  relation "telephony_call_hash_idx" already exists, skipping
+CREATE INDEX
+psql:34_telephony.sql:110: NOTICE:  relation "telephony_tag" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:34_telephony.sql:129: NOTICE:  relation "telephony_call_tag" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:34_telephony.sql:132: NOTICE:  relation "telephony_call_tag_current_idx" already exists, skipping
+CREATE INDEX
+psql:34_telephony.sql:133: NOTICE:  relation "telephony_call_tag_tag_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:34_telephony.sql:173: NOTICE:  relation "telephony_number" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:34_telephony.sql:202: NOTICE:  relation "call_link" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:34_telephony.sql:204: NOTICE:  relation "call_link_telephony_idx" already exists, skipping
+CREATE INDEX
+psql:34_telephony.sql:205: NOTICE:  relation "call_link_crm_idx" already exists, skipping
+CREATE INDEX
+psql:34_telephony.sql:206: NOTICE:  relation "call_link_pair_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:34_telephony.sql:231: NOTICE:  policy "tenant_readonly" for relation "telephony_call" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:34_telephony.sql:232: NOTICE:  policy "tenant_readonly" for relation "telephony_tag" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:34_telephony.sql:233: NOTICE:  policy "tenant_readonly" for relation "telephony_call_tag" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:34_telephony.sql:234: NOTICE:  policy "tenant_readonly" for relation "telephony_number" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:34_telephony.sql:235: NOTICE:  policy "tenant_readonly" for relation "call_link" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+GRANT
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+RESET

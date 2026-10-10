@@ -1,0 +1,74 @@
+DO
+SET
+DO
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+psql:db/36_commerce.sql:187: NOTICE:  policy "tenant_app" for relation "commerce_store" does not exist, skipping
+psql:db/36_commerce.sql:187: NOTICE:  policy "tenant_readonly" for relation "commerce_store" does not exist, skipping
+psql:db/36_commerce.sql:187: NOTICE:  trigger "audit" for relation "commerce_store" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:188: NOTICE:  policy "tenant_app" for relation "commerce_customer" does not exist, skipping
+psql:db/36_commerce.sql:188: NOTICE:  policy "tenant_readonly" for relation "commerce_customer" does not exist, skipping
+psql:db/36_commerce.sql:188: NOTICE:  trigger "audit" for relation "commerce_customer" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:189: NOTICE:  policy "tenant_app" for relation "commerce_order" does not exist, skipping
+psql:db/36_commerce.sql:189: NOTICE:  policy "tenant_readonly" for relation "commerce_order" does not exist, skipping
+psql:db/36_commerce.sql:189: NOTICE:  trigger "audit" for relation "commerce_order" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:190: NOTICE:  policy "tenant_app" for relation "commerce_order_line" does not exist, skipping
+psql:db/36_commerce.sql:190: NOTICE:  policy "tenant_readonly" for relation "commerce_order_line" does not exist, skipping
+psql:db/36_commerce.sql:190: NOTICE:  trigger "audit" for relation "commerce_order_line" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+RESET
