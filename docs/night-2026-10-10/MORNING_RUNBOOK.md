@@ -311,9 +311,10 @@ Records: **Terminal** `mkdir -p records/intake-hubspot-dev-$(date +%F)` and save
 3. **Studio (cma-dev-pg)** after the context block — the Pulse4all rule:
 ```sql
 select cma.upsert_message_rule('New deal', 'deal', '{}'::text[], 'leads.accept', true, true, 'leads.manage', 'normal');
+select cma.set_connection_settings('<conn>', '{"app_host":"app-eu1.hubspot.com","record_url_deal":"https://{app_host}/contacts/{account}/record/0-3/{id}","record_url_ticket":"https://{app_host}/contacts/{account}/record/0-5/{id}"}'::jsonb);
 reset role;
 ```
-Expected: one uuid.
+Expected: one uuid, then an empty result. The alert's link comes from the template `record_url_<record type>` (0008 keeps no vendor address pattern in the database). `set_connection_settings` replaces all settings, so the statement repeats `app_host`; add any other key the connection already has. Prod later takes the same statement with the live `app_host`.
 4. B12 merged → prod builds the web; dev gets the image (README release flow, by short SHA) and the ingest is redeployed: `bash docs/ingest/deploy.sh dev`.
 5. Check: in the dev Workspace as an agent with the NL language skill (mock identity switch), clocked in; create a deal in `CMA dev` for a contact with country NL. Expected: a toast within 15 seconds, the inbox count 1, the link opening the deal in `CMA dev`. In Studio: `select title, body, ref_id from cma_read.message order by created_at desc limit 1;` and its delivery row with `delivered_at` and, after opening, `read_at`.
 
