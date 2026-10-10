@@ -1,0 +1,23 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:130: ERROR:  FAIL A1: migration 0008 not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+psql:/tmp/provoke.sql:466: ERROR:  FAIL B1: the rule was not created and updated by name
+CONTEXT:  PL/pgSQL function inline_code_block line 87 at RAISE
+psql:/tmp/provoke.sql:637: ERROR:  FAIL C1: a1's poll returned [Two:true,One:true]
+CONTEXT:  PL/pgSQL function inline_code_block line 49 at RAISE
+psql:/tmp/provoke.sql:813: ERROR:  FAIL D1: the refused send left 0 message(s)
+CONTEXT:  PL/pgSQL function inline_code_block line 62 at RAISE
+psql:/tmp/provoke.sql:957: ERROR:  FAIL E1: the alert for tenant one's agent is missing
+CONTEXT:  PL/pgSQL function inline_code_block line 54 at RAISE
+         tenant          | rules | rules_enabled | messages | deliveries | unread |       verdict        
+-------------------------+-------+---------------+----------+------------+--------+----------------------
+ pulse4all-invest        |     0 |             0 |        0 |          0 |      0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |     0 |             0 |        0 |          0 |      0 | PROVOKED, NOT A PASS
+(2 rows)
+

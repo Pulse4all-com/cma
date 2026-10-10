@@ -1,0 +1,19 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+DO
+DO
+DO
+DO
+         tenant          | lines | tags | telephony_calls | call_links | verdict 
+-------------------------+-------+------+-----------------+------------+---------
+ pulse4all-invest        |     0 |    0 |               0 |          0 | PASS
+ pulse4all-subscriptions |     0 |    0 |               0 |          0 | PASS
+(2 rows)
+
