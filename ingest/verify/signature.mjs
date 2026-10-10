@@ -13,8 +13,8 @@ console.log(`verify/signature.mjs${PROVOKE ? "  (--provoke: every check must FAI
 
 const SECRET = "fixture-client-secret-0000";
 const URI = "https://ingest.example.com/hubspot/key0000000000000000000001";
-const BODY = Buffer.from(JSON.stringify([{ eventId: 1, portalId: 9000001, objectId: 11, subscriptionType: "object.creation", objectTypeId: "0-3", occurredAt: 1760086800000 }]));
-const NOW = 1760086800000;
+const BODY = Buffer.from(JSON.stringify([{ eventId: 1, portalId: 9000001, objectId: 11, subscriptionType: "object.creation", objectTypeId: "0-3", occurredAt: 1791622800000 }]));
+const NOW = 1791622800000;
 const TS = String(NOW - 1000);
 
 // Independent reference: HubSpot's documented construction, written out by hand

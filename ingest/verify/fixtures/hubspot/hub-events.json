@@ -1,0 +1,4 @@
+[
+  { "eventId": 3000000201, "subscriptionId": 5000101, "portalId": 9000001, "appId": 8000001, "occurredAt": 1791623000000,
+    "subscriptionType": "contact.privacyDeletion", "attemptNumber": 0, "objectId": 4300000001, "changeSource": "GDPR" }
+]

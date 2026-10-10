@@ -8,14 +8,31 @@
  * sweeper (brief B8) reads it again with backoff; ten failures park an event as needs_review.
  */
 import { contextOf } from "./connection.mjs";
-import { claimEvents } from "./events.mjs";
+import { claimEvents, chunks } from "./events.mjs";
 import { storeFor, applyUnits } from "./store.mjs";
 import { info, warn } from "./log.mjs";
 
+/**
+ * Processes the given events (in parts of at most 500, while the budget lasts) or, with ids null, the
+ * next due ones. Answers the totals.
+ */
 export async function processEvents(adapter, connection, ids, budget) {
+  const total = { claimed: 0, events: { processed: 0, ignored: 0, failed: 0 }, counts: {} };
+  const parts = ids ? chunks(ids) : [null];
+  for (const part of parts) {
+    if (budget.expired()) break;
+    const r = await processPart(adapter, connection, part, budget);
+    total.claimed += r.claimed;
+    for (const k of Object.keys(total.events)) total.events[k] += r.events?.[k] ?? 0;
+    for (const [k, v] of Object.entries(r.counts ?? {})) total.counts[k] = (total.counts[k] ?? 0) + (typeof v === "number" ? v : 0);
+  }
+  return total;
+}
+
+async function processPart(adapter, connection, ids, budget) {
   const started = Date.now();
   const ctx = contextOf(connection);
-  const claimed = await claimEvents(ctx, connection.connectionId, ids, Math.max(1, Math.min(500, ids?.length ?? 100)));
+  const claimed = await claimEvents(ctx, connection.connectionId, ids, ids ? ids.length : 100);
   if (!claimed.length) return { claimed: 0 };
   const store = storeFor(ctx, connection.connectionId);
   const config = await store.config();
