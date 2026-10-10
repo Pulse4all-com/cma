@@ -132,7 +132,7 @@ $$;
 -- B. Rules and record alerts (throwaway tenants, rolled back)
 --    Tenant one (zone Europe/Amsterdam): markets NL (Dutch at level 2 or more), DE (German, any
 --    level) and GB (no language skill). Agents: a1 Dutch 3 clocked in, a2 Dutch 1 clocked in, a3
---    Dutch 4 not clocked in, a4 German 4 clocked in, a5 Dutch 4 clocked in but inactive; the admin
+--    Dutch 4 clocked in and out again, a4 German 4 clocked in, a5 Dutch 4 clocked in but inactive; the admin
 --    and the manager hold leads.manage, the supervisor leads.accept, none of them clocked in.
 do $$
 declare
@@ -186,10 +186,13 @@ begin
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
-    foreach v_txt in array array[v_a1::text, v_a2::text, v_a4::text, v_a5::text] loop
+    foreach v_txt in array array[v_a1::text, v_a2::text, v_a3::text, v_a4::text, v_a5::text] loop
       perform set_config('app.user_id', v_txt, true);
-      perform cma.open_workday(now());
+      perform cma.open_workday(now() - interval '1 minute');
     end loop;
+    -- a3 clocked out again: an ended day is not clocked in
+    perform set_config('app.user_id', v_a3::text, true);
+    perform cma.end_workday((select w.id from cma.workday w where w.user_id = v_a3), now());
     perform set_config('role', 'cma_owner', true);
     update cma.app_user set status = 'inactive' where id = v_a5;
     perform set_config('role', 'cma_app', true);
@@ -262,7 +265,7 @@ begin
     end loop;
 
     -- B2. an NL deal created five minutes ago: the agents clocked in with Dutch at level 2 or more
-    --     (a1 only: a2's level is too low, a3 is not clocked in, a4 speaks German, a5 is inactive);
+    --     (a1 only: a2's level is too low, a3 has clocked out, a4 speaks German, a5 is inactive);
     --     content of references only; the link from the connection's template
     perform set_config('app.user_id', v_ing1::text, true);
     perform cma.ingest_upsert_records(v_c1, jsonb_build_array(

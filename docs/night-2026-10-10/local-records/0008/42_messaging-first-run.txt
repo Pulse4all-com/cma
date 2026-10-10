@@ -1,0 +1,66 @@
+DO
+SET
+DO
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:42_messaging.sql:168: NOTICE:  policy "tenant_app" for relation "cma.message_rule" does not exist, skipping
+psql:42_messaging.sql:168: NOTICE:  policy "tenant_readonly" for relation "cma.message_rule" does not exist, skipping
+psql:42_messaging.sql:168: NOTICE:  trigger "audit" for relation "cma.message_rule" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:42_messaging.sql:169: NOTICE:  policy "tenant_app" for relation "cma.message" does not exist, skipping
+psql:42_messaging.sql:169: NOTICE:  policy "tenant_readonly" for relation "cma.message" does not exist, skipping
+psql:42_messaging.sql:169: NOTICE:  trigger "audit" for relation "cma.message" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:42_messaging.sql:170: NOTICE:  policy "tenant_app" for relation "cma.message_delivery" does not exist, skipping
+psql:42_messaging.sql:170: NOTICE:  policy "tenant_readonly" for relation "cma.message_delivery" does not exist, skipping
+psql:42_messaging.sql:170: NOTICE:  trigger "audit" for relation "cma.message_delivery" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+RESET
