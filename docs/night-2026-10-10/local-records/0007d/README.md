@@ -13,7 +13,7 @@ This is Claude Code's local run for brief B4. It is not a release record: `recor
 | `41_verify_lead_metrics-provoked.txt` | the same with `verify.provoke` true, `ON_ERROR_STOP=0` | 6 FAIL lines, one per block (A1, B1, C1, D1, E1, F1); `PROVOKED, NOT A PASS` twice |
 | `*-after-0007d.txt` | `04` to `43` rerun after 0007d | compared with the same verifies on the copy without 0007d, ids and times masked. `12`, `14`, `16`, `18`, `20`, `22`, `25`, `27`, `29`, `31`, `33`, `35`, `37` and `43` are identical. `04` and `07` differ only in the listing of `cma_read` views (the three new views and the fifteen `dq_` views), `07` and `10` in the 0007d migration row. `04`, `07` and `12` end blocks in their expected errors (3, 7 and 1), with the same messages as without 0007d |
 
-**Mutation check (not kept as files):** twenty-four deliberate breakages of `40`. Each was applied to a fresh copy without 0007d as a changed `40`, and each stopped `41` in the block meant to catch it:
+**Mutation check (not kept as files):** twenty-five deliberate breakages of `40`. Each was applied to a fresh copy without 0007d as a changed `40`, and each stopped `41` in the block meant to catch it:
 
 | Breakage | Stopped at |
 |---|---|
@@ -41,3 +41,4 @@ This is Claude Code's local run for brief B4. It is not a release record: `recor
 | the speed-to-lead read without its permission check | F1 |
 | a readers' function without `reader_sees` | F4 |
 | a readers' function executable by everyone | A3 |
+| a readers' function without its pinned search path | A3 |

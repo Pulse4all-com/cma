@@ -196,7 +196,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a127d0-17eb-7997-a064-8d4df79c527c
+ 01a127d4-544f-714c-9a69-3e50efca66c5
 (1 row)
 
  status 
@@ -214,7 +214,7 @@ SET
  ended
 (1 row)
 
-psql:/home/user/cma/db/07_verify_time_model.sql:119: ERROR:  workday 01a127d0-17fc-72a5-8448-1a3497b64a1d is already ended; resuming is a correction
+psql:/home/user/cma/db/07_verify_time_model.sql:119: ERROR:  workday 01a127d4-5457-7214-a87b-7d45add319d9 is already ended; resuming is a correction
 CONTEXT:  PL/pgSQL function cma.end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
 ROLLBACK
 BEGIN
@@ -229,7 +229,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a127d0-180a-7124-a511-4b11a0057881
+ 01a127d4-5460-7ed0-ad9e-70b8823daad4
 (1 row)
 
  status 
@@ -239,7 +239,7 @@ SET
 
               set_config              
 --------------------------------------
- 01a127d0-180a-72ec-8c65-749895427ad8
+ 01a127d4-5461-705c-aabc-17e2f9946ea0
 (1 row)
 
 psql:/home/user/cma/db/07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
@@ -363,7 +363,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a127d0-1835-71ac-94c6-aa2d0a8ad7b9
+ 01a127d4-547a-7e3c-a9ca-1bbff3376f35
 (1 row)
 
  agent_may_correct 
@@ -371,7 +371,7 @@ SET
  f
 (1 row)
 
-psql:/home/user/cma/db/07_verify_time_model.sql:236: ERROR:  user 01a127d0-1835-71ac-94c6-aa2d0a8ad7b9 lacks permission workday.team
+psql:/home/user/cma/db/07_verify_time_model.sql:236: ERROR:  user 01a127d4-547a-7e3c-a9ca-1bbff3376f35 lacks permission workday.team
 CONTEXT:  PL/pgSQL function cma.assert_permission(text) line 13 at RAISE
 PL/pgSQL function cma.correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
 ROLLBACK
@@ -387,7 +387,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a127d0-183f-7801-ae87-e5d54c942f69
+ 01a127d4-5481-75d0-8a12-d6d7a9dac560
 (1 row)
 
  status 
@@ -397,7 +397,7 @@ SET
 
 SET
 psql:/home/user/cma/db/07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
-DETAIL:  Failing row contains (01a127d0-1848-7adc-89b3-598898454b40, 01a127c1-1ea1-7ddb-ab80-4c11c7aa3713, 01a127d0-1843-77eb-a9e2-45c41fc695b9, 01a127d0-183f-7801-ae87-e5d54c942f69, end, null, 2026-10-10 21:55:11.550044+00, 2026-10-10 21:55:11.560693+00, correction, null, null, null).
+DETAIL:  Failing row contains (01a127d4-5486-7532-83e7-606acca935c0, 01a127c1-1ea1-7ddb-ab80-4c11c7aa3713, 01a127d4-5483-7c86-9865-e49b64d71eeb, 01a127d4-5481-75d0-8a12-d6d7a9dac560, end, null, 2026-10-10 21:59:49.121059+00, 2026-10-10 21:59:49.126333+00, correction, null, null, null).
 ROLLBACK
 BEGIN
 SET

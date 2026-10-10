@@ -52,12 +52,12 @@ INSERT 0 2
 SET
               set_config              |              set_config              
 --------------------------------------+--------------------------------------
- 01a127d0-18a9-76ec-af27-eafc8a4619e6 | 01a127d0-18a8-7cdb-9e1e-d5f4ac013e5f
+ 01a127d4-54c4-7f4c-9dbf-30d254008043 | 01a127d4-54c4-756e-9a69-81c04aa9f3a5
 (1 row)
 
               set_config              |    set_config    |   set_config    |      set_config      
 --------------------------------------+------------------+-----------------+----------------------
- 01a127d0-18a9-76ec-af27-eafc8a4619e6 | Europe/Amsterdam | available_sales | available_operations
+ 01a127d4-54c4-7f4c-9dbf-30d254008043 | Europe/Amsterdam | available_sales | available_operations
 (1 row)
 
  set_config 

@@ -82,8 +82,8 @@ begin
     end if;
   end loop;
 
-  -- A3. the readers' functions: security definer owned by cma_owner with a pinned search path;
-  --     readers may execute them, the application and public may not
+  -- A3. the readers' functions: security definer owned by cma_owner with a pinned search path
+  --     (pg_temp last); readers may execute them, the application and public may not
   foreach v_fn in array array[
     'cma_read.speed_to_lead_rows()', 'cma_read.lead_to_order_rows()',
     'cma_read.intake_per_day_rows()', 'cma_read.data_quality_rows()'
@@ -93,7 +93,7 @@ begin
     end if;
     if not (select prosecdef from pg_proc where oid = to_regprocedure(v_fn))
        or (select pg_get_userbyid(proowner) from pg_proc where oid = to_regprocedure(v_fn)) <> 'cma_owner'
-       or (select array_to_string(proconfig, ',') from pg_proc where oid = to_regprocedure(v_fn)) is distinct from 'search_path=pg_catalog, cma' then
+       or (select array_to_string(proconfig, ',') from pg_proc where oid = to_regprocedure(v_fn)) is distinct from 'search_path=pg_catalog, cma, pg_temp' then
       raise exception 'FAIL A3: % must be security definer, owned by cma_owner, with a pinned search path', v_fn;
     end if;
     if not has_function_privilege('cma_readonly', v_fn, 'execute')

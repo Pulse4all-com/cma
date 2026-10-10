@@ -762,10 +762,11 @@ begin
   from cma.connection_form f
   where f.tenant_id = p_tenant_id and f.status = 'active' and f.is_counted and f.market is null;
 
-  -- parked write-backs: the outbox arrives with migration 0007c; until then the check finds nothing
+  -- parked write-backs: the outbox arrives with migration 0007c (DESIGN §4.3a); until then the check
+  -- finds nothing. Only the columns every outbox row has by design are read: id, connection, status
   if to_regclass('cma.outbox_action') is not null then
     return query execute
-      'select ''writeback_parked''::text, o.connection_id, o.target_type::text, o.target_id::text, o.action::text
+      'select ''writeback_parked''::text, o.connection_id, ''outbox_action''::text, o.id::text, null::text
        from cma.outbox_action o
        where o.tenant_id = $1 and o.status = ''needs_review'''
       using p_tenant_id;
@@ -933,12 +934,13 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 10. Reporting: the readers' functions and views (every tenant the reader sees)
 -- ---------------------------------------------------------------------------------------------
--- SECURITY DEFINER, owned by cma_owner, search path pinned; the tenant filter is the views' own
+-- SECURITY DEFINER, owned by cma_owner, search path pinned (pg_temp last, so a reader's temporary
+-- objects are never found first); the tenant filter is the views' own
 -- (cma_read.reader_sees). Readers may execute these; the application and public may not.
 create or replace function cma_read.speed_to_lead_rows()
 returns setof cma.speed_to_lead_row
 language sql stable security definer
-set search_path = pg_catalog, cma
+set search_path = pg_catalog, cma, pg_temp
 as $$
   select r.* from cma.tenant t
   cross join lateral cma.speed_to_lead_of(t.id, null, null) r
@@ -948,7 +950,7 @@ $$;
 create or replace function cma_read.lead_to_order_rows()
 returns setof cma.lead_to_order_row
 language sql stable security definer
-set search_path = pg_catalog, cma
+set search_path = pg_catalog, cma, pg_temp
 as $$
   select r.* from cma.tenant t
   cross join lateral cma.lead_to_order_of(t.id, null, null) r
@@ -958,7 +960,7 @@ $$;
 create or replace function cma_read.intake_per_day_rows()
 returns setof cma.intake_per_day_row
 language sql stable security definer
-set search_path = pg_catalog, cma
+set search_path = pg_catalog, cma, pg_temp
 as $$
   select r.* from cma.tenant t
   cross join lateral cma.intake_per_day_of(t.id, null, null) r
@@ -968,7 +970,7 @@ $$;
 create or replace function cma_read.data_quality_rows()
 returns table (tenant_id uuid, check_key text, connection_id uuid, object_type text, object_id text, value text)
 language sql stable security definer
-set search_path = pg_catalog, cma
+set search_path = pg_catalog, cma, pg_temp
 as $$
   select t.id, q.check_key, q.connection_id, q.object_type, q.object_id, q.value
   from cma.tenant t

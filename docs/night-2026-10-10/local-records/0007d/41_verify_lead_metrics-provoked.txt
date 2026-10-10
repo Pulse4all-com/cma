@@ -1,5 +1,3 @@
-DO
-SET
  set_config 
 ------------
  true
@@ -7,7 +5,6 @@ SET
 
 psql:db/41_verify_lead_metrics.sql (provoke true):158: ERROR:  FAIL A1: migration 0007d not recorded
 CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
-CREATE FUNCTION
 psql:db/41_verify_lead_metrics.sql (provoke true):527: ERROR:  FAIL B1: speed to lead rows are d1:called:420:true:true d10:called:2310:true:true d11:called:3000:true:true d13:called:1800:true:true d14:called:-:-:- d16:called:3600:true:true d2:called:900:true:true d3:not_called_open:-:false:false d4:not_called_closed:-:false:false d5:called:1800:true:true d6:called:1200:true:true d7:called:1800:true:true d8:not_called_open:-:false:false d9:called:0:true:true
 CONTEXT:  PL/pgSQL function inline_code_block line 27 at RAISE
 psql:db/41_verify_lead_metrics.sql (provoke true):572: ERROR:  FAIL C1: lead to order rows are d1:1:o-101:first:verify-nl:5.08 d2:2:o-202:repeat:verify-gb:6.80 d3:1:-:-:-:- d4:0:-:-:-:- d5:1:o-501:renewal:verify-nl:1.06
@@ -18,7 +15,6 @@ psql:db/41_verify_lead_metrics.sql (provoke true):743: ERROR:  FAIL E1: data qua
 CONTEXT:  PL/pgSQL function inline_code_block line 86 at RAISE
 psql:db/41_verify_lead_metrics.sql (provoke true):853: ERROR:  FAIL F1: provoked
 CONTEXT:  PL/pgSQL function inline_code_block line 35 at RAISE
-DROP FUNCTION
          tenant          | lead_deals | called | dq_findings |       verdict        
 -------------------------+------------+--------+-------------+----------------------
  pulse4all-invest        |          0 |      0 |           0 | PROVOKED, NOT A PASS
