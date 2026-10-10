@@ -1,0 +1,15 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+         tenant          | people | verdict 
+-------------------------+--------+---------
+ pulse4all-invest        |      0 | PASS
+ pulse4all-subscriptions |      2 | PASS
+(2 rows)
+

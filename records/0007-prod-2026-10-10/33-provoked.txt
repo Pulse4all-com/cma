@@ -1,0 +1,25 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:180: ERROR:  FAIL A1: migration 0007 not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+psql:/tmp/provoke.sql:370: ERROR:  FAIL B1: 3 markets after four upserts
+CONTEXT:  PL/pgSQL function inline_code_block line 35 at RAISE
+psql:/tmp/provoke.sql:533: ERROR:  FAIL C1: the settings were not kept
+CONTEXT:  PL/pgSQL function inline_code_block line 38 at RAISE
+psql:/tmp/provoke.sql:684: ERROR:  FAIL D1: the first calls gave inserted,inserted
+CONTEXT:  PL/pgSQL function inline_code_block line 40 at RAISE
+psql:/tmp/provoke.sql:869: ERROR:  FAIL E1: after the refresh f1 is Verify form one (renamed), Website, NL, {interest,product} and f2 is archived
+CONTEXT:  PL/pgSQL function inline_code_block line 54 at RAISE
+psql:/tmp/provoke.sql:1059: ERROR:  FAIL F1: provoked
+CONTEXT:  PL/pgSQL function inline_code_block line 57 at RAISE
+         tenant          | markets | aliases | hour_ranges | crm_calls | submissions | sync_runs |       verdict        
+-------------------------+---------+---------+-------------+-----------+-------------+-----------+----------------------
+ pulse4all-invest        |       0 |       0 |           0 |         0 |           0 |         0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |       0 |       0 |           0 |         0 |           0 |         0 | PROVOKED, NOT A PASS
+(2 rows)
+

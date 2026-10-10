@@ -1,0 +1,249 @@
+DO
+SET
+DO
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:72: NOTICE:  constraint "setting_date_default_check" of relation "setting" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+CREATE FUNCTION
+REVOKE
+INSERT 0 8
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+ALTER TABLE
+psql:db/32_intake_core.sql:241: NOTICE:  constraint "integration_connection_settings_check" of relation "integration_connection" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:253: NOTICE:  constraint "connection_field_entity_field_check" of relation "connection_field" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:257: NOTICE:  constraint "connection_field_slot_check" of relation "connection_field" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+DO
+ALTER TABLE
+psql:db/32_intake_core.sql:273: NOTICE:  constraint "crm_contact_ref_slot_check" of relation "crm_contact_ref" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+DO
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:287: NOTICE:  constraint "crm_contact_currency_check" of relation "crm_contact" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:289: NOTICE:  constraint "crm_contact_store_check" of relation "crm_contact" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:296: NOTICE:  constraint "crm_record_currency_check" of relation "crm_record" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:298: NOTICE:  constraint "crm_record_source_channel_check" of relation "crm_record" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+psql:db/32_intake_core.sql:300: NOTICE:  constraint "crm_record_category_check" of relation "crm_record" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:db/32_intake_core.sql:485: NOTICE:  policy "tenant_app" for relation "market" does not exist, skipping
+psql:db/32_intake_core.sql:485: NOTICE:  policy "tenant_readonly" for relation "market" does not exist, skipping
+psql:db/32_intake_core.sql:485: NOTICE:  trigger "audit" for relation "market" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:486: NOTICE:  policy "tenant_app" for relation "market_alias" does not exist, skipping
+psql:db/32_intake_core.sql:486: NOTICE:  policy "tenant_readonly" for relation "market_alias" does not exist, skipping
+psql:db/32_intake_core.sql:486: NOTICE:  trigger "audit" for relation "market_alias" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:487: NOTICE:  policy "tenant_app" for relation "business_hours" does not exist, skipping
+psql:db/32_intake_core.sql:487: NOTICE:  policy "tenant_readonly" for relation "business_hours" does not exist, skipping
+psql:db/32_intake_core.sql:487: NOTICE:  trigger "audit" for relation "business_hours" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:488: NOTICE:  policy "tenant_app" for relation "business_holiday" does not exist, skipping
+psql:db/32_intake_core.sql:488: NOTICE:  policy "tenant_readonly" for relation "business_holiday" does not exist, skipping
+psql:db/32_intake_core.sql:488: NOTICE:  trigger "audit" for relation "business_holiday" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:489: NOTICE:  policy "tenant_app" for relation "crm_call" does not exist, skipping
+psql:db/32_intake_core.sql:489: NOTICE:  policy "tenant_readonly" for relation "crm_call" does not exist, skipping
+psql:db/32_intake_core.sql:489: NOTICE:  trigger "audit" for relation "crm_call" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:490: NOTICE:  policy "tenant_app" for relation "connection_call_outcome" does not exist, skipping
+psql:db/32_intake_core.sql:490: NOTICE:  policy "tenant_readonly" for relation "connection_call_outcome" does not exist, skipping
+psql:db/32_intake_core.sql:490: NOTICE:  trigger "audit" for relation "connection_call_outcome" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:491: NOTICE:  policy "tenant_app" for relation "crm_association" does not exist, skipping
+psql:db/32_intake_core.sql:491: NOTICE:  policy "tenant_readonly" for relation "crm_association" does not exist, skipping
+psql:db/32_intake_core.sql:491: NOTICE:  trigger "audit" for relation "crm_association" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:492: NOTICE:  policy "tenant_app" for relation "connection_form" does not exist, skipping
+psql:db/32_intake_core.sql:492: NOTICE:  policy "tenant_readonly" for relation "connection_form" does not exist, skipping
+psql:db/32_intake_core.sql:492: NOTICE:  trigger "audit" for relation "connection_form" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:493: NOTICE:  policy "tenant_app" for relation "form_submission" does not exist, skipping
+psql:db/32_intake_core.sql:493: NOTICE:  policy "tenant_readonly" for relation "form_submission" does not exist, skipping
+psql:db/32_intake_core.sql:493: NOTICE:  trigger "audit" for relation "form_submission" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:494: NOTICE:  policy "tenant_app" for relation "sync_cursor" does not exist, skipping
+psql:db/32_intake_core.sql:494: NOTICE:  policy "tenant_readonly" for relation "sync_cursor" does not exist, skipping
+psql:db/32_intake_core.sql:494: NOTICE:  trigger "audit" for relation "sync_cursor" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/32_intake_core.sql:495: NOTICE:  policy "tenant_app" for relation "sync_run" does not exist, skipping
+psql:db/32_intake_core.sql:495: NOTICE:  policy "tenant_readonly" for relation "sync_run" does not exist, skipping
+psql:db/32_intake_core.sql:495: NOTICE:  trigger "audit" for relation "sync_run" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+GRANT
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+RESET
