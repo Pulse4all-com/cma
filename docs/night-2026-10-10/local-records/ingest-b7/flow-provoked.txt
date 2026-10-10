@@ -1,0 +1,65 @@
+verify/flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  GET /health answers ok and the version                           got {"ok":true,"version":"dev"}, wanted {"ok":false}
+FAIL  an unknown key → 404                                             got 404, wanted 401
+FAIL  a malformed key → 404                                            got 404, wanted 401
+FAIL  a connection of another adapter on /hubspot → 404                got 404, wanted 401
+FAIL  a route without an adapter → 404                                 got 404, wanted 200
+FAIL  GET on a webhook route → 404                                     got 404, wanted 405
+FAIL  unsigned → 401                                                   got 401, wanted 200
+FAIL  signed with another secret → 401                                 got 401, wanted 200
+FAIL  a timestamp 6 minutes old → 401                                  got 401, wanted 200
+FAIL  a signature for another URI → 401                                got 401, wanted 200
+FAIL  refused requests wrote nothing                                   got 0, wanted 4
+FAIL  refused requests read nothing from HubSpot                       got 0, wanted 1
+FAIL  a signed batch → 200                                             got 200, wanted 401
+FAIL  four events recorded, all processed                              got [{"status":"processed","n":4}], wanted [{"status":"received","n":4}]
+FAIL  the deal with its contact, market GB through the alias uk        got ["4300000001","GB","en"], wanted ["4300000001","uk","en"]
+FAIL  the deal's amount, currency, pipeline, stage, owner              got ["1200.50","EUR","p-sales","s-new","7100000001"], wanted []
+FAIL  the deal is open by its stage (pipelines refreshed)              got false, wanted null
+FAIL  the deal's raw holds no deal name                                got false, wanted true
+FAIL  the contact with country, language, currency                     got ["GB","en","GBP"], wanted ["uk","en","gbp"]
+FAIL  the contact's two Shopify ref slots                              got [[1,"6000000001"],[2,"6000000002"]], wanted [[1,"6000000001"]]
+FAIL  the contact's email was never read                               got false, wanted true
+FAIL  the call: outbound, 61 s, outcome, owner, source app             got ["outbound",61,"f240bbac-0000-0000-0000-000000000001","7100000001","in, wanted []
+FAIL  the call's counterpart hash is HMAC(pepper, E.164)               got "6bda30c73c8fea25652f9ffaa6cae7956ab640ea38760f82b7e88c387f88d3e7", wanted null
+FAIL  the call's raw holds no number and no body                       got false, wanted true
+FAIL  associations deal→contact, call→contact, call→deal               got ["crm_call>contact:4300000001","crm_call>deal:4100000001","deal>contac, wanted []
+FAIL  the call outcome catalog                                         got 2, wanted 0
+FAIL  the pipelines and stages                                         got ["s-new","s-won","t-closed"], wanted []
+FAIL  deals were read with structural and configured properties only   got true, wanted false
+FAIL  contacts were read with configured properties only               got true, wanted false
+FAIL  every HubSpot call carried the connection's token                got true, wanted false
+FAIL  the same delivery again → 200                                    got 200, wanted 500
+FAIL  …written once: still four events                                 got 4, wanted 8
+FAIL  …and no second read-back                                         got 9, wanted 10
+FAIL  …one deal row                                                    got 1, wanted 2
+FAIL  HubSpot down → still 200                                         got 200, wanted 500
+FAIL  …the event failed with http_503, one attempt, retried later      got ["failed","http_503",1,true], wanted ["processed",null,1,false]
+FAIL  HubSpot rate limit → still 200                                   got 200, wanted 500
+FAIL  …the event failed with rate_limited                              got "rate_limited", wanted null
+FAIL  HubSpot slower than the budget → 200 within about the budget     got [200,true], wanted [200,false]
+FAIL  …the event failed with timeout                                   got "timeout", wanted null
+FAIL  an event of another portal → 200                                 got 200, wanted 401
+FAIL  …recorded as ignored portal_mismatch                             got ["ignored","portal_mismatch"], wanted ["processed",null]
+FAIL  …and never read back                                             got 12, wanted 13
+FAIL  a database error before the commit → 500                         got 500, wanted 200
+FAIL  …and nothing of the request was written                          got 8, wanted 9
+FAIL  600 events in one request → 200                                  got 200, wanted 500
+FAIL  …all 600 recorded (two batches of at most 500)                   got 600, wanted 500
+FAIL  …contacts the CMA does not hold are ignored without a read       got [600,0], wanted [0,0]
+FAIL  an association removal: deal→contact removed                     got true, wanted false
+FAIL  privacy deletion: the contact cleared, refs gone                 got [null,true,0], wanted ["GB",false,2]
+FAIL  privacy deletion: the call's hash cleared                        got null, wanted "6bda30c73c8fea25652f9ffaa6cae7956ab640ea38760f82b7e88c387f88d3e7"
+FAIL  a deal deletion marks the record deleted                         got true, wanted false
+FAIL  tenant one's secret on tenant two's key → 401                    got 401, wanted 200
+FAIL  tenant two's own signed event → 200                              got 200, wanted 401
+FAIL  tenant two's record lives in tenant two                          got ["01a1245f-6ff4-7665-90c0-398cbb40d3bd"], wanted ["01a1245f-6fda-7cb2-be29-812620868d01"]
+FAIL  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two", wanted "Bearer fixture-token-one"
+FAIL  tenant one cannot see tenant two's records                       got 0, wanted 1
+FAIL  tenant one's records unchanged by tenant two                     got 1, wanted 2
+FAIL  no phone number anywhere in the event, call or record rows       got false, wanted true
+FAIL  the logs hold no number, token, secret or contact id             got [false,false,false,false], wanted [true,true,true,true]
+FAIL  header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not got [true,false], wanted [false,true]
+
+ALL 61 PROVOKED CHECKS FAILED, as they must

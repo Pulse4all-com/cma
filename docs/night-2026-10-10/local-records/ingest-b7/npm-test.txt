@@ -1,0 +1,103 @@
+
+> cma-ingest@0.1.0 test
+> npm run verify:signature && npm run verify:mapping && npm run verify:hash
+
+
+> cma-ingest@0.1.0 verify:signature
+> node verify/signature.mjs
+
+verify/signature.mjs
+
+PASS  signV3 equals the documented construction                        got "3A3HP6wNx19p9aIlUtrpGv7a7ukK/KMwD3qBXAMsoIE="
+PASS  a valid v3 signature is accepted                                 got {"ok":true}
+PASS  the method is part of the signature                              got "bad_signature"
+PASS  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}
+PASS  a timestamp 6 minutes old is refused                             got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 6 minutes ahead is refused                           got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 4 minutes old is accepted                            got {"ok":true}
+PASS  a tampered body is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a wrong URI is refused                                           got {"ok":false,"reason":"bad_signature"}
+PASS  a query string is part of the URI                                got false
+PASS  one matching URI among the candidates is enough                  got {"ok":true}
+PASS  a missing signature header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a missing timestamp header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a non-numeric timestamp is refused                               got {"ok":false,"reason":"bad_timestamp"}
+PASS  an empty secret is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a v1-style signature (hex SHA-256) is refused                    got false
+PASS  HubSpot's decoded characters in the URI                          got "https://ingest.example.com/hubspot/key:a/b@c?q=,;"
+PASS  a signature over the decoded URI is accepted                     got true
+
+ALL 18 PASS
+
+> cma-ingest@0.1.0 verify:mapping
+> node verify/mapping.mjs
+
+verify/mapping.mjs
+
+PASS  one canonical event per webhook event                            got 10
+PASS  event key is hs:<eventId>                                        got "hs:3000000101"
+PASS  deal creation → created deal                                     got ["created","deal","4100000001"]
+PASS  occurredAt in ISO 8601                                           got "2026-10-10T09:00:00.000Z"
+PASS  attempt is attemptNumber + 1                                     got 2
+PASS  property change → changed with the property name                 got ["changed","dealstage"]
+PASS  call creation → created crm_call                                 got ["created","crm_call"]
+PASS  contact→call association: the call is read back                  got ["associated","crm_call","4200000001",null]
+PASS  deal→company association is not kept                             got "association_not_kept"
+PASS  merge → merged on the surviving id, merged ids kept              got ["merged","4300000001",["4300000002"]]
+PASS  deletion → deleted ticket                                        got ["deleted","ticket"]
+PASS  restore → restored deal                                          got "restored"
+PASS  another portal → ignored portal_mismatch                         got "portal_mismatch"
+PASS  events of this portal are not ignored                            got 8
+PASS  no property value is kept (ids only)                             got false
+PASS  no acting user is kept                                           got false
+PASS  raw keeps the event id and subscription                          got ["3000000101","object.creation"]
+PASS  contact.privacyDeletion → deleted contact, privacy flag          got ["deleted","contact","4300000001",true]
+PASS  deal.creation (object-named) → created deal                      got ["created","deal",3]
+PASS  DEAL_TO_CONTACT removal → associated deal, removal noted         got ["deal","4100000004",true,"4300000003"]
+PASS  an object (not an array) body is one event                       got 1
+PASS  an event without an id or object is kept as malformed            got "malformed"
+PASS  a company event is not kept                                      got "object_not_kept"
+PASS  kept association direction: deal → contact                       got {"fromType":"deal","fromId":"2","toType":"contact","toId":"1"}
+PASS  deal properties: structural plus configured only                 got ["amount","closedate","createdate","deal_currency_code","dealstage","h
+PASS  contact properties: configured only                              got ["contact_country","contact_language","contact_shopify_id_1","contact_
+PASS  deal → record ids, pipeline, stage, owner                        got ["4100000001","p-sales","s-new","7100000001"]
+PASS  record amount and currency from the mapping                      got ["1200.50","eur"]
+PASS  no market property mapped: the contact's country                 got ["uk","en"]
+PASS  record raw holds requested properties only                       got false
+PASS  record times                                                     got ["2026-10-10T09:00:00.000Z","2026-10-10T09:01:00.000Z"]
+PASS  a mapped market property wins over the contact                   got null
+PASS  contact → country, language and two ref slots                    got ["NL","nl",{"shopify":[null,"6000000002"]}]
+PASS  primary contact: the labelled one                                got "12"
+PASS  primary contact: the held one when still associated              got "12"
+PASS  primary contact: else the lowest id                              got "9"
+PASS  association diff: new added, gone removed                        got [{"fromType":"deal","fromId":"1","toType":"contact","toId":"2","remove
+
+ALL 37 PASS
+
+> cma-ingest@0.1.0 verify:hash
+> node verify/hash.mjs
+
+verify/hash.mjs
+
+PASS  international format → E.164                                     got "+442000000001"
+PASS  national format with region GB → E.164                           got "+442000000001"
+PASS  00 prefix with region GB → E.164                                 got "+442000000001"
+PASS  national format with region NL → E.164                           got "+31200000001"
+PASS  the hash is HMAC-SHA256(pepper, E.164) in hex                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  national and international formats hash the same                 got true
+PASS  spaces, dashes and brackets do not change the hash               got true
+PASS  another region reads a national number differently               got false
+PASS  a different pepper gives a different hash                        got false
+PASS  another number gives another hash                                got false
+PASS  a national number without a region gives no hash                 got null
+PASS  too short to be a number gives no hash                           got null
+PASS  text gives no hash                                               got null
+PASS  no pepper gives no hash                                          got null
+PASS  a lower-case region is not used                                  got null
+PASS  the hash is 64 lower-case hex characters                         got true
+PASS  an outbound call hashes the number it called                     got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  no digits of either number remain in the call                    got false
+PASS  an inbound call hashes the number that called                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  a call of unknown direction gets no hash                         got null
+
+ALL 20 PASS

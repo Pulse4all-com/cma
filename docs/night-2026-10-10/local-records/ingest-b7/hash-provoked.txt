@@ -1,0 +1,24 @@
+verify/hash.mjs  (--provoke: every check must FAIL)
+
+FAIL  international format → E.164                                     got "+442000000001", wanted "+44 20 0000 0001"
+FAIL  national format with region GB → E.164                           got "+442000000001", wanted null
+FAIL  00 prefix with region GB → E.164                                 got "+442000000001", wanted null
+FAIL  national format with region NL → E.164                           got "+31200000001", wanted "+442000000001"
+FAIL  the hash is HMAC-SHA256(pepper, E.164) in hex                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted "x"
+FAIL  national and international formats hash the same                 got true, wanted false
+FAIL  spaces, dashes and brackets do not change the hash               got true, wanted false
+FAIL  another region reads a national number differently               got false, wanted true
+FAIL  a different pepper gives a different hash                        got false, wanted true
+FAIL  another number gives another hash                                got false, wanted true
+FAIL  a national number without a region gives no hash                 got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  too short to be a number gives no hash                           got null, wanted "x"
+FAIL  text gives no hash                                               got null, wanted "x"
+FAIL  no pepper gives no hash                                          got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  a lower-case region is not used                                  got null, wanted "+442000000001"
+FAIL  the hash is 64 lower-case hex characters                         got true, wanted false
+FAIL  an outbound call hashes the number it called                     got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  no digits of either number remain in the call                    got false, wanted true
+FAIL  an inbound call hashes the number that called                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  a call of unknown direction gets no hash                         got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+
+ALL 20 PROVOKED CHECKS FAILED, as they must

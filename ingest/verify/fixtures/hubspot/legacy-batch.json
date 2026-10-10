@@ -1,0 +1,7 @@
+[
+  { "eventId": 3000000301, "subscriptionId": 5000201, "portalId": 9000001, "appId": 8000001, "occurredAt": 1791623100000,
+    "subscriptionType": "deal.creation", "attemptNumber": 2, "objectId": 4100000004, "changeSource": "CRM_UI" },
+  { "eventId": 3000000302, "subscriptionId": 5000202, "portalId": 9000001, "appId": 8000001, "occurredAt": 1791623110000,
+    "subscriptionType": "deal.associationChange", "attemptNumber": 0, "associationType": "DEAL_TO_CONTACT",
+    "fromObjectId": 4100000004, "toObjectId": 4300000003, "associationRemoved": true }
+]

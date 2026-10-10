@@ -1,0 +1,65 @@
+verify/flow.mjs
+
+PASS  GET /health answers ok and the version                           got {"ok":true,"version":"dev"}
+PASS  an unknown key → 404                                             got 404
+PASS  a malformed key → 404                                            got 404
+PASS  a connection of another adapter on /hubspot → 404                got 404
+PASS  a route without an adapter → 404                                 got 404
+PASS  GET on a webhook route → 404                                     got 404
+PASS  unsigned → 401                                                   got 401
+PASS  signed with another secret → 401                                 got 401
+PASS  a timestamp 6 minutes old → 401                                  got 401
+PASS  a signature for another URI → 401                                got 401
+PASS  refused requests wrote nothing                                   got 0
+PASS  refused requests read nothing from HubSpot                       got 0
+PASS  a signed batch → 200                                             got 200
+PASS  four events recorded, all processed                              got [{"status":"processed","n":4}]
+PASS  the deal with its contact, market GB through the alias uk        got ["4300000001","GB","en"]
+PASS  the deal's amount, currency, pipeline, stage, owner              got ["1200.50","EUR","p-sales","s-new","7100000001"]
+PASS  the deal is open by its stage (pipelines refreshed)              got false
+PASS  the deal's raw holds no deal name                                got false
+PASS  the contact with country, language, currency                     got ["GB","en","GBP"]
+PASS  the contact's two Shopify ref slots                              got [[1,"6000000001"],[2,"6000000002"]]
+PASS  the contact's email was never read                               got false
+PASS  the call: outbound, 61 s, outcome, owner, source app             got ["outbound",61,"f240bbac-0000-0000-0000-000000000001","7100000001","in
+PASS  the call's counterpart hash is HMAC(pepper, E.164)               got "6bda30c73c8fea25652f9ffaa6cae7956ab640ea38760f82b7e88c387f88d3e7"
+PASS  the call's raw holds no number and no body                       got false
+PASS  associations deal→contact, call→contact, call→deal               got ["crm_call>contact:4300000001","crm_call>deal:4100000001","deal>contac
+PASS  the call outcome catalog                                         got 2
+PASS  the pipelines and stages                                         got ["s-new","s-won","t-closed"]
+PASS  deals were read with structural and configured properties only   got true
+PASS  contacts were read with configured properties only               got true
+PASS  every HubSpot call carried the connection's token                got true
+PASS  the same delivery again → 200                                    got 200
+PASS  …written once: still four events                                 got 4
+PASS  …and no second read-back                                         got 9
+PASS  …one deal row                                                    got 1
+PASS  HubSpot down → still 200                                         got 200
+PASS  …the event failed with http_503, one attempt, retried later      got ["failed","http_503",1,true]
+PASS  HubSpot rate limit → still 200                                   got 200
+PASS  …the event failed with rate_limited                              got "rate_limited"
+PASS  HubSpot slower than the budget → 200 within about the budget     got [200,true]
+PASS  …the event failed with timeout                                   got "timeout"
+PASS  an event of another portal → 200                                 got 200
+PASS  …recorded as ignored portal_mismatch                             got ["ignored","portal_mismatch"]
+PASS  …and never read back                                             got 12
+PASS  a database error before the commit → 500                         got 500
+PASS  …and nothing of the request was written                          got 8
+PASS  600 events in one request → 200                                  got 200
+PASS  …all 600 recorded (two batches of at most 500)                   got 600
+PASS  …contacts the CMA does not hold are ignored without a read       got [600,0]
+PASS  an association removal: deal→contact removed                     got true
+PASS  privacy deletion: the contact cleared, refs gone                 got [null,true,0]
+PASS  privacy deletion: the call's hash cleared                        got null
+PASS  a deal deletion marks the record deleted                         got true
+PASS  tenant one's secret on tenant two's key → 401                    got 401
+PASS  tenant two's own signed event → 200                              got 200
+PASS  tenant two's record lives in tenant two                          got ["01a1245f-6424-7653-ba00-129efc804025"]
+PASS  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two"
+PASS  tenant one cannot see tenant two's records                       got 0
+PASS  tenant one's records unchanged by tenant two                     got 1
+PASS  no phone number anywhere in the event, call or record rows       got false
+PASS  the logs hold no number, token, secret or contact id             got [false,false,false,false]
+PASS  header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not got [true,false]
+
+ALL 61 PASS
