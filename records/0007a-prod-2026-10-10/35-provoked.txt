@@ -1,0 +1,25 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:141: ERROR:  FAIL A1: migration 0007a not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+psql:/tmp/provoke.sql:296: ERROR:  FAIL B1: out-of-order events gave inserted,stale,stale and left done, 2026-10-12 10:05:02+00, talk 280
+CONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE
+psql:/tmp/provoke.sql:435: ERROR:  FAIL C1: the first tags are tg-a,tg-b
+CONTEXT:  PL/pgSQL function inline_code_block line 39 at RAISE
+psql:/tmp/provoke.sql:596: ERROR:  FAIL D1: link_calls made 2 link(s): T1>K1:-30:hash_time,T6>K6:10:hash_time
+CONTEXT:  PL/pgSQL function inline_code_block line 61 at RAISE
+psql:/tmp/provoke.sql:681: ERROR:  FAIL E1: 2 current links before the deletion, expected 2
+CONTEXT:  PL/pgSQL function inline_code_block line 55 at RAISE
+psql:/tmp/provoke.sql:831: ERROR:  FAIL F1: provoked
+CONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE
+         tenant          | lines | tags | telephony_calls | call_links |       verdict        
+-------------------------+-------+------+-----------------+------------+----------------------
+ pulse4all-invest        |     0 |    0 |               0 |          0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |     0 |    0 |               0 |          0 | PROVOKED, NOT A PASS
+(2 rows)
+
