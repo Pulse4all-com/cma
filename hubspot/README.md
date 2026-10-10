@@ -44,7 +44,7 @@ Files:
 
 Two things to know:
 
-- **`tickets` also allows writing tickets.** HubSpot has no read-only ticket scope: in the spec, create, update, merge and delete of tickets all require the same `tickets` scope as reading them. The CMA never writes tickets. The verifier allows exactly `crm.objects.contacts.write` and `tickets` as write-capable scopes, so adding any other one fails it.
+- **`tickets` also allows writing tickets.** HubSpot has no read-only ticket scope: in the spec, create, update, merge and delete of tickets all require the same `tickets` scope as reading them. The CMA never writes tickets; Martin accepted the scope on 10 October 2026 (README Decision log). The verifier allows exactly `crm.objects.contacts.write` and `tickets` as write-capable scopes, so adding any other one fails it.
 - **Call dispositions need no extra scope, as far as could be checked.** The outcome catalog endpoint (`/calling/v1/dispositions`) is not in the published specs, and no separate scope is requested for it. If the first catalog read answers 403, the scope it names gets added here.
 
 ## Subscriptions and their canonical kinds
