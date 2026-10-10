@@ -1,0 +1,66 @@
+DO
+SET
+DO
+psql:42_messaging.sql:87: NOTICE:  relation "message_rule" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:42_messaging.sql:117: NOTICE:  relation "message" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+psql:42_messaging.sql:122: NOTICE:  relation "message_rule_ref_idx" already exists, skipping
+CREATE INDEX
+psql:42_messaging.sql:123: NOTICE:  relation "message_created_idx" already exists, skipping
+CREATE INDEX
+psql:42_messaging.sql:138: NOTICE:  relation "message_delivery" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:42_messaging.sql:140: NOTICE:  relation "message_delivery_user_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+psql:42_messaging.sql:168: NOTICE:  policy "tenant_readonly" for relation "cma.message_rule" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:42_messaging.sql:169: NOTICE:  policy "tenant_readonly" for relation "cma.message" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:42_messaging.sql:170: NOTICE:  policy "tenant_readonly" for relation "cma.message_delivery" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+REVOKE
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+RESET
