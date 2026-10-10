@@ -1,0 +1,421 @@
+DO
+   rolname    | rolcanlogin 
+--------------+-------------
+ bq_reader    | t
+ cma_app      | f
+ cma_owner    | f
+ cma_readonly | f
+(4 rows)
+
+         relname         |   owner   | rls_on 
+-------------------------+-----------+--------
+ absence_type            | cma_owner | t
+ app_link                | cma_owner | t
+ app_role                | cma_owner | t
+ app_user                | cma_owner | t
+ app_user_external_id    | cma_owner | t
+ audit_log               | cma_owner | t
+ business_holiday        | cma_owner | t
+ business_hours          | cma_owner | t
+ call_link               | cma_owner | t
+ channel                 | cma_owner | t
+ commerce_customer       | cma_owner | t
+ commerce_order          | cma_owner | t
+ commerce_order_line     | cma_owner | t
+ commerce_store          | cma_owner | t
+ connection_call_outcome | cma_owner | t
+ connection_field        | cma_owner | t
+ connection_form         | cma_owner | t
+ connection_pipeline     | cma_owner | t
+ connection_stage        | cma_owner | t
+ coverage_target         | cma_owner | t
+ crm_association         | cma_owner | t
+ crm_call                | cma_owner | t
+ crm_contact             | cma_owner | t
+ crm_contact_ref         | cma_owner | t
+ crm_record              | cma_owner | t
+ form_submission         | cma_owner | t
+ ingest_event            | cma_owner | t
+ integration_connection  | cma_owner | t
+ market                  | cma_owner | t
+ market_alias            | cma_owner | t
+ message                 | cma_owner | t
+ message_delivery        | cma_owner | t
+ message_rule            | cma_owner | t
+ organisation            | cma_owner | t
+ outbox_action           | cma_owner | t
+ permission              | cma_owner | f
+ role_permission         | cma_owner | t
+ roster_entry            | cma_owner | t
+ roster_publication      | cma_owner | t
+ roster_week             | cma_owner | t
+ schema_migration        | cma_owner | f
+ setting                 | cma_owner | f
+ skill                   | cma_owner | t
+ skill_level             | cma_owner | t
+ sync_cursor             | cma_owner | t
+ sync_run                | cma_owner | t
+ team                    | cma_owner | t
+ team_member             | cma_owner | t
+ telephony_call          | cma_owner | t
+ telephony_call_tag      | cma_owner | t
+ telephony_number        | cma_owner | t
+ telephony_tag           | cma_owner | t
+ tenant                  | cma_owner | f
+ tenant_setting          | cma_owner | t
+ time_event              | cma_owner | t
+ user_role               | cma_owner | t
+ user_skill              | cma_owner | t
+ work_status             | cma_owner | t
+ workday                 | cma_owner | t
+ writeback_field         | cma_owner | t
+(60 rows)
+
+        tablename        | policyname |   roles   | cmd 
+-------------------------+------------+-----------+-----
+ absence_type            | tenant_app | {cma_app} | ALL
+ app_link                | tenant_app | {cma_app} | ALL
+ app_role                | tenant_app | {cma_app} | ALL
+ app_user                | tenant_app | {cma_app} | ALL
+ app_user_external_id    | tenant_app | {cma_app} | ALL
+ audit_log               | tenant_app | {cma_app} | ALL
+ business_holiday        | tenant_app | {cma_app} | ALL
+ business_hours          | tenant_app | {cma_app} | ALL
+ call_link               | tenant_app | {cma_app} | ALL
+ channel                 | tenant_app | {cma_app} | ALL
+ commerce_customer       | tenant_app | {cma_app} | ALL
+ commerce_order          | tenant_app | {cma_app} | ALL
+ commerce_order_line     | tenant_app | {cma_app} | ALL
+ commerce_store          | tenant_app | {cma_app} | ALL
+ connection_call_outcome | tenant_app | {cma_app} | ALL
+ connection_field        | tenant_app | {cma_app} | ALL
+ connection_form         | tenant_app | {cma_app} | ALL
+ connection_pipeline     | tenant_app | {cma_app} | ALL
+ connection_stage        | tenant_app | {cma_app} | ALL
+ coverage_target         | tenant_app | {cma_app} | ALL
+ crm_association         | tenant_app | {cma_app} | ALL
+ crm_call                | tenant_app | {cma_app} | ALL
+ crm_contact             | tenant_app | {cma_app} | ALL
+ crm_contact_ref         | tenant_app | {cma_app} | ALL
+ crm_record              | tenant_app | {cma_app} | ALL
+ form_submission         | tenant_app | {cma_app} | ALL
+ ingest_event            | tenant_app | {cma_app} | ALL
+ integration_connection  | tenant_app | {cma_app} | ALL
+ market                  | tenant_app | {cma_app} | ALL
+ market_alias            | tenant_app | {cma_app} | ALL
+ message                 | tenant_app | {cma_app} | ALL
+ message_delivery        | tenant_app | {cma_app} | ALL
+ message_rule            | tenant_app | {cma_app} | ALL
+ organisation            | tenant_app | {cma_app} | ALL
+ outbox_action           | tenant_app | {cma_app} | ALL
+ role_permission         | tenant_app | {cma_app} | ALL
+ roster_entry            | tenant_app | {cma_app} | ALL
+ roster_publication      | tenant_app | {cma_app} | ALL
+ roster_week             | tenant_app | {cma_app} | ALL
+ skill                   | tenant_app | {cma_app} | ALL
+ skill_level             | tenant_app | {cma_app} | ALL
+ sync_cursor             | tenant_app | {cma_app} | ALL
+ sync_run                | tenant_app | {cma_app} | ALL
+ team                    | tenant_app | {cma_app} | ALL
+ team_member             | tenant_app | {cma_app} | ALL
+ telephony_call          | tenant_app | {cma_app} | ALL
+ telephony_call_tag      | tenant_app | {cma_app} | ALL
+ telephony_number        | tenant_app | {cma_app} | ALL
+ telephony_tag           | tenant_app | {cma_app} | ALL
+ tenant_setting          | tenant_app | {cma_app} | ALL
+ time_event              | tenant_app | {cma_app} | ALL
+ user_role               | tenant_app | {cma_app} | ALL
+ user_skill              | tenant_app | {cma_app} | ALL
+ work_status             | tenant_app | {cma_app} | ALL
+ workday                 | tenant_app | {cma_app} | ALL
+ writeback_field         | tenant_app | {cma_app} | ALL
+(56 rows)
+
+         table_name          
+-----------------------------
+ cma.organisation
+ cma.channel
+ cma.app_user
+ cma.app_user_external_id
+ cma.app_role
+ cma.role_permission
+ cma.user_role
+ cma.work_status
+ cma.workday
+ cma.time_event
+ cma.tenant_setting
+ cma.app_link
+ cma.team
+ cma.team_member
+ cma.skill
+ cma.skill_level
+ cma.user_skill
+ cma.absence_type
+ cma.roster_week
+ cma.roster_publication
+ cma.roster_entry
+ cma.coverage_target
+ cma.integration_connection
+ cma.connection_field
+ cma.connection_pipeline
+ cma.connection_stage
+ cma.ingest_event
+ cma.crm_record
+ cma.crm_contact
+ cma.crm_contact_ref
+ cma.market
+ cma.market_alias
+ cma.business_hours
+ cma.business_holiday
+ cma.crm_call
+ cma.connection_call_outcome
+ cma.crm_association
+ cma.connection_form
+ cma.form_submission
+ cma.sync_cursor
+ cma.sync_run
+ cma.telephony_call
+ cma.telephony_tag
+ cma.telephony_call_tag
+ cma.telephony_number
+ cma.call_link
+ cma.commerce_store
+ cma.commerce_customer
+ cma.commerce_order
+ cma.commerce_order_line
+ cma.message_rule
+ cma.message
+ cma.message_delivery
+ cma.writeback_field
+ cma.outbox_action
+(55 rows)
+
+       table_name        
+-------------------------
+ absence_type
+ app_link
+ app_role
+ app_user
+ app_user_external_id
+ audit_log
+ business_holiday
+ business_hours
+ call_link
+ channel
+ commerce_customer
+ commerce_order
+ commerce_order_line
+ commerce_store
+ connection_call_outcome
+ connection_form
+ connection_pipeline
+ connection_stage
+ coverage_target
+ crm_association
+ crm_call
+ crm_contact
+ crm_contact_ref
+ crm_record
+ crm_record_detail
+ form_submission
+ ingest_event
+ integration_connection
+ market
+ market_alias
+ message
+ message_delivery
+ message_rule
+ organisation
+ outbox_action
+ permission
+ role_permission
+ roster_entry
+ roster_publication
+ roster_published_entry
+ roster_week
+ setting
+ skill
+ skill_level
+ sync_run
+ team
+ team_member
+ telephony_call
+ telephony_call_tag
+ telephony_number
+ telephony_tag
+ tenant
+ tenant_setting
+ time_event
+ time_interval
+ user_role
+ user_skill
+ work_status
+ workday
+ workday_summary
+ writeback_field
+(61 rows)
+
+ reader_on_base_tables | reader_on_views | app_on_views | bq_reader_is_reader 
+-----------------------+-----------------+--------------+---------------------
+ f                     | t               | f            | t
+(1 row)
+
+          slug           | users 
+-------------------------+-------
+ pulse4all-invest        |     3
+ pulse4all-subscriptions |     8
+(2 rows)
+
+      table_name      | action | changes |     actor_login      | system_actor 
+----------------------+--------+---------+----------------------+--------------
+ absence_type         | insert |      10 | martin@pulse4all.com | t
+ app_link             | insert |       5 | martin@pulse4all.com | t
+ app_role             | insert |      14 | martin@pulse4all.com | t
+ app_user             | insert |      11 | martin@pulse4all.com | t
+ app_user             | update |       1 | martin@pulse4all.com | t
+ app_user_external_id | insert |      13 | martin@pulse4all.com | t
+ channel              | insert |       4 | martin@pulse4all.com | t
+ organisation         | insert |       4 | martin@pulse4all.com | t
+ organisation         | update |       1 | martin@pulse4all.com | t
+ role_permission      | delete |       4 | martin@pulse4all.com | t
+ role_permission      | insert |     104 | martin@pulse4all.com | t
+ roster_entry         | insert |      10 | martin@pulse4all.com | f
+ roster_publication   | insert |       2 | martin@pulse4all.com | f
+ roster_week          | insert |       3 | martin@pulse4all.com | f
+ roster_week          | update |       2 | martin@pulse4all.com | f
+ skill                | insert |      11 | martin@pulse4all.com | t
+ skill_level          | insert |       8 | martin@pulse4all.com | t
+ team                 | insert |       5 | martin@pulse4all.com | t
+ team_member          | insert |       4 | martin@pulse4all.com | f
+ tenant_setting       | insert |       6 | martin@pulse4all.com | t
+ time_event           | insert |      11 | martin@pulse4all.com | f
+ user_role            | insert |      11 | martin@pulse4all.com | t
+ user_skill           | insert |      12 | martin@pulse4all.com | f
+ work_status          | insert |       3 | martin@pulse4all.com | t
+ work_status          | update |       2 | martin@pulse4all.com | t
+ workday              | insert |       5 | martin@pulse4all.com | f
+ workday              | update |      11 | martin@pulse4all.com | f
+(27 rows)
+
+BEGIN
+              set_config              
+--------------------------------------
+ 01a127c3-373f-790f-9e79-6a03f43cafb1
+(1 row)
+
+       slug       
+------------------
+ pulse4all-invest
+(1 row)
+
+ invest_users 
+--------------
+            3
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a127c3-3735-7368-80fa-6a1096c7e684
+(1 row)
+
+              set_config              
+--------------------------------------
+ 01a127c3-3776-7a6c-b93a-30a202490536
+(1 row)
+
+  set_config   
+---------------
+ verify-script
+(1 row)
+
+          email           |  display_name   
+--------------------------+-----------------
+ admin@example.com        | Test Admin
+ agent.one@example.com    | Agent One
+ agent.two@example.com    | Agent Two
+ analyst@example.com      | Test Analyst
+ ingest@system.invalid    | Ingest
+ manager@example.com      | Test Manager
+ scheduler@system.invalid | Scheduler
+ supervisor@example.com   | Test Supervisor
+(8 rows)
+
+ organisation | users 
+--------------+-------
+ newco        |     3
+ pulse4all    |     3
+(2 rows)
+
+  key  | is_synchronous 
+-------+----------------
+ email | f
+ phone | t
+(2 rows)
+
+          email           |    role    | scope_type 
+--------------------------+------------+------------
+ admin@example.com        | admin      | 
+ agent.one@example.com    | agent      | 
+ agent.two@example.com    | agent      | 
+ analyst@example.com      | analytics  | 
+ ingest@system.invalid    | ingest     | 
+ manager@example.com      | manager    | 
+ scheduler@system.invalid | scheduler  | 
+ supervisor@example.com   | supervisor | 
+(8 rows)
+
+    role    | permissions 
+------------+-------------
+ admin      |          17
+ agent      |           4
+ analytics  |           4
+ ingest     |           1
+ manager    |          15
+ scheduler  |           1
+ supervisor |           8
+(7 rows)
+
+UPDATE 1
+ table_name | action | actor_db_role |  actor_label  | actor_is_manager |  before   |        after        
+------------+--------+---------------+---------------+------------------+-----------+---------------------
+ app_user   | update | cma_app       | verify-script | t                | Agent One | Agent One (renamed)
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+ should_be_zero 
+----------------
+              0
+(1 row)
+
+ should_be_zero 
+----------------
+              0
+(1 row)
+
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a127c3-3735-7368-80fa-6a1096c7e684
+(1 row)
+
+psql:/home/user/cma/db/04_verify.sql:152: ERROR:  new row violates row-level security policy for table "app_user"
+ROLLBACK
+BEGIN
+SET
+              set_config              
+--------------------------------------
+ 01a127c3-3735-7368-80fa-6a1096c7e684
+(1 row)
+
+psql:/home/user/cma/db/04_verify.sql:162: ERROR:  permission denied for table audit_log
+ROLLBACK
+psql:/home/user/cma/db/04_verify.sql:167: ERROR:  permission denied for schema cma
+LINE 1: select count(*) from cma.app_user;
+                             ^

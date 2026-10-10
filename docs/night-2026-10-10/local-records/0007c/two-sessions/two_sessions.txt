@@ -1,0 +1,77 @@
+== setup: four pending actions (contacts 9000001 to 9000004)
+ enqueued 
+----------
+ t
+ t
+ t
+ t
+(4 rows)
+
+== case 1: worker A claims 2 and holds its transaction 4 s; worker B claims up to 50 one second later
+ worker |      claimed      | n | seconds 
+--------+-------------------+---+---------
+ A      | {9000001,9000002} | 2 |    0.01
+(1 row)
+SET
+COMMIT
+ worker |      claimed      | n | seconds 
+--------+-------------------+---+---------
+ B      | {9000003,9000004} | 2 |    0.01
+(1 row)
+SET
+COMMIT
+-- after both committed: every action claimed once (attempt 1), all in flight
+ target_id |  status   | attempts 
+-----------+-----------+----------
+ 9000001   | in_flight |        1
+ 9000002   | in_flight |        1
+ 9000003   | in_flight |        1
+ 9000004   | in_flight |        1
+(4 rows)
+
+== case 2: two more pending (9000005, 9000006); worker C claims all and holds 4 s; worker D claims one second later
+ enqueued 
+----------
+ t
+ t
+(2 rows)
+ worker |      claimed      | n | seconds 
+--------+-------------------+---+---------
+ C      | {9000005,9000006} | 2 |    0.01
+(1 row)
+SET
+COMMIT
+ worker | claimed | n | seconds 
+--------+---------+---+---------
+ D      |         | 0 |    0.01
+(1 row)
+SET
+COMMIT
+-- after both committed
+ target_id |  status   | attempts 
+-----------+-----------+----------
+ 9000001   | in_flight |        1
+ 9000002   | in_flight |        1
+ 9000003   | in_flight |        1
+ 9000004   | in_flight |        1
+ 9000005   | in_flight |        1
+ 9000006   | in_flight |        1
+(6 rows)
+
+== case 3: two ingest calls enqueue different values for one contact (9000007) at once; E holds 3 s, F starts one second later
+ caller | enqueued | waited_seconds 
+--------+----------+----------------
+ E      | t        |            0.0
+(1 row)
+COMMIT
+ caller | enqueued | waited_seconds 
+--------+----------+----------------
+ F      | t        |            2.0
+(1 row)
+COMMIT
+-- after both committed: F waited for E, and E's action is superseded by F's (one pending action for the contact)
+ target_id |   status   | attempts 
+-----------+------------+----------
+ 9000007   | superseded |        0
+ 9000007   | pending    |        0
+(8 rows)
