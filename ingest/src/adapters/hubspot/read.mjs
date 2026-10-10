@@ -281,6 +281,8 @@ export async function readBack({ connection, config, events, store, budget }) {
     }
   }
 
+  // Catalogs only when HubSpot answered in this run (a source that is down is not asked twice)
+  if (!units.some((u) => u.status === "processed" && u.eventIds.length && pending.some((g) => g.events.some((e) => u.eventIds.includes(e.eventId))))) return units;
   const types = new Set(pending.map((g) => g.objectType));
   const catalogs = await catalogUnit(api, connection.connectionId, types, budget);
   if (catalogs) units.unshift(catalogs);
