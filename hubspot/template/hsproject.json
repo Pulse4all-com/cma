@@ -1,0 +1,5 @@
+{
+  "name": "{{projectName}}",
+  "srcDir": "src",
+  "platformVersion": "2026.09"
+}

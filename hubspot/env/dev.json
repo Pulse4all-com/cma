@@ -1,0 +1,6 @@
+{
+  "uidSuffix": "dev",
+  "appName": "CMA ingest dev",
+  "targetUrl": "https://cma-ingest.placeholder.invalid/hubspot/CONNECTION-KEY-PLACEHOLDER",
+  "maxConcurrentRequests": 10
+}
