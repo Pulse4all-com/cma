@@ -1,0 +1,16 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+DO
+         tenant          |                                                                                                                                                                                                                                                                                                                                                           settings                                                                                                                                                                                                                                                                                                                                                            | verdict 
+-------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------
+ pulse4all-invest        | alerts.max_age_minutes = 60 (default), commerce.renewal_app_ids =  (default), commerce.renewal_source_names =  (default), export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default), forms.deal_window_hours = 72 (default), ingest.max_attempts = 10 (default), intake.start_date = 2026-10-01 (default), lead_to_order.max_days = 90 (default), outbox.max_attempts = 8 (default), roster.adherence_tolerance_minutes = 5 (default), speed_to_lead.pre_window_minutes = 0 (default), speed_to_lead.target_minutes = 60 (default), workday.auto_close_grace_minutes = 120 (default) | PASS
+ pulse4all-subscriptions | alerts.max_age_minutes = 60 (default), commerce.renewal_app_ids =  (default), commerce.renewal_source_names =  (default), export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default), forms.deal_window_hours = 72 (default), ingest.max_attempts = 10 (default), intake.start_date = 2026-10-01 (default), lead_to_order.max_days = 90 (default), outbox.max_attempts = 8 (default), roster.adherence_tolerance_minutes = 5 (default), speed_to_lead.pre_window_minutes = 0 (default), speed_to_lead.target_minutes = 60 (default), workday.auto_close_grace_minutes = 120 (default) | PASS
+(2 rows)
+

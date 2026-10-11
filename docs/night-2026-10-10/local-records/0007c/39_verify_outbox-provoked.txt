@@ -1,0 +1,25 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:39_verify_outbox-provoked.sql:170: ERROR:  FAIL A1: migration 0007c not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+psql:39_verify_outbox-provoked.sql:299: ERROR:  FAIL B1: write-back fields are commerce_orders:1:verify_shop_orders:always:true,commerce_ref:1:verify_shop_id_1:slot:true,commerce_ref:2:verify_shop_id_2:slot:true,commerce_spent:1:verify_shop_spent:always:true,commerce_store:1:verify_shop_store:always:true,country:1:verify_country:if_empty:true,currency:1:verify_currency:if_empty:true,language:1:verify_language:if_empty:true
+CONTEXT:  PL/pgSQL function inline_code_block line 41 at RAISE
+psql:39_verify_outbox-provoked.sql:444: ERROR:  FAIL C1: the action is pending 9000001 {"country": "GB", "currency": "GBP", "commerce_ref": "7001", "commerce_spent": 120.51, "commerce_store": "verify-gb", "commerce_orders": 3} commerce_customer:7001 by 01a127cd-6152-7ca5-82d0-cd24ccbdb9fb
+CONTEXT:  PL/pgSQL function inline_code_block line 49 at RAISE
+psql:39_verify_outbox-provoked.sql:663: ERROR:  FAIL D1: claimed {01a127cd-6166-7951-a431-ea1f0514313b,01a127cd-6167-788b-ae26-f5bdee8d1777,01a127cd-6168-770e-a6b4-277230348ac9} (3 at one attempt), or claimed again at once
+CONTEXT:  PL/pgSQL function inline_code_block line 47 at RAISE
+psql:39_verify_outbox-provoked.sql:811: ERROR:  FAIL E1: retry did not answer pending
+CONTEXT:  PL/pgSQL function inline_code_block line 54 at RAISE
+psql:39_verify_outbox-provoked.sql:974: ERROR:  FAIL F1: provoked
+CONTEXT:  PL/pgSQL function inline_code_block line 57 at RAISE
+         tenant          | writeback_fields | outbox_open | outbox_parked | outbox_sent |       verdict        
+-------------------------+------------------+-------------+---------------+-------------+----------------------
+ pulse4all-invest        |                0 |           0 |             0 |           0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |                0 |           0 |             0 |           0 | PROVOKED, NOT A PASS
+(2 rows)
+
