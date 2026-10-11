@@ -11,14 +11,17 @@ import type { Copy } from "@/lib/copy";
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 
-export type NavIcon = "home" | "live" | "people" | "clock" | "chart" | "gear";
+export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "gear";
 export type ShellPage =
-  | "welcome" | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
+  | "welcome"
+  /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
+  | "messages" | "messages-send"
+  | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
-  | "/" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
+  | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links";
 
 export interface NavItem {
@@ -63,6 +66,14 @@ export function navEntries(copy: Copy): NavEntry[] {
       kind: "page",
       icon: "home",
       item: { page: "welcome", href: "/", label: copy.nav.welcome, permission: null },
+    },
+    {
+      // Messages (migration 0008, 11 October 2026): a bare page right after Welcome, so every person's
+      // inbox is key 2 and the keys of the groups below move by one for everyone alike. Every active
+      // person can receive a message; sending is a button on the page for messages.send.
+      kind: "page",
+      icon: "inbox",
+      item: { page: "messages", href: "/messages", label: copy.nav.messages, permission: null },
     },
     {
       // Live before Time (Martin, 7 October 2026): the screen a supervisor keeps open. Agents do not

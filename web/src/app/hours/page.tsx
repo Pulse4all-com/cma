@@ -49,6 +49,7 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
                 <th className="h-10 px-3 font-semibold">{copy.myHours.date}</th>
                 <th className="h-10 px-3 text-right font-semibold">{copy.myHours.start}</th>
                 <th className="h-10 px-3 text-right font-semibold">{copy.myHours.end}</th>
+                <th className="h-10 px-3 text-right font-semibold">{copy.myHours.pauses}</th>
                 <th className="h-10 px-3 text-right font-semibold">{copy.myHours.duration}</th>
               </tr>
             </thead>
@@ -60,6 +61,7 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
                   <td className="tabular px-3 text-right">
                     {d.endedAt ? fmtTime(d.endedAt, me.timeZone, me.locale) : <span className="text-p4a-muted">{copy.myHours.stillWorking}</span>}
                   </td>
+                  <td className="tabular px-3 text-right text-p4a-muted">{fmtMinutes(d.pauseMinutes)}</td>
                   <td className="tabular px-3 text-right">{fmtMinutes(d.minutes)}</td>
                 </tr>
               ))}
@@ -67,6 +69,7 @@ export default async function MyHoursPage({ searchParams }: PageProps<"/hours">)
             <tfoot>
               <tr className="h-10 font-semibold">
                 <td className="px-3" colSpan={3}>{copy.myHours.total}</td>
+                <td className="tabular px-3 text-right text-p4a-muted">{fmtMinutes(hours.days.reduce((sum, d) => sum + d.pauseMinutes, 0))}</td>
                 <td className="tabular px-3 text-right">{fmtMinutes(hours.totalMinutes)}</td>
               </tr>
             </tfoot>

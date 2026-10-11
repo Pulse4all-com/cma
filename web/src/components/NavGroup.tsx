@@ -97,6 +97,23 @@ export function NavIconMark({ name }: { name: NavIcon }) {
           <path d="M5.5 8.5v7.5h3.5v-4h2v4h3.5V8.5" />
         </svg>
       );
+    case "inbox":
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M3 11.5V15a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 17 15v-3.5" />
+          <path d="M3 11.5 5.3 4.6A1 1 0 0 1 6.25 4h7.5a1 1 0 0 1 .95.6L17 11.5" />
+          <path d="M3 11.5h4l1 2h4l1-2h4" />
+        </svg>
+      );
     case "live":
       return (
         <svg

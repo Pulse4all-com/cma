@@ -57,14 +57,15 @@ async function expectShell(width, height) {
 // analyst back to Welcome.
 async function expectNavigation() {
   const cases = [
-    ["analyst", ["/", "/live/board", "/reports/dashboard"], false],
+    // Since 0008 Messages is a bare page right after Welcome for everyone, so every key below moves by one
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
-    ["agent-one", ["/", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
-    ["admin", ["/", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });

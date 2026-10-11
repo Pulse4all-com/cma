@@ -16,6 +16,7 @@ import { Keycap } from "./primitives";
 import { NAV_COOKIE_PREFIX, visibleNav, type ShellPage } from "@/lib/nav";
 import { NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
+import { MessageCenter } from "./MessageCenter";
 
 export type { ShellPage };
 
@@ -58,6 +59,8 @@ export async function Shell({
           </span>
         </div>
         <div className="flex items-center gap-6 text-small">
+          {/* The inbox with its unread count, the toasts and the urgent pop-up (migration 0008) */}
+          <MessageCenter copy={copy.messages} active={active === "messages" || active === "messages-send"} />
           <span className="text-p4a-muted">
             {copy.shell.signedInAs}{" "}
             <Link

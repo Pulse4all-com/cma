@@ -70,6 +70,8 @@ const fake = {
       4100000002: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
       4100000003: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
       4100000004: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
+      // Created now: the one deal inside the alert age limit (migration 0008)
+      4100000007: { createdate: new Date().toISOString(), pipeline: "p-sales", dealstage: "s-new", hs_lastmodifieddate: new Date().toISOString() },
     },
     contacts: {
       4300000001: { contact_country: "uk", contact_language: "en", contact_currency: "gbp", contact_shopify_id_1: "6000000001", contact_shopify_id_2: "6000000002", email: "a.person@example.com" },
@@ -334,6 +336,31 @@ const deletion = ev({ subscriptionType: "object.deletion", objectTypeId: "0-3", 
 await post(conn1.key, [deletion]);
 expect("a deal deletion marks the record deleted", (await q("select source_deleted_at is not null as d from cma.crm_record where connection_id = $1 and source_id = '4100000001'", [conn1.id]))[0]?.d, true, false);
 
+// New-deal alerts (migration 0008, DESIGN §8): a rule on tenant one for the holders of leads.accept, an agent
+// holding it, then a deal created now arrives by a created event → one message with one delivery; the
+// same delivery again → nothing new; a synthetic (reconcile-shaped) changed event → nothing
+const agentOf = await asAdmin(t1, async () => {
+  const [{ id }] = await q("insert into cma.app_user (tenant_id, email, display_name) values ($1, 'flow-agent@example.invalid', 'Flow agent') returning id", [t1]);
+  await q("insert into cma.user_role (tenant_id, user_id, role_id) select $1, $2, id from cma.app_role where tenant_id = $1 and key = 'agent'", [t1, id]);
+  await q("select cma.upsert_message_rule('new-deal', 'deal', '{}'::text[], 'leads.accept', false, false, 'leads.manage', 'normal', null)");
+  await q("select cma.set_connection_settings($1, '{\"phone_default_region\":\"GB\",\"app_host\":\"app.example.com\",\"record_url_deal\":\"https://{app_host}/contacts/{account}/record/0-3/{id}\"}'::jsonb)", [conn1.id]);
+  return id;
+});
+const created = ev({ subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000007, occurredAt: Date.now() });
+expect("a deal created now → 200", (await post(conn1.key, [created])).status, 200, 500);
+const alertRows = async () => q("select m.title, m.ref_type, m.ref_id, m.ref_url, m.kind, (select count(*)::int from cma.message_delivery d where d.message_id = m.id) as deliveries, (select count(*)::int from cma.message_delivery d where d.message_id = m.id and d.user_id = $2) as to_agent from cma.message m where m.tenant_id = $1 order by m.created_at", [t1, agentOf]);
+let alerts = await alertRows();
+// Two deliveries: the agent and the flow admin both hold leads.accept in the default ladder
+expect("…one alert written, delivered to the two holders of leads.accept, with the record link", [alerts.length, alerts[0]?.kind, alerts[0]?.ref_type, alerts[0]?.ref_id, alerts[0]?.deliveries, alerts[0]?.to_agent, alerts[0]?.ref_url],
+  [1, "alert", "deal", "4100000007", 2, 1, "https://app.example.com/contacts/9000001/record/0-3/4100000007"], [0, "alert", "deal", "4100000007", 1, 0, null]);
+expect("…the alert's title and body hold the configured words, never a deal name", [alerts[0]?.title, (await q("select body from cma.message where tenant_id = $1", [t1])).some((r) => /must not be read/.test(r.body))], ["New deal", false], ["must not be read", true]);
+expect("the same delivery again → no second alert", [(await post(conn1.key, [created])).status, (await alertRows()).length], [200, 1], [200, 2]);
+const changed = ev({ subscriptionType: "object.propertyChange", objectTypeId: "0-3", objectId: 4100000007, propertyName: "amount", propertyValue: "5", occurredAt: Date.now() });
+expect("a changed event (the shape of reconcile and backfill) → no alert", [(await post(conn1.key, [changed])).status, (await alertRows()).length], [200, 1], [200, 2]);
+const old = ev({ subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000004, occurredAt: Date.now() });
+await post(conn1.key, [old]);
+expect("a created event for a deal older than the age limit → no alert", (await alertRows()).length, 1, 2);
+
 // Tenant isolation
 clearSecretCache();
 const t2event = ev({ portalId: 9000002, subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000001 });
@@ -344,7 +371,8 @@ expect("tenant two's record lives in tenant two", t2rows.map((r) => r.tenant_id)
 expect("tenant two's read-back used tenant two's token", fake.requests.at(-1)?.auth, `Bearer ${TOKEN2}`, `Bearer ${TOKEN1}`);
 const seen = await asAdmin(t1, async () => (await q("select count(*)::int as n from cma.crm_record where connection_id = $1", [conn2.id]))[0].n);
 expect("tenant one cannot see tenant two's records", seen, 0, 1);
-expect("tenant one's records unchanged by tenant two", await count("crm_record"), 1, 2);
+// Three: the first deal plus the two the alert cases read back
+expect("tenant one's records unchanged by tenant two", await count("crm_record"), 3, 4);
 
 // What was written and logged
 const dbText = JSON.stringify(await q("select raw from cma.ingest_event where connection_id = any ($1) union all select raw from cma.crm_call where connection_id = any ($1) union all select raw from cma.crm_record where connection_id = any ($1)", [[conn1.id, conn2.id]]));

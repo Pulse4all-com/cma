@@ -64,6 +64,8 @@ export interface HoursDay {
   date: DateKey;
   /** Minutes of workday time; one row per calendar day */
   minutes: number;
+  /** Minutes in non-working statuses (break, lunch): the Pauses column (Martin, 7 October 2026) */
+  pauseMinutes: number;
   startedAt: Instant | null;
   endedAt: Instant | null;
 }
@@ -624,6 +626,82 @@ export interface TodayShift {
   absenceName: string | null;
 }
 
+// ---- Messaging (migration 0008): references only, never customer data
+
+export type MessageKind = "alert" | "announcement";
+export type MessageUrgency = "normal" | "urgent";
+
+/** The record a message points to: the adapter, the record type, the source id and an https link */
+export interface MessageRef {
+  system: string;
+  type: string;
+  id: string;
+  url: string | null;
+}
+
+/** One of the caller's own deliveries (cma.my_messages): the message plus the caller's three times */
+export interface MyMessage {
+  id: string;
+  kind: MessageKind;
+  urgency: MessageUrgency;
+  title: string;
+  body: string;
+  ref: MessageRef | null;
+  createdAt: Instant;
+  expiresAt: Instant | null;
+  /** Set by the first poll that returned the message */
+  deliveredAt: Instant | null;
+  readAt: Instant | null;
+  acknowledgedAt: Instant | null;
+}
+
+export interface MyMessages {
+  /** Newest first */
+  messages: MyMessage[];
+  /** Unread, unexpired deliveries of the caller, all of them, not only the listed ones */
+  unreadCount: number;
+}
+
+/**
+ * The target of a manual message, exactly one group (cma.send_message): everyone, teams by key, a
+ * language skill with a minimum level, or named people; optionally only those clocked in now
+ */
+export type MessageTarget =
+  | { everyone: true; onlyClockedIn?: boolean }
+  | { teams: string[]; onlyClockedIn?: boolean }
+  | { language: { skill: string; minLevel: number | null }; onlyClockedIn?: boolean }
+  | { users: string[]; onlyClockedIn?: boolean };
+
+export interface SendMessageInput {
+  title: string;
+  body: string;
+  urgency: MessageUrgency;
+  target: MessageTarget;
+}
+
+export interface SentMessage {
+  id: string;
+  /** Recipients resolved at send time */
+  recipients: number;
+}
+
+/** One sent message with its delivery figures (cma.message_stats) */
+export interface MessageStat {
+  id: string;
+  kind: MessageKind;
+  urgency: MessageUrgency;
+  title: string;
+  ref: Omit<MessageRef, "url"> | null;
+  /** True for an alert raised by a rule, false for a person's message */
+  byRule: boolean;
+  createdAt: Instant;
+  recipients: number;
+  delivered: number;
+  read: number;
+  acknowledged: number;
+  medianSecondsToRead: number | null;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -758,4 +836,19 @@ export interface CmaData {
   getRosterToday(me: Principal): Promise<TodayShift[]>;
   /** The caller's own details, role, teams and skills for My account; no permission beyond being an active person */
   getMyProfile(me: Principal): Promise<MyProfile>;
+
+  // ---- Messaging (migration 0008): the caller's own deliveries; sending needs messages.send (CMA06)
+  /**
+   * The caller's own messages, newest first, expired ones left out; `since` lists only messages created
+   * after that instant. The first return of a message sets its delivered time. Any active person.
+   */
+  listMyMessages(me: Principal, since: Instant | null, limit: number): Promise<MyMessages>;
+  /** Marks the caller's own deliveries read; other people's ids and rows already read are left alone. Answers how many changed */
+  markMessagesRead(me: Principal, ids: string[]): Promise<number>;
+  /** Acknowledges one of the caller's own messages (reads it too); a message not delivered to the caller is CMA02 */
+  acknowledgeMessage(me: Principal, id: string): Promise<void>;
+  /** A manager's message to a target resolved now (cma.send_message). Nobody reached CMA04, an unknown team, skill or person CMA02 */
+  sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
+  /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */
+  getMessageStats(me: Principal, range: HoursRange): Promise<MessageStat[]>;
 }

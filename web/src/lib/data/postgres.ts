@@ -3,10 +3,10 @@ import { config } from "@/lib/config";
 import type { Identity, Principal } from "@/lib/auth/identity";
 import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantContext } from "@/lib/db/client";
 import type {
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MyProfile, MyRosterDay, OrganisationInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
-  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo,
+  TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
 } from "./types";
 
 /**
@@ -405,6 +405,43 @@ async function readRosterHeader(q: Querier, weekStart: DateKey, teamKey: string 
   return toRosterHeader(one(r.rows, "roster_week"));
 }
 
+// ---- Messaging (migration 0008): cma.my_messages, my_unread_count, mark_messages_read, acknowledge_message,
+// send_message, message_stats. Own deliveries only: every function takes the acting user from the
+// transaction, never an id; the permission checks (messages.send, CMA06) are inside the functions.
+
+type MessageDbRow = {
+  message_id: string; kind: MyMessage["kind"]; urgency: MyMessage["urgency"]; title: string; body: string;
+  ref_system: string | null; ref_type: string | null; ref_id: string | null; ref_url: string | null;
+  created_at: Date; expires_at: Date | null; delivered_at: Date | null; read_at: Date | null; acknowledged_at: Date | null;
+};
+
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
+function toMessage(r: MessageDbRow): MyMessage {
+  return {
+    id: r.message_id, kind: r.kind, urgency: r.urgency, title: r.title, body: r.body,
+    ref: r.ref_system && r.ref_type && r.ref_id ? { system: r.ref_system, type: r.ref_type, id: r.ref_id, url: r.ref_url } : null,
+    createdAt: r.created_at.toISOString(), expiresAt: iso(r.expires_at),
+    deliveredAt: iso(r.delivered_at), readAt: iso(r.read_at), acknowledgedAt: iso(r.acknowledged_at),
+  };
+}
+
+type StatDbRow = {
+  message_id: string; kind: MyMessage["kind"]; urgency: MyMessage["urgency"]; title: string;
+  ref_system: string | null; ref_type: string | null; ref_id: string | null; rule_id: string | null; sender_user_id: string | null;
+  created_at: Date; recipients: number; delivered: number; read: number; acknowledged: number; median_seconds_to_read: number | null;
+};
+
+function toStat(r: StatDbRow): MessageStat {
+  return {
+    id: r.message_id, kind: r.kind, urgency: r.urgency, title: r.title,
+    ref: r.ref_system && r.ref_type && r.ref_id ? { system: r.ref_system, type: r.ref_type, id: r.ref_id } : null,
+    byRule: r.rule_id !== null, createdAt: r.created_at.toISOString(),
+    recipients: Number(r.recipients), delivered: Number(r.delivered), read: Number(r.read), acknowledged: Number(r.acknowledged),
+    medianSecondsToRead: r.median_seconds_to_read === null ? null : Number(r.median_seconds_to_read),
+  };
+}
+
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
     // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
@@ -541,16 +578,21 @@ export const postgresData: CmaData = {
     assertDate(range.from, "from");
     assertDate(range.to, "to");
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<SummaryRow>(
-        `select ${HEADER}, working_seconds
-           from cma.workday_summary
-          where ${OWN} and business_date between $1::date and $2::date
-          order by business_date`,
+      // Pauses: the day's seconds in non-working statuses, the complement of working time within the day
+      const r = await q.query<SummaryRow & { pause_seconds: number }>(
+        `select ${HEADER}, s.working_seconds,
+                coalesce((select sum(i.seconds) from cma.time_interval i
+                            join cma.work_status ws on ws.tenant_id = cma.current_tenant_id() and ws.id = i.status_id
+                           where i.workday_id = s.workday_id and not ws.is_working), 0)::bigint as pause_seconds
+           from cma.workday_summary s
+          where s.${OWN} and s.business_date between $1::date and $2::date
+          order by s.business_date`,
         [range.from, range.to],
       );
       const days = r.rows.map((row) => ({
         date: row.business_date,
         minutes: minutesOf(row),
+        pauseMinutes: Math.floor(Number(row.pause_seconds) / 60),
         startedAt: row.started_at.toISOString(),
         endedAt: row.ended_at ? row.ended_at.toISOString() : null,
       }));
@@ -963,6 +1005,49 @@ export const postgresData: CmaData = {
         roleName: p.role_name, timeKept: p.time_kept, teams: p.teams ?? [],
         skills: (p.skills ?? []).map((k) => ({ dimension: k.dimension, key: k.key, name: k.name, level: k.level, levelName: k.levelName })),
       };
+    });
+  },
+
+  async listMyMessages(me, since, limit): Promise<MyMessages> {
+    return withTenant(ctx(me), async (q) => {
+      // The screen knows instants to the millisecond and the database to the microsecond: the newest
+      // message the poller saw would come back on every poll, so "after" means after its millisecond
+      const r = await q.query<MessageDbRow>(
+        `select * from cma.my_messages(case when $1::timestamptz is null then null else $1::timestamptz + interval '999 microseconds' end, $2::int)`, [since, limit]);
+      const c = await q.query<{ n: number }>(`select cma.my_unread_count() as n`);
+      return { messages: r.rows.map(toMessage), unreadCount: Number(one(c.rows, "my_unread_count").n) };
+    });
+  },
+
+  async markMessagesRead(me, ids): Promise<number> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ n: number }>(`select cma.mark_messages_read($1::uuid[]) as n`, [ids]);
+      return Number(one(r.rows, "mark_messages_read").n);
+    });
+  },
+
+  async acknowledgeMessage(me, id): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.acknowledge_message($1::uuid)`, [id]));
+  },
+
+  async sendMessage(me, input): Promise<SentMessage> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ id: string }>(`select cma.send_message($1, $2, $3, $4::jsonb) as id`,
+        [input.title, input.body, input.urgency, JSON.stringify(input.target)]);
+      const id = one(r.rows, "send_message").id;
+      // The recipients were written in this transaction; the stats function counts them (messages.send holds it)
+      const c = await q.query<{ recipients: number }>(
+        `select recipients from cma.message_stats((now() - interval '1 day')::date, (now() + interval '1 day')::date) where message_id = $1::uuid`, [id]);
+      return { id, recipients: Number(c.rows[0]?.recipients ?? 0) };
+    });
+  },
+
+  async getMessageStats(me, range): Promise<MessageStat[]> {
+    assertDate(range.from, "from");
+    assertDate(range.to, "to");
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<StatDbRow>(`select * from cma.message_stats($1::date, $2::date)`, [range.from, range.to]);
+      return r.rows.map(toStat);
     });
   },
 };

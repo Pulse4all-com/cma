@@ -20,7 +20,9 @@
  * own-day read), the Team screen (migration 0004: who is listed and editable, roles, teams, skills,
  * adding a person) and the memberships for the Live board's team filter, the configuration screens
  * (migration 0005a: statuses, app links, absence types, coverage targets, settings; the admin only,
- * everything undone at the end), and the own profile for My account (addition 0005b).
+ * everything undone at the end), the own profile for My account (addition 0005b), and messaging
+ * (migration 0008: the own inbox, since and limit, read and acknowledge on own rows only, sending as
+ * messages.send to one named person, the stats; one message per run, dev data).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -678,6 +680,55 @@ expect("an ended day refuses a status change",
 
 // Leave Agent Two in the status the run found (dev data; not a check)
 if (before?.statusKey) await setStatus(AGENT, { key: before.statusKey });
+
+// ---- messaging (migration 0008), 22 checks --------------------------------------------------
+// One urgent message per run from the test supervisor to Agent Two (dev data), then read and
+// acknowledged by Agent Two, so the stats show the whole path.
+const inboxBefore = (await get(AGENT, "/api/v1/me/messages")).body?.data;
+expect("the own inbox lists messages with an unread count",
+  [Array.isArray(inboxBefore?.messages), typeof inboxBefore?.unreadCount], [true, "number"], [false, "number"]);
+expect("a bad since is a 400", (await get(AGENT, "/api/v1/me/messages?since=yesterday")).status, 400, 200);
+expect("a limit above 200 is a 400", (await get(AGENT, "/api/v1/me/messages?limit=201")).status, 400, 200);
+const jsonPost = (s, path, body, headers = { "x-cma-request": "1" }) =>
+  call(s, path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+const readIds = (s, ids, headers) => jsonPost(s, "/api/v1/me/messages/read", { ids }, headers);
+const send = (s, body, headers) => jsonPost(s, "/api/v1/messages", body, headers);
+const ackOf = (s, id, headers = { "x-cma-request": "1" }) => post(s, `/api/v1/me/messages/${id}/ack`, headers);
+const NO_MESSAGE = "00000000-0000-7000-8000-00000000dead";
+expect("marking read needs the request header", (await readIds(AGENT, [NO_MESSAGE], {})).status, 400, 200);
+expect("cross-site marking read is refused",
+  (await readIds(AGENT, [NO_MESSAGE], { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+expect("an agent cannot send", (await send(AGENT, { title: "verify", target: { everyone: true } })).status, 403, 201);
+expect("a target without a group is a 400 before the database", (await send(SUPERVISOR, { title: "verify", target: {} })).status, 400, 201);
+expect("an unknown team is a 404", (await send(SUPERVISOR, { title: "verify", target: { teams: ["verify-no-such-team"] } })).status, 404, 201);
+const sent = await send(SUPERVISOR, { title: `API verifier ${new Date().toISOString().slice(0, 16)}`, body: "Sent by verify/api.mjs; acknowledged by the same run", urgency: "urgent", target: { users: [meA.userId] } });
+const mid = sent.body?.data?.id;
+expect("the supervisor sends an urgent message to one named person", [sent.status, sent.body?.data?.recipients], [201, 1], [403, 0]);
+const inboxAfter = (await get(AGENT, "/api/v1/me/messages")).body?.data;
+const mine = inboxAfter?.messages?.find((m) => m.id === mid);
+expect("the recipient sees it unread, urgent, delivered by this read, title and body only",
+  [!!mine, mine?.readAt ?? null, !!mine?.deliveredAt, mine?.urgency, mine?.ref ?? null], [true, null, true, "urgent", null], [false, null, false, "normal", null]);
+expect("the unread count moved by one", inboxAfter?.unreadCount - inboxBefore?.unreadCount, 1, 0);
+expect("the sender's own inbox does not hold it",
+  (await get(SUPERVISOR, "/api/v1/me/messages")).body?.data?.messages?.some((m) => m.id === mid) ?? false, false, true);
+expect("since lists only newer messages",
+  (await get(AGENT, `/api/v1/me/messages?since=${encodeURIComponent(mine?.createdAt ?? "")}`)).body?.data?.messages?.some((m) => m.id === mid) ?? false, false, true);
+expect("another person cannot read it for the recipient", (await readIds(SUPERVISOR, [mid])).body?.data?.changed, 0, 1);
+expect("marking read changes one row, then none",
+  [(await readIds(AGENT, [mid])).body?.data?.changed, (await readIds(AGENT, [mid])).body?.data?.changed], [1, 0], [0, 1]);
+expect("acknowledging needs the request header", (await ackOf(AGENT, mid, {})).status, 400, 200);
+expect("acknowledging a message that is not yours is a 404", (await ackOf(SUPERVISOR, mid)).status, 404, 200);
+expect("the recipient acknowledges; a second time changes nothing", [(await ackOf(AGENT, mid)).status, (await ackOf(AGENT, mid)).status], [200, 200], [404, 404]);
+const acked = (await get(AGENT, "/api/v1/me/messages")).body?.data?.messages?.find((m) => m.id === mid);
+expect("read and acknowledged times are set and the count is back", [!!acked?.readAt, !!acked?.acknowledgedAt, inboxBefore?.unreadCount === (await get(AGENT, "/api/v1/me/messages")).body?.data?.unreadCount],
+  [true, true, true], [false, false, false]);
+const shift = (d, days) => dateKey(new Date(d.getTime() + days * 86_400_000), meA.timeZone);
+const statsPath = `/api/v1/messages/stats?from=${shift(new Date(), -1)}&to=${shift(new Date(), 1)}`;
+expect("stats need messages.send or performance.team", [(await get(AGENT, statsPath)).status, (await get(SUPERVISOR, statsPath)).status], [403, 200], [200, 403]);
+const stat = (await get(SUPERVISOR, statsPath)).body?.data?.find((x) => x.id === mid);
+expect("the stats count the one recipient: delivered, read, acknowledged, not by a rule",
+  [stat?.recipients, stat?.delivered, stat?.read, stat?.acknowledged, stat?.byRule], [1, 1, 1, 1, false], [1, 0, 0, 0, true]);
+expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/messages/stats?from=${shift(new Date(), -100)}&to=${shift(new Date(), 0)}`)).status, 400, 200);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
