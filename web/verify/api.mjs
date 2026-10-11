@@ -12,15 +12,15 @@
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
  *
- * Themes: identity and tenant, Clock in as an action (a visit opens nothing, the database refuses
- * someone whose time is not kept), own data only, corrections (team routes), an ended day stays
- * ended, status changes from the tenant's own list, the two export files in the tenant's format,
- * time per status for the Dashboard (the same minutes as Team hours), app links per person, the
- * team now for the Live board (a person's own entry equals the own-day read), the Team screen
- * (migration 0004: who is listed and editable, roles, teams, skills, adding a person) and the
- * memberships for the Live board's team filter, the configuration screens (migration 0005a: statuses,
- * app links, absence types, coverage targets, settings; the admin only, everything undone at the end),
- * and the own profile for My account (addition 0005b).
+ * Themes: identity and tenant, ?as= in mock mode (a relative 303 with the cookie), Clock in as an
+ * action (a visit opens nothing, the database refuses someone whose time is not kept), own data only,
+ * corrections (team routes), an ended day stays ended, status changes from the tenant's own list, the
+ * two export files in the tenant's format, time per status for the Dashboard (the same minutes as Team
+ * hours), app links per person, the team now for the Live board (a person's own entry equals the
+ * own-day read), the Team screen (migration 0004: who is listed and editable, roles, teams, skills,
+ * adding a person) and the memberships for the Live board's team filter, the configuration screens
+ * (migration 0005a: statuses, app links, absence types, coverage targets, settings; the admin only,
+ * everything undone at the end), and the own profile for My account (addition 0005b).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -83,6 +83,22 @@ const meA = (await get(AGENT, "/api/v1/me")).body.data;
 const meS = (await get(SUPERVISOR, "/api/v1/me")).body.data;
 const spoofed = await call(AGENT, `/api/v1/me?tenantId=${SPOOF_TENANT}`, { headers: { "x-cma-tenant-id": SPOOF_TENANT } });
 expect("tenant comes from the identity only", spoofed.body?.data?.tenantId, meA.tenantId, SPOOF_TENANT);
+
+// ---- ?as= in mock mode, 4 checks ----------------------------------------------------------------
+// A browser picks its test identity with ?as=: a 303 to the same address without ?as=, relative
+// (no host), with the cookie. No x-cma-mock-subject header here, so only ?as= and the cookie count.
+const plain = (path, headers = {}) => fetch(BASE + path, { headers, redirect: "manual" });
+const asParam = await plain(`/day?as=${SUPERVISOR}`);
+expect("?as= is a 303 to the same path, relative",
+  [asParam.status, asParam.headers.get("location"), (asParam.headers.get("set-cookie") ?? "").includes(`cma-mock-subject=${SUPERVISOR}`)],
+  [303, "/day", true], [303, "http://localhost/day", true]);
+const asKeeps = await plain(`/day?as=${SUPERVISOR}&date=2026-10-01`);
+expect("?as= keeps the other parameters", [asKeeps.status, asKeeps.headers.get("location")],
+  [303, "/day?date=2026-10-01"], [303, `/day?as=${SUPERVISOR}&date=2026-10-01`]);
+const asBad = await plain("/day?as=Bad_Subject");
+expect("an invalid ?as= is a 400", [asBad.status, asBad.headers.get("x-cma-auth")], [400, "bad-mock-subject"], [303, null]);
+expect("the cookie from ?as= is honoured",
+  (await plain("/day", { cookie: `cma-mock-subject=${SUPERVISOR}` })).status, 200, 303);
 
 // ---- clock in is an action (increment e, addition 0003d), 6 checks ---------------------------
 // The analyst holds performance.team and no workday.own: a visit to the landing page and to My day
