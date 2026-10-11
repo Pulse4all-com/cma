@@ -28,7 +28,7 @@ Files:
 - **Event types and scopes.** These come from `github.com/HubSpot/HubSpot-public-api-spec-collection` (2026-09 rollouts, commit of 9 October 2026):
   - the app webhooks API lists `object.creation`, `object.deletion`, `object.merge`, `object.restore`, `object.propertyChange`, `object.associationChange` and `contact.privacyDeletion`;
   - each endpoint the ingest calls names its scope (table below); on 11 October 2026 HubSpot refused `tickets` on the first upload, and the ticket calls were checked again (Scopes).
-- **Still unproven offline.** The schema itself is served by HubSpot at upload time, so `hs project upload` is the final check. Nothing is installed if it fails. One point is unproven until then: whether the project schema accepts `call` as a `crmObjects` object type together with `object.associationChange`.
+- **Still unproven offline.** The schema itself is served by HubSpot at upload time, so `hs project upload` is the final check. Nothing is installed if it fails. One point was unproven until then: whether the project schema accepts `call` as a `crmObjects` object type together with `object.associationChange`. It does: build #2 of CMA ingest dev deployed the webhooks component with both (11 October 2026).
 
 ## Scopes
 
@@ -59,9 +59,9 @@ Two things to know:
   | `POST /crm/v4/associations/tickets/contacts/batch/read` | `CRM/Associations/Rollouts/130902/v4/associations.json` | 1173 | none outside the sensitive variants; any of 79 alternatives, among them `crm.objects.contacts.read` |
   | ticket webhook subscriptions | `Webhooks/Webhooks/Rollouts/147891/2026-09/webhooks.json` | 248 | none: the subscriptions API takes the developer key; its error format names `missingScopes` (line 2191) |
 
-  So no spec version lists `crm.schemas.tickets.read` as needed, and it is not requested. If the ticket pipelines read answers 403 at runtime, the ingest logs `catalog refresh skipped` (deal and ticket pipelines are refreshed together) and keeps processing events; then add `crm.schemas.tickets.read`, a read scope the verifier allows once it is in the documented set.
+  So no spec version lists `crm.schemas.tickets.read` as needed, and it is not requested. If the ticket pipelines read answers 403 at runtime, the ingest logs `catalog refresh skipped` (deal and ticket pipelines are refreshed together) and keeps processing events; then add `crm.schemas.tickets.read`, a read scope the verifier allows once it is in the documented set. Not needed: in dev on 11 October 2026 the pipeline label resolved, so the refresh was not skipped (README Decision log).
 - **`forms` also covers form definitions.** HubSpot has one forms scope: the spec (`Marketing/Forms/Rollouts/144909/v3/forms.json`) names `forms` for reading forms and for creating, updating and deleting them. The CMA only reads the catalog and the submissions.
-- **Call dispositions need no extra scope, as far as could be checked.** The outcome catalog endpoint (`/calling/v1/dispositions`) is not in the published specs, and no separate scope is requested for it. If the first catalog read answers 403, the scope it names gets added here.
+- **Call dispositions need no extra scope.** The outcome catalog endpoint (`/calling/v1/dispositions`) is not in the published specs, and no separate scope is requested for it. Confirmed in dev on 11 October 2026: the catalog was read with the app's scopes, 7 outcomes (README Decision log).
 
 ## Subscriptions and their canonical kinds
 
@@ -84,16 +84,30 @@ Association changes can't be narrowed to one associated type in the configuratio
 
 ## Render, upload, install (Martin, in Cloud Shell)
 
-The full sequence, with the connection and the secrets, is in `docs/night-2026-10-10/MORNING_RUNBOOK.md` §2.2 to §2.5 for dev and in its prod phase for prod.
+The full sequence, with the connection and the secrets, is in `docs/night-2026-10-10/MORNING_RUNBOOK.md` §2.2 to §2.5 for dev and in its prod phase for prod. The steps below were corrected to what happened in dev on 11 October 2026 (`records/hubspot-dev-2026-10-11`).
 
-**1. Install the HubSpot CLI and sign in.**
+**1. Install the HubSpot CLI and sign in.** Install it under the home directory, so it survives a Cloud Shell restart without changing npm's global prefix: Cloud Shell's Node is managed by `nvm`, which refuses a global prefix.
 
-**Terminal** (in `~/cma`)
+**Terminal** (once per Cloud Shell home)
 ```bash
-npm install -g @hubspot/cli@8.15.0 >/dev/null 2>&1; hs --version
+npm install --prefix ~/.hscli-bin @hubspot/cli@8.15.0 >/dev/null 2>&1
+grep -q '.hscli-bin' ~/.bashrc || echo 'export PATH="$HOME/.hscli-bin/node_modules/.bin:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.hscli-bin/node_modules/.bin:$PATH"
+hs --version
+```
+Expected: `8.15.0` (the newest release at least 14 days old on 10 October 2026). In a later session the `PATH` line in `~/.bashrc` is enough.
+
+**Terminal**
+```bash
 hs account auth
 ```
-Expected: `8.15.0` (the newest release at least 14 days old on 10 October 2026). `hs account auth` asks for a personal access key: open the link it prints in the **live portal**, generate the key and paste it at the prompt. Projects live in the live portal's Development area, also for the dev app.
+Expected: a prompt for a personal access key. It must be a personal access key of the **live portal**: open the link the CLI prints in the live portal, generate the key and paste it at the prompt. Projects live in the live portal's Development area, also for the dev app. The CLI's login stays in `~/.hscli`.
+
+**Terminal**
+```bash
+hs account list
+```
+Expected: the live portal, with the developer test account under it as `↳ … [test account]`.
 
 **2. Render the environment with its real target URL.** `<URL>` is the `cma-ingest` URL; `<key>` is the connection key from `cma.upsert_connection`. The key isn't a secret: the signature is the proof.
 
@@ -109,40 +123,58 @@ Expected: `rendered dev: hubspot/build/dev`, then the upload command. Run the sa
 ```bash
 cd hubspot/build/dev && hs project upload && cd ~/cma
 ```
-Expected: the build and deploy of project **CMA ingest dev** succeed. If HubSpot refuses a field, it names it; nothing is installed. Upload only from `build/dev` or `build/prod`, never from a `-draft` directory.
+Expected: the upload names the live portal, then the build and deploy of project **CMA ingest dev** succeed with both components (the app and the webhooks). **If the upload line names the test account, answer `n`.** If HubSpot refuses a field or a scope, it names it and nothing is installed (11 October 2026: build #1 was refused for the retired `tickets` scope, build #2 deployed after PR #90). Upload only from `build/dev` or `build/prod`, never from a `-draft` directory.
 
-**4. Install.**
+**4. The client secret, before the install.** See the next section.
+
+**5. Install.**
 
 **Browser:**
-- **Dev:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → Install in `CMA dev`. **Never Standard install** for the dev app.
+- **Dev:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → **Add test install(s)** → tick the test account `CMA dev` → install. **Never "Install now" under Standard install** for the dev app: that is the live portal.
 - **Prod:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → **Standard install**, in the live portal. Only when the runbook's prod phase says so.
 
 Review the scopes on the consent screen: the read scopes (ticket read among them, no ticket write) and write on contacts.
+
+**6. The static token**, then the accessor grants (next section).
 
 ## The client secret and the static token
 
 The two values go straight into Secret Manager with the runbook's `put_secret`, a hidden prompt that never echoes them. Never paste them into a file, a chat, a PR or another command.
 
-| Value | Where HubSpot shows it | Secret (DESIGN §5) |
-|---|---|---|
-| Client secret (signs the webhooks, `X-HubSpot-Signature-v3`) | the app → **Auth** tab | `ingest-hubspot-<env>-signing` |
-| Static access token (the read-back, the write-back) | the installed app (the test install for dev, the standard install for prod) | `ingest-hubspot-<env>-token` |
+| Value | Where HubSpot shows it | Secret (DESIGN §5) | When |
+|---|---|---|---|
+| Client secret (signs the webhooks, `X-HubSpot-Signature-v3`) | the app → **Auth** tab (with the scopes) | `ingest-hubspot-<env>-signing` | before the install |
+| Static access token (the read-back, the write-back) | the app → **Distribution** tab → the install's row → **Show** (for dev, the test install's row); not on the Auth tab | `ingest-hubspot-<env>-token` | after the install |
 
-**Terminal** (in `~/cma`, after the runbook's `put_secret` helper is defined)
+Define `put_secret` (runbook, Helpers) in the same Cloud Shell session as the command that uses it. Run each `put_secret` on its own line, typed or pasted alone, not inside a pasted block: the hidden prompt would take the block's next line as the value.
+
+**Terminal** (in `~/cma`, the client secret copied from the Auth tab)
 ```bash
 put_secret p4a-cma-dev ingest-hubspot-dev-signing
+```
+Expected: `stored ingest-hubspot-dev-signing (version added)`, nothing else.
+
+**Terminal** (after the install, the token copied from the Distribution tab)
+```bash
 put_secret p4a-cma-dev ingest-hubspot-dev-token
 ```
-Expected: `stored ingest-hubspot-dev-signing (version added)` and the same for the token, nothing else. For prod use `p4a-cma-prod` and `ingest-hubspot-prod-…`. Then grant the accessor to `cma-ingest`'s service account as in runbook §2.4.
+Expected: `stored ingest-hubspot-dev-token (version added)`, nothing else. For prod use `p4a-cma-prod` and the prod secret names of the runbook's prod phase.
+
+Verify the token without showing it:
+
+**Terminal**
+```bash
+gcloud secrets versions access latest --secret=ingest-hubspot-dev-token --project=p4a-cma-dev | sed 's/^/Authorization: Bearer /' \
+  | curl -s -H @- https://api.hubapi.com/account-info/v3/details | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("portalId"), d.get("accountType"), d.get("dataHostingLocation"))'
+```
+Expected for dev: the test account's id, `DEVELOPER_TEST`, `eu1`. For prod: the live portal's id. Then grant the accessor to `cma-ingest`'s service account as in runbook §2.4.
 
 ## The first delivery: the signature headers
 
-The ingest service authenticates on `X-HubSpot-Signature-v3` with `X-HubSpot-Request-Timestamp` (DESIGN §2). HubSpot's documentation does not confirm that project apps send v3, so check it on the first delivery in dev (runbook §2.5). Create a deal in `CMA dev`, then:
+The ingest service authenticates on `X-HubSpot-Signature-v3` with `X-HubSpot-Request-Timestamp` (DESIGN §2). HubSpot's documentation did not confirm that project apps send v3; the first delivery in dev did (11 October 2026: `cma-ingest` answered the first POSTs with 200, README Decision log), so the reconcile fallback is not needed. To check a new environment's first delivery (runbook §2.5), create a deal in the installed account, then:
 
 **Terminal**
 ```bash
 gcloud run services logs read cma-ingest --project=p4a-cma-dev --region=europe-west4 --limit=30 | grep -E "hubspot|signature|header" | tail -10
 ```
-Expected: accepted requests (200). If the service was deployed with `INGEST_LOG_HEADER_NAMES=1`, it logs the header names only, never their values, and they include `x-hubspot-signature-v3` and `x-hubspot-request-timestamp`.
-
-If v3 is missing, stop. The fallback is decided (Decision log, 10 October 2026): webhooks off, and the reconcile job every two minutes. It is a schedule change, not a weaker signature.
+Expected: accepted requests (200). If the service was deployed with `INGEST_LOG_HEADER_NAMES=1`, it logs the header names only, never their values, and they include `x-hubspot-signature-v3` and `x-hubspot-request-timestamp`. A 401 means the signature did not verify: check that the signing secret is the client secret of this app.
