@@ -13,10 +13,19 @@
 #
 # Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main. Rerunnable.
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
-# its IAM database user; the accessor per named secret; the Artifact Registry repository cma; the image
-# ingest:<short sha> built by Cloud Build (ingest/cloudbuild.yaml); the Cloud Run service with the
+# its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
 # settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs). Prints the
 # Studio statement that makes the database user a member of cma_app, the service URL and /health.
+#
+# The image is built once, in p4a-cma-prod, never in dev (README Architecture, Build and deploy;
+# Decision log, 5 October 2026): Cloud Build in europe-west4 (ingest/cloudbuild.yaml) as service
+# account cma-build@p4a-cma-prod, source staged in gs://p4a-cma-prod-build-src (the default staging
+# bucket is in the US and the EU-only policy refuses it), pushed to
+# europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>. When that tag already exists the
+# build is skipped, so a prod deploy after dev runs exactly the bytes dev tested. Dev and prod both
+# deploy that image by tag; dev has no repository and no build of its own, and pulls through its
+# Cloud Run service agent's Artifact Registry reader on the prod repository cma. Before a dev deploy
+# the script checks that grant and, when it is missing, prints the command that adds it and stops.
 set -euo pipefail
 
 ENV="${1:?dev or prod}"
@@ -43,7 +52,10 @@ SERVICE=cma-ingest
 SA_NAME=cma-ingest
 SA="${SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 DB_USER="${SA_NAME}@${PROJECT}.iam"
-REPO="${REGION}-docker.pkg.dev/${PROJECT}/cma"
+BUILD_PROJECT=p4a-cma-prod
+BUILD_SA="cma-build@${BUILD_PROJECT}.iam.gserviceaccount.com"
+BUILD_STAGING="gs://${BUILD_PROJECT}-build-src/source"
+REPO="${REGION}-docker.pkg.dev/${BUILD_PROJECT}/cma"
 
 cd "$(git rev-parse --show-toplevel)"
 SHA="$(git rev-parse --short HEAD)"
@@ -55,8 +67,8 @@ for t in "${TENANTS[@]}"; do [[ "$t" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "t
 for s in "${SECRETS[@]}"; do [[ "$s" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo "secret name $s is not valid"; exit 2; }; done
 
 echo "== ${SERVICE} ${SHA} → ${PROJECT}"
-gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com \
-  secretmanager.googleapis.com sqladmin.googleapis.com --project="$PROJECT" --quiet
+gcloud services enable run.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com \
+  --project="$PROJECT" --quiet
 
 # The service account, its project roles, its IAM database user
 gcloud iam service-accounts describe "$SA" --project="$PROJECT" >/dev/null 2>&1 || \
@@ -88,13 +100,48 @@ for t in "${TENANTS[@]}"; do
 done
 [ ${#TENANTS[@]} -gt 0 ] || echo "note: no --tenant given; calls wait (pepper_unavailable) until ingest-hash-pepper-<tenant slug> exists"
 
-# The image
-gcloud artifacts repositories describe cma --location="$REGION" --project="$PROJECT" >/dev/null 2>&1 || \
-  gcloud artifacts repositories create cma --repository-format=docker --location="$REGION" --project="$PROJECT" --quiet
-gcloud builds submit ingest --project="$PROJECT" --region="$REGION" --config=ingest/cloudbuild.yaml \
-  --substitutions="_VERSION=${SHA},_REPO=${REPO}" --quiet
+# The image: dev pulls from the prod repository through its Cloud Run service agent
+if [ "$PROJECT" != "$BUILD_PROJECT" ]; then
+  AGENT="service-$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')@serverless-robot-prod.iam.gserviceaccount.com"
+  READ_ROLES='roles/artifactregistry\.(reader|writer|repoAdmin|admin)'
+  roles="$(gcloud artifacts repositories get-iam-policy cma --location="$REGION" --project="$BUILD_PROJECT" \
+      --flatten='bindings[].members' --filter="bindings.members:serviceAccount:${AGENT}" --format='value(bindings.role)'
+    gcloud projects get-iam-policy "$BUILD_PROJECT" \
+      --flatten='bindings[].members' --filter="bindings.members:serviceAccount:${AGENT}" --format='value(bindings.role)')"
+  if ! grep -qxE "$READ_ROLES" <<<"$roles"; then
+    echo "${PROJECT}'s Cloud Run service agent cannot read ${REPO}; grant it (README, 5 October 2026), then rerun:"
+    echo "gcloud artifacts repositories add-iam-policy-binding cma --project=${BUILD_PROJECT} --location=${REGION} --member=serviceAccount:${AGENT} --role=roles/artifactregistry.reader"
+    exit 1
+  fi
+  echo "${AGENT} reads ${REPO}"
+fi
 
-# The service. Env vars as one list, delimited by @ because INGEST_PUBLIC_URLS holds commas
+# The image: built once in prod; an existing tag is deployed as it is
+if out="$(gcloud artifacts docker images describe "$IMAGE" --format='value(image_summary.digest)' 2>&1)"; then
+  echo "image ${IMAGE} exists (${out}); no build"
+elif grep -qiE 'not.?found' <<<"$out"; then
+  gcloud builds submit ingest --project="$BUILD_PROJECT" --region="$REGION" --config=ingest/cloudbuild.yaml \
+    --gcs-source-staging-dir="$BUILD_STAGING" \
+    --service-account="projects/${BUILD_PROJECT}/serviceAccounts/${BUILD_SA}" \
+    --substitutions="_VERSION=${SHA},_REPO=${REPO}" --quiet
+else
+  echo "cannot tell whether ${IMAGE} exists:"; echo "$out"; exit 1
+fi
+
+# The service. Env vars as one list in gcloud's custom-delimiter form ^|^, because INGEST_PUBLIC_URLS
+# holds commas and CMA_DB_USER holds @ (cma-ingest@<project>.iam). No value may hold |; env_list stops
+# the script before gcloud runs when one does.
+DELIM='|'
+env_list () {  # KEY=VALUE... → ^|^KEY=VALUE|KEY=VALUE; fails when a value holds the delimiter
+  local kv out=""
+  for kv in "$@"; do
+    case "${kv#*=}" in
+      *"$DELIM"*) echo "env var ${kv%%=*} holds the delimiter ${DELIM} (${kv#*=}); gcloud would split it, stopped" >&2; return 1 ;;
+    esac
+    out+="${out:+$DELIM}${kv}"
+  done
+  printf '^%s^%s' "$DELIM" "$out"
+}
 urls_of () {  # every public URL of the service (both address forms), comma-separated; empty before the first deploy
   { gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json 2>/dev/null || echo '{}'; } | python3 -c '
 import json, sys
@@ -105,7 +152,9 @@ if main and main not in urls: urls.insert(0, main)
 print(",".join(urls))'
 }
 URLS="$(urls_of)"
-ENV_VARS="^@^CMA_DB_INSTANCE=${INSTANCE}@CMA_DB_USER=${DB_USER}@CMA_DB_NAME=cma@CMA_DB_POOL_MAX=5@INGEST_VERSION=${SHA}@INGEST_PROJECT=${PROJECT}@INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}@INGEST_READBACK_BUDGET_MS=3000@INGEST_PUBLIC_URLS=${URLS}"
+ENV_VARS="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=5" \
+  "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" "INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}" \
+  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}")"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" --region="$REGION" \
   --image="$IMAGE" \
@@ -123,8 +172,9 @@ gcloud run deploy "$SERVICE" \
 # First deploy: the URLs exist only now; set them so signatures verify against the public address
 NEW_URLS="$(urls_of)"
 if [ "$NEW_URLS" != "$URLS" ]; then
+  URL_VARS="$(env_list "INGEST_PUBLIC_URLS=${NEW_URLS}")"
   gcloud run services update "$SERVICE" --project="$PROJECT" --region="$REGION" \
-    --update-env-vars="^@^INGEST_PUBLIC_URLS=${NEW_URLS}" --quiet
+    --update-env-vars="$URL_VARS" --quiet
 fi
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"
 
