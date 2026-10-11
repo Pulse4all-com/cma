@@ -6,10 +6,11 @@
  *   node hubspot/verify/render.mjs --provoke   every check must FAIL
  *
  * Covers: dev and prod render; their uids, names and target URLs differ; their scopes are identical,
- * the documented set, and the contact write scope is the only *.write scope; static auth, private
- * distribution, no redirect URLs; the subscription list is the one VENDOR_SETUP.md §1.3 names; the
- * placeholder target URL and other unfit URLs are refused without --draft; the env files hold no
- * ids, tokens or secrets; build/ is git-ignored.
+ * the documented set, and the contact write scope is the only write-capable scope (`tickets` and any
+ * other *.write or *.delete refused); static auth, private distribution, no redirect URLs; the
+ * subscription list is the one VENDOR_SETUP.md §1.3 names; the placeholder target URL and other unfit
+ * URLs are refused without --draft; the env files hold no ids, tokens or secrets; build/ is
+ * git-ignored.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -62,17 +63,23 @@ expect("dev and prod request identical scopes", JSON.stringify(auth(dev).require
   && JSON.stringify(auth(dev).optionalScopes) === JSON.stringify(auth(prod).optionalScopes), true, false);
 // Scope strings as HubSpot's public API specs name them (HubSpot-public-api-spec-collection, 2026-09
 // rollouts) and its project templates (hubspot-project-components 2026.09): see hubspot/README.md.
-const SCOPES = ["oauth", "crm.objects.contacts.read", "crm.objects.contacts.write", "crm.objects.deals.read", "tickets",
+// HubSpot refused `tickets` on project apps on 11 October 2026 and named the granular ticket scopes
+// instead; the CMA reads tickets only, so it requests crm.objects.tickets.read.
+const SCOPES = ["oauth", "crm.objects.contacts.read", "crm.objects.contacts.write", "crm.objects.deals.read", "crm.objects.tickets.read",
   "crm.objects.owners.read", "forms"];
 expect("the required scopes are exactly the documented set", [...auth(dev).requiredScopes].sort(), [...SCOPES].sort(), [...SCOPES, "crm.objects.deals.write"].sort());
 expect("no optional or conditional scopes", [auth(dev).optionalScopes, auth(dev).conditionallyRequiredScopes], [[], []], [["forms"], []]);
 expect("crm.objects.contacts.write is the only *.write scope", auth(dev).requiredScopes.filter((s) => /write/.test(s)), ["crm.objects.contacts.write"], []);
-// HubSpot has no read-only ticket scope: `tickets` also allows ticket writes. The CMA's code never
-// writes tickets; the scope is named here so adding any other write-capable scope fails this check.
-const WRITE_CAPABLE = new Set(["crm.objects.contacts.write", "tickets"]);
-expect("write-capable scopes: contacts write, and tickets (HubSpot has no read-only one)",
-  auth(dev).requiredScopes.filter((s) => WRITE_CAPABLE.has(s) || /write|sensitive|schemas|automation|e-commerce/.test(s)).sort(),
-  ["crm.objects.contacts.write", "tickets"], ["crm.objects.contacts.write"]);
+// The only write-capable scope the app may request is crm.objects.contacts.write. `tickets` (retired
+// by HubSpot on project apps, and it allowed ticket writes) and any other *.write or *.delete scope
+// fail this check.
+const ALLOWED_WRITE = "crm.objects.contacts.write";
+const disallowedWrites = (scopes) => scopes.filter((s) => s !== ALLOWED_WRITE && (s === "tickets" || /(^|\.)(write|delete)(\.|$)/.test(s))).sort();
+expect("crm.objects.contacts.write is the only write-capable scope", [disallowedWrites(auth(dev).requiredScopes), disallowedWrites(auth(prod).requiredScopes)],
+  [[], []], [["tickets"], []]);
+expect("the write rule refuses `tickets`, other *.write and *.delete scopes",
+  disallowedWrites([...auth(dev).requiredScopes, "tickets", "crm.objects.tickets.write", "crm.schemas.tickets.write", "crm.objects.contacts.delete"]),
+  ["crm.objects.contacts.delete", "crm.objects.tickets.write", "crm.schemas.tickets.write", "tickets"], []);
 
 // ---- subscriptions: VENDOR_SETUP.md §1.3 ----------------------------------------------------------
 const vendor = readFileSync(join(REPO, "docs/night-2026-10-10/VENDOR_SETUP.md"), "utf8");

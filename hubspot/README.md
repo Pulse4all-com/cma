@@ -27,7 +27,7 @@ Files:
 - **Rendered draft.** The parser's offline translation (schema fetch skipped) reads `build/dev-draft` as one `APPLICATION` and one `WEBHOOKS` component that depends on it, with no skipped files. Every key in the rendered files also occurs in HubSpot's 2026.09 templates. We leave out the template's `support` block (support contact details) and its legacy subscriptions.
 - **Event types and scopes.** These come from `github.com/HubSpot/HubSpot-public-api-spec-collection` (2026-09 rollouts, commit of 9 October 2026):
   - the app webhooks API lists `object.creation`, `object.deletion`, `object.merge`, `object.restore`, `object.propertyChange`, `object.associationChange` and `contact.privacyDeletion`;
-  - each endpoint the ingest calls names its scope (table below).
+  - each endpoint the ingest calls names its scope (table below); on 11 October 2026 HubSpot refused `tickets` on the first upload, and the ticket calls were checked again (Scopes).
 - **Still unproven offline.** The schema itself is served by HubSpot at upload time, so `hs project upload` is the final check. Nothing is installed if it fails. One point is unproven until then: whether the project schema accepts `call` as a `crmObjects` object type together with `object.associationChange`.
 
 ## Scopes
@@ -36,7 +36,7 @@ Files:
 |---|---|---|
 | `oauth` | the base scope HubSpot's project templates put on every app | project templates |
 | `crm.objects.deals.read` | deals: batch read, search; deal pipelines | Deals, Pipelines |
-| `tickets` | tickets: batch read, search; ticket pipelines | Tickets, Pipelines |
+| `crm.objects.tickets.read` | tickets: batch read, search; their contacts through the associations batch read; the ticket webhook subscriptions | named by HubSpot's refusal of `tickets` (11 October 2026); see below |
 | `crm.objects.contacts.read` | contacts; also **calls**: the calls batch read and search name this scope | Contacts, Calls |
 | `crm.objects.contacts.write` | the contact write-back (DESIGN §4.3a), limited to `writeback_field` in the database and in code | Contacts batch update |
 | `crm.objects.owners.read` | owners, to map HubSpot owners to CMA people once | Owners |
@@ -44,7 +44,23 @@ Files:
 
 Two things to know:
 
-- **`tickets` also allows writing tickets.** HubSpot has no read-only ticket scope: in the spec, create, update, merge and delete of tickets all require the same `tickets` scope as reading them. The CMA never writes tickets; Martin accepted the scope on 10 October 2026 (README Decision log). The verifier allows exactly `crm.objects.contacts.write` and `tickets` as write-capable scopes, so adding any other one fails it.
+- **Ticket scopes: read only (11 October 2026).** The first upload of `CMA ingest dev` on 11 October 2026 was refused: "The scope tickets has been replaced by more specific scopes and is no longer available. Use the following scope(s) instead: crm.objects.tickets.read, crm.objects.tickets.write, crm.schemas.tickets.read, crm.schemas.tickets.write." The CMA never writes tickets, so the app requests `crm.objects.tickets.read` only, and `crm.objects.contacts.write` is its only write scope. This supersedes the acceptance of `tickets` of 10 October 2026 (README Decision log). The verifier fails on `tickets` and on any `*.write` or `*.delete` scope other than `crm.objects.contacts.write`.
+- **What the spec says about the ticket calls (checked 11 October 2026, `HubSpot-public-api-spec-collection` commit `c7c63ae`).** The published spec lags behind the platform: `crm.objects.tickets.read` occurs in none of its files, and the 2026-09 ticket specs still name `tickets`. In OpenAPI each entry of `security` is an alternative, so one listed scope is enough:
+
+  | Call (ingest) | Spec file (`PublicApiSpecs/…`) | Line | Ticket scope listed |
+  |---|---|---|---|
+  | `POST /crm/v3/objects/tickets/batch/read` | `CRM/Tickets/Rollouts/424/v3/tickets.json` | 341 | none (`security: []`) |
+  | same, 2026-09 | `CRM/Tickets/Rollouts/424/2026-09/tickets.json` | 762 | `tickets` |
+  | `POST /crm/v3/objects/tickets/search` | `CRM/Tickets/Rollouts/424/v3/tickets.json` | 527 | none (`security: []`) |
+  | same, 2026-09 | `CRM/Tickets/Rollouts/424/2026-09/tickets.json` | 974 | `tickets` |
+  | `GET /crm/v3/pipelines/tickets` | `CRM/Pipelines/Rollouts/145896/v3/pipelines.json` | 65 | none outside the sensitive variants; any of 98 alternatives, among them `crm.objects.deals.read` and `crm.objects.contacts.read` |
+  | same, 2026-09 | `CRM/Pipelines/Rollouts/321972/2026-09/pipelines.json` | 59 | the same 98 alternatives; `crm.schemas.tickets.read` is not among them |
+  | same, 2026-09-beta | `CRM/Pipelines/Rollouts/321972/2026-09-beta/pipelines.json` | 59 | `tickets` or `crm.schemas.tickets.read`, as two of 100 alternatives |
+  | `POST /crm/v4/associations/tickets/contacts/batch/read` | `CRM/Associations/Rollouts/130902/v4/associations.json` | 1173 | none outside the sensitive variants; any of 79 alternatives, among them `crm.objects.contacts.read` |
+  | ticket webhook subscriptions | `Webhooks/Webhooks/Rollouts/147891/2026-09/webhooks.json` | 248 | none: the subscriptions API takes the developer key; its error format names `missingScopes` (line 2191) |
+
+  So no spec version lists `crm.schemas.tickets.read` as needed, and it is not requested. If the ticket pipelines read answers 403 at runtime, the ingest logs `catalog refresh skipped` (deal and ticket pipelines are refreshed together) and keeps processing events; then add `crm.schemas.tickets.read`, a read scope the verifier allows once it is in the documented set.
+- **`forms` also covers form definitions.** HubSpot has one forms scope: the spec (`Marketing/Forms/Rollouts/144909/v3/forms.json`) names `forms` for reading forms and for creating, updating and deleting them. The CMA only reads the catalog and the submissions.
 - **Call dispositions need no extra scope, as far as could be checked.** The outcome catalog endpoint (`/calling/v1/dispositions`) is not in the published specs, and no separate scope is requested for it. If the first catalog read answers 403, the scope it names gets added here.
 
 ## Subscriptions and their canonical kinds
@@ -101,7 +117,7 @@ Expected: the build and deploy of project **CMA ingest dev** succeed. If HubSpot
 - **Dev:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → Install in `CMA dev`. **Never Standard install** for the dev app.
 - **Prod:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → **Standard install**, in the live portal. Only when the runbook's prod phase says so.
 
-Review the scopes on the consent screen: the read scopes, `tickets`, and write on contacts.
+Review the scopes on the consent screen: the read scopes (ticket read among them, no ticket write) and write on contacts.
 
 ## The client secret and the static token
 
