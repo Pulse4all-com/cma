@@ -1,0 +1,1 @@
+11 October 2026, dev cma-web on bbea843 through gcloud run services proxy. An earlier provoked run straight after a normal run reported 4 of 147 checks not failing; its PASS lines were not captured. Not reproduced: a second provoked run and the recorded sequence here (normal, then provoked) both failed all 147.
