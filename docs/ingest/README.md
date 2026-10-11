@@ -37,11 +37,19 @@ Environment (set by `deploy.sh`): `CMA_DB_INSTANCE`, `CMA_DB_USER` (`cma-ingest@
 
 ## Deploy (Martin, Cloud Shell)
 
+The image is built once, in `p4a-cma-prod`, never in dev (README Architecture, Build and deploy; Decision log, 5 October 2026): `gcloud builds submit` in europe-west4 as `cma-build@p4a-cma-prod.iam.gserviceaccount.com`, source staged in `gs://p4a-cma-prod-build-src` (the default staging bucket is in the US and the EU-only policy refuses it, HTTP 412 on `constraints/gcp.resourceLocations`), pushed to `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>`. When that tag exists the build is skipped, so prod after dev runs exactly the bytes dev tested. Dev and prod both deploy that image by tag; dev has no repository and no build of its own and pulls through its Cloud Run service agent, which has Artifact Registry reader on the prod repository `cma`. Before a dev deploy the script checks that grant; when it is missing it stops and prints the command that adds it:
+
+**Terminal** (only when the script printed it; the project number is dev's)
+```bash
+gcloud artifacts repositories add-iam-policy-binding cma --project=p4a-cma-prod --location=europe-west4 --member=serviceAccount:service-<dev project number>@serverless-robot-prod.iam.gserviceaccount.com --role=roles/artifactregistry.reader
+```
+Expected: the repository's updated policy; then rerun the deploy.
+
 **Terminal** (in `~/cma`, on main)
 ```bash
 git switch -q main && git pull -q --ff-only && bash docs/ingest/deploy.sh dev --tenant pulse4all-subscriptions --tenant pulse4all-invest
 ```
-Expected: the APIs enabled, the service account and its database user (first time), `created ingest-hash-pepper-…` per tenant the first time and `accessor on …`, the Cloud Build log ending in `SUCCESS`, the Cloud Run deploy, then a block with one Studio statement, the URL and `health: {"ok":true,"version":"<short sha>"}`.
+Expected: the APIs enabled, the service account and its database user (first time), `created ingest-hash-pepper-…` per tenant the first time and `accessor on …`, `service-…@serverless-robot-prod.iam.gserviceaccount.com reads europe-west4-docker.pkg.dev/p4a-cma-prod/cma`, the Cloud Build log (project `p4a-cma-prod`) ending in `SUCCESS` or `image … exists (sha256:…); no build`, the Cloud Run deploy, then a block with one Studio statement, the URL and `health: {"ok":true,"version":"<short sha>"}`.
 
 **Studio (cma-dev-pg)**: paste the printed statement as is, once:
 ```sql
@@ -57,7 +65,7 @@ bash docs/ingest/deploy.sh dev --secret ingest-hubspot-dev-signing --secret inge
 ```
 Expected: `accessor on ingest-hubspot-dev-signing`, `accessor on ingest-hubspot-dev-token`, a new revision.
 
-For prod the same with `prod` (instance `cma-prod-pg`, min instances 1, max 5, no header logging).
+For prod the same with `prod` (instance `cma-prod-pg`, min instances 1, max 5, no header logging), from the same commit as the dev deploy: the image already exists, so the output says `no build` and prod runs what dev tested.
 
 ## Checks
 

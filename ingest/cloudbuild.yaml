@@ -1,10 +1,12 @@
 # Cloud Build for the ingest image: build and push only. Not wired to a trigger: docs/ingest/deploy.sh
-# runs it with `gcloud builds submit ingest --config=ingest/cloudbuild.yaml` in the target project and
-# then deploys the service itself, so the service's settings live in one place (deploy.sh).
+# runs it with `gcloud builds submit ingest --config=ingest/cloudbuild.yaml` in p4a-cma-prod (never in
+# dev), as service account cma-build with source staged in gs://p4a-cma-prod-build-src, and then
+# deploys the service itself in dev or prod, so the service's settings live in one place (deploy.sh).
+# Logging stays CLOUD_LOGGING_ONLY: a build with a user-specified service account requires it.
 #
 # Substitutions:
 #   _VERSION   the short sha of the commit the image is built from (shown by GET /health)
-#   _REPO      europe-west4-docker.pkg.dev/$PROJECT_ID/cma
+#   _REPO      europe-west4-docker.pkg.dev/p4a-cma-prod/cma
 steps:
   - id: build
     name: gcr.io/cloud-builders/docker
