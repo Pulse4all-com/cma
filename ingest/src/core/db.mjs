@@ -5,6 +5,7 @@
  *
  *   withoutTenant  no tenant context: only cma.ingest_connection(key), the SECURITY DEFINER lookup
  *   withTenant     app.tenant_id, app.user_id (the tenant's Ingest user) and app.actor_label
+ *   withTenantOnly app.tenant_id alone: a job finding the tenant's Ingest user and connections
  *
  * Authentication is automatic IAM database authentication through the Cloud SQL connector: the
  * service account cma-ingest@<project>.iam is the database user, a member of cma_app with plain
@@ -105,6 +106,15 @@ export function withTenant(ctx, fn) {
       "select set_config('app.tenant_id', $1, true), set_config('app.user_id', $2, true), set_config('app.actor_label', $3, true)",
       [ctx.tenantId, ctx.userId, ctx.actorLabel ?? "ingest"],
     );
+  }, fn);
+}
+
+/** A transaction with the tenant set and no acting user (reads only: every write needs a user). */
+export function withTenantOnly(tenantId, actorLabel, fn) {
+  if (!tenantId) throw new Error("tenant missing");
+  return transaction(async (q) => {
+    await q.query("select set_config('app.tenant_id', $1, true), set_config('app.user_id', '', true), set_config('app.actor_label', $2, true)",
+      [tenantId, actorLabel ?? "ingest"]);
   }, fn);
 }
 

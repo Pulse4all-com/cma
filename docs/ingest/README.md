@@ -1,6 +1,6 @@
 # The ingest service (`cma-ingest`)
 
-The only write path into the CMA from outside Google Cloud (README Architecture, Ingest API; specification `docs/night-2026-10-10/DESIGN.md` §2, §5, §6). Code in `ingest/` (plain Node 22, ESM, `pg` and the Cloud SQL connector as `web/src/lib/db/client.ts` connects). This version (brief B7) has the HubSpot route; the jobs come with B8, Aircall with B9, Shopify with B10.
+The only write path into the CMA from outside Google Cloud (README Architecture, Ingest API; specification `docs/night-2026-10-10/DESIGN.md` §2, §5, §6). Code in `ingest/` (plain Node 22, ESM, `pg` and the Cloud SQL connector as `web/src/lib/db/client.ts` connects). This version has the HubSpot route (brief B7) and the jobs (brief B8); Aircall comes with B9, Shopify with B10.
 
 ## What it does
 
@@ -16,13 +16,26 @@ Per request, in this order (DESIGN §2, the 0006 pattern):
 1. **Authenticate** before anything but the key lookup touches the database: `X-HubSpot-Signature-v3` = base64(HMAC-SHA256(client secret, `POST` + URI + body + timestamp)), `X-HubSpot-Request-Timestamp` at most 5 minutes off, compared in constant time. The URI is the public address HubSpot called: the service's own URLs are in `INGEST_PUBLIC_URLS` (deploy.sh sets both Cloud Run address forms).
 2. **Record** every event as a canonical event (`hs:<eventId>`, kind, object type and id, ids and timestamps only; the property value and the acting user are dropped), in one transaction, in batches of at most 500. An event of another portal is recorded as `ignored` with `raw.ignored = portal_mismatch` and never read back; so are association changes the CMA does not keep (only deal → contact, ticket → contact, call → contact and call → deal) and objects it does not read.
 3. **Read back** within the budget (`INGEST_READBACK_BUDGET_MS`, 3000): deals and tickets by CRM v3 batch read with HubSpot's structural properties (pipeline, stage, owner, created, closed, modified) plus the properties configured in `cma.connection_field`, their contacts through the v4 associations batch read, the primary contact (labelled primary, else the one already held, else the lowest id) read with its configured properties; calls with their properties, the other party's number hashed (below) and dropped, their contacts and deals; contacts only when the CMA holds them (0006: never the contact base). Deletions mark the object deleted without a read; `contact.privacyDeletion` calls `cma.ingest_contact_forget()`. Pipelines with stages and the call outcome list (`/calling/v1/dispositions`) are refreshed at most hourly per connection.
-4. **Upsert** through the 0006 and 0007 functions (stale guard on the source's updated time) and **finish** the events. A 429 finishes them as `failed` with `rate_limited`, a timeout with `timeout`, an HTTP error with `http_<status>`: the sweeper (B8) reads them again with backoff and parks them after `ingest.max_attempts`.
+4. **Upsert** through the 0006 and 0007 functions (stale guard on the source's updated time) and **finish** the events. A 429 finishes them as `failed` with `rate_limited`, a timeout with `timeout`, an HTTP error with `http_<status>`: the sweep job reads them again with backoff and parks them after `ingest.max_attempts`.
 
 Without a market property mapped for a record type, a deal or ticket takes its primary contact's mapped country as market (and language), normalised by the market aliases (VENDOR_SETUP §1.1). A later change of the contact's country reaches the record at the record's next read (its own event or the nightly reconcile of B8).
 
 **The keyed hash.** `HMAC-SHA256(pepper, E.164)` in hex; numbers normalised with libphonenumber, national formats with the connection setting `phone_default_region` (for example `GB`) as default region; a number that is not a possible phone number gets no hash. The pepper is per tenant: secret `ingest-hash-pepper-<tenant slug>`. Without it, calls are not read back (`pepper_unavailable`) until it exists.
 
 **Logs** are JSON lines: connection id, adapter, counts, durations and error codes. Never payloads, contact or customer ids, numbers, emails, secrets or header values. With `INGEST_LOG_HEADER_NAMES=1` (dev) each webhook logs its header **names**, so the first delivery shows whether HubSpot sends `x-hubspot-signature-v3`.
+
+## Jobs
+
+Cloud Run jobs on the same image (`node jobs/<name>.mjs`), as `cma-ingest@<project>` with the service's database settings, started by Cloud Scheduler (Europe/Amsterdam) as `cma-ingest-scheduler@<project>`, which holds `run.invoker` on the three scheduled jobs only. Each serves every active connection of every tenant with an active Ingest user (`cma.find_tenants_for_identity('ingest', 'ingest')`, then the tenant's connections under row-level security, as the tenant's Ingest user), exits 0 when every connection was served and 1 when any failed (the others are still served). Logs: connection ids, counts, codes; never an email, a contact id or a token.
+
+| Job | Schedule | Does | `sync_run` |
+|---|---|---|---|
+| `ingest-sweep` | every minute | per connection, due events (received, or failed with the backoff passed) claimed and read back in parts of 100 until none is due (at most about 45 seconds); records still without a contact in their first hour read again, at most every ten minutes; per tenant `cma.link_calls(now() − 2 h)` | `link_calls` on the tenant's first HubSpot connection (the events are the sweep's own audit) |
+| `ingest-poll-forms` | every minute | the form catalog (`GET /marketing/v3/forms`) at most hourly into `cma.connection_form` (names only; counted, lead source, market and kept fields stay as configured); per counted, active form the submissions newest first, 50 per page, until the form's cursor (`forms:<guid>`: time and conversion id of the newest read), on its first poll until `intake.start_date`; the contact by a CRM search on the definition's email field (one → resolved, none → not_found, several → ambiguous, no email → no_email), the email in memory for that search only; page host and path, UTM parameters, kept fields only (never the email field) | `forms_poll`, stream `forms` |
+| `ingest-reconcile` | 02:30 | per connection and object type (deal, ticket, crm_call, contact) everything modified in the last 26 hours by CRM search, read back like a webhook (stale guard: a newer row stays); contacts only when the CMA holds them; `--lookback-minutes <n>` shortens the look-back | `reconcile`, stream the object type |
+| `ingest-backfill` | none | `--connection <id> --object <deal\|ticket\|crm_call\|form_submission\|contact> [--from <YYYY-MM-DD>]` (default `intake.start_date`, 00:00 in the tenant's zone): deals by `createdate` and then `closedate`, tickets by `createdate` and `closed_date`, calls by `hs_timestamp`, contacts the CMA holds, submissions of the counted forms; paced at half of HubSpot's documented limits (search one call per 400 ms, the rest one per 200 ms); resumable: the cursor (`backfill:<object>:<property>`) moves after every page and a run with the same start continues there | `backfill`, stream the object type |
+
+Reconcile, backfill and the second read do not write themselves: what they find becomes a synthetic event (`sync:<type>:<id>:<modified time>`, kind `changed`) on the webhook's read-back and upserts. So an unchanged object is read once however often it is listed, a 429 in a backfill leaves its events to the sweep with backoff, and every object a job touched has its event row. A failed contact search in the forms poll writes nothing for that form and leaves its cursor, so the next run reads the same submissions again (they are idempotent on the conversion id). HubSpot's search returns at most 10,000 results per query; past that a new query starts at the last value seen. Deletions are not found by a search: they arrive by webhook.
 
 ## Configuration
 
@@ -33,7 +46,7 @@ Without a market property mapped for a record type, a deal or ticket takes its p
 | `cma.set_connection_settings(conn, '{"app_host":"…","phone_default_region":"GB"}')` | non-secret settings; `phone_default_region` for the call hash |
 | Secret Manager | `<signing secret name>` (the app's client secret), `<token secret name>` (the static token), `ingest-hash-pepper-<tenant slug>` |
 
-Environment (set by `deploy.sh`): `CMA_DB_INSTANCE`, `CMA_DB_USER` (`cma-ingest@<project>.iam`), `CMA_DB_NAME`, `CMA_DB_POOL_MAX`, `INGEST_VERSION`, `INGEST_PROJECT`, `INGEST_PUBLIC_URLS`, `INGEST_LOG_HEADER_NAMES` (dev 1, prod 0), `INGEST_READBACK_BUDGET_MS`. Local only: `CMA_DB_HOST`, `CMA_DB_PORT`, `CMA_DB_PASSWORD`, `CMA_DB_SET_ROLE`, `INGEST_SECRETS_DIR` (secrets as files), `INGEST_HUBSPOT_API_BASE` (a fake HubSpot on localhost; only https or localhost is accepted).
+Environment (set by `deploy.sh`): `CMA_DB_INSTANCE`, `CMA_DB_USER` (`cma-ingest@<project>.iam`), `CMA_DB_NAME`, `CMA_DB_POOL_MAX`, `INGEST_VERSION`, `INGEST_PROJECT`, `INGEST_PUBLIC_URLS`, `INGEST_LOG_HEADER_NAMES` (dev 1, prod 0), `INGEST_READBACK_BUDGET_MS`; the jobs get the database settings, `INGEST_VERSION` and `INGEST_PROJECT` only. Local only: `CMA_DB_HOST`, `CMA_DB_PORT`, `CMA_DB_PASSWORD`, `CMA_DB_SET_ROLE`, `INGEST_SECRETS_DIR` (secrets as files), `INGEST_HUBSPOT_API_BASE` (a fake HubSpot on localhost; only https or localhost is accepted), `INGEST_PACE_FACTOR` (0 to 1: scales the jobs' pacing for a verifier run against a fake source).
 
 ## Deploy (Martin, Cloud Shell)
 
@@ -67,6 +80,32 @@ Expected: `accessor on ingest-hubspot-dev-signing`, `accessor on ingest-hubspot-
 
 For prod the same with `prod` (instance `cma-prod-pg`, min instances 1, max 5, no header logging), from the same commit as the dev deploy: the image already exists, so the output says `no build` and prod runs what dev tested.
 
+**The jobs** (after the service, from the same commit, so the image exists):
+
+**Terminal** (in `~/cma`, on main)
+```bash
+bash docs/ingest/deploy.sh dev --jobs
+```
+Expected: `image … exists (sha256:…); no build`, four `gcloud run jobs deploy` results (`ingest-sweep`, `ingest-poll-forms`, `ingest-reconcile`, `ingest-backfill`), then `schedule ingest-sweep: * * * * * (Europe/Amsterdam)`, the same for `ingest-poll-forms` and `schedule ingest-reconcile: 30 2 * * * (Europe/Amsterdam)`, and the backfill command. The first time it also creates the service account `cma-ingest-scheduler`.
+
+A backfill, per connection and object type (the connection id from `select connection_id, adapter, name from cma.connections_all();` in Studio):
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<connection id>,--object,deal,--from,2026-10-01
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` Then the same with `ticket`, `crm_call`, `form_submission`. A failed execution can simply be run again with the same arguments: it continues where it stopped.
+
+**The polling fallback** (NIGHT_NOTES D3, only if the first delivery shows no `x-hubspot-signature-v3`): webhooks off in the app, and the reconcile every two minutes over the last ten:
+
+**Terminal**
+```bash
+bash docs/ingest/deploy.sh dev --jobs --reconcile-every "*/2 * * * *" --reconcile-lookback 10
+```
+Expected: `schedule ingest-reconcile: */2 * * * * (Europe/Amsterdam)`. Back to nightly: rerun `--jobs` without the two options.
+
+For prod the same with `prod`.
+
 ## Checks
 
 **Terminal**: health and the first delivery's header names (runbook 2.5):
@@ -83,6 +122,21 @@ select object_type, kind, status, error, count(*) from cma.ingest_event group by
 reset role;
 ```
 Expected: `processed` rows; `failed` with `token_unavailable`, `pepper_unavailable` or `http_401`/`http_403` points at a secret, an accessor or a scope.
+
+**Studio (cma-dev-pg)**: the jobs' runs and the forms:
+```sql
+set role cma_owner;
+select job, stream, status, counts, error, started_at, finished_at from cma.sync_run order by started_at desc limit 20;
+select source_form_id, submitted_at, page_host, page_path, utm, contact_resolution, kept_values from cma.form_submission order by submitted_at desc limit 10;
+reset role;
+```
+Expected: `link_calls` and `forms_poll` rows every minute with `succeeded`, `reconcile` rows after 02:30, a `backfill` row per execution; submissions with a host, a path without query, the UTM values and a resolution. A `forms_poll` row `failed` with `rate_limited` resolves itself on a later run; `token_unavailable` points at the token secret's accessor; `http_403` at the `forms` scope.
+
+**Terminal**: a job's log:
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=p4a-cma-dev --limit=10 --format='value(jsonPayload.message,jsonPayload.processed,jsonPayload.failed)'
+```
+Expected: `sweep` lines with counts every minute.
 
 ## People: HubSpot owners on CMA persons
 
@@ -108,6 +162,8 @@ Expected: `200 {"received":10,"new":10}`. The fixture's ids do not exist in `CMA
 |---|---|---|
 | `npm test` | `verify/signature.mjs`, `verify/mapping.mjs`, `verify/hash.mjs` | nothing (pure) |
 | `node verify/<name>.mjs --provoke` | every check must fail | nothing |
+| `npm test` (also) | `verify/forms.mjs`: page host, path and UTM, the email kept out, kept fields, the poll's cursor stop, the search window, synthetic event keys, job arguments | nothing (pure) |
 | `node verify/flow.mjs [--provoke]` | the service end to end against a fake HubSpot | a local PostgreSQL with `db/00…33`, see the file's header |
+| `node verify/jobs-flow.mjs [--provoke]` | the jobs end to end against a fake HubSpot: sweep, forms poll, backfill with an interruption, reconcile, tenant isolation, no email stored or logged | a local PostgreSQL with `db/00…37`, see the file's header |
 
 Each prints `ALL n PASS`, or with `--provoke` `ALL n PROVOKED CHECKS FAILED, as they must`.

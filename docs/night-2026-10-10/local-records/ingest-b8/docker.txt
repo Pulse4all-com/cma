@@ -1,0 +1,25 @@
+$ docker build (session copy of ingest/Dockerfile: proxy CA, mirror.gcr.io, --network host)
+image cma-ingest:b8 sha256:404cb039d28608008f23323e3b2de3727babedfe3cb75449a0cdb6732302a5c5
+
+$ docker run cma-ingest:b8 (the service) + GET /health
+{"ok":true,"version":"local"}
+app
+
+$ docker run cma-ingest:b8 ls jobs
+backfill.mjs
+poll-forms.mjs
+reconcile.mjs
+sweep.mjs
+
+$ docker run cma-ingest:b8 node jobs/backfill.mjs   (no arguments)
+{"severity":"ERROR","message":"backfill usage","job":"backfill","code":"usage","detail":"--connection and --object are required","time":"…"}
+exit 2
+
+$ docker run cma-ingest:b8 node jobs/reconcile.mjs --lookback-minutes ten
+{"severity":"ERROR","message":"reconcile usage","job":"reconcile","code":"usage","detail":"--lookback-minutes is not a number of minutes","time":"…"}
+exit 2
+
+$ docker run (local PostgreSQL socket) node jobs/sweep.mjs
+{"severity":"INFO","message":"sweep","connections":6,"claimed":9,"processed":0,"ignored":0,"eventsFailed":9,"reread":0,"links":0,"failed":0,"ms":196,"time":"…"}
+{"severity":"INFO","message":"sweep finished","job":"sweep","connections":6,"claimed":9,"processed":0,"ignored":0,"eventsFailed":9,"reread":0,"links":0,"failed":0,"ms":197,"time":"…"}
+exit 0

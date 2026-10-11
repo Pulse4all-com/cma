@@ -1,0 +1,177 @@
+# deploy.sh --jobs at b361d2f against a stub gcloud that prints each call (GCLOUD …), records its arguments as
+# JSON and answers every lookup as existing, except the Cloud Scheduler entries (missing, so they are created).
+# Nothing was sent to Google Cloud. After each run, the parser below reads every --set-env-vars the way gcloud
+# parses a dict argument.
+
+## The parser (parse_env.py, session-only)
+```
+"""Reads --set-env-vars / --update-env-vars from recorded gcloud calls the way gcloud parses a dict
+argument: a leading ^X^ sets the delimiter (default ","), the rest splits on it, and each item splits
+on its first "="; an item without "=" is gcloud's "Bad syntax for dict arg: [item]"."""
+import json, sys
+
+def parse(value):
+    delim = ","
+    if value.startswith("^"):
+        end = value.index("^", 1)
+        delim, value = value[1:end], value[end + 1:]
+    out = {}
+    for item in value.split(delim):
+        if "=" not in item:
+            raise ValueError(f"Bad syntax for dict arg: [{item}]")
+        k, v = item.split("=", 1)
+        out[k] = v
+    return out
+
+for line in open(sys.argv[1]):
+    args = json.loads(line)
+    for a in args:
+        for flag in ("--set-env-vars=", "--update-env-vars="):
+            if a.startswith(flag):
+                name = " ".join(args[:4])
+                try:
+                    env = parse(a[len(flag):])
+                    print(f"{name}: {flag[:-1]} → {len(env)} keys")
+                    for k, v in env.items():
+                        print(f"    {k}={v}")
+                except ValueError as e:
+                    print(f"{name}: {flag[:-1]} → ERROR {e}")
+if len(sys.argv) > 2:
+    try:
+        parse(sys.argv[2])
+    except ValueError as e:
+        print(f"the old ^@^ list: ERROR {e}")
+```
+
+$ bash docs/ingest/deploy.sh dev --jobs
+== ingest jobs b361d2f → p4a-cma-dev
+GCLOUD services enable run.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com --project=p4a-cma-dev --quiet
+GCLOUD services enable cloudscheduler.googleapis.com --project=p4a-cma-dev --quiet
+GCLOUD projects add-iam-policy-binding p4a-cma-dev --member=serviceAccount:cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --role=roles/cloudsql.client --condition=None --quiet
+GCLOUD projects add-iam-policy-binding p4a-cma-dev --member=serviceAccount:cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --role=roles/cloudsql.instanceUser --condition=None --quiet
+GCLOUD sql users list --instance=cma-dev-pg --project=p4a-cma-dev --format=value(name)
+note: no --tenant given; calls wait (pepper_unavailable) until ingest-hash-pepper-<tenant slug> exists
+GCLOUD projects describe p4a-cma-dev --format=value(projectNumber)
+GCLOUD artifacts repositories get-iam-policy cma --location=europe-west4 --project=p4a-cma-prod --flatten=bindings[].members --filter=bindings.members:serviceAccount:service-123456@serverless-robot-prod.iam.gserviceaccount.com --format=value(bindings.role)
+GCLOUD projects get-iam-policy p4a-cma-prod --flatten=bindings[].members --filter=bindings.members:serviceAccount:service-123456@serverless-robot-prod.iam.gserviceaccount.com --format=value(bindings.role)
+service-123456@serverless-robot-prod.iam.gserviceaccount.com reads europe-west4-docker.pkg.dev/p4a-cma-prod/cma
+image europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f exists (GCLOUD artifacts docker images describe europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --format=value(image_summary.digest)
+sha256:abc); no build
+GCLOUD run jobs deploy ingest-sweep --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/sweep.mjs --args= --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-dev --tasks=1 --max-retries=0 --task-timeout=10m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-poll-forms --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/poll-forms.mjs --args= --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-dev --tasks=1 --max-retries=0 --task-timeout=10m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-reconcile --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/reconcile.mjs --args= --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-dev --tasks=1 --max-retries=0 --task-timeout=60m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-backfill --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/backfill.mjs --args= --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-dev --tasks=1 --max-retries=0 --task-timeout=24h --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs add-iam-policy-binding ingest-sweep --project=p4a-cma-dev --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-sweep --project=p4a-cma-dev --location=europe-west4 --schedule=* * * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-dev/jobs/ingest-sweep:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --quiet
+schedule ingest-sweep: * * * * * (Europe/Amsterdam)
+GCLOUD run jobs add-iam-policy-binding ingest-poll-forms --project=p4a-cma-dev --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-poll-forms --project=p4a-cma-dev --location=europe-west4 --schedule=* * * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-dev/jobs/ingest-poll-forms:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --quiet
+schedule ingest-poll-forms: * * * * * (Europe/Amsterdam)
+GCLOUD run jobs add-iam-policy-binding ingest-reconcile --project=p4a-cma-dev --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-reconcile --project=p4a-cma-dev --location=europe-west4 --schedule=30 2 * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-dev/jobs/ingest-reconcile:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-dev.iam.gserviceaccount.com --quiet
+schedule ingest-reconcile: 30 2 * * * (Europe/Amsterdam)
+
+== Studio (cma-dev-pg), once per database: the service's database user joins cma_app (the jobs run as it too)
+grant cma_app to "cma-ingest@p4a-cma-dev.iam";
+
+== jobs on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f
+ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (30 2 * * *), ingest-backfill (manual)
+backfill:  gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact>,--from,<YYYY-MM-DD>
+run now:   gcloud run jobs execute ingest-sweep --project=p4a-cma-dev --region=europe-west4 --wait
+logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=p4a-cma-dev --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'
+exit 0
+
+-- parsed as gcloud parses a dict argument:
+run jobs deploy ingest-sweep: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-dev.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-dev
+run jobs deploy ingest-poll-forms: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-dev.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-dev
+run jobs deploy ingest-reconcile: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-dev.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-dev
+run jobs deploy ingest-backfill: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-dev.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-dev
+
+$ bash docs/ingest/deploy.sh prod --jobs
+== ingest jobs b361d2f → p4a-cma-prod
+GCLOUD services enable run.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com --project=p4a-cma-prod --quiet
+GCLOUD services enable cloudscheduler.googleapis.com --project=p4a-cma-prod --quiet
+GCLOUD projects add-iam-policy-binding p4a-cma-prod --member=serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --role=roles/cloudsql.client --condition=None --quiet
+GCLOUD projects add-iam-policy-binding p4a-cma-prod --member=serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --role=roles/cloudsql.instanceUser --condition=None --quiet
+GCLOUD sql users list --instance=cma-prod-pg --project=p4a-cma-prod --format=value(name)
+note: no --tenant given; calls wait (pepper_unavailable) until ingest-hash-pepper-<tenant slug> exists
+image europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f exists (GCLOUD artifacts docker images describe europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --format=value(image_summary.digest)
+sha256:abc); no build
+GCLOUD run jobs deploy ingest-sweep --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/sweep.mjs --args= --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-prod --tasks=1 --max-retries=0 --task-timeout=10m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-poll-forms --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/poll-forms.mjs --args= --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-prod --tasks=1 --max-retries=0 --task-timeout=10m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-reconcile --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/reconcile.mjs --args= --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-prod --tasks=1 --max-retries=0 --task-timeout=60m --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs deploy ingest-backfill --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f --command=node,jobs/backfill.mjs --args= --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=3|INGEST_VERSION=b361d2f|INGEST_PROJECT=p4a-cma-prod --tasks=1 --max-retries=0 --task-timeout=24h --cpu=1 --memory=512Mi --quiet
+GCLOUD run jobs add-iam-policy-binding ingest-sweep --project=p4a-cma-prod --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-sweep --project=p4a-cma-prod --location=europe-west4 --schedule=* * * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-prod/jobs/ingest-sweep:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --quiet
+schedule ingest-sweep: * * * * * (Europe/Amsterdam)
+GCLOUD run jobs add-iam-policy-binding ingest-poll-forms --project=p4a-cma-prod --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-poll-forms --project=p4a-cma-prod --location=europe-west4 --schedule=* * * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-prod/jobs/ingest-poll-forms:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --quiet
+schedule ingest-poll-forms: * * * * * (Europe/Amsterdam)
+GCLOUD run jobs add-iam-policy-binding ingest-reconcile --project=p4a-cma-prod --region=europe-west4 --member=serviceAccount:cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --role=roles/run.invoker --quiet
+GCLOUD scheduler jobs create http ingest-reconcile --project=p4a-cma-prod --location=europe-west4 --schedule=30 2 * * * --time-zone=Europe/Amsterdam --uri=https://europe-west4-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/p4a-cma-prod/jobs/ingest-reconcile:run --http-method=POST --oauth-service-account-email=cma-ingest-scheduler@p4a-cma-prod.iam.gserviceaccount.com --quiet
+schedule ingest-reconcile: 30 2 * * * (Europe/Amsterdam)
+
+== Studio (cma-prod-pg), once per database: the service's database user joins cma_app (the jobs run as it too)
+grant cma_app to "cma-ingest@p4a-cma-prod.iam";
+
+== jobs on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:b361d2f
+ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (30 2 * * *), ingest-backfill (manual)
+backfill:  gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact>,--from,<YYYY-MM-DD>
+run now:   gcloud run jobs execute ingest-sweep --project=p4a-cma-prod --region=europe-west4 --wait
+logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=p4a-cma-prod --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'
+exit 0
+
+-- parsed as gcloud parses a dict argument:
+run jobs deploy ingest-sweep: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-prod.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-prod
+run jobs deploy ingest-poll-forms: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-prod.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-prod
+run jobs deploy ingest-reconcile: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-prod.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-prod
+run jobs deploy ingest-backfill: --set-env-vars → 6 keys
+    CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg
+    CMA_DB_USER=cma-ingest@p4a-cma-prod.iam
+    CMA_DB_NAME=cma
+    CMA_DB_POOL_MAX=3
+    INGEST_VERSION=b361d2f
+    INGEST_PROJECT=p4a-cma-prod
+

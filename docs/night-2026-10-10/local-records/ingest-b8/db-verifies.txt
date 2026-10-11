@@ -1,0 +1,156 @@
+# db verifies on the local database the jobs ran against (verdict lines), after both flow verifiers' runs
+$ psql -f db/31_verify_ingest_crm_records.sql
+ flow-71c1593e-one       |            1 |           2 |    611 |            0 |       1 | PASS
+ flow-71c1593e-two       |            1 |           1 |      1 |            0 |       1 | PASS
+ flow-90fd5969-one       |            1 |           2 |    611 |            0 |       1 | PASS
+ flow-90fd5969-two       |            1 |           1 |      1 |            0 |       1 | PASS
+ flow-9a711c11-one       |            1 |           2 |    611 |            0 |       1 | PASS
+ flow-9a711c11-two       |            1 |           1 |      1 |            0 |       1 | PASS
+ flow-adb298a7-one       |            1 |           2 |    611 |            0 |       1 | PASS
+ flow-adb298a7-two       |            1 |           1 |      1 |            0 |       1 | PASS
+ flow-d7ce5093-one       |            1 |           2 |    611 |            0 |       1 | PASS
+ flow-d7ce5093-two       |            1 |           1 |      1 |            0 |       1 | PASS
+ jobs-1bea8d3a-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-1bea8d3a-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-1c573f85-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-1c573f85-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-58154f7b-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-58154f7b-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-71a46d74-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-71a46d74-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-7f36aa5a-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-7f36aa5a-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-a51c12bc-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-a51c12bc-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-e179b5a4-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-e179b5a4-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-e7cc2165-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-e7cc2165-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ jobs-e9eeb6d7-one       |            1 |           0 |     19 |            1 |       9 | PASS
+ jobs-e9eeb6d7-two       |            1 |           0 |      2 |            0 |       1 | PASS
+ pulse4all-invest        |            1 |           0 |      0 |            0 |       0 | PASS
+ pulse4all-subscriptions |            1 |           0 |      0 |            0 |       0 | PASS
+$ psql -f db/33_verify_intake_core.sql
+ flow-71c1593e-one       |       1 |       1 |           0 |         1 |           0 |         5 | PASS
+ flow-71c1593e-two       |       0 |       0 |           0 |         0 |           0 |         5 | PASS
+ flow-90fd5969-one       |       1 |       1 |           0 |         1 |           0 |         5 | PASS
+ flow-90fd5969-two       |       0 |       0 |           0 |         0 |           0 |         5 | PASS
+ flow-9a711c11-one       |       1 |       1 |           0 |         1 |           0 |         4 | PASS
+ flow-9a711c11-two       |       0 |       0 |           0 |         0 |           0 |         4 | PASS
+ flow-adb298a7-one       |       1 |       1 |           0 |         1 |           0 |        10 | PASS
+ flow-adb298a7-two       |       0 |       0 |           0 |         0 |           0 |        10 | PASS
+ flow-d7ce5093-one       |       1 |       1 |           0 |         1 |           0 |         4 | PASS
+ flow-d7ce5093-two       |       0 |       0 |           0 |         0 |           0 |         4 | PASS
+ jobs-1bea8d3a-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-1bea8d3a-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-1c573f85-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-1c573f85-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-58154f7b-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-58154f7b-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-71a46d74-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-71a46d74-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-7f36aa5a-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-7f36aa5a-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-a51c12bc-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-a51c12bc-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-e179b5a4-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-e179b5a4-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-e7cc2165-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-e7cc2165-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ jobs-e9eeb6d7-one       |       1 |       1 |           0 |         0 |           7 |        28 | PASS
+ jobs-e9eeb6d7-two       |       0 |       0 |           0 |         0 |           0 |         1 | PASS
+ pulse4all-invest        |       0 |       0 |           0 |         0 |           0 |         0 | PASS
+ pulse4all-subscriptions |       0 |       0 |           0 |         0 |           0 |         0 | PASS
+$ psql -f db/35_verify_telephony.sql
+ flow-71c1593e-one       |     0 |    0 |               0 |          0 | PASS
+ flow-71c1593e-two       |     0 |    0 |               0 |          0 | PASS
+ flow-90fd5969-one       |     0 |    0 |               0 |          0 | PASS
+ flow-90fd5969-two       |     0 |    0 |               0 |          0 | PASS
+ flow-9a711c11-one       |     0 |    0 |               0 |          0 | PASS
+ flow-9a711c11-two       |     0 |    0 |               0 |          0 | PASS
+ flow-adb298a7-one       |     0 |    0 |               0 |          0 | PASS
+ flow-adb298a7-two       |     0 |    0 |               0 |          0 | PASS
+ flow-d7ce5093-one       |     0 |    0 |               0 |          0 | PASS
+ flow-d7ce5093-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-1bea8d3a-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-1bea8d3a-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-1c573f85-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-1c573f85-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-58154f7b-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-58154f7b-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-71a46d74-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-71a46d74-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-7f36aa5a-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-7f36aa5a-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-a51c12bc-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-a51c12bc-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-e179b5a4-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-e179b5a4-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-e7cc2165-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-e7cc2165-two       |     0 |    0 |               0 |          0 | PASS
+ jobs-e9eeb6d7-one       |     0 |    0 |               0 |          0 | PASS
+ jobs-e9eeb6d7-two       |     0 |    0 |               0 |          0 | PASS
+ pulse4all-invest        |     0 |    0 |               0 |          0 | PASS
+ pulse4all-subscriptions |     0 |    0 |               0 |          0 | PASS
+$ psql -f db/37_verify_commerce.sql
+ flow-71c1593e-one       |      0 |         0 |      0 |           0 | PASS
+ flow-71c1593e-two       |      0 |         0 |      0 |           0 | PASS
+ flow-90fd5969-one       |      0 |         0 |      0 |           0 | PASS
+ flow-90fd5969-two       |      0 |         0 |      0 |           0 | PASS
+ flow-9a711c11-one       |      0 |         0 |      0 |           0 | PASS
+ flow-9a711c11-two       |      0 |         0 |      0 |           0 | PASS
+ flow-adb298a7-one       |      0 |         0 |      0 |           0 | PASS
+ flow-adb298a7-two       |      0 |         0 |      0 |           0 | PASS
+ flow-d7ce5093-one       |      0 |         0 |      0 |           0 | PASS
+ flow-d7ce5093-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-1bea8d3a-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-1bea8d3a-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-1c573f85-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-1c573f85-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-58154f7b-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-58154f7b-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-71a46d74-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-71a46d74-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-7f36aa5a-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-7f36aa5a-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-a51c12bc-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-a51c12bc-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-e179b5a4-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-e179b5a4-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-e7cc2165-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-e7cc2165-two       |      0 |         0 |      0 |           0 | PASS
+ jobs-e9eeb6d7-one       |      0 |         0 |      0 |           0 | PASS
+ jobs-e9eeb6d7-two       |      0 |         0 |      0 |           0 | PASS
+ pulse4all-invest        |      0 |         0 |      0 |           0 | PASS
+ pulse4all-subscriptions |      0 |         0 |      0 |           0 | PASS
+$ psql -f db/43_verify_messaging.sql
+ flow-71c1593e-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-71c1593e-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-90fd5969-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-90fd5969-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-9a711c11-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-9a711c11-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-adb298a7-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-adb298a7-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-d7ce5093-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-d7ce5093-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-1bea8d3a-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-1bea8d3a-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-1c573f85-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-1c573f85-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-58154f7b-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-58154f7b-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-71a46d74-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-71a46d74-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-7f36aa5a-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-7f36aa5a-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-a51c12bc-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-a51c12bc-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e179b5a4-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e179b5a4-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e7cc2165-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e7cc2165-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e9eeb6d7-one       |     0 |             0 |        0 |          0 |      0 | PASS
+ jobs-e9eeb6d7-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ pulse4all-invest        |     0 |             0 |        0 |          0 |      0 | PASS
+ pulse4all-subscriptions |     0 |             0 |        0 |          0 |      0 | PASS
