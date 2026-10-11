@@ -13,7 +13,7 @@ Create in **both** the developer test account `CMA dev` and the live Subscriptio
 | Label | Internal name | Field type | Values (stored value = code; label in brackets) |
 |---|---|---|---|
 | Contact-Country | `contact_country` | Dropdown select | `GB` (United Kingdom), `IE` (Ireland), `NL` (Netherlands), `BE` (Belgium), `DE` (Germany), `AT` (Austria), `CH` (Switzerland), `FR` (France), `SE` (Sweden), `DK` (Denmark), `NO` (Norway), `FI` (Finland) |
-| Contact-Language | `contact_language` | Dropdown select | `en` (English), `nl` (Dutch), `de` (German), `fr` (French), `sv` (Swedish), `da` (Danish), `nb` (Norwegian Bokmål), `fi` (Finnish) |
+| Contact-Language | `contact_language` | Dropdown select | `en` (English), `nl` (Dutch), `de` (German), `fr` (French), `sv` (Swedish), `da` (Danish), `no` (Norwegian), `fi` (Finnish) |
 | Contact-Currency | `contact_currency` | Dropdown select | `EUR` (Euro), `GBP` (Pound sterling), `SEK` (Swedish krona), `DKK` (Danish krone), `NOK` (Norwegian krone), `CHF` (Swiss franc), `USD` (US dollar) |
 | Contact-Shopify Store | `contact_shopify_store` | Dropdown select | one option per store, value = the store handle exactly as in Shopify (for example `pulse4all-nl`), label = the store name |
 | Contact-Shopify ID-1 | `contact_shopify_id_1` | Single-line text | the numeric Shopify customer id, digits only |
@@ -25,12 +25,12 @@ Create in **both** the developer test account `CMA dev` and the live Subscriptio
 Decisions taken (also in `NIGHT_NOTES.md`):
 
 - **GB, not UK.** ISO 3166-1 alpha-2 is GB; Shopify, Aircall, NetSuite and phone-number libraries all use GB. "United Kingdom" stays the label agents see. A source that writes `UK` anyway is caught by the market alias (`uk` → GB) and reported in data quality.
-- **Codes as stored values, names as labels**: language ISO 639-1 lower case, currency ISO 4217 upper case. Norwegian is `nb` (Bokmål, as Shopify and browsers write it).
+- **Codes as stored values, names as labels**: language ISO 639-1 lower case, currency ISO 4217 upper case. Norwegian is `no` (Martin, 10 October 2026, replacing the night's `nb`; Shopify writes Norwegian locales as `nb`, so the commerce adapter (brief B10) writes `no` for them).
 - **Shopify ID-1 and ID-2 without a second store field**: a Shopify customer id identifies its store in the CMA (every store is its own connection), so ID-2 needs no store of its own. Contact-Shopify Store is the store of ID-1. A contact whose country differs from its store's market shows up in data quality (Martin's cross-check).
 - **The CMA fills the Shopify fields itself** (Martin, 10 October 2026: as little as possible through Make): Contact-Shopify ID-1/ID-2, Contact-Shopify Store, Total Orders and Total Spent always; Contact-Country, Currency and Language only when empty, so an agent's value is never overwritten (DESIGN §4.3a). Shopify still owns the facts; HubSpot holds the copy the CMA keeps current.
 - Internal names are what the CMA's configuration points at (`connection_field`); renaming a label later breaks nothing.
 
-Deals and tickets: no new properties are required. The CMA reads `pipeline`, `dealstage`, `hubspot_owner_id`, `createdate`, `closedate`, `hs_lastmodifieddate`, `amount`, `deal_currency_code`, `hs_analytics_source` on deals and `hs_pipeline`, `hs_pipeline_stage`, `hubspot_owner_id`, `createdate`, `closed_date`, `hs_lastmodifieddate`, `hs_ticket_category` on tickets. A deal's market comes from its contact's Contact-Country unless a deal property is mapped later.
+Deals and tickets: no new properties are required. The CMA reads `pipeline`, `dealstage`, `hubspot_owner_id`, `createdate`, `closedate`, `hs_lastmodifieddate`, `amount`, `deal_currency_code`, `hs_analytics_source`, `deal_country` on deals and `hs_pipeline`, `hs_pipeline_stage`, `hubspot_owner_id`, `createdate`, `closed_date`, `hs_lastmodifieddate`, `hs_ticket_category` on tickets. A deal's market comes from its own `deal_country` property first (country names, turned into codes by the market aliases), then from its primary contact's Contact-Country (Martin, 10 October 2026; migration 0007d).
 
 ### 1.2 Developer test account (dev)
 
