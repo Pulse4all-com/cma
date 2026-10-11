@@ -157,7 +157,7 @@ select cma.upsert_market('CH', 'Switzerland',    'Europe/Zurich',     'de', 'CHF
 select cma.upsert_market('FR', 'France',         'Europe/Paris',      'fr', 'EUR', null, null, 40);
 select cma.upsert_market('SE', 'Sweden',         'Europe/Stockholm',  'sv', 'SEK', null, null, 50);
 select cma.upsert_market('DK', 'Denmark',        'Europe/Copenhagen', 'da', 'DKK', null, null, 51);
-select cma.upsert_market('NO', 'Norway',         'Europe/Oslo',       'nb', 'NOK', null, null, 52);
+select cma.upsert_market('NO', 'Norway',         'Europe/Oslo',       'no', 'NOK', null, null, 52);
 select cma.upsert_market('FI', 'Finland',        'Europe/Helsinki',   'fi', 'EUR', null, null, 53);
 select cma.set_market_alias(a, c) from (values
   ('uk','GB'),('united kingdom','GB'),('great britain','GB'),('england','GB'),('ireland','IE'),
@@ -176,7 +176,7 @@ With the language keys from the last result, link each market to its skill (exam
 **Studio (cma-dev-pg)** after the context block
 ```sql
 select cma.upsert_market(code, name, time_zone, language_code, currency, '<skill key>', 3::smallint, sort_order)
-from cma.market where language_code = '<en|nl|de|fr|sv|da|nb|fi>';
+from cma.market where language_code = '<en|nl|de|fr|sv|da|no|fi>';
 reset role;
 ```
 Expected: one row per updated market. (Repeat per language.)
@@ -220,6 +220,7 @@ select cma.set_connection_field('<conn>', 'contact', 'store',    '', 'contact_sh
 select cma.set_connection_field('<conn>', 'contact', 'ref', 'shopify', 'contact_shopify_id_1', 1::smallint);
 select cma.set_connection_field('<conn>', 'contact', 'ref', 'shopify', 'contact_shopify_id_2', 2::smallint);
 select cma.set_connection_field('<conn>', 'contact', 'ref', 'netsuite', 'contact_netsuite_id');
+select cma.set_connection_field('<conn>', 'deal',   'market',         '', 'deal_country');
 select cma.set_connection_field('<conn>', 'deal',   'amount',         '', 'amount');
 select cma.set_connection_field('<conn>', 'deal',   'currency',       '', 'deal_currency_code');
 select cma.set_connection_field('<conn>', 'deal',   'source_channel', '', 'hs_analytics_source');
@@ -227,7 +228,7 @@ select cma.set_connection_field('<conn>', 'ticket', 'category',       '', 'hs_ti
 select cma.connection_config('<conn>');
 reset role;
 ```
-Use the host you noted in 0.4 for the live portal; developer test accounts in the EU data centre also use `app-eu1`. Expected: the last result is the mapping as JSON with eleven fields.
+Use the host you noted in 0.4 for the live portal; developer test accounts in the EU data centre also use `app-eu1`. Expected: the last result is the mapping as JSON with twelve fields. The deal's `market` comes from `deal_country` (country names, turned into codes by the market aliases of 1.4), then from the contact's country (decision of 10 October 2026, migration 0007d).
 
 ### 2.3 Render, upload and install the dev app
 

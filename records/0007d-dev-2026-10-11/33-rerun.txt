@@ -1,0 +1,19 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+DO
+DO
+DO
+DO
+DO
+         tenant          | markets | aliases | hour_ranges | crm_calls | submissions | sync_runs | verdict 
+-------------------------+---------+---------+-------------+-----------+-------------+-----------+---------
+ pulse4all-invest        |       0 |       0 |           0 |         0 |           0 |         0 | PASS
+ pulse4all-subscriptions |      16 |      34 |           5 |         0 |           0 |         0 | PASS
+(2 rows)
+

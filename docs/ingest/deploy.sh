@@ -155,9 +155,9 @@ else
   echo "cannot tell whether ${IMAGE} exists:"; echo "$out"; exit 1
 fi
 
-# Env vars (the service's and the jobs') as one list in gcloud's custom-delimiter form ^|^, because
-# INGEST_PUBLIC_URLS holds commas and CMA_DB_USER holds @ (cma-ingest@<project>.iam). No value may
-# hold |; env_list stops the script before gcloud runs when one does.
+# The service. Env vars as one list in gcloud's custom-delimiter form ^|^, because INGEST_PUBLIC_URLS
+# holds commas and CMA_DB_USER holds @ (cma-ingest@<project>.iam). No value may hold |; env_list stops
+# the script before gcloud runs when one does.
 DELIM='|'
 env_list () {  # KEY=VALUE... → ^|^KEY=VALUE|KEY=VALUE; fails when a value holds the delimiter
   local kv out=""

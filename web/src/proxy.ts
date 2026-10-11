@@ -59,14 +59,11 @@ function mock(request: NextRequest, headers: Headers) {
   const fromParam = request.nextUrl.searchParams.get(MOCK_SUBJECT_PARAM);
   if (fromParam !== null) {
     if (!MOCK_SUBJECT_RE.test(fromParam)) return badMockSubject();
-    // Relative Location: behind a proxy the absolute host is the container's, not the visitor's
-    const params = new URLSearchParams(request.nextUrl.search);
-    params.delete(MOCK_SUBJECT_PARAM);
-    const query = params.toString();
-    const res = new NextResponse(null, {
-      status: 303,
-      headers: { location: `${request.nextUrl.pathname}${query ? `?${query}` : ""}`, "cache-control": "no-store" },
-    });
+    // Next turns a same-host absolute redirect into a relative Location, so the visitor never sees the container's host
+    const target = request.nextUrl.clone();
+    target.searchParams.delete(MOCK_SUBJECT_PARAM);
+    const res = NextResponse.redirect(target, 303);
+    res.headers.set("cache-control", "no-store");
     res.cookies.set(MOCK_SUBJECT_COOKIE, fromParam, { httpOnly: true, sameSite: "lax", secure: true, path: "/" });
     return res;
   }
