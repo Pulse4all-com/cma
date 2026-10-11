@@ -20,7 +20,8 @@
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
  * Writes: a read-back answers units, one per object it read ({ eventIds, status, error?, writes }); a
- * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts.
+ * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts;
+ * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a).
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
  * writes unit by unit, so one bad object fails its own events only.
  */
@@ -168,6 +169,15 @@ async function writeAll(q, connectionId, units, counts) {
     for (const part of chunks([...new Set(ids)])) {
       const r = await q.query("select cma.ingest_record_alerts($1, $2, $3::text[]) as n", [connectionId, recordType, part]);
       counts.alerts = (counts.alerts ?? 0) + Number(r.rows[0]?.n ?? 0);
+    }
+  }
+  // Assignment alerts (0008a): per record type, the owner's person, once per record and owner
+  const assignedByType = new Map();
+  for (const a of units.flatMap((u) => u.writes?.assignments ?? [])) assignedByType.set(a.recordType, [...(assignedByType.get(a.recordType) ?? []), a.sourceId]);
+  for (const [recordType, ids] of assignedByType) {
+    for (const part of chunks([...new Set(ids)])) {
+      const r = await q.query("select cma.ingest_assignment_alerts($1, $2, $3::text[]) as n", [connectionId, recordType, part]);
+      counts.assignments = (counts.assignments ?? 0) + Number(r.rows[0]?.n ?? 0);
     }
   }
 }

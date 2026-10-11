@@ -58,14 +58,26 @@ FAIL  …the alert's title and body hold the configured words, never a deal name
 FAIL  the same delivery again → no second alert                        got [200,1], wanted [200,2]
 FAIL  a changed event (the shape of reconcile and backfill) → no alert got [200,1], wanted [200,2]
 FAIL  a created event for a deal older than the age limit → no alert   got 1, wanted 2
+FAIL  a deal created now with an owner → 200                           got 200, wanted 500
+FAIL  …one assignment alert, urgent, to the owner's person only        got [1,"New deal assigned to you","urgent","7100000001",["01a12c54-a571-71, wanted [0,"New deal assigned to you","urgent","7100000001",["01a12c54-a571-71
+FAIL  …next to the created alert of the first rule                     got 2, wanted 1
+FAIL  the owner changed → 200                                          got 200, wanted 500
+FAIL  …one more assignment alert, to the new owner; the same change again adds nothing got [2,"7100000002",["01a12c54-a5b0-700b-bec2-e52beba2f269"],200,2], wanted [1,"7100000002",["01a12c54-a5b0-700b-bec2-e52beba2f269"],200,3]
+FAIL  the automation route without a bearer → 401                      got 401, wanted 200
+FAIL  …with a wrong bearer → 401                                       got 401, wanted 200
+FAIL  …the HubSpot connection's key on /automation → 404               got 404, wanted 200
+FAIL  …a body without messages → 400 with a code                       got "messages_1_to_50", wanted undefined
+FAIL  …a message to the person behind a CRM owner id → 200, one recipient got [200,1,0], wanted [200,2,0]
+FAIL  …stored as an urgent announcement with the record link, delivered to that person got ["announcement","urgent","https://app.example.com/contacts/9000001/rec, wanted ["alert","urgent",null,["01a12c54-a571-7133-88d1-b9b15eab92a4"]]
+FAIL  …one refused (nobody) and one sent in the same request           got [200,[{"index":0,"code":"invalid"}],1], wanted [200,[],2]
 FAIL  tenant one's secret on tenant two's key → 401                    got 401, wanted 200
 FAIL  tenant two's own signed event → 200                              got 200, wanted 401
-FAIL  tenant two's record lives in tenant two                          got ["01a12b73-8c88-7fe8-a54b-9f764c686b59"], wanted ["01a12b73-8c78-7bba-9cdc-86c7410f0950"]
+FAIL  tenant two's record lives in tenant two                          got ["01a12c54-9fbd-769e-9868-b36a9a401f6e"], wanted ["01a12c54-9fad-7d08-b61b-35b02a6e979a"]
 FAIL  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two", wanted "Bearer fixture-token-one"
 FAIL  tenant one cannot see tenant two's records                       got 0, wanted 1
-FAIL  tenant one's records unchanged by tenant two                     got 3, wanted 4
+FAIL  tenant one's records unchanged by tenant two                     got 4, wanted 5
 FAIL  no phone number anywhere in the event, call or record rows       got false, wanted true
 FAIL  the logs hold no number, token, secret or contact id             got [false,false,false,false], wanted [true,true,true,true]
 FAIL  header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not got [true,false], wanted [false,true]
 
-ALL 67 PROVOKED CHECKS FAILED, as they must
+ALL 79 PROVOKED CHECKS FAILED, as they must

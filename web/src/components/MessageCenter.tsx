@@ -24,8 +24,17 @@ export const MESSAGES_ARRIVED_EVENT = "cma-messages-arrived";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 
+/** One short tone for an alert that arrives (a new deal, an assignment), the chime for an urgent message */
+function ping() {
+  tones([[1046.5, 0]]);
+}
+
 /** Two short tones from the Web Audio API: no file to load, nothing to cache */
 function chime() {
+  tones([[880, 0], [1174.66, 0.25]]);
+}
+
+function tones(notes: [number, number][]) {
   try {
     const AudioCtx = window.AudioContext;
     if (!AudioCtx) return;
@@ -42,8 +51,7 @@ function chime() {
       o.start(ctx.currentTime + at);
       o.stop(ctx.currentTime + at + 0.4);
     };
-    play(880, 0);
-    play(1174.66, 0.25);
+    for (const [freq, at] of notes) play(freq, at);
     setTimeout(() => void ctx.close(), 1200);
   } catch {
     // No sound is not a failure: the pop-up still demands confirmation
@@ -91,6 +99,8 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
       first.current = false;
       if (got.toasts.length) {
         setToasts((t) => [...t, ...got.toasts]);
+        // An alert (a new deal, an assignment) rings once; a plain message is silent
+        if (got.toasts.some((m) => m.kind === "alert")) ping();
         if (document.hidden && typeof Notification !== "undefined" && Notification.permission === "granted") {
           for (const m of got.toasts) notify(m, (x) => openRef.current(x));
         }

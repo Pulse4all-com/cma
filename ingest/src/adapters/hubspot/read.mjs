@@ -266,6 +266,9 @@ export async function readBack({ connection, config, events, store, budget }) {
         // the one-alert-per-record rule itself. Synthetic events of the reconcile, backfill and second
         // read are "changed", so they never alert.
         if (g.events.some((e) => e.kind === "created")) writes.alerts = [{ recordType, sourceId: g.objectId }];
+        // Assignment alerts (0008a) after every read-back of a record, created or changed: the
+        // function alerts the owner's person once per record and owner, within the age limit
+        writes.assignments = [{ recordType, sourceId: g.objectId }];
         units.push(unit(g.events, "processed", null, writes));
       }
     } catch (err) {

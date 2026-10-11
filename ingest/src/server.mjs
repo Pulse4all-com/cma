@@ -131,6 +131,64 @@ async function handleWebhook(req, res, adapter, key) {
   send(res, 200, { received: events.length, new: newCount });
 }
 
+/**
+ * POST /automation/<key> (0008a): the bearer is checked, the body is parsed into messages and each is
+ * sent by the adapter; nothing is recorded as an event. 404 for an unknown key or another adapter's
+ * connection, 401 for a wrong bearer, 400 for a bad body, 200 with { sent, refused } otherwise.
+ */
+async function handleMessages(req, res, adapter, key) {
+  const started = Date.now();
+  let body;
+  try {
+    body = await readRawBody(req);
+  } catch (err) {
+    send(res, err instanceof BodyTooLarge ? 413 : 400);
+    return;
+  }
+  let connection;
+  try {
+    connection = await lookupConnection(key);
+  } catch (err) {
+    error("connection lookup failed", { adapter: adapter.name, code: dbErrorCode(err) });
+    send(res, 500);
+    return;
+  }
+  if (!connection || connection.adapter !== adapter.name) {
+    send(res, 404);
+    return;
+  }
+  let auth;
+  try {
+    auth = await adapter.authenticate({ headers: req.headers, connection });
+  } catch (err) {
+    error("authentication unavailable", { connection: connection.connectionId, adapter: adapter.name,
+      code: err instanceof SecretUnavailable ? "signing_secret_unavailable" : "authentication_error" });
+    send(res, 500);
+    return;
+  }
+  if (!auth.ok) {
+    warn("authentication failed", { connection: connection.connectionId, adapter: adapter.name, code: auth.reason });
+    send(res, 401);
+    return;
+  }
+  const parsed = adapter.parseMessages(body);
+  if (!parsed.ok) {
+    warn("body not readable", { connection: connection.connectionId, adapter: adapter.name, code: parsed.code });
+    send(res, 400, { error: parsed.code });
+    return;
+  }
+  let result;
+  try {
+    result = await adapter.send(connection, parsed.value);
+  } catch (err) {
+    error("messages not sent", { connection: connection.connectionId, adapter: adapter.name, code: dbErrorCode(err) });
+    send(res, 500);
+    return;
+  }
+  info("messages", { connection: connection.connectionId, adapter: adapter.name, sent: result.sent.length, refused: result.refused.length, ms: Date.now() - started });
+  send(res, 200, result);
+}
+
 export function createIngestServer({ adapters = ADAPTERS } = {}) {
   return http.createServer((req, res) => {
     const path = (req.url ?? "/").split("?")[0];
@@ -145,7 +203,7 @@ export function createIngestServer({ adapters = ADAPTERS } = {}) {
       send(res, 404);
       return;
     }
-    handleWebhook(req, res, adapter, m[2]).catch((err) => {
+    (adapter.kind === "messages" ? handleMessages(req, res, adapter, m[2]) : handleWebhook(req, res, adapter, m[2])).catch((err) => {
       error("request failed", { adapter: adapter.name, code: err?.code ?? "error" });
       if (!res.headersSent) send(res, 500);
     });

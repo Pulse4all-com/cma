@@ -1,0 +1,2 @@
+psql:db/44_assignment_alerts.sql:81: NOTICE:  relation "message_rule_ref_idx" already exists, skipping
+psql:db/44_assignment_alerts.sql:83: NOTICE:  relation "message_rule_ref_assignee_idx" already exists, skipping

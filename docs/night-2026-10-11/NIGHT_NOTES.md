@@ -14,7 +14,8 @@ Written by the build chat while Martin was away. Everything here was built and v
 2. **The ingest's alert hook (B12, ingest half).** A deal or ticket that arrived by a `created` event carries `writes.alerts`; the core calls `cma.ingest_record_alerts(connection, type, ids)` after the records, at most 500 ids a call, and counts `alerts` in the run's totals. Synthetic events (reconcile, backfill, the second read) are `changed`, so they never alert; the function keeps the age limit and the one-alert-per-record rule. `verify/flow.mjs` gained five cases (a rule plus an agent on tenant one; a deal created now → one alert with the record link, delivered to the holders of `leads.accept`; the same delivery again → nothing; a changed event → nothing; a created event for a deal older than the age limit → nothing; the title and body never hold a deal name).
 3. **The Pauses column on My hours** (Martin's decision of 7 October): minutes in non-working statuses next to the working time, with a total; both data layers.
 4. **The account id on No access yet.** The page shows the signed-in person their own account id (the value Add a person asks for) with a one-line explanation, so a new agent reads it to the manager. Nothing else changed in the flow: access requests stay out.
-5. README: Features 7 (first increment live) and 9 (the Pauses column), the API section (Messages paragraph, the verifier counts), Code, eight Decision log rows, the urgent-message Open decision rewritten, the Last updated line.
+5. **Assignment alerts and automation messages (addition 0008a, second commit).** `db/44_assignment_alerts.sql` with `45`: `record_assigned` rules (`cma.upsert_assignment_rule`), one alert per record and owner through a second unique index (the created-alert index narrowed, `ingest_record_alerts` redefined with the matching conflict target), `cma.ingest_assignment_alerts` called by the ingest after every read-back of a record, and `cma.ingest_send_message` for automations (owners and emails as targets, the link from the connection's template) behind `POST /automation/<key>` with a bearer secret in the ingest service. Flow verifier 79 (assignment on creation, on reassignment, idempotent; the automation route's 401, 404, 400, a sent message to an owner, one refused and one sent in one request). Web: an alert rings once (one tone), the Log out page shows the clock's figures and that the clock stops.
+6. README: Features 4 and 7 (first increment live) and 9 (the Pauses column), the API section (Messages paragraph, the verifier counts), Code, eight Decision log rows, the urgent-message Open decision rewritten, the Last updated line.
 
 ## Verification (outputs in `local-records/`)
 
@@ -22,13 +23,14 @@ Written by the build chat while Martin was away. Everything here was built and v
 |---|---|
 | `npm run typecheck`, `npm run lint` (web) | clean |
 | `npm run build` (web) | clean |
-| copy | PASS, 585 keys, en and nl |
+| copy | PASS, 586 keys, en and nl |
 | corrections 26, csv 15, dashboard 17, live 26, team 18, roster 31, configuration 30, messages 24 | all PASS; all provoked FAIL as they must |
 | theme | PASS, 22 pages (Messages and Send a message added) |
 | layout | PASS: 1280, 1920, the gate at 1279, navigation for five identities with `/messages` as key 2 |
 | API verifier against the local database (mock auth, api data) | `ALL 169 PASS`; `ALL 169 PROVOKED CHECKS FAILED, as they must` (`api.txt`, `api-provoked.txt`) |
 | ingest: `npm run lint`, `npm test` | clean; 18, 37, 20, 41 PASS |
-| ingest flow verifier | `ALL 67 PASS`; `ALL 67 PROVOKED CHECKS FAILED, as they must` (`ingest-flow.txt`, `ingest-flow-provoked.txt`) |
+| ingest flow verifier | `ALL 79 PASS`; `ALL 79 PROVOKED CHECKS FAILED, as they must` (`ingest-flow.txt`, `ingest-flow-provoked.txt`) |
+| `db/44` twice, `db/45` normal and provoked, `db/43` after | clean (the rerun skips the two indexes); `PASS` per tenant; 3 FAIL lines under provoke (A1, B1, C1); `43` unchanged (`local-records/0008a/`) |
 
 Not run here: the scheduler verifier (unchanged), the IAP token verifier (unchanged), a Docker build (no change to the Dockerfiles), anything against dev or prod.
 

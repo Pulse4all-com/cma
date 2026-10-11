@@ -70,6 +70,12 @@ select cma.upsert_message_rule('New deal', 'deal', '{}'::text[], 'leads.accept',
 ```
 Expected: one uuid.
 
+**Studio (cma-prod-pg)**, the assignment rule (addition 0008a: a deal whose HubSpot owner is an agent alerts that agent, urgent, with a sound; it needs the owner mapping of step 3b):
+```sql
+select cma.upsert_assignment_rule('Assigned deal', 'deal', '{}'::text[], 'urgent', null);
+```
+Expected: one uuid.
+
 **Studio (cma-prod-pg)**, the record links on the live HubSpot connection (first read what the connection holds, because `set_connection_settings` replaces all settings):
 ```sql
 select c.id, c.name, c.settings from cma.integration_connection c where c.adapter = 'hubspot';
@@ -83,6 +89,36 @@ Expected: an empty result. Skip this block while the prod HubSpot connection doe
 
 **Browser** (the first message, as yourself): `workspace.pulse4all.app` → Messages (2) → New message (N) → To: Everyone → title `Welcome to the Workspace` → Send. Expected: "Sent to n people", the message in the sent list, and in your own inbox nothing (a sender is not a recipient unless the target includes them: Everyone does, so it is there, unread).
 
+## 2a. Migration 0008a in dev and prod (before step 2's assignment rule)
+
+**Terminal** (`~/cma`, as the runbook of 10 October does it; dev first, then prod after the PITR check):
+```bash
+run_migration dev 44_assignment_alerts.sql 45_verify_assignment_alerts.sql 0008a-dev-$(date +%F) 43_verify_messaging.sql
+run_migration prod 44_assignment_alerts.sql 45_verify_assignment_alerts.sql 0008a-prod-$(date +%F) 43_verify_messaging.sql
+```
+Expected: `44` clean (the rerun reports the two indexes as existing), `45` ends with `PASS` per tenant, `43` unchanged; the records committed.
+
+## 2b. An automation connection (optional today): messages from Make, n8n or a HubSpot workflow
+
+**Terminal** (a secret for the connection, prod):
+```bash
+openssl rand -base64 32 | tr -d '\n' | gcloud secrets create ingest-automation-subs-secret --project=p4a-cma-prod --data-file=- --replication-policy=user-managed --locations=europe-west4
+gcloud secrets add-iam-policy-binding ingest-automation-subs-secret --project=p4a-cma-prod --member="serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+```
+**Studio (cma-prod-pg)**, after the context block (the account id is the HubSpot portal id, for the links):
+```sql
+select * from cma.upsert_connection('automation', 'Automations Subs', '<HubSpot portal id>', 'ingest-automation-subs-secret', null);
+select cma.set_connection_settings('<connection id>', '{"app_host":"app-eu1.hubspot.com","record_url_deal":"https://{app_host}/contacts/{account}/record/0-3/{id}"}'::jsonb);
+reset role;
+```
+Expected: one row with `connection_id` and `key`, then an empty result. The automation then calls `POST https://<ingest host>/automation/<key>` with `Authorization: Bearer <the secret's value>` and a body like:
+```json
+{ "messages": [ { "title": "New lead for you", "body": "Call within 5 minutes.", "urgency": "urgent",
+                  "target": { "owners": { "system": "hubspot", "ids": ["<hubspot owner id>"] } },
+                  "ref": { "system": "hubspot", "type": "deal", "id": "<deal id>" } } ] }
+```
+The answer lists `sent` (with the recipient count) and `refused`. Targets also take `{"emails": [...]}`, `{"teams": [...]}`, `{"users": [...]}`, `{"language": {...}}` or `{"everyone": true}`, each with `"onlyClockedIn": true` if wanted.
+
 ## 3. People: Arno and the first agents
 
 Arno and each agent need a `pulse4all.com` Google account (README, Authentication) and their account id, which `workspace.pulse4all.app` now shows them on the No access yet page after they sign in (step 4 must have let them through IAP first). The other way to the id: **Browser** → `admin.google.com` → Users → the user → the address bar holds `/ac/users/<id>`; that number is the account id.
@@ -92,6 +128,20 @@ Arno and each agent need a `pulse4all.com` Google account (README, Authenticatio
 - Each agent: name, their address, employer `newco`, role `agent`, provider `google`, their account id, zone `Europe/Madrid`. Then Edit person → teams (Team NL, …) and skills (the language levels, Sales), because the alert rule routes on the market's language at its minimum level: an agent without the language skill never receives a new-deal alert.
 
 Expected after each: the row on People, Active, "clock runs".
+
+### 3b. The owner mapping: which agent is which HubSpot owner
+
+The assignment alert and the `owners` target find a person through `app_user_external_id` with the system `hubspot_owner` and the HubSpot owner id (`docs/ingest/hubspot-owners.mjs` lists the portal's owners; the carry-over's "owners mapping (agent_ref unmapped)" is this step). Until a screen exists (My account's Linked accounts, after Sync), one row per agent:
+
+**Studio (cma-prod-pg)**, as `cma_owner` (the tenant id from the context block; the user id from People's row, or `select id, email from cma.app_user where tenant_id = '<tenant_id>'`):
+```sql
+set role cma_owner;
+insert into cma.app_user_external_id (tenant_id, user_id, system, external_id)
+values ('<tenant_id>', '<user_id>', 'hubspot_owner', '<hubspot owner id>')
+on conflict do nothing;
+reset role;
+```
+Expected: `INSERT 0 1`. An agent without this row never receives an assignment alert, and `data_quality()` counts them as "CRM owners without a person".
 
 ## 4. IAP: let the agents through without the domain gate
 

@@ -58,14 +58,26 @@ PASS  …the alert's title and body hold the configured words, never a deal name
 PASS  the same delivery again → no second alert                        got [200,1]
 PASS  a changed event (the shape of reconcile and backfill) → no alert got [200,1]
 PASS  a created event for a deal older than the age limit → no alert   got 1
+PASS  a deal created now with an owner → 200                           got 200
+PASS  …one assignment alert, urgent, to the owner's person only        got [1,"New deal assigned to you","urgent","7100000001",["01a12c54-99b3-7e
+PASS  …next to the created alert of the first rule                     got 2
+PASS  the owner changed → 200                                          got 200
+PASS  …one more assignment alert, to the new owner; the same change again adds nothing got [2,"7100000002",["01a12c54-99ef-7a76-916a-228667c8014c"],200,2]
+PASS  the automation route without a bearer → 401                      got 401
+PASS  …with a wrong bearer → 401                                       got 401
+PASS  …the HubSpot connection's key on /automation → 404               got 404
+PASS  …a body without messages → 400 with a code                       got "messages_1_to_50"
+PASS  …a message to the person behind a CRM owner id → 200, one recipient got [200,1,0]
+PASS  …stored as an urgent announcement with the record link, delivered to that person got ["announcement","urgent","https://app.example.com/contacts/9000001/rec
+PASS  …one refused (nobody) and one sent in the same request           got [200,[{"index":0,"code":"invalid"}],1]
 PASS  tenant one's secret on tenant two's key → 401                    got 401
 PASS  tenant two's own signed event → 200                              got 200
-PASS  tenant two's record lives in tenant two                          got ["01a12b73-80d3-72d9-bab6-877388dbe3b0"]
+PASS  tenant two's record lives in tenant two                          got ["01a12c54-941e-73c6-b573-326053908255"]
 PASS  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two"
 PASS  tenant one cannot see tenant two's records                       got 0
-PASS  tenant one's records unchanged by tenant two                     got 3
+PASS  tenant one's records unchanged by tenant two                     got 4
 PASS  no phone number anywhere in the event, call or record rows       got false
 PASS  the logs hold no number, token, secret or contact id             got [false,false,false,false]
 PASS  header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not got [true,false]
 
-ALL 67 PASS
+ALL 79 PASS
