@@ -155,13 +155,29 @@ else
   echo "cannot tell whether ${IMAGE} exists:"; echo "$out"; exit 1
 fi
 
+# Env vars (the service's and the jobs') as one list in gcloud's custom-delimiter form ^|^, because
+# INGEST_PUBLIC_URLS holds commas and CMA_DB_USER holds @ (cma-ingest@<project>.iam). No value may
+# hold |; env_list stops the script before gcloud runs when one does.
+DELIM='|'
+env_list () {  # KEY=VALUE... → ^|^KEY=VALUE|KEY=VALUE; fails when a value holds the delimiter
+  local kv out=""
+  for kv in "$@"; do
+    case "${kv#*=}" in
+      *"$DELIM"*) echo "env var ${kv%%=*} holds the delimiter ${DELIM} (${kv#*=}); gcloud would split it, stopped" >&2; return 1 ;;
+    esac
+    out+="${out:+$DELIM}${kv}"
+  done
+  printf '^%s^%s' "$DELIM" "$out"
+}
+
 if [ "$JOBS" = 1 ]; then
   # The jobs: the same image and service account as the service, the database settings, no public URL
   SCHED_SA_NAME=cma-ingest-scheduler
   SCHED_SA="${SCHED_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
   gcloud iam service-accounts describe "$SCHED_SA" --project="$PROJECT" >/dev/null 2>&1 || \
     gcloud iam service-accounts create "$SCHED_SA_NAME" --project="$PROJECT" --display-name="CMA ingest scheduler" --quiet
-  JOB_ENV="^@^CMA_DB_INSTANCE=${INSTANCE}@CMA_DB_USER=${DB_USER}@CMA_DB_NAME=cma@CMA_DB_POOL_MAX=3@INGEST_VERSION=${SHA}@INGEST_PROJECT=${PROJECT}"
+  JOB_ENV="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=3" \
+    "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}")"
   deploy_job () {  # <job> <script> <task timeout> <args, comma-separated; empty resets them>
     gcloud run jobs deploy "$1" \
       --project="$PROJECT" --region="$REGION" \
@@ -210,7 +226,7 @@ if [ "$JOBS" = 1 ]; then
   exit 0
 fi
 
-# The service. Env vars as one list, delimited by @ because INGEST_PUBLIC_URLS holds commas
+# The service.
 urls_of () {  # every public URL of the service (both address forms), comma-separated; empty before the first deploy
   { gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format=json 2>/dev/null || echo '{}'; } | python3 -c '
 import json, sys
@@ -221,7 +237,9 @@ if main and main not in urls: urls.insert(0, main)
 print(",".join(urls))'
 }
 URLS="$(urls_of)"
-ENV_VARS="^@^CMA_DB_INSTANCE=${INSTANCE}@CMA_DB_USER=${DB_USER}@CMA_DB_NAME=cma@CMA_DB_POOL_MAX=5@INGEST_VERSION=${SHA}@INGEST_PROJECT=${PROJECT}@INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}@INGEST_READBACK_BUDGET_MS=3000@INGEST_PUBLIC_URLS=${URLS}"
+ENV_VARS="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=5" \
+  "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" "INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}" \
+  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}")"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" --region="$REGION" \
   --image="$IMAGE" \
@@ -239,8 +257,9 @@ gcloud run deploy "$SERVICE" \
 # First deploy: the URLs exist only now; set them so signatures verify against the public address
 NEW_URLS="$(urls_of)"
 if [ "$NEW_URLS" != "$URLS" ]; then
+  URL_VARS="$(env_list "INGEST_PUBLIC_URLS=${NEW_URLS}")"
   gcloud run services update "$SERVICE" --project="$PROJECT" --region="$REGION" \
-    --update-env-vars="^@^INGEST_PUBLIC_URLS=${NEW_URLS}" --quiet
+    --update-env-vars="$URL_VARS" --quiet
 fi
 URL="$(gcloud run services describe "$SERVICE" --project="$PROJECT" --region="$REGION" --format='value(status.url)')"
 
