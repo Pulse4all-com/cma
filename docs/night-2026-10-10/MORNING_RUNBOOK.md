@@ -232,33 +232,72 @@ Use the host you noted in 0.4 for the live portal; developer test accounts in th
 
 ### 2.3 Render, upload and install the dev app
 
+Corrected after the dev run of 11 October 2026 (`records/hubspot-dev-2026-10-11`).
+
+**Terminal** (once per Cloud Shell home: the CLI under the home directory, so it survives a restart; Cloud Shell's Node is managed by `nvm`, which refuses a global npm prefix, so no `-g` and no prefix change)
+```bash
+npm install --prefix ~/.hscli-bin @hubspot/cli@8.15.0 >/dev/null 2>&1
+grep -q '.hscli-bin' ~/.bashrc || echo 'export PATH="$HOME/.hscli-bin/node_modules/.bin:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.hscli-bin/node_modules/.bin:$PATH"
+hs --version
+```
+Expected: `8.15.0`. In a later session the `PATH` line in `~/.bashrc` is enough.
+
 **Terminal**
 ```bash
-npm install -g @hubspot/cli@latest >/dev/null 2>&1; hs --version
 hs account auth
 ```
-Expected: a CLI version ≥ 7.6; `hs account auth` asks for a personal access key: Browser → live portal → the link the CLI prints → generate the key → paste it at the prompt. The account is the **live portal** (projects live in its Development area), not `CMA dev`.
+Expected: the CLI asks for a personal access key. Browser → the link the CLI prints, in the **live portal** (projects live in its Development area) → generate the key → paste it at the prompt. Never a key of `CMA dev`. The CLI's login stays in `~/.hscli`.
+
+**Terminal**
+```bash
+hs account list
+```
+Expected: the live portal, and under it `CMA dev` as `↳ … [test account]`.
 
 **Terminal** (`<URL>` from 2.1, `<key>` from 2.2)
 ```bash
 cd ~/cma && node hubspot/render.mjs dev --target-url "<URL>/hubspot/<key>" && cd hubspot/build/dev && hs project upload && cd ~/cma
 ```
-Expected: render writes `hubspot/build/dev`; the upload ends with a successful build and deploy of project **CMA ingest dev**.
+Expected: render writes `hubspot/build/dev`; the upload names the live portal and ends with a successful build and deploy of project **CMA ingest dev** (both components, the app and the webhooks). **If the upload line names the test account, answer `n`**: projects belong to the live portal.
 
-**Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → Install in `CMA dev` → review the scopes (read-only, plus write on contacts for the write-back) → Connect app.
-
-### 2.4 The two dev secrets
+Then the client secret, **before** the install, in the same Cloud Shell session as the `put_secret` helper (define the helpers first if this is a new session). Browser: live portal → Development → Projects → CMA ingest dev → the app → **Auth** tab (the client secret and the scopes). Copy the client secret, then type this line on its own, not inside a pasted block, so the hidden prompt cannot take a pasted line as the value:
 
 **Terminal**
 ```bash
-put_secret p4a-cma-dev ingest-hubspot-dev-signing    # paste the app's client secret (Auth tab)
-put_secret p4a-cma-dev ingest-hubspot-dev-token      # paste the static access token of the test install
+put_secret p4a-cma-dev ingest-hubspot-dev-signing
+```
+Expected: the hidden prompt; paste the client secret, Enter; `stored ingest-hubspot-dev-signing (version added)`.
+
+**Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → **Add test install(s)** → tick `CMA dev` → review the scopes (read-only, plus write on contacts for the write-back) → install. **Never "Install now" under Standard install**: that installs in the live portal.
+
+Expected: `CMA dev` listed under Test installs.
+
+### 2.4 The dev token and the accessor grants
+
+**Browser:** the app → **Distribution** tab → the row of the `CMA dev` test install → **Show**: the static access token is there, not on the Auth tab. Copy it, then type on its own line:
+
+**Terminal**
+```bash
+put_secret p4a-cma-dev ingest-hubspot-dev-token
+```
+Expected: `stored ingest-hubspot-dev-token (version added)`.
+
+**Terminal** (verify the token without showing it)
+```bash
+gcloud secrets versions access latest --secret=ingest-hubspot-dev-token --project=p4a-cma-dev | sed 's/^/Authorization: Bearer /' \
+  | curl -s -H @- https://api.hubapi.com/account-info/v3/details | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("portalId"), d.get("accountType"), d.get("dataHostingLocation"))'
+```
+Expected: `CMA dev`'s account id, `DEVELOPER_TEST`, `eu1`. Nothing else is printed; anything else (an error message, the live portal's id) means the wrong token.
+
+**Terminal**
+```bash
 for s in ingest-hubspot-dev-signing ingest-hubspot-dev-token; do
   gcloud secrets add-iam-policy-binding "$s" --project=p4a-cma-dev \
     --member="serviceAccount:cma-ingest@p4a-cma-dev.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor >/dev/null && echo "accessor on $s"
 done
 ```
-Expected: `stored …` twice, `accessor on …` twice. Nothing else is printed.
+Expected: `accessor on …` twice. Nothing else is printed.
 
 ### 2.5 First events
 
@@ -385,7 +424,7 @@ Gates: the Yordi heads-up is sent (0.2); NocoDB: the new `cma_read` views are vi
 
 1. **Terminal:** `bash docs/ingest/deploy.sh prod && bash docs/ingest/deploy.sh prod --jobs`, the printed grant in **Studio (cma-prod-pg)**.
 2. **Studio (cma-prod-pg)** after the context block (as yourself): the market, alias and office-hours statements of 1.4 and the market-to-skill links; the message rule of phase 3.
-3. **HubSpot:** connection as in 2.2 with the live portal's account id and secret names `ingest-hubspot-subs-signing`, `ingest-hubspot-subs-token`, the live host in `app_host`; render prod with the prod URL and key, upload, **Standard install** in the live portal, the two secrets with `put_secret p4a-cma-prod …`, accessor grants. Then backfill deal, ticket, crm_call, form_submission from 2026-10-01. Then pipelines: `select * from cma.connections_all();` and `cma.set_connection_pipeline(...)` / `cma.set_pipeline_lead(...)` for the test pipelines (not counted) and the lead pipelines; forms: `cma.set_form(...)` per counted form with its market and lead source; call outcomes: `cma.set_call_outcome(<conn>, '<Connected guid>', true)`.
+3. **HubSpot:** connection as in 2.2 with the live portal's account id and secret names `ingest-hubspot-subs-signing`, `ingest-hubspot-subs-token`, the live host in `app_host`; render prod with the prod URL and key, upload, **Standard install** in the live portal, the two secrets with `put_secret p4a-cma-prod …`, accessor grants. Then backfill deal, ticket, crm_call, form_submission from 2026-10-01. Then pipelines: `select * from cma.connections_all();` and `cma.set_connection_pipeline(...)` / `cma.set_pipeline_lead(...)` for the test pipelines (not counted) and the lead pipelines; forms: `cma.set_form(...)` per counted form with its market and lead source; call outcomes (Decision log, 11 October 2026): `cma.set_call_outcome(<conn>, '<guid>', true)` for Connected and Meeting booked, `false` for Left live message, Left voicemail, Busy, No answer and Wrong number, as in dev.
 4. **People:** **Terminal** `node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret ingest-hubspot-subs-token` and, after step 5, `node docs/ingest/aircall-users.mjs --project p4a-cma-prod --api-secret ingest-aircall-subs-token`; each prints one `select cma.set_user_external_id(...)` per person who exists in the CMA. Paste those into **Studio (cma-prod-pg)** after the context block. People without a line are not in the CMA yet (data quality lists them).
 5. **Aircall:** API key (VENDOR_SETUP §2.2) into `put_secret p4a-cma-prod ingest-aircall-subs-token` as `{"api_id":"…","api_token":"…"}`; connection `upsert_connection('aircall', 'Aircall Subscriptions', '<company id>', 'ingest-aircall-subs-signing', 'ingest-aircall-subs-token')`; `node docs/ingest/aircall-webhook.mjs --project p4a-cma-prod --url "<prod URL>/aircall/<key>" --api-secret ingest-aircall-subs-token --token-secret ingest-aircall-subs-signing` (it stores the webhook token itself); accessor grants; backfill `telephony_call` from 2026-10-01; lines and markets with `cma.set_telephony_number(...)`.
 6. **Make, then Shopify:** first switch off the Make modules found in 0.6 that write the nine properties (one writer per property). Then per store: connection (`<handle>.myshopify.com`), settings with the prod app's client id and `crm_connection_id` = the live HubSpot connection, the write-back fields of phase 5 on the live HubSpot connection (once), `upsert_commerce_store`, the shared client secret once as `ingest-shopify-app-signing` (every store connection names it), subscriptions with `shopify-subscribe.mjs --project p4a-cma-prod --shop <handle>.myshopify.com --client-id <prod client id> --secret-name ingest-shopify-app-signing --url "<prod URL>/shopify/<key of that store>"`, backfill customers and orders from 2026-10-01.

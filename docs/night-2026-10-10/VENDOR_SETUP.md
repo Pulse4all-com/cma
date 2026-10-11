@@ -36,18 +36,21 @@ Deals and tickets: no new properties are required. The CMA reads `pipeline`, `de
 
 Live portal → Development → Testing → **Test accounts** → Create developer test account, name `CMA dev`. Note its account id (digits in the URL after `/`). In `CMA dev`:
 
+The order that worked in dev on 11 October 2026 (`records/hubspot-dev-2026-10-11`):
+
 1. Create the nine properties of §1.1.
 2. Sales: one deal pipeline **Sales test** (stages: New, Contacted, Won (closed won), Lost (closed lost)); Service: one ticket pipeline **Support test** (New, Waiting, Closed).
-3. Marketing → Forms: one form **CMA test lead** with email, first name and a dropdown "Interest" (values hs1, frx). Publish; keep the share link.
-4. Five test contacts with fake emails `test1@example.com` … `test5@example.com`, Contact-Country and Contact-Language filled on three of them and left empty on two (to see `if_empty` at work); Contact-Shopify fields left empty (the CMA fills them in phase 5).
+3. Five test contacts with fake emails `test1@example.com` … `test5@example.com`, Contact-Country and Contact-Language filled on three of them and left empty on two (to see `if_empty` at work); Contact-Shopify fields left empty (the CMA fills them in phase 5).
+4. The first deal, from test1, in **Sales test**, once the app is installed and the secrets are stored (runbook §2.5).
+5. Still to do, before the forms poll test (runbook §2.6): Marketing → Forms: one form **CMA test lead** with email, first name and a dropdown "Interest" (values hs1, frx). Publish; keep the share link.
 
 ### 1.3 The project apps
 
 Built from `hubspot/` in the repository (brief B6): **CMA ingest dev** and **CMA ingest prod**, each a project with static auth and private distribution; uploaded from Cloud Shell with the HubSpot CLI; webhooks and scopes in the configuration files.
 
-- Dev app: Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → Install in `CMA dev`. Never *Standard install*.
+- Dev app: Development → Projects → CMA ingest dev → the app → Distribution → **Test installs** → **Add test install(s)** → tick `CMA dev`. Never *Install now* under *Standard install* (that is the live portal).
 - Prod app: Development → Projects → CMA ingest prod → the app → Distribution → **Standard install** in the live portal (when the runbook's prod phase says so).
-- After install: the app's **Auth** tab shows the client secret; the installed app shows the static access token. Copy each straight into the Secret Manager command of the runbook (it reads from the clipboard paste into a hidden prompt); never anywhere else.
+- The app's **Auth** tab shows the client secret (and the scopes): store it before the install. The static access token is on the **Distribution** tab, on the install's row (for dev, the test install's row → **Show**), not on the Auth tab: store it after the install. Copy each straight into the runbook's `put_secret`, run on its own line (a hidden prompt for a pasted value); never anywhere else. The runbook's §2.4 checks the token without showing it.
 
 Subscriptions the project declares (`crmObjects` unless stated): deal `object.creation`, `object.deletion`, `object.merge`, `object.restore`, `object.propertyChange` on `pipeline`, `dealstage`, `hubspot_owner_id`, `closedate`, `amount`, `object.associationChange` (deal ↔ contact); ticket the same with `hs_pipeline`, `hs_pipeline_stage`, `hubspot_owner_id`, `closed_date`; contact `object.propertyChange` on the nine properties of §1.1, `object.deletion`, `object.merge`; call `object.creation`, `object.propertyChange` on `hs_call_status`, `hs_call_disposition`, `hubspot_owner_id`, `object.deletion`, `object.associationChange` (call ↔ contact, call ↔ deal); `hubEvents` `contact.privacyDeletion`. Scopes: read-only for deals, tickets, calls, forms, call dispositions and owners (owners are staff: id and email, used once to map agents to their CMA person), and **read and write on contacts** for the write-back. HubSpot's contact write scope covers every contact property; the CMA writes only the properties configured in `writeback_field` (checked in the database and again in code), and every write is an `outbox_action` row with HubSpot's answer. Exact scope names fixed by B6 from HubSpot's scope list.
 
