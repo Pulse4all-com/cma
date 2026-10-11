@@ -55,7 +55,7 @@ FAIL  privacy deletion: the call's hash cleared                        got null,
 FAIL  a deal deletion marks the record deleted                         got true, wanted false
 FAIL  tenant one's secret on tenant two's key → 401                    got 401, wanted 200
 FAIL  tenant two's own signed event → 200                              got 200, wanted 401
-FAIL  tenant two's record lives in tenant two                          got ["01a12990-c43c-7cc7-b43e-f3c179b403ee"], wanted ["01a12990-c424-7e2a-a678-57966ba6e853"]
+FAIL  tenant two's record lives in tenant two                          got ["01a12a8f-e0ad-7d61-9914-3b04e6e41526"], wanted ["01a12a8f-e079-7950-8ac3-70427a568fbe"]
 FAIL  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two", wanted "Bearer fixture-token-one"
 FAIL  tenant one cannot see tenant two's records                       got 0, wanted 1
 FAIL  tenant one's records unchanged by tenant two                     got 1, wanted 2

@@ -55,7 +55,7 @@ PASS  privacy deletion: the call's hash cleared                        got null
 PASS  a deal deletion marks the record deleted                         got true
 PASS  tenant one's secret on tenant two's key → 401                    got 401
 PASS  tenant two's own signed event → 200                              got 200
-PASS  tenant two's record lives in tenant two                          got ["01a12990-b831-72fb-92b5-f54c62142d73"]
+PASS  tenant two's record lives in tenant two                          got ["01a12a8f-d3b9-7d9c-a65d-de9e462b72d7"]
 PASS  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two"
 PASS  tenant one cannot see tenant two's records                       got 0
 PASS  tenant one's records unchanged by tenant two                     got 1

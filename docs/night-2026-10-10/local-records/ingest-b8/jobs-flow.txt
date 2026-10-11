@@ -57,7 +57,7 @@ PASS  reconcile: a second run lists the same and reads nothing again   got [true
 PASS  reconcile: --lookback-minutes 10 asks the last ten minutes, one object type got [true,9]
 PASS  isolation: an unfiltered sweep serves tenant two's due event     got "processed"
 PASS  isolation: …read with tenant two's token                         got true
-PASS  isolation: tenant two's record and run rows live in tenant two   got [["01a12991-14e8-780b-ac38-32d246b68d29"],["01a12991-14e8-780b-ac38-32
+PASS  isolation: tenant two's record and run rows live in tenant two   got [["01a12a8f-b3e2-7eab-a772-dcaab9a123a1"],["01a12a8f-b3e2-7eab-a772-dc
 PASS  isolation: tenant one sees none of tenant two's runs or cursors  got [0,0]
 PASS  isolation: the tenant one's requests all carried tenant one's token got true
 PASS  no email in the submissions, cursors, runs, events, contacts or forms got false
