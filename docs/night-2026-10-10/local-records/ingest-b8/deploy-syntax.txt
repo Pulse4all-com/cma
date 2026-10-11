@@ -1,0 +1,2 @@
+$ bash -n docs/ingest/deploy.sh
+syntax ok

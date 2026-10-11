@@ -1,0 +1,68 @@
+$ node verify/jobs-flow.mjs --provoke
+verify/jobs-flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  sweep: a due event processed                                     got "processed", wanted "received"
+FAIL  sweep: the deal read back, still without a contact               got [true,null], wanted [true,"4300000001"]
+FAIL  sweep: a record without a contact read again (one reread event)  got 1, wanted 0
+FAIL  sweep: within ten minutes it is not read again                   got 1, wanted 2
+FAIL  sweep: ten minutes later the second read finds the contact       got "4300000001", wanted null
+FAIL  sweep: the contact taken in with its country through the alias   got "GB", wanted "uk"
+FAIL  sweep: link_calls recorded once per run, succeeded               got ["succeeded","succeeded","succeeded"], wanted ["succeeded"]
+FAIL  sweep: the run's totals count the processed event                got true, wanted false
+FAIL  sweep: HubSpot failing → the event failed, attempt 1             got ["failed",1,"http_503"], wanted ["processed",1,null]
+FAIL  sweep: the backoff is respected (not claimed again at once)      got 1, wanted 2
+FAIL  sweep: due again → attempt 2, still failed                       got ["failed",2], wanted ["failed",1]
+FAIL  sweep: at ingest.max_attempts (3) the event is parked as needs_review got ["needs_review",3], wanted ["failed",3]
+FAIL  sweep: a parked event is never claimed again                     got 3, wanted 4
+FAIL  forms: the catalog refreshed, names from HubSpot                 got ["Quote test","Not counted test"], wanted ["aaaaaaaa-0000-4000-8000-000000000001","bbbbbbbb-0000-4000-8000-00000
+FAIL  forms: the refresh kept the configuration (counted, market, kept fields) got [[true,"GB",["product_interest","work_email"]],[false,null,[]]], wanted [[true,null,[]],[true,null,[]]]
+FAIL  forms: four submissions since the start date, not the older one  got ["c-0002","c-0003","c-0004","c-0005"], wanted ["c-0001","c-0002","c-0003","c-0004","c-0005"]
+FAIL  forms: contacts resolved (no email, several, none, one)          got [["no_email",null],["ambiguous",null],["not_found",null],["resolved",", wanted []
+FAIL  forms: host and path only, UTM parsed                            got ["www.example.com","/nl/kopen",{"source":"google","campaign":"autumn"}, wanted ["www.example.com","/nl/kopen?utm_source=google",{}]
+FAIL  forms: kept values only the kept field, never the email field    got {"product_interest":"AED Plus"}, wanted {"product_interest":"AED Plus","work_email":"one@example.com"}
+FAIL  forms: one contact search per distinct email, on the definition's email field got [3,true], wanted [4,false]
+FAIL  forms: a form not counted is never read                          got 0, wanted 1
+FAIL  forms: the run recorded, fetched and upserted four               got [["forms","succeeded",4,4]], wanted [["forms","failed",0,0]]
+FAIL  forms: the run's totals                                          got [4,0], wanted [0,1]
+FAIL  forms: a second run writes nothing new                           got 4, wanted 8
+FAIL  forms: …reads one page (stops at the cursor), no catalog, no search got [1,0,0], wanted [3,1,3]
+FAIL  forms: a new submission arrives on the next run                  got "resolved", wanted null
+FAIL  forms: a rate-limited contact search fails the run (rate_limited) got ["failed","rate_limited"], wanted ["succeeded",null]
+FAIL  forms: …the submission is not written without its contact        got 0, wanted 1
+FAIL  forms: …and the cursor did not move                              got {"at":1791626760000,"id":"c-0006","emailField":"work_email"}, wanted null
+FAIL  forms: the next run writes it                                    got "not_found", wanted null
+FAIL  backfill: an interruption fails the run with its code            got ["failed","http_503",1], wanted ["succeeded",null,0]
+FAIL  backfill: without --from it starts at intake.start_date (00:00 in the tenant's zone) got "2026-09-30T22:00:00.000Z", wanted "2026-10-01T00:00:00.000Z"
+FAIL  backfill: the first page was written before the interruption     got [true,true,false], wanted [true,true,true]
+FAIL  backfill: the cursor stands at the first page's last created time got [1791018000000,false], wanted [null,true]
+FAIL  backfill: the rerun succeeds                                     got ["succeeded",0], wanted ["failed",1]
+FAIL  backfill: it resumed at the cursor, not at the start             got "1791018000000", wanted "1790805600000"
+FAIL  backfill: the first page's deals were not read again             got false, wanted true
+FAIL  backfill: every deal since the start date, and the one created earlier and closed since got [true,true,true], wanted [true,true,false]
+FAIL  backfill: both streams' cursors done                             got [["backfill:deal:closedate","true"],["backfill:deal:createdate","true", wanted [["backfill:deal:createdate","false"]]
+FAIL  backfill: searches within a run paced (at least 40 ms apart at a pace factor of 0.1) got true, wanted false
+FAIL  backfill: a finished backfill with the same start reads nothing again got 0, wanted 2
+FAIL  backfill: form submissions from an earlier date fill the older one got "resolved", wanted null
+FAIL  backfill: an object the adapter does not backfill is refused     got true, wanted null
+FAIL  reconcile: setup, the webhook's newer read of a deal stored      got "333.00", wanted "300.00"
+FAIL  reconcile: the change the webhook missed arrives                 got "250.00", wanted "100.00"
+FAIL  reconcile: a newer row is left alone (stale)                     got "333.00", wanted "999.00"
+FAIL  reconcile: one run per object type, all succeeded                got [["deal","succeeded"],["ticket","succeeded"],["crm_call","succeeded"],, wanted []
+FAIL  reconcile: the stale read counted                                got true, wanted false
+FAIL  reconcile: the default look-back is 26 hours                     got true, wanted false
+FAIL  reconcile: only held contacts are read                           got [true,false], wanted [true,true]
+FAIL  reconcile: the unheld contact counted as skipped                 got true, wanted false
+FAIL  reconcile: the run's totals                                      got [4,0], wanted [3,1]
+FAIL  reconcile: a second run lists the same and reads nothing again   got [true,0,0], wanted [true,1,1]
+FAIL  reconcile: --lookback-minutes 10 asks the last ten minutes, one object type got [true,9], wanted [false,8]
+FAIL  isolation: an unfiltered sweep serves tenant two's due event     got "processed", wanted "received"
+FAIL  isolation: …read with tenant two's token                         got true, wanted false
+FAIL  isolation: tenant two's record and run rows live in tenant two   got [["01a12991-1ffa-79e0-b18e-5d7273270751"],["01a12991-1ffa-79e0-b18e-5d, wanted [["01a12991-1fdd-7412-aede-17dac306c790"],["01a12991-1fdd-7412-aede-17
+FAIL  isolation: tenant one sees none of tenant two's runs or cursors  got [0,0], wanted [1,1]
+FAIL  isolation: the tenant one's requests all carried tenant one's token got true, wanted false
+FAIL  no email in the submissions, cursors, runs, events, contacts or forms got false, wanted true
+FAIL  the logs hold no email, token or contact id                      got [false,false,false], wanted [true,true,true]
+FAIL  the logs hold the jobs' counts                                   got true, wanted false
+
+ALL 62 PROVOKED CHECKS FAILED, as they must
+exit 0
