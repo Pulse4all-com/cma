@@ -12,7 +12,7 @@
         "crm.objects.contacts.read",
         "crm.objects.contacts.write",
         "crm.objects.deals.read",
-        "tickets",
+        "crm.objects.tickets.read",
         "crm.objects.owners.read",
         "forms"
       ],
