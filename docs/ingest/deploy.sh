@@ -3,19 +3,35 @@
 #
 #   bash docs/ingest/deploy.sh dev  [--tenant <slug>]... [--secret <name>]...
 #   bash docs/ingest/deploy.sh prod [--tenant <slug>]... [--secret <name>]...
+#   bash docs/ingest/deploy.sh dev|prod --jobs [--reconcile-every "<cron>"] [--reconcile-lookback <minutes>]
 #
 #   --tenant <slug>   the tenant's hash pepper ingest-hash-pepper-<slug>: created with 32 random bytes
 #                     when missing (the value is generated and stored without being shown), accessor
 #                     granted; calls are not read back without it (pepper_unavailable)
 #   --secret <name>   grant the service account the accessor on an existing secret, for example
 #                     ingest-hubspot-dev-signing and ingest-hubspot-dev-token
-#   --jobs            the jobs and their schedules: brief B8 (not in this version)
+#   --jobs            the jobs and their schedules instead of the service (below)
+#   --reconcile-every "<cron>"       with --jobs: the reconcile schedule (default "30 2 * * *", Europe/Amsterdam)
+#   --reconcile-lookback <minutes>   with --jobs: the reconcile's look-back (default the job's 26 hours).
+#                     The polling fallback of NIGHT_NOTES D3 (no v3 signature on the project app) is
+#                     --reconcile-every "*/2 * * * *" --reconcile-lookback 10, a schedule change only
 #
 # Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main. Rerunnable.
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
 # settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs). Prints the
 # Studio statement that makes the database user a member of cma_app, the service URL and /health.
+#
+# With --jobs (DESIGN §5, brief B8), the same steps up to the image, then instead of the service: the
+# Cloud Run jobs on the same image by tag, each `node jobs/<name>.mjs` as cma-ingest@<project> with
+# the service's database settings, and their Cloud Scheduler entries (Europe/Amsterdam) calling the
+# jobs' run endpoints as cma-ingest-scheduler@<project>, which holds run.invoker on the scheduled jobs
+# only:
+#   ingest-sweep       every minute   due events, the second read, link_calls
+#   ingest-poll-forms  every minute   HubSpot forms: catalog hourly, submissions until the cursor
+#   ingest-reconcile   02:30          everything modified in the last 26 hours
+#   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
+# The arguments of an execution are appended to the job's command (node jobs/<name>.mjs).
 #
 # The image is built once, in p4a-cma-prod, never in dev (README Architecture, Build and deploy;
 # Decision log, 5 October 2026): Cloud Build in europe-west4 (ingest/cloudbuild.yaml) as service
@@ -32,11 +48,16 @@ ENV="${1:?dev or prod}"
 shift
 TENANTS=()
 SECRETS=()
+JOBS=0
+RECONCILE_EVERY="30 2 * * *"
+RECONCILE_LOOKBACK=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tenant) TENANTS+=("${2:?--tenant needs a slug}"); shift 2 ;;
     --secret) SECRETS+=("${2:?--secret needs a name}"); shift 2 ;;
-    --jobs) echo "--jobs comes with brief B8 (the jobs); nothing deployed"; exit 2 ;;
+    --jobs) JOBS=1; shift ;;
+    --reconcile-every) RECONCILE_EVERY="${2:?--reconcile-every needs a cron expression}"; shift 2 ;;
+    --reconcile-lookback) RECONCILE_LOOKBACK="${2:?--reconcile-lookback needs minutes}"; shift 2 ;;
     *) echo "unknown argument $1"; exit 2 ;;
   esac
 done
@@ -65,10 +86,16 @@ fi
 IMAGE="${REPO}/ingest:${SHA}"
 for t in "${TENANTS[@]}"; do [[ "$t" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "tenant slug $t is not a slug"; exit 2; }; done
 for s in "${SECRETS[@]}"; do [[ "$s" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo "secret name $s is not valid"; exit 2; }; done
+[[ "$RECONCILE_EVERY" =~ ^[0-9*/,-]+( [0-9*/,-]+){4}$ ]] || { echo "--reconcile-every is not a five-field cron expression"; exit 2; }
+[ -z "$RECONCILE_LOOKBACK" ] || [[ "$RECONCILE_LOOKBACK" =~ ^[1-9][0-9]{0,4}$ ]] || { echo "--reconcile-lookback is not a number of minutes"; exit 2; }
+if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "30 2 * * *" ] || [ -n "$RECONCILE_LOOKBACK" ]; }; then
+  echo "--reconcile-every and --reconcile-lookback go with --jobs"; exit 2
+fi
 
-echo "== ${SERVICE} ${SHA} → ${PROJECT}"
+if [ "$JOBS" = 1 ]; then echo "== ingest jobs ${SHA} → ${PROJECT}"; else echo "== ${SERVICE} ${SHA} → ${PROJECT}"; fi
 gcloud services enable run.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com \
   --project="$PROJECT" --quiet
+[ "$JOBS" = 0 ] || gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT" --quiet
 
 # The service account, its project roles, its IAM database user
 gcloud iam service-accounts describe "$SA" --project="$PROJECT" >/dev/null 2>&1 || \
@@ -126,6 +153,61 @@ elif grep -qiE 'not.?found' <<<"$out"; then
     --substitutions="_VERSION=${SHA},_REPO=${REPO}" --quiet
 else
   echo "cannot tell whether ${IMAGE} exists:"; echo "$out"; exit 1
+fi
+
+if [ "$JOBS" = 1 ]; then
+  # The jobs: the same image and service account as the service, the database settings, no public URL
+  SCHED_SA_NAME=cma-ingest-scheduler
+  SCHED_SA="${SCHED_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
+  gcloud iam service-accounts describe "$SCHED_SA" --project="$PROJECT" >/dev/null 2>&1 || \
+    gcloud iam service-accounts create "$SCHED_SA_NAME" --project="$PROJECT" --display-name="CMA ingest scheduler" --quiet
+  JOB_ENV="^@^CMA_DB_INSTANCE=${INSTANCE}@CMA_DB_USER=${DB_USER}@CMA_DB_NAME=cma@CMA_DB_POOL_MAX=3@INGEST_VERSION=${SHA}@INGEST_PROJECT=${PROJECT}"
+  deploy_job () {  # <job> <script> <task timeout> <args, comma-separated; empty resets them>
+    gcloud run jobs deploy "$1" \
+      --project="$PROJECT" --region="$REGION" \
+      --image="$IMAGE" \
+      --command="node,jobs/$2" --args="$4" \
+      --service-account="$SA" \
+      --set-env-vars="$JOB_ENV" \
+      --tasks=1 --max-retries=0 --task-timeout="$3" \
+      --cpu=1 --memory=512Mi \
+      --quiet
+  }
+  RECONCILE_ARGS=""
+  [ -z "$RECONCILE_LOOKBACK" ] || RECONCILE_ARGS="--lookback-minutes,${RECONCILE_LOOKBACK}"
+  deploy_job ingest-sweep sweep.mjs 10m ""
+  deploy_job ingest-poll-forms poll-forms.mjs 10m ""
+  deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
+  deploy_job ingest-backfill backfill.mjs 24h ""
+
+  # Cloud Scheduler calls each scheduled job's run endpoint as the scheduler account (run.invoker on those jobs only)
+  schedule () {  # <job> <cron>
+    gcloud run jobs add-iam-policy-binding "$1" --project="$PROJECT" --region="$REGION" \
+      --member="serviceAccount:${SCHED_SA}" --role=roles/run.invoker --quiet >/dev/null
+    local uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/$1:run"
+    local verb=create
+    gcloud scheduler jobs describe "$1" --project="$PROJECT" --location="$REGION" >/dev/null 2>&1 && verb=update
+    gcloud scheduler jobs "$verb" http "$1" \
+      --project="$PROJECT" --location="$REGION" \
+      --schedule="$2" --time-zone="Europe/Amsterdam" \
+      --uri="$uri" --http-method=POST \
+      --oauth-service-account-email="$SCHED_SA" --quiet >/dev/null
+    echo "schedule $1: $2 (Europe/Amsterdam)"
+  }
+  schedule ingest-sweep "* * * * *"
+  schedule ingest-poll-forms "* * * * *"
+  schedule ingest-reconcile "$RECONCILE_EVERY"
+
+  echo
+  echo "== Studio (${INSTANCE_NAME}), once per database: the service's database user joins cma_app (the jobs run as it too)"
+  echo "grant cma_app to \"${DB_USER}\";"
+  echo
+  echo "== jobs on ${IMAGE}"
+  echo "ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-backfill (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact>,--from,<YYYY-MM-DD>"
+  echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
+  echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
+  exit 0
 fi
 
 # The service. Env vars as one list, delimited by @ because INGEST_PUBLIC_URLS holds commas

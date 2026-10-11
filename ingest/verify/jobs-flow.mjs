@@ -252,7 +252,6 @@ const eventOf = async (objectId, conn = conn1) => (await q(
 const forceDue = (objectId) => q("update cma.ingest_event set next_attempt_at = now() where connection_id = $1 and object_id = $2", [conn1, String(objectId)]);
 const deal = async (id, conn = conn1) => (await q("select contact_source_id, amount::text as amount, source_updated_at from cma.crm_record where connection_id = $1 and source_id = $2", [conn, String(id)]))[0] ?? null;
 const runs = (job, conn = conn1) => q("select stream, status, counts, error, from_at, to_at from cma.sync_run where connection_id = $1 and job = $2 order by started_at", [conn, job]);
-const requests = (pred) => fake.requests.filter(pred);
 const mark = () => fake.requests.length;
 const since = (n) => fake.requests.slice(n);
 const sweep = (opts = {}) => runSweep({ connectionId: conn1, ...opts });
