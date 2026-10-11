@@ -31,12 +31,46 @@ function apiBase() {
   return checkedBase(process.env.INGEST_HUBSPOT_API_BASE ?? "https://api.hubapi.com");
 }
 
-/** The HubSpot API with a connection's token, every call bound to the budget. */
+/**
+ * The jobs' pacing at half of HubSpot's documented limits (developers.hubspot.com, API usage
+ * guidelines): privately distributed apps 100 requests per 10 seconds on the lowest tier → one call
+ * per 200 ms; the CRM search endpoints five requests per second → one per 400 ms. The webhook path
+ * does not pace (its budget has no pace()).
+ */
+export const RATES = { general: 200, search: 400 };
+
+/** The HubSpot API with a connection's token, every call bound to the budget (and paced by it in a job). */
 export function hubspotClient(token, budget) {
   const base = apiBase();
   const headers = { authorization: `Bearer ${token}` };
-  const call = (method, path, body) => requestJson(`${base}${path}`, { method, headers, body, signal: budget.signal(PER_CALL_MS) });
+  const call = async (method, path, body, kind = "general") => {
+    await budget.pace?.(kind);
+    return requestJson(`${base}${path}`, { method, headers, body, signal: budget.signal(PER_CALL_MS) });
+  };
   return {
+    /** One CRM search page: POST /crm/v3/objects/{type}/search. */
+    async search(type, body) {
+      return call("POST", `/crm/v3/objects/${API_OBJECT[type]}/search`, body, "search");
+    },
+    /** The ids of the contacts whose property equals the value (at most two: one, none or several). */
+    async contactIdsWhere(property, value) {
+      const r = await call("POST", "/crm/v3/objects/contacts/search", {
+        filterGroups: [{ filters: [{ propertyName: property, operator: "EQ", value }] }], properties: ["hs_object_id"], limit: 2,
+      }, "search");
+      return (r?.results ?? []).map((x) => String(x.id));
+    },
+    /** One page of the form catalog: GET /marketing/v3/forms. */
+    async forms(after) {
+      return call("GET", `/marketing/v3/forms?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`);
+    },
+    /** One form's definition: GET /marketing/v3/forms/{id}. */
+    async form(formId) {
+      return call("GET", `/marketing/v3/forms/${encodeURIComponent(formId)}`);
+    },
+    /** One page of a form's submissions, newest first: GET /form-integrations/v1/submissions/forms/{guid}. */
+    async submissions(formId, after) {
+      return call("GET", `/form-integrations/v1/submissions/forms/${encodeURIComponent(formId)}?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`);
+    },
     async batchRead(type, ids, properties) {
       const results = [];
       for (let i = 0; i < ids.length; i += BATCH_READ) {
@@ -66,6 +100,15 @@ export function hubspotClient(token, budget) {
       return call("GET", `/crm/v3/owners?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`);
     },
   };
+}
+
+/** The connection's static token; a SourceError (token_unavailable) when it cannot be read. */
+export async function tokenOf(connection) {
+  try {
+    return await getSecret(connection.tokenSecretName);
+  } catch (err) {
+    throw new SourceError(err instanceof SecretUnavailable ? "token_unavailable" : "secret_error");
+  }
 }
 
 function unit(events, status, error = null, writes = {}) {

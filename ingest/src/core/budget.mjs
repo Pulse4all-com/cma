@@ -4,6 +4,8 @@
  * a signal that aborts at the deadline or after its own timeout, whichever comes first. What does
  * not finish in time is finished as failed ("timeout") and the sweeper reads it again with backoff.
  */
+import { Pace } from "./pace.mjs";
+
 export class Budget {
   constructor(ms) {
     this.deadline = Date.now() + ms;
@@ -31,6 +33,25 @@ export class NoBudget extends Budget {
   }
   signal(perCallMs = 30_000) {
     return AbortSignal.timeout(perCallMs);
+  }
+}
+
+/**
+ * A job's budget: no deadline, a longer per-call timeout (a search page or a batch of 100 can take a
+ * few seconds), and the source's pacing. rates: { kind: interval ms } from the adapter; a call of an
+ * unnamed kind is not paced.
+ */
+export class JobBudget extends NoBudget {
+  constructor(rates = {}, perCallMs = 20_000) {
+    super();
+    this.perCallMs = perCallMs;
+    this.paces = new Map(Object.entries(rates).map(([kind, ms]) => [kind, new Pace(ms)]));
+  }
+  signal(perCallMs = this.perCallMs) {
+    return AbortSignal.timeout(Math.max(perCallMs, this.perCallMs));
+  }
+  async pace(kind = "general") {
+    await this.paces.get(kind)?.wait();
   }
 }
 

@@ -1,11 +1,20 @@
 /**
- * The HubSpot adapter as the server sees it: authenticate a request, map its body to canonical
- * events, read objects back. Route: POST /hubspot/<connection key>.
+ * The HubSpot adapter as the server and the jobs see it. Route: POST /hubspot/<connection key>.
+ *
+ *   authenticate, mapRequest, readBack   the webhook path (brief B7)
+ *   holdsRecords                         the sweeper reads records without a contact again
+ *   rates                                the jobs' pacing (read.mjs RATES)
+ *   pollForms                            the poll-forms job (forms.mjs)
+ *   reconcileObjects, reconcile          the reconcile job (reconcile.mjs)
+ *   backfillObjects, backfill            the backfill job (backfill.mjs)
  */
 import { getSecret } from "../../core/secrets.mjs";
 import { verifyV3 } from "./verify.mjs";
 import { mapEvents } from "./map.mjs";
-import { readBack } from "./read.mjs";
+import { readBack, RATES } from "./read.mjs";
+import { pollForms } from "./forms.mjs";
+import { reconcile, RECONCILE_OBJECTS } from "./reconcile.mjs";
+import { backfill, BACKFILL_OBJECTS } from "./backfill.mjs";
 
 export const hubspot = {
   name: "hubspot",
@@ -22,4 +31,12 @@ export const hubspot = {
   },
 
   readBack,
+
+  holdsRecords: true,
+  rates: RATES,
+  pollForms,
+  reconcileObjects: RECONCILE_OBJECTS,
+  reconcile,
+  backfillObjects: BACKFILL_OBJECTS,
+  backfill,
 };
