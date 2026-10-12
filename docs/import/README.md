@@ -14,15 +14,16 @@ What the database does with the file (`cma.load_import_batch`), per person and l
 - a date that already has a CMA day is skipped (the CMA's own days win); a day under one minute is
   dropped;
 - a day closed by the 17:00 rule or clipped is flagged for review (Team hours, needs correction);
-- the import status (Steam session) is retired by the load, so nobody chooses it afterwards.
+- the import status (Steam session) is seeded inactive and never offered; the load accepts it because
+  nothing was ever booked on it.
 
 Rules for the files: the export, the map, the staging file and the person map statement stay in
 `~/import` in Cloud Shell, never in `~/cma`, and are deleted after the load (step 11). Real files are
 prod only; dev uses the synthetic fixture in `tools/fixtures/`.
 
 Before you start: `50`, `51` and `02` have run in prod (in that order, with `51` passing), and
-point-in-time recovery of cma-prod-pg is confirmed. Run the `02` block of the import status right
-before step 1, not days earlier: until the load retires it, My day offers "Steam session" to everyone.
+point-in-time recovery of cma-prod-pg is confirmed. The status is seeded inactive and never offered,
+so `02` may run any time before step 1.
 
 ---
 
@@ -63,7 +64,7 @@ order by s.key;
 reset role;
 ```
 Expected: two rows, `break` (active, not working, not paid) and `legacy_session` (Steam session,
-active, working, paid), both with 07:00, 22:00 and 17:00.
+inactive, working, paid), both with 07:00, 22:00 and 17:00.
 
 ## 4. The staging file
 
@@ -198,5 +199,5 @@ Expected: `steam-2026 | voided | <now> | <events_written of step 9>`. A second v
 (`CMA03`).
 
 To load again: steps 1 to 11 with a new key (`--batch steam-2026-2` in step 4, `'steam-2026-2'` in
-steps 5 and 7 to 10). The import status stays retired; the load accepts it because the first load
-retired it.
+steps 5 and 7 to 10). The import status stays inactive; the load accepts it because the void left no
+effective event in it.

@@ -21,8 +21,10 @@
 --      the work status retired; a second load refused; another tenant sees nothing; the void, then
 --      the same days loaded again by a new batch
 --   C  the refusals: an unknown status, a period that has not ended, a session in the spring gap, a
---      session outside the period, a paid or working gap status, an inactive work status, a map row
---      of another tenant, a batch without mapped sessions, a key in use, rows into a loaded batch
+--      session outside the period, a paid or working gap status, the default as work status, an
+--      inactive work status with time behind it, a map row of another tenant, a batch without mapped
+--      sessions, a key in use, rows into a voided batch; and an inactive work status nothing was ever
+--      booked on, as the import status is seeded, loads
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- =============================================================================================
@@ -487,7 +489,6 @@ begin
         ('verify-period',  'verify_import', v_gap,           '2026-03-31 09:00:00'::timestamp, '2026-03-31 17:00:00'::timestamp, 'outside the period'),
         ('verify-paid',    'verify_import', v_paid,          '2026-03-02 09:00:00'::timestamp, '2026-03-02 17:00:00'::timestamp, 'neither working nor paid'),
         ('verify-working', 'verify_import', 'verify_import', '2026-03-02 09:00:00'::timestamp, '2026-03-02 17:00:00'::timestamp, 'neither working nor paid'),
-        ('verify-retired', 'verify_old',    v_gap,           '2026-03-02 09:00:00'::timestamp, '2026-03-02 17:00:00'::timestamp, 'inactive'),
         ('verify-default', (select s.key from cma.work_status s where s.is_default), v_gap,
                                                              '2026-03-02 09:00:00'::timestamp, '2026-03-02 17:00:00'::timestamp, 'not the default')
       ) as x(batch_key, work_key, gap_key, login_at, logout_at, says)
@@ -509,6 +510,40 @@ begin
         raise exception 'FAIL C2: the refused batch % left something behind', r.batch_key;
       end if;
     end loop;
+
+    -- C2b. the work status may be inactive while nothing was ever booked on it (the import status is
+    --      seeded inactive, so it is never offered); an inactive status with time behind it is refused
+    perform cma.upsert_work_status('verify_used', 'Verify used', true, true, true, true, 920);
+    perform cma.correct_workday(v_p1, date '2026-03-10', jsonb_build_array(
+      jsonb_build_object('kind', 'start', 'statusKey', 'verify_used', 'at', '2026-03-10T09:00:00+01:00'),
+      jsonb_build_object('kind', 'end', 'at', '2026-03-10T17:00:00+01:00')), 'verify time in a status');
+    perform cma.retire_work_status('verify_used');
+    b := cma.stage_import_batch('verify-used', 'verify_source', 'f.csv', date '2026-03-01', date '2026-03-30', v_zone, 'verify_used', v_gap);
+    insert into cma.import_session_staging (batch_key, external_person_id, external_session_id, login_local, logout_local)
+    values ('verify-used', 'A1', 's1', '2026-03-02 09:00:00', '2026-03-02 17:00:00');
+    insert into cma.import_person_map (batch_id, external_person_id, user_id) values (b.id, 'A1', v_p1);
+    begin
+      perform cma.load_import_batch('verify-used');
+      raise exception 'FAIL C2b: an inactive status with time behind it was loaded';
+    exception when sqlstate 'CMA04' then
+      get stacked diagnostics v_txt = message_text;
+      if position('inactive and has time recorded' in v_txt) = 0 then
+        raise exception 'FAIL C2b: the inactive status with time was refused with [%]', v_txt;
+      end if;
+    end;
+    if (select x.status from cma.import_batch x where x.id = b.id) <> 'staged' or (select count(*) from cma.workday) <> 1 then
+      raise exception 'FAIL C2b: the refused batch left something behind';
+    end if;
+    b := cma.stage_import_batch('verify-unused', 'verify_source', 'f.csv', date '2026-03-01', date '2026-03-30', v_zone, 'verify_old', v_gap);
+    insert into cma.import_session_staging (batch_key, external_person_id, external_session_id, login_local, logout_local)
+    values ('verify-unused', 'A1', 's1', '2026-03-03 09:00:00', '2026-03-03 17:00:00');
+    insert into cma.import_person_map (batch_id, external_person_id, user_id) values (b.id, 'A1', v_p1);
+    b := cma.load_import_batch('verify-unused');
+    if b.status <> 'loaded' or (b.counts ->> 'days_written')::int <> 1
+       or (select s.working_seconds from cma.workday_summary s where s.user_id = v_p1 and s.business_date = date '2026-03-03') <> 28800
+       or (select s.status from cma.work_status s where s.key = 'verify_old') <> 'inactive' then
+      raise exception 'FAIL C2b: the inactive status nothing was booked on gave % with %', b.status, b.counts;
+    end if;
 
     -- C3. a map row of another tenant's person; a batch without sessions of a mapped account
     b := cma.stage_import_batch('verify-unmapped', 'verify_source', 'f.csv', date '2026-03-01', date '2026-03-30', v_zone, 'verify_import', v_gap);

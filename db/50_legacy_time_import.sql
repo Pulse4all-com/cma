@@ -31,8 +31,9 @@
 --                      time (dropped when it starts at or after it), every session clipped to the
 --                      window, then one day from the first login to the last logout with the gaps in
 --                      the gap status. A date that already has a day of its own is skipped (the CMA's
---                      own days win); a day under one minute is dropped. The work status is retired by
---                      the load, so nobody chooses it afterwards. The void withdraws the batch with
+--                      own days win); a day under one minute is dropped. The work status may be
+--                      inactive, as long as no effective event uses it, so it is created inactive and
+--                      never offered; the load retires it if it was active. The void withdraws the batch with
 --                      void corrections by the caller, so no fact is deleted; the same person-days
 --                      can then be loaded by a new batch
 --   reporting          workday_summary as in 0008b with two changes, same columns: needs_correction
@@ -338,8 +339,9 @@ $$;
 -- 6. Load: the sessions become workdays, in one transaction
 -- ---------------------------------------------------------------------------------------------
 -- Refuses a batch not staged (CMA03); an unknown work or gap status (CMA02); a work status that is
--- not working, is the default, or is inactive (unless an earlier batch of this tenant retired it,
--- for a reload after a void); a gap status that is working or paid; a map row outside the tenant; a
+-- not working, is the default, or is inactive with time behind it (an effective event of the tenant
+-- in it; an inactive status nothing was ever booked on loads, as does a reload after a void, whose
+-- events are no longer effective); a gap status that is working or paid; a map row outside the tenant; a
 -- session in the spring gap of the batch's zone; a session outside the period; a batch without
 -- sessions of a mapped account (all CMA04). Per mapped account and local login date: a session
 -- without a logout ends at the close time (dropped when it starts at or after it), every session is
@@ -348,7 +350,8 @@ $$;
 -- logout and back to the work status at the next login, the end at the last logout, all source
 -- 'import', occurred_at the local time in the batch's zone, recorded_at now. A date that already has
 -- a day with effective events is skipped; the day of a withdrawn import is used again. A day under
--- one minute is dropped. Then the work status is retired and the batch is loaded with its counts.
+-- one minute is dropped. Then the work status is retired (nothing to do when it is inactive already)
+-- and the batch is loaded with its counts.
 create or replace function cma.load_import_batch(p_key text)
 returns cma.import_batch
 language plpgsql
@@ -399,10 +402,9 @@ begin
     raise exception 'the import''s work status must be a working status that is not the default' using errcode = 'CMA04';
   end if;
   if v_work.status <> 'active'
-     and not exists (select 1 from cma.import_batch x
-                     where x.tenant_id = v_tenant and x.id <> b.id and x.status in ('loaded', 'voided')
-                       and x.loaded_at is not null and x.work_status_key = v_work.key) then
-    raise exception 'work status "%" is inactive; the import writes a status created for it', v_work.key using errcode = 'CMA04';
+     and exists (select 1 from cma.time_event_effective e where e.tenant_id = v_tenant and e.status_id = v_work.id) then
+    raise exception 'work status "%" is inactive and has time recorded in it; the import writes a status created for it', v_work.key
+      using errcode = 'CMA04';
   end if;
   select * into v_gap from cma.work_status s where s.tenant_id = v_tenant and s.key = b.gap_status_key;
   if not found then
@@ -570,7 +572,7 @@ begin
     c_clipped := c_clipped + case when r.clipped then 1 else 0 end;
   end loop;
 
-  -- nobody chooses the import's status afterwards
+  -- nobody chooses the import's status afterwards (a no-op for a status seeded inactive)
   perform cma.retire_work_status(v_work.key);
 
   update cma.import_batch x
