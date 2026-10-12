@@ -5,3 +5,7 @@ db/people_add_*.sql
 
 # Rendered HubSpot projects (hubspot/render.mjs); uploaded from Cloud Shell, never committed
 hubspot/build/
+
+# Legacy time import (docs/import/README.md): exports, maps and staging files never enter the repository
+docs/import/*.csv
+tools/*.csv

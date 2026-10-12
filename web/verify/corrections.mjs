@@ -6,7 +6,8 @@
  *
  * Covers the clock changes of Europe/Madrid in 2026 (29 March: 02:00 to 02:59 does not exist;
  * 25 October: 02:00 to 02:59 occurs twice), the order rules, and the diff: unchanged rows send
- * nothing, a changed row replaces its event, a removed row is voided, Add day starts with the start.
+ * nothing, a changed row replaces its event, a removed row is voided, Add day starts with the start;
+ * and a day imported from an earlier system (addition 0008d), in a status retired by the import.
  */
 import { check, instantsForLocal, localParts, normalizeTime, rowsFromEvents } from "../src/lib/corrections.ts";
 
@@ -42,7 +43,7 @@ expect("typed times become 24-hour hh:mm", ["905", "0905", "9:05", "17.30", "25:
 
 // ---- rows and diff ----------------------------------------------------------------------------
 const ev = (id, kind, at, statusKey = null) =>
-  ({ id, kind, statusKey, statusName: null, at, recordedAt: at, source: "user", supersedes: null, reason: null, approvedByName: null, isEffective: true });
+  ({ id, kind, statusKey, statusName: null, at, recordedAt: at, source: "user", importBatchKey: null, supersedes: null, reason: null, approvedByName: null, isEffective: true });
 const ID = (n) => `00000000-0000-4000-8000-00000000000${n}`;
 const day = [
   ev(ID(1), "start", "2026-10-05T07:00:00Z", "available"),
@@ -115,6 +116,34 @@ expect("choosing a current status clears it",
   withList(original.map((r) => (r.eventId === ID(3) ? { ...r, time: "11:20", statusKey: "training" } : r))).changes,
   [{ kind: "status", at: "2026-10-05T11:20:00+02:00", statusKey: "training", supersedes: ID(3) }], []);
 expect("without a list the rule is off", run(movedRetired).rowProblems, {}, { [ID(3)]: "inactive" });
+
+// ---- an imported day (addition 0008d) ------------------------------------------------------------
+// Two sessions with a gap, loaded in a status the import retired, the gap in break. The editor
+// treats the import's rows like any other: kept rows send nothing, a moved end replaces the
+// imported end, a removed gap voids both of its rows, and a session row may not be moved while
+// it keeps the retired status.
+const imp = (id, kind, at, statusKey = null) => ({ ...ev(id, kind, at, statusKey), source: "import", importBatchKey: "legacy-2026" });
+const IMP = (n) => `00000000-0000-4000-8000-0000000001${String(n).padStart(2, "0")}`;
+const importedDay = [
+  imp(IMP(1), "start", "2026-03-06T07:00:00Z", "legacy_session"),
+  imp(IMP(2), "status", "2026-03-06T09:00:00Z", "break"),
+  imp(IMP(3), "status", "2026-03-06T09:15:00Z", "legacy_session"),
+  imp(IMP(4), "end", "2026-03-06T15:30:15Z"),
+];
+const importedRows = rowsFromEvents(importedDay, TZ);
+const onImported = (rows) => check(importedRows, rows, "2026-03-06", TZ, LATER, ACTIVE);
+expect("an imported day shows its rows", importedRows.map((r) => `${r.time} ${r.end ? "end" : r.statusKey}`),
+  ["08:00 legacy_session", "10:00 break", "10:15 legacy_session", "16:30 end"], []);
+expect("kept imported rows send nothing", onImported(importedRows).dayProblems, ["noChange"], []);
+expect("a moved end replaces the imported end",
+  onImported(importedRows.map((r) => (r.eventId === IMP(4) ? { ...r, time: "16:00" } : r))).changes,
+  [{ kind: "end", at: "2026-03-06T16:00:00+01:00", supersedes: IMP(4) }], []);
+expect("a removed gap voids both of its rows",
+  onImported(importedRows.filter((r) => r.eventId !== IMP(2) && r.eventId !== IMP(3))).changes,
+  [{ kind: "void", supersedes: IMP(2) }, { kind: "void", supersedes: IMP(3) }], []);
+expect("a moved session row needs a current status",
+  onImported(importedRows.map((r) => (r.eventId === IMP(3) ? { ...r, time: "10:20" } : r))).rowProblems,
+  { [IMP(3)]: "inactive" }, {});
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

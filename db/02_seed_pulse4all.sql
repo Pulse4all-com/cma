@@ -221,3 +221,23 @@ begin
   on conflict (tenant_id, key) do nothing;
 end
 $$;
+
+-- The import status for Pulse4all Subscriptions (after addition 0008d; Martin, 12 October 2026): the
+-- sessions of the earlier system (Steam Connect, 2 January to 9 October 2026) are loaded as one batch
+-- in a status of their own, "Steam session", working, productive, paid and billable, with the gaps
+-- between sessions in Break (docs/import/README.md). It is seeded inactive and never offered: no
+-- screen lists an inactive status for a choice, and the load accepts it because nothing was ever
+-- booked on it. Rerun-safe: it only adds the row when the tenant does not have it yet.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.import_batch') is null then
+    raise notice 'the legacy time import does not exist yet (addition 0008d): rerun this seed after 50_legacy_time_import.sql';
+    return;
+  end if;
+  insert into cma.work_status (tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default, sort_order, status)
+  values (v_subs, 'legacy_session', 'Steam session', true, true, true, true, false, 900, 'inactive')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;

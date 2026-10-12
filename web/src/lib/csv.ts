@@ -135,13 +135,13 @@ export function hoursCsv(rows: ExportHoursRow[], s: ExportSettings, l: HoursLabe
 export interface StatusChangeLabels {
   date: string; person: string; employer: string; timeZone: string; status: string; from: string; to: string;
   duration: string; working: string; paid: string; billable: string; enteredBy: string; notClockedOut: string;
-  yes: string; no: string; sourceUser: string; sourceSystem: string; sourceCorrection: string;
+  yes: string; no: string; sourceUser: string; sourceSystem: string; sourceCorrection: string; sourceImport: string;
 }
 
 /** One row per stretch in a status, from its change to the next; an open stretch has no end */
 export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: StatusChangeLabels): string {
   const yn = (b: boolean) => (b ? l.yes : l.no);
-  const source = { user: l.sourceUser, system: l.sourceSystem, correction: l.sourceCorrection } as const;
+  const source = { user: l.sourceUser, system: l.sourceSystem, correction: l.sourceCorrection, import: l.sourceImport } as const;
   return toCsv(
     [l.date, l.person, l.employer, l.timeZone, l.status, l.from, l.to, l.duration, l.working, l.paid, l.billable, l.enteredBy, l.notClockedOut],
     rows.map((r) => [

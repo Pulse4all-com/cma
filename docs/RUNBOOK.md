@@ -124,7 +124,7 @@ node verify/scheduler.mjs; echo "exit $?"     # ALL 10 PASS
 
 It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job step exits 1 and every close check fails.
 
-The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
+The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `import`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
 of each script in `web/verify/` for its start command.
 
 ## 6. Logs

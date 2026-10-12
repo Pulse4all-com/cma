@@ -1,0 +1,20 @@
+-- Copies a staging file (tools/legacy-sessions-to-staging.mjs) into a staged import batch, in one
+-- transaction, as the application with the tenant and the acting person set (addition 0008d).
+-- Run from Cloud Shell through the Cloud SQL Auth Proxy; docs/import/README.md step 5:
+--   psql "$PGCONN" -v tenant_id=<uuid> -v user_id=<uuid> -f ~/cma/docs/import/copy-staging.psql < <staging.csv>
+-- The staging file arrives on standard input (pstdin), because \copy does not expand psql variables.
+-- The acting person holds tenant.configure (the database checks it on every row). The file's rows
+-- name their batch by its key; a batch that is not staged refuses them all (CMA03).
+\set ON_ERROR_STOP on
+begin;
+set local role cma_app;
+select set_config('app.tenant_id', :'tenant_id', true) is not null as tenant_set,
+       set_config('app.user_id', :'user_id', true) is not null as user_set,
+       set_config('app.actor_label', 'import:copy', true) is not null as label_set;
+\copy cma.import_session_staging (batch_key, external_person_id, external_person_name, external_session_id, login_local, logout_local, role) from pstdin with (format csv, header true)
+select s.batch_key, count(*) as sessions, count(distinct s.external_person_id) as accounts,
+       min(s.login_local)::date as first_day, max(s.login_local)::date as last_day
+from cma.import_session_staging s
+group by s.batch_key
+order by s.batch_key;
+commit;

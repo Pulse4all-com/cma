@@ -126,6 +126,12 @@ export interface TeamHours extends HoursRange {
 
 export type TimeEventKind = "start" | "status" | "end" | "void";
 
+/**
+ * Who entered an event: the person's own click, the system (the forgotten-day close), a correction
+ * by a manager, or an import of an earlier system's sessions (addition 0008d)
+ */
+export type TimeEventSource = "user" | "system" | "correction" | "import";
+
 /** One row of a day, effective or not: corrections never remove a row */
 export interface TimeEvent {
   id: string;
@@ -134,7 +140,9 @@ export interface TimeEvent {
   statusName: string | null;
   at: Instant;
   recordedAt: Instant;
-  source: "user" | "system" | "correction";
+  source: TimeEventSource;
+  /** The import batch an imported event came from (its key); null for every other source */
+  importBatchKey: string | null;
   /** The event this row replaces or cancels */
   supersedes: string | null;
   reason: string | null;
@@ -215,7 +223,7 @@ export interface StatusChangeRow {
   isCapped: boolean;
   seconds: number;
   /** Who entered the change that began it */
-  source: "user" | "system" | "correction";
+  source: TimeEventSource;
 }
 
 /**

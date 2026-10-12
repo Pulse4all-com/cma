@@ -1,0 +1,5 @@
+steam_pid,work_email,include
+1001,account.a@example.com,yes
+1002,Account.B@example.com,yes
+1003,account.c@example.com,no
+1005,account.e@example.com,yes
