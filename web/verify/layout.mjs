@@ -7,12 +7,14 @@
  * is sent from My day to Welcome, and that the Clock in button is shown only to
  * a person whose time is kept. On the intake reports and the Dashboard one header hint is opened
  * by keyboard focus: the panel must show, stay inside the viewport, and not cover the header or
- * label it explains when there is room below (12 October 2026). Saves screenshots under records/
+ * label it explains when there is room below, and the Intake table scrolls inside its card so the
+ * main area never scrolls sideways at 1280 px (12 October 2026). Saves screenshots under records/
  * for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
- *       1279 px and demands the app shell, and moves one hint panel over its header, expect FAIL, exit 1
+ *       1279 px and demands the app shell, moves one hint panel over its header and lets the
+ *       Intake table spill out of its card, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -141,6 +143,19 @@ async function expectReports() {
       keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
     }));
     if (m.scrollX) problems.push(`${subject} ${path}: page scrolls horizontally at 1280`);
+    // Intake, the widest table: it scrolls inside its own card, so the main area never scrolls
+    // sideways (12 October 2026); --provoke lets the table spill out of its card again
+    if (path.startsWith("/reports/intake")) {
+      const w = await p.evaluate((spill) => {
+        const box = document.querySelector('[data-testid="intake-scroll"]');
+        if (!box) return null;
+        if (spill) box.style.overflowX = "visible";
+        const main = document.querySelector("main");
+        return { main: main.scrollWidth - main.clientWidth };
+      }, provoke && subject === "manager");
+      if (!w) problems.push(`${subject} ${path}: the Intake table has no scroll container`);
+      else if (w.main > 0) problems.push(`${subject} ${path}: the main area scrolls sideways by ${w.main}px at 1280`);
+    }
     if (Math.round(m.rail) !== 256) problems.push(`${subject} ${path}: rail is ${m.rail}px`);
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${subject} ${path}: keycap ${k} missing`);
     if (await p.locator(selector).count() === 0) problems.push(`${subject} ${path}: ${selector} missing`);
@@ -203,5 +218,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

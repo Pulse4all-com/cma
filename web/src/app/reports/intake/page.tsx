@@ -19,7 +19,8 @@ import { resolve } from "../../access";
  * 0007d) with a total row and a small bar per row, a market filter (F), and the telephony and shop
  * columns, each shown as not connected when the tenant has no such source (never 0). Shown to people
  * holding reports.view or performance.team; the database checks again on every read. Counts only.
- * Every column header explains itself in a hint (copy.hints).
+ * Every column header explains itself in a hint (copy.hints). The table scrolls sideways inside its
+ * card where it is wider than the card (1280 px), so the page itself never does.
  */
 export default async function IntakePage({ searchParams }: PageProps<"/reports/intake">) {
   const r = await resolve();
@@ -112,46 +113,49 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
         {rows.length === 0 ? (
           <p className="text-body text-p4a-muted">{t.empty}</p>
         ) : (
-          <table className="w-full border-collapse text-small" data-testid="intake-table">
-            <thead>
-              <tr className="text-left text-caption text-p4a-grey">
-                <th className="px-2" colSpan={3} />
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}>{t.sourceCrm}{hint(t.sourceCrm, h.sourceCrm)}</th>
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}>{t.sourceTelephony}{hint(t.sourceTelephony, h.sourceTelephony)}</th>
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}>{t.sourceShop}{hint(t.sourceShop, h.sourceShop)}</th>
-              </tr>
-              <tr className="bg-p4a-bgblue text-left text-p4a-heading">
-                <th className={th}>{copy.reports.date}{hint(copy.reports.date, h.date)}</th>
-                <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.intakeMarket)}</th>
-                <th className={`${th} w-24`}>{t.volume}{hint(t.volume, h.volume)}</th>
-                {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
-                {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
-                {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((x, i) => (
-                <tr key={`${x.date}:${x.market}`} className="border-b border-p4a-border">
-                  <td className={`${td} tabular`}>{fmtDate(x.date, me.locale, "compact")}</td>
-                  <td className={td}>{x.market === "unknown" ? copy.reports.unknownMarket : x.market}</td>
-                  <td className={td} title={t.volumeHint}>
-                    <div className="h-2 w-20 rounded-full bg-p4a-bgblue">
-                      <div className="h-2 rounded-full bg-p4a-deepblue" style={{ width: `${Math.round(shares[i]! * 100)}%` }} />
-                    </div>
-                  </td>
-                  {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right ${j === 0 ? sep : ""}`}>{n(x[f])}</td>)}
-                  {sourceCells(x, false)}
+          // The widest report: at 1280 px the table scrolls sideways inside its card, never the page
+          <div className="overflow-x-auto" data-testid="intake-scroll" role="region" aria-label={t.title} tabIndex={0}>
+            <table className="w-full border-collapse text-small" data-testid="intake-table">
+              <thead>
+                <tr className="text-left text-caption text-p4a-grey">
+                  <th className="px-2" colSpan={3} />
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}>{t.sourceCrm}{hint(t.sourceCrm, h.sourceCrm)}</th>
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}>{t.sourceTelephony}{hint(t.sourceTelephony, h.sourceTelephony)}</th>
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}>{t.sourceShop}{hint(t.sourceShop, h.sourceShop)}</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="text-p4a-heading" data-testid="intake-total">
-                <td className={`${td} font-semibold`} colSpan={3}>{copy.reports.total}</td>
-                {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right font-semibold ${j === 0 ? sep : ""}`}>{n(totals[f])}</td>)}
-                {sourceCells(totals, true)}
-              </tr>
-            </tfoot>
-          </table>
+                <tr className="bg-p4a-bgblue text-left text-p4a-heading">
+                  <th className={th}>{copy.reports.date}{hint(copy.reports.date, h.date)}</th>
+                  <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.intakeMarket)}</th>
+                  <th className={`${th} w-24`}>{t.volume}{hint(t.volume, h.volume)}</th>
+                  {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                  {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                  {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((x, i) => (
+                  <tr key={`${x.date}:${x.market}`} className="border-b border-p4a-border">
+                    <td className={`${td} tabular`}>{fmtDate(x.date, me.locale, "compact")}</td>
+                    <td className={td}>{x.market === "unknown" ? copy.reports.unknownMarket : x.market}</td>
+                    <td className={td} title={t.volumeHint}>
+                      <div className="h-2 w-20 rounded-full bg-p4a-bgblue">
+                        <div className="h-2 rounded-full bg-p4a-deepblue" style={{ width: `${Math.round(shares[i]! * 100)}%` }} />
+                      </div>
+                    </td>
+                    {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right ${j === 0 ? sep : ""}`}>{n(x[f])}</td>)}
+                    {sourceCells(x, false)}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="text-p4a-heading" data-testid="intake-total">
+                  <td className={`${td} font-semibold`} colSpan={3}>{copy.reports.total}</td>
+                  {CRM_FIELDS.map((f, j) => <td key={f} className={`${td} tabular text-right font-semibold ${j === 0 ? sep : ""}`}>{n(totals[f])}</td>)}
+                  {sourceCells(totals, true)}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
       </Card>
 
