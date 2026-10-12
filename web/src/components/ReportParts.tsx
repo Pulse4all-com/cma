@@ -2,16 +2,18 @@
  * Building blocks of the intake reports (B11): the no-permission card, the not-connected state, the
  * grouping switch, the external record link and the Dashboard's Intake row. Server components; the
  * figures arrive from the data layer and lib/reports arranges them. No customer data: ids, counts,
- * codes and links only.
+ * codes and links only. Every Intake tile explains itself in a hint, with the text of the matching
+ * report header (copy.hints).
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { CrmRecordsDay, Intake, SpeedToLeadGroup, SpeedToLeadRow } from "@/lib/data";
 import {
-  fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, nextGroup, recordsOfType, SPEED_TO_LEAD_GROUPS, speedFigures,
+  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, nextGroup, recordsOfType, SPEED_TO_LEAD_GROUPS, speedFigures,
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
+import { HeaderHint } from "./HeaderHint";
 import { Card, Keycap } from "./primitives";
 
 export function NoReportPermission({ title, body }: { title: string; body: string }) {
@@ -86,24 +88,25 @@ export function RecordLink({ url, label }: { url: string | null; label: string }
 }
 
 function IntakeTile({
-  label, value, hint, testId, href, notConnected = false,
+  label, value, hint, info, testId, href, notConnected = false,
 }: {
   label: string; value: ReactNode; hint: ReactNode; testId: string; href?: "/reports/speed-to-lead" | "/reports/intake";
+  /** The explanation behind the label's info mark: the accessible name and the text */
+  info: { about: string; text: string };
   /** The value is a not-connected state in words, set smaller than a figure */
   notConnected?: boolean;
 }) {
-  const body = (
-    <>
-      <p className="text-caption text-p4a-grey">{label}</p>
+  // The label is the link, stretched over the whole tile, so the tile stays clickable while the
+  // info mark next to the label is a button of its own and never sits inside the link
+  return (
+    <div className={`relative rounded-card border border-p4a-border bg-white p-5 ${href ? "hover:border-p4a-deepblue" : ""}`} data-testid={testId} data-tile="">
+      <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
+        {href ? <Link href={href} className="after:absolute after:inset-0 after:rounded-card">{label}</Link> : label}
+        <HeaderHint label={info.about} text={info.text} />
+      </p>
       <div className={notConnected ? "mt-2 text-body font-semibold" : "tabular mt-1 text-title font-bold text-p4a-heading"}>{value}</div>
       <div className="mt-1 text-small text-p4a-muted">{hint}</div>
-    </>
-  );
-  const cls = "block rounded-card border border-p4a-border bg-white p-5";
-  return href ? (
-    <Link href={href} className={`${cls} hover:border-p4a-deepblue`} data-testid={testId}>{body}</Link>
-  ) : (
-    <div className={cls} data-testid={testId}>{body}</div>
+    </div>
   );
 }
 
@@ -122,6 +125,10 @@ export function IntakeRow({
   const s = speedFigures(speed);
   const n = (x: number) => fmtCount(x, locale);
   const muted = (label: string, hint: string) => <NotConnected label={label} hint={hint} />;
+  const h = copy.hints;
+  const info = (label: string, text: string) => ({
+    about: h.about.replace("{label}", label), text: fillHint(text, { hours: h.officeHours }, locale),
+  });
   return (
     <section aria-labelledby="intake-row" className="mb-6" data-testid="intake-row">
       <div className="mb-3 flex items-baseline justify-between gap-4">
@@ -129,13 +136,14 @@ export function IntakeRow({
         <p className="text-caption text-p4a-grey">{t.hint}</p>
       </div>
       <div className="grid grid-cols-6 gap-4">
-        <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
-        <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
-        <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
+        <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} info={info(t.leads, h.leads)} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
+        <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.dealsCreatedClosed)} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
+        <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed)} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
         <IntakeTile
           testId="intake-speed"
           href="/reports/speed-to-lead"
           label={t.speed}
+          info={info(t.speed, h.median)}
           value={fmtBusinessMinutes(s.medianBusinessMinutes, locale)}
           hint={<>{t.speedHint}<br />{t.speedDetail.replace("{pct}", fmtPct(s.withinTargetPct, locale)).replace("{open}", n(s.openNotCalled))}</>}
         />
@@ -143,6 +151,7 @@ export function IntakeRow({
           testId="intake-calls"
           href="/reports/intake"
           label={t.calls}
+          info={info(t.calls, h.calls)}
           notConnected={!intake.connections.telephony}
           value={intake.connections.telephony ? n((totals.callsIn ?? 0) + (totals.callsOut ?? 0)) : muted(r.noTelephony, r.noTelephonyHint)}
           hint={intake.connections.telephony ? t.callsHint.replace("{in}", n(totals.callsIn ?? 0)).replace("{out}", n(totals.callsOut ?? 0)) : r.noTelephonyHint}
@@ -151,6 +160,7 @@ export function IntakeRow({
           testId="intake-shop"
           href="/reports/intake"
           label={t.shop}
+          info={info(t.shop, h.shop)}
           notConnected={!intake.connections.commerce}
           value={intake.connections.commerce ? n(totals.firstOrders ?? 0) : muted(r.noShop, r.noShopHint)}
           hint={intake.connections.commerce

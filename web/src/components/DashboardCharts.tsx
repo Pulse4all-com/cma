@@ -10,6 +10,7 @@ import {
   type PersonTotal, type StatusTotal,
 } from "@/lib/dashboard";
 import { fmtDate, fmtMinutes, fmtPercent } from "@/lib/time";
+import { HeaderHint } from "./HeaderHint";
 import { Badge } from "./primitives";
 
 const minutes = (seconds: number) => fmtMinutes(Math.floor(seconds / 60));
@@ -29,10 +30,15 @@ export function Swatch({ group }: { group: Group | "pause" }) {
   return <span aria-hidden="true" className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${GROUP_BG[group]}`} />;
 }
 
-export function Tile({ label, value, hint }: { label: string; value: string; hint: string }) {
+export function Tile({
+  label, value, hint, info,
+}: { label: string; value: string; hint: string; info: { about: string; text: string } }) {
   return (
-    <div className="rounded-card border border-p4a-border bg-white p-5">
-      <p className="text-caption text-p4a-grey">{label}</p>
+    <div className="rounded-card border border-p4a-border bg-white p-5" data-tile="">
+      <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
+        {label}
+        <HeaderHint label={info.about} text={info.text} />
+      </p>
       <p className="tabular mt-1 text-title font-bold text-p4a-heading">{value}</p>
       <p className="mt-1 text-small text-p4a-muted">{hint}</p>
     </div>

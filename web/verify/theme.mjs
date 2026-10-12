@@ -9,10 +9,13 @@
  * start route, with the clock and the status buttons; the Live board as the supervisor; People
  * (the Team screen, 0004) as the admin. The intake reports (B11): Speed to lead, Intake and Data quality
  * as the manager, Intake and the Dashboard's Intake row for a tenant without telephony or a shop.
+ * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
+ * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
+ * body text (12 October 2026).
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
- *       off-palette element and a stray font, expect FAIL, exit 1
+ *       off-palette element and a stray font, and greys out one hint panel, expect FAIL, exit 1
  *
  * Needs the app running in mock mode and Playwright's Chromium installed
  * (npx playwright install chromium).
@@ -70,6 +73,8 @@ const pages = [
   { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
   { path: "/logout" }, { path: "/no-access" },
 ];
+let hintsChecked = 0;
+const hintsSkipped = [];
 for (const { path, subject, start } of pages) {
   // Clock in is an action: open the day through the route, so the page shows the clock
   if (start) await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
@@ -80,6 +85,32 @@ for (const { path, subject, start } of pages) {
   const p = await ctx.newPage();
   await p.goto(BASE + path);
   await p.waitForLoadState("networkidle");
+  // A report page: open one header hint by keyboard focus, so the panel is painted when the colours
+  // are read. An urgent alert's dialog holds the focus where one is waiting (the supervisor's), so
+  // that page is read without a hint; the other report pages must each show one
+  if (path.startsWith("/reports/")) {
+    const mark = p.locator("main button[data-header-hint]").first();
+    if (await mark.count() === 0) problems.push(`${path}: no header hint to open`);
+    else {
+      await mark.focus();
+      const hint = await p.evaluate((grey) => {
+        const m = document.activeElement;
+        if (!m?.hasAttribute("data-header-hint")) return document.querySelector("dialog[open]") ? "dialog" : null;
+        const panel = document.getElementById(m.getAttribute("aria-describedby") ?? "");
+        if (!panel || panel.hidden) return null;
+        if (grey) panel.style.color = "#666666";
+        const cs = getComputedStyle(panel);
+        return { color: cs.color, background: cs.backgroundColor };
+      }, provoke && path.startsWith("/reports/data-quality"));
+      if (hint === "dialog") hintsSkipped.push(`${path} as ${subject}`);
+      else if (!hint) problems.push(`${path}: the header hint does not open on focus`);
+      else {
+        hintsChecked++;
+        if (rgbToHex(hint.color) !== "#1c2127") problems.push(`${path}: hint text is ${rgbToHex(hint.color)}, not Inkt Body like the other text`);
+        if (rgbToHex(hint.background) !== "#ffffff") problems.push(`${path}: hint panel is ${rgbToHex(hint.background)}, not white`);
+      }
+    }
+  }
   if (provoke && path === "/") {
     await p.evaluate(() => {
       const el = document.createElement("p");
@@ -117,8 +148,9 @@ for (const { path, subject, start } of pages) {
   await ctx.close();
 }
 await b.close();
+if (hintsChecked < 5) problems.push(`only ${hintsChecked} report pages showed a header hint, expected 5`);
 
 const unique = [...new Set(problems)];
 for (const x of unique) console.log("  " + x);
-console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours)` : `theme: FAIL (${unique.length} problems)`);
+console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours, a header hint open on ${hintsChecked} report pages${hintsSkipped.length ? `; not on ${hintsSkipped.join(", ")}, where an alert dialog holds the focus` : ""})` : `theme: FAIL (${unique.length} problems)`);
 process.exit(unique.length === 0 ? 0 : 1);

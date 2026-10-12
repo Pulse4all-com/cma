@@ -249,3 +249,21 @@ export function fmtPct(pct: number | null, locale: string): string {
   const f = new Intl.NumberFormat(intlLocale[locale] ?? locale, { style: "percent", maximumFractionDigits: 0 });
   return pct > 0 && pct < 0.5 ? `< ${f.format(0.01)}` : f.format(pct / 100);
 }
+
+// ---- Header hints ------------------------------------------------------------------------------
+
+/** The speed-to-lead target in whole business minutes, from the rows (the tenant's setting); null without rows */
+export function targetMinutesOf(rows: Pick<SpeedToLeadRow, "targetSeconds">[]): number | null {
+  const s = rows.find((x) => x.targetSeconds !== null)?.targetSeconds;
+  return s === null || s === undefined ? null : Math.round(s / 60);
+}
+
+/**
+ * A header hint's text with its values filled in: {hours} the office hours (per market, tenant
+ * configuration) and {target} the speed-to-lead target from the tenant's settings, a dash when the
+ * period has no rows to carry it. The copy never holds either value.
+ */
+export function fillHint(text: string, values: { hours: string; target?: number | null }, locale: string): string {
+  const target = values.target === null || values.target === undefined ? "–" : fmtCount(values.target, locale);
+  return text.replaceAll("{hours}", values.hours).replaceAll("{target}", target);
+}

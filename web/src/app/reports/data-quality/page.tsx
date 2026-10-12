@@ -1,3 +1,4 @@
+import { HeaderHint } from "@/components/HeaderHint";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
@@ -17,7 +18,8 @@ function describe(c: DataQualityCheck, copy: Copy): { label: string; fix: string
  * Data quality (Report, B11): one row per check of cma.data_quality() (migration 0007d) with its
  * current count and one line on what fixing it means; checks with nothing to fix are muted, and CRM
  * owners without a person come first. Shown to people holding reports.view or tenant.configure; the
- * database checks again on every read. Counts only, no record of any customer.
+ * database checks again on every read. Counts only, no record of any customer. Every column header
+ * explains itself in a hint (copy.hints).
  */
 export default async function DataQualityPage() {
   const r = await resolve();
@@ -35,6 +37,8 @@ export default async function DataQualityPage() {
   }
 
   const checks = orderChecks(await data().getDataQuality(me));
+  const h = copy.hints;
+  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
   const th = "h-10 whitespace-nowrap px-3 font-semibold";
   const td = "px-3 py-3 align-top";
 
@@ -47,9 +51,9 @@ export default async function DataQualityPage() {
         <table className="w-full border-collapse text-body" data-testid="data-quality">
           <thead>
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-              <th className={`${th} w-80`}>{t.check}</th>
-              <th className={`${th} w-28 text-right`}>{t.count}</th>
-              <th className={th}>{t.fix}</th>
+              <th className={`${th} w-80`}>{t.check}{hint(t.check, h.check)}</th>
+              <th className={`${th} w-28 text-right`}>{t.count}{hint(t.count, h.count)}</th>
+              <th className={th}>{t.fix}{hint(t.fix, h.fix)}</th>
             </tr>
           </thead>
           <tbody>

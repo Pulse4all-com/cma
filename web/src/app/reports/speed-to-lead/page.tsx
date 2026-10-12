@@ -1,3 +1,4 @@
+import { HeaderHint } from "@/components/HeaderHint";
 import { PeriodBar } from "@/components/PeriodBar";
 import { GroupSwitch, NoReportPermission, RecordLink } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -7,8 +8,8 @@ import { data, dataIsMock, type SpeedToLeadGroup, type SpeedToLeadSummaryRow } f
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import {
-  fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay, MAX_REPORT_DAYS, openNotCalled, parseGroup, REPORT_PERMISSIONS,
-  summaryTotals,
+  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay, MAX_REPORT_DAYS, openNotCalled, parseGroup, REPORT_PERMISSIONS,
+  summaryTotals, targetMinutesOf,
 } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { resolve } from "../../access";
@@ -30,7 +31,8 @@ function groupLabel(row: SpeedToLeadSummaryRow, group: SpeedToLeadGroup, copy: C
  * by day, market, agent or pipeline (G cycles), then the open deals not called with a link to the
  * record. Shown to people holding reports.view or performance.team; the database checks again on
  * every read. Deal ids, codes and counts only: no customer name, email or phone number. An agent
- * whose owner is not mapped shows as Not mapped, never as an owner id.
+ * whose owner is not mapped shows as Not mapped, never as an owner id. Every header explains itself in
+ * a hint (copy.hints), the target and office hours filled in from the tenant's settings.
  */
 export default async function SpeedToLeadPage({ searchParams }: PageProps<"/reports/speed-to-lead">) {
   const r = await resolve();
@@ -58,11 +60,17 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
   ]);
   const totals = summaryTotals(summary.rows);
   const open = openNotCalled(rows);
-  const targetMinutes = rows.find((x) => x.targetSeconds !== null)?.targetSeconds;
+  const targetMinutes = targetMinutesOf(rows);
+  const h = copy.hints;
+  const hint = (label: string, text: string) => (
+    <HeaderHint label={h.about.replace("{label}", label)} text={fillHint(text, { hours: h.officeHours, target: targetMinutes }, me.locale)} />
+  );
+  const groupHint: Record<SpeedToLeadGroup, string> = { day: h.day, market: h.market, agent: h.agent, pipeline: h.pipeline };
   const periodQuery: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
   const n = (x: number) => fmtCount(x, me.locale);
-  const th = "h-10 whitespace-nowrap px-3 font-semibold";
+  // Headers may wrap at 1280 px, so the label and its info mark fit without widening the table
+  const th = "h-10 px-3 py-1 font-semibold";
   const td = "h-10 whitespace-nowrap px-3";
 
   return (
@@ -95,14 +103,14 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
               <table className="w-full border-collapse text-body" data-testid="speed-summary">
                 <thead>
                   <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                    <th className={th}>{t[group]}</th>
-                    <th className={`${th} text-right`}>{t.deals}</th>
-                    <th className={`${th} text-right`}>{t.called}</th>
-                    <th className={`${th} text-right`}>{t.median}</th>
-                    <th className={`${th} text-right`}>{t.p80}</th>
-                    <th className={`${th} text-right`}>{t.withinTarget}</th>
-                    <th className={`${th} text-right`}>{t.beforeNoon}</th>
-                    <th className={`${th} text-right`}>{t.openNotCalled}</th>
+                    <th className={th}>{t[group]}{hint(t[group], groupHint[group])}</th>
+                    <th className={`${th} text-right`}>{t.deals}{hint(t.deals, h.deals)}</th>
+                    <th className={`${th} text-right`}>{t.called}{hint(t.called, h.called)}</th>
+                    <th className={`${th} text-right`}>{t.median}{hint(t.median, h.median)}</th>
+                    <th className={`${th} text-right`}>{t.p80}{hint(t.p80, h.p80)}</th>
+                    <th className={`${th} text-right`}>{t.withinTarget}{hint(t.withinTarget, h.withinTarget)}</th>
+                    <th className={`${th} text-right`}>{t.beforeNoon}{hint(t.beforeNoon, h.beforeNoon)}</th>
+                    <th className={`${th} text-right`}>{t.openNotCalled}{hint(t.openNotCalled, h.openNotCalled)}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,7 +140,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                 </tfoot>
               </table>
               <p className="mt-4 text-caption text-p4a-grey">
-                {t.minutesNote.replace("{n}", targetMinutes ? n(Math.round(targetMinutes / 60)) : "–")}
+                {t.minutesNote.replace("{n}", targetMinutes !== null ? n(targetMinutes) : "–")}
               </p>
             </>
           )}
@@ -146,11 +154,11 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
             <table className="w-full border-collapse text-body" data-testid="open-not-called">
               <thead>
                 <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                  <th className={th}>{t.deal}</th>
-                  <th className={th}>{t.created}</th>
-                  <th className={th}>{copy.reports.market}</th>
-                  <th className={th}>{t.pipeline}</th>
-                  <th className={`${th} text-right`}>{t.waiting}</th>
+                  <th className={th}>{t.deal}{hint(t.deal, h.deal)}</th>
+                  <th className={th}>{t.created}{hint(t.created, h.created)}</th>
+                  <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.market)}</th>
+                  <th className={th}>{t.pipeline}{hint(t.pipeline, h.pipeline)}</th>
+                  <th className={`${th} text-right`}>{t.waiting}{hint(t.waiting, h.waiting)}</th>
                   <th className={`${th} w-12`}><span className="sr-only">{t.openTitle}</span></th>
                 </tr>
               </thead>
