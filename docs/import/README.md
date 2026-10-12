@@ -21,9 +21,33 @@ Rules for the files: the export, the map, the staging file and the person map st
 `~/import` in Cloud Shell, never in `~/cma`, and are deleted after the load (step 11). Real files are
 prod only; dev uses the synthetic fixture in `tools/fixtures/`.
 
-Before you start: `50`, `51` and `02` have run in prod (in that order, with `51` passing), and
-point-in-time recovery of cma-prod-pg is confirmed. The status is seeded inactive and never offered,
-so `02` may run any time before step 1.
+Before you start: `48` (0008c), `50` (0008d), `51` and `02` have run in prod, in that order, with
+`51` passing; `48` must be in before `50`, because 0008d needs 0008c. Point-in-time recovery of
+cma-prod-pg is confirmed. The status is seeded inactive and never offered, so `02` may run any time
+before step 1. Every person whose hours are imported exists in the tenant (People, below).
+
+Studio does not keep `set_config` between runs: each run may get a new session, so `app.tenant_id`
+and `app.user_id` set in one run are gone in the next. Every Studio block of steps 5 and 7 to 10 (and
+the void) therefore starts with the context block, shown in each block; run the block as a whole.
+The two ids come from the first query of step 5. The context block returns one row of three values;
+each step's expected output follows it.
+
+## People for the imported hours
+
+Every included account of the map needs a person in the tenant (Team → People → Add a person): role
+`agent` for agents, login system Google, and the account id at the provider. The account id is the
+Google account's stable numeric id (README, Authentication), never the email address and not the key
+in the Admin console's address. A Workspace admin reads the ids for many people at once with the
+Directory API:
+
+**Browser:** the Admin SDK Directory API reference for `users.list` (developers.google.com, Admin
+SDK, Directory API, `users.list`), Try this API, signed in as a Workspace admin, with `customer`
+`my_customer`, `maxResults` `500` and `fields` `users(primaryEmail,id,orgUnitPath,suspended)`.
+
+Expected: one entry per account with `primaryEmail`, `id` (digits only), `orgUnitPath` and
+`suspended`. Use `id` as the account id; leave out suspended accounts. The ids are pasted into the
+People screen, never into a file in the repository or a chat. A person added for the import has
+access as soon as the gate admits their account (README, Authentication).
 
 ---
 
@@ -39,6 +63,10 @@ Expected: the folder lists `steam-export.csv`; `cd ~/cma && git status --short` 
 
 ## 2. The map
 
+Skip this step when the map is already filled (`~/import/steam-map.csv` from an earlier run); go to
+step 3. The map may carry extra columns (the template's, or your own notes): only `steam_pid`,
+`work_email` and `include` are read.
+
 **Terminal**
 ```bash
 cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv --map-template ~/import/steam-map.csv
@@ -47,7 +75,9 @@ Expected: `accounts_in_export <n>` and the file path.
 
 **File** `~/import/steam-map.csv` (Cloud Shell editor): fill in `work_email` (the person's email in
 the CMA) and `include` (`yes` or `no`) on every row. The other columns are there to recognise the
-account and are ignored. An account set to `no`, or a row you delete, is not imported.
+account and are ignored. An account set to `no`, or a row you delete, is not imported. Accounts that
+are not agent hours (management accounts, for Pulse4all five in the Steam export) are left out:
+deleted from the map or set to `no`.
 
 ## 3. The tenant is ready
 
@@ -73,10 +103,22 @@ inactive, working, paid), both with 07:00, 22:00 and 17:00.
 cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv --map ~/import/steam-map.csv --zone Europe/Amsterdam --batch steam-2026 --out ~/import/staging.csv --map-sql ~/import/person-map.sql
 ```
 Expected: the counts, with `period_from 2026-01-02` and `period_to 2026-10-09` (the first and last
-login of an included account), `accounts_absent_from_map 0`, and the two file paths. A refusal
-(`refused, nothing written`) names the line: fix the export or the map and run again. The defaults
-are Steam's columns and `d-m-yyyy hh:mm:ss`; for another layout see the options at the top of
-`tools/legacy-sessions-to-staging.mjs`.
+login of an included account), `accounts_absent_from_map` equal to the number of accounts you
+deliberately deleted from the map in step 2 (`accounts_excluded` for those set to `no`), and the two
+file paths. A refusal (`refused, nothing written`) names the line: fix the export or the map and
+run again. The defaults are Steam's columns and `d-m-yyyy hh:mm:ss`; for another layout see the
+options at the top of `tools/legacy-sessions-to-staging.mjs`.
+
+A refusal `session id <id> appears twice`: Steam's export can hold one session twice, the same
+session id and login on both rows, the second with a later logout that contains the first (the
+Pulse4all export had 11). Check the pairs first: open `~/import/steam-export.csv` in the Cloud Shell
+editor at the lines the refusal names (the later row of each pair; up to 20 are listed), search for
+the earlier row with the same session id, and confirm that each pair has the same account and login. Then run the line above again with `--dedupe-sessions latest-logout` at the end:
+per session id the row with the latest logout is kept (a row without a logout counts as latest).
+This changes no hours, because the load merges overlapping sessions. Expected: the counts as above
+plus `sessions_deduplicated` equal to the number of extra rows (11 for 11 pairs). A pair whose rows
+differ in account or login is still refused (`appears twice with another account or login`): that
+is not a duplicate; fix the export.
 
 ## 5. Stage the batch
 
@@ -101,7 +143,8 @@ from cma.stage_import_batch('steam-2026', 'steam_connect', 'steam-export.csv',
                             '2026-01-02', '2026-10-09', 'Europe/Amsterdam', 'legacy_session', 'break');
 ```
 Expected: one row of three values, then `steam-2026 | staged | 2026-01-02 | 2026-10-09 |
-Europe/Amsterdam`. Use the period step 4 printed. Keep this Studio tab open for steps 7 to 9.
+Europe/Amsterdam`. Use the period step 4 printed. Keep the two ids at hand for the context block
+of steps 7 to 10.
 
 ## 6. Copy the sessions in
 
@@ -117,7 +160,15 @@ error nothing is kept (one transaction); fix it and run the line again.
 
 **File** `~/import/person-map.sql`: open it in the Cloud Shell editor and copy all of it.
 
-**Studio (cma-prod-pg)**, in the tab of step 5: paste and run it.
+**Studio (cma-prod-pg)**: the context block, then the statement of the file pasted below it; run
+both together.
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+-- paste the contents of ~/import/person-map.sql here
+```
 
 Expected: `accounts_in_map <a> | rows_written <a> | emails_without_person 0`, with `a` =
 `accounts_written` of step 4. It is rerun-safe (a second run writes 0). An email without a person
@@ -126,8 +177,12 @@ statement again, or accept that the load counts them as `accounts_skipped`.
 
 ## 8. Before the load: what will be skipped
 
-**Studio (cma-prod-pg)**, in the same tab:
+**Studio (cma-prod-pg)**
 ```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
 select count(distinct s.external_person_id) filter (where m.user_id is null) as accounts_without_person,
        count(distinct (m.user_id, s.login_local::date)) filter (where w.id is not null) as days_the_cma_already_has
 from cma.import_session s
@@ -136,12 +191,17 @@ left join cma.import_person_map m on m.batch_id = s.batch_id and m.external_pers
 left join cma.workday w on w.user_id = m.user_id and w.business_date = s.login_local::date;
 ```
 Expected: `0` accounts without a person, and the number of person-days the CMA already holds (from 5
-October 2026); those stay as they are.
+October 2026); those stay as they are. On a first import for people who are new in the CMA (added
+for the import, never clocked in), `days_the_cma_already_has` is `0`.
 
 ## 9. Load
 
-**Studio (cma-prod-pg)**, in the same tab:
+**Studio (cma-prod-pg)**
 ```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
 select key, status, loaded_at, jsonb_pretty(counts) as counts from cma.load_import_batch('steam-2026');
 ```
 Expected: `loaded` with the counts: `sessions_in` = step 6's `n`; `accounts_skipped` 0;
@@ -152,8 +212,12 @@ the spring clock change gap of 29 March, a session outside the period, a status 
 
 ## 10. Read the result
 
-**Studio (cma-prod-pg)**, in the same tab:
+**Studio (cma-prod-pg)**
 ```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
 select u.display_name, count(*) as days, round(sum(s.working_seconds) / 3600.0, 1) as hours,
        count(*) filter (where s.needs_correction) as to_review
 from cma.import_day d
@@ -166,8 +230,8 @@ select key, status from cma.work_status where key = 'legacy_session';
 reset role;
 ```
 Expected: one row per imported person with days, hours and days to review; then
-`legacy_session | inactive`. Keep the counts of step 9 (not the names) as the record
-`records/0008d-import-prod-<date>/load.txt`.
+`legacy_session | inactive`. Keep the counts of step 9, the batch key, the period and the times
+(not the names, emails or Steam ids) as the record `records/0008d-import-prod-<date>/load.txt`.
 
 **Browser:** Team hours for a week in the period: the days show as normal days; Correct a day shows
 the history as "Imported from an earlier system, batch steam-2026"; Download status changes names
@@ -177,9 +241,13 @@ them "Import" under Entered by.
 
 **Terminal**
 ```bash
-rm -f ~/import/steam-export.csv ~/import/steam-map.csv ~/import/staging.csv ~/import/person-map.sql && rmdir ~/import && ls ~/import
+rm -rf ~/import && ls ~/import
 ```
-Expected: `ls: cannot access '/home/…/import': No such file or directory`.
+Expected: `ls: cannot access '/home/…/import': No such file or directory`. The whole folder goes, so a
+cleaned or renamed copy of the export goes too.
+
+**Browser:** on the laptop, delete every downloaded copy of the export, the map or the staging file
+(Downloads, and empty the bin).
 
 ---
 
@@ -189,8 +257,12 @@ The void adds one void correction per effective event of every day the batch wro
 approver, the reason with the batch key), so nothing is deleted and the history stays. The days then
 count nowhere, and the same person-days can be loaded by a new batch.
 
-**Studio (cma-prod-pg)**, after the context block of step 5:
+**Studio (cma-prod-pg)**
 ```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
 select key, status, voided_at, counts ->> 'events_voided' as events_voided
 from cma.void_import_batch('steam-2026', '<why, 3 to 500 characters>');
 reset role;

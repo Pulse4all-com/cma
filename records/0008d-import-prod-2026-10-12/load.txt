@@ -1,0 +1,42 @@
+Legacy time import in prod, 12 October 2026 (addition 0008d, docs/import/README.md)
+
+Written down by Claude Code at Martin's request from his report of the run; the numbers and times
+below are his. No name, email address or Steam id appears here.
+
+Instance          cma-prod-pg
+Tenant            pulse4all-subscriptions
+Before the load   48 (0008c) applied 12:26 UTC, 50 (0008d) applied 12:27 UTC; 51 PASS both
+                  tenants and provoked FAIL A1; 02 run (legacy_session inactive); 27, 45, 47 PASS;
+                  point-in-time recovery confirmed (7 days of logs)
+People            13 agents added on the People screen (role agent, login system google)
+
+Batch             steam-2026
+Period            2026-01-02 to 2026-10-09
+Zone              Europe/Amsterdam
+
+Staging (tools/legacy-sessions-to-staging.mjs)
+  11 duplicated session ids (same session and login twice, the second row with a later logout
+  that contains the first) refused by the tool; the row with the latest logout per session id
+  kept before staging (no change in hours: the load merges overlaps)
+  5 management accounts left out of the map (not agent hours)
+
+Load              cma.load_import_batch('steam-2026')
+Status            loaded
+Loaded at         2026-10-12T13:02:18Z
+
+  sessions_in               2353
+  sessions_merged            462
+  sessions_open_dropped        1
+  sessions_outside_window      0
+  sessions_unmapped            0
+  accounts_skipped             0
+  days_written              1506
+  days_closed_by_rule         23
+  days_clipped                85
+  days_dropped                 1
+  days_skipped_existing        0
+  events_written            3778
+
+Result            9,504.7 working hours over 13 people; 108 days need a correction review
+Browser           Team hours and Correct a day show the days and the batch key as designed
+Files             deleted from Cloud Shell after the load

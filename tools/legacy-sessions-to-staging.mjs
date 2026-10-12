@@ -24,6 +24,10 @@
  *   --col-role        Functie            the account's role in that system (optional column)
  *   --date-format     d-m-yyyy hh:mm:ss  date tokens d dd m mm yyyy, time tokens h hh mm ss
  *   --delimiter       auto               ; , or tab; auto picks the one the header line holds most
+ *   --dedupe-sessions latest-logout      off by default: a session id that appears more than once,
+ *                                        each time with the same account and login, keeps the row
+ *                                        with the latest logout (no logout counts as latest); the
+ *                                        rows dropped are counted as sessions_deduplicated
  * Line ends CRLF or LF, an optional UTF-8 byte order mark, quoted fields as in RFC 4180.
  *
  * The map (a header, then one row per account): steam_pid,work_email,include
@@ -32,8 +36,9 @@
  *   Studio statement that matches the included accounts' emails to people at load time.
  *
  * Refuses (exit 1, nothing written) a row without a person id, session id or login, a time that
- * does not parse, a logout before its login, a duplicate session id, and a local time that does not
- * exist in the zone (the spring clock change); the database refuses the last one too. Prints counts
+ * does not parse, a logout before its login, a duplicate session id (with --dedupe-sessions: one
+ * whose rows differ in account or login), and a local time that does not exist in the zone (the
+ * spring clock change); the database refuses the last one too. Prints counts
  * only, never a name or an email.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -201,7 +206,9 @@ export function readMap(text) {
 
 /**
  * The export and the map to staging rows and counts. Pure: no file access.
- * options: { batch, zone, columns, dateFormat, delimiter }
+ * options: { batch, zone, columns, dateFormat, delimiter, dedupeSessions }
+ * dedupeSessions "latest-logout": per session id the row with the latest logout (an open one counts
+ * as latest; on a tie the first), when every row of that id has the same account and login.
  */
 export function convert(exportText, mapText, options) {
   const columns = { ...DEFAULT_COLUMNS, ...(options.columns ?? {}) };
@@ -216,14 +223,8 @@ export function convert(exportText, mapText, options) {
   }
   if (problems.length) return { problems, rows: [], counts: null };
 
-  const seen = new Set();
-  const accounts = new Set();
-  const dropped = { absent: new Set(), excluded: new Set() };
-  const out = [];
-  let open = 0;
-  let durationOff = 0;
-  let first = null;
-  let last = null;
+  const sessions = new Map();
+  let deduplicated = 0;
   rows.forEach((r, i) => {
     const line = i + 2;
     const cell = (k) => (col[k] >= 0 ? (r[col[k]] ?? "").trim() : "");
@@ -231,8 +232,8 @@ export function convert(exportText, mapText, options) {
     const sid = cell("sessionId");
     if (!pid) { problems.push(`line ${line}: no person id`); return; }
     if (!sid) { problems.push(`line ${line}: no session id`); return; }
-    if (seen.has(sid)) { problems.push(`line ${line}: session id ${sid} appears twice`); return; }
-    seen.add(sid);
+    const earlier = sessions.get(sid);
+    if (earlier && options.dedupeSessions !== "latest-logout") { problems.push(`line ${line}: session id ${sid} appears twice`); return; }
     const login = parse(cell("login"));
     const logoutText = cell("logout");
     const logout = logoutText ? parse(logoutText) : null;
@@ -242,25 +243,45 @@ export function convert(exportText, mapText, options) {
     for (const t of [login, logout]) {
       if (t && !existsInZone(t, options.zone)) problems.push(`line ${line}: session ${sid} at ${t.replace("T", " ")} does not exist in ${options.zone} (spring clock change)`);
     }
+    const session = { pid, sid, login, logout, name: cell("personName"), role: cell("role"), duration: cell("duration") };
+    if (earlier) {
+      if (earlier.pid !== pid || earlier.login !== login) { problems.push(`line ${line}: session id ${sid} appears twice with another account or login`); return; }
+      deduplicated++;
+      // Map.set on a known key keeps its place, so the staging file keeps the export's order
+      if (earlier.logout !== null && (logout === null || logout > earlier.logout)) sessions.set(sid, session);
+      return;
+    }
+    sessions.set(sid, session);
+  });
+
+  const accounts = new Set();
+  const dropped = { absent: new Set(), excluded: new Set() };
+  const out = [];
+  let open = 0;
+  let durationOff = 0;
+  let first = null;
+  let last = null;
+  for (const { pid, sid, login, logout, name, role, duration } of sessions.values()) {
     accounts.add(pid);
     const m = map.get(pid);
-    if (!m) { dropped.absent.add(pid); return; }
-    if (!m.include) { dropped.excluded.add(pid); return; }
+    if (!m) { dropped.absent.add(pid); continue; }
+    if (!m.include) { dropped.excluded.add(pid); continue; }
     if (!logout) open++;
-    const d = durationSeconds(cell("duration"));
+    const d = durationSeconds(duration);
     if (logout && d !== null && Math.abs(localSeconds(login, logout, options.zone) - d) > 60) durationOff++;
     const date = login.slice(0, 10);
     if (!first || date < first) first = date;
     if (!last || date > last) last = date;
-    out.push([options.batch, pid, cell("personName"), sid, login, logout ?? "", cell("role")]);
-  });
+    out.push([options.batch, pid, name, sid, login, logout ?? "", role]);
+  }
 
   const included = new Set(out.map((r) => r[1]));
   const counts = {
     rows_read: rows.length,
+    sessions_deduplicated: deduplicated,
     sessions_written: out.length,
     sessions_open: open,
-    sessions_dropped: rows.length - out.length,
+    sessions_dropped: rows.length - deduplicated - out.length,
     accounts_in_export: accounts.size,
     accounts_written: included.size,
     accounts_absent_from_map: dropped.absent.size,
@@ -358,7 +379,11 @@ export function main(argv) {
     return 0;
   }
   if (!exportPath || !o.map || !o.zone || !o.batch || !o.out) {
-    console.error("usage: legacy-sessions-to-staging.mjs <export.csv> --map <map.csv> --zone <IANA zone> --batch <key> --out <staging.csv> [--map-sql <file>]");
+    console.error("usage: legacy-sessions-to-staging.mjs <export.csv> --map <map.csv> --zone <IANA zone> --batch <key> --out <staging.csv> [--map-sql <file>] [--dedupe-sessions latest-logout]");
+    return 2;
+  }
+  if (o["dedupe-sessions"] !== undefined && o["dedupe-sessions"] !== "latest-logout") {
+    console.error("--dedupe-sessions takes one value: latest-logout");
     return 2;
   }
   if (!/^[a-z0-9_-]+$/.test(o.batch) || o.batch.length > 64) {
@@ -367,7 +392,7 @@ export function main(argv) {
   }
   try { new Intl.DateTimeFormat("en", { timeZone: o.zone }); } catch { console.error(`unknown time zone ${o.zone}`); return 2; }
   const result = convert(readFileSync(exportPath, "utf8"), readFileSync(o.map, "utf8"),
-    { batch: o.batch, zone: o.zone, columns, dateFormat: o["date-format"], delimiter });
+    { batch: o.batch, zone: o.zone, columns, dateFormat: o["date-format"], delimiter, dedupeSessions: o["dedupe-sessions"] });
   if (result.problems.length) {
     console.error(`refused, nothing written: ${result.problems.length} problem(s)`);
     for (const p of result.problems.slice(0, 20)) console.error(`  ${p}`);
