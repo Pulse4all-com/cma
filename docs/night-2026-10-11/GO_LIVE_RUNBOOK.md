@@ -70,7 +70,7 @@ select cma.upsert_message_rule('New deal', 'deal', '{}'::text[], 'leads.accept',
 ```
 Expected: one uuid.
 
-**Studio (cma-prod-pg)**, the assignment rule (addition 0008a: a deal whose HubSpot owner is an agent alerts that agent, urgent, with a sound; it needs the owner mapping of step 3b):
+**Studio (cma-prod-pg)**, the assignment rule (addition 0008a: a deal whose HubSpot owner is an agent alerts that agent, urgent, with a sound; it needs the owner mapping of step 3b; needs `cma-ingest` in prod, which follows the prod HubSpot phase):
 ```sql
 select cma.upsert_assignment_rule('Assigned deal', 'deal', '{}'::text[], 'urgent', null);
 ```
@@ -96,9 +96,11 @@ Expected: an empty result. Skip this block while the prod HubSpot connection doe
 run_migration dev 44_assignment_alerts.sql 45_verify_assignment_alerts.sql 0008a-dev-$(date +%F) 43_verify_messaging.sql
 run_migration prod 44_assignment_alerts.sql 45_verify_assignment_alerts.sql 0008a-prod-$(date +%F) 43_verify_messaging.sql
 ```
-Expected: `44` clean (the rerun reports the two indexes as existing), `45` ends with `PASS` per tenant, `43` unchanged; the records committed.
+Expected: `44` clean (the rerun reports the two indexes as existing), `45` ends with `PASS` per tenant, `43` unchanged; the records committed on a branch and merged through a pull request (`main` accepts pull requests only).
 
 ## 2b. An automation connection (optional today): messages from Make, n8n or a HubSpot workflow
+
+Needs `cma-ingest` in prod, which follows the prod HubSpot phase.
 
 **Terminal** (a secret for the connection, prod):
 ```bash
@@ -121,7 +123,7 @@ The answer lists `sent` (with the recipient count) and `refused`. Targets also t
 
 ## 3. People: Arno and the first agents
 
-Arno and each agent need a `pulse4all.com` Google account (README, Authentication) and their account id, which `workspace.pulse4all.app` now shows them on the No access yet page after they sign in (step 4 must have let them through IAP first). The other way to the id: **Browser** → `admin.google.com` → Users → the user → the address bar holds `/ac/users/<id>`; that number is the account id.
+Arno and each agent need a `pulse4all.com` Google account (README, Authentication) and their account id, which `workspace.pulse4all.app` now shows them on the No access yet page after they sign in (step 4 must have let them through IAP first). The id comes from the person's own No access yet page only.
 
 **Browser** (`workspace.pulse4all.app`, as yourself, People → Add a person (A)):
 - Arno: name, `arno@pulse4all.com`, employer Pulse4all, role `manager` (he holds `messages.send`, `monitoring.live`, `workday.team`, `roster.manage`; `admin` only if he is to configure statuses and links), provider `google`, his account id, zone `Europe/Amsterdam`.
@@ -143,15 +145,15 @@ reset role;
 ```
 Expected: `INSERT 0 1`. An agent without this row never receives an assignment alert, and `data_quality()` counts them as "CRM owners without a person".
 
-## 4. IAP: let the agents through without the domain gate
+## 4. IAP: open the gate to the domain
 
-Before the gate opens to the whole domain, each agent passes IAP through an IAP-only grant on the backend (README, Open decisions, Roles in prod), never through `cma@pulse4all.com`.
+Open the gate once (done 12 October 2026). Who may work is decided by `app_user` (README, Authentication); the gate only proves the visitor is a `pulse4all.com` account.
 
-**Terminal** (one line per person; prod project):
+**Terminal** (prod project, once):
 ```bash
-gcloud iap web add-iam-policy-binding --project=p4a-cma-prod --resource-type=backend-services --service=cma-web-backend --member='user:arno@pulse4all.com' --role='roles/iap.httpsResourceAccessor'
+gcloud iap web add-iam-policy-binding --project=p4a-cma-prod --resource-type=backend-services --service=cma-web-backend --member='domain:pulse4all.com' --role='roles/iap.httpsResourceAccessor'
 ```
-Expected: the policy printed with the new member. Repeat per agent address. Check:
+Expected: the policy printed with `domain:pulse4all.com` next to `group:cma@pulse4all.com`. Check:
 ```bash
 gcloud iap web get-iam-policy --project=p4a-cma-prod --resource-type=backend-services --service=cma-web-backend
 ```
@@ -165,6 +167,8 @@ gcloud run services update cma-web --project=p4a-cma-prod --region=europe-west4 
 Expected: a new revision, `min-instances: 1` in the service description. Note that the next web merge keeps it only if `cloudbuild.yaml`'s deploy step does not reset it: check with `gcloud run services describe cma-web --project=p4a-cma-prod --region=europe-west4 --format='value(spec.template.metadata.annotations)'` after the first merge that follows, and add `--min-instances=1` to the deploy step if it was lost (say so in the PR).
 
 ## 6. The Gemini audit before the gate opens
+
+Done 12 October 2026; see the Decision log.
 
 Re-upload `README.md` to the Gem after the merge, then paste:
 
