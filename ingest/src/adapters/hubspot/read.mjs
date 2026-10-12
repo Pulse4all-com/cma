@@ -261,6 +261,14 @@ export async function readBack({ connection, config, events, store, budget }) {
         const diff = associationDiff(recordType, g.objectId, current, storedAssoc, ["contact"], readAt);
         if (diff.length) writes.associations = diff;
         for (const m of g.mergedIds) writes = mergeWrites(writes, deletionWrites(recordType, m, g.latest.occurredAt));
+        // A record that arrived by a created event may raise an alert (migration 0008, DESIGN §8): the
+        // core asks cma.ingest_record_alerts after the upsert, which applies the rules, the age limit and
+        // the one-alert-per-record rule itself. Synthetic events of the reconcile, backfill and second
+        // read are "changed", so they never alert.
+        if (g.events.some((e) => e.kind === "created")) writes.alerts = [{ recordType, sourceId: g.objectId }];
+        // Assignment alerts (0008a) after every read-back of a record, created or changed: the
+        // function alerts the owner's person once per record and owner, within the age limit
+        writes.assignments = [{ recordType, sourceId: g.objectId }];
         units.push(unit(g.events, "processed", null, writes));
       }
     } catch (err) {

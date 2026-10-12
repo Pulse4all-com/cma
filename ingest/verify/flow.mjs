@@ -58,6 +58,8 @@ putSecret("ingest-hubspot-flow1-token", TOKEN1);
 putSecret("ingest-hubspot-flow2-signing", SIGN2);
 putSecret("ingest-hubspot-flow2-token", TOKEN2);
 putSecret(`ingest-hash-pepper-${SLUG1}`, PEPPER1);
+const AUTOMATION_SECRET = "fixture-automation-secret-one";
+putSecret("ingest-automation-flow1-secret", AUTOMATION_SECRET);
 putSecret(`ingest-hash-pepper-${SLUG2}`, "fixture-pepper-two-000000000000");
 
 // ---- The fake HubSpot API ----------------------------------------------------------------------
@@ -70,6 +72,10 @@ const fake = {
       4100000002: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
       4100000003: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
       4100000004: { createdate: T0, pipeline: "p-sales", dealstage: "s-new" },
+      // Created now: the one deal inside the alert age limit (migration 0008)
+      4100000007: { createdate: new Date().toISOString(), pipeline: "p-sales", dealstage: "s-new", hs_lastmodifieddate: new Date().toISOString() },
+      // Created now with an owner, for the assignment alerts (0008a)
+      4100000008: { createdate: new Date().toISOString(), pipeline: "p-sales", dealstage: "s-new", hubspot_owner_id: "7100000001", hs_lastmodifieddate: new Date().toISOString() },
     },
     contacts: {
       4300000001: { contact_country: "uk", contact_language: "en", contact_currency: "gbp", contact_shopify_id_1: "6000000001", contact_shopify_id_2: "6000000002", email: "a.person@example.com" },
@@ -334,6 +340,83 @@ const deletion = ev({ subscriptionType: "object.deletion", objectTypeId: "0-3", 
 await post(conn1.key, [deletion]);
 expect("a deal deletion marks the record deleted", (await q("select source_deleted_at is not null as d from cma.crm_record where connection_id = $1 and source_id = '4100000001'", [conn1.id]))[0]?.d, true, false);
 
+// New-deal alerts (migration 0008, DESIGN §8): a rule on tenant one for the holders of leads.accept, an agent
+// holding it, then a deal created now arrives by a created event → one message with one delivery; the
+// same delivery again → nothing new; a synthetic (reconcile-shaped) changed event → nothing
+const agentOf = await asAdmin(t1, async () => {
+  const [{ id }] = await q("insert into cma.app_user (tenant_id, email, display_name) values ($1, 'flow-agent@example.invalid', 'Flow agent') returning id", [t1]);
+  await q("insert into cma.user_role (tenant_id, user_id, role_id) select $1, $2, id from cma.app_role where tenant_id = $1 and key = 'agent'", [t1, id]);
+  await q("select cma.upsert_message_rule('new-deal', 'deal', '{}'::text[], 'leads.accept', false, false, 'leads.manage', 'normal', null)");
+  await q("select cma.set_connection_settings($1, '{\"phone_default_region\":\"GB\",\"app_host\":\"app.example.com\",\"record_url_deal\":\"https://{app_host}/contacts/{account}/record/0-3/{id}\"}'::jsonb)", [conn1.id]);
+  return id;
+});
+const created = ev({ subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000007, occurredAt: Date.now() });
+expect("a deal created now → 200", (await post(conn1.key, [created])).status, 200, 500);
+const alertRows = async () => q("select m.title, m.ref_type, m.ref_id, m.ref_url, m.kind, (select count(*)::int from cma.message_delivery d where d.message_id = m.id) as deliveries, (select count(*)::int from cma.message_delivery d where d.message_id = m.id and d.user_id = $2) as to_agent from cma.message m where m.tenant_id = $1 order by m.created_at", [t1, agentOf]);
+let alerts = await alertRows();
+// Two deliveries: the agent and the flow admin both hold leads.accept in the default ladder
+expect("…one alert written, delivered to the two holders of leads.accept, with the record link", [alerts.length, alerts[0]?.kind, alerts[0]?.ref_type, alerts[0]?.ref_id, alerts[0]?.deliveries, alerts[0]?.to_agent, alerts[0]?.ref_url],
+  [1, "alert", "deal", "4100000007", 2, 1, "https://app.example.com/contacts/9000001/record/0-3/4100000007"], [0, "alert", "deal", "4100000007", 1, 0, null]);
+expect("…the alert's title and body hold the configured words, never a deal name", [alerts[0]?.title, (await q("select body from cma.message where tenant_id = $1", [t1])).some((r) => /must not be read/.test(r.body))], ["New deal", false], ["must not be read", true]);
+expect("the same delivery again → no second alert", [(await post(conn1.key, [created])).status, (await alertRows()).length], [200, 1], [200, 2]);
+const changed = ev({ subscriptionType: "object.propertyChange", objectTypeId: "0-3", objectId: 4100000007, propertyName: "amount", propertyValue: "5", occurredAt: Date.now() });
+expect("a changed event (the shape of reconcile and backfill) → no alert", [(await post(conn1.key, [changed])).status, (await alertRows()).length], [200, 1], [200, 2]);
+const old = ev({ subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000004, occurredAt: Date.now() });
+await post(conn1.key, [old]);
+expect("a created event for a deal older than the age limit → no alert", (await alertRows()).length, 1, 2);
+
+// Assignment alerts (0008a): the flow agent is the person behind owner 7100000001, a second agent behind
+// 7100000002; an assignment rule; a deal created now with an owner → the created alert of the rule above
+// plus one assignment alert to the owner's person; the owner changed → one alert to the new owner
+const agentTwo = await asAdmin(t1, async () => {
+  const [{ id }] = await q("insert into cma.app_user (tenant_id, email, display_name) values ($1, 'flow-agent-two@example.invalid', 'Flow agent two') returning id", [t1]);
+  await q("insert into cma.user_role (tenant_id, user_id, role_id) select $1, $2, id from cma.app_role where tenant_id = $1 and key = 'agent'", [t1, id]);
+  await q("select cma.upsert_assignment_rule('assigned-deal', 'deal', '{}'::text[], 'urgent', null)");
+  return id;
+});
+await q("insert into cma.app_user_external_id (tenant_id, user_id, system, external_id) values ($1, $2, 'hubspot_owner', '7100000001'), ($1, $3, 'hubspot_owner', '7100000002')", [t1, agentOf, agentTwo]);
+const assigned = ev({ subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000008, occurredAt: Date.now() });
+expect("a deal created now with an owner → 200", (await post(conn1.key, [assigned])).status, 200, 500);
+const assignmentRows = async () => q("select m.title, m.urgency, m.target ->> 'assignee' as assignee, (select array_agg(d.user_id) from cma.message_delivery d where d.message_id = m.id) as to_users from cma.message m where m.tenant_id = $1 and m.ref_id = '4100000008' and m.target ? 'assignee' order by m.created_at", [t1]);
+let assignments = await assignmentRows();
+expect("…one assignment alert, urgent, to the owner's person only", [assignments.length, assignments[0]?.title, assignments[0]?.urgency, assignments[0]?.assignee, assignments[0]?.to_users],
+  [1, "New deal assigned to you", "urgent", "7100000001", [agentOf]], [0, "New deal assigned to you", "urgent", "7100000001", [agentOf]]);
+expect("…next to the created alert of the first rule", (await q("select count(*)::int as n from cma.message where tenant_id = $1 and ref_id = '4100000008'", [t1]))[0].n, 2, 1);
+fake.objects.deals[4100000008].hubspot_owner_id = "7100000002";
+const reassigned = ev({ subscriptionType: "object.propertyChange", objectTypeId: "0-3", objectId: 4100000008, propertyName: "hubspot_owner_id", propertyValue: "7100000002", occurredAt: Date.now() });
+expect("the owner changed → 200", (await post(conn1.key, [reassigned])).status, 200, 500);
+assignments = await assignmentRows();
+expect("…one more assignment alert, to the new owner; the same change again adds nothing", [assignments.length, assignments[1]?.assignee, assignments[1]?.to_users, (await post(conn1.key, [reassigned])).status, (await assignmentRows()).length],
+  [2, "7100000002", [agentTwo], 200, 2], [1, "7100000002", [agentTwo], 200, 3]);
+
+// Messages from an automation (0008a): POST /automation/<key> with a bearer
+const auto1 = await asAdmin(t1, async () => {
+  const [c] = await q("select * from cma.upsert_connection('automation', 'Make flow one', '9000001', 'ingest-automation-flow1-secret', null)");
+  await q("select cma.set_connection_settings($1, '{\"app_host\":\"app.example.com\",\"record_url_deal\":\"https://{app_host}/contacts/{account}/record/0-3/{id}\"}'::jsonb)", [c.connection_id]);
+  return { id: c.connection_id, key: c.key };
+});
+async function postMessages(key, body, bearer = AUTOMATION_SECRET, method = "POST") {
+  const headers = { "content-type": "application/json" };
+  if (bearer !== null) headers.authorization = `Bearer ${bearer}`;
+  const res = await fetch(`${BASE}/automation/${key}`, { method, headers, body: method === "POST" ? (typeof body === "string" ? body : JSON.stringify(body)) : undefined });
+  const text = await res.text();
+  let json = null;
+  try { json = JSON.parse(text); } catch { json = null; }
+  return { status: res.status, body: json };
+}
+const lead = { messages: [{ title: "Lead for you", body: "Call within five minutes.", urgency: "urgent", target: { owners: { system: "hubspot", ids: ["7100000001", "7199999999"] } }, ref: { system: "hubspot", type: "deal", id: "4100000008" } }] };
+expect("the automation route without a bearer → 401", (await postMessages(auto1.key, lead, null)).status, 401, 200);
+expect("…with a wrong bearer → 401", (await postMessages(auto1.key, lead, "not-the-secret")).status, 401, 200);
+expect("…the HubSpot connection's key on /automation → 404", (await postMessages(conn1.key, lead)).status, 404, 200);
+expect("…a body without messages → 400 with a code", (await postMessages(auto1.key, { nope: true })).body?.error, "messages_1_to_50", undefined);
+const sentLead = await postMessages(auto1.key, lead);
+expect("…a message to the person behind a CRM owner id → 200, one recipient", [sentLead.status, sentLead.body?.sent?.[0]?.recipients, sentLead.body?.refused?.length], [200, 1, 0], [200, 2, 0]);
+const [leadRow] = await q("select m.kind, m.urgency, m.ref_url, (select array_agg(d.user_id) from cma.message_delivery d where d.message_id = m.id) as to_users from cma.message m where m.id = $1", [sentLead.body?.sent?.[0]?.id]);
+expect("…stored as an urgent announcement with the record link, delivered to that person", [leadRow?.kind, leadRow?.urgency, leadRow?.ref_url, leadRow?.to_users],
+  ["announcement", "urgent", "https://app.example.com/contacts/9000001/record/0-3/4100000008", [agentOf]], ["alert", "urgent", null, [agentOf]]);
+const mixed = await postMessages(auto1.key, { messages: [{ title: "Nobody", target: { emails: ["unknown@example.invalid"] } }, { title: "By email", target: { emails: ["flow-agent-two@example.invalid"] }, body: "Hello" }] });
+expect("…one refused (nobody) and one sent in the same request", [mixed.status, mixed.body?.refused, mixed.body?.sent?.[0]?.recipients], [200, [{ index: 0, code: "invalid" }], 1], [200, [], 2]);
+
 // Tenant isolation
 clearSecretCache();
 const t2event = ev({ portalId: 9000002, subscriptionType: "object.creation", objectTypeId: "0-3", objectId: 4100000001 });
@@ -344,7 +427,8 @@ expect("tenant two's record lives in tenant two", t2rows.map((r) => r.tenant_id)
 expect("tenant two's read-back used tenant two's token", fake.requests.at(-1)?.auth, `Bearer ${TOKEN2}`, `Bearer ${TOKEN1}`);
 const seen = await asAdmin(t1, async () => (await q("select count(*)::int as n from cma.crm_record where connection_id = $1", [conn2.id]))[0].n);
 expect("tenant one cannot see tenant two's records", seen, 0, 1);
-expect("tenant one's records unchanged by tenant two", await count("crm_record"), 1, 2);
+// Four: the first deal plus the three the alert cases read back
+expect("tenant one's records unchanged by tenant two", await count("crm_record"), 4, 5);
 
 // What was written and logged
 const dbText = JSON.stringify(await q("select raw from cma.ingest_event where connection_id = any ($1) union all select raw from cma.crm_call where connection_id = any ($1) union all select raw from cma.crm_record where connection_id = any ($1)", [[conn1.id, conn2.id]]));

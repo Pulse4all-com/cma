@@ -8,7 +8,7 @@ import { CmaDbError } from "@/lib/db/client";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {
-  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MyProfile, MyRosterDay, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
+  AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
 } from "./types";
@@ -71,12 +71,24 @@ type MockConfig = {
   statuses: ConfigStatus[]; links: ConfigAppLink[]; absences: AbsenceType[]; targets: CoverageTargetRow[];
   settings: TenantSetting[]; teams: TeamInfo[]; skills: SkillInfo[];
 };
+/**
+ * A fictional message as cma.message with its deliveries (0008). "everyone" messages hand a delivery to
+ * any person of the tenant who polls, so a tester's own mock identity receives them too.
+ */
+type MockDelivery = { deliveredAt: Instant | null; readAt: Instant | null; acknowledgedAt: Instant | null };
+type MockMessage = Omit<MyMessage, "deliveredAt" | "readAt" | "acknowledgedAt"> & {
+  tenantId: string; everyone: boolean; users: Set<string>; byRule: boolean; deliveries: Map<string, MockDelivery>;
+};
 type MockState = {
   store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null;
   rosters: Map<string, MockRosterWeek> | null; config: MockConfig | null;
+  messages: Map<string, MockMessage>; messagesSeeded: Set<string>; lastSyntheticAlertAt: number; messageSeq: number;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
-const state: MockState = (g.__cmaMock ??= { store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null, config: null });
+const state: MockState = (g.__cmaMock ??= {
+  store: new Map(), teamStore: new Map(), teamSeeded: false, people: null, rosters: null, config: null,
+  messages: new Map(), messagesSeeded: new Set(), lastSyntheticAlertAt: 0, messageSeq: 0,
+});
 const store = state.store;
 
 /**
@@ -614,6 +626,117 @@ function publishedCellFor(userId: string, date: DateKey): { entry: RosterEntry |
   return covering ? { entry: null, week: covering } : null;
 }
 
+// ---- Messaging (migration 0008): fixtures shaped like cma.message and cma.message_delivery ---------
+
+/** Same answer as the database for a caller without messages.send */
+function assertSend(me: Principal): void {
+  if (!me.permissions.includes("messages.send")) throw new CmaDbError("CMA06", "not permitted");
+}
+
+/** A synthetic alert arrives every few minutes in mock mode, so the toast and the inbox can be seen without a source */
+const SYNTHETIC_ALERT_EVERY_MS = 3 * 60_000;
+
+function mockMessageId(): string {
+  state.messageSeq += 1;
+  return `00000000-0000-7000-8000-0000000a${String(state.messageSeq).padStart(4, "0")}`;
+}
+
+function addMockMessage(m: Omit<MockMessage, "id" | "deliveries">): MockMessage {
+  const row: MockMessage = { ...m, id: mockMessageId(), deliveries: new Map() };
+  state.messages.set(row.id, row);
+  return row;
+}
+
+/** Three fictional messages per tenant on first use: a welcome, an alert with a link, an urgent one already confirmed */
+function seedMessages(me: Principal, now: Instant): void {
+  if (state.messagesSeeded.has(me.tenantId)) return;
+  state.messagesSeeded.add(me.tenantId);
+  const ago = (minutes: number) => new Date(Date.parse(now) - minutes * 60_000).toISOString();
+  addMockMessage({ tenantId: me.tenantId, kind: "announcement", urgency: "normal", title: "Welcome to the Workspace (test)",
+    body: "Clock in on Welcome and pick your status on My day. Questions go to your supervisor.", ref: null,
+    createdAt: ago(130), expiresAt: null, everyone: true, users: new Set(), byRule: false });
+  addMockMessage({ tenantId: me.tenantId, kind: "alert", urgency: "normal", title: "New deal",
+    body: "NL · Sales (test) · created 09:40", ref: { system: "crm_test", type: "deal", id: "4100000001", url: "https://example.com/crm/deals/4100000001" },
+    createdAt: ago(25), expiresAt: null, everyone: true, users: new Set(), byRule: true });
+  const urgent = addMockMessage({ tenantId: me.tenantId, kind: "announcement", urgency: "urgent", title: "Line check at 12:00 (test)",
+    body: "Stay available between 12:00 and 12:15.", ref: null, createdAt: ago(60), expiresAt: null, everyone: true, users: new Set(), byRule: false });
+  urgent.deliveries.set(me.userId, { deliveredAt: ago(59), readAt: ago(58), acknowledgedAt: ago(58) });
+}
+
+/** A new fictional alert every few minutes, to everyone, as the ingest service's rule would raise it */
+function maybeSyntheticAlert(me: Principal, now: Instant): void {
+  if (Date.parse(now) - state.lastSyntheticAlertAt < SYNTHETIC_ALERT_EVERY_MS) return;
+  state.lastSyntheticAlertAt = Date.parse(now);
+  const n = 4100000100 + state.messageSeq;
+  const hhmm = new Intl.DateTimeFormat("en-GB", { timeZone: me.timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(now));
+  addMockMessage({ tenantId: me.tenantId, kind: "alert", urgency: "normal", title: "New deal", body: `NL · Sales (test) · created ${hhmm}`,
+    ref: { system: "crm_test", type: "deal", id: String(n), url: `https://example.com/crm/deals/${n}` }, createdAt: now, expiresAt: null,
+    everyone: true, users: new Set(), byRule: true });
+}
+
+/** The caller's delivery of a message, created on the first poll for an "everyone" message; null when it is not theirs */
+function deliveryOf(m: MockMessage, me: Principal): MockDelivery | null {
+  if (m.tenantId !== me.tenantId) return null;
+  const existing = m.deliveries.get(me.userId);
+  if (existing) return existing;
+  if (!m.everyone && !m.users.has(me.userId)) return null;
+  const fresh: MockDelivery = { deliveredAt: null, readAt: null, acknowledgedAt: null };
+  m.deliveries.set(me.userId, fresh);
+  return fresh;
+}
+
+function isExpired(m: MockMessage, now: Instant): boolean {
+  return m.expiresAt !== null && Date.parse(m.expiresAt) <= Date.parse(now);
+}
+
+/** The caller's own rows, newest first, as cma.my_messages lists them (expired ones left out) */
+function ownMessages(me: Principal, now: Instant): { m: MockMessage; d: MockDelivery }[] {
+  const out: { m: MockMessage; d: MockDelivery }[] = [];
+  for (const m of state.messages.values()) {
+    if (isExpired(m, now)) continue;
+    const d = deliveryOf(m, me);
+    if (d) out.push({ m, d });
+  }
+  return out.sort((a, b) => b.m.createdAt.localeCompare(a.m.createdAt) || b.m.id.localeCompare(a.m.id));
+}
+
+function toMyMessage(m: MockMessage, d: MockDelivery): MyMessage {
+  return { id: m.id, kind: m.kind, urgency: m.urgency, title: m.title, body: m.body, ref: m.ref, createdAt: m.createdAt, expiresAt: m.expiresAt,
+    deliveredAt: d.deliveredAt, readAt: d.readAt, acknowledgedAt: d.acknowledgedAt };
+}
+
+/** Whether a person has an open, started day today (cma.is_clocked_in) */
+function isClockedIn(me: Principal, userId: string, now: Instant): boolean {
+  const date = dateKeyInZone(now, me.timeZone);
+  const w = store.get(`${me.tenantId}:${userId}:${date}` as Key);
+  return !!w && w.status === "working";
+}
+
+/** Resolves a target to people now, as cma.send_message does; CMA02 for an unknown team, skill or person, CMA04 for nobody */
+function resolveTarget(me: Principal, target: MessageTarget, now: Instant): { everyone: boolean; users: Set<string> } {
+  const people = [...seedPeople().values()].filter((p) => p.isActive);
+  const clocked = (id: string) => !target.onlyClockedIn || isClockedIn(me, id, now);
+  let users: string[];
+  let everyone = false;
+  if ("everyone" in target) {
+    everyone = !target.onlyClockedIn;
+    users = people.map((p) => p.userId);
+  } else if ("teams" in target) {
+    for (const k of target.teams) if (!MOCK_TEAMS.some((t) => t.key === k)) throw new CmaDbError("CMA02", "not found");
+    users = people.filter((p) => p.teams.some((t) => target.teams.includes(t.key))).map((p) => p.userId);
+  } else if ("language" in target) {
+    const skill = MOCK_SKILLS.find((x) => x.dimension === "language" && x.key === target.language.skill);
+    if (!skill) throw new CmaDbError("CMA02", "not found");
+    users = people.filter((p) => p.skills.some((x) => x.key === skill.key && (target.language.minLevel === null || (x.level ?? 0) >= target.language.minLevel))).map((p) => p.userId);
+  } else {
+    for (const id of target.users) if (!people.some((p) => p.userId === id)) throw new CmaDbError("CMA02", "not found");
+    users = target.users;
+  }
+  const chosen = new Set(users.filter(clocked));
+  if (chosen.size === 0 && !everyone) throw new CmaDbError("CMA04", "the target reaches nobody now");
+  return { everyone, users: chosen };
+}
+
 export const mockData: CmaData = {
   /**
    * Any verified identity may work as the test agent. A real person behind IAP
@@ -633,10 +756,11 @@ export const mockData: CmaData = {
         roleKey: identity.subject,
         // As the default ladder after 0004: the manager also exports, manages agents and skills and plans the
         // roster; the supervisor does not; both watch the Live board
+        // Both push messages to agents (messages.send, migration 0008)
         permissions: identity.subject === "manager"
           ? ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
-             "users.manage_agents", "skills.manage", "roster.manage", "roster.view"]
-          : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view"],
+             "users.manage_agents", "skills.manage", "roster.manage", "roster.view", "messages.send"]
+          : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"],
       };
     }
     // The admin (0004): everything the manager has plus configuration and user management for everyone
@@ -648,7 +772,7 @@ export const mockData: CmaData = {
         organisationName: "Pulse4all",
         roleKey: "admin",
         permissions: ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
-                      "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view"],
+                      "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send"],
       };
     }
     // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections
@@ -757,6 +881,8 @@ export const mockData: CmaData = {
         startedAt: w.startedAt,
         endedAt: w.endedAt,
         minutes: Math.floor(workedSeconds(w, now) / 60),
+        // Everything between clock in and clock out that was not working time
+        pauseMinutes: Math.max(0, Math.floor(secondsBetween(w.startedAt, w.endedAt ?? now) / 60) - Math.floor(workedSeconds(w, now) / 60)),
       }));
     const summary: HoursSummary = {
       ...range,
@@ -1329,5 +1455,70 @@ export const mockData: CmaData = {
       roleName: p?.roleName ?? MOCK_ROLES.find((r) => r.key === me.roleKey)?.name ?? null, timeKept: p?.timeKept ?? me.permissions.includes("workday.own"),
       teams: p?.teams ?? [], skills: p?.skills ?? [],
     };
+  },
+
+  async listMyMessages(me, since, limit): Promise<MyMessages> {
+    const now = new Date().toISOString();
+    seedMessages(me, now);
+    maybeSyntheticAlert(me, now);
+    const own = ownMessages(me, now);
+    const listed = own.filter(({ m }) => since === null || m.createdAt > since).slice(0, limit);
+    for (const { d } of listed) d.deliveredAt ??= now;
+    return { messages: listed.map(({ m, d }) => toMyMessage(m, d)), unreadCount: own.filter(({ d }) => d.readAt === null).length };
+  },
+
+  async markMessagesRead(me, ids): Promise<number> {
+    const now = new Date().toISOString();
+    let n = 0;
+    for (const id of ids) {
+      const m = state.messages.get(id);
+      const d = m ? deliveryOf(m, me) : null;
+      if (!d || d.readAt !== null) continue;
+      d.deliveredAt ??= now;
+      d.readAt = now;
+      n += 1;
+    }
+    return n;
+  },
+
+  async acknowledgeMessage(me, id): Promise<void> {
+    const now = new Date().toISOString();
+    const m = state.messages.get(id);
+    const d = m ? deliveryOf(m, me) : null;
+    if (!d) throw new CmaDbError("CMA02", "not found");
+    if (d.acknowledgedAt !== null) return;
+    d.deliveredAt ??= now;
+    d.readAt ??= now;
+    d.acknowledgedAt = now;
+  },
+
+  async sendMessage(me, input): Promise<SentMessage> {
+    assertSend(me);
+    const now = new Date().toISOString();
+    seedMessages(me, now);
+    const { everyone, users } = resolveTarget(me, input.target, now);
+    const m = addMockMessage({ tenantId: me.tenantId, kind: "announcement", urgency: input.urgency, title: input.title.trim(), body: input.body,
+      ref: null, createdAt: now, expiresAt: null, everyone, users, byRule: false });
+    for (const id of users) m.deliveries.set(id, { deliveredAt: null, readAt: null, acknowledgedAt: null });
+    return { id: m.id, recipients: m.deliveries.size };
+  },
+
+  async getMessageStats(me, range): Promise<MessageStat[]> {
+    if (!me.permissions.includes("messages.send") && !me.permissions.includes("performance.team")) throw new CmaDbError("CMA06", "not permitted");
+    const now = new Date().toISOString();
+    seedMessages(me, now);
+    const out: MessageStat[] = [];
+    for (const m of state.messages.values()) {
+      if (m.tenantId !== me.tenantId) continue;
+      const date = dateKeyInZone(m.createdAt, me.timeZone);
+      if (date < range.from || date > range.to) continue;
+      const ds = [...m.deliveries.values()];
+      const reads = ds.filter((d) => d.readAt).map((d) => (Date.parse(d.readAt!) - Date.parse(m.createdAt)) / 1000).sort((a, b) => a - b);
+      out.push({ id: m.id, kind: m.kind, urgency: m.urgency, title: m.title, ref: m.ref ? { system: m.ref.system, type: m.ref.type, id: m.ref.id } : null,
+        byRule: m.byRule, createdAt: m.createdAt, recipients: ds.length, delivered: ds.filter((d) => d.deliveredAt).length,
+        read: reads.length, acknowledged: ds.filter((d) => d.acknowledgedAt).length,
+        medianSecondsToRead: reads.length ? Math.round(reads[Math.floor((reads.length - 1) / 2)]!) : null });
+    }
+    return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   },
 };

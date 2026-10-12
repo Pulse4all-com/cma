@@ -4,7 +4,7 @@ import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
 import { Badge, Card, Notice } from "@/components/primitives";
 import { agentGroupOf } from "@/lib/dashboard";
-import { data, dataIsMock, type AppLink, type MyRosterDay, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
+import { data, dataIsMock, type AppLink, type MyMessages, type MyRosterDay, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
 import { cellLabel } from "@/lib/roster";
 import type { Copy, Locale } from "@/lib/copy";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, fmtTime, hourInZone } from "@/lib/time";
@@ -12,6 +12,8 @@ import { resolve } from "./access";
 
 /** The to-do line looks back this many days, today excluded */
 const TODO_DAYS = 31;
+/** The Updates card shows this many of the latest messages */
+const UPDATES_SHOWN = 5;
 
 /**
  * Welcome (increment e, 7 October 2026): the landing page for everyone with a role, built as
@@ -33,12 +35,14 @@ export default async function WelcomePage() {
   const hasRoster = me.permissions.includes("roster.view");
 
   // One read per block the person may see; reading never opens a day
-  const [workday, statuses, team, links, roster] = await Promise.all([
+  const [workday, statuses, team, links, roster, inbox] = await Promise.all([
     hasClock ? data().getWorkday(me, today) : Promise.resolve(null),
     hasClock ? data().listStatuses(me) : Promise.resolve([] as WorkStatus[]),
     hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
     data().listAppLinks(me),
     hasRoster ? data().getMyRoster(me, { from: today, to: today }) : Promise.resolve([] as MyRosterDay[]),
+    // The latest messages for the Updates card (migration 0008); listing sets their delivered time, reading is the person's own click
+    data().listMyMessages(me, null, UPDATES_SHOWN),
   ]);
   // The shift sentence the greeting waited for (migration 0005): from the published roster only
   const todayRoster = roster[0] ?? null;
@@ -61,9 +65,7 @@ export default async function WelcomePage() {
 
       <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
         <div className="flex flex-col gap-6">
-          <Card title={t.updates}>
-            <p className="text-body text-p4a-muted">{t.updatesEmpty}</p>
-          </Card>
+          <UpdatesBlock inbox={inbox} timeZone={me.timeZone} locale={me.locale} copy={copy} />
           {team ? <TodoBlock team={team} copy={copy} /> : null}
           {hasReports ? (
             <Card title={t.reports}>
@@ -146,6 +148,39 @@ function DayBlock({
       <Link href="/day" className="mt-4 inline-block font-semibold text-p4a-deepblue hover:underline">
         {t.openMyDay}
       </Link>
+    </Card>
+  );
+}
+
+/** The latest messages, unread ones marked; the inbox has the rest (migration 0008) */
+function UpdatesBlock({ inbox, timeZone, locale, copy }: { inbox: MyMessages; timeZone: string; locale: Locale; copy: Copy }) {
+  const t = copy.welcome;
+  const m = copy.messages;
+  const more = inbox.unreadCount - inbox.messages.filter((x) => x.readAt === null).length;
+  const fmt = new Intl.DateTimeFormat(locale === "nl" ? "nl-NL" : "en-GB", { timeZone, hour: "2-digit", minute: "2-digit" });
+  return (
+    <Card title={t.updates}>
+      {inbox.messages.length === 0 ? (
+        <p className="text-body text-p4a-muted">{t.updatesEmpty}</p>
+      ) : (
+        <ul className="flex flex-col gap-2" data-testid="updates-list">
+          {inbox.messages.map((x) => (
+            <li key={x.id} className="flex items-start gap-3 text-body">
+              <span aria-hidden="true" className={`mt-2 h-2 w-2 shrink-0 rounded-full ${x.readAt === null ? "bg-p4a-deepblue" : "bg-p4a-border"}`} />
+              <span className="min-w-0 flex-1">
+                <span className={x.readAt === null ? "font-semibold text-p4a-heading" : ""}>{x.title}</span>
+                {x.body ? <span className="text-p4a-muted"> · {x.body}</span> : null}
+              </span>
+              <span className="shrink-0 text-caption text-p4a-grey tabular">{fmt.format(new Date(x.createdAt))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-3 flex items-center gap-3">
+        <Link href="/messages" className="font-semibold text-p4a-deepblue hover:underline">{t.openMessages}</Link>
+        {more > 0 ? <span className="text-small text-p4a-muted">{more === 1 ? t.updatesMoreOne : t.updatesMore.replace("{n}", String(more))}</span> : null}
+        {inbox.unreadCount > 0 ? <Badge tone="info">{inbox.unreadCount === 1 ? m.unreadOne : m.unread.replace("{n}", String(inbox.unreadCount))}</Badge> : null}
+      </p>
     </Card>
   );
 }

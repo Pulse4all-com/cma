@@ -4,5 +4,7 @@
  * plug in here.
  */
 import { hubspot } from "./hubspot/index.mjs";
+import { automation } from "./automation/index.mjs";
 
-export const ADAPTERS = { hubspot };
+/** automation (0008a) is a message route, not a webhook: the server hands it the body as messages */
+export const ADAPTERS = { hubspot, automation };

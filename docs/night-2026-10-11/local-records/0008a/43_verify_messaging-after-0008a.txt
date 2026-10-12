@@ -1,0 +1,17 @@
+ set_config 
+------------
+ false
+(1 row)
+
+         tenant          | rules | rules_enabled | messages | deliveries | unread | verdict 
+-------------------------+-------+---------------+----------+------------+--------+---------
+ flow-1a2860e0-one       |     1 |             1 |        1 |          2 |      2 | PASS
+ flow-1a2860e0-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-3ae6d01e-one       |     1 |             1 |        1 |          2 |      2 | PASS
+ flow-3ae6d01e-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ flow-e7a332b8-one       |     1 |             1 |        1 |          2 |      2 | PASS
+ flow-e7a332b8-two       |     0 |             0 |        0 |          0 |      0 | PASS
+ pulse4all-invest        |     0 |             0 |        0 |          0 |      0 | PASS
+ pulse4all-subscriptions |     0 |             0 |        4 |          4 |      0 | PASS
+(8 rows)
+

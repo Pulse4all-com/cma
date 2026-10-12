@@ -1,0 +1,23 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/45p.sql:63: ERROR:  FAIL A1: addition 0008a not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 8 at RAISE
+psql:/tmp/45p.sql:230: ERROR:  FAIL B1: the assignment rule was not created and updated by name
+CONTEXT:  PL/pgSQL function inline_code_block line 57 at RAISE
+psql:/tmp/45p.sql:338: ERROR:  FAIL C1: the message to an owner: 1 recipient(s), title Lead for you, url https://app.example.com/records/verify-portal-1/deal/d1
+CONTEXT:  PL/pgSQL function inline_code_block line 46 at RAISE
+         tenant          | created_rules | assignment_rules | alerts | assignment_alerts |       verdict        
+-------------------------+---------------+------------------+--------+-------------------+----------------------
+ flow-1a2860e0-one       |             1 |                0 |      1 |                 0 | PROVOKED, NOT A PASS
+ flow-1a2860e0-two       |             0 |                0 |      0 |                 0 | PROVOKED, NOT A PASS
+ flow-3ae6d01e-one       |             1 |                0 |      1 |                 0 | PROVOKED, NOT A PASS
+ flow-3ae6d01e-two       |             0 |                0 |      0 |                 0 | PROVOKED, NOT A PASS
+ flow-e7a332b8-one       |             1 |                0 |      1 |                 0 | PROVOKED, NOT A PASS
+ flow-e7a332b8-two       |             0 |                0 |      0 |                 0 | PROVOKED, NOT A PASS
+ pulse4all-invest        |             0 |                0 |      0 |                 0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |             0 |                0 |      0 |                 0 | PROVOKED, NOT A PASS
+(8 rows)
+
