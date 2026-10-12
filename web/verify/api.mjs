@@ -280,21 +280,28 @@ expect("a replaced event stays visible",
 // After the closing above, no past day may be open, and every past day must count its exact
 // minutes from start to end, not a capped day. Since 0008b a day's counted time stops at the
 // workday window end (workday.window_end in the zone, read as the window FAIL message does), so a
-// past day that ended after it counts from start to the window end of its date.
+// past day that ended after it counts from start to the window end of its date. The database
+// counts each stretch in whole seconds and sums them (cma.time_interval_all), so a day whose
+// stretches are cut mid-second can count one minute less than floor(span / 60), as 2026-10-11 in
+// dev did (575 against 576); that one minute is accepted and its dates are printed.
 const hoursAfter = (await get(AGENT, `/api/v1/me/hours?${range}`)).body.data;
 const past = hoursAfter.days.filter((d) => d.date < today);
 const openPast = past.filter((d) => !d.endedAt).map((d) => d.date);
 const windowSettings = (await get(AGENT, "/api/v1/settings")).body?.data ?? [];
 const windowEnd = String(windowSettings.find((x) => x.key === "workday.window_end")?.value ?? "24:00").slice(0, 5);
 const cappedPast = [];
+const roundedPast = [];
 const allExact = past.every((d) => {
   if (!d.endedAt) return false;
   const until = Math.min(Date.parse(d.endedAt), Date.parse(localInstant(d.date, windowEnd, meA.timeZone)));
   if (until < Date.parse(d.endedAt)) cappedPast.push(d.date);
-  return d.minutes === Math.floor((until - Date.parse(d.startedAt)) / 60000);
+  const expected = Math.floor((until - Date.parse(d.startedAt)) / 60000);
+  if (d.minutes === expected - 1) roundedPast.push(d.date);
+  return d.minutes >= expected - 1 && d.minutes <= expected;
 });
 if (openPast.length) console.log(`      (open past days ${openPast.join(", ")})`);
 if (cappedPast.length) console.log(`      (counted to the window end ${windowEnd} ${meA.timeZone}: ${cappedPast.join(", ")})`);
+if (roundedPast.length) console.log(`      (one minute less from per-stretch seconds: ${roundedPast.join(", ")})`);
 expect("correction leaves no past day open or capped", [openPast.length, allExact, past.length > 0], [0, true, true], [1, false, true]);
 
 // ---- an ended day stays ended --------------------------------------------------------------
