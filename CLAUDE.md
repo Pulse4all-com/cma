@@ -28,6 +28,9 @@
 - Scripts are numbered and run in order; a change is a new script plus its verify script (for example `32_<name>.sql` and `33_verify_<name>.sql`), not an edit to a script that has run in prod. Every new tenant table gets `cma.setup_tenant_table(table)`.
 - Follow the conventions in README (Architecture, Data model sections): error codes, permissions, the provoke switch in verify scripts.
 
+## Ingest (ingest/, docs/ingest/)
+- No ingest route takes personal data in its path or query string: the path holds the adapter and the connection key (an identifier, not a secret), secrets travel in headers or signatures, data in the body. Cloud Run's request log keeps the URL (Decision log, 12 October 2026).
+
 ## Security and data
 - No secrets, tokens, passwords or connection strings in code, commits, PR descriptions or setup scripts.
 - No real personal or customer data in code, fixtures or tests; use the dev seed.
