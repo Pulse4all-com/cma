@@ -1,3 +1,4 @@
+import { HeaderHint } from "@/components/HeaderHint";
 import { MarketFilter } from "@/components/MarketFilter";
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission, NotConnected } from "@/components/ReportParts";
@@ -18,6 +19,7 @@ import { resolve } from "../../access";
  * 0007d) with a total row and a small bar per row, a market filter (F), and the telephony and shop
  * columns, each shown as not connected when the tenant has no such source (never 0). Shown to people
  * holding reports.view or performance.team; the database checks again on every read. Counts only.
+ * Every column header explains itself in a hint (copy.hints).
  */
 export default async function IntakePage({ searchParams }: PageProps<"/reports/intake">) {
   const r = await resolve();
@@ -52,6 +54,13 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
     ticketsClosed: t.ticketsClosed, callsIn: t.callsIn, callsOut: t.callsOut, taggedCalls: t.taggedCalls,
     newCustomers: t.newCustomers, firstOrders: t.firstOrders, repeatOrders: t.repeatOrders, renewals: t.renewals,
   };
+  const h = copy.hints;
+  const hints: Record<IntakeField, string> = {
+    formSubmissions: h.leads, dealsCreated: h.dealsCreatedClosed, dealsClosed: h.dealsCreatedClosed,
+    ticketsCreated: h.ticketsCreatedClosed, ticketsClosed: h.ticketsCreatedClosed, callsIn: h.calls, callsOut: h.calls,
+    taggedCalls: h.taggedCalls, newCustomers: h.shop, firstOrders: h.shop, repeatOrders: h.shop, renewals: h.shop,
+  };
+  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
   const n = (x: number | null) => (x === null ? "" : fmtCount(x, me.locale));
   const th = "h-10 px-2 font-semibold";
   const td = "h-10 whitespace-nowrap px-2";
@@ -107,17 +116,17 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
             <thead>
               <tr className="text-left text-caption text-p4a-grey">
                 <th className="px-2" colSpan={3} />
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}>{t.sourceCrm}</th>
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}>{t.sourceTelephony}</th>
-                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}>{t.sourceShop}</th>
+                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}>{t.sourceCrm}{hint(t.sourceCrm, h.sourceCrm)}</th>
+                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}>{t.sourceTelephony}{hint(t.sourceTelephony, h.sourceTelephony)}</th>
+                <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}>{t.sourceShop}{hint(t.sourceShop, h.sourceShop)}</th>
               </tr>
               <tr className="bg-p4a-bgblue text-left text-p4a-heading">
-                <th className={th}>{copy.reports.date}</th>
-                <th className={th}>{copy.reports.market}</th>
-                <th className={`${th} w-24`} title={t.volumeHint}>{t.volume}</th>
-                {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}</th>)}
-                {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}</th>)}
-                {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}</th>)}
+                <th className={th}>{copy.reports.date}{hint(copy.reports.date, h.date)}</th>
+                <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.intakeMarket)}</th>
+                <th className={`${th} w-24`}>{t.volume}{hint(t.volume, h.volume)}</th>
+                {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
               </tr>
             </thead>
             <tbody>

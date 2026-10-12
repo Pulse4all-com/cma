@@ -22,7 +22,8 @@ const MAX_DAYS = 92;
  * every read (CMA06). Staff data only, never customer data. One read for the time: the person filter
  * narrows the rows of the period on the server, so its list needs no team list. Since B11 (12 October
  * 2026) the Intake row above the time tiles reads the tenant's intake for the period: counts, speed to
- * lead and the not-connected state of telephony and the shop, never a customer's details.
+ * lead and the not-connected state of telephony and the shop, never a customer's details. Every tile
+ * explains itself in a hint (copy.hints).
  */
 export default async function DashboardPage({ searchParams }: PageProps<"/reports/dashboard">) {
   const r = await resolve();
@@ -65,6 +66,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
   const persons = byPerson(rows);
   const query: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
+  const info = (label: string, text: string) => ({ about: copy.hints.about.replace("{label}", label), text });
 
   return (
     <Shell copy={copy} me={me} active="dashboard" wide>
@@ -109,15 +111,17 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
           ) : null}
 
           <div className="grid grid-cols-4 gap-4">
-            <Tile label={t.worked} value={fmtMinutes(summary.workedMinutes)} hint={t.workedHint} />
-            <Tile label={t.paid} value={fmtMinutes(summary.paidMinutes)} hint={t.paidHint} />
+            <Tile label={t.worked} info={info(t.worked, copy.hints.worked)} value={fmtMinutes(summary.workedMinutes)} hint={t.workedHint} />
+            <Tile label={t.paid} info={info(t.paid, copy.hints.paid)} value={fmtMinutes(summary.paidMinutes)} hint={t.paidHint} />
             <Tile
               label={t.productive}
+              info={info(t.productive, copy.hints.productive)}
               value={fmtPercent(share(summary.productiveSeconds, summary.workedSeconds), me.locale)}
               hint={t.productiveHint.replace("{time}", fmtMinutes(Math.floor(summary.productiveSeconds / 60)))}
             />
             <Tile
               label={t.people}
+              info={info(t.people, copy.hints.people)}
               value={String(summary.people)}
               hint={summary.personDays === 1 ? t.peopleHintOne : t.peopleHint.replace("{n}", String(summary.personDays))}
             />

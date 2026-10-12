@@ -5,11 +5,14 @@
  * permission: everyone lands on Welcome (increment e), which pages each test
  * identity sees, numbered 1, 2, 3 without gaps, that someone without a clock
  * is sent from My day to Welcome, and that the Clock in button is shown only to
- * a person whose time is kept. Saves screenshots under records/ for the release note.
+ * a person whose time is kept. On the intake reports and the Dashboard one header hint is opened
+ * by keyboard focus: the panel must show, stay inside the viewport, and not cover the header or
+ * label it explains when there is room below (12 October 2026). Saves screenshots under records/
+ * for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
- *       1279 px and demands the app shell, expect FAIL, exit 1
+ *       1279 px and demands the app shell, and moves one hint panel over its header, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -116,15 +119,18 @@ async function expectNavigation() {
 // widest table (Intake); the grouping and market keycaps are there; a tenant without telephony or a shop
 // says so in words; an agent who opens a report gets the no-permission card, never figures
 async function expectReports() {
+  // The last value is the header hint opened on the page: a middle column, the right-most column (the
+  // panel must stay inside the viewport) and a tile
+  const lastIntakeHeader = '[data-testid="intake-table"] thead tr:nth-child(2) th:last-child button[data-header-hint]';
   const cases = [
-    ["manager", "/reports/speed-to-lead?range=month", ["G", "T", "W", "M", "C"], '[data-testid="speed-summary"]'],
-    ["manager", "/reports/intake?range=month", ["F", "T", "W", "M", "C"], '[data-testid="intake-table"]'],
-    ["manager", "/reports/data-quality", [], '[data-testid="data-quality"]'],
-    ["manager", "/reports/dashboard?range=month", ["P", "T"], '[data-testid="intake-row"]'],
-    ["invest-analyst", "/reports/intake?range=month", ["F"], '[data-testid="not-connected"]'],
-    ["invest-analyst", "/reports/dashboard?range=month", [], '[data-testid="not-connected"]'],
+    ["manager", "/reports/speed-to-lead?range=month", ["G", "T", "W", "M", "C"], '[data-testid="speed-summary"]', '[data-testid="speed-summary"] th:nth-child(6) button[data-header-hint]'],
+    ["manager", "/reports/intake?range=month", ["F", "T", "W", "M", "C"], '[data-testid="intake-table"]', lastIntakeHeader],
+    ["manager", "/reports/data-quality", [], '[data-testid="data-quality"]', '[data-testid="data-quality"] th:nth-child(2) button[data-header-hint]'],
+    ["manager", "/reports/dashboard?range=month", ["P", "T"], '[data-testid="intake-row"]', '[data-testid="intake-speed"] button[data-header-hint]'],
+    ["invest-analyst", "/reports/intake?range=month", ["F"], '[data-testid="not-connected"]', lastIntakeHeader],
+    ["invest-analyst", "/reports/dashboard?range=month", [], '[data-testid="not-connected"]', '[data-testid="intake-calls"] button[data-header-hint]'],
   ];
-  for (const [subject, path, keys, selector] of cases) {
+  for (const [subject, path, keys, selector, hintMark] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + path);
@@ -139,6 +145,33 @@ async function expectReports() {
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${subject} ${path}: keycap ${k} missing`);
     if (await p.locator(selector).count() === 0) problems.push(`${subject} ${path}: ${selector} missing`);
     await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+    // One header hint, opened by keyboard focus
+    const mark = p.locator(hintMark);
+    if (await mark.count() !== 1) problems.push(`${subject} ${path}: header hint ${hintMark} missing`);
+    else {
+      await mark.focus();
+      const h = await p.evaluate((cover) => {
+        const m = document.activeElement;
+        const panel = m && document.getElementById(m.getAttribute("aria-describedby") ?? "");
+        if (!panel || panel.hidden || getComputedStyle(panel).visibility !== "visible") return null;
+        const anchor = m.closest("th, [data-hint-anchor]").getBoundingClientRect();
+        if (cover) panel.style.top = `${anchor.top}px`;
+        const r = panel.getBoundingClientRect();
+        return {
+          inside: r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight,
+          covers: r.top < anchor.bottom && r.bottom > anchor.top && r.left < anchor.right && r.right > anchor.left,
+          roomBelow: anchor.bottom + r.height + 8 <= window.innerHeight,
+          width: r.width,
+        };
+      }, provoke && path.startsWith("/reports/data-quality"));
+      if (!h) problems.push(`${subject} ${path}: the header hint does not show on focus`);
+      else {
+        if (!h.inside) problems.push(`${subject} ${path}: the header hint leaves the viewport`);
+        if (h.covers && h.roomBelow) problems.push(`${subject} ${path}: the header hint covers the header it explains`);
+        if (h.width > 320) problems.push(`${subject} ${path}: the header hint is ${h.width}px wide, more than 320`);
+      }
+      await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}-hint.png` });
+    }
     await ctx.close();
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
@@ -170,5 +203,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

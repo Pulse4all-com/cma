@@ -1,0 +1,157 @@
+/**
+ * Verifier: every header and tile of the reports explains itself (HeaderHint, 12 October 2026).
+ * Every column header with visible text on Speed to lead (the summary in each of the four groups
+ * and the open deals), Intake and Data quality, and every tile on the Dashboard (the Intake row
+ * and the time tiles), carries exactly one info mark: a button with a name, described by a
+ * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
+ * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
+ * a touch screen, and a Dashboard tile still opens its report while its mark does not.
+ *
+ *   BASE=http://localhost:8080 node verify/hints.mjs             expect PASS
+ *   BASE=http://localhost:8080 node verify/hints.mjs --provoke   removes one header's mark,
+ *       expect FAIL, exit 1
+ *
+ * Needs the app running in mock mode and Playwright's Chromium installed.
+ */
+import { chromium } from "playwright";
+
+const BASE = process.env.BASE ?? "http://localhost:8080";
+const provoke = process.argv.includes("--provoke");
+const problems = [];
+const b = await chromium.launch();
+
+/** Headers and tiles of a page, and what is wrong with their marks */
+async function coverage(p, withHeaders) {
+  return p.evaluate((withHeaders) => {
+    const out = { headers: 0, tiles: 0, problems: [] };
+    const text = (el) => {
+      const c = el.cloneNode(true);
+      c.querySelectorAll(".sr-only, [data-hint-panel], button").forEach((x) => x.remove());
+      return c.textContent.trim();
+    };
+    const checkMark = (where, el) => {
+      const marks = el.querySelectorAll("button[data-header-hint]");
+      if (marks.length !== 1) return out.problems.push(`${where}: ${marks.length} info marks, expected 1`);
+      const m = marks[0];
+      if (!m.getAttribute("aria-label")) out.problems.push(`${where}: the mark has no name`);
+      const panel = document.getElementById(m.getAttribute("aria-describedby") ?? "");
+      if (!panel || panel.getAttribute("role") !== "tooltip") return out.problems.push(`${where}: the mark describes no tooltip`);
+      const t = panel.textContent.trim();
+      if (!t) out.problems.push(`${where}: the hint is empty`);
+      if (/[{}]/.test(t)) out.problems.push(`${where}: the hint has an unfilled value: ${t}`);
+    };
+    for (const th of withHeaders ? document.querySelectorAll("main th") : []) {
+      const label = text(th);
+      if (!label) continue;
+      out.headers++;
+      checkMark(`header "${label}"`, th);
+    }
+    for (const tile of document.querySelectorAll("main [data-tile]")) {
+      out.tiles++;
+      checkMark(`tile "${text(tile.querySelector("p") ?? tile)}"`, tile);
+    }
+    return out;
+  }, withHeaders);
+}
+
+const cases = [
+  // [subject, path, at least this many headers, at least this many tiles]; on the Dashboard the tiles
+  // only: the charts' own tables (time per status, per person) are not report headers
+  ["manager", "/reports/speed-to-lead?range=month&group=day", 13, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=market", 8, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=agent", 8, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=pipeline", 8, 0],
+  ["manager", "/reports/intake?range=month", 18, 0],
+  ["invest-analyst", "/reports/intake?range=month", 18, 0],
+  ["manager", "/reports/data-quality", 3, 0],
+  ["manager", "/reports/dashboard?range=month", 0, 10],
+  ["invest-analyst", "/reports/dashboard?range=month", 0, 6],
+];
+let headers = 0;
+let tiles = 0;
+for (const [subject, path, minHeaders, minTiles] of cases) {
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + path);
+  await p.waitForLoadState("networkidle");
+  if (provoke && path.startsWith("/reports/data-quality")) {
+    await p.evaluate(() => document.querySelector("main th button[data-header-hint]")?.closest("span")?.remove());
+  }
+  const c = await coverage(p, !path.startsWith("/reports/dashboard"));
+  for (const x of c.problems) problems.push(`${subject} ${path}: ${x}`);
+  if (c.headers < minHeaders) problems.push(`${subject} ${path}: ${c.headers} headers, expected at least ${minHeaders}`);
+  if (c.tiles < minTiles) problems.push(`${subject} ${path}: ${c.tiles} tiles, expected at least ${minTiles}`);
+  headers += c.headers;
+  tiles += c.tiles;
+  await ctx.close();
+}
+
+// Behaviour on Speed to lead: focus opens, Esc closes, hover opens
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/speed-to-lead?range=month");
+  await p.waitForLoadState("networkidle");
+  const mark = p.locator('[data-testid="speed-summary"] th button[data-header-hint]').nth(1);
+  const panelOf = async (m) => p.locator(`[id="${await m.getAttribute("aria-describedby")}"]`);
+  const panel = await panelOf(mark);
+  await mark.focus();
+  if (!(await panel.isVisible())) problems.push("speed to lead: the hint does not open on keyboard focus");
+  await p.keyboard.press("Escape");
+  if (await panel.isVisible()) problems.push("speed to lead: Esc does not close the hint");
+  const focused = await p.evaluate(() => document.activeElement?.hasAttribute("data-header-hint"));
+  if (!focused) problems.push("speed to lead: Esc moved the focus away from the mark");
+  await p.keyboard.press("Tab");
+  const next = await p.evaluate(() => document.activeElement?.hasAttribute("data-header-hint"));
+  if (!next) problems.push("speed to lead: Tab from one mark does not reach the next header's mark");
+  await p.mouse.move(0, 0);
+  await p.locator("main h1").click();
+  const hovered = p.locator('[data-testid="speed-summary"] th button[data-header-hint]').nth(3);
+  await hovered.hover();
+  if (!(await (await panelOf(hovered)).isVisible())) problems.push("speed to lead: the hint does not open on hover");
+  await p.mouse.move(0, 0);
+  await p.waitForTimeout(300);
+  if (await (await panelOf(hovered)).isVisible()) problems.push("speed to lead: the hint stays open after the pointer leaves");
+  await ctx.close();
+}
+
+// Touch: a tap opens, a second tap closes, a tap elsewhere closes
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, hasTouch: true, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/data-quality");
+  await p.waitForLoadState("networkidle");
+  const mark = p.locator("main th button[data-header-hint]").first();
+  const panel = p.locator(`[id="${await mark.getAttribute("aria-describedby")}"]`);
+  await mark.tap();
+  if (!(await panel.isVisible())) problems.push("data quality: a tap does not open the hint");
+  await mark.tap();
+  if (await panel.isVisible()) problems.push("data quality: a second tap does not close the hint");
+  await mark.tap();
+  await p.locator("main h1").tap();
+  if (await panel.isVisible()) problems.push("data quality: a tap elsewhere does not close the hint");
+  await ctx.close();
+}
+
+// The Dashboard: a tile still opens its report, its mark only opens the hint
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/dashboard?range=month");
+  await p.waitForLoadState("networkidle");
+  await p.locator('[data-testid="intake-leads"] button[data-header-hint]').click();
+  if (new URL(p.url()).pathname !== "/reports/dashboard") problems.push("dashboard: the Leads tile's mark navigated away");
+  // A click on the figure, where the label's link is stretched over the tile
+  const box = await p.locator('[data-testid="intake-speed"] .text-title').boundingBox();
+  await p.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await p.waitForURL("**/reports/speed-to-lead**").catch(() => {});
+  if (new URL(p.url()).pathname !== "/reports/speed-to-lead") problems.push("dashboard: the Speed to lead tile no longer opens its report");
+  await ctx.close();
+}
+
+await b.close();
+for (const x of problems) console.log("  " + x);
+console.log(problems.length === 0
+  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links)`
+  : `hints: FAIL (${problems.length} problems)`);
+process.exit(problems.length === 0 ? 0 : 1);
