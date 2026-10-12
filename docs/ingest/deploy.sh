@@ -2,7 +2,7 @@
 # The ingest service cma-ingest (DESIGN §5; README Architecture, Ingest API) in one project.
 #
 #   bash docs/ingest/deploy.sh dev  [--tenant <slug>]... [--secret <name>]...
-#   bash docs/ingest/deploy.sh prod [--tenant <slug>]... [--secret <name>]...
+#   bash docs/ingest/deploy.sh prod [--tenant <slug>]... [--secret <name>]... [--front <host>]
 #   bash docs/ingest/deploy.sh dev|prod --jobs [--reconcile-every "<cron>"] [--reconcile-lookback <minutes>]
 #
 #   --tenant <slug>   the tenant's hash pepper ingest-hash-pepper-<slug>: created with 32 random bytes
@@ -10,6 +10,11 @@
 #                     granted; calls are not read back without it (pepper_unavailable)
 #   --secret <name>   grant the service account the accessor on an existing secret, for example
 #                     ingest-hubspot-dev-signing and ingest-hubspot-dev-token
+#   --front <host>    the service only (not --jobs), prod: the service sits behind the web load balancer
+#                     as https://<host> (docs/ingest/front.sh builds that front): ingress
+#                     internal-and-cloud-load-balancing instead of all, so the run.app address refuses
+#                     everyone, and INGEST_PUBLIC_URLS starts with https://<host>, so the URI HubSpot
+#                     signs is the public host (the first deploy too). Without it nothing changes (dev)
 #   --jobs            the jobs and their schedules instead of the service (below)
 #   --reconcile-every "<cron>"       with --jobs: the reconcile schedule (default "30 2 * * *", Europe/Amsterdam)
 #   --reconcile-lookback <minutes>   with --jobs: the reconcile's look-back (default the job's 26 hours).
@@ -19,8 +24,9 @@
 # Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main. Rerunnable.
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
-# settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs). Prints the
-# Studio statement that makes the database user a member of cma_app, the service URL and /health.
+# settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs; with --front the
+# public host first). Prints the Studio statement that makes the database user a member of cma_app,
+# the service URL and /health.
 #
 # With --jobs (DESIGN §5, brief B8), the same steps up to the image, then instead of the service: the
 # Cloud Run jobs on the same image by tag, each `node jobs/<name>.mjs` as cma-ingest@<project> with
@@ -51,11 +57,13 @@ SECRETS=()
 JOBS=0
 RECONCILE_EVERY="30 2 * * *"
 RECONCILE_LOOKBACK=""
+FRONT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --tenant) TENANTS+=("${2:?--tenant needs a slug}"); shift 2 ;;
     --secret) SECRETS+=("${2:?--secret needs a name}"); shift 2 ;;
     --jobs) JOBS=1; shift ;;
+    --front) FRONT="${2:?--front needs a host}"; shift 2 ;;
     --reconcile-every) RECONCILE_EVERY="${2:?--reconcile-every needs a cron expression}"; shift 2 ;;
     --reconcile-lookback) RECONCILE_LOOKBACK="${2:?--reconcile-lookback needs minutes}"; shift 2 ;;
     *) echo "unknown argument $1"; exit 2 ;;
@@ -88,6 +96,10 @@ for t in "${TENANTS[@]}"; do [[ "$t" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "t
 for s in "${SECRETS[@]}"; do [[ "$s" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo "secret name $s is not valid"; exit 2; }; done
 [[ "$RECONCILE_EVERY" =~ ^[0-9*/,-]+( [0-9*/,-]+){4}$ ]] || { echo "--reconcile-every is not a five-field cron expression"; exit 2; }
 [ -z "$RECONCILE_LOOKBACK" ] || [[ "$RECONCILE_LOOKBACK" =~ ^[1-9][0-9]{0,4}$ ]] || { echo "--reconcile-lookback is not a number of minutes"; exit 2; }
+[ -z "$FRONT" ] || [[ "$FRONT" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { echo "--front $FRONT is not a host name"; exit 2; }
+if [ "$JOBS" = 1 ] && [ -n "$FRONT" ]; then
+  echo "--front goes with the service deploy, not --jobs"; exit 2
+fi
 if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "30 2 * * *" ] || [ -n "$RECONCILE_LOOKBACK" ]; }; then
   echo "--reconcile-every and --reconcile-lookback go with --jobs"; exit 2
 fi
@@ -236,7 +248,14 @@ main = s.get("status", {}).get("url")
 if main and main not in urls: urls.insert(0, main)
 print(",".join(urls))'
 }
-URLS="$(urls_of)"
+public_urls () {  # with --front: https://<host> first, then the service's own URLs
+  local own
+  own="$(urls_of)"
+  if [ -n "$FRONT" ]; then echo "https://${FRONT}${own:+,${own}}"; else echo "$own"; fi
+}
+INGRESS_FLAG=--ingress=all
+[ -z "$FRONT" ] || INGRESS_FLAG=--ingress=internal-and-cloud-load-balancing
+URLS="$(public_urls)"
 ENV_VARS="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=5" \
   "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" "INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}" \
   "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}")"
@@ -245,7 +264,7 @@ gcloud run deploy "$SERVICE" \
   --image="$IMAGE" \
   --service-account="$SA" \
   --no-invoker-iam-check \
-  --ingress=all \
+  "$INGRESS_FLAG" \
   --port=8080 \
   --concurrency=20 \
   --min-instances="$MIN" --max-instances="$MAX" \
@@ -255,7 +274,7 @@ gcloud run deploy "$SERVICE" \
   --quiet
 
 # First deploy: the URLs exist only now; set them so signatures verify against the public address
-NEW_URLS="$(urls_of)"
+NEW_URLS="$(public_urls)"
 if [ "$NEW_URLS" != "$URLS" ]; then
   URL_VARS="$(env_list "INGEST_PUBLIC_URLS=${NEW_URLS}")"
   gcloud run services update "$SERVICE" --project="$PROJECT" --region="$REGION" \
@@ -269,6 +288,13 @@ echo "grant cma_app to \"${DB_USER}\";"
 echo
 echo "== ${SERVICE} ${SHA} at ${URL}"
 echo "public URLs (signed by HubSpot): ${NEW_URLS}"
-echo "health: $(curl -s --max-time 20 "${URL}/health" || echo 'no answer yet')"
-echo "webhook address per connection: ${URL}/hubspot/<connection key>"
+if [ -n "$FRONT" ]; then
+  echo "ingress: internal-and-cloud-load-balancing (front https://${FRONT}: docs/ingest/front.sh, the A record, the certificate ACTIVE)"
+  echo "health: $(curl -s --max-time 20 "https://${FRONT}/health" || echo 'no answer yet (front.sh, the A record and the certificate first)')"
+  echo "run.app: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/health" || true) (expected 403: refused)"
+  echo "webhook address per connection: https://${FRONT}/hubspot/<connection key>"
+else
+  echo "health: $(curl -s --max-time 20 "${URL}/health" || echo 'no answer yet')"
+  echo "webhook address per connection: ${URL}/hubspot/<connection key>"
+fi
 echo "logs: gcloud run services logs read ${SERVICE} --project=${PROJECT} --region=${REGION} --limit=30"
