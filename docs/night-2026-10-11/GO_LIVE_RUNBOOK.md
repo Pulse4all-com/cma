@@ -135,11 +135,19 @@ Expected after each: the row on People, Active, "clock runs".
 
 The assignment alert and the `owners` target find a person through `app_user_external_id` with the system `hubspot_owner` and the HubSpot owner id (`docs/ingest/hubspot-owners.mjs` lists the portal's owners; the carry-over's "owners mapping (agent_ref unmapped)" is this step). Until a screen exists (My account's Linked accounts, after Sync), the owners script prints one statement per HubSpot owner, matched to a CMA person on the work email.
 
+Newco agents are HubSpot owners as `@newcogroup.com`, while their CMA identity through IAP is `@pulse4all.com`; `--also-domain newcogroup.com=pulse4all.com` makes the statement of such an owner match either address (owners on other domains are matched as before).
+
 **Terminal** (`~/cma`, prod project; the token is read with your own gcloud login and never printed):
 ```bash
-node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret <the prod token secret>
+node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret ingest-hubspot-subs-token --also-domain newcogroup.com=pulse4all.com
 ```
-Expected: one `select cma.set_user_external_id(u.id, 'hubspot_owner', '<owner id>') from cma.app_user u where u.email = '<owner email>';` line per active owner, then `-- n statement(s) for m active owner(s)`. The output stays in the terminal, never in a file.
+Expected: one line per active owner, then `-- n statement(s) for m active owner(s)`: for a `@newcogroup.com` owner `select cma.set_user_external_id(u.id, 'hubspot_owner', '<owner id>') from cma.app_user u where u.email in ('<local>@newcogroup.com', '<local>@pulse4all.com');`, for any other owner `… where u.email = '<owner email>';`. The output stays in the terminal, never in a file.
+
+An agent whose local part differs between the two addresses (`<a>@newcogroup.com` in HubSpot, `<b>@pulse4all.com` in the CMA) matches no row; map them by hand with their HubSpot owner id from the printed line and their CMA address, in the same Studio tab:
+```sql
+select cma.set_user_external_id(u.id, 'hubspot_owner', '<owner id>') from cma.app_user u where u.email = '<their pulse4all.com address>';
+```
+Expected: one row. `CMA03` means that owner id already belongs to another person.
 
 **Studio (cma-prod-pg)**, after the context block of step 2 (`set role cma_app` with the tenant and a person holding `users.manage_all`): paste the printed `select cma.set_user_external_id(...)` lines, then:
 ```sql

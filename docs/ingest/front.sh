@@ -10,10 +10,13 @@
 # Runs from Cloud Shell in ~/cma under your own account, after `bash docs/ingest/deploy.sh prod --front <host>`
 # (the Cloud Run service must exist). Rerunnable: every step skips what exists. In p4a-cma-prod:
 #   a. serverless NEG cma-ingest-neg (europe-west4) on the Cloud Run service cma-ingest
-#   b. global backend service cma-ingest-backend: the load-balancing scheme of cma-web-backend, HTTPS,
-#      the NEG as backend, no IAP, logging off (the Cloud Run request log is the one record). No
-#      backend timeout is set: Google refuses timeoutSec on a backend with a serverless NEG, and the
-#      Cloud Run service's own request timeout (30s, deploy.sh) applies
+#   b. global backend service cma-ingest-backend: the load-balancing scheme of cma-web-backend, no
+#      --protocol (gcloud sets HTTP with port name http, which a serverless NEG accepts; --protocol=HTTPS
+#      sets port name https, which add-backend refuses: "Port name is not supported for a backend
+#      service with Serverless network endpoint groups", 12 October 2026), the NEG as backend, no
+#      IAP, logging off (the Cloud Run request log is the one record). No backend timeout is set:
+#      Google refuses timeoutSec on a backend with a serverless NEG, and the Cloud Run service's own
+#      request timeout (30s, deploy.sh) applies
 #   c. Cloud Armor policy cma-ingest-armor: rule 1000 throttles per IP (<n> per 60 s, deny-429), the
 #      default rule allows; no IP allow-list; attached to cma-ingest-backend
 #   d. Google-managed certificate cma-ingest-cert for <host>, added to cma-web-proxy next to the
@@ -77,7 +80,7 @@ else
   echo "a. NEG ${NEG} created"
 fi
 
-# b. The backend service: the web backend's scheme (read, never hardcoded), HTTPS, no IAP, no logging
+# b. The backend service: the web backend's scheme (read, never hardcoded), no --protocol (header, b), no IAP, no logging
 SCHEME="$(gcloud compute backend-services describe "$WEB_BACKEND" --project="$PROJECT" --global --format='value(loadBalancingScheme)')"
 [ -n "$SCHEME" ] || { echo "cannot read the load-balancing scheme of ${WEB_BACKEND}; stopped"; exit 1; }
 if gcloud compute backend-services describe "$BACKEND" --project="$PROJECT" --global >/dev/null 2>&1; then
@@ -86,8 +89,8 @@ if gcloud compute backend-services describe "$BACKEND" --project="$PROJECT" --gl
   [ "$own" = "$SCHEME" ] || { echo "${BACKEND} has scheme ${own}, ${WEB_BACKEND} has ${SCHEME}; one URL map cannot serve both, stopped"; exit 1; }
 else
   gcloud compute backend-services create "$BACKEND" --project="$PROJECT" --global \
-    --load-balancing-scheme="$SCHEME" --protocol=HTTPS --no-enable-logging --quiet
-  echo "b. backend ${BACKEND} created (${SCHEME}, HTTPS, logging off)"
+    --load-balancing-scheme="$SCHEME" --no-enable-logging --quiet
+  echo "b. backend ${BACKEND} created (${SCHEME}, logging off)"
 fi
 if [ "$(gcloud compute backend-services describe "$BACKEND" --project="$PROJECT" --global --format='value(logConfig.enable)')" = "True" ]; then
   gcloud compute backend-services update "$BACKEND" --project="$PROJECT" --global --no-enable-logging --quiet
@@ -172,4 +175,4 @@ echo
 echo "== afterwards"
 CHECK='curl -sS -o /dev/null -w "%{http_code}\n"'
 printf '%s %s      # %s\n' "$CHECK" "https://${HOST}/health" "expected 200"
-printf '%s %s      # %s\n' "$CHECK" "${RUN_URL}/health" "expected 403 (refused) once deploy.sh ran with --front"
+printf '%s %s      # %s\n' "$CHECK" "${RUN_URL}/health" "expected 404 (refused) once deploy.sh ran with --front"

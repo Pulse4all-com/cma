@@ -43,9 +43,11 @@
 # Decision log, 5 October 2026): Cloud Build in europe-west4 (ingest/cloudbuild.yaml) as service
 # account cma-build@p4a-cma-prod, source staged in gs://p4a-cma-prod-build-src (the default staging
 # bucket is in the US and the EU-only policy refuses it), pushed to
-# europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>. When that tag already exists the
-# build is skipped, so a prod deploy after dev runs exactly the bytes dev tested. Dev and prod both
-# deploy that image by tag; dev has no repository and no build of its own, and pulls through its
+# europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>, the sha of the last commit that
+# touched ingest/ (not HEAD), so a merge of docs or README only reuses the image dev tested; when the
+# two differ the script prints both. When that tag already exists the build is skipped, so a prod
+# deploy after dev runs exactly the bytes dev tested. Dev and prod both deploy that image by tag;
+# dev has no repository and no build of its own, and pulls through its
 # Cloud Run service agent's Artifact Registry reader on the prod repository cma. Before a dev deploy
 # the script checks that grant and, when it is missing, prints the command that adds it and stops.
 set -euo pipefail
@@ -87,10 +89,12 @@ BUILD_STAGING="gs://${BUILD_PROJECT}-build-src/source"
 REPO="${REGION}-docker.pkg.dev/${BUILD_PROJECT}/cma"
 
 cd "$(git rev-parse --show-toplevel)"
-SHA="$(git rev-parse --short HEAD)"
+HEAD_SHA="$(git rev-parse --short HEAD)"
+SHA="$(git log -1 --format=%h -- ingest/)"   # the image tag: the last commit that touched ingest/
 if [ -n "$(git status --porcelain -- ingest)" ]; then
   echo "ingest/ has uncommitted changes; deploy from a clean checkout of main"; exit 2
 fi
+[ -n "$SHA" ] || { echo "no commit touches ingest/"; exit 2; }
 IMAGE="${REPO}/ingest:${SHA}"
 for t in "${TENANTS[@]}"; do [[ "$t" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || { echo "tenant slug $t is not a slug"; exit 2; }; done
 for s in "${SECRETS[@]}"; do [[ "$s" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo "secret name $s is not valid"; exit 2; }; done
@@ -105,6 +109,7 @@ if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "30 2 * * *" ] || [ -n "$RECONCI
 fi
 
 if [ "$JOBS" = 1 ]; then echo "== ingest jobs ${SHA} → ${PROJECT}"; else echo "== ${SERVICE} ${SHA} → ${PROJECT}"; fi
+[ "$SHA" = "$HEAD_SHA" ] || echo "image tag ${SHA}: the last commit under ingest/; HEAD is ${HEAD_SHA}"
 gcloud services enable run.googleapis.com secretmanager.googleapis.com sqladmin.googleapis.com \
   --project="$PROJECT" --quiet
 [ "$JOBS" = 0 ] || gcloud services enable cloudscheduler.googleapis.com --project="$PROJECT" --quiet
@@ -291,7 +296,12 @@ echo "public URLs (signed by HubSpot): ${NEW_URLS}"
 if [ -n "$FRONT" ]; then
   echo "ingress: internal-and-cloud-load-balancing (front https://${FRONT}: docs/ingest/front.sh, the A record, the certificate ACTIVE)"
   echo "health: $(curl -s --max-time 20 "https://${FRONT}/health" || echo 'no answer yet (front.sh, the A record and the certificate first)')"
-  echo "run.app: $(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/health" || true) (expected 403: refused)"
+  RUNAPP="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${URL}/health" || true)"
+  case "$RUNAPP" in
+    404) echo "run.app: 404 (refused)" ;;
+    200) echo "FAIL run.app: 200, the run.app address answers although ingress is internal-and-cloud-load-balancing" ;;
+    *) echo "run.app: ${RUNAPP:-no answer} (expected 404: refused)" ;;
+  esac
   echo "webhook address per connection: https://${FRONT}/hubspot/<connection key>"
 else
   echo "health: $(curl -s --max-time 20 "${URL}/health" || echo 'no answer yet')"
