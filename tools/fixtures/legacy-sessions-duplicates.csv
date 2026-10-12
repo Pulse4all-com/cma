@@ -1,0 +1,8 @@
+﻿PersoneelsPID;Personeel;Ingelogd;Uitgelogd;Ingelogde tijd;Sessie-ID;Functie
+1001;Test Account A;2-2-2026 09:00:00;2-2-2026 10:00:00;1:00:00;91001;Agent
+1001;Test Account A;2-2-2026 09:00:00;2-2-2026 12:00:00;3:00:00;91001;Agent
+1001;Test Account A;3-2-2026 09:00:00;3-2-2026 17:00:00;8:00:00;91002;Agent
+1001;Test Account A;3-2-2026 09:00:00;3-2-2026 11:00:00;2:00:00;91002;Agent
+1002;"Account, B";4-2-2026 09:00:00;4-2-2026 12:00:00;3:00:00;91003;Teamleider
+1002;"Account, B";4-2-2026 09:00:00;;;91003;Teamleider
+1001;Test Account A;5-2-2026 09:00:00;5-2-2026 10:00:00;1:00:00;91004;Agent

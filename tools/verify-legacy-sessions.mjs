@@ -10,7 +10,9 @@
  * name; the counts; accounts absent from the map or excluded; the staging file and the person map
  * statement; other column names, another date format and commas through the options; and the
  * refusals (the spring gap, a duplicate session, a logout before its login, a time that does not
- * read, a malformed batch key), each without writing a file; the map template.
+ * read, a malformed batch key), each without writing a file; the map template; duplicated session ids
+ * with --dedupe-sessions latest-logout (the latest logout kept, an open one as latest, counted), and
+ * refused without it or when the rows of one id differ in account or login.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -45,7 +47,7 @@ function run(exportPath, extra = [], mapPath = join(FIXTURES, "legacy-person-map
 const sample = run(join(FIXTURES, "legacy-sessions-sample.csv"));
 expect("the fixture converts", sample.code, 0, 1);
 expect("counts", sample.counts, {
-  rows_read: "8", sessions_written: "6", sessions_open: "1", sessions_dropped: "2", accounts_in_export: "4",
+  rows_read: "8", sessions_deduplicated: "0", sessions_written: "6", sessions_open: "1", sessions_dropped: "2", accounts_in_export: "4",
   accounts_written: "2", accounts_absent_from_map: "1", accounts_excluded: "1", map_rows_without_sessions: "1",
   sessions_duration_differs: "1", period_from: "2026-01-02", period_to: "2026-10-09",
 }, { rows_read: "8", sessions_written: "8" });
@@ -98,6 +100,35 @@ for (const [name, body] of Object.entries(refusals)) {
 const badKey = spawnSync(process.execPath, [TOOL, join(FIXTURES, "legacy-sessions-sample.csv"), "--map", join(FIXTURES, "legacy-person-map.csv"),
   "--zone", "Europe/Amsterdam", "--batch", "Steam 2026", "--out", join(dir, "never.csv")], { encoding: "utf8" });
 expect("refused: a malformed batch key", [badKey.status, existsSync(join(dir, "never.csv"))], [2, false], [0, true]);
+// ---- duplicated session ids: --dedupe-sessions latest-logout -------------------------------------
+const duplicates = join(FIXTURES, "legacy-sessions-duplicates.csv");
+const strict = run(duplicates);
+expect("refused: duplicated session ids without the option", [strict.code, strict.out === null, /91001 appears twice/.test(strict.printed)],
+  [1, true, true], [0, false, false]);
+const dedupe = run(duplicates, ["--dedupe-sessions", "latest-logout"]);
+expect("deduplicated: counts", [dedupe.code, dedupe.counts.rows_read, dedupe.counts.sessions_deduplicated, dedupe.counts.sessions_written,
+  dedupe.counts.sessions_open, dedupe.counts.sessions_dropped], [0, "7", "3", "4", "1", "0"], [1, "7", "0", "7", "0", "0"]);
+expect("deduplicated: the latest logout is kept, an open one as latest", (dedupe.out ?? "").split("\n").slice(1, 5), [
+  "verify-sample,1001,Test Account A,91001,2026-02-02T09:00:00,2026-02-02T12:00:00,Agent",
+  "verify-sample,1001,Test Account A,91002,2026-02-03T09:00:00,2026-02-03T17:00:00,Agent",
+  'verify-sample,1002,"Account, B",91003,2026-02-04T09:00:00,,Teamleider',
+  "verify-sample,1001,Test Account A,91004,2026-02-05T09:00:00,2026-02-05T10:00:00,Agent",
+], [
+  "verify-sample,1001,Test Account A,91001,2026-02-02T09:00:00,2026-02-02T10:00:00,Agent",
+  "verify-sample,1001,Test Account A,91002,2026-02-03T09:00:00,2026-02-03T11:00:00,Agent",
+  'verify-sample,1002,"Account, B",91003,2026-02-04T09:00:00,2026-02-04T12:00:00,Teamleider',
+  "verify-sample,1001,Test Account A,91004,2026-02-05T09:00:00,2026-02-05T10:00:00,Agent",
+]);
+const otherLogin = join(dir, "other-login.csv");
+writeFileSync(otherLogin, `${header}\r\n1001;A;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;r1;Agent\r\n1001;A;2-3-2026 09:30:00;2-3-2026 11:00:00;1:30:00;r1;Agent\r\n`);
+const otherAccount = join(dir, "other-account.csv");
+writeFileSync(otherAccount, `${header}\r\n1001;A;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;r1;Agent\r\n1002;B;2-3-2026 09:00:00;2-3-2026 11:00:00;2:00:00;r1;Agent\r\n`);
+expect("refused with the option: one id, another login or account",
+  [otherLogin, otherAccount].map((f) => { const r = run(f, ["--dedupe-sessions", "latest-logout"]); return [r.code, r.out === null]; }),
+  [[1, true], [1, true]], [[0, false], [0, false]]);
+const badRule = run(duplicates, ["--dedupe-sessions", "first"]);
+expect("refused: an unknown dedupe rule", [badRule.code, badRule.out === null], [2, true], [0, false]);
+
 const template = join(dir, "template.csv");
 const tpl = spawnSync(process.execPath, [TOOL, join(FIXTURES, "legacy-sessions-sample.csv"), "--map-template", template], { encoding: "utf8" });
 expect("a map template lists every account of the export",
