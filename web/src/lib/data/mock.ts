@@ -191,7 +191,7 @@ function localMs(date: DateKey, time: string, timeZone: string): number {
 
 function mockEvent(
   kind: TimeEvent["kind"], at: Instant, statusKey: string | null, source: TimeEvent["source"],
-  extra: Partial<Pick<TimeEvent, "supersedes" | "reason" | "approvedByName">> = {},
+  extra: Partial<Pick<TimeEvent, "supersedes" | "reason" | "approvedByName" | "importBatchKey">> = {},
 ): MockEvent {
   return {
     id: crypto.randomUUID(),
@@ -204,6 +204,7 @@ function mockEvent(
     supersedes: extra.supersedes ?? null,
     reason: extra.reason ?? null,
     approvedByName: extra.approvedByName ?? null,
+    importBatchKey: extra.importBatchKey ?? null,
     isEffective: true,
   };
 }

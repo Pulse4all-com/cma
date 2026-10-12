@@ -119,6 +119,7 @@ function assertDate(d: string, name: string): void {
 }
 
 // ---- Team (migrations 0003, 0003a): cma.team_hours, cma.team_day, cma.correct_workday, cma.team_people
+// team_day carries import_batch_key since addition 0008d; before it the column is absent (null here)
 // These read other people's days, so the permission check is inside each function (workday.team,
 // CMA06), in the same transaction as the read: never a check here followed by a plain query.
 
@@ -150,6 +151,7 @@ type EventRow = {
   reason: string | null;
   approved_by_name: string | null;
   is_effective: boolean;
+  import_batch_key: string | null;
 };
 
 function toTeamDay(r: TeamRow): TeamDay {
@@ -183,6 +185,7 @@ function toTimeEvent(r: EventRow): TimeEvent {
     reason: r.reason,
     approvedByName: r.approved_by_name,
     isEffective: r.is_effective,
+    importBatchKey: r.import_batch_key ?? null,
   };
 }
 

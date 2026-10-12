@@ -20,7 +20,7 @@
 - Never push to main; it only accepts pull requests (repository ruleset). Work on a branch, open a PR, never merge it yourself. Martin reviews and squash-merges.
 - A merge to main that touches web/** or cloudbuild.yaml builds and deploys PROD (Cloud Build trigger cma-web-main). README, db/, docs/ and records/ do not build.
 - One increment per PR, small and reviewable. The PR description states what changed, why, how it was checked, and what Martin still has to run.
-- In this session, run in web/: `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint`, and the pure verifiers (`npm run verify:copy`, `verify:corrections`, `verify:csv`, `verify:dashboard`, `verify:live`, `verify:team`, `verify:roster`, `verify:configuration`). Report the results in the PR. Verifiers that need a server or a database (`verify:api`, `verify:theme`, `verify:layout`, `verify:iap`, `verify:scheduler`) and every db/ script are run by Martin in Cloud Shell or Cloud SQL Studio.
+- In this session, run in web/: `npm ci`, `npm run build`, `npm run typecheck`, `npm run lint`, and the pure verifiers (`npm run verify:copy`, `verify:corrections`, `verify:csv`, `verify:dashboard`, `verify:live`, `verify:team`, `verify:roster`, `verify:configuration`, `verify:messages`, `verify:import`). Report the results in the PR. Verifiers that need a server or a database (`verify:api`, `verify:theme`, `verify:layout`, `verify:iap`, `verify:scheduler`) and every db/ script are run by Martin in Cloud Shell or Cloud SQL Studio.
 - Never write to records/: it holds outputs of real runs only. Never create, edit or backdate a record.
 - Never change cloudbuild.yaml substitutions or environment variables without saying so explicitly in the PR.
 

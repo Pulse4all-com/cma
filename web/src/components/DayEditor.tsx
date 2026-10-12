@@ -411,6 +411,7 @@ export function DayEditor({
                     {" · "}
                     {e.source === "correction"
                       ? `${t.byCorrection} ${e.approvedByName ?? ""}, ${fmtDate(localParts(e.recordedAt, who.timeZone).date, locale, "short")}: ${e.reason ?? ""}`
+                      : e.source === "import" ? `${t.byImport} ${e.importBatchKey ?? ""}`
                       : e.source === "system" ? t.bySystem : t.byPerson}
                     {!e.isEffective && e.kind !== "void" ? ` · ${t.replaced}` : null}
                   </li>

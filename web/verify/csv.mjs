@@ -6,7 +6,8 @@
  *
  * Covers the tenant formats (separator, decimal mark, date format, duration format, byte order
  * mark), quoting, cells a spreadsheet would run as a formula, times in each day's own zone across
- * the autumn clock change, and the settings fallback.
+ * the autumn clock change, the settings fallback, and who entered a stretch, an import included
+ * (addition 0008d).
  */
 import {
   exportSettingsFrom, formatDate, formatDuration, formatTime, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
@@ -30,7 +31,8 @@ const labels = {
   date: "Date", person: "Person", employer: "Employer", timeZone: "Time zone", clockedIn: "Clocked in",
   clockedOut: "Clocked out", worked: "Worked", paid: "Paid", billable: "Billable", notClockedOut: "Not clocked out",
   corrected: "Corrected afterwards", status: "Status", from: "From", to: "To", duration: "Duration", working: "Working",
-  enteredBy: "Entered by", sourceUser: "Person", sourceSystem: "System", sourceCorrection: "Correction", yes: "Yes", no: "No",
+  enteredBy: "Entered by", sourceUser: "Person", sourceSystem: "System", sourceCorrection: "Correction", sourceImport: "Import",
+  yes: "Yes", no: "No",
 };
 
 // ---- settings -----------------------------------------------------------------------------------
@@ -93,6 +95,22 @@ expect("an open stretch has no end and names its source", status[1],
   "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correction;Yes",
   "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;correction;Yes");
 expect("the header is the caller's labels", status[0].replace("\uFEFF", "").split(";").length, 13, 12);
+
+// An imported day (addition 0008d): the session as a working stretch, the gap in the gap status,
+// both entered by the import, in the day's own zone
+const imported = statusChangesCsv([
+  { userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-03-06", timeZone: "Europe/Amsterdam",
+    statusKey: "legacy_session", statusName: "Earlier session", isWorking: true, isProductive: true, isPaid: true, isBillable: true,
+    from: "2026-03-06T07:00:00Z", to: "2026-03-06T09:00:00Z", isOpen: false, isCapped: false, seconds: 7_200, source: "import" },
+  { userId: "u1", displayName: "Ana", organisationName: "Newco", date: "2026-03-06", timeZone: "Europe/Amsterdam",
+    statusKey: "break", statusName: "Break", isWorking: false, isProductive: false, isPaid: false, isBillable: false,
+    from: "2026-03-06T09:00:00Z", to: "2026-03-06T09:15:00Z", isOpen: false, isCapped: false, seconds: 900, source: "import" },
+], DUTCH, labels).split("\r\n");
+expect("an imported stretch and its gap name the import", [imported[1], imported[2]],
+  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;Import;No",
+   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No"],
+  ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;;No",
+   "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;;No"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;
