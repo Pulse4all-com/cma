@@ -492,7 +492,6 @@ const en = {
     linkedProblem: "An id has 1 to 100 characters without spaces",
     linkedColumn: "Linked",
     linkedCount: "{n} of {total}",
-    linkedSelf: "Your own ids are linked by another manager or admin.",
     hintLinked: "How many of the ids the business line's systems use are linked for this person. An owner who is not linked counts as Not mapped in the reports.",
   },
   roster: {
@@ -1625,7 +1624,6 @@ const nl: Copy = {
     linkedProblem: "Een id heeft 1 tot 100 tekens zonder spaties",
     linkedColumn: "Gekoppeld",
     linkedCount: "{n} van {total}",
-    linkedSelf: "Je eigen id's worden door een andere manager of admin gekoppeld.",
     hintLinked: "Hoeveel van de id's die de systemen van de businesslijn gebruiken voor deze persoon zijn gekoppeld. Een eigenaar die niet is gekoppeld telt als Niet gekoppeld in de rapportages.",
   },
   roster: {

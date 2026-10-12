@@ -1,1 +1,5 @@
-copy: PASS (1060 keys, en and nl)
+
+> cma-web@0.1.0 verify:copy
+> node verify/copy.mjs
+
+copy: PASS (1059 keys, en and nl)
