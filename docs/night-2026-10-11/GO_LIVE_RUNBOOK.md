@@ -133,17 +133,19 @@ Expected after each: the row on People, Active, "clock runs".
 
 ### 3b. The owner mapping: which agent is which HubSpot owner
 
-The assignment alert and the `owners` target find a person through `app_user_external_id` with the system `hubspot_owner` and the HubSpot owner id (`docs/ingest/hubspot-owners.mjs` lists the portal's owners; the carry-over's "owners mapping (agent_ref unmapped)" is this step). Until a screen exists (My account's Linked accounts, after Sync), one row per agent:
+The assignment alert and the `owners` target find a person through `app_user_external_id` with the system `hubspot_owner` and the HubSpot owner id (`docs/ingest/hubspot-owners.mjs` lists the portal's owners; the carry-over's "owners mapping (agent_ref unmapped)" is this step). Until a screen exists (My account's Linked accounts, after Sync), the owners script prints one statement per HubSpot owner, matched to a CMA person on the work email.
 
-**Studio (cma-prod-pg)**, as `cma_owner` (the tenant id from the context block; the user id from People's row, or `select id, email from cma.app_user where tenant_id = '<tenant_id>'`):
+**Terminal** (`~/cma`, prod project; the token is read with your own gcloud login and never printed):
+```bash
+node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret <the prod token secret>
+```
+Expected: one `select cma.set_user_external_id(u.id, 'hubspot_owner', '<owner id>') from cma.app_user u where u.email = '<owner email>';` line per active owner, then `-- n statement(s) for m active owner(s)`. The output stays in the terminal, never in a file.
+
+**Studio (cma-prod-pg)**, after the context block of step 2 (`set role cma_app` with the tenant and a person holding `users.manage_all`): paste the printed `select cma.set_user_external_id(...)` lines, then:
 ```sql
-set role cma_owner;
-insert into cma.app_user_external_id (tenant_id, user_id, system, external_id)
-values ('<tenant_id>', '<user_id>', 'hubspot_owner', '<hubspot owner id>')
-on conflict do nothing;
 reset role;
 ```
-Expected: `INSERT 0 1`. An agent without this row never receives an assignment alert, and `data_quality()` counts them as "CRM owners without a person".
+Expected: one row per owner who is a CMA person; an owner without a CMA person matches no row and changes nothing. An agent without the mapping never receives an assignment alert, and `data_quality()` counts them as "CRM owners without a person".
 
 ## 4. IAP: open the gate to the domain
 
