@@ -278,12 +278,23 @@ expect("a replaced event stays visible",
 
 // ---- no past day open ----------------------------------------------------------------------
 // After the closing above, no past day may be open, and every past day must count its exact
-// minutes from start to end, not a capped day.
+// minutes from start to end, not a capped day. Since 0008b a day's counted time stops at the
+// workday window end (workday.window_end in the zone, read as the window FAIL message does), so a
+// past day that ended after it counts from start to the window end of its date.
 const hoursAfter = (await get(AGENT, `/api/v1/me/hours?${range}`)).body.data;
 const past = hoursAfter.days.filter((d) => d.date < today);
 const openPast = past.filter((d) => !d.endedAt).map((d) => d.date);
-const allExact = past.every((d) => d.endedAt && d.minutes === Math.floor((Date.parse(d.endedAt) - Date.parse(d.startedAt)) / 60000));
+const windowSettings = (await get(AGENT, "/api/v1/settings")).body?.data ?? [];
+const windowEnd = String(windowSettings.find((x) => x.key === "workday.window_end")?.value ?? "24:00").slice(0, 5);
+const cappedPast = [];
+const allExact = past.every((d) => {
+  if (!d.endedAt) return false;
+  const until = Math.min(Date.parse(d.endedAt), Date.parse(localInstant(d.date, windowEnd, meA.timeZone)));
+  if (until < Date.parse(d.endedAt)) cappedPast.push(d.date);
+  return d.minutes === Math.floor((until - Date.parse(d.startedAt)) / 60000);
+});
 if (openPast.length) console.log(`      (open past days ${openPast.join(", ")})`);
+if (cappedPast.length) console.log(`      (counted to the window end ${windowEnd} ${meA.timeZone}: ${cappedPast.join(", ")})`);
 expect("correction leaves no past day open or capped", [openPast.length, allExact, past.length > 0], [0, true, true], [1, false, true]);
 
 // ---- an ended day stays ended --------------------------------------------------------------
