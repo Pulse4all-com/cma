@@ -12,8 +12,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
-import type { DirectoryPerson, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
-import { filterPeople, skillLabel } from "@/lib/team";
+import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
+import { filterPeople, linkedCount, linkedLabel, skillLabel } from "@/lib/team";
+import { HeaderHint } from "./HeaderHint";
 import { PersonDialog, type PersonDialogTarget } from "./PersonDialog";
 import { Badge, Button, Keycap } from "./primitives";
 
@@ -26,6 +27,7 @@ export function TeamDirectory({
   meId,
   maySetSkills,
   defaultLoginSystem,
+  linked,
   copy,
 }: {
   people: DirectoryPerson[];
@@ -37,6 +39,8 @@ export function TeamDirectory({
   /** skills.manage: without it the editor shows skills read-only */
   maySetSkills: boolean;
   defaultLoginSystem: string;
+  /** Linked accounts (addition 0008e) */
+  linked: LinkedAccounts;
   copy: Copy;
 }) {
   const t = copy.team;
@@ -138,6 +142,9 @@ export function TeamDirectory({
               <th className={th}>{t.teams}</th>
               <th className={th}>{t.skills}</th>
               <th className={th}>{t.status}</th>
+              {linked.systems.length > 0 ? (
+                <th className={th}>{t.linkedColumn}<HeaderHint label={copy.hints.about.replace("{label}", t.linkedColumn)} text={t.hintLinked} /></th>
+              ) : null}
               <th className={th}>
                 <span className="sr-only">{t.edit}</span>
               </th>
@@ -183,6 +190,19 @@ export function TeamDirectory({
                     {p.isActive ? <Badge tone={p.timeKept ? "info" : "neutral"}>{p.timeKept ? t.clockKept : t.noClock}</Badge> : null}
                   </div>
                 </td>
+                {linked.systems.length > 0 ? (
+                  <td className="px-3 py-2 align-top" data-testid="linked-count">
+                    {(() => {
+                      const n = linkedCount(linked.accounts, p.userId, linked.systems);
+                      const held = linked.systems.filter((s) => linked.accounts.some((a) => a.userId === p.userId && a.system === s.system));
+                      return (
+                        <span title={held.map((s) => linkedLabel(s, t)).join(", ") || t.linkedNone} className={n === 0 ? "text-p4a-muted" : ""}>
+                          {t.linkedCount.replace("{n}", String(n)).replace("{total}", String(linked.systems.length))}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                ) : null}
                 <td className="px-3 py-2 align-top text-right">
                   <Button
                     variant="outlined"
@@ -210,6 +230,7 @@ export function TeamDirectory({
           organisations={organisations}
           maySetSkills={maySetSkills}
           defaultLoginSystem={defaultLoginSystem}
+          linked={linked}
           copy={copy}
           onClose={close}
           onSaved={() => {

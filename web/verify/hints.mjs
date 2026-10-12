@@ -18,6 +18,21 @@ import { chromium } from "playwright";
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
 const problems = [];
+/**
+ * The mock's urgent fixture message pops up for every identity but the first one to poll the inbox, and
+ * its dialog holds the focus, so a header hint could never open on a fresh server for the others (seen on
+ * main, 13 October 2026). Acknowledge it first for the identities read here, as a person would.
+ */
+async function acknowledgeUrgent(subject) {
+  const r = await fetch(`${BASE}/api/v1/me/messages`, { headers: { "x-cma-mock-subject": subject } }).catch(() => null);
+  const list = (await r?.json().catch(() => null))?.data?.messages ?? [];
+  for (const m of list) {
+    if (m.urgency === "urgent" && !m.acknowledgedAt) {
+      await fetch(`${BASE}/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
+    }
+  }
+}
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 /** Headers and tiles of a page, and what is wrong with their marks */

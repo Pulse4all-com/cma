@@ -1,6 +1,10 @@
 import "server-only";
 import { ApiError } from "@/lib/api/respond";
-import type { AbsenceTypeInput, ConfigAppLinkInput, ConfigStatusInput, SkillDimension, SkillInputRow, SkillLevel, TeamInput } from "@/lib/data";
+import type {
+  AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
+  SourceFormChange, SourceKind, SourceLineInput, SourceOutcomeChange, SourcePipelineInput, SourceSettings, SourceStore, SourceTagInput, TeamInput,
+} from "@/lib/data";
+import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
 
 /**
  * Parameter checks of the configuration routes (migration 0005a): shape and bounds only, so a bad
@@ -105,4 +109,175 @@ export function checkSettingInput(b: Record<string, unknown>): { key: string; va
   const value = b.value ?? null;
   if (value !== null && (typeof value !== "string" || value.length === 0 || value.length > 100)) throw new ApiError(400, "invalid_value", "value must be text, or null to reset");
   return { key, value };
+}
+
+// ---- Sources, markets, alert rules and linked accounts (addition 0008e) ---------------------------
+// Shape and bounds only; whether a market, a pipeline, a form or a person exists, and whether a kind
+// fits the connection's rows, is the database's answer.
+
+const KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
+const REF = /^[A-Za-z0-9_.:@\/+=-]{1,100}$/;
+const MARKET = /^[A-Z]{2}$/;
+
+function ref(v: unknown, name: string): string {
+  if (typeof v !== "string" || !REF.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be an id of 1 to 100 characters without spaces`);
+  return v;
+}
+
+function bool(b: Record<string, unknown>, name: string): boolean {
+  return flag(b, name);
+}
+
+function marketOrNull(v: unknown, name: string): string | null {
+  if (v == null || v === "") return null;
+  if (typeof v !== "string" || !MARKET.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be a two-letter market code or empty`);
+  return v;
+}
+
+export function checkSourceConnectionInput(b: Record<string, unknown>): SourceConnectionInput {
+  const out: SourceConnectionInput = {};
+  if (b.name !== undefined) out.name = text(b, "name", 100);
+  if (b.isActive !== undefined) out.isActive = flag(b, "isActive");
+  if (b.kind !== undefined) {
+    if (typeof b.kind !== "string" || !KINDS.includes(b.kind as SourceKind)) throw new ApiError(400, "invalid_kind", "kind must be crm, telephony, commerce or automation");
+    out.kind = b.kind as SourceKind;
+  }
+  if (Object.keys(out).length === 0) throw new ApiError(400, "invalid_body", "name, isActive or kind is required");
+  return out;
+}
+
+/** The whole settings object; the rules of cma.connection_settings_ok first, so a refusal is a 400 with a code */
+export function checkSettingsInput(b: Record<string, unknown>): SourceSettings {
+  const s = b.settings;
+  if (!s || typeof s !== "object" || Array.isArray(s)) throw new ApiError(400, "invalid_settings", "settings must be a flat object");
+  const problem = settingsProblem(s as SourceSettings);
+  if (problem === "secret") throw new ApiError(400, "secret_key", "a settings key may not contain secret, token, password or key");
+  if (problem) throw new ApiError(400, `invalid_settings_${problem}`, "settings must be a flat object of text, numbers or true and false, lower-case keys, at most 4 kB");
+  return s as SourceSettings;
+}
+
+export function checkPipelineInput(b: Record<string, unknown>): SourcePipelineInput {
+  return { recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineId: ref(b.pipelineId, "pipelineId"), isCounted: bool(b, "isCounted"), isLead: bool(b, "isLead") };
+}
+
+function list(b: Record<string, unknown>, name: string): Record<string, unknown>[] {
+  const v = b[name];
+  if (!Array.isArray(v) || v.length === 0 || v.length > 500 || v.some((x) => !x || typeof x !== "object" || Array.isArray(x))) {
+    throw new ApiError(400, `invalid_${name}`, `${name} must be a list of 1 to 500 objects`);
+  }
+  return v as Record<string, unknown>[];
+}
+
+export function checkFormChanges(b: Record<string, unknown>): SourceFormChange[] {
+  return list(b, "forms").map((x) => {
+    const leadSource = x.leadSource == null || x.leadSource === "" ? null : x.leadSource;
+    if (leadSource !== null && (typeof leadSource !== "string" || leadSource.trim().length === 0 || leadSource.trim().length > 60)) {
+      throw new ApiError(400, "invalid_lead_source", "leadSource must be 1 to 60 characters or empty");
+    }
+    return { formId: ref(x.formId, "formId"), isCounted: flag(x, "isCounted"), leadSource: leadSource === null ? null : (leadSource as string).trim(), market: marketOrNull(x.market, "market") };
+  });
+}
+
+export function checkOutcomeChanges(b: Record<string, unknown>): SourceOutcomeChange[] {
+  return list(b, "outcomes").map((x) => ({ outcomeRef: ref(x.outcomeRef, "outcomeRef"), isConnected: flag(x, "isConnected") }));
+}
+
+export function checkLineInput(b: Record<string, unknown>): SourceLineInput {
+  return { lineRef: ref(b.lineRef, "lineRef"), market: marketOrNull(b.market, "market"), isCounted: flag(b, "isCounted") };
+}
+
+export function checkTagInput(b: Record<string, unknown>): SourceTagInput {
+  return { tagRef: ref(b.tagRef, "tagRef"), isCounted: flag(b, "isCounted") };
+}
+
+export function checkStoreInput(b: Record<string, unknown>): SourceStore {
+  const handle = b.handle;
+  if (typeof handle !== "string" || !/^[a-z0-9-]{1,60}$/.test(handle)) throw new ApiError(400, "invalid_handle", "handle is 1 to 60 lower-case letters, digits or hyphens");
+  const currency = b.currency;
+  if (typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)) throw new ApiError(400, "invalid_currency", "currency is three upper-case letters");
+  const market = marketOrNull(b.market, "market");
+  if (market === null) throw new ApiError(400, "invalid_market", "market is required");
+  return { handle, name: text(b, "name", 80), market, currency, timeZone: text(b, "timeZone", 64) };
+}
+
+export function checkMarketInput(b: Record<string, unknown>): { input: MarketInput; active: boolean } {
+  const code = b.code;
+  if (typeof code !== "string" || !MARKET.test(code)) throw new ApiError(400, "invalid_code", "code is two upper-case letters (ISO 3166-1), GB not UK");
+  const languageCode = b.languageCode;
+  if (typeof languageCode !== "string" || !/^[a-z]{2}$/.test(languageCode)) throw new ApiError(400, "invalid_language", "languageCode is two lower-case letters");
+  const currency = b.currency;
+  if (typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)) throw new ApiError(400, "invalid_currency", "currency is three upper-case letters");
+  const skill = b.languageSkillKey == null || b.languageSkillKey === "" ? null : b.languageSkillKey;
+  if (skill !== null && (typeof skill !== "string" || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(skill))) throw new ApiError(400, "invalid_skill", "languageSkillKey must be a skill key or empty");
+  const level = b.minLanguageLevel ?? null;
+  if (level !== null && (typeof level !== "number" || !Number.isInteger(level) || level < 1 || level > 9)) throw new ApiError(400, "invalid_level", "minLanguageLevel is 1 to 9 or empty");
+  return {
+    input: { code, name: text(b, "name", 80), timeZone: text(b, "timeZone", 64), languageCode, currency, languageSkillKey: skill as string | null, minLanguageLevel: level as number | null, sortOrder: order(b) },
+    active: b.active === undefined ? true : flag(b, "active"),
+  };
+}
+
+export function checkAliasInput(b: Record<string, unknown>): { alias: string; code: string | null } {
+  const alias = typeof b.alias === "string" ? normalizeAlias(b.alias) : null;
+  if (alias === null) throw new ApiError(400, "invalid_alias", "alias is 1 to 100 characters");
+  return { alias, code: marketOrNull(b.code, "code") };
+}
+
+export function checkHoursInput(b: Record<string, unknown>): { market: string; days: { weekday: number; hours: string }[] } {
+  const market = b.market;
+  if (typeof market !== "string" || !(market === "*" || MARKET.test(market))) throw new ApiError(400, "invalid_market", "market is a market code or *");
+  const days = b.days;
+  if (!Array.isArray(days) || days.length === 0 || days.length > 7) throw new ApiError(400, "invalid_days", "days is a list of 1 to 7 { weekday, hours }");
+  const out = days.map((d: unknown) => {
+    const x = (d ?? {}) as Record<string, unknown>;
+    const weekday = x.weekday;
+    if (typeof weekday !== "number" || !Number.isInteger(weekday) || weekday < 1 || weekday > 7) throw new ApiError(400, "invalid_weekday", "weekday is 1 (Monday) to 7 (Sunday)");
+    const hours = typeof x.hours === "string" ? parseOfficeHours(x.hours) : null;
+    if (hours === null) throw new ApiError(400, "invalid_hours", "hours are ranges like 09:00-17:00, or empty for closed");
+    return { weekday, hours };
+  });
+  if (new Set(out.map((d) => d.weekday)).size !== out.length) throw new ApiError(400, "invalid_days", "each weekday once");
+  return { market, days: out };
+}
+
+export function checkHolidayInput(b: Record<string, unknown>): { market: string; day: string; name: string | null } {
+  const market = b.market;
+  if (typeof market !== "string" || !(market === "*" || MARKET.test(market))) throw new ApiError(400, "invalid_market", "market is a market code or *");
+  const day = typeof b.day === "string" ? parseDay(b.day) : null;
+  if (day === null) throw new ApiError(400, "invalid_day", "day must be a date in YYYY-MM-DD");
+  return { market, day, name: b.name == null ? null : text(b, "name", 100) };
+}
+
+export function checkAlertRuleInput(b: Record<string, unknown>): AlertRuleInput {
+  const trigger = b.trigger;
+  if (trigger !== "record_created" && trigger !== "record_assigned") throw new ApiError(400, "invalid_trigger", "trigger is record_created or record_assigned");
+  const urgency = b.urgency;
+  if (urgency !== "normal" && urgency !== "urgent") throw new ApiError(400, "invalid_urgency", "urgency is normal or urgent");
+  const pipelineIds = b.pipelineIds ?? [];
+  if (!Array.isArray(pipelineIds) || pipelineIds.length > 50) throw new ApiError(400, "invalid_pipelines", "pipelineIds is a list of at most 50 ids");
+  const age = b.maxAgeMinutes ?? null;
+  if (age !== null && (typeof age !== "number" || !Number.isInteger(age) || age < 1 || age > 10080)) throw new ApiError(400, "invalid_age", "maxAgeMinutes is 1 to 10080 or empty");
+  const permission = (v: unknown, name: string, nullable: boolean): string | null => {
+    if (nullable && (v == null || v === "")) return null;
+    if (typeof v !== "string" || !/^[a-z_]+(\.[a-z_]+)+$/.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be a permission key${nullable ? " or empty" : ""}`);
+    return v;
+  };
+  const created = trigger === "record_created";
+  return {
+    name: text(b, "name", 80), trigger, recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineIds: pipelineIds.map((p) => ref(p, "pipelineId")),
+    urgency, maxAgeMinutes: age as number | null,
+    audiencePermission: created ? permission(b.audiencePermission, "audiencePermission", false)! : "leads.accept",
+    matchLanguage: created ? flag(b, "matchLanguage") : false,
+    onlyClockedIn: created ? flag(b, "onlyClockedIn") : false,
+    fallbackPermission: created ? permission(b.fallbackPermission, "fallbackPermission", true) : null,
+  };
+}
+
+export function checkLinkedAccountInput(b: Record<string, unknown>): { system: string; externalId: string | null } {
+  const system = b.system;
+  if (typeof system !== "string" || !/^[a-z0-9]+_(owner|user)$/.test(system)) throw new ApiError(400, "invalid_system", "system must read <system>_owner or <system>_user");
+  const v = b.externalId;
+  if (v == null || v === "") return { system, externalId: null };
+  if (typeof v !== "string" || v.trim().length === 0 || v.trim().length > 100 || /\s/.test(v.trim())) throw new ApiError(400, "invalid_external_id", "the id is 1 to 100 characters without spaces");
+  return { system, externalId: v.trim() };
 }

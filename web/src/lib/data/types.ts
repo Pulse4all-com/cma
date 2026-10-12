@@ -848,6 +848,289 @@ export interface CrmRecordsDay {
   closedNow: number;
 }
 
+// ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
+
+/**
+ * The kind of source a connection is in the data model's terms (the tables its data lands in), never
+ * a vendor: which sections the Sources screen shows and which id a person can hold come from it
+ */
+export type SourceKind = "crm" | "telephony" | "commerce" | "automation";
+
+/** A connection's non-secret settings (cma.integration_connection.settings): a flat object of scalars */
+export type SourceSettingValue = string | number | boolean;
+export type SourceSettings = Record<string, SourceSettingValue>;
+
+/** One connection as cma.sources() answers it: names of secrets, never their values */
+export interface SourceConnection {
+  id: string;
+  /** The last segment of the ingest address: an identifier, not a secret */
+  key: string;
+  /** The adapter as a data value (the vendor), shown as it is stored */
+  adapter: string;
+  name: string;
+  accountId: string;
+  /** null until set */
+  kind: SourceKind | null;
+  /** The kinds the connection's rows imply */
+  heldKinds: SourceKind[];
+  isActive: boolean;
+  signingSecretName: string | null;
+  tokenSecretName: string | null;
+  settings: SourceSettings;
+  events24h: number;
+  eventsWaiting: number;
+  eventsParked: number;
+  lastEventAt: Instant | null;
+  pipelines: number;
+  forms: number;
+  callOutcomes: number;
+  fields: number;
+  lines: number;
+  tags: number;
+  storeHandle: string | null;
+}
+
+export interface SourcePipeline {
+  recordType: string;
+  pipelineId: string;
+  label: string;
+  isCounted: boolean;
+  isRouted: boolean;
+  isLead: boolean;
+  workType: string | null;
+  isActive: boolean;
+}
+
+export interface SourceForm {
+  formId: string;
+  name: string;
+  isCounted: boolean;
+  leadSource: string | null;
+  market: string | null;
+  /** Field names whose values are not personal; kept as they are by every write of this screen */
+  keptFields: string[];
+  isActive: boolean;
+}
+
+export interface SourceCallOutcome {
+  outcomeRef: string;
+  label: string;
+  isConnected: boolean;
+  isActive: boolean;
+}
+
+export interface SourceLine {
+  lineRef: string;
+  name: string;
+  /** The company's own number, never a customer's */
+  digits: string | null;
+  market: string | null;
+  isCounted: boolean;
+  isActive: boolean;
+}
+
+export interface SourceTag {
+  tagRef: string;
+  name: string;
+  isCounted: boolean;
+  isActive: boolean;
+}
+
+/** Which source property feeds which canonical field (read only in this increment) */
+export interface SourceField {
+  entity: string;
+  field: string;
+  refSystem: string | null;
+  slot: number;
+  property: string;
+}
+
+/** A field written back to the CRM (0007c; read only here) */
+export interface SourceWriteback {
+  field: string;
+  slot: number;
+  property: string;
+  mode: string;
+  enabled: boolean;
+}
+
+export interface SourceStore {
+  handle: string;
+  name: string;
+  market: string;
+  currency: string;
+  timeZone: string;
+}
+
+/** One connection with its catalogs, for its page */
+export interface SourceDetail {
+  connection: SourceConnection;
+  pipelines: SourcePipeline[];
+  forms: SourceForm[];
+  callOutcomes: SourceCallOutcome[];
+  lines: SourceLine[];
+  tags: SourceTag[];
+  fields: SourceField[];
+  writeback: SourceWriteback[];
+  store: SourceStore | null;
+  /** The newest record id per record type, for the record link preview (ids only) */
+  sampleIds: Record<string, string>;
+}
+
+/** The connection's own fields a person may change; each only when given */
+export interface SourceConnectionInput {
+  name?: string;
+  isActive?: boolean;
+  kind?: SourceKind;
+}
+
+export interface SourcePipelineInput {
+  recordType: string;
+  pipelineId: string;
+  isCounted: boolean;
+  isLead: boolean;
+}
+
+/** One form's new configuration; its kept fields stay as they are */
+export interface SourceFormChange {
+  formId: string;
+  isCounted: boolean;
+  leadSource: string | null;
+  market: string | null;
+}
+
+export interface SourceOutcomeChange {
+  outcomeRef: string;
+  isConnected: boolean;
+}
+
+export interface SourceLineInput {
+  lineRef: string;
+  market: string | null;
+  isCounted: boolean;
+}
+
+export interface SourceTagInput {
+  tagRef: string;
+  isCounted: boolean;
+}
+
+export interface MarketConfig {
+  code: string;
+  name: string;
+  timeZone: string;
+  languageCode: string;
+  languageSkillKey: string | null;
+  minLanguageLevel: number | null;
+  currency: string;
+  isActive: boolean;
+  sortOrder: number;
+  /** How sources write the market, lower-cased */
+  aliases: string[];
+}
+
+export interface MarketInput {
+  code: string;
+  name: string;
+  timeZone: string;
+  languageCode: string;
+  currency: string;
+  languageSkillKey: string | null;
+  minLanguageLevel: number | null;
+  sortOrder: number;
+}
+
+/** Office hours of one market ("*" is the default) on one weekday (1 Monday … 7 Sunday), as "09:00-12:30,13:00-17:00" */
+export interface OfficeHours {
+  market: string;
+  weekday: number;
+  hours: string;
+}
+
+export interface MarketHoliday {
+  market: string;
+  day: DateKey;
+  name: string;
+}
+
+export interface MarketsConfig {
+  markets: MarketConfig[];
+  hours: OfficeHours[];
+  holidays: MarketHoliday[];
+}
+
+export type AlertTrigger = "record_created" | "record_assigned";
+
+/** One rule of cma.message_rule (0008, 0008a) with its alerts in the last 30 days */
+export interface AlertRule {
+  id: string;
+  name: string;
+  trigger: AlertTrigger;
+  recordType: string;
+  /** Source pipeline ids; empty means every counted pipeline */
+  pipelineIds: string[];
+  audiencePermission: string;
+  matchLanguage: boolean;
+  onlyClockedIn: boolean;
+  fallbackPermission: string | null;
+  urgency: "normal" | "urgent";
+  enabled: boolean;
+  /** null: the setting alerts.max_age_minutes */
+  maxAgeMinutes: number | null;
+  alerts30d: number;
+  lastAlertAt: Instant | null;
+}
+
+/** A new or changed rule; the audience fields are read for created-record rules only */
+export interface AlertRuleInput {
+  name: string;
+  trigger: AlertTrigger;
+  recordType: string;
+  pipelineIds: string[];
+  urgency: "normal" | "urgent";
+  maxAgeMinutes: number | null;
+  audiencePermission: string;
+  matchLanguage: boolean;
+  onlyClockedIn: boolean;
+  fallbackPermission: string | null;
+}
+
+/** A pipeline a rule can name: from the tenant's customer-record connections */
+export interface AlertPipelineChoice {
+  connectionName: string;
+  recordType: string;
+  pipelineId: string;
+  label: string;
+  isCounted: boolean;
+}
+
+export interface AlertRulesConfig {
+  rules: AlertRule[];
+  pipelines: AlertPipelineChoice[];
+  /** alerts.max_age_minutes, the age limit of a rule without its own */
+  defaultMaxAgeMinutes: number;
+}
+
+/** An id a person can hold in another system: <adapter>_owner for a CRM, <adapter>_user for telephony */
+export interface LinkedAccountSystem {
+  system: string;
+  role: "owner" | "user";
+  /** The connections that name this system; empty for a system only held ids still name */
+  connections: string[];
+  isActive: boolean;
+}
+
+export interface LinkedAccount {
+  userId: string;
+  system: string;
+  externalId: string;
+}
+
+export interface LinkedAccounts {
+  systems: LinkedAccountSystem[];
+  accounts: LinkedAccount[];
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -997,6 +1280,50 @@ export interface CmaData {
   sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
   /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */
   getMessageStats(me: Principal, range: HoursRange): Promise<MessageStat[]>;
+
+  // ---- Sources, markets, alert rules (addition 0008e): the database checks tenant.configure on every call (CMA06)
+  /** Every connection of the tenant with its kind, settings and catalog sizes */
+  listSources(me: Principal): Promise<SourceConnection[]>;
+  /** One connection with its catalogs; unknown or another tenant's CMA02 */
+  getSource(me: Principal, id: string): Promise<SourceDetail>;
+  /** Name (upsert_connection with the stored secret names), status and kind; a kind against the connection's rows CMA03 */
+  setSourceConnection(me: Principal, id: string, input: SourceConnectionInput): Promise<void>;
+  /** Replaces the non-secret settings (set_connection_settings); a secret-looking key CMA04 */
+  setSourceSettings(me: Principal, id: string, settings: SourceSettings): Promise<void>;
+  /** Counted (set_connection_pipeline, routed and work type kept) and lead (set_pipeline_lead) of one pipeline */
+  setSourcePipeline(me: Principal, id: string, input: SourcePipelineInput): Promise<void>;
+  /** Several forms in one transaction (set_form, kept fields kept); an unknown market CMA02 writes nothing */
+  setSourceForms(me: Principal, id: string, changes: SourceFormChange[]): Promise<void>;
+  /** Several call outcomes in one transaction (set_call_outcome) */
+  setSourceCallOutcomes(me: Principal, id: string, changes: SourceOutcomeChange[]): Promise<void>;
+  setSourceLine(me: Principal, id: string, input: SourceLineInput): Promise<void>;
+  setSourceTag(me: Principal, id: string, input: SourceTagInput): Promise<void>;
+  /** The connection's store (upsert_commerce_store); a handle another store holds CMA03 */
+  setSourceStore(me: Principal, id: string, store: SourceStore): Promise<void>;
+  /** Markets with their aliases, office hours and holidays */
+  getMarkets(me: Principal): Promise<MarketsConfig>;
+  /** Adds or changes a market (upsert_market) and its status (set_market_status) */
+  upsertMarket(me: Principal, input: MarketInput, active: boolean): Promise<void>;
+  /** Adds or moves an alias (set_market_alias); code null removes it (remove_market_alias) */
+  setMarketAlias(me: Principal, alias: string, code: string | null): Promise<void>;
+  /** Replaces weekdays' office hours of a market or "*" in one transaction (set_business_hours per day); "" closes a day */
+  setOfficeHours(me: Principal, market: string, days: { weekday: number; hours: string }[]): Promise<void>;
+  /** Adds or renames a holiday (set_business_holiday); name null removes it */
+  setHoliday(me: Principal, market: string, day: DateKey, name: string | null): Promise<void>;
+  /** The alert rules with the pipelines a rule can name */
+  getAlertRules(me: Principal): Promise<AlertRulesConfig>;
+  /** Adds or changes a rule by name (upsert_message_rule or upsert_assignment_rule); a name of a rule with the other trigger CMA03 */
+  upsertAlertRule(me: Principal, input: AlertRuleInput): Promise<string>;
+  setAlertRuleEnabled(me: Principal, id: string, enabled: boolean): Promise<void>;
+
+  // ---- Linked accounts on People (addition 0008e): users.manage_agents or users.manage_all, the directory's scope
+  /** The ids a person can hold and the ids held by the people the caller may see */
+  getLinkedAccounts(me: Principal): Promise<LinkedAccounts>;
+  /**
+   * Links (set_user_external_id) or, with null, unlinks (remove_user_external_id) one id of a person the
+   * caller may edit on People (not oneself); an id another person holds CMA03
+   */
+  setLinkedAccount(me: Principal, userId: string, system: string, externalId: string | null): Promise<void>;
 
   // ---- Intake reports (0007d, 0006): the database checks the permission on every call (CMA06); at most 92 days
   /** One row per lead deal created in the range, with its record link. Needs reports.view or performance.team */

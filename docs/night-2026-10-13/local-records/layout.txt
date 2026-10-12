@@ -1,0 +1,1 @@
+layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card, Sources, Markets and Alert rules; screenshots in /tmp/claude-0/-home-user-cma/c54d00b4-a3ca-5048-8398-29dae0eb683e/scratchpad/layout-final)

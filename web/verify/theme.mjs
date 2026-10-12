@@ -48,6 +48,21 @@ for (const hex of css.matchAll(/#[0-9a-f]{6}\b/gi)) {
   if (!palette.has(hex[0].toLowerCase())) problems.push(`globals.css: colour ${hex[0]} is not in the palette`);
 }
 
+/**
+ * The mock's urgent fixture message pops up for every identity but the first one to poll the inbox, and
+ * its dialog holds the focus, so a header hint could never open on a fresh server for the others (seen on
+ * main, 13 October 2026). Acknowledge it first for the identities read here, as a person would.
+ */
+async function acknowledgeUrgent(subject) {
+  const r = await fetch(`${BASE}/api/v1/me/messages`, { headers: { "x-cma-mock-subject": subject } }).catch(() => null);
+  const list = (await r?.json().catch(() => null))?.data?.messages ?? [];
+  for (const m of list) {
+    if (m.urgency === "urgent" && !m.acknowledgedAt) {
+      await fetch(`${BASE}/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
+    }
+  }
+}
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 const pages = [
   { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },
@@ -65,6 +80,13 @@ const pages = [
   { path: "/configuration/statuses", subject: "admin" }, { path: "/configuration/teams", subject: "admin" },
   { path: "/configuration/absences", subject: "admin" }, { path: "/configuration/exports", subject: "admin" },
   { path: "/configuration/app-links", subject: "admin" },
+  // Sources, a connection of each kind, Markets and Alert rules (addition 0008e), as the admin
+  { path: "/configuration/sources", subject: "admin" },
+  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin" },
+  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c002", subject: "admin" },
+  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c003", subject: "admin" },
+  { path: "/configuration/markets", subject: "admin" },
+  { path: "/configuration/alert-rules", subject: "admin" },
   // The intake reports (B11): as the manager (every figure), and the tenant without telephony or a shop
   { path: "/reports/speed-to-lead?range=month&group=agent", subject: "manager" },
   { path: "/reports/intake?range=month", subject: "manager" },

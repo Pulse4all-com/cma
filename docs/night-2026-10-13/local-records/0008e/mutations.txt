@@ -1,0 +1,12 @@
+m01_kind_ignores_held_rows:  B1 kind: unset, set, refused against held rows, unknown or for an agent | FAIL; verdict | FAIL
+m02_sources_no_permission:  B2 sources with kinds, settings and catalog sizes; a manager refused | FAIL; verdict | FAIL
+m03_sample_oldest_record:  B3 catalogs with configuration and the newest record id | FAIL; verdict | FAIL
+m04_markets_without_aliases:  B4 markets with aliases, office hours and holidays; an agent refused | FAIL; verdict | FAIL
+m05_hours_wrong_separator:  B4 markets with aliases, office hours and holidays; an agent refused | FAIL; verdict | FAIL
+m06_rules_no_alert_count:  B5 alert rules of both triggers with their alerts; a manager refused | FAIL; verdict | FAIL
+m07_systems_without_held_ids:  B6 linked-account systems from connections and held ids; an agent refused | FAIL; verdict | FAIL
+m08_linked_accounts_no_scope:  B7 linked accounts in the directory's scope | FAIL; verdict | FAIL
+m09_external_id_admin_only:  B the block ran to the end | FAIL; verdict | FAIL
+m10_external_id_no_people_rule:  B8 people's ids by the People rule | FAIL; verdict | FAIL
+m11_reader_executes_sources:  A3 twelve functions, executable by cma_app only | FAIL; verdict | FAIL
+m12_reader_view_without_kind:  A2 kind column, check and reader view | FAIL; verdict | FAIL

@@ -32,12 +32,13 @@ export default async function PeoplePage() {
   }
 
   // One transaction per read; the directory's own permission check decides who is listed
-  const [people, roles, teams, skills, organisations] = await Promise.all([
+  const [people, roles, teams, skills, organisations, linked] = await Promise.all([
     data().listDirectory(me),
     data().listRoles(me),
     data().listTeams(me),
     data().listSkills(me),
     data().listOrganisations(me),
+    data().getLinkedAccounts(me),
   ]);
 
   return (
@@ -56,6 +57,7 @@ export default async function PeoplePage() {
           maySetSkills={me.permissions.includes("skills.manage")}
           // The sign-in provider the app runs with: google behind IAP, mock in dev (a data value, as stored)
           defaultLoginSystem={config.authMode === "iap" ? "google" : "mock"}
+          linked={linked}
           copy={copy}
         />
       </Card>

@@ -11,6 +11,7 @@
  */
 import {
   checkNewPerson, editChanges, filterPeople, hasChanges, roleOptions, skillLabel, skillStateOf, skillsByDimension, skillsPayload,
+  linkedChanges, linkedCount, linkedIdProblem, linkedLabel, linkedStateOf,
 } from "../src/lib/team.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -81,6 +82,24 @@ const form = { displayName: "New Person", email: "new.person@example.com", organ
 expect("a complete form has no problems", checkNewPerson(form), [], ["login"]);
 expect("every missing part is named", checkNewPerson({ displayName: " ", email: "nope", organisationKey: "", roleKey: "", loginSystem: "google", loginId: "12 34" }),
   ["name", "email", "employer", "role", "login"], ["name", "email"]);
+
+// ---- Linked accounts (addition 0008e) --------------------------------------------------------------
+const systems = [
+  { system: "crmtest_owner", role: "owner", connections: ["Customer records"], isActive: true },
+  { system: "phonetest_user", role: "user", connections: ["Phones"], isActive: true },
+  { system: "old_owner", role: "owner", connections: [], isActive: false },
+];
+const accounts = [{ userId: "u1", system: "crmtest_owner", externalId: "700" }, { userId: "u2", system: "crmtest_owner", externalId: "701" }];
+expect("the editor starts from the person's ids", linkedStateOf(accounts, "u1", systems), { crmtest_owner: "700", phonetest_user: "", old_owner: "" }, { crmtest_owner: "" });
+expect("a changed id links, an emptied one unlinks", linkedChanges({ crmtest_owner: "700", phonetest_user: "" }, { crmtest_owner: "", phonetest_user: " 9001 " }),
+  [{ system: "crmtest_owner", externalId: null }, { system: "phonetest_user", externalId: "9001" }], []);
+expect("nothing changed writes nothing", linkedChanges({ a: "1" }, { a: " 1 " }), [], [{ system: "a", externalId: "1" }]);
+expect("an id with a space is refused", linkedIdProblem("70 0"), true, false);
+expect("an empty id is fine (unlinks)", linkedIdProblem(" "), false, true);
+expect("linked systems are counted per person", linkedCount(accounts, "u1", systems), 1, 2);
+const words = { linked_owner: "Owner id in {connection}", linked_user: "User id in {connection}", linkedSystem: "Id in {system}" };
+expect("an owner system is labelled by its connection", linkedLabel(systems[0], words), "Owner id in Customer records", "crmtest_owner");
+expect("a system without a connection is named as stored", linkedLabel(systems[2], words), "Id in old_owner", "Owner id in ");
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

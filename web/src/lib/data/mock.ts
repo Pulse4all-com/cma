@@ -12,7 +12,10 @@ import type {
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
+  AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceForm, SourceKind,
+  SourceLine, SourcePipeline, SourceStore, SourceTag,
 } from "./types";
+import { settingsProblem } from "@/lib/sources";
 import { applyConnections, groupSpeedToLead, rangeProblem, type IntakeCounts } from "@/lib/reports";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
@@ -236,6 +239,8 @@ type MockState = {
   store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null;
   rosters: Map<string, MockRosterWeek> | null; config: MockConfig | null;
   messages: Map<string, MockMessage>; messagesSeeded: Set<string>; lastSyntheticAlertAt: number; messageSeq: number;
+  /** Sources, markets, rules and linked accounts per tenant (addition 0008e), seeded on first use */
+  intakeConfig?: Map<string, MockIntakeConfig>;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
@@ -912,6 +917,134 @@ function resolveTarget(me: Principal, target: MessageTarget, now: Instant): { ev
   const chosen = new Set(users.filter(clocked));
   if (chosen.size === 0 && !everyone) throw new CmaDbError("CMA04", "the target reaches nobody now");
   return { everyone, users: chosen };
+}
+
+// ---- Sources, markets, alert rules and linked accounts (addition 0008e): fixture data, in memory --------
+// Fictional connections with neutral adapter values (crmtest, phonetest, shoptest, automationtest),
+// invented ids, example.com hosts and form, outcome, line and tag names that look like a tenant's, so every
+// section and both pattern rules can be tried. The screens never branch on these values.
+
+type MockSource = SourceDetail & { tenantId: string };
+type MockIntakeConfig = {
+  sources: MockSource[];
+  markets: MarketConfig[];
+  hours: OfficeHours[];
+  holidays: MarketHoliday[];
+  rules: AlertRule[];
+  accounts: LinkedAccount[];
+};
+
+function mockSource(tenantId: string, n: number, adapter: string, name: string, accountId: string, kind: SourceKind | null, o: Partial<SourceDetail> = {}, settings: SourceConnection["settings"] = {}): MockSource {
+  const connection: SourceConnection = {
+    id: `00000000-0000-7000-8000-00000000c00${n}`, key: `k${n}${"0".repeat(20)}test`, adapter, name, accountId, kind, heldKinds: [], isActive: true,
+    signingSecretName: `ingest-${adapter}-signing`,
+    tokenSecretName: kind === "crm" || kind === "telephony" ? `ingest-${adapter}-token` : null,
+    settings, events24h: 40 + n * 7, eventsWaiting: n === 1 ? 2 : 0, eventsParked: 0, lastEventAt: new Date(Date.now() - n * 60_000).toISOString(),
+    pipelines: 0, forms: 0, callOutcomes: 0, fields: 0, lines: 0, tags: 0, storeHandle: null,
+  };
+  return {
+    tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {}, ...o,
+  };
+}
+
+const form = (formId: string, name: string, isCounted = true, leadSource: string | null = null, market: string | null = null): SourceForm =>
+  ({ formId, name, isCounted, leadSource, market, keptFields: [], isActive: true });
+const outcome = (outcomeRef: string, label: string, isConnected: boolean): SourceCallOutcome => ({ outcomeRef, label, isConnected, isActive: true });
+const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean): SourcePipeline =>
+  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true });
+
+function seedIntakeConfig(me: Principal): MockIntakeConfig {
+  const all = (state.intakeConfig ??= new Map());
+  const existing = all.get(me.tenantId);
+  if (existing) return existing;
+  const t = me.tenantId;
+  const crm = mockSource(t, 1, "crmtest", "Customer records (test)", "100200300", "crm", {
+    pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true), pipeline("deal", "p-self-serve", "Web orders (test)", true, false),
+      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true), pipeline("ticket", "p-support", "Support (test)", true, true)],
+    forms: [form("f-101", "NL - Quote form (test)"), form("f-102", "UK - Contact form (test)"), form("f-103", "DE Info request (test)"),
+      form("f-104", "NL - Cancellation form (test)"), form("f-105", "UK - Replacement request (test)"), form("f-106", "Support question (test)"),
+      form("f-107", "Newsletter sign-up (test)", false), form("f-108", "BE Quote form (test)", true, "quote", "BE")],
+    callOutcomes: [outcome("o-1", "Connected", true), outcome("o-2", "Not reached", true), outcome("o-3", "Voicemail", true), outcome("o-4", "Busy", false),
+      outcome("o-5", "Wrong number", false), outcome("o-6", "Left live message", true), outcome("o-7", "Do not call or email", false)],
+    fields: [{ entity: "contact", field: "country", refSystem: null, slot: 1, property: "contact_country" },
+      { entity: "contact", field: "language", refSystem: null, slot: 1, property: "contact_language" },
+      { entity: "contact", field: "ref", refSystem: "shoptest", slot: 1, property: "contact_shop_id_1" },
+      { entity: "deal", field: "market", refSystem: null, slot: 1, property: "deal_country" }],
+    writeback: [{ field: "commerce_ref", slot: 1, property: "contact_shop_id_1", mode: "slot", enabled: true },
+      { field: "country", slot: 1, property: "contact_country", mode: "if_empty", enabled: true }],
+    sampleIds: { deal: "41000123", ticket: "52000456" },
+  }, { app_host: "crm.example.com", record_url_deal: "https://{app_host}/records/{account}/deal/{id}", record_url_ticket: "https://{app_host}/records/{account}/ticket/{id}" });
+  const sources: MockSource[] = [crm];
+  if (t !== MOCK_TENANT_2) {
+    sources.push(mockSource(t, 2, "phonetest", "Phones (test)", "4400", "telephony", {
+      lines: [{ lineRef: "l-1", name: "NL sales line (test)", digits: "+31200000001", market: "NL", isCounted: true, isActive: true },
+        { lineRef: "l-2", name: "UK sales line (test)", digits: "+442000000002", market: "GB", isCounted: true, isActive: true },
+        { lineRef: "l-3", name: "Test line (test)", digits: null, market: null, isCounted: false, isActive: true }],
+      tags: [{ tagRef: "t-1", name: "Quote", isCounted: true, isActive: true }, { tagRef: "t-2", name: "Courtesy call", isCounted: true, isActive: true },
+        { tagRef: "t-3", name: "Internal", isCounted: false, isActive: true }],
+    }));
+    sources.push(mockSource(t, 3, "shoptest", "Shop NL (test)", "shop-nl-test.example.com", "commerce", {
+      store: { handle: "shop-nl-test", name: "Shop NL (test)", market: "NL", currency: "EUR", timeZone: "Europe/Amsterdam" },
+    }, { api_version: "2026-10", client_id: "test-client-id" }));
+    sources.push(mockSource(t, 4, "automationtest", "Automations (test)", "100200300", null, {}, { record_url_deal: "https://crm.example.com/records/{account}/deal/{id}" }));
+  }
+  const market = (code: string, name: string, timeZone: string, languageCode: string, currency: string, sortOrder: number, aliases: string[], active = true): MarketConfig =>
+    ({ code, name, timeZone, languageCode, languageSkillKey: active ? languageCode : null, minLanguageLevel: active ? 3 : null, currency, isActive: active, sortOrder, aliases });
+  const cfg: MockIntakeConfig = {
+    sources,
+    markets: [market("NL", "Netherlands", "Europe/Amsterdam", "nl", "EUR", 10, ["holland", "nederland", "the netherlands"]),
+      market("BE", "Belgium", "Europe/Brussels", "nl", "EUR", 20, ["belgie", "belgique"]),
+      market("GB", "United Kingdom", "Europe/London", "en", "GBP", 30, ["england", "great britain", "uk", "united kingdom"]),
+      market("DE", "Germany", "Europe/Berlin", "de", "EUR", 40, ["deutschland"]),
+      market("ES", "Spain", "Europe/Madrid", "es", "EUR", 90, [], false)],
+    hours: [1, 2, 3, 4, 5].map((weekday) => ({ market: "*", weekday, hours: "09:00-17:00" }))
+      .concat([1, 2, 3, 4, 5].map((weekday) => ({ market: "GB", weekday, hours: "09:00-12:30,13:00-17:30" }))),
+    holidays: [{ market: "NL", day: `${new Date().getUTCFullYear()}-12-25`, name: "Christmas Day" }, { market: "*", day: `${new Date().getUTCFullYear()}-12-31`, name: "Office closed (test)" }],
+    rules: [
+      { id: "00000000-0000-7000-8000-0000000a0001", name: "New deal", trigger: "record_created", recordType: "deal", pipelineIds: [], audiencePermission: "leads.accept",
+        matchLanguage: true, onlyClockedIn: true, fallbackPermission: "leads.manage", urgency: "normal", enabled: true, maxAgeMinutes: null, alerts30d: 214,
+        lastAlertAt: new Date(Date.now() - 25 * 60_000).toISOString() },
+      { id: "00000000-0000-7000-8000-0000000a0002", name: "Assigned deal", trigger: "record_assigned", recordType: "deal", pipelineIds: ["p-sales"], audiencePermission: "leads.accept",
+        matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, urgency: "urgent", enabled: true, maxAgeMinutes: 60, alerts30d: 168,
+        lastAlertAt: new Date(Date.now() - 12 * 60_000).toISOString() },
+    ],
+    accounts: [
+      { userId: "00000000-0000-7000-8000-000000000201", system: "crmtest_owner", externalId: "70000001" },
+      { userId: "00000000-0000-7000-8000-000000000201", system: "phonetest_user", externalId: "900001" },
+      { userId: "00000000-0000-7000-8000-000000000202", system: "crmtest_owner", externalId: "70000002" },
+      { userId: MOCK_MANAGER_ID, system: "crmtest_owner", externalId: "70000009" },
+    ],
+  };
+  all.set(t, cfg);
+  return cfg;
+}
+
+/** The kinds a fixture connection's rows imply, as cma.connection_held_kinds_of */
+function heldKindsOf(x: SourceDetail): SourceKind[] {
+  const out: SourceKind[] = [];
+  if (x.pipelines.length + x.forms.length + x.callOutcomes.length + x.fields.length + x.writeback.length > 0) out.push("crm");
+  if (x.lines.length + x.tags.length > 0) out.push("telephony");
+  if (x.store) out.push("commerce");
+  return out;
+}
+
+function sourceRow(x: MockSource): SourceConnection {
+  return {
+    ...x.connection, heldKinds: heldKindsOf(x), settings: { ...x.connection.settings }, pipelines: x.pipelines.length, forms: x.forms.length,
+    callOutcomes: x.callOutcomes.length, fields: x.fields.length, lines: x.lines.length, tags: x.tags.length, storeHandle: x.store?.handle ?? null,
+  };
+}
+
+function sourceOf(me: Principal, id: string): MockSource {
+  assertConfigure(me);
+  const x = seedIntakeConfig(me).sources.find((c) => c.connection.id === id);
+  if (!x) throw new CmaDbError("CMA02", "no such connection in the current tenant");
+  return x;
+}
+
+function assertMockMarket(me: Principal, code: string | null, allowDefault = false): void {
+  if (code === null || (allowDefault && code === "*")) return;
+  if (!seedIntakeConfig(me).markets.some((m) => m.code === code)) throw new CmaDbError("CMA02", "no such market");
 }
 
 export const mockData: CmaData = {
@@ -1719,6 +1852,211 @@ export const mockData: CmaData = {
         medianSecondsToRead: reads.length ? Math.round(reads[Math.floor((reads.length - 1) / 2)]!) : null });
     }
     return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  },
+
+  // ---- Sources, markets, alert rules (addition 0008e): the same refusals as the database functions ----
+
+  async listSources(me) {
+    assertConfigure(me);
+    return seedIntakeConfig(me).sources.map(sourceRow);
+  },
+
+  async getSource(me, id) {
+    const x = sourceOf(me, id);
+    const { tenantId: _t, ...detail } = structuredClone(x);
+    void _t;
+    return { ...detail, connection: sourceRow(x) };
+  },
+
+  async setSourceConnection(me, id, input) {
+    const x = sourceOf(me, id);
+    if (input.kind !== undefined) {
+      const held = heldKindsOf(x);
+      if (held.length > 0 && !held.includes(input.kind)) throw new CmaDbError("CMA03", "the connection holds rows of another kind");
+    }
+    if (input.name !== undefined) x.connection.name = input.name.trim();
+    if (input.isActive !== undefined) x.connection.isActive = input.isActive;
+    if (input.kind !== undefined) x.connection.kind = input.kind;
+  },
+
+  async setSourceSettings(me, id, settings) {
+    const x = sourceOf(me, id);
+    if (settingsProblem(settings)) throw new CmaDbError("CMA04", "settings refused");
+    x.connection.settings = { ...settings };
+  },
+
+  async setSourcePipeline(me, id, input) {
+    const x = sourceOf(me, id);
+    const p = x.pipelines.find((y) => y.recordType === input.recordType && y.pipelineId === input.pipelineId);
+    if (p) Object.assign(p, { isCounted: input.isCounted, isLead: input.isLead });
+    else x.pipelines.push({ ...pipeline(input.recordType, input.pipelineId, input.pipelineId, input.isCounted, input.isLead) });
+  },
+
+  async setSourceForms(me, id, changes) {
+    const x = sourceOf(me, id);
+    for (const c of changes) assertMockMarket(me, c.market);   // all or nothing, as one transaction
+    for (const c of changes) {
+      const f = x.forms.find((y) => y.formId === c.formId);
+      if (f) Object.assign(f, { isCounted: c.isCounted, leadSource: c.leadSource, market: c.market });
+      else x.forms.push(form(c.formId, c.formId, c.isCounted, c.leadSource, c.market));
+    }
+  },
+
+  async setSourceCallOutcomes(me, id, changes) {
+    const x = sourceOf(me, id);
+    for (const c of changes) {
+      const o = x.callOutcomes.find((y) => y.outcomeRef === c.outcomeRef);
+      if (o) o.isConnected = c.isConnected;
+      else x.callOutcomes.push(outcome(c.outcomeRef, c.outcomeRef, c.isConnected));
+    }
+  },
+
+  async setSourceLine(me, id, input) {
+    const x = sourceOf(me, id);
+    assertMockMarket(me, input.market);
+    const l = x.lines.find((y) => y.lineRef === input.lineRef);
+    if (l) Object.assign(l, { market: input.market, isCounted: input.isCounted });
+    else x.lines.push({ lineRef: input.lineRef, name: input.lineRef, digits: null, market: input.market, isCounted: input.isCounted, isActive: true } satisfies SourceLine);
+  },
+
+  async setSourceTag(me, id, input) {
+    const x = sourceOf(me, id);
+    const t = x.tags.find((y) => y.tagRef === input.tagRef);
+    if (t) t.isCounted = input.isCounted;
+    else x.tags.push({ tagRef: input.tagRef, name: input.tagRef, isCounted: input.isCounted, isActive: true } satisfies SourceTag);
+  },
+
+  async setSourceStore(me, id, store: SourceStore) {
+    const x = sourceOf(me, id);
+    assertMockMarket(me, store.market);
+    if (seedIntakeConfig(me).sources.some((c) => c !== x && c.store?.handle === store.handle)) throw new CmaDbError("CMA03", "the handle belongs to another store");
+    x.store = { ...store };
+  },
+
+  async getMarkets(me) {
+    assertConfigure(me);
+    const c = seedIntakeConfig(me);
+    return { markets: structuredClone(c.markets), hours: structuredClone(c.hours), holidays: structuredClone(c.holidays) };
+  },
+
+  async upsertMarket(me, input, active) {
+    assertConfigure(me);
+    if (input.code === "UK" || !/^[A-Z]{2}$/.test(input.code)) throw new CmaDbError("CMA04", "use GB");
+    const c = seedIntakeConfig(me);
+    const cur = c.markets.find((m) => m.code === input.code);
+    const next: MarketConfig = { ...input, isActive: active, aliases: cur?.aliases ?? [] };
+    if (cur) Object.assign(cur, next);
+    else c.markets.push(next);
+  },
+
+  async setMarketAlias(me, alias, code) {
+    assertConfigure(me);
+    const c = seedIntakeConfig(me);
+    const holder = c.markets.find((m) => m.aliases.includes(alias));
+    if (code === null) {
+      if (!holder) throw new CmaDbError("CMA02", "no such alias");
+      holder.aliases = holder.aliases.filter((a) => a !== alias);
+      return;
+    }
+    const target = c.markets.find((m) => m.code === code);
+    if (!target) throw new CmaDbError("CMA02", "no such market");
+    if (holder) holder.aliases = holder.aliases.filter((a) => a !== alias);
+    target.aliases = [...target.aliases, alias].sort();
+  },
+
+  async setOfficeHours(me, market, days) {
+    assertConfigure(me);
+    assertMockMarket(me, market, true);
+    const c = seedIntakeConfig(me);
+    for (const { weekday, hours } of days) {
+      c.hours = c.hours.filter((h) => !(h.market === market && h.weekday === weekday));
+      if (hours !== "") c.hours.push({ market, weekday, hours });
+    }
+    c.hours.sort((a, b) => Number(a.market !== "*") - Number(b.market !== "*") || a.market.localeCompare(b.market) || a.weekday - b.weekday);
+  },
+
+  async setHoliday(me, market, day, name) {
+    assertConfigure(me);
+    assertMockMarket(me, market, true);
+    const c = seedIntakeConfig(me);
+    const cur = c.holidays.find((h) => h.market === market && h.day === day);
+    if (name === null) {
+      if (!cur) throw new CmaDbError("CMA02", "no such holiday");
+      c.holidays = c.holidays.filter((h) => h !== cur);
+    } else if (cur) cur.name = name;
+    else c.holidays.push({ market, day, name });
+  },
+
+  async getAlertRules(me) {
+    assertConfigure(me);
+    const c = seedIntakeConfig(me);
+    const pipelines = c.sources.filter((x) => x.connection.kind === "crm")
+      .flatMap((x) => x.pipelines.map((p) => ({ connectionName: x.connection.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted })));
+    return { rules: structuredClone(c.rules), pipelines, defaultMaxAgeMinutes: 60 };
+  },
+
+  async upsertAlertRule(me, input) {
+    assertConfigure(me);
+    const c = seedIntakeConfig(me);
+    const name = input.name.trim();
+    const cur = c.rules.find((r) => r.name === name);
+    if (cur && cur.trigger !== input.trigger) throw new CmaDbError("CMA03", "a rule of the other trigger holds this name");
+    const values = { ...input, name, pipelineIds: [...new Set(input.pipelineIds)].sort() };
+    if (cur) {
+      Object.assign(cur, values);
+      return cur.id;
+    }
+    const id = crypto.randomUUID();
+    c.rules.push({ ...values, id, enabled: true, alerts30d: 0, lastAlertAt: null });
+    return id;
+  },
+
+  async setAlertRuleEnabled(me, id, enabled) {
+    assertConfigure(me);
+    const r = seedIntakeConfig(me).rules.find((x) => x.id === id);
+    if (!r) throw new CmaDbError("CMA02", "no such rule");
+    r.enabled = enabled;
+  },
+
+  // ---- Linked accounts (addition 0008e): the directory's scope and the People rule ----
+
+  async getLinkedAccounts(me) {
+    assertManage(me);
+    const c = seedIntakeConfig(me);
+    const visible = new Set(directoryFor(me).map((p) => p.userId));
+    const fromConnections = c.sources.filter((x) => x.connection.kind === "crm" || x.connection.kind === "telephony")
+      .map((x) => ({ system: `${x.connection.adapter}_${x.connection.kind === "crm" ? "owner" : "user"}`, name: x.connection.name, active: x.connection.isActive }));
+    const names = [...new Set([...fromConnections.map((x) => x.system), ...c.accounts.map((a) => a.system)])]
+      .sort((a, b) => Number(!a.endsWith("_owner")) - Number(!b.endsWith("_owner")) || a.localeCompare(b));
+    return {
+      systems: names.map((system) => ({
+        system, role: system.endsWith("_owner") ? "owner" as const : "user" as const,
+        connections: fromConnections.filter((x) => x.system === system).map((x) => x.name).sort(),
+        isActive: fromConnections.some((x) => x.system === system && x.active),
+      })),
+      accounts: c.accounts.filter((a) => visible.has(a.userId)).map((a) => ({ ...a })),
+    };
+  },
+
+  async setLinkedAccount(me, userId, system, externalId) {
+    assertManage(me);
+    const p = directoryFor(me).find((x) => x.userId === userId);
+    if (!p) {
+      if (seedPeople().has(userId)) throw new CmaDbError("CMA06", "may not manage this person");
+      throw new CmaDbError("CMA02", "person not found");
+    }
+    if (!p.mayEdit) throw new CmaDbError("CMA06", "may not edit this person");
+    if (!/^[a-z0-9]+_(owner|user)$/.test(system)) throw new CmaDbError("CMA04", "system must read <system>_owner or <system>_user");
+    const c = seedIntakeConfig(me);
+    const cur = c.accounts.find((a) => a.userId === userId && a.system === system);
+    if (externalId === null) {
+      if (!cur) throw new CmaDbError("CMA02", "no such id");
+      c.accounts = c.accounts.filter((a) => a !== cur);
+      return;
+    }
+    if (c.accounts.some((a) => a.system === system && a.externalId === externalId && a.userId !== userId)) throw new CmaDbError("CMA03", "the id belongs to another person");
+    if (cur) cur.externalId = externalId;
+    else c.accounts.push({ userId, system, externalId });
   },
 
   async getSpeedToLeadRows(me, range): Promise<SpeedToLeadRow[]> {

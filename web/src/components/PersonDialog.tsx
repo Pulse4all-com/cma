@@ -14,10 +14,10 @@
  */
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { Copy } from "@/lib/copy";
-import type { DirectoryPerson, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
+import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import {
-  checkNewPerson, editChanges, hasChanges, roleOptions, skillStateOf, skillsByDimension,
-  type EditState, type NewPersonForm, type NewPersonProblem, type SkillState,
+  checkNewPerson, editChanges, hasChanges, linkedChanges, linkedIdProblem, linkedLabel, linkedStateOf, roleOptions, skillStateOf, skillsByDimension,
+  type EditState, type LinkedState, type NewPersonForm, type NewPersonProblem, type SkillState,
 } from "@/lib/team";
 import { Button, Notice } from "./primitives";
 
@@ -42,6 +42,7 @@ export function PersonDialog({
   organisations,
   maySetSkills,
   defaultLoginSystem,
+  linked,
   copy,
   onClose,
   onSaved,
@@ -53,6 +54,8 @@ export function PersonDialog({
   organisations: OrganisationInfo[];
   maySetSkills: boolean;
   defaultLoginSystem: string;
+  /** Linked accounts (addition 0008e): the systems a person can hold an id in, and the ids held */
+  linked: LinkedAccounts;
   copy: Copy;
   onClose: () => void;
   onSaved: () => void;
@@ -86,9 +89,12 @@ export function PersonDialog({
   }), [organisations, defaultLoginSystem]);
   const [form, setForm] = useState<NewPersonForm>(emptyForm);
 
+  const initialLinked: LinkedState = useMemo(() => (person ? linkedStateOf(linked.accounts, person.userId, linked.systems) : {}), [person, linked]);
+  const [linkedEdit, setLinkedEdit] = useState<LinkedState>(initialLinked);
   const groups = useMemo(() => skillsByDimension(skills), [skills]);
   const changes = useMemo(() => editChanges(initial, edit, skills), [initial, edit, skills]);
-  const dirty = target.mode === "edit" ? hasChanges(changes) : JSON.stringify(form) !== JSON.stringify(emptyForm);
+  const linkChanges = useMemo(() => linkedChanges(initialLinked, linkedEdit), [initialLinked, linkedEdit]);
+  const dirty = target.mode === "edit" ? hasChanges(changes) || linkChanges.length > 0 : JSON.stringify(form) !== JSON.stringify(emptyForm);
 
   useEffect(() => {
     const d = ref.current;
@@ -135,22 +141,28 @@ export function PersonDialog({
       return;
     }
     if (!person) return;
-    if (!hasChanges(changes)) {
+    if (!hasChanges(changes) && linkChanges.length === 0) {
       setError(t.problemNoChange);
+      return;
+    }
+    if (Object.values(linkedEdit).some(linkedIdProblem)) {
+      setError(t.linkedProblem);
       return;
     }
     startTransition(async () => {
       const base = `/api/v1/team/directory/${person.userId}`;
-      const steps: [string, unknown][] = [];
+      // each step with its own answer to a conflict: an id another person holds says so
+      const steps: [string, unknown, string?][] = [];
       if (changes.roleKey) steps.push([`${base}/role`, { roleKey: changes.roleKey }]);
       if (changes.teams) steps.push([`${base}/teams`, { teamKeys: changes.teams }]);
       if (changes.skills) steps.push([`${base}/skills`, { skills: changes.skills }]);
+      for (const l of linkChanges) steps.push([`${base}/linked-accounts`, l, t.linkedTaken]);
       // The active flag last: deactivating first would make the other writes pointless
       if (changes.active !== undefined) steps.push([`${base}/active`, { active: changes.active }]);
-      for (const [path, body] of steps) {
+      for (const [path, body, conflict] of steps) {
         const res = await send("PUT", path, body);
         if (!res.ok) {
-          setError(messageFor(res.status));
+          setError(res.status === 409 && conflict ? conflict : messageFor(res.status));
           return;
         }
       }
@@ -325,6 +337,28 @@ export function PersonDialog({
                   })}
                 </div>
               ))}
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-3" data-testid="linked-accounts">
+              <legend className="mb-2 text-small font-semibold">{t.linkedAccounts}</legend>
+              <p className="text-caption text-p4a-grey">{t.linkedIntro}</p>
+              {linked.systems.length === 0 ? (
+                <p className="text-small text-p4a-muted">{t.linkedNoSystems}</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {linked.systems.map((sys) => (
+                    <label key={sys.system} className={label}>
+                      <span>
+                        {linkedLabel(sys, t)}
+                        {sys.isActive ? null : <span className="font-normal text-p4a-grey"> · {t.linkedInactive}</span>}
+                      </span>
+                      <input className={`${field} tabular`} value={linkedEdit[sys.system] ?? ""} maxLength={100} autoComplete="off" placeholder={t.linkedNone}
+                        aria-invalid={linkedIdProblem(linkedEdit[sys.system] ?? "")}
+                        onChange={(e) => setLinkedEdit({ ...linkedEdit, [sys.system]: e.target.value })} />
+                    </label>
+                  ))}
+                </div>
+              )}
             </fieldset>
           </div>
         )}

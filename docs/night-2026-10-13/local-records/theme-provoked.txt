@@ -1,0 +1,6 @@
+  /: typeface "Georgia" is not Montserrat
+  /: p color #ff0000 is not in the palette
+  /: p borderTopColor #ff0000 is not in the palette
+  /: p outlineColor #ff0000 is not in the palette
+  /reports/data-quality: hint text is #666666, not Inkt Body like the other text
+theme: FAIL (5 problems)

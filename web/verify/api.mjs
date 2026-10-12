@@ -23,7 +23,9 @@
  * (migration 0005a: statuses, app links, absence types, coverage targets, settings; the admin only,
  * everything undone at the end), the own profile for My account (addition 0005b), and messaging
  * (migration 0008: the own inbox, since and limit, read and acknowledge on own rows only, sending as
- * messages.send to one named person, the stats; one message per run, dev data).
+ * messages.send to one named person, the stats; one message per run, dev data), and since addition
+ * 0008e (night of 13 October 2026) the Sources, Markets and Alert rules screens and linked accounts on
+ * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -33,6 +35,12 @@ const PROVOKE = process.argv.includes("--provoke");
  * tenant with telephony and a shop and one without (invest-analyst).
  */
 const ONLY_REPORTS = process.argv.includes("--reports");
+/**
+ * --sources runs only the checks of the Sources, Markets and Alert rules screens and of linked accounts on
+ * People (addition 0008e, night of 13 October 2026). Every write is undone at the end, so they run against
+ * dev, a local database or a cma-web in mock data mode alike.
+ */
+const ONLY_SOURCES = process.argv.includes("--sources");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -105,12 +113,16 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_REPORTS && health.body?.data === "mock"))) {
-  console.error(`Not a mock-auth, ${ONLY_REPORTS ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
+if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES) && health.body?.data === "mock"))) {
+  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
 }
 if (ONLY_REPORTS) {
   await reportChecks();
+  verdict();
+}
+if (ONLY_SOURCES) {
+  await sourceChecks();
   verdict();
 }
 
@@ -700,6 +712,8 @@ expect("the forgotten clock-out grace exists with its default", [graceReset.body
 // Nothing of the run stays: the status and the link stay retired rows with no time behind them (dev data; not a check)
 void linksBefore;
 
+await sourceChecks();
+
 // ---- verdict --------------------------------------------------------------------------------
 
 // ---- work status (cma.set_status), 7 checks ------------------------------------------------------------
@@ -810,6 +824,178 @@ function verdict() {
     const ok = passed === n;
     console.log(`\n${ok ? `ALL ${n} PASS` : `${n - passed} of ${n} FAILED`}`);
     process.exit(ok ? 0 : 1);
+  }
+}
+
+// ---- sources, markets, alert rules and linked accounts (addition 0008e), 32 checks ------------------
+// The admin configures sources, markets and rules (tenant.configure); linked accounts follow the People
+// rule (users.manage_agents for non-managing people, users.manage_all for everyone, never oneself). Every
+// write is undone at the end: settings, a pipeline, a call outcome, an alias, a holiday and two people's ids
+// are put back as the run found them; the one rule the run writes ("API verifier rule", a record_assigned
+// rule on a pipeline id no source has) is left switched off (dev data). The source checks need a
+// connection: dev's CRM connection, or locally verify/reports-fixture.sql.
+async function sourceChecks() {
+  const sj = (s, method, path, body, headers = { "x-cma-request": "1" }) =>
+    call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const cfgS = "/api/v1/configuration";
+  const KNOWN = ["id", "key", "adapter", "name", "accountId", "kind", "heldKinds", "isActive", "signingSecretName", "tokenSecretName", "settings",
+    "events24h", "eventsWaiting", "eventsParked", "lastEventAt", "pipelines", "forms", "callOutcomes", "fields", "lines", "tags", "storeHandle"].sort();
+
+  expect("sources: an agent cannot read the connections", (await get(AGENT, `${cfgS}/sources`)).status, 403, 200);
+  expect("sources: the manager cannot read them either", (await get(MANAGER, `${cfgS}/sources`)).status, 403, 200);
+  const list = await get(ADMIN, `${cfgS}/sources`);
+  const sources = list.body?.data ?? [];
+  expect("sources: the admin reads every connection with its kind",
+    [list.status, Array.isArray(list.body?.data), sources.every((c) => [null, "crm", "telephony", "commerce", "automation"].includes(c.kind) && Array.isArray(c.heldKinds))],
+    [200, true, true], [403, false, true]);
+  expect("sources: no secret value, only names and non-secret settings",
+    sources.every((c) => JSON.stringify(Object.keys(c).sort()) === JSON.stringify(KNOWN) && Object.keys(c.settings ?? {}).every((k) => !/(secret|token|password|key)/i.test(k))),
+    true, false);
+  expect("sources: a malformed id is a 400, an unknown one a 404",
+    [(await get(ADMIN, `${cfgS}/sources/not-an-id`)).status, (await get(ADMIN, `${cfgS}/sources/00000000-0000-7000-8000-00000000dead`)).status], [400, 404], [200, 200]);
+
+  const src = sources.find((c) => c.kind === "crm") ?? sources.find((c) => c.heldKinds.includes("crm")) ?? sources[0];
+  if (!src) {
+    console.log("note  no connection in this tenant: the 10 checks on one connection are left out (load verify/reports-fixture.sql locally)");
+  } else {
+    const base = `${cfgS}/sources/${src.id}`;
+    const one = await get(ADMIN, base);
+    const d = one.body?.data;
+    expect("sources: the admin opens one connection with its catalogs",
+      [one.status, d?.connection?.id, ["pipelines", "forms", "callOutcomes", "lines", "tags", "fields", "writeback"].every((k) => Array.isArray(d?.[k]))],
+      [200, src.id, true], [404, null, true]);
+    const settingsBefore = d?.connection?.settings ?? {};
+    expect("sources: a settings write needs the request header", (await sj(ADMIN, "PUT", `${base}/settings`, { settings: settingsBefore }, {})).status, 400, 200);
+    expect("sources: a cross-site settings write is refused",
+      (await sj(ADMIN, "PUT", `${base}/settings`, { settings: settingsBefore }, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+    const secretTry = await sj(ADMIN, "PUT", `${base}/settings`, { settings: { ...settingsBefore, api_token: "x" } });
+    expect("sources: a secret-looking settings key is a 400 and changes nothing",
+      [secretTry.status, Object.keys((await get(ADMIN, base)).body?.data?.connection?.settings ?? {}).includes("api_token")], [400, false], [200, true]);
+    expect("sources: the manager cannot write settings", (await sj(MANAGER, "PUT", `${base}/settings`, { settings: settingsBefore })).status, 403, 200);
+    const written = await sj(ADMIN, "PUT", `${base}/settings`, { settings: { ...settingsBefore, verify_note: "api verifier" } });
+    const restored = await sj(ADMIN, "PUT", `${base}/settings`, { settings: settingsBefore });
+    expect("sources: a setting is written, read back and the settings restored",
+      [written.body?.data?.connection?.settings?.verify_note, JSON.stringify(restored.body?.data?.connection?.settings) === JSON.stringify(settingsBefore)],
+      ["api verifier", true], [undefined, true]);
+    const notHeld = ["crm", "telephony", "commerce", "automation"].find((k) => src.heldKinds.length > 0 && !src.heldKinds.includes(k));
+    expect("sources: a kind the connection's rows contradict is a 409",
+      notHeld ? (await sj(ADMIN, "PUT", base, { kind: notHeld })).status : 409, 409, 200);
+    const pipeline = d?.pipelines?.[0];
+    if (pipeline) {
+      const flipped = await sj(ADMIN, "PUT", `${base}/pipelines`, { recordType: pipeline.recordType, pipelineId: pipeline.pipelineId, isCounted: !pipeline.isCounted, isLead: pipeline.isLead });
+      const back = await sj(ADMIN, "PUT", `${base}/pipelines`, { recordType: pipeline.recordType, pipelineId: pipeline.pipelineId, isCounted: pipeline.isCounted, isLead: pipeline.isLead });
+      const find = (r) => (r.body?.data?.pipelines ?? []).find((p) => p.recordType === pipeline.recordType && p.pipelineId === pipeline.pipelineId);
+      expect("sources: a pipeline's counted switch is written and put back",
+        [find(flipped)?.isCounted, find(back)?.isCounted, find(back)?.isRouted, find(back)?.workType], [!pipeline.isCounted, pipeline.isCounted, pipeline.isRouted, pipeline.workType], [pipeline.isCounted, !pipeline.isCounted, null, null]);
+    } else {
+      console.log("note  the connection has no pipeline: the pipeline check is left out");
+    }
+    const form = d?.forms?.[0];
+    if (form) {
+      const bad = await sj(ADMIN, "PUT", `${base}/forms`, { forms: [
+        { formId: form.formId, isCounted: !form.isCounted, leadSource: form.leadSource, market: form.market },
+        { formId: form.formId, isCounted: form.isCounted, leadSource: form.leadSource, market: "ZZ" }] });
+      const after = ((await get(ADMIN, base)).body?.data?.forms ?? []).find((f) => f.formId === form.formId);
+      expect("sources: a form change with an unknown market is a 404 and writes nothing", [bad.status, after?.isCounted, after?.keptFields], [404, form.isCounted, form.keptFields], [200, !form.isCounted, []]);
+    } else {
+      console.log("note  the connection has no form: the form check is left out");
+    }
+    const outcome = d?.callOutcomes?.[0];
+    if (outcome) {
+      const o1 = await sj(ADMIN, "PUT", `${base}/call-outcomes`, { outcomes: [{ outcomeRef: outcome.outcomeRef, isConnected: !outcome.isConnected }] });
+      const o2 = await sj(ADMIN, "PUT", `${base}/call-outcomes`, { outcomes: [{ outcomeRef: outcome.outcomeRef, isConnected: outcome.isConnected }] });
+      const find = (r) => (r.body?.data?.callOutcomes ?? []).find((o) => o.outcomeRef === outcome.outcomeRef)?.isConnected;
+      expect("sources: a call outcome's connected switch is written and put back", [find(o1), find(o2)], [!outcome.isConnected, outcome.isConnected], [outcome.isConnected, outcome.isConnected]);
+    } else {
+      console.log("note  the connection has no call outcome: the outcome check is left out");
+    }
+  }
+
+  // markets
+  expect("markets: an agent cannot read them", (await get(AGENT, `${cfgS}/markets`)).status, 403, 200);
+  const mk = await get(ADMIN, `${cfgS}/markets`);
+  const markets = mk.body?.data?.markets ?? [];
+  expect("markets: the admin reads markets with aliases, office hours and holidays",
+    [mk.status, markets.every((m) => /^[A-Z]{2}$/.test(m.code) && Array.isArray(m.aliases)), Array.isArray(mk.body?.data?.hours), Array.isArray(mk.body?.data?.holidays)],
+    [200, true, true, true], [403, true, true, true]);
+  expect("markets: UK is not a market code (use GB)",
+    (await sj(ADMIN, "PUT", `${cfgS}/markets`, { code: "UK", name: "United Kingdom", timeZone: "Europe/London", languageCode: "en", currency: "GBP", sortOrder: 990 })).status, 400, 200);
+  expect("markets: overlapping office hours are a 400",
+    (await sj(ADMIN, "PUT", `${cfgS}/markets/hours`, { market: "*", days: [{ weekday: 7, hours: "09:00-13:00,12:00-17:00" }] })).status, 400, 200);
+  const first = markets[0];
+  if (first) {
+    const alias = `verify alias ${Date.now() % 100000}`;
+    const added = await sj(ADMIN, "PUT", `${cfgS}/markets/aliases`, { alias, code: first.code });
+    const removed = await sj(ADMIN, "PUT", `${cfgS}/markets/aliases`, { alias, code: null });
+    const again = await sj(ADMIN, "PUT", `${cfgS}/markets/aliases`, { alias, code: null });
+    const has = (r) => (r.body?.data?.markets ?? []).find((m) => m.code === first.code)?.aliases.includes(alias);
+    expect("markets: an alias is added, read back and removed; a second removal is a 404", [has(added), has(removed), again.status], [true, false, 404], [false, true, 200]);
+    const day = `${new Date().getUTCFullYear() + 9}-01-02`;
+    const hAdd = await sj(ADMIN, "PUT", `${cfgS}/markets/holidays`, { market: "*", day, name: "API verifier holiday" });
+    const hDel = await sj(ADMIN, "PUT", `${cfgS}/markets/holidays`, { market: "*", day, name: null });
+    const hHas = (r) => (r.body?.data?.holidays ?? []).some((h) => h.market === "*" && h.day === day);
+    expect("markets: a holiday is added and removed again", [hHas(hAdd), hHas(hDel)], [true, false], [false, true]);
+  } else {
+    console.log("note  no market in this tenant: the alias and holiday checks are left out");
+  }
+
+  // alert rules
+  expect("alert rules: the manager cannot read them", (await get(MANAGER, `${cfgS}/alert-rules`)).status, 403, 200);
+  const rulesRead = await get(ADMIN, `${cfgS}/alert-rules`);
+  expect("alert rules: the admin reads the rules and the pipelines a rule can name",
+    [rulesRead.status, Array.isArray(rulesRead.body?.data?.rules), Array.isArray(rulesRead.body?.data?.pipelines), Number.isInteger(rulesRead.body?.data?.defaultMaxAgeMinutes)],
+    [200, true, true, true], [403, true, true, true]);
+  const RULE = "API verifier rule";
+  const recordType = rulesRead.body?.data?.pipelines?.[0]?.recordType ?? "deal";
+  const ruleBody = { name: RULE, trigger: "record_assigned", recordType, pipelineIds: ["verify-no-such-pipeline"], urgency: "normal", maxAgeMinutes: 5 };
+  const ruleWritten = await sj(ADMIN, "PUT", `${cfgS}/alert-rules`, ruleBody);
+  const rule = (ruleWritten.body?.data?.rules ?? []).find((r) => r.name === RULE);
+  expect("alert rules: an assignment rule is written by name and listed",
+    [ruleWritten.status, rule?.trigger, rule?.pipelineIds, rule?.maxAgeMinutes], [200, "record_assigned", ["verify-no-such-pipeline"], 5], [403, "record_created", [], null]);
+  expect("alert rules: the same name for the other trigger is a 409",
+    (await sj(ADMIN, "PUT", `${cfgS}/alert-rules`, { ...ruleBody, trigger: "record_created", audiencePermission: "leads.accept", matchLanguage: true, onlyClockedIn: true, fallbackPermission: null })).status, 409, 200);
+  const off = rule ? await sj(ADMIN, "PUT", `${cfgS}/alert-rules/${rule.id}/enabled`, { enabled: false }) : null;
+  expect("alert rules: a rule is switched off, never deleted", (off?.body?.data?.rules ?? []).find((r) => r.name === RULE)?.enabled, false, true);
+
+  // linked accounts on People
+  const la = "/api/v1/team/directory";
+  expect("linked accounts: an agent cannot read them", (await get(AGENT, `${la}/linked-accounts`)).status, 403, 200);
+  const linked = await get(MANAGER, `${la}/linked-accounts`);
+  const systems = linked.body?.data?.systems ?? [];
+  expect("linked accounts: the manager reads the systems and the ids held, never a sign-in id",
+    [linked.status, systems.every((x) => /^[a-z0-9]+_(owner|user)$/.test(x.system)), (linked.body?.data?.accounts ?? []).every((a) => /_(owner|user)$/.test(a.system))],
+    [200, true, true], [403, true, true]);
+  const meMgr = (await get(MANAGER, "/api/v1/me")).body?.data;
+  const meAdmin = (await get(ADMIN, "/api/v1/me")).body?.data;
+  const meAgent = (await get(AGENT, "/api/v1/me")).body?.data;
+  const sys = systems[0]?.system ?? "verify_owner";
+  expect("linked accounts: the manager cannot link the admin (a managing person)",
+    (await sj(MANAGER, "PUT", `${la}/${meAdmin?.userId}/linked-accounts`, { system: sys, externalId: "verify-1" })).status, 403, 200);
+  expect("linked accounts: nobody links their own id",
+    (await sj(MANAGER, "PUT", `${la}/${meMgr?.userId}/linked-accounts`, { system: sys, externalId: "verify-2" })).status, 403, 200);
+  expect("linked accounts: an id with a space is a 400",
+    (await sj(MANAGER, "PUT", `${la}/${meAgent?.userId}/linked-accounts`, { system: sys, externalId: "has space" })).status, 400, 200);
+  // two people the manager may edit, from the manager's own directory (dev: the seed's agents; mock: the fixture team)
+  const editable = ((await get(MANAGER, la)).body?.data ?? []).filter((x) => x.mayEdit && x.isActive);
+  const [pa, pb] = editable;
+  if (systems.length > 0 && pa && pb) {
+    const held = (u) => (linked.body?.data?.accounts ?? []).find((a) => a.userId === u && a.system === sys)?.externalId ?? null;
+    const aBefore = held(pa.userId);
+    const bBefore = held(pb.userId);
+    const id = `verify-${Date.now() % 1000000}`;
+    const linkedNow = await sj(MANAGER, "PUT", `${la}/${pa.userId}/linked-accounts`, { system: sys, externalId: id });
+    const taken = await sj(MANAGER, "PUT", `${la}/${pb.userId}/linked-accounts`, { system: sys, externalId: id });
+    const after = (await get(MANAGER, `${la}/linked-accounts`)).body?.data?.accounts ?? [];
+    const bAfter = after.find((a) => a.userId === pb.userId && a.system === sys)?.externalId ?? null;
+    // put both back as the run found them
+    if (bAfter !== bBefore) await sj(MANAGER, "PUT", `${la}/${pb.userId}/linked-accounts`, { system: sys, externalId: bBefore });
+    await sj(MANAGER, "PUT", `${la}/${pa.userId}/linked-accounts`, { system: sys, externalId: aBefore });
+    const aAfter = ((await get(MANAGER, `${la}/linked-accounts`)).body?.data?.accounts ?? []).find((a) => a.userId === pa.userId && a.system === sys)?.externalId ?? null;
+    expect("linked accounts: the manager links a person; the same id for another person is a 409; put back",
+      [(linkedNow.body?.data?.accounts ?? []).some((a) => a.userId === pa.userId && a.externalId === id), taken.status, bAfter === bBefore, aAfter === aBefore],
+      [true, 409, true, true], [false, 200, true, true]);
+  } else {
+    console.log("note  no customer-records or telephony system, or fewer than two people the manager may edit: the link check is left out");
   }
 }
 
