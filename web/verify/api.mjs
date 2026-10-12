@@ -7,7 +7,8 @@
  *   node verify/api.mjs --provoke    every check gets a deliberately wrong expectation and must FAIL
  * Env: BASE (default http://localhost:8080).
  *
- * Needs the dev seeds (06, 24) and migrations 0003 to 0003e, 0004 and 0005. Ends the test supervisor's workday of today and, as
+ * Needs the dev seeds (06, 24) and migrations 0003 to 0003e, 0004, 0005 and 0008b, and runs between
+ * 07:00 and 22:00 Amsterdam time (the workday window of the seed since 0008b). Ends the test supervisor's workday of today and, as
  * the supervisor, closes Agent Two's open past days (the verifier's own earlier logins) through the
  * corrections route, so no fixture runs first. Adds one day per run for Agent Two on the first free
  * date more than 400 days back (dev data). Safe to rerun on the same day.
@@ -59,6 +60,16 @@ function dateKey(d, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
 }
 
+/** The instant of a local time on a date in a zone, as ISO (away from a clock change, as every use here is) */
+function localInstant(date, time, tz) {
+  const guess = Date.parse(`${date}T${time}:00Z`);
+  const name = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "longOffset" })
+    .formatToParts(new Date(guess)).find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  const offsetMin = m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+  return new Date(guess - offsetMin * 60_000).toISOString();
+}
+
 const results = [];
 /** expect(name, actual, expected, provoked): in --provoke the provoked expectation is used and must fail */
 function expect(name, actual, expected, provoked) {
@@ -102,9 +113,12 @@ expect("an invalid ?as= is a 400", [asBad.status, asBad.headers.get("x-cma-auth"
 expect("the cookie from ?as= is honoured",
   (await plain("/day", { cookie: `cma-mock-subject=${SUPERVISOR}` })).status, 200, 303);
 
-// ---- clock in is an action (increment e, addition 0003d), 6 checks ---------------------------
+// ---- clock in is an action (increment e, addition 0003d), 7 checks ---------------------------
 // The analyst holds performance.team and no workday.own: a visit to the landing page and to My day
 // opens nothing, and the start route is refused by the database (CMA06), not by the route.
+// Since addition 0008b a clock-in before the window start (07:00 for Pulse4all) is refused, so
+// this verifier runs between 07:00 and 22:00 Amsterdam time; the refusal itself is proven by
+// db/47_verify_workday_window.sql, because a clock-in before 07:00 cannot be forced here.
 await visit(ANALYST, "/");
 await visit(ANALYST, "/day");
 expect("a visit opens no workday", (await get(ANALYST, "/api/v1/me/day")).body?.data ?? null, null, "a day");
@@ -112,11 +126,18 @@ expect("the database keeps no time for someone without a clock", (await start(AN
 expect("start needs the request header", (await start(AGENT, {})).status, 400, 200);
 expect("cross-site start is refused",
   (await start(AGENT, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
+const today0 = dateKey(new Date(), meA.timeZone);
 const started = (await start(AGENT)).body?.data;
 const startedAgain = (await start(AGENT)).body?.data;
 expect("start opens the own day today", [started?.date, started?.status === "working" || started?.status === "ended"],
   [dateKey(new Date(), meA.timeZone), true], [dateKey(new Date(), meA.timeZone), false]);
 expect("a second start is the same day", startedAgain?.startedAt === started?.startedAt, true, false);
+// The day's end (addition 0008b): the tenant's window end on the agent's date, 22:00 in Amsterdam
+// for Pulse4all (Madrid keeps the same clock), so the clock on Welcome and My day stops there
+const dayRead = (await get(AGENT, "/api/v1/me/day")).body?.data ?? null;
+expect("the own day ends at the window end, 22:00",
+  dayRead?.dayEndsAt ?? null, localInstant(dayRead?.date ?? today0, "22:00", "Europe/Amsterdam"),
+  localInstant(dayRead?.date ?? today0, "23:00", "Europe/Amsterdam"));
 
 // ---- own data only -------------------------------------------------------------------------
 await start(SUPERVISOR);

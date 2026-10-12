@@ -191,3 +191,33 @@ begin
   on conflict (tenant_id, dimension, key) do nothing;
 end
 $$;
+
+-- Workday window and forgotten-day close per tenant (after addition 0008b; Martin, 12 October 2026):
+-- a working day runs from 07:00 to 22:00 in the day's zone; a day still open an hour after 22:00 is
+-- closed at the planned shift end, else at 17:00. Only sets values a tenant does not have yet, so a
+-- later change on the configuration screen survives a rerun; every value passes the catalog's check.
+do $$
+begin
+  -- two steps: the catalog itself only exists from 0003b on
+  if to_regclass('cma.setting') is null then
+    raise notice 'the workday window settings do not exist yet (addition 0008b): rerun this seed after 46_workday_window.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'workday.window_end') then
+    raise notice 'the workday window settings do not exist yet (addition 0008b): rerun this seed after 46_workday_window.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, s.key, s.value
+  from (values
+    (1, 'workday.window_start',             '07:00'),
+    (2, 'workday.window_end',               '22:00'),
+    (3, 'workday.auto_close_at',            '17:00'),
+    (4, 'workday.auto_close_grace_minutes', '60')
+  ) as s(ord, key, value)
+  cross join cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug, s.ord
+  on conflict (tenant_id, key) do nothing;
+end
+$$;

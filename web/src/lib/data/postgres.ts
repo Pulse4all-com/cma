@@ -8,6 +8,7 @@ import type {
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
 } from "./types";
+import { workdayStartsAt } from "@/lib/live";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -47,6 +48,7 @@ type DayRow = HeaderRow & {
   status_since: Date | null;
   closed_seconds: number;
   running_since: Date | null;
+  day_ends_at: Date;
 };
 
 /**
@@ -61,7 +63,8 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
             ws.name                                  as status_name,
             coalesce(c.closed_seconds, 0)::int       as closed_seconds,
             c.running_since,
-            c.status_since
+            c.status_since,
+            cma.business_day_end(s.business_date, s.timezone) as day_ends_at
        from cma.workday_summary s
        left join cma.work_status ws
               on ws.tenant_id = cma.current_tenant_id() and ws.id = s.current_status_id
@@ -98,6 +101,7 @@ function toWorkday(r: DayRow): Workday {
       closedSeconds: r.closed_seconds,
       runningSince: !ended && r.running_since ? r.running_since.toISOString() : null,
     },
+    dayEndsAt: r.day_ends_at.toISOString(),
   };
 }
 
@@ -291,7 +295,7 @@ type TeamNowDbRow = {
   started_at: Date | null; ended_at: Date | null;
   status_key: string | null; status_name: string | null; status_active: boolean | null;
   is_working: boolean | null; is_productive: boolean | null; is_paid: boolean | null; is_billable: boolean | null;
-  status_since: Date | null; closed_seconds: number; running_since: Date | null;
+  status_since: Date | null; closed_seconds: number; running_since: Date | null; day_ends_at: Date;
 };
 
 function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
@@ -307,6 +311,7 @@ function toTeamNowPerson(r: TeamNowDbRow): TeamNowPerson {
           status_since: r.status_since,
           closed_seconds: Number(r.closed_seconds),
           running_since: r.running_since,
+          day_ends_at: r.day_ends_at,
         })
       : null;
   const status =
@@ -513,12 +518,19 @@ export const postgresData: CmaData = {
 
   async startWorkday(me: Principal): Promise<Workday> {
     // Clock in: today's day, open or ended, created if needed; an ended day stays ended. The
-    // database creates a day only for someone whose time is kept (0003d, CMA06 otherwise)
-    return withTenant(ctx(me), async (q) => {
-      const opened = await q.query<{ business_date: string }>(`select business_date from cma.open_workday()`);
-      const date = one(opened.rows, "open_workday").business_date;
-      return toWorkday(one(await readDay(q, "$1::date", [date]), "open_workday"));
-    });
+    // database creates a day only for someone whose time is kept (0003d, CMA06 otherwise) and not
+    // before the workday window starts (0008b, CMA04 "the workday starts at HH:MI"): that refusal
+    // keeps its own text, so the screen can say when the day starts
+    try {
+      return await withTenant(ctx(me), async (q) => {
+        const opened = await q.query<{ business_date: string }>(`select business_date from cma.open_workday()`);
+        const date = one(opened.rows, "open_workday").business_date;
+        return toWorkday(one(await readDay(q, "$1::date", [date]), "open_workday"));
+      });
+    } catch (e) {
+      const startsAt = e instanceof CmaDbError && e.sqlState === "CMA04" ? workdayStartsAt(e.detail) : null;
+      throw startsAt ? new CmaDbError("CMA04", `the workday starts at ${startsAt}`) : e;
+    }
   },
 
   async getWorkday(me: Principal, date: DateKey): Promise<Workday | null> {
@@ -693,7 +705,8 @@ export const postgresData: CmaData = {
   // of the status flags that follows runs only in a transaction where the check already passed
   async getTeamNow(me): Promise<TeamNow> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<TeamNowDbRow>(`select * from cma.team_now()`);
+      // The day's end per person (0008b), so a day on the board carries the same field as the own day
+      const r = await q.query<TeamNowDbRow>(`select n.*, cma.business_day_end(n.business_date, n.timezone) as day_ends_at from cma.team_now() n`);
       const flags = await q.query<{ is_working: boolean; is_productive: boolean; is_paid: boolean }>(
         `select is_working, is_productive, is_paid from cma.work_status where status = 'active' order by sort_order, key`,
       );

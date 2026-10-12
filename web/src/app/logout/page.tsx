@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Shell } from "@/components/Shell";
 import { Card, Keycap, Notice, PageTitle } from "@/components/primitives";
 import { data } from "@/lib/data";
+import { workedSeconds } from "@/lib/live";
 import { dateKeyInZone, fmtMinutes, fmtTime } from "@/lib/time";
 import { resolve } from "../access";
 
@@ -16,8 +17,7 @@ export default async function LogOutPage() {
   const today = await data().getWorkday(me, dateKeyInZone(now, me.timeZone));
   const dayOpen = today?.status === "working";
   // The clock's figures at this moment, so the person sees what logging out ends (11 October 2026)
-  const running = today?.clock.runningSince ? Math.max(0, now.getTime() - Date.parse(today.clock.runningSince)) / 1000 : 0;
-  const workedMinutes = today ? Math.floor((today.clock.closedSeconds + running) / 60) : 0;
+  const workedMinutes = today ? Math.floor(workedSeconds(today.clock, now.getTime(), today.dayEndsAt) / 60) : 0;
   const clockLine = today && dayOpen
     ? copy.logOut.clockStops.replace("{start}", fmtTime(today.startedAt, me.timeZone, me.locale)).replace("{worked}", fmtMinutes(workedMinutes))
     : null;

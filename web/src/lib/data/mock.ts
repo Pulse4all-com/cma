@@ -110,9 +110,23 @@ function secondsBetween(a: Instant, b: Instant): number {
   return Math.max(0, Math.floor((Date.parse(b) - Date.parse(a)) / 1000));
 }
 
-/** Worked seconds of a day up to `now`: closed stretches plus the running one */
+/**
+ * The fictional tenant's workday window and forgotten-day close, Pulse4all's settings (addition
+ * 0008b): clock-in from 07:00, time counted up to 22:00, a forgotten day closed at 17:00 when no
+ * shift is planned. Fixture configuration following the database's rule; the screens read the
+ * day's end from the data, never from here.
+ */
+const MOCK_WINDOW = { start: "07:00", end: "22:00", autoCloseAt: "17:00" } as const;
+
+/** The first instant after a working day in a zone: the window end */
+function dayEndMs(date: DateKey, timeZone: string): number {
+  return localMs(date, MOCK_WINDOW.end, timeZone);
+}
+
+/** Worked seconds of a day up to `now`: closed stretches plus the running one, which stops at the day's end */
 function workedSeconds(w: Workday, now: Instant): number {
-  return w.clock.closedSeconds + (w.clock.runningSince ? secondsBetween(w.clock.runningSince, now) : 0);
+  const until = new Date(Math.min(Date.parse(now), Date.parse(w.dayEndsAt))).toISOString();
+  return w.clock.closedSeconds + (w.clock.runningSince ? secondsBetween(w.clock.runningSince, until) : 0);
 }
 
 /** Closes the running stretch at `now`; the result has nothing running */
@@ -145,6 +159,7 @@ function seedHistory(me: Principal, today: DateKey) {
       statusName: null,
       statusSince: null,
       clock: { closedSeconds: (endMin - startMin) * 60, runningSince: null },
+      dayEndsAt: new Date(dayEndMs(date, me.timeZone)).toISOString(),
     });
   }
 }
@@ -212,14 +227,15 @@ function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
   const live = effective(events);
   const start = live.find((e) => e.kind === "start")!;
   const end = live.find((e) => e.kind === "end") ?? null;
-  const today = dateKeyInZone(new Date(), p.timeZone);
-  const isCapped = !end && date < today;
-  const stop = end ? Date.parse(end.at) : isCapped ? localMs(addDays(date, 1), "00:00", p.timeZone) : Date.now();
+  // Every stretch stops at the window end; an open day past it is capped (0008b)
+  const dayEnd = dayEndMs(date, p.timeZone);
+  const isCapped = !end && Date.now() > dayEnd;
+  const stop = end ? Date.parse(end.at) : Math.min(Date.now(), dayEnd);
   let working = 0;
   let paid = 0;
   const marks = live.filter((e) => e.kind !== "end");
   marks.forEach((e, i) => {
-    const until = Math.min(stop, i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : stop);
+    const until = Math.min(stop, dayEnd, i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : stop);
     const seconds = Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000));
     const s = MOCK_STATUSES.find((x) => x.key === e.statusKey);
     if (s?.isWorking) working += seconds;
@@ -237,7 +253,8 @@ function teamDay(p: TeamPerson, date: DateKey, events: MockEvent[]): TeamDay {
     minutes: Math.floor(working / 60),
     paidMinutes: Math.floor(paid / 60),
     isCapped,
-    needsCorrection: isCapped,
+    // A day the system closed stays on the review list until a correction replaces its end (0005a)
+    needsCorrection: isCapped || end?.source === "system",
     hasCorrection: events.some((e) => e.source === "correction"),
   };
 }
@@ -252,13 +269,13 @@ function readTeamDay(userId: string, date: DateKey): TeamDayDetail {
 function statusRows(p: TeamPerson, date: DateKey, events: MockEvent[]): StatusChangeRow[] {
   const live = effective(events);
   const end = live.find((e) => e.kind === "end") ?? null;
-  const today = dateKeyInZone(new Date(), p.timeZone);
-  const capped = !end && date < today;
-  const stop = end ? Date.parse(end.at) : capped ? localMs(addDays(date, 1), "00:00", p.timeZone) : Date.now();
+  const dayEnd = dayEndMs(date, p.timeZone);
+  const capped = !end && Date.now() > dayEnd;
+  const stop = end ? Date.parse(end.at) : Math.min(Date.now(), dayEnd);
   const marks = live.filter((e) => e.kind !== "end");
   return marks.map((e, i) => {
     const next = marks[i + 1] ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
-    const until = Math.min(stop, next ?? stop);
+    const until = Math.min(stop, dayEnd, next ?? stop);
     const status = MOCK_STATUSES.find((x) => x.key === e.statusKey);
     const paid = !!e.statusKey && MOCK_PAID.has(e.statusKey);
     return {
@@ -337,6 +354,12 @@ function seedTeam() {
       plan.sort((a, b) => Date.parse(a[1]) - Date.parse(b[1]));
       const events = plan.filter(([, t]) => Date.parse(t) <= now).map(([k, t, s]) => mockEvent(k, t, s, "user"));
       if (events.length === 0) continue;
+      // ...and the hourly sweep closed it at the default time, as the database does without a
+      // planned shift (0008b): never before his last event
+      if (forgot) {
+        const lastMs = Math.max(...events.map((e) => Date.parse(e.at)));
+        events.push(mockEvent("end", new Date(Math.max(lastMs, localMs(date, MOCK_WINDOW.autoCloseAt, p.timeZone))).toISOString(), null, "system"));
+      }
       if (n === 1 && weekday === 4) {         // Jordi: an end time confirmed afterwards
         const old = events.find((e) => e.kind === "end");
         if (old) {
@@ -799,9 +822,12 @@ export const mockData: CmaData = {
     const k = key(me, date);
     const existing = store.get(k);
     if (existing) return existing;
-    // Same contract as cma.open_workday after 0003d: nothing exists yet, so only a person whose
-    // time is kept gets a day
+    // Same contract as cma.open_workday after 0003d and 0008b: nothing exists yet, so only a person
+    // whose time is kept gets a day, and not before the window starts
     assertTimeKept(me);
+    if (Date.parse(now) < localMs(date, MOCK_WINDOW.start, me.timeZone)) {
+      throw new CmaDbError("CMA04", `the workday starts at ${MOCK_WINDOW.start}`);
+    }
     seedHistory(me, date);
     const fresh: Workday = {
       date,
@@ -812,6 +838,7 @@ export const mockData: CmaData = {
       statusName: DEFAULT_STATUS.name,
       statusSince: now,
       clock: { closedSeconds: 0, runningSince: DEFAULT_STATUS.isWorking ? now : null },
+      dayEndsAt: new Date(dayEndMs(date, me.timeZone)).toISOString(),
     };
     store.set(k, fresh);
     return fresh;
@@ -932,8 +959,9 @@ export const mockData: CmaData = {
     const days = teamStore.get(userId)!;
     const events = [...(days.get(date) ?? [])];
     const isNew = events.length === 0;
-    const from = localMs(date, "00:00", person.timeZone);
-    const to = localMs(addDays(date, 1), "00:00", person.timeZone);
+    // Within the day's window (0008b)
+    const from = localMs(date, MOCK_WINDOW.start, person.timeZone);
+    const to = dayEndMs(date, person.timeZone);
     correction.changes.forEach((c: CorrectionChange, i) => {
       if (isNew && i === 0 && (c.kind !== "start" || c.supersedes)) throw new CmaDbError("CMA04", "the first change must be the start");
       if (c.supersedes) {
@@ -1059,12 +1087,14 @@ export const mockData: CmaData = {
       const marks = live.filter((e) => e.kind !== "end");
       const last = marks[marks.length - 1]!;
       const current = MOCK_STATUSES.find((x) => x.key === last.statusKey) ?? null;
-      // Closed stretches in working statuses; the last stretch is open while the day is
+      // Closed stretches in working statuses, each stopping at the window end; the last stretch is
+      // open while the day is
+      const dayEnd = dayEndMs(date, p.timeZone);
       let closed = 0;
       marks.forEach((e, i) => {
         const s = MOCK_STATUSES.find((x) => x.key === e.statusKey);
         const until = i + 1 < marks.length ? Date.parse(marks[i + 1]!.at) : end ? Date.parse(end.at) : null;
-        if (s?.isWorking && until !== null) closed += Math.max(0, Math.floor((until - Date.parse(e.at)) / 1000));
+        if (s?.isWorking && until !== null) closed += Math.max(0, Math.floor((Math.min(until, dayEnd) - Date.parse(e.at)) / 1000));
       });
       const day: Workday = {
         date,
@@ -1075,6 +1105,7 @@ export const mockData: CmaData = {
         statusName: end ? null : current?.name ?? last.statusKey,
         statusSince: end ? null : last.at,
         clock: { closedSeconds: closed, runningSince: !end && current?.isWorking ? last.at : null },
+        dayEndsAt: new Date(dayEnd).toISOString(),
       };
       const status = !end && current
         ? { key: current.key, name: current.name, isActive: true, isWorking: current.isWorking,

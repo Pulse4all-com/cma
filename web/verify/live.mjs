@@ -8,10 +8,12 @@
  * from the day's state (clocked out, not clocked in), the row order (group, then name, no
  * ranking), the tiles (a flag group only when an active status belongs to it, the two day states
  * always, counts before any filter), the filters, the employers, and the two figures that tick
- * (since, worked so far) from fixed instants.
+ * (since, worked so far, which stops at the day's end since addition 0008b) from fixed instants,
+ * and the window start read from a refused clock-in.
  */
 import {
   LIVE_GROUPS, employersOf, filterRows, fmtSeconds, liveGroupOf, liveRows, secondsSince, teamKeysByUser, teamsOf, tiles, workedSeconds,
+  workdayStartsAt,
 } from "../src/lib/live.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -107,6 +109,13 @@ expect("since counts whole seconds from the instant", secondsSince(T1, nowMs), 1
 expect("since is never negative", secondsSince("2026-10-07T10:00:00.000Z", nowMs), 0, -3570);
 expect("worked adds the running stretch to the closed ones", workedSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs), 2430, 600);
 expect("worked stands still while paused or ended", workedSeconds({ closedSeconds: 9000, runningSince: null }, nowMs), 9000, 9030);
+// The workday window (addition 0008b): the running stretch stops at the day's end, as the database counts
+expect("worked stops at the day's end", workedSeconds({ closedSeconds: 600, runningSince: T1 }, nowMs, "2026-10-07T08:45:00.000Z"), 1500, 2430);
+expect("a stretch begun after the day's end counts nothing",
+  workedSeconds({ closedSeconds: 54000, runningSince: "2026-10-07T09:00:00.000Z" }, nowMs, "2026-10-07T08:00:00.000Z"), 54000, 54030);
+expect("a refused clock-in gives the window start, nothing else does",
+  ["the workday starts at 07:00", "the workday starts at 25:00", "invalid", null].map(workdayStartsAt),
+  ["07:00", null, null, null], ["07:00", "25:00", null, null]);
 expect("the format drops the hour below one", [fmtSeconds(5), fmtSeconds(3599), fmtSeconds(3600), fmtSeconds(37230)],
   ["0:05", "59:59", "1:00:00", "10:20:30"], ["0:05", "59:59", "1:00:00", "10:20:31"]);
 
