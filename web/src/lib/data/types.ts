@@ -716,6 +716,138 @@ export interface MessageStat {
   medianSecondsToRead: number | null;
 }
 
+// ---- Intake reports (migration 0007d and 0006; B11, 12 October 2026). Ids, counts and codes only:
+// no customer name, email or phone number reaches these shapes.
+
+/** How cma.speed_to_lead_summary groups its rows */
+export type SpeedToLeadGroup = "day" | "market" | "agent" | "pipeline";
+
+/** called: an outbound call reached the deal; otherwise not called, open or closed */
+export type SpeedToLeadStatus = "called" | "not_called_open" | "not_called_closed";
+
+/** One lead deal (cma.speed_to_lead_rows) with the link to its record (cma.record_url, null without a template) */
+export interface SpeedToLeadRow {
+  dealId: string;
+  connectionId: string;
+  /** The deal's id in the CRM */
+  dealSourceId: string;
+  pipelineId: string | null;
+  pipelineLabel: string | null;
+  /** Business date of the deal's creation in the tenant's zone */
+  date: DateKey;
+  createdAt: Instant;
+  /** A catalog market code, or "unknown" (then the business measures are null) */
+  market: string;
+  /** Where the market came from: "record", "contact" or null for unknown */
+  marketSource: string | null;
+  isClosed: boolean;
+  status: SpeedToLeadStatus;
+  /** The first outbound call's id in the CRM */
+  firstCallSourceId: string | null;
+  firstCallAt: Instant | null;
+  firstCallLinked: boolean | null;
+  firstAnyCallAt: Instant | null;
+  firstAnyDirection: string | null;
+  inboundFirst: boolean;
+  firstConnectedAt: Instant | null;
+  /** The CMA person behind the call's or the deal's owner; null when the owner is not mapped */
+  agentUserId: string | null;
+  /** "call" or "deal": whose owner the agent came from; null without an owner */
+  agentFrom: string | null;
+  elapsedSeconds: number | null;
+  businessSeconds: number | null;
+  targetSeconds: number | null;
+  /** null while a deal not yet called can still make it */
+  withinTarget: boolean | null;
+  nextBusinessNoon: Instant | null;
+  beforeNextNoon: boolean | null;
+  /** Office seconds waited so far, for open deals not called */
+  waitingBusinessSeconds: number | null;
+  recordUrl: string | null;
+}
+
+/** One group of cma.speed_to_lead_summary */
+export interface SpeedToLeadSummaryRow {
+  /** The business date, the market code, the agent's user id or "unknown", or connection:pipeline */
+  groupKey: string;
+  /** The date, the market, the agent's name or the pipeline label; null for an agent who is not mapped */
+  groupLabel: string | null;
+  deals: number;
+  called: number;
+  medianBusinessMinutes: number | null;
+  p80BusinessMinutes: number | null;
+  withinTargetPct: number | null;
+  beforeNextNoonPct: number | null;
+  openNotCalled: number;
+}
+
+export interface SpeedToLeadSummary {
+  from: DateKey;
+  to: DateKey;
+  group: SpeedToLeadGroup;
+  rows: SpeedToLeadSummaryRow[];
+}
+
+/**
+ * Which kinds of source the tenant has connected. Telephony: an active connection with a line in the
+ * telephony catalog or a telephony call (migration 0007a); commerce: an active connection with its
+ * store (0007b, one store per commerce connection).
+ */
+export interface SourceConnections {
+  telephony: boolean;
+  commerce: boolean;
+}
+
+/**
+ * Per business date and market (cma.intake_per_day). Telephony figures are null when the tenant has
+ * no telephony connected, commerce figures null without a shop: never 0 for a source that is not there.
+ */
+export interface IntakeDay {
+  date: DateKey;
+  market: string;
+  formSubmissions: number;
+  dealsCreated: number;
+  dealsClosed: number;
+  ticketsCreated: number;
+  ticketsClosed: number;
+  callsIn: number | null;
+  callsOut: number | null;
+  taggedCalls: number | null;
+  newCustomers: number | null;
+  firstOrders: number | null;
+  repeatOrders: number | null;
+  renewals: number | null;
+}
+
+export interface Intake {
+  from: DateKey;
+  to: DateKey;
+  connections: SourceConnections;
+  /** The tenant's intake.start_date: nothing before it is counted */
+  startDate: DateKey | null;
+  rows: IntakeDay[];
+}
+
+/** One check of cma.data_quality(); total null for a check whose source is not installed */
+export interface DataQualityCheck {
+  key: string;
+  /** The database's own description, for a check this screen does not know yet */
+  description: string;
+  total: number | null;
+}
+
+/** Records created per business date, type, market and pipeline (cma.crm_records_per_day, 0006) */
+export interface CrmRecordsDay {
+  date: DateKey;
+  recordType: string;
+  /** As the source wrote it; null without a market */
+  market: string | null;
+  pipelineId: string | null;
+  pipelineLabel: string | null;
+  records: number;
+  closedNow: number;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -865,4 +997,16 @@ export interface CmaData {
   sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
   /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */
   getMessageStats(me: Principal, range: HoursRange): Promise<MessageStat[]>;
+
+  // ---- Intake reports (0007d, 0006): the database checks the permission on every call (CMA06); at most 92 days
+  /** One row per lead deal created in the range, with its record link. Needs reports.view or performance.team */
+  getSpeedToLeadRows(me: Principal, range: HoursRange): Promise<SpeedToLeadRow[]>;
+  /** The rows grouped by day, market, agent or pipeline. Needs reports.view or performance.team; another group CMA04 */
+  getSpeedToLeadSummary(me: Principal, range: HoursRange, group: SpeedToLeadGroup): Promise<SpeedToLeadSummary>;
+  /** Intake per business date and market with the tenant's source connections. Needs reports.view or performance.team */
+  getIntake(me: Principal, range: HoursRange): Promise<Intake>;
+  /** Every data-quality check with its total, in the database's order. Needs reports.view or tenant.configure */
+  getDataQuality(me: Principal): Promise<DataQualityCheck[]>;
+  /** CRM records created per business date, type, market and pipeline. Needs performance.team */
+  getCrmRecordsPerDay(me: Principal, range: HoursRange): Promise<CrmRecordsDay[]>;
 }

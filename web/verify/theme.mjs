@@ -7,7 +7,8 @@
  * build time. The Dashboard is checked as the test supervisor, so its charts render;
  * My day is checked without a day (the Clock in card) and, as Agent Two after the
  * start route, with the clock and the status buttons; the Live board as the supervisor; People
- * (the Team screen, 0004) as the admin.
+ * (the Team screen, 0004) as the admin. The intake reports (B11): Speed to lead, Intake and Data quality
+ * as the manager, Intake and the Dashboard's Intake row for a tenant without telephony or a shop.
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
@@ -61,6 +62,12 @@ const pages = [
   { path: "/configuration/statuses", subject: "admin" }, { path: "/configuration/teams", subject: "admin" },
   { path: "/configuration/absences", subject: "admin" }, { path: "/configuration/exports", subject: "admin" },
   { path: "/configuration/app-links", subject: "admin" },
+  // The intake reports (B11): as the manager (every figure), and the tenant without telephony or a shop
+  { path: "/reports/speed-to-lead?range=month&group=agent", subject: "manager" },
+  { path: "/reports/intake?range=month", subject: "manager" },
+  { path: "/reports/intake?range=month", subject: "invest-analyst" },
+  { path: "/reports/data-quality", subject: "manager" },
+  { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 for (const { path, subject, start } of pages) {

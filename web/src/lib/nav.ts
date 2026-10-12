@@ -17,11 +17,14 @@ export type ShellPage =
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
   | "messages" | "messages-send"
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
+  /** Intake reports (B11, migration 0007d) */
+  | "speed-to-lead" | "intake" | "data-quality"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
+  | "/reports/speed-to-lead" | "/reports/intake" | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links";
 
 export interface NavItem {
@@ -117,6 +120,12 @@ export function navEntries(copy: Copy): NavEntry[] {
       icon: "chart",
       items: [
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },
+        // The intake reports (B11, 12 October 2026), each with its function's permissions (migration 0007d),
+        // the same lists as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here,
+        // because this module has no runtime imports)
+        { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
+        { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
+        { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },
     {

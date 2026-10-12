@@ -1,0 +1,155 @@
+-- =============================================================================================
+-- verify/reports-fixture.sql: a small intake fixture for running verify/api.mjs --reports (and the
+-- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026)
+-- =============================================================================================
+-- Never for dev or prod: it refuses to run unless the session sets the local switch first, and it
+-- refuses a database without the dev seed. All ids are invented; nothing personal is written (ids,
+-- times, codes and counts only, as the ingest path allows). Dates are relative to today, so the
+-- verifier's last 30 days always hold data. Rerunnable: a second run finds its connections and
+-- stops.
+--
+--   psql -h /tmp -p 5433 -d cma -c "set cma.local_fixture = 'on'" -f verify/reports-fixture.sql
+--   (or put  set cma.local_fixture = 'on';  in the same session before \i)
+--
+-- What it writes
+--   pulse4all-subscriptions  a CRM, a telephony and a shop connection (so telephony and the shop are
+--                            connected), markets NL and GB with office hours, lead deals called,
+--                            not called open and closed, one owner mapped to Agent Two and one not,
+--                            a deal of an unknown market, form submissions, telephony calls with a
+--                            tag, shop customers and orders, and the record link template
+--   pulse4all-invest         a CRM connection only, two deals and a form submission, and the mock
+--                            identity invest-analyst (analytics), so a tenant without telephony or
+--                            a shop can be read
+do $$
+begin
+  if coalesce(current_setting('cma.local_fixture', true), '') <> 'on' then
+    raise exception 'local fixture only: run  set cma.local_fixture = ''on''  in this session first';
+  end if;
+  if not exists (select 1 from cma.app_user where email = 'agent.two@example.com') then
+    raise exception 'the dev seed is missing: this fixture needs db/03 and db/06';
+  end if;
+end
+$$;
+set role cma_owner;
+
+do $$
+declare
+  v_subs uuid; v_inv uuid;
+  v_admin uuid; v_agent2 uuid; v_ing uuid; v_admin_inv uuid; v_ing_inv uuid; v_inv_analyst uuid;
+  v_crm uuid; v_tel uuid; v_shop uuid; v_crm_inv uuid;
+  d date := current_date;
+  ts text;
+begin
+  select id into v_subs from cma.tenant where slug = 'pulse4all-subscriptions';
+  select id into v_inv from cma.tenant where slug = 'pulse4all-invest';
+  if exists (select 1 from cma.integration_connection where tenant_id = v_subs and adapter = 'fixturecrm') then
+    raise notice 'fixture already present';
+    return;
+  end if;
+  select id into v_admin from cma.app_user where tenant_id = v_subs and email = 'admin@example.com';
+  select id into v_agent2 from cma.app_user where tenant_id = v_subs and email = 'agent.two@example.com';
+  select id into v_ing from cma.app_user where tenant_id = v_subs and email = 'ingest@system.invalid';
+  select id into v_ing_inv from cma.app_user where tenant_id = v_inv and email = 'ingest@system.invalid';
+
+  -- the invest tenant's analyst (mock identity invest-analyst) and an admin to configure it
+  insert into cma.app_user (tenant_id, email, display_name) values (v_inv, 'invest.analyst@example.com', 'Test invest analyst') returning id into v_inv_analyst;
+  insert into cma.app_user (tenant_id, email, display_name) values (v_inv, 'invest.admin@example.com', 'Test invest admin') returning id into v_admin_inv;
+  insert into cma.user_role (tenant_id, user_id, role_id)
+  select v_inv, x.uid, ar.id from (values (v_inv_analyst, 'analytics'), (v_admin_inv, 'admin')) x(uid, role_key)
+  join cma.app_role ar on ar.tenant_id = v_inv and ar.key = x.role_key;
+  insert into cma.app_user_external_id (tenant_id, user_id, system, external_id) values (v_inv, v_inv_analyst, 'mock', 'invest-analyst');
+
+  insert into cma.integration_connection (tenant_id, adapter, name, external_account_id) values (v_subs, 'fixturecrm', 'Fixture CRM', 'portal-1') returning id into v_crm;
+  insert into cma.integration_connection (tenant_id, adapter, name, external_account_id) values (v_subs, 'fixturetel', 'Fixture telephony', 'tel-1') returning id into v_tel;
+  insert into cma.integration_connection (tenant_id, adapter, name, external_account_id) values (v_subs, 'fixtureshop', 'Fixture shop', 'shop.example.com') returning id into v_shop;
+  insert into cma.integration_connection (tenant_id, adapter, name, external_account_id) values (v_inv, 'fixturecrm', 'Fixture CRM invest', 'portal-2') returning id into v_crm_inv;
+
+  -- ---- pulse4all-subscriptions --------------------------------------------------------------
+  perform set_config('role', 'cma_app', true);
+  perform set_config('app.tenant_id', v_subs::text, true);
+  perform set_config('app.user_id', v_admin::text, true);
+  perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+  perform cma.upsert_market('GB', 'United Kingdom', 'Europe/London', 'en', 'GBP');
+  perform cma.set_business_hours('*', w::smallint, '09:00-17:00') from generate_series(1, 5) w;
+  perform cma.set_tenant_setting('intake.start_date', (d - 60)::text);
+  perform cma.set_user_external_id(v_agent2, 'fixturecrm_owner', 'o-1');
+  perform cma.set_connection_settings(v_crm, '{"record_url_deal": "https://example.com/fixture/{account}/deal/{id}"}');
+  perform cma.upsert_commerce_store(v_shop, 'fixture-nl', 'Fixture NL', 'NL', 'EUR', 'Europe/Amsterdam');
+
+  perform set_config('app.user_id', v_ing::text, true);
+  perform cma.ingest_upsert_pipelines(v_crm, '[
+    {"recordType": "deal", "pipelineId": "sales", "label": "Sales", "stages": [
+       {"stageId": "s1", "label": "Open", "order": 1, "isClosed": false}, {"stageId": "s9", "label": "Lost", "order": 9, "isClosed": true}]},
+    {"recordType": "ticket", "pipelineId": "support", "label": "Support", "stages": [{"stageId": "t1", "label": "New", "order": 1, "isClosed": false}]}]');
+  perform cma.ingest_upsert_telephony_catalog(v_tel, 'number', '[{"numberRef": "n-nl", "name": "Fixture NL line", "digits": "+31000000001"}]');
+  perform cma.ingest_upsert_telephony_catalog(v_tel, 'tag', '[{"tagRef": "tg1", "name": "Fixture sale"}]');
+  perform cma.ingest_upsert_forms(v_crm, '[{"formId": "f1", "name": "Fixture form NL"}]');
+
+  perform set_config('app.user_id', v_admin::text, true);
+  perform cma.set_telephony_number(v_tel, 'n-nl', 'NL', true);
+  perform cma.set_form(v_crm, 'f1', true, 'Fixture', 'NL', '{}');
+
+  -- deals: two days back (09:00 Amsterdam is 07:00 UTC in October before the change, 08:00 after;
+  -- the exact office minutes do not matter to the verifier), each with its own contact
+  perform set_config('app.user_id', v_ing::text, true);
+  perform cma.ingest_upsert_records(v_crm, (
+    select jsonb_agg(jsonb_build_object('recordType', 'deal', 'sourceId', x.id, 'pipelineId', 'sales', 'stageId', x.stage,
+                                        'ownerRef', x.owner, 'contactId', 'k' || x.id, 'market', x.market,
+                                        'createdAt', to_char(x.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'updatedAt', to_char(x.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))
+                         || case when x.stage = 's9' then jsonb_build_object('closedAt', to_char(x.at + interval '2 hours', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')) else '{}' end)
+    from (values
+      ('9100001', 's1', 'o-1', 'NL',    (d - 2)::timestamp + time '08:00'),
+      ('9100002', 's1', 'o-9', 'NL',    (d - 2)::timestamp + time '09:00'),
+      ('9100003', 's1', 'o-1', 'GB',    (d - 3)::timestamp + time '10:00'),
+      ('9100004', 's1', null,  'NL',    (d - 2)::timestamp + time '11:00'),
+      ('9100005', 's9', null,  'NL',    (d - 5)::timestamp + time '12:00'),
+      ('9100006', 's1', 'o-9', 'Mars',  (d - 4)::timestamp + time '09:30')) x(id, stage, owner, market, at)));
+  perform cma.ingest_upsert_records(v_crm, (
+    select jsonb_build_array(jsonb_build_object('recordType', 'ticket', 'sourceId', '9200001', 'pipelineId', 'support', 'stageId', 't1', 'market', 'NL',
+      'createdAt', to_char((d - 2)::timestamp + time '10:00', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'updatedAt', to_char((d - 2)::timestamp + time '10:00', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))));
+  perform cma.ingest_upsert_calls(v_crm, (
+    select jsonb_agg(jsonb_build_object('sourceId', c.id, 'occurredAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'direction', 'outbound',
+                                        'ownerRef', c.owner, 'updatedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+    from (values ('8100001', 'o-1', (d - 2)::timestamp + time '08:07'),
+                 ('8100002', 'o-9', (d - 2)::timestamp + time '10:30'),
+                 ('8100003', 'o-1', (d - 3)::timestamp + time '13:00'),
+                 ('8100006', 'o-9', (d - 4)::timestamp + time '09:40')) c(id, owner, at)));
+  perform cma.ingest_upsert_associations(v_crm, (
+    select jsonb_agg(jsonb_build_object('fromType', 'crm_call', 'fromId', a.call, 'toType', 'contact', 'toId', a.contact, 'removed', false,
+                                        'changedAt', to_char((d - 1)::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+    from (values ('8100001', 'k9100001'), ('8100002', 'k9100002'), ('8100003', 'k9100003'), ('8100006', 'k9100006')) a(call, contact)));
+  perform cma.ingest_upsert_telephony_calls(v_tel, (
+    select jsonb_agg(jsonb_build_object('sourceId', t.id, 'direction', t.dir, 'startedAt', to_char(t.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                                        'endedAt', to_char(t.at + interval '3 minutes', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'numberRef', 'n-nl',
+                                        'versionAt', to_char(t.at + interval '3 minutes', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'tags', t.tags))
+    from (values ('7100001', 'inbound',  (d - 2)::timestamp + time '09:00', '["tg1"]'::jsonb),
+                 ('7100002', 'outbound', (d - 2)::timestamp + time '09:30', '[]'::jsonb)) t(id, dir, at, tags)));
+  perform cma.ingest_upsert_commerce_customers(v_shop, (
+    select jsonb_build_array(jsonb_build_object('sourceId', '6100001', 'createdAt', to_char((d - 2)::timestamp + time '12:00', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                                                'updatedAt', to_char((d - 2)::timestamp + time '12:00', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))));
+  perform cma.ingest_upsert_commerce_orders(v_shop, (
+    select jsonb_build_array(jsonb_build_object('sourceId', '5100001', 'customerId', '6100001', 'priorOrdersCount', 0, 'currency', 'EUR', 'totalAmount', '10.00',
+                                                'createdAt', to_char((d - 2)::timestamp + time '12:05', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                                                'updatedAt', to_char((d - 2)::timestamp + time '12:05', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))));
+  perform cma.ingest_upsert_form_submissions(v_crm, (
+    select jsonb_agg(jsonb_build_object('sourceId', s.id, 'formId', 'f1', 'submittedAt', to_char(s.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+    from (values ('4100001', (d - 2)::timestamp + time '07:55'), ('4100002', (d - 3)::timestamp + time '09:55')) s(id, at)));
+
+  -- ---- pulse4all-invest: a CRM only ------------------------------------------------------------
+  perform set_config('app.tenant_id', v_inv::text, true);
+  perform set_config('app.user_id', v_admin_inv::text, true);
+  perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+  perform cma.set_tenant_setting('intake.start_date', (d - 60)::text);
+  perform set_config('app.user_id', v_ing_inv::text, true);
+  perform cma.ingest_upsert_pipelines(v_crm_inv, '[{"recordType": "deal", "pipelineId": "invest", "label": "Invest", "stages": [{"stageId": "i1", "label": "Open", "order": 1, "isClosed": false}]}]');
+  perform cma.ingest_upsert_records(v_crm_inv, (
+    select jsonb_agg(jsonb_build_object('recordType', 'deal', 'sourceId', x.id, 'pipelineId', 'invest', 'stageId', 'i1', 'market', 'NL',
+                                        'createdAt', to_char(x.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'updatedAt', to_char(x.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+    from (values ('9300001', (d - 2)::timestamp + time '10:00'), ('9300002', (d - 1)::timestamp + time '10:00')) x(id, at)));
+
+  perform set_config('role', 'cma_owner', true);
+  perform set_config('app.tenant_id', '', true);
+  perform set_config('app.user_id', '', true);
+  raise notice 'fixture written';
+end
+$$;

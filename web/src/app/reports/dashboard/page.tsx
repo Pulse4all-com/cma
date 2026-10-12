@@ -2,6 +2,7 @@ import {
   DayChart, GroupLegend, PersonBars, StatusBars, Tile,
 } from "@/components/DashboardCharts";
 import { DashboardFilter } from "@/components/DashboardFilter";
+import { IntakeRow } from "@/components/ReportParts";
 import { PeriodBar } from "@/components/PeriodBar";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
@@ -18,8 +19,10 @@ const MAX_DAYS = 92;
  * Dashboard (Report, first page of the Reports group): where the team's time went, per status and
  * per flag group, per day and per person. Shown to people holding performance.team (supervisor,
  * manager and analytics in the default ladder); the database checks that permission again on
- * every read (CMA06). Staff data only, never customer data. One read per page: the person filter
- * narrows the rows of the period on the server, so its list needs no team list.
+ * every read (CMA06). Staff data only, never customer data. One read for the time: the person filter
+ * narrows the rows of the period on the server, so its list needs no team list. Since B11 (12 October
+ * 2026) the Intake row above the time tiles reads the tenant's intake for the period: counts, speed to
+ * lead and the not-connected state of telephony and the shop, never a customer's details.
  */
 export default async function DashboardPage({ searchParams }: PageProps<"/reports/dashboard">) {
   const r = await resolve();
@@ -43,7 +46,14 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
   const today = dateKeyInZone(new Date(), me.timeZone);
   const { range, period, invalid } = resolvePeriod(sp, today, MAX_DAYS);
 
-  const all = await data().getTeamStatusTime(me, period, null);
+  // The Intake row (B11, migration 0007d and 0006's crm_records_per_day): the tenant's intake for the
+  // period, read next to the time per status; the person filter does not apply to it
+  const [all, intake, records, speed] = await Promise.all([
+    data().getTeamStatusTime(me, period, null),
+    data().getIntake(me, period),
+    data().getCrmRecordsPerDay(me, period),
+    data().getSpeedToLeadRows(me, period),
+  ]);
   const people = peopleOf(all.rows);
   const person = typeof sp.person === "string" && people.some((p) => p.userId === sp.person) ? sp.person : "";
   const rows = person ? all.rows.filter((x) => x.userId === person) : all.rows;
@@ -75,6 +85,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
           <Notice tone="warning">{invalid === "length" ? t.tooLong : copy.myHours.invalidRange}</Notice>
         </div>
       ) : null}
+
+      <IntakeRow intake={intake} records={records} speed={speed} copy={copy} locale={me.locale} from={period.from} />
 
       <div className="mb-6 flex items-end justify-between gap-4">
         <DashboardFilter people={people} person={person} query={query} copy={copy} />

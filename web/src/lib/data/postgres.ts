@@ -7,7 +7,9 @@ import type {
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
+  CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
 } from "./types";
+import { applyConnections, rangeProblem, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 
 /**
@@ -81,6 +83,78 @@ async function readDay(q: Querier, dateSql: string, params: unknown[]): Promise<
     params,
   );
   return r.rows;
+}
+
+
+// ---- Intake reports (migration 0007d, and 0006's crm_records_per_day; B11, 12 October 2026)
+// Each function checks its permission and the 92-day bound itself (CMA06, CMA04), in the same
+// transaction as everything else read here; the bound is checked here first as well, so a long range
+// never reaches the database.
+
+function assertReportRange(range: HoursRange): void {
+  assertDate(range.from, "from");
+  assertDate(range.to, "to");
+  if (rangeProblem(range.from, range.to)) throw new CmaDbError("CMA04", "the range must run forward and cover at most 92 days");
+}
+
+/** numeric arrives as a string; null stays null */
+const num = (v: string | number | null): number | null => (v === null ? null : Number(v));
+
+type SpeedDbRow = {
+  deal_id: string; connection_id: string; deal_source_id: string; pipeline_id: string | null; pipeline_label: string | null;
+  business_date: string; created_at: Date; market: string; market_source: string | null; is_closed: boolean; status: SpeedToLeadStatus;
+  first_call_source_id: string | null; first_call_at: Date | null; first_call_linked: boolean | null; first_any_call_at: Date | null;
+  first_any_direction: string | null; inbound_first: boolean; first_connected_at: Date | null; agent_user_id: string | null;
+  agent_from: string | null; elapsed_seconds: number | null; business_seconds: number | null; target_seconds: number | null;
+  within_target: boolean | null; next_business_noon: Date | null; before_next_noon: boolean | null;
+  waiting_business_seconds: number | null; record_url: string | null;
+};
+
+function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
+  return {
+    dealId: r.deal_id, connectionId: r.connection_id, dealSourceId: r.deal_source_id, pipelineId: r.pipeline_id,
+    pipelineLabel: r.pipeline_label, date: r.business_date, createdAt: r.created_at.toISOString(), market: r.market,
+    marketSource: r.market_source, isClosed: r.is_closed, status: r.status, firstCallSourceId: r.first_call_source_id,
+    firstCallAt: iso(r.first_call_at), firstCallLinked: r.first_call_linked, firstAnyCallAt: iso(r.first_any_call_at),
+    firstAnyDirection: r.first_any_direction, inboundFirst: r.inbound_first, firstConnectedAt: iso(r.first_connected_at),
+    agentUserId: r.agent_user_id, agentFrom: r.agent_from, elapsedSeconds: r.elapsed_seconds, businessSeconds: r.business_seconds,
+    targetSeconds: r.target_seconds, withinTarget: r.within_target, nextBusinessNoon: iso(r.next_business_noon),
+    beforeNextNoon: r.before_next_noon, waitingBusinessSeconds: r.waiting_business_seconds, recordUrl: r.record_url,
+  };
+}
+
+type SummaryDbRow = {
+  group_key: string; group_label: string | null; deals: number; called: number; median_business_minutes: string | null;
+  p80_business_minutes: string | null; within_target_pct: string | null; before_next_noon_pct: string | null; open_not_called: number;
+};
+
+type IntakeDbRow = {
+  business_date: string; market: string; form_submissions: number; deals_created: number; deals_closed: number;
+  tickets_created: number; tickets_closed: number; calls_in: number; calls_out: number; tagged_calls: number;
+  new_customers: number; first_orders: number; repeat_orders: number; renewals: number;
+};
+
+/**
+ * Which kinds of source the tenant has connected, read under row-level security in the transaction
+ * whose report function has just checked the permission. No function answers this for a reader
+ * (cma.connections_all is tenant.configure only and names adapters, which are vendor values), so the
+ * tables of 0007a and 0007b decide: telephony is connected when an active connection has a line in
+ * the telephony catalog or a telephony call; commerce when an active connection has its store.
+ */
+async function readConnections(q: Querier): Promise<SourceConnections> {
+  const r = await q.query<{ telephony: boolean; commerce: boolean }>(
+    `select exists (select 1 from cma.telephony_number n
+                      join cma.integration_connection c on c.tenant_id = n.tenant_id and c.id = n.connection_id
+                     where c.status = 'active')
+         or exists (select 1 from cma.telephony_call t
+                      join cma.integration_connection c on c.tenant_id = t.tenant_id and c.id = t.connection_id
+                     where c.status = 'active') as telephony,
+            exists (select 1 from cma.commerce_store s
+                      join cma.integration_connection c on c.tenant_id = s.tenant_id and c.id = s.connection_id
+                     where c.status = 'active') as commerce`,
+  );
+  const row = one(r.rows, "connections");
+  return { telephony: row.telephony, commerce: row.commerce };
 }
 
 function ctx(me: Principal): TenantContext {
@@ -1064,6 +1138,68 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<StatDbRow>(`select * from cma.message_stats($1::date, $2::date)`, [range.from, range.to]);
       return r.rows.map(toStat);
+    });
+  },
+
+  async getSpeedToLeadRows(me, range): Promise<SpeedToLeadRow[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
+      const r = await q.query<SpeedDbRow>(
+        `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+           from cma.speed_to_lead_rows($1::date, $2::date) r`,
+        [range.from, range.to],
+      );
+      return r.rows.map(toSpeedRow);
+    });
+  },
+
+  async getSpeedToLeadSummary(me, range, group) {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<SummaryDbRow>(`select * from cma.speed_to_lead_summary($1::date, $2::date, $3)`, [range.from, range.to, group]);
+      const rows: SpeedToLeadSummaryRow[] = r.rows.map((x) => ({
+        groupKey: x.group_key,
+        // the function labels an agent who is not mapped 'unknown'; the screen says Not mapped
+        groupLabel: group === "agent" && x.group_key === "unknown" ? null : x.group_label,
+        deals: x.deals, called: x.called,
+        medianBusinessMinutes: num(x.median_business_minutes), p80BusinessMinutes: num(x.p80_business_minutes),
+        withinTargetPct: num(x.within_target_pct), beforeNextNoonPct: num(x.before_next_noon_pct), openNotCalled: x.open_not_called,
+      }));
+      return { ...range, group, rows };
+    });
+  },
+
+  async getIntake(me, range): Promise<Intake> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<IntakeDbRow>(`select * from cma.intake_per_day($1::date, $2::date)`, [range.from, range.to]);
+      const connections = await readConnections(q);
+      const start = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'intake.start_date'`);
+      const counts: IntakeCounts[] = r.rows.map((x) => ({
+        date: x.business_date, market: x.market, formSubmissions: x.form_submissions, dealsCreated: x.deals_created,
+        dealsClosed: x.deals_closed, ticketsCreated: x.tickets_created, ticketsClosed: x.tickets_closed, callsIn: x.calls_in,
+        callsOut: x.calls_out, taggedCalls: x.tagged_calls, newCustomers: x.new_customers, firstOrders: x.first_orders,
+        repeatOrders: x.repeat_orders, renewals: x.renewals,
+      }));
+      return { ...range, connections, startDate: start.rows[0]?.value ?? null, rows: applyConnections(counts, connections) };
+    });
+  },
+
+  async getDataQuality(me): Promise<DataQualityCheck[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ check_key: string; description: string; total: number | null }>(`select * from cma.data_quality()`);
+      return r.rows.map((x) => ({ key: x.check_key, description: x.description, total: x.total }));
+    });
+  },
+
+  async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ business_date: string; record_type: string; market: string | null; pipeline_id: string | null; pipeline_label: string | null; records: number; closed_now: number }>(
+        `select * from cma.crm_records_per_day($1::date, $2::date)`, [range.from, range.to]);
+      return r.rows.map((x) => ({ date: x.business_date, recordType: x.record_type, market: x.market, pipelineId: x.pipeline_id,
+        pipelineLabel: x.pipeline_label, records: x.records, closedNow: x.closed_now }));
     });
   },
 };

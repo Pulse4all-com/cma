@@ -58,14 +58,16 @@ async function expectShell(width, height) {
 async function expectNavigation() {
   const cases = [
     // Since 0008 Messages is a bare page right after Welcome for everyone, so every key below moves by one
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard"], false],
+    // Since B11 (12 October 2026) the Reports group holds Speed to lead and Intake (reports.view or performance.team)
+    // and Data quality (reports.view or tenant.configure): the supervisor holds neither of the latter
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -110,6 +112,45 @@ async function expectNavigation() {
   }
 }
 
+// The intake reports (B11): at 1280 px every page keeps the shell without horizontal scrolling, even the
+// widest table (Intake); the grouping and market keycaps are there; a tenant without telephony or a shop
+// says so in words; an agent who opens a report gets the no-permission card, never figures
+async function expectReports() {
+  const cases = [
+    ["manager", "/reports/speed-to-lead?range=month", ["G", "T", "W", "M", "C"], '[data-testid="speed-summary"]'],
+    ["manager", "/reports/intake?range=month", ["F", "T", "W", "M", "C"], '[data-testid="intake-table"]'],
+    ["manager", "/reports/data-quality", [], '[data-testid="data-quality"]'],
+    ["manager", "/reports/dashboard?range=month", ["P", "T"], '[data-testid="intake-row"]'],
+    ["invest-analyst", "/reports/intake?range=month", ["F"], '[data-testid="not-connected"]'],
+    ["invest-analyst", "/reports/dashboard?range=month", [], '[data-testid="not-connected"]'],
+  ];
+  for (const [subject, path, keys, selector] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate(() => ({
+      scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      rail: document.querySelector("nav")?.getBoundingClientRect().width ?? 0,
+      keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+    }));
+    if (m.scrollX) problems.push(`${subject} ${path}: page scrolls horizontally at 1280`);
+    if (Math.round(m.rail) !== 256) problems.push(`${subject} ${path}: rail is ${m.rail}px`);
+    for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${subject} ${path}: keycap ${k} missing`);
+    if (await p.locator(selector).count() === 0) problems.push(`${subject} ${path}: ${selector} missing`);
+    await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+    await ctx.close();
+  }
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
+  const p = await ctx.newPage();
+  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"]) {
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
+  }
+  await ctx.close();
+}
+
 async function expectGate(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
   await p.goto(BASE + "/");
@@ -123,10 +164,11 @@ async function expectGate(width, height) {
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
+await expectReports();
 if (provoke) await expectShell(1279, 800);
 else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);
