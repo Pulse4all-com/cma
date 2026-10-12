@@ -82,6 +82,16 @@ export function assertSameSiteWrite(request: Request): void {
   }
 }
 
+/**
+ * The caller must hold one of the permissions, or the route answers 403 before reading anything. The
+ * database checks again inside the function (CMA06), so this is a first answer, never the only one.
+ */
+export function requireAnyPermission(me: Principal, permissions: readonly string[]): void {
+  if (!permissions.some((p) => me.permissions.includes(p))) {
+    throw new ApiError(403, "not_permitted", "not permitted");
+  }
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** A real calendar date in YYYY-MM-DD, or a 400 */

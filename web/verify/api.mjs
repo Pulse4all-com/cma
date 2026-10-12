@@ -27,6 +27,12 @@
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
+/**
+ * --reports runs only the intake reports' checks (B11, 12 October 2026). They read and write nothing a
+ * fixture depends on, so they also run against a cma-web in mock data mode: the mock fixture has a
+ * tenant with telephony and a shop and one without (invest-analyst).
+ */
+const ONLY_REPORTS = process.argv.includes("--reports");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -35,6 +41,7 @@ const SUPERVISOR = "supervisor";
 const MANAGER = "manager";         // holds workday.export from the default ladder (0003b)
 const ANALYST = "analyst";         // analytics: no workday.own, so the database keeps no time for them (0003d)
 const ADMIN = "admin";             // admin (0004): users.manage_all and tenant.configure
+const INVEST = "invest-analyst";   // B11: an analyst in a tenant without telephony or a shop (mock fixture, local fixture)
 const NOBODY = "verify-nobody";
 const SPOOF_TENANT = "00000000-0000-7000-8000-00000000beef";
 
@@ -98,9 +105,13 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-if (health.status !== 200 || health.body?.auth !== "mock" || health.body?.data !== "api") {
-  console.error(`Not a mock-auth, api-data cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
+if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_REPORTS && health.body?.data === "mock"))) {
+  console.error(`Not a mock-auth, ${ONLY_REPORTS ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
+}
+if (ONLY_REPORTS) {
+  await reportChecks();
+  verdict();
 }
 
 // ---- identity and tenant -------------------------------------------------------------------
@@ -785,14 +796,97 @@ expect("the stats count the one recipient: delivered, read, acknowledged, not by
   [stat?.recipients, stat?.delivered, stat?.read, stat?.acknowledged, stat?.byRule], [1, 1, 1, 1, false], [1, 0, 0, 0, true]);
 expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/messages/stats?from=${shift(new Date(), -100)}&to=${shift(new Date(), 0)}`)).status, 400, 200);
 
-const passed = results.filter(Boolean).length;
-const n = results.length;
-if (PROVOKE) {
-  const ok = passed === 0;
-  console.log(`\n${ok ? `ALL ${n} PROVOKED CHECKS FAILED, as they must` : `${passed} of ${n} checks did not fail when provoked`}`);
-  process.exit(ok ? 0 : 1);
-} else {
-  const ok = passed === n;
-  console.log(`\n${ok ? `ALL ${n} PASS` : `${n - passed} of ${n} FAILED`}`);
-  process.exit(ok ? 0 : 1);
+await reportChecks();
+verdict();
+
+function verdict() {
+  const passed = results.filter(Boolean).length;
+  const n = results.length;
+  if (PROVOKE) {
+    const ok = passed === 0;
+    console.log(`\n${ok ? `ALL ${n} PROVOKED CHECKS FAILED, as they must` : `${passed} of ${n} checks did not fail when provoked`}`);
+    process.exit(ok ? 0 : 1);
+  } else {
+    const ok = passed === n;
+    console.log(`\n${ok ? `ALL ${n} PASS` : `${n - passed} of ${n} FAILED`}`);
+    process.exit(ok ? 0 : 1);
+  }
+}
+
+// ---- intake reports (B11, migration 0007d), 16 checks, 17 with the tenant without sources ------
+// Read only. Each route needs its function's permission (reports.view or performance.team; data
+// quality reports.view or tenant.configure), answered 403 by the route and again by the database;
+// at most 92 days; a group outside day, market, agent and pipeline is a 400; no row field is personal.
+async function reportChecks() {
+  const tz = "Europe/Amsterdam";
+  const day = (offset) => dateKey(new Date(Date.now() + offset * 86_400_000), tz);
+  const range = `from=${day(-29)}&to=${day(0)}`;
+  const routes = [`/api/v1/reports/speed-to-lead?${range}&group=day`, `/api/v1/reports/speed-to-lead/rows?${range}`, `/api/v1/reports/intake?${range}`, "/api/v1/reports/data-quality"];
+  const statuses = async (s) => Promise.all(routes.map(async (r) => (await get(s, r)).status));
+
+  expect("reports: an agent is refused on every route", await statuses(AGENT), [403, 403, 403, 403], [200, 200, 200, 200]);
+  expect("reports: the supervisor reads all but data quality", await statuses(SUPERVISOR), [200, 200, 200, 403], [200, 200, 200, 200]);
+  expect("reports: the analyst reads all four", await statuses(ANALYST), [200, 200, 200, 200], [200, 200, 200, 403]);
+  expect("reports: the manager reads data quality", (await get(MANAGER, routes[3])).status, 200, 403);
+  const long = `from=${day(-92)}&to=${day(0)}`;
+  expect("reports: more than 92 days is a 400 on every ranged route",
+    await Promise.all([`/api/v1/reports/speed-to-lead?${long}&group=day`, `/api/v1/reports/speed-to-lead/rows?${long}`, `/api/v1/reports/intake?${long}`]
+      .map(async (r) => (await get(ANALYST, r)).status)), [400, 400, 400], [200, 200, 200]);
+  expect("reports: 92 days are answered", (await get(ANALYST, `/api/v1/reports/intake?from=${day(-91)}&to=${day(0)}`)).status, 200, 400);
+  expect("reports: a backwards range is a 400", (await get(ANALYST, `/api/v1/reports/speed-to-lead/rows?from=${day(0)}&to=${day(-1)}`)).status, 400, 200);
+  expect("reports: a group outside the four is a 400",
+    await Promise.all(["owner", "week", "DAY"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).status)),
+    [400, 400, 400], [200, 200, 200]);
+  const grouped = await Promise.all(["day", "market", "agent", "pipeline"].map(async (g) => (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=${g}`)).body?.data?.group));
+  const plain = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}`)).body?.data?.group;
+  expect("reports: each group answers as itself, none means day", [...grouped, plain], ["day", "market", "agent", "pipeline", "day"], ["day", "day", "day", "day", "day"]);
+
+  const rowsBody = (await get(ANALYST, `/api/v1/reports/speed-to-lead/rows?${range}`)).body;
+  const rows = rowsBody?.data?.rows ?? [];
+  const keys = new Set();
+  const walk = (v) => { if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) { keys.add(k.toLowerCase()); walk(x); } };
+  walk(rowsBody);
+  expect("reports: no field named email, phone, name or firstname in the rows",
+    ["email", "phone", "name", "firstname"].filter((k) => keys.has(k)), [], ["name"]);
+  expect("reports: statuses are called, not called open or closed",
+    rows.every((r) => ["called", "not_called_open", "not_called_closed"].includes(r.status)), true, false);
+  expect("reports: every record link is https or empty",
+    rows.every((r) => r.recordUrl === null || /^https:\/\/\S+$/.test(r.recordUrl)), true, false);
+  const byDay = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=day`)).body?.data?.rows ?? [];
+  const sum = (xs, f) => xs.reduce((n, x) => n + f(x), 0);
+  expect("reports: the summary by day adds up to the rows",
+    [sum(byDay, (g) => g.deals), sum(byDay, (g) => g.called), sum(byDay, (g) => g.openNotCalled)],
+    [rows.length, rows.filter((r) => r.status === "called").length, rows.filter((r) => r.status === "not_called_open").length],
+    [rows.length + 1, -1, -1]);
+  const byAgent = (await get(ANALYST, `/api/v1/reports/speed-to-lead?${range}&group=agent`)).body?.data?.rows ?? [];
+  const unmapped = byAgent.filter((g) => g.groupKey === "unknown");
+  expect("reports: agents not mapped are one group without a label, never an owner id",
+    [unmapped.every((g) => g.groupLabel === null), sum(unmapped, (g) => g.deals), byAgent.every((g) => g.groupKey === "unknown" || /^[0-9a-f-]{36}$/.test(g.groupKey))],
+    [true, rows.filter((r) => r.agentUserId === null).length, true], [false, -1, false]);
+
+  // Not connected: a telephony or shop figure is null exactly when that source is not connected
+  const consistent = (data) => {
+    const c = data?.connections;
+    if (typeof c?.telephony !== "boolean" || typeof c?.commerce !== "boolean") return false;
+    return (data.rows ?? []).every((r) =>
+      ["callsIn", "callsOut", "taggedCalls"].every((f) => (c.telephony ? Number.isInteger(r[f]) : r[f] === null)) &&
+      ["newCustomers", "firstOrders", "repeatOrders", "renewals"].every((f) => (c.commerce ? Number.isInteger(r[f]) : r[f] === null)) &&
+      ["formSubmissions", "dealsCreated", "dealsClosed", "ticketsCreated", "ticketsClosed"].every((f) => Number.isInteger(r[f])));
+  };
+  const intake = (await get(ANALYST, `/api/v1/reports/intake?${range}`)).body?.data;
+  expect("reports: intake figures follow the tenant's connections", consistent(intake), true, false);
+  const dq = (await get(ANALYST, routes[3])).body?.data ?? [];
+  expect("reports: data quality lists each check once with a count",
+    [dq.length > 0 && new Set(dq.map((c) => c.key)).size === dq.length, dq.every((c) => c.total === null || Number.isInteger(c.total)), dq.some((c) => c.key === "owner_without_person")],
+    [true, true, true], [false, true, true]);
+
+  // A tenant without telephony or a shop (the mock fixture and the local fixture; absent in dev)
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    const none = (await get(INVEST, `/api/v1/reports/intake?${range}`)).body?.data;
+    expect("reports: without telephony and a shop those figures are null, never 0",
+      [none?.connections, consistent(none), (none?.rows ?? []).some((r) => r.callsIn === 0 || r.renewals === 0)],
+      [{ telephony: false, commerce: false }, true, false], [{ telephony: true, commerce: true }, true, false]);
+  } else {
+    console.log(`note  ${INVEST} has no access here: the check of a tenant without sources is left out`);
+  }
 }

@@ -11,7 +11,160 @@ import type {
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, MessageStat, MessageTarget, MyMessage, MyMessages, MyProfile, MyRosterDay, SentMessage, RosterCellInput, RosterEntry, RosterWeek, RosterWeekHeader, RosterWeekSummary, TodayShift, CorrectionChange, DateKey, DirectoryPerson, ExportHoursRow, HoursSummary, Instant, RoleInfo,
   SkillInfo, SkillInput, StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow,
   TeamNowPerson, TeamPerson, TenantSetting, TimeEvent, WorkStatus, Workday,
+  CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
 } from "./types";
+import { applyConnections, groupSpeedToLead, rangeProblem, type IntakeCounts } from "@/lib/reports";
+
+// ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
+// Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
+// counts only. Two tenants: the main one has telephony and a shop connected, the second (the
+// invest-analyst identity) has neither, so both states of every screen can be seen. Markets: NL, GB
+// and DE with business hours, and deals whose market is unknown (no business hours: their business
+// measures are empty, as in the database). One agent in five is not mapped to a person.
+
+/** A second fictional tenant without telephony or a shop, for the not-connected states */
+const MOCK_TENANT_2 = "00000000-0000-7000-8000-000000000002";
+const MOCK_INVEST_ANALYST_ID = "00000000-0000-7000-8000-000000000106";
+
+// Functions, not constants: MOCK_PRINCIPAL comes from a module that imports this one, so it is not
+// initialised while this module loads
+const connectionsOf = (me: Principal): SourceConnections =>
+  me.tenantId === MOCK_TENANT_2 ? { telephony: false, commerce: false } : { telephony: true, commerce: true };
+const marketsOf = (me: Principal): string[] => (me.tenantId === MOCK_TENANT_2 ? ["NL", "BE"] : ["NL", "GB", "DE", "unknown"]);
+const MOCK_CRM_CONNECTION = "00000000-0000-7000-8000-00000000c001";
+const MOCK_PIPELINES = [
+  { id: "p-sales", label: "Sales (test)" },
+  { id: "p-renewal", label: "Renewals (test)" },
+];
+
+/** A stable number from a text, so the fixture is the same on every read */
+function hashOf(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967296;
+}
+
+/** Same answer as the database for a caller holding none of the permissions */
+function assertAny(me: Principal, permissions: string[]): void {
+  if (!permissions.some((x) => me.permissions.includes(x))) throw new CmaDbError("CMA06", "not permitted");
+}
+
+function assertReportRange(range: { from: DateKey; to: DateKey }): void {
+  if (rangeProblem(range.from, range.to)) throw new CmaDbError("CMA04", "the range must run forward and cover at most 92 days");
+}
+
+function mockToday(me: Principal): DateKey {
+  return dateKeyInZone(new Date(), me.timeZone);
+}
+
+/** intake.start_date of the fixture: six weeks back, so a custom range can start before it */
+function mockStartDate(me: Principal): DateKey {
+  return addDays(mockToday(me), -42);
+}
+
+function datesOf(range: { from: DateKey; to: DateKey }, me: Principal): DateKey[] {
+  const out: DateKey[] = [];
+  const first = range.from < mockStartDate(me) ? mockStartDate(me) : range.from;
+  const last = range.to > mockToday(me) ? mockToday(me) : range.to;
+  for (let d = first; d <= last; d = addDays(d, 1)) out.push(d);
+  return out;
+}
+
+function mockIntakeCounts(me: Principal, date: DateKey, market: string): IntakeCounts | null {
+  const h = (k: string, n: number) => Math.floor(hashOf(`${me.tenantId}:${date}:${market}:${k}`) * n);
+  const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+  const scale = (market === "unknown" ? 0.2 : market === "NL" ? 1 : 0.6) * (weekend ? 0.3 : 1);
+  const n = (k: string, max: number) => h(k, Math.max(1, Math.round(max * scale)) + 1);
+  const row: IntakeCounts = {
+    date, market, formSubmissions: n("form", 14), dealsCreated: n("deal", 8), dealsClosed: n("dealc", 5),
+    ticketsCreated: n("ticket", 6), ticketsClosed: n("ticketc", 5), callsIn: n("in", 30), callsOut: n("out", 45),
+    taggedCalls: n("tag", 12), newCustomers: n("cust", 5), firstOrders: n("first", 4), repeatOrders: n("repeat", 2),
+    renewals: n("renew", 3),
+  };
+  const any = Object.entries(row).some(([k, v]) => k !== "date" && k !== "market" && v !== 0);
+  return any ? row : null;
+}
+
+function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): SpeedToLeadRow[] {
+  const markets = marketsOf(me);
+  const today = mockToday(me);
+  const now = Date.now();
+  const rows: SpeedToLeadRow[] = [];
+  for (const date of datesOf(range, me)) {
+    const deals = Math.floor(hashOf(`${me.tenantId}:${date}:deals`) * 6);
+    for (let i = 0; i < deals; i++) {
+      const h = (k: string) => hashOf(`${me.tenantId}:${date}:${i}:${k}`);
+      const market = markets[Math.floor(h("market") * markets.length)]!;
+      const known = market !== "unknown";
+      const pipeline = MOCK_PIPELINES[h("pipe") < 0.7 ? 0 : 1]!;
+      const createdMs = Math.min(now - 60_000, localMs(date, `${String(8 + Math.floor(h("hour") * 10)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, me.timeZone));
+      const createdAt = new Date(createdMs).toISOString();
+      const recent = addDays(date, 3) >= today;
+      const roll = h("status");
+      const status: SpeedToLeadStatus = roll < 0.72 ? "called" : recent ? "not_called_open" : "not_called_closed";
+      const called = status === "called";
+      const businessMinutes = Math.round(2 + h("speed") ** 2 * 300);
+      const businessSeconds = called && known ? businessMinutes * 60 : null;
+      const callAt = called ? new Date(createdMs + Math.round(businessMinutes * 60_000 * (1 + h("gap")))).toISOString() : null;
+      const noon = known ? new Date(localMs(addDays(date, 1), "12:00", me.timeZone)).toISOString() : null;
+      const team = TEAM[Math.floor(h("agent") * TEAM.length)]!;
+      const mapped = Math.floor(h("agent") * 1000) % 5 !== 0;
+      const waiting = status === "not_called_open" && known ? Math.round(30 + h("wait") * 900) * 60 : null;
+      const late = !called && known && (waiting === null || waiting > 3600);
+      rows.push({
+        dealId: `00000000-0000-7000-8000-${String(rows.length + 1).padStart(12, "0")}`,
+        connectionId: MOCK_CRM_CONNECTION,
+        dealSourceId: String(90_000_000 + Math.floor(h("id") * 9_000_000)),
+        pipelineId: pipeline.id,
+        pipelineLabel: pipeline.label,
+        date,
+        createdAt,
+        market,
+        marketSource: known ? (h("src") < 0.8 ? "record" : "contact") : null,
+        isClosed: status === "not_called_closed" || (called && h("closed") < 0.4),
+        status,
+        firstCallSourceId: called ? String(70_000_000 + Math.floor(h("call") * 9_000_000)) : null,
+        firstCallAt: callAt,
+        firstCallLinked: called ? connectionsOf(me).telephony && h("linked") < 0.8 : null,
+        firstAnyCallAt: callAt,
+        firstAnyDirection: called ? "outbound" : null,
+        inboundFirst: false,
+        firstConnectedAt: called && h("conn") < 0.6 ? callAt : null,
+        // the first call's owner when called, else the deal's owner, as the database picks the agent
+        agentUserId: mapped ? team.userId : null,
+        agentFrom: called ? "call" : "deal",
+        elapsedSeconds: callAt ? Math.round((Date.parse(callAt) - createdMs) / 1000) : null,
+        businessSeconds,
+        targetSeconds: 3600,
+        withinTarget: businessSeconds !== null ? businessSeconds <= 3600 : late ? false : null,
+        nextBusinessNoon: noon,
+        beforeNextNoon: called && noon ? Date.parse(callAt!) < Date.parse(noon) : noon && now >= Date.parse(noon) ? false : null,
+        waitingBusinessSeconds: waiting,
+        recordUrl: `https://example.com/crm/deal/${String(90_000_000 + Math.floor(h("id") * 9_000_000))}`,
+      });
+    }
+  }
+  return rows.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.dealSourceId.localeCompare(b.dealSourceId));
+}
+
+/** The checks of cma.data_quality_checks() in its order, with the database's descriptions */
+const MOCK_CHECKS: [string, string][] = [
+  ["deal_without_contact", "Lead deals without any contact"],
+  ["deal_contact_incomplete", "Primary contacts of lead deals without country or language"],
+  ["market_not_in_catalog", "Markets or countries written by a source that are not in the market catalog"],
+  ["owner_without_person", "CRM owners without a CMA person"],
+  ["telephony_user_without_person", "Telephony users without a CMA person"],
+  ["crm_call_without_contact", "CRM calls without a contact association"],
+  ["telephony_call_unlinked", "Telephony calls without a link to a CRM call after 24 hours (once both sources run)"],
+  ["commerce_unmatched", "Commerce customers whose id no CRM contact holds"],
+  ["commerce_ambiguous", "Commerce customers whose id several CRM contacts hold"],
+  ["writeback_parked", "CRM write-backs parked for review (from migration 0007c)"],
+  ["contact_slots_full", "Contacts whose first two ref slots of a system are both taken"],
+  ["contact_country_differs", "Contacts whose country differs from the market of a store their commerce id belongs to"],
+  ["customer_in_two_stores", "Commerce customer ids present in more than one store"],
+  ["pipeline_unreviewed", "Pipelines seen but never reviewed by a person (counted by default)"],
+  ["form_without_market", "Counted forms without a market"],
+];
 
 /** Same answer as the database for a caller without workday.team */
 function assertTeam(me: Principal): void {
@@ -810,6 +963,20 @@ export const mockData: CmaData = {
         permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
       };
     }
+    // The second fictional tenant (B11): an analyst whose tenant has no telephony and no shop connected
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject === "invest-analyst") {
+      return {
+        ...MOCK_PRINCIPAL,
+        tenantId: MOCK_TENANT_2,
+        tenantName: "Pulse4all invest (test)",
+        userId: MOCK_INVEST_ANALYST_ID,
+        displayName: "Test invest analyst",
+        organisationName: "Pulse4all",
+        roleKey: "analytics",
+        timeZone: "Europe/Amsterdam",
+        permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
+      };
+    }
     return {
       ...MOCK_PRINCIPAL,
       // one mock user per real person, so two testers do not share a clock
@@ -1552,5 +1719,57 @@ export const mockData: CmaData = {
         medianSecondsToRead: reads.length ? Math.round(reads[Math.floor((reads.length - 1) / 2)]!) : null });
     }
     return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  },
+
+  async getSpeedToLeadRows(me, range): Promise<SpeedToLeadRow[]> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    return mockSpeedRows(me, range);
+  },
+
+  async getSpeedToLeadSummary(me, range, group) {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    if (!["day", "market", "agent", "pipeline"].includes(group)) throw new CmaDbError("CMA04", "group by day, market, agent or pipeline");
+    const names = new Map(TEAM.map((p) => [p.userId, p.displayName]));
+    return { ...range, group, rows: groupSpeedToLead(mockSpeedRows(me, range), group, (id) => names.get(id) ?? null) };
+  },
+
+  async getIntake(me, range): Promise<Intake> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    const counts: IntakeCounts[] = [];
+    for (const date of datesOf(range, me)) {
+      for (const market of marketsOf(me)) {
+        const row = mockIntakeCounts(me, date, market);
+        if (row) counts.push(row);
+      }
+    }
+    const connections = connectionsOf(me);
+    return { ...range, connections, startDate: mockStartDate(me), rows: applyConnections(counts, connections) };
+  },
+
+  async getDataQuality(me): Promise<DataQualityCheck[]> {
+    assertAny(me, ["reports.view", "tenant.configure"]);
+    // The main tenant has something to fix in every check; the second tenant has nothing yet
+    const main = me.tenantId === MOCK_PRINCIPAL.tenantId;
+    return MOCK_CHECKS.map(([key, description], i) => ({ key, description, total: main ? 1 + Math.floor(hashOf(key) * 40) + (i === 3 ? 3 : 0) : 0 }));
+  },
+
+  async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {
+    assertPerformance(me);
+    assertReportRange(range);
+    // The deals and tickets of the intake fixture, split over the two fictional pipelines
+    const out: CrmRecordsDay[] = [];
+    for (const date of datesOf(range, me)) {
+      for (const market of marketsOf(me)) {
+        const row = mockIntakeCounts(me, date, market);
+        if (!row) continue;
+        const m = market === "unknown" ? null : market;
+        if (row.dealsCreated) out.push({ date, recordType: "deal", market: m, pipelineId: MOCK_PIPELINES[0]!.id, pipelineLabel: MOCK_PIPELINES[0]!.label, records: row.dealsCreated, closedNow: Math.min(row.dealsCreated, row.dealsClosed) });
+        if (row.ticketsCreated) out.push({ date, recordType: "ticket", market: m, pipelineId: "p-service", pipelineLabel: "Service (test)", records: row.ticketsCreated, closedNow: Math.min(row.ticketsCreated, row.ticketsClosed) });
+      }
+    }
+    return out;
   },
 };
