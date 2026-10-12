@@ -50,7 +50,7 @@ Environment (set by `deploy.sh`): `CMA_DB_INSTANCE`, `CMA_DB_USER` (`cma-ingest@
 
 ## Deploy (Martin, Cloud Shell)
 
-The image is built once, in `p4a-cma-prod`, never in dev (README Architecture, Build and deploy; Decision log, 5 October 2026): `gcloud builds submit` in europe-west4 as `cma-build@p4a-cma-prod.iam.gserviceaccount.com`, source staged in `gs://p4a-cma-prod-build-src` (the default staging bucket is in the US and the EU-only policy refuses it, HTTP 412 on `constraints/gcp.resourceLocations`), pushed to `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>`. When that tag exists the build is skipped, so prod after dev runs exactly the bytes dev tested. Dev and prod both deploy that image by tag; dev has no repository and no build of its own and pulls through its Cloud Run service agent, which has Artifact Registry reader on the prod repository `cma`. Before a dev deploy the script checks that grant; when it is missing it stops and prints the command that adds it:
+The image is built once, in `p4a-cma-prod`, never in dev (README Architecture, Build and deploy; Decision log, 5 October 2026): `gcloud builds submit` in europe-west4 as `cma-build@p4a-cma-prod.iam.gserviceaccount.com`, source staged in `gs://p4a-cma-prod-build-src` (the default staging bucket is in the US and the EU-only policy refuses it, HTTP 412 on `constraints/gcp.resourceLocations`), pushed to `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:<short sha>`, the sha of the last commit that touched `ingest/` (`git log -1 --format=%h -- ingest/`), not HEAD, so a merge of docs or README only reuses the image dev tested (the script prints both shas when they differ). When that tag exists the build is skipped, so prod after dev runs exactly the bytes dev tested. Dev and prod both deploy that image by tag; dev has no repository and no build of its own and pulls through its Cloud Run service agent, which has Artifact Registry reader on the prod repository `cma`. Before a dev deploy the script checks that grant; when it is missing it stops and prints the command that adds it:
 
 **Terminal** (only when the script printed it; the project number is dev's)
 ```bash
@@ -102,7 +102,7 @@ gcloud compute ssl-certificates describe cma-ingest-cert --project=p4a-cma-prod 
 curl -sS -o /dev/null -w "%{http_code}\n" https://ingest.pulse4all.app/health
 curl -sS -o /dev/null -w "%{http_code}\n" "$(gcloud run services describe cma-ingest --project=p4a-cma-prod --region=europe-west4 --format='value(status.url)')/health"
 ```
-Expected: `ACTIVE	ingest.pulse4all.app=ACTIVE`, then `200` on the host and `403` on the `run.app` address (refused by the ingress setting). Every later prod deploy of the service passes `--front ingest.pulse4all.app` again; without it the ingress would go back to `all`.
+Expected: `ACTIVE	ingest.pulse4all.app=ACTIVE`, then `200` on the host and `404` on the `run.app` address (refused by the ingress setting, as seen in prod on 12 October 2026). Every later prod deploy of the service passes `--front ingest.pulse4all.app` again; without it the ingress would go back to `all`.
 
 **The jobs** (after the service, from the same commit, so the image exists):
 

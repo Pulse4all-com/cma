@@ -4,8 +4,20 @@ The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
-- The helpers of `MORNING_RUNBOOK.md` (Helpers: `put_secret`) defined in the Cloud Shell session that stores a secret.
-- `~/cma` on a clean, current `main`, the same commit dev runs, so prod deploys the image dev tested (`no build`).
+- Every command below runs from `~/cma`. Every new Cloud Shell session (a reconnect starts one) needs `put_secret` defined again before a secret is stored; it is the function of `MORNING_RUNBOOK.md` (Helpers), unchanged:
+
+**Terminal** (paste once per Cloud Shell session)
+```bash
+cd ~/cma
+put_secret () {  # usage: put_secret <project> <name>   → hidden prompt, never echoed, never in history
+  gcloud secrets describe "$2" --project="$1" >/dev/null 2>&1 || \
+    gcloud secrets create "$2" --project="$1" --replication-policy=user-managed --locations=europe-west4 >/dev/null
+  read -rsp "Paste value for $2 (hidden), then Enter: " v; echo
+  printf %s "$v" | gcloud secrets versions add "$2" --project="$1" --data-file=- >/dev/null && echo "stored $2 (version added)"; unset v
+}
+```
+Expected: no output. `type put_secret` prints the function.
+- `~/cma` on a clean, current `main`. `deploy.sh` tags the image with the last commit that touched `ingest/` (`git log -1 --format=%h -- ingest/`), not HEAD, so a `main` that moved on with docs or README only deploys the image dev tested (`no build`); when the two differ the script prints `image tag <sha>: the last commit under ingest/; HEAD is <sha>`.
 - The tenant is `pulse4all-subscriptions` (seed `db/02_seed_pulse4all.sql`).
 
 **The Studio context block** (every Studio session below that calls a configuration function; prod uses you):
@@ -37,7 +49,7 @@ The two HubSpot secrets normally exist only after 7.4 (the client secret before 
 ```bash
 git switch -q main && git pull -q --ff-only && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-hubspot-subs-signing --secret ingest-hubspot-subs-token
 ```
-Expected: the APIs, the service account `cma-ingest@p4a-cma-prod` and its database user (first time), `created ingest-hash-pepper-pulse4all-subscriptions (value generated, not shown)` the first time and `accessor on ingest-hash-pepper-pulse4all-subscriptions`, per HubSpot secret `accessor on …` or `does not exist yet`, `image … exists (sha256:…); no build`, the Cloud Run deploy, then the block with one Studio statement, `ingress: internal-and-cloud-load-balancing (front https://ingest.pulse4all.app: …)`, `public URLs (signed by HubSpot): https://ingest.pulse4all.app,https://cma-ingest-…run.app,…`, `health: no answer yet (…)` (the front does not exist yet) and `webhook address per connection: https://ingest.pulse4all.app/hubspot/<connection key>`.
+Expected: `== cma-ingest <sha> → p4a-cma-prod` with the image tag (and the `image tag … HEAD is …` line when `main` moved on outside `ingest/`), the APIs, the service account `cma-ingest@p4a-cma-prod` and its database user (first time), `created ingest-hash-pepper-pulse4all-subscriptions (value generated, not shown)` the first time and `accessor on ingest-hash-pepper-pulse4all-subscriptions`, per HubSpot secret `accessor on …` or `does not exist yet`, `image … exists (sha256:…); no build`, the Cloud Run deploy, then the block with one Studio statement, `ingress: internal-and-cloud-load-balancing (front https://ingest.pulse4all.app: …)`, `public URLs (signed by HubSpot): https://ingest.pulse4all.app,https://cma-ingest-…run.app,…`, `health: no answer yet (…)` (the front does not exist yet) and `webhook address per connection: https://ingest.pulse4all.app/hubspot/<connection key>`.
 
 **Studio (cma-prod-pg)**: paste the printed statement as is, once:
 ```sql
@@ -49,7 +61,7 @@ Expected: `GRANT ROLE` (a notice that the role is already a member on a rerun).
 ```bash
 bash docs/ingest/front.sh prod --host ingest.pulse4all.app
 ```
-Expected: `a. NEG cma-ingest-neg created`, `b. backend cma-ingest-backend created (EXTERNAL_MANAGED, HTTPS, logging off)` (the scheme is read from `cma-web-backend`), `b. cma-ingest-neg added to cma-ingest-backend`, `c. policy cma-ingest-armor created`, `c. rule 1000 (create): 600 requests per 60 s per IP, then 429`, `c. cma-ingest-armor attached to cma-ingest-backend`, `d. certificate cma-ingest-cert created for ingest.pulse4all.app`, `d. cma-web-proxy now holds cma-web-cert,cma-ingest-cert`, `e. path matcher cma-ingest added to cma-web-urlmap: ingest.pulse4all.app → cma-ingest-backend`, then the A record with the address of `cma-web-ip` (34.54.22.146), `certificate cma-ingest-cert: PROVISIONING …` and the two checks. On a rerun every line says `exists` or `holds`.
+Expected: `a. NEG cma-ingest-neg created`, `b. backend cma-ingest-backend created (EXTERNAL_MANAGED, logging off)` (the scheme is read from `cma-web-backend`; no `--protocol`, so gcloud sets HTTP with port name `http`, which the serverless NEG accepts: with `--protocol=HTTPS` the next step was refused on 12 October with "Port name is not supported for a backend service with Serverless network endpoint groups"), `b. cma-ingest-neg added to cma-ingest-backend`, `c. policy cma-ingest-armor created`, `c. rule 1000 (create): 600 requests per 60 s per IP, then 429`, `c. cma-ingest-armor attached to cma-ingest-backend`, `d. certificate cma-ingest-cert created for ingest.pulse4all.app`, `d. cma-web-proxy now holds cma-web-cert,cma-ingest-cert`, `e. path matcher cma-ingest added to cma-web-urlmap: ingest.pulse4all.app → cma-ingest-backend`, then the A record with the address of `cma-web-ip` (34.54.22.146), `certificate cma-ingest-cert: PROVISIONING …` and the two checks. On a rerun every line says `exists` or `holds`.
 
 **Browser:** IONOS → pulse4all.app → DNS → Add record → type A, host `ingest`, points to the printed address. The `workspace` record and the mail records stay as they are.
 
@@ -66,7 +78,7 @@ Expected: `ACTIVE	ingest.pulse4all.app=ACTIVE` (before that `PROVISIONING` with 
 curl -sS -o /dev/null -w "%{http_code}\n" https://ingest.pulse4all.app/health
 curl -sS -o /dev/null -w "%{http_code}\n" "$(gcloud run services describe cma-ingest --project=p4a-cma-prod --region=europe-west4 --format='value(status.url)')/health"
 ```
-Expected: `200`, then `403` (the `run.app` address refused by the ingress setting). A `200` on the second line means the service was deployed without `--front`: rerun the first block.
+Expected: `200`, then `404` (the `run.app` address refused by the ingress setting; seen in prod on 12 October, `deploy.sh` prints `run.app: 404 (refused)`). A `200` on the second line means the service was deployed without `--front` (`deploy.sh` prints a `FAIL run.app: 200` line): rerun the first block.
 
 ## 7.2 The jobs
 
@@ -87,9 +99,19 @@ Expected: `ingest-backfill`, `ingest-poll-forms`, `ingest-reconcile`, `ingest-sw
 
 ## 7.3 Configuration and the connection
 
-**Studio (cma-prod-pg)** after the context block: the first block of `MORNING_RUNBOOK.md` 1.4 unchanged (twelve `cma.upsert_market`, the 26 aliases, the office hours, the language skill keys), then its second block per language (the market-to-skill links with the keys from the last result and the minimum level the team wants). Every statement is an upsert, so a rerun on a prod that already has them changes nothing.
+**Studio (cma-prod-pg)** after the context block: the first block of `MORNING_RUNBOOK.md` 1.4 unchanged (twelve `cma.upsert_market`, the 26 aliases, the office hours, the language skill keys). Every statement is an upsert, so a rerun on a prod that already has them changes nothing.
 
-Expected: as in 1.4: twelve empty results, 26 rows of `set_market_alias`, five of `set_business_hours`, the tenant's language skill keys; then one row per updated market per language.
+Expected: as in 1.4: twelve empty results, 26 rows of `set_market_alias`, five of `set_business_hours`, the tenant's language skill keys.
+
+The language skill keys of the Pulse4all seed equal the language codes (`en`, `nl`, …), so the market-to-skill links are one statement instead of 1.4's block per language (minimum level 3, Fluent):
+
+**Studio (cma-prod-pg)** (same tab)
+```sql
+select cma.upsert_market(code, name, time_zone, language_code, currency, language_code, 3::smallint, sort_order)
+from cma.market where language_code in (select key from cma.skill where dimension = 'language');
+reset role;
+```
+Expected: one row per market whose language has a skill. A market whose language has no skill keeps no link: market ES (Spain, Europe/Madrid, EUR), added in prod on 12 October because the live portal has ES forms, has none until a Spanish skill exists (Open decisions).
 
 **Studio (cma-prod-pg)** after the context block (the live portal):
 ```sql
@@ -124,9 +146,9 @@ The click paths of `hubspot/README.md` (Render, upload, install) and `VENDOR_SET
 
 **Terminal** (in `~/cma`; `<key>` from 7.3)
 ```bash
-node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && cd hubspot/build/prod && hs project upload && cd ~/cma
+node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && cd hubspot/build/prod && hs project upload --force && cd ~/cma
 ```
-Expected: `rendered prod: hubspot/build/prod`; the upload names the live portal (`147946837`) and ends with a successful build and deploy of project **CMA ingest prod** with both components (the app and the webhooks). If the upload names a test account, answer `n`.
+Expected: `rendered prod: hubspot/build/prod`; the upload names the live portal (`147946837`) and ends with a successful build and deploy of project **CMA ingest prod** with both components (the app and the webhooks). On the first upload the project does not exist yet: `--force` creates it without the prompt (`--forceCreate` is deprecated). If the upload names a test account, stop it (Ctrl+C) and switch the CLI's account first.
 
 **Browser:** live portal → Development → Projects → CMA ingest prod → the app → **Auth** tab: copy the client secret. Then type this line on its own, not inside a pasted block:
 
@@ -140,7 +162,7 @@ Expected: the hidden prompt; paste, Enter; `stored ingest-hubspot-subs-signing (
 
 Expected: the install listed under Standard install. Webhooks start now: every deal, ticket, call and listed contact change in the live portal is delivered to `https://ingest.pulse4all.app/hubspot/<key>`, and until the token exists the read-backs finish `failed` with `token_unavailable` (the sweep reads them again after the token is in).
 
-**Browser:** the app → **Distribution** tab → the install's row → **Show**: copy the static access token. Then on its own line:
+**Browser:** the app → **Distribution** tab → the Standard install's row → **Show**: copy the static access token (it is on the install row, not on the Auth tab). Then on its own line:
 
 **Terminal**
 ```bash
@@ -201,11 +223,13 @@ reset role;
 ```
 Expected: one row with market `GB`, `market_source` `record`, no call yet. Log an outbound call on the test contact (outcome Connected) and rerun: `first_call_at` filled.
 
-**Browser:** delete the test deal and the test contact in the live portal. Expected: the deletion events `processed` and the rows' `source_deleted_at` set.
+In the live portal on 12 October `deal_country` was filled: `United Kingdom` resolved to `GB` with `source` `record`, so no alias was needed.
+
+**Browser:** delete the test deal and the test contact in the live portal. Expected: within seconds the deletion events (`deal` `deleted`, `processed`) and the rows' `source_deleted_at` set.
 
 ### 7.5b Pipelines, forms and call outcomes (carried over from Phase 7 step 3)
 
-The first read-back loaded the pipeline and call outcome catalogs; the forms poll loads the form catalog within the hour.
+The first read-back loaded the pipeline and call outcome catalogs; the forms poll loads the form catalog within the hour. A form is counted by default, so set the form rule below before the forms poll has run for long: until then every form's submissions, cancellations included, are read as leads.
 
 **Studio (cma-prod-pg)** after the context block
 ```sql
@@ -213,23 +237,48 @@ select record_type, source_pipeline_id, label, is_counted, is_routed from cma.co
 select outcome_ref, label, is_connected from cma.connection_call_outcome where connection_id = '<conn>' order by 2;
 select source_form_id, name, is_counted, lead_source, market from cma.connection_form where connection_id = '<conn>' order by 2;
 ```
-Then per pipeline, form and outcome (the values from those lists; the call outcomes as decided on 11 October 2026: Connected and Meeting booked count, Left live message, Left voicemail, Busy, No answer and Wrong number do not):
+Then per pipeline (the values from the first list):
 ```sql
 select cma.set_connection_pipeline('<conn>', 'deal', '<test pipeline id>', false, false, null);
 select cma.set_pipeline_lead('<conn>', 'deal', '<lead pipeline id>', true);
-select cma.set_form('<conn>', '<form guid>', true, '<lead source>', '<market code>', '{}'::text[]);
-select cma.set_call_outcome('<conn>', '<outcome guid>', true);
+```
+Expected: an empty result per statement.
+
+**The call outcome rule** (Martin, 12 October 2026; Decision log): an outcome is connected unless its label matches not reached, voicemail, no answer, busy, wrong number, incorrect data or email only; `Left live message` is not connected either (the customer was not reached), `Do Not Call Or Email` is (they were). One statement over the catalog:
+
+**Studio (cma-prod-pg)** (same tab)
+```sql
+select o.label, cma.set_call_outcome(o.connection_id, o.outcome_ref,
+         o.label !~* '(not reached|voicemail|no answer|busy|wrong number|incorrect data|email only|left live message)')
+from cma.connection_call_outcome o where o.connection_id = '<conn>' order by o.label;
+select label, is_connected from cma.connection_call_outcome where connection_id = '<conn>' order by is_connected desc, label;
+```
+Expected: one row per outcome, then the list with `is_connected` as the rule says.
+
+**The form rule** (Martin, 12 October 2026; Decision log): a form is counted when its name matches quote, contact or info and not cancellation, replacement or support; its `lead_source` is `quote`, `contact` or `info`, whichever of the three comes first in the name; its market is the name's two-letter prefix, `UK` read as `GB`, when that is a market of the tenant. `set_form` replaces `kept_fields`, so the statement passes the form's current ones:
+
+**Studio (cma-prod-pg)** (same tab)
+```sql
+select f.name, cma.set_form(f.connection_id, f.source_form_id, x.counted,
+         case when x.counted then substring(lower(f.name) from '(quote|contact|info)') end,
+         (select m.code from cma.market m where m.code = x.prefix), f.kept_fields)
+from cma.connection_form f
+cross join lateral (select f.name ~* '(quote|contact|info)' and f.name !~* '(cancellation|replacement|support)' as counted,
+                           case upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) when 'UK' then 'GB'
+                                else upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) end as prefix) x
+where f.connection_id = '<conn>' order by f.name;
+select name, is_counted, lead_source, market from cma.connection_form where connection_id = '<conn>' order by is_counted desc, name;
 reset role;
 ```
-Expected: the three lists, then an empty result per statement.
+Expected: one row per form, then the list: the Quote, Contact and Info forms counted with their lead source and market, the cancellation, replacement and support forms not counted. A counted form without a market (a prefix that is no market, ES before the market existed) reads its market from the contact; add the market and rerun.
 
 ## 7.6 People: HubSpot owners on CMA persons
 
 **Terminal** (in `~/cma`; the token is read with your own login and never printed)
 ```bash
-node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret ingest-hubspot-subs-token
+node docs/ingest/hubspot-owners.mjs --project p4a-cma-prod --token-secret ingest-hubspot-subs-token --also-domain newcogroup.com=pulse4all.com
 ```
-Expected: one `select cma.set_user_external_id(u.id, 'hubspot_owner', '<owner id>') from cma.app_user u where u.email = '<owner email>';` per active owner, then `-- n statement(s) for m active owner(s)` on stderr. The output stays in the terminal.
+Expected: one `select cma.set_user_external_id(…)` per active owner, then `-- n statement(s) for m active owner(s)` on stderr; a `@newcogroup.com` owner's line matches `u.email in ('<local>@newcogroup.com', '<local>@pulse4all.com')` (Newco agents sign in to the CMA as `@pulse4all.com`). The output stays in the terminal. An agent whose local part differs between the two addresses is mapped by hand (`GO_LIVE_RUNBOOK.md` 3b gives the line).
 
 **Studio (cma-prod-pg)** after the context block (you hold `users.manage_all`): paste the printed lines, then:
 ```sql
@@ -265,7 +314,7 @@ Optional: an automation connection for Make as in `GO_LIVE_RUNBOOK.md` 2b, with 
 
 ## 7.8 Backfill from 1 October
 
-One object type at a time; the next only after the count of the previous. `<conn>` from 7.3 (or `select connection_id, adapter, name from cma.connections_all();` in Studio after the context block).
+One object type at a time; the next only after the count of the previous. `<conn>` from 7.3 (or `select connection_id, adapter, name from cma.connections_all();` in Studio after the context block). The backfill selects by last modification since `--from`, so records created before 1 October but touched since then come along: the earliest `source_created_at` below can lie before 1 October. The reports count a record by its `source_created_at`, so such a record counts on the day it was created, not on the day of the backfill.
 
 **Terminal**
 ```bash
@@ -280,7 +329,7 @@ select record_type, count(*), min(source_created_at), max(source_created_at) fro
 select job, stream, status, counts, error, started_at, finished_at from cma.sync_run where connection_id = '<conn>' and job = 'backfill' order by started_at desc limit 5;
 reset role;
 ```
-Expected: deals from 1 October onward; one `backfill` row `succeeded` for stream `deal`.
+Expected: deals modified since 1 October (the earliest created before it); one `backfill` row `succeeded` for stream `deal`.
 
 Then the same execution with `ticket` (count: the `ticket` row of the first query), `crm_call` and `form_submission`, with these counts:
 
