@@ -4,6 +4,7 @@ import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
 import { Badge, Card, Notice } from "@/components/primitives";
 import { agentGroupOf } from "@/lib/dashboard";
+import { workedSeconds } from "@/lib/live";
 import { data, dataIsMock, type AppLink, type MyMessages, type MyRosterDay, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
 import { cellLabel } from "@/lib/roster";
 import type { Copy, Locale } from "@/lib/copy";
@@ -124,8 +125,8 @@ function DayBlock({
     );
   }
   const current = statuses.find((s) => s.key === workday.statusKey);
-  const running = workday.clock.runningSince ? Math.max(0, now.getTime() - Date.parse(workday.clock.runningSince)) / 1000 : 0;
-  const workedMinutes = Math.floor((workday.clock.closedSeconds + running) / 60);
+  // The running stretch stops at the day's end (the workday window, 0008b)
+  const workedMinutes = Math.floor(workedSeconds(workday.clock, now.getTime(), workday.dayEndsAt) / 60);
   return (
     <Card>
       <div className="flex items-center gap-3">

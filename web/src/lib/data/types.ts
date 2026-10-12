@@ -44,6 +44,12 @@ export interface Workday {
   /** When the current status began; null once the day has ended */
   statusSince: Instant | null;
   clock: WorkdayClock;
+  /**
+   * First instant after the working day: the tenant's window end on this date (addition 0008b,
+   * 22:00 for Pulse4all, midnight by default). The clock stops counting here; time after it is
+   * not counted by the database either
+   */
+  dayEndsAt: Instant;
 }
 
 /**

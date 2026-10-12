@@ -6,22 +6,32 @@
  * POST /api/v1/me/day/start, the path the API verifier proves, and the page re-renders with the
  * open day. The card names the tenant's default status; no status name is in code or copy.
  * The button has focus when the page opens, so Enter clocks in (keyboard-first, as on Log out).
+ * Before the workday window starts the database refuses (0008b): the card then says when the day
+ * starts, with the time the database gave, and the button stays.
  */
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
-import { Badge, Card, Keycap } from "./primitives";
+import { workdayStartsAt } from "@/lib/live";
+import { Badge, Card, Keycap, Notice } from "./primitives";
 
 export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: string; copy: Copy }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
+  const [startsAt, setStartsAt] = useState<string | null>(null);
 
   function clockIn() {
     setFailed(false);
+    setStartsAt(null);
     startTransition(async () => {
       const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } });
-      if (!res.ok) setFailed(true);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        const at = workdayStartsAt(body?.error?.message);
+        if (at) setStartsAt(at);
+        else setFailed(true);
+      }
       // Also after a refusal: the day may have been opened in another tab
       router.refresh();
     });
@@ -42,6 +52,11 @@ export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: st
         {copy.welcome.clockIn}
         <Keycap>Enter</Keycap>
       </button>
+      {startsAt ? (
+        <div className="mt-3" data-testid="clock-in-too-early">
+          <Notice tone="info">{copy.welcome.clockInTooEarly.replace("{time}", startsAt)}</Notice>
+        </div>
+      ) : null}
       {failed ? (
         <p role="alert" className="mt-3 text-small text-p4a-body">
           {copy.welcome.clockInFailed}

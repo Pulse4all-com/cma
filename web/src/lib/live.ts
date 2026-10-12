@@ -118,9 +118,24 @@ export function secondsSince(since: Instant, nowMs: number): number {
   return Math.max(0, Math.floor((nowMs - Date.parse(since)) / 1000));
 }
 
-/** Worked seconds at `nowMs`: the closed stretches plus the running one, as the clock on My day */
-export function workedSeconds(clock: WorkdayClock, nowMs: number): number {
-  return clock.closedSeconds + (clock.runningSince ? secondsSince(clock.runningSince, nowMs) : 0);
+/**
+ * Worked seconds at `nowMs`: the closed stretches plus the running one, as the clock on My day.
+ * With the day's end (the workday window, addition 0008b) the running stretch stops there, as the
+ * database's count does; the Live board passes none and shows what its read returned.
+ */
+export function workedSeconds(clock: WorkdayClock, nowMs: number, dayEndsAt: Instant | null = null): number {
+  const until = dayEndsAt === null ? nowMs : Math.min(nowMs, Date.parse(dayEndsAt));
+  return clock.closedSeconds + (clock.runningSince ? secondsSince(clock.runningSince, until) : 0);
+}
+
+/**
+ * The window start in a refused clock-in ("the workday starts at 07:00", cma.open_workday since
+ * addition 0008b), or null for any other refusal. The time is the database's own setting, never
+ * typed here.
+ */
+export function workdayStartsAt(message: string | null | undefined): string | null {
+  const m = /^the workday starts at ((?:[01]\d|2[0-3]):[0-5]\d)$/.exec(message ?? "");
+  return m ? m[1]! : null;
 }
 
 /** 1:07:05 for the worked figure, 7:05 for a stretch under an hour: the clock's format, compact */

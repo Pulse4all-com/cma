@@ -21,6 +21,7 @@ import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
 import { Badge, Button, Card } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { endWorkdayAction } from "@/app/actions";
+import { workedSeconds } from "@/lib/live";
 
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
 function subscribe(onTick: () => void) {
@@ -30,10 +31,12 @@ function subscribe(onTick: () => void) {
 const nowSeconds = () => Math.floor(Date.now() / 1000) * 1000;
 const serverNow = () => null;
 
-/** Worked seconds at `now` (ms), or the closed part alone before the client clock starts */
-function worked(clock: Workday["clock"], now: number | null): number {
-  if (now === null || !clock.runningSince) return clock.closedSeconds;
-  return clock.closedSeconds + Math.max(0, Math.floor((now - Date.parse(clock.runningSince)) / 1000));
+/**
+ * Worked seconds at `now` (ms), or the closed part alone before the client clock starts. The
+ * running stretch stops at the day's end (the workday window, 0008b), as the database counts.
+ */
+function worked(workday: Workday, now: number | null): number {
+  return now === null ? workday.clock.closedSeconds : workedSeconds(workday.clock, now, workday.dayEndsAt);
 }
 
 function hms(s: number): string {
@@ -163,7 +166,7 @@ export function WorkdayPanel({
         className="tabular text-clock font-semibold text-p4a-heading"
         aria-live="off"
       >
-        {hms(worked(workday.clock, now))}
+        {hms(worked(workday, now))}
       </p>
       <div className="mt-6">
         <p className="text-caption text-p4a-grey">{copy.myDay.statusLabel}</p>
