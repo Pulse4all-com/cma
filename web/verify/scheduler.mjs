@@ -15,7 +15,11 @@
  * time is workday.auto_close_at within the workday window (no shift is planned 400 days back, and the
  * day's only event is its 09:00 start): 17:00 for Pulse4all, the business day's end for a tenant
  * without settings. Today's clock-in needs the window, so this runs between 07:00 and 22:00
- * Amsterdam time.
+ * Amsterdam time; outside it the clock-in is refused and the verifier stops with one FAIL line.
+ *
+ * Dev only: before anything is written, the database PGCONN points to must hold the dev seed's test
+ * person (agent.two@example.com, db/03), active in a tenant; prod never holds example.com people.
+ * Otherwise the verifier refuses to run and exits 2 without writing anything.
  */
 import { execFileSync, spawnSync } from "node:child_process";
 
@@ -28,6 +32,29 @@ if (!PGCONN) {
 }
 const AGENT = "agent-two";
 const SUPERVISOR = "supervisor";
+
+/** Where PGCONN points, as host:port (a URI or key=value string), never with its user or password */
+function pgTarget(conn) {
+  if (/^postgres(ql)?:\/\//.test(conn)) {
+    try {
+      const u = new URL(conn);
+      return `${u.hostname || process.env.PGHOST || "the local socket"}:${u.port || process.env.PGPORT || 5432}`;
+    } catch { return "an unreadable URI"; }
+  }
+  const kv = (k) => { const m = new RegExp(`(?:^|\\s)${k}\\s*=\\s*(?:'([^']*)'|(\\S+))`).exec(conn); return m ? m[1] ?? m[2] : null; };
+  return `${kv("host") ?? kv("hostaddr") ?? process.env.PGHOST ?? "the local socket"}:${kv("port") ?? process.env.PGPORT ?? 5432}`;
+}
+
+// Dev only, before any write: the dev seed's test person, active in a tenant (db/03). Prod never
+// holds example.com people; a database without the cma schema or the role fails the query and is
+// refused the same way.
+const devCheck = spawnSync("psql", [PGCONN, "-At", "-v", "ON_ERROR_STOP=1", "-c", "set role cma_owner", "-c",
+  `select exists (select 1 from cma.app_user u join cma.tenant t on t.id = u.tenant_id
+                  where u.email = 'agent.two@example.com' and u.status = 'active')`], { encoding: "utf8" });
+if (devCheck.status !== 0 || (devCheck.stdout ?? "").trim().split("\n").pop() !== "t") {
+  console.error(`scheduler verifier: refusing to run, the connected database is not dev (PGCONN points to ${pgTarget(PGCONN)})`);
+  process.exit(2);
+}
 
 const results = [];
 function expect(name, actual, expected, provoked) {
@@ -80,8 +107,16 @@ const forgotten = sql(`
   select status || ' ' || coalesce(ended_at::text, 'open') from cma.workday where user_id = '${meA.userId}' and business_date = '${freeDate}';`);
 expect("the forgotten day was written open as the owner", forgotten.startsWith("open"), true, false);
 
-// Today's day is open and must stay so
-await call(AGENT, "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } });
+// Today's day is open and must stay so. Outside the workday window (0008b) the clock-in is refused
+// with "the workday starts at HH:MI": one FAIL line and exit 1, not a crash further on.
+const clockIn = await call(AGENT, "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } });
+const startsAt = /^the workday starts at (\d\d:\d\d)$/.exec(clockIn.body?.error?.message ?? "")?.[1] ?? null;
+if (startsAt || (clockIn.body?.data ?? null) === null) {
+  const settings = (await get(AGENT, "/api/v1/settings")).body?.data ?? [];
+  const setting = (k) => String(settings.find((x) => x.key === k)?.value ?? "?").slice(0, 5);
+  console.log(`FAIL  clock-in refused: outside the workday window (${startsAt ?? setting("workday.window_start")} to ${setting("workday.window_end")} ${meA.timeZone}); run this verifier inside the window`);
+  process.exit(1);
+}
 const todayBefore = (await get(AGENT, "/api/v1/me/day")).body?.data;
 expect("today's day is open before the job", todayBefore?.status, "working", "ended");
 

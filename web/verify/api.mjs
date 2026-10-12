@@ -55,6 +55,21 @@ const end = (s, headers = { "x-cma-request": "1" }) => post(s, "/api/v1/me/day/e
 /** Clock in is an action (increment e): the start route, never a visit */
 const start = (s, headers = { "x-cma-request": "1" }) => post(s, "/api/v1/me/day/start", headers);
 const visit = (s, path) => call(s, path, { redirect: "follow" });
+/**
+ * Clock in a test user and answer the day. Outside the workday window (0008b) the clock-in is refused
+ * with "the workday starts at HH:MI" (or the day comes back null): one FAIL line and exit 1, never a
+ * crash on a missing day further on.
+ */
+async function clockIn(s, timeZone) {
+  const r = await start(s);
+  const startsAt = /^the workday starts at (\d\d:\d\d)$/.exec(r.body?.error?.message ?? "")?.[1] ?? null;
+  const day = r.body?.data ?? null;
+  if (!startsAt && day !== null) return day;
+  const settings = (await get(s, "/api/v1/settings")).body?.data ?? [];
+  const setting = (k) => String(settings.find((x) => x.key === k)?.value ?? "?").slice(0, 5);
+  console.log(`FAIL  clock-in refused: outside the workday window (${startsAt ?? setting("workday.window_start")} to ${setting("workday.window_end")} ${timeZone}); run this verifier inside the window`);
+  process.exit(1);
+}
 
 function dateKey(d, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -117,8 +132,9 @@ expect("the cookie from ?as= is honoured",
 // The analyst holds performance.team and no workday.own: a visit to the landing page and to My day
 // opens nothing, and the start route is refused by the database (CMA06), not by the route.
 // Since addition 0008b a clock-in before the window start (07:00 for Pulse4all) is refused, so
-// this verifier runs between 07:00 and 22:00 Amsterdam time; the refusal itself is proven by
-// db/47_verify_workday_window.sql, because a clock-in before 07:00 cannot be forced here.
+// this verifier runs between 07:00 and 22:00 Amsterdam time (outside it, clockIn stops with one FAIL
+// line); the refusal itself is proven by db/47_verify_workday_window.sql, because a clock-in
+// before 07:00 cannot be forced here.
 await visit(ANALYST, "/");
 await visit(ANALYST, "/day");
 expect("a visit opens no workday", (await get(ANALYST, "/api/v1/me/day")).body?.data ?? null, null, "a day");
@@ -127,7 +143,7 @@ expect("start needs the request header", (await start(AGENT, {})).status, 400, 2
 expect("cross-site start is refused",
   (await start(AGENT, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status, 403, 200);
 const today0 = dateKey(new Date(), meA.timeZone);
-const started = (await start(AGENT)).body?.data;
+const started = await clockIn(AGENT, meA.timeZone);
 const startedAgain = (await start(AGENT)).body?.data;
 expect("start opens the own day today", [started?.date, started?.status === "working" || started?.status === "ended"],
   [dateKey(new Date(), meA.timeZone), true], [dateKey(new Date(), meA.timeZone), false]);
@@ -140,7 +156,7 @@ expect("the own day ends at the window end, 22:00",
   localInstant(dayRead?.date ?? today0, "23:00", "Europe/Amsterdam"));
 
 // ---- own data only -------------------------------------------------------------------------
-await start(SUPERVISOR);
+await clockIn(SUPERVISOR, meS.timeZone);
 const dayA = (await get(AGENT, "/api/v1/me/day")).body.data;
 const dayS = (await get(SUPERVISOR, "/api/v1/me/day")).body.data;
 expect("two users have two different days", dayA.startedAt === dayS.startedAt, false, true);
