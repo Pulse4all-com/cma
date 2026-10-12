@@ -113,6 +113,17 @@ closes Agent Two's open past days itself (as the supervisor); no fixture runs fi
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
+`verify:scheduler` against dev (inside 07:00-22:00 Amsterdam): it writes a test day through `PGCONN` and runs the
+job's code locally, which reads `CMA_DB_*`; both must point at dev:
+
+```bash
+cma_db dev
+export CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=martin@pulse4all.com CMA_DB_SET_ROLE=cma_app
+node verify/scheduler.mjs; echo "exit $?"     # ALL 10 PASS
+```
+
+It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job step exits 1 and every close check fails.
+
 The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
 of each script in `web/verify/` for its start command.
 
