@@ -188,7 +188,7 @@ begin
       raise exception 'FAIL B0: create_tenant did not seed the Ingest user';
     end if;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t2, 'verify_crm', 'Verify two', '222') returning id, key into v_c2, v_key2;
+    values (v_t2, 'verifycrm', 'Verify two', '222') returning id, key into v_c2, v_key2;
 
     -- From here on as the application
     perform set_config('role', 'cma_app', true);
@@ -198,14 +198,14 @@ begin
     --     key; an agent may not
     perform set_config('app.user_id', v_admin::text, true);
     select c.connection_id, c.key into v_c1, v_key
-    from cma.upsert_connection('verify_crm', 'Verify one', '111', 'verify-signing', 'verify-token') c;
-    select c.connection_id into v_id from cma.upsert_connection('verify_crm', 'Verify one renamed', '111', 'verify-signing', 'verify-token') c;
+    from cma.upsert_connection('verifycrm', 'Verify one', '111', 'verify-signing', 'verify-token') c;
+    select c.connection_id into v_id from cma.upsert_connection('verifycrm', 'Verify one renamed', '111', 'verify-signing', 'verify-token') c;
     if v_c1 is null or v_id <> v_c1 or v_key !~ '^[0-9a-f]{32}$' or v_provoke then
       raise exception 'FAIL B1: upsert_connection gave % then % with key %', v_c1, v_id, v_key;
     end if;
     perform set_config('app.user_id', v_agent::text, true);
     begin
-      perform cma.upsert_connection('verify_crm', 'Verify agent', '999', null, null);
+      perform cma.upsert_connection('verifycrm', 'Verify agent', '999', null, null);
       raise exception 'FAIL B1: an agent added a connection';
     exception when sqlstate 'CMA06' then null;
     end;
@@ -215,7 +215,7 @@ begin
     perform cma.set_connection_field(v_c1, 'deal', 'market', null, 'verify_market');
     perform cma.set_connection_field(v_c1, 'deal', 'language', null, 'verify_language');
     perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'country');
-    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', 'verify_shop_id');
+    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', 'verifyshop_id');
     perform cma.set_connection_field(v_c1, 'deal', 'language', null, '');
     begin
       perform cma.set_connection_field(v_c1, 'deal', 'country', null, 'country');
@@ -223,7 +223,7 @@ begin
     exception when sqlstate 'CMA04' then null;
     end;
     begin
-      perform cma.set_connection_field(v_c1, 'contact', 'ref', null, 'verify_shop_id');
+      perform cma.set_connection_field(v_c1, 'contact', 'ref', null, 'verifyshop_id');
       raise exception 'FAIL B2: a ref without its system was accepted';
     exception when sqlstate 'CMA04' then null;
     end;
@@ -347,7 +347,7 @@ begin
        or (select is_closed from cma.crm_record where connection_id = v_c1 and source_id = 'd1') is distinct from false
        or (select is_closed from cma.crm_record where connection_id = v_c1 and source_id = 'd2') is not null
        or (select closed_at is null or not is_closed from cma.crm_record where connection_id = v_c1 and source_id = 't1')
-       or (select source_system from cma.crm_record where connection_id = v_c1 and source_id = 'd1') <> 'verify_crm' then
+       or (select source_system from cma.crm_record where connection_id = v_c1 and source_id = 'd1') <> 'verifycrm' then
       raise exception 'FAIL B8: the first records are wrong';
     end if;
     select u.outcome into r from cma.ingest_upsert_records(v_c1, jsonb_build_array(
@@ -387,11 +387,11 @@ begin
     --      an older read is stale; a null ref removes it; a deleted contact loses its attributes
     select string_agg(u.outcome, ',' order by u.source_id) into v_txt
     from cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
-      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'language', 'nl', 'refs', jsonb_build_object('verify_shop', '123'), 'updatedAt', v_t1time),
+      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'language', 'nl', 'refs', jsonb_build_object('verifyshop', '123'), 'updatedAt', v_t1time),
       jsonb_build_object('sourceId', 'c9', 'country', 'SE', 'updatedAt', v_t1time))) u;
     if v_txt is distinct from 'inserted,not_held'
        or (select x.external_id from cma.crm_contact_ref x join cma.crm_contact c on c.id = x.contact_id
-           where c.source_id = 'c1' and x.system = 'verify_shop') is distinct from '123' then
+           where c.source_id = 'c1' and x.system = 'verifyshop') is distinct from '123' then
       raise exception 'FAIL B10: contacts gave %', v_txt;
     end if;
     if (select u.outcome from cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
@@ -399,12 +399,12 @@ begin
       raise exception 'FAIL B10: an older contact read was not stale';
     end if;
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
-      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'language', 'nl', 'refs', jsonb_build_object('verify_shop', null), 'updatedAt', v_t2time)));
+      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'language', 'nl', 'refs', jsonb_build_object('verifyshop', null), 'updatedAt', v_t2time)));
     if exists (select 1 from cma.crm_contact_ref) then
       raise exception 'FAIL B10: a null ref was not removed';
     end if;
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
-      jsonb_build_object('sourceId', 'c1', 'refs', jsonb_build_object('verify_shop', '456'), 'updatedAt', now())));
+      jsonb_build_object('sourceId', 'c1', 'refs', jsonb_build_object('verifyshop', '456'), 'updatedAt', now())));
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(jsonb_build_object('sourceId', 'c1', 'deletedAt', now())));
     select * into r from cma.crm_contact where connection_id = v_c1 and source_id = 'c1';
     if r.country is not null or r.language is not null or r.source_deleted_at is null or exists (select 1 from cma.crm_contact_ref) then

@@ -28,16 +28,17 @@ Written by Claude Code while Martin was away. Everything was built and verified 
 | `verify/api.mjs` against the build (mock auth, api data, local database at `53` with `reports-fixture.sql`) | `ALL 218 PASS` (dev has 219: the call-outcome check needs a call outcome the fixture lacks) | `ALL 218 PROVOKED CHECKS FAILED` |
 | `verify/api.mjs --sources` (database / mock data) | `ALL 31 PASS` / `ALL 32 PASS` | all failed / all failed |
 | `52` first run and rerun | clean; the rerun writes nothing new | |
-| `53` | 13 PASS, verdict PASS | A1, B1, B8 FAIL, verdict `PROVOKED, NOT A PASS` |
+| `52` on a copy with an adapter `old_crm` (13 October) | stopped by the pre-flight, naming tenant, adapter and name; nothing applied | |
+| `53` (16 checks since the review of 13 October) | 16 PASS, verdict PASS | A1, B1, B8 FAIL, verdict `PROVOKED, NOT A PASS` (13 PASS, 3 FAIL) |
 | `53` on a database without the dev seed | `REFUSED: not dev`, every block stopped | |
-| twelve mutations of `52`, each on a copy of the database | all caught by `53` | |
+| fifteen mutations (twelve of `52`'s night version, and `add_person`, `find_tenants_for_identity`, `upsert_connection` put back as before), each on a copy of the database | all caught by `53`, each on its own row | |
 | `04` to `51` after `52` | identical to the same verifies at `51` (`07` and `10` list the new migration row) | |
 
 Not run here (they need a server, IAP or a real database): `verify:iap`, `verify:scheduler`, the theme and layout runs against dev, every db/ script in dev or prod, a Docker build (no Dockerfile change), the ingest verifiers (no change under `ingest/`).
 
 Found on the way: the mock fixture's urgent message opens a pop-up that covered the manager's pages and failed theme, layout and hints on `main` too (proven on a checkout of `main`); the three verifiers now acknowledge it first.
 
-## Decisions to confirm (each a Decision log row ending "(Claude Code, for Martin to confirm)")
+## Decisions (each a Decision log row; confirmed by Martin in the review of 13 October, the adapter-name row rewritten)
 
 1. A connection has a kind in the data model's terms (`crm`, `telephony`, `commerce`, `automation`), never derived from the vendor; it decides the Sources sections and which ids People offers; a kind the rows contradict is refused.
 2. The Sources page never creates a connection and never shows or accepts a secret (names only; a secret-looking settings key is refused three times over). Connections come from the runbook.
@@ -46,10 +47,19 @@ Found on the way: the mock fixture's urgent message opens a pop-up that covered 
 5. An alert rule's sound follows its urgency (one tone for normal, chime and pop-up for urgent); rules are switched off, never deleted; name and trigger fixed once a rule exists.
 6. Rules by name pattern: words typed per run and never stored; the preview is what is saved, in one transaction; lead source from the first include word in the name; market from the two-letter prefix through the aliases; a name without a prefix keeps its market.
 7. Office hours are edited a week at a time, a market's own week starting from the default.
-8. Adapter names are lower-case letters and digits only, because ids read `<adapter>_owner` / `<adapter>_user` (`upsert_connection` still accepts an underscore; a later check could make that explicit).
+8. Adapter names are lower-case letters and digits only, because ids read `<adapter>_owner` / `<adapter>_user`. Since the review: `upsert_connection` refuses any other name, `52` refuses to run while an existing adapter breaks the rule, and the verifiers' adapters were renamed (`verifycrm`, `verifyshop`).
 9. `53` is dev only, like `49`; prod gets a read-only Studio check.
 10. The browser verifiers acknowledge the mock urgent message first.
 11. Phases 8 and 9 are written ahead of B9 and B10 with a gate; the Aircall signing secret is created empty and granted before the webhook exists; store, subscriptions and backfill in one sitting; renewal lists set from the backfilled orders.
+12. Since the review: system names ending in `_owner` or `_user` are reserved for linked accounts; `add_person` refuses them as a login system and `find_tenants_for_identity` never matches them, so a manager who may edit linked ids can never rewrite a sign-in id.
+
+## Review fixes, 13 October (amended in place: 0008e had run nowhere)
+
+- **Sign-in ids are never linked accounts.** A login system only had to match `^[a-z0-9_]+$`, so one named like `hubspot_user` would have been editable by a manager as a linked id. `52` now replaces `cma.find_tenants_for_identity` (never matches a system ending in `_owner` or `_user`; still the one SECURITY DEFINER function, owned by `cma_owner`, executable by `cma_app` only) and `cma.add_person` (refuses such a login system with `CMA04` right after the form check; everything else unchanged).
+- **The adapter rule is enforced.** `52` refuses to run while any connection's adapter is not `^[a-z0-9]+$` (prod holds only `hubspot`), and replaces `cma.upsert_connection` to refuse such a name (`CMA04`). `31`, `33`, `37` and `39` use `verifycrm` and `verifyshop` instead of `verify_crm` and `verify_shop` (and the values derived from them); nothing else in them changed. `35` still writes `verify_crm` through a direct insert inside its rolled-back block, which the rule does not touch.
+- **`53` has three more checks (16):** B10 `add_person` refuses `verifyx_owner` and `verifyx_user` and lets `verifyx` through to the employer check; B11 a person holding `verifycrm_owner`/`o1` is not found by `find_tenants_for_identity`, while the tenant's Ingest user still is; B12 `upsert_connection` refuses `verify_crm`.
+- **README:** the night's Decision log rows confirmed (Martin), the adapter-name row rewritten, a row for the reserved names, a sentence in Authentication, the 0008e section, and the Ingest API bullet corrected (only HubSpot's webhooks arrive today).
+- **Checked:** a fresh database `00` to `53` in README order (16 PASS; `31`, `33`, `37`, `39` PASS with the new names), `52` first run, rerun and its pre-flight refusal, `53` provoked and refused outside dev, fifteen mutations, `04` to `51` unchanged against a database at `51`, `verify/api.mjs --sources` against the web on the new `52` (31 PASS, provoked all failed), and a person posted with login system `hubspot_owner` refused with 400. Not rerun: the full `verify/api.mjs`, because it was 04:30 in Amsterdam, outside its workday window; the dev run in the morning runbook covers it.
 
 ## Part 4: quiet hours and the late clock-in (design and questions, no code)
 

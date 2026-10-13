@@ -2,7 +2,8 @@ DO
 BEGIN
 SET
 DO
-psql:52_sources_configuration.sql:74: NOTICE:  column "kind" of relation "integration_connection" already exists, skipping
+DO
+psql:52_sources_configuration.sql:99: NOTICE:  column "kind" of relation "integration_connection" already exists, skipping
 ALTER TABLE
 DO
 COMMENT
@@ -17,6 +18,10 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 DO

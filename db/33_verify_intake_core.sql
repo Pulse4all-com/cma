@@ -397,7 +397,7 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id, c.key into v_c1, v_key from cma.upsert_connection('verify_crm', 'Verify one', '111', null, null) c;
+    select c.connection_id, c.key into v_c1, v_key from cma.upsert_connection('verifycrm', 'Verify one', '111', null, null) c;
     perform cma.upsert_market('GB', 'United Kingdom', 'Europe/London', 'en', 'GBP');
     perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
     perform cma.set_market_alias('uk', 'GB');
@@ -427,8 +427,8 @@ begin
     perform cma.set_connection_field(v_c1, 'ticket', 'category', null, 'verify_category', 1::smallint);
     perform cma.set_connection_field(v_c1, 'contact', 'currency', null, 'verify_currency', 1::smallint);
     perform cma.set_connection_field(v_c1, 'contact', 'store', null, 'verify_store', 1::smallint);
-    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', 'verify_shop_id_1', 1::smallint);
-    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', 'verify_shop_id_2', 2::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', 'verifyshop_id_1', 1::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', 'verifyshop_id_2', 2::smallint);
     begin
       perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'country_2', 2::smallint);
       raise exception 'FAIL C2: slot 2 of a non-ref field was accepted';
@@ -440,15 +440,15 @@ begin
     exception when sqlstate 'CMA04' then null;
     end;
     begin
-      perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', 'verify_shop_id_10', 10::smallint);
+      perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', 'verifyshop_id_10', 10::smallint);
       raise exception 'FAIL C2: slot 10 was accepted';
     exception when sqlstate 'CMA04' then null;
     end;
-    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', '', 2::smallint);
-    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verify_shop', 'verify_shop_id_2', 2::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', '', 2::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'ref', 'verifyshop', 'verifyshop_id_2', 2::smallint);
     v_cfg := cma.connection_config(v_c1);
     if jsonb_array_length(v_cfg -> 'fields') <> 9
-       or (select count(*) from jsonb_array_elements(v_cfg -> 'fields') f where f ->> 'refSystem' = 'verify_shop' and (f ->> 'slot')::int in (1, 2)) <> 2
+       or (select count(*) from jsonb_array_elements(v_cfg -> 'fields') f where f ->> 'refSystem' = 'verifyshop' and (f ->> 'slot')::int in (1, 2)) <> 2
        or v_cfg -> 'settings' ->> 'api_version' is distinct from '2026-10' then
       raise exception 'FAIL C2: connection_config is %', v_cfg;
     end if;
@@ -499,7 +499,7 @@ begin
     --     with a gap empties slot 1; a single id replaces the set; a deletion clears currency and store
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
       jsonb_build_object('sourceId', 'c1', 'country', 'Nederland', 'language', 'nl', 'currency', 'eur', 'store', ' Verify-Store-1 ',
-                         'refs', jsonb_build_object('verify_shop', jsonb_build_array('111', '222')), 'updatedAt', v_t0)));
+                         'refs', jsonb_build_object('verifyshop', jsonb_build_array('111', '222')), 'updatedAt', v_t0)));
     select * into r from cma.crm_contact where connection_id = v_c1 and source_id = 'c1';
     if r.country <> 'NL' or r.currency <> 'EUR' or r.store <> 'verify-store-1'
        or (select string_agg(slot || '=' || external_id, ',' order by slot) from cma.crm_contact_ref where contact_id = r.id) is distinct from '1=111,2=222' then
@@ -508,13 +508,13 @@ begin
     end if;
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
       jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'currency', 'EUR', 'store', 'not a handle!',
-                         'refs', jsonb_build_object('verify_shop', jsonb_build_array(null, '222')), 'updatedAt', v_t1time)));
+                         'refs', jsonb_build_object('verifyshop', jsonb_build_array(null, '222')), 'updatedAt', v_t1time)));
     if (select string_agg(slot || '=' || external_id, ',' order by slot) from cma.crm_contact_ref where contact_id = r.id) is distinct from '2=222'
        or (select store from cma.crm_contact where id = r.id) is not null then
       raise exception 'FAIL C5: a gap in the list or an invalid store was not handled';
     end if;
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
-      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'refs', jsonb_build_object('verify_shop', '333'), 'updatedAt', v_t2time)));
+      jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'refs', jsonb_build_object('verifyshop', '333'), 'updatedAt', v_t2time)));
     if (select string_agg(slot || '=' || external_id, ',' order by slot) from cma.crm_contact_ref where contact_id = r.id) is distinct from '1=333' then
       raise exception 'FAIL C5: a single id did not replace the set';
     end if;
@@ -557,7 +557,7 @@ begin
     select v_t1, v_admin, ar.id from cma.app_role ar where ar.tenant_id = v_t1 and ar.key = 'admin';
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_crm', 'Verify one', '111') returning id into v_c1;
+    values (v_t1, 'verifycrm', 'Verify one', '111') returning id into v_c1;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -575,7 +575,7 @@ begin
       raise exception 'FAIL D1: the first calls gave %', v_txt;
     end if;
     select * into r from cma.crm_call where connection_id = v_c1 and source_id = 'k1';
-    if r.direction <> 'outbound' or r.source_app <> 'verify_dialer' or r.counterpart_hash <> v_hash or r.source_system <> 'verify_crm'
+    if r.direction <> 'outbound' or r.source_app <> 'verify_dialer' or r.counterpart_hash <> v_hash or r.source_system <> 'verifycrm'
        or (select direction from cma.crm_call where connection_id = v_c1 and source_id = 'k2') <> 'unknown' then
       raise exception 'FAIL D1: the first call holds %, %, %', r.direction, r.source_app, r.source_system;
     end if;
@@ -707,7 +707,7 @@ begin
     select v_t1, v_admin, ar.id from cma.app_role ar where ar.tenant_id = v_t1 and ar.key = 'admin';
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_crm', 'Verify one', '111') returning id into v_c1;
+    values (v_t1, 'verifycrm', 'Verify one', '111') returning id into v_c1;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -842,7 +842,7 @@ begin
       jsonb_build_object('recordType', 'deal', 'sourceId', 'd2', 'contactId', 'c2', 'createdAt', now(), 'updatedAt', now())));
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
       jsonb_build_object('sourceId', 'c1', 'country', 'NL', 'language', 'nl', 'currency', 'EUR', 'store', 'verify-store',
-                         'refs', jsonb_build_object('verify_shop', jsonb_build_array('111', '222')), 'updatedAt', now())));
+                         'refs', jsonb_build_object('verifyshop', jsonb_build_array('111', '222')), 'updatedAt', now())));
     perform cma.ingest_upsert_calls(v_c1, jsonb_build_array(
       jsonb_build_object('sourceId', 'k1', 'direction', 'outbound', 'counterpartHash', v_hash, 'updatedAt', now()),
       jsonb_build_object('sourceId', 'k2', 'direction', 'outbound', 'counterpartHash', v_hash, 'updatedAt', now())));
@@ -900,9 +900,9 @@ begin
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     select id into v_ing2 from cma.app_user where tenant_id = v_t2 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_crm', 'Verify one', '111') returning id into v_c1;
+    values (v_t1, 'verifycrm', 'Verify one', '111') returning id into v_c1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t2, 'verify_crm', 'Verify two', '222') returning id into v_c2;
+    values (v_t2, 'verifycrm', 'Verify two', '222') returning id into v_c2;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);

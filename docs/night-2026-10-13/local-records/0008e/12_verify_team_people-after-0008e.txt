@@ -10,12 +10,12 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
               set_config              
 --------------------------------------
- 01a13190-a9de-7245-b33a-2e80d07c0051
+ <uuid>
 (1 row)
 
              check             | result | people 
@@ -28,12 +28,12 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
               set_config              
 --------------------------------------
- 01a13190-a9de-79a0-99a7-cf07cce50961
+ <uuid>
 (1 row)
 
 DO
@@ -47,7 +47,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 DO
@@ -65,7 +65,7 @@ SET
 
 SET
 psql:12_verify_team_people.sql:77: ERROR:  this needs app.user_id, the acting user
-CONTEXT:  PL/pgSQL function assert_permission(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function cma.assert_permission(text) line 6 at RAISE
 SQL statement "SELECT cma.assert_permission('workday.team')"
-PL/pgSQL function team_people() line 4 at PERFORM
+PL/pgSQL function cma.team_people() line 4 at PERFORM
 ROLLBACK

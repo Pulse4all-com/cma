@@ -10,3 +10,6 @@ m09_external_id_admin_only:  B the block ran to the end | FAIL; verdict | FAIL
 m10_external_id_no_people_rule:  B8 people's ids by the People rule | FAIL; verdict | FAIL
 m11_reader_executes_sources:  A3 twelve functions, executable by cma_app only | FAIL; verdict | FAIL
 m12_reader_view_without_kind:  A2 kind column, check and reader view | FAIL; verdict | FAIL
+m13_add_person_no_reserved_check:  B10 add_person refuses a login system ending in _owner or _user | FAIL; verdict | FAIL
+m14_find_tenants_matches_linked_ids:  B11 find_tenants_for_identity never matches a linked id | FAIL; verdict | FAIL
+m15_upsert_connection_any_adapter:  B12 upsert_connection refuses an adapter with an underscore | FAIL; verdict | FAIL

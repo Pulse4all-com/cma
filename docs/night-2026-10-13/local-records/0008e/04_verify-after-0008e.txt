@@ -311,7 +311,7 @@ DO
  organisation         | update |       1 | martin@pulse4all.com | t
  role_permission      | delete |       4 | martin@pulse4all.com | t
  role_permission      | insert |     104 | martin@pulse4all.com | t
- roster_entry         | insert |      26 | martin@pulse4all.com | f
+ roster_entry         | insert |      23 | martin@pulse4all.com | f
  roster_entry         | update |       2 | martin@pulse4all.com | f
  roster_publication   | insert |       2 | martin@pulse4all.com | f
  roster_week          | insert |       3 | martin@pulse4all.com | f
@@ -333,7 +333,7 @@ DO
 BEGIN
               set_config              
 --------------------------------------
- 01a13190-a999-714f-afc2-2162363c9e68
+ <uuid>
 (1 row)
 
        slug       
@@ -351,12 +351,12 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
               set_config              
 --------------------------------------
- 01a13190-a9de-7a90-805f-e47f59a76fa7
+ <uuid>
 (1 row)
 
   set_config   
@@ -435,7 +435,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 psql:04_verify.sql:152: ERROR:  new row violates row-level security policy for table "app_user"
@@ -444,7 +444,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 psql:04_verify.sql:162: ERROR:  permission denied for table audit_log

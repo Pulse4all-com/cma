@@ -190,25 +190,25 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c1 from cma.upsert_connection('verify_crm', 'Verify CRM one', '1000001', null, null) c;
-    select c.connection_id into v_c2 from cma.upsert_connection('verify_crm', 'Verify CRM two', '1000002', null, null) c;
+    select c.connection_id into v_c1 from cma.upsert_connection('verifycrm', 'Verify CRM one', '1000001', null, null) c;
+    select c.connection_id into v_c2 from cma.upsert_connection('verifycrm', 'Verify CRM two', '1000002', null, null) c;
 
     -- B1. the seven fields of the contact write-back, two slots for the customer id; a second call
     --     updates in place (one row per field and slot)
-    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verify_shop_id_1', 'slot', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verify_shop_id_2', 'slot', true, 2::smallint);
-    perform cma.set_writeback_field(v_c1, 'commerce_store', 'verify_shop_store', 'always', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verify_shop_orders', 'always', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_spent', 'verify_shop_spent', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verifyshop_id_1', 'slot', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verifyshop_id_2', 'slot', true, 2::smallint);
+    perform cma.set_writeback_field(v_c1, 'commerce_store', 'verifyshop_store', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verifyshop_orders', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_spent', 'verifyshop_spent', 'always', true);
     perform cma.set_writeback_field(v_c1, 'country', 'verify_country', 'always', true);
     perform cma.set_writeback_field(v_c1, 'currency', 'verify_currency', 'if_empty', true);
     perform cma.set_writeback_field(v_c1, 'language', 'verify_language', 'if_empty', true);
     perform cma.set_writeback_field(v_c1, 'country', ' verify_country ', 'if_empty', true);
     select string_agg(field || ':' || slot || ':' || target_property || ':' || mode || ':' || enabled, ',' order by field, slot) into v_txt
     from cma.writeback_field where connection_id = v_c1;
-    if v_txt is distinct from 'commerce_orders:1:verify_shop_orders:always:true,commerce_ref:1:verify_shop_id_1:slot:true,'
-                              'commerce_ref:2:verify_shop_id_2:slot:true,commerce_spent:1:verify_shop_spent:always:true,'
-                              'commerce_store:1:verify_shop_store:always:true,country:1:verify_country:if_empty:true,'
+    if v_txt is distinct from 'commerce_orders:1:verifyshop_orders:always:true,commerce_ref:1:verifyshop_id_1:slot:true,'
+                              'commerce_ref:2:verifyshop_id_2:slot:true,commerce_spent:1:verifyshop_spent:always:true,'
+                              'commerce_store:1:verifyshop_store:always:true,country:1:verify_country:if_empty:true,'
                               'currency:1:verify_currency:if_empty:true,language:1:verify_language:if_empty:true' or v_provoke then
       raise exception 'FAIL B1: write-back fields are %', v_txt;
     end if;
@@ -264,7 +264,7 @@ begin
     end;
     select string_agg(field || ':' || target_property || ':' || mode, ',' order by field, slot) into v_txt
     from cma.writeback_field where connection_id = v_c1 and field in ('country', 'currency', 'commerce_store');
-    if v_txt is distinct from 'commerce_store:verify_shop_store:always,country:verify_country:if_empty,currency:verify_currency:if_empty'
+    if v_txt is distinct from 'commerce_store:verifyshop_store:always,country:verify_country:if_empty,currency:verify_currency:if_empty'
        or (select count(*) from cma.writeback_field) <> 8 then
       raise exception 'FAIL B3: a refusal changed the fields: %', v_txt;
     end if;
@@ -279,7 +279,7 @@ begin
     --     connection without any answers an empty list
     v_cfg := cma.connection_config(v_c1);
     select count(*) into v_n from jsonb_array_elements(v_cfg -> 'writeback') w
-    where (w ->> 'field' = 'commerce_ref' and (w ->> 'slot')::int = 2 and w ->> 'property' = 'verify_shop_id_2' and w ->> 'mode' = 'slot'
+    where (w ->> 'field' = 'commerce_ref' and (w ->> 'slot')::int = 2 and w ->> 'property' = 'verifyshop_id_2' and w ->> 'mode' = 'slot'
            and (w ->> 'enabled')::boolean)
        or (w ->> 'field' = 'language' and not (w ->> 'enabled')::boolean);
     if jsonb_array_length(v_cfg -> 'writeback') <> 8 or v_n <> 2
@@ -287,7 +287,7 @@ begin
       raise exception 'FAIL B5: connection_config gives %', v_cfg;
     end if;
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c2 from cma.upsert_connection('verify_crm', 'Verify CRM three', '1000003', null, null) c;
+    select c.connection_id into v_c2 from cma.upsert_connection('verifycrm', 'Verify CRM three', '1000003', null, null) c;
     if cma.connection_config(v_c2) -> 'writeback' is distinct from '[]'::jsonb then
       raise exception 'FAIL B5: a connection without write-back fields gives %', cma.connection_config(v_c2) -> 'writeback';
     end if;
@@ -325,12 +325,12 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c1 from cma.upsert_connection('verify_crm', 'Verify CRM one', '1000001', null, null) c;
-    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verify_shop_id_1', 'slot', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verify_shop_id_2', 'slot', true, 2::smallint);
-    perform cma.set_writeback_field(v_c1, 'commerce_store', 'verify_shop_store', 'always', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verify_shop_orders', 'always', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_spent', 'verify_shop_spent', 'always', true);
+    select c.connection_id into v_c1 from cma.upsert_connection('verifycrm', 'Verify CRM one', '1000001', null, null) c;
+    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verifyshop_id_1', 'slot', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verifyshop_id_2', 'slot', true, 2::smallint);
+    perform cma.set_writeback_field(v_c1, 'commerce_store', 'verifyshop_store', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verifyshop_orders', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_spent', 'verifyshop_spent', 'always', true);
     perform cma.set_writeback_field(v_c1, 'country', 'verify_country', 'if_empty', true);
     perform cma.set_writeback_field(v_c1, 'currency', 'verify_currency', 'if_empty', true);
     perform cma.set_writeback_field(v_c1, 'language', 'verify_language', 'if_empty', false);
@@ -402,7 +402,7 @@ begin
 
     -- C6. a sent action is never touched: a newer payload after it is a new action, the sent one stays
     perform 1 from cma.outbox_claim(v_c1);
-    perform cma.outbox_finish(array[v_id2], 'sent', '{"written": ["verify_shop_orders"]}');
+    perform cma.outbox_finish(array[v_id2], 'sent', '{"written": ["verifyshop_orders"]}');
     select * into r from cma.outbox_action where id = v_id2;
     v_id3 := cma.enqueue_contact_writeback(v_c1, '9000001', '{"commerce_ref": "7001", "commerce_orders": 5}', null);
     if v_id3 = v_id2 or (select status from cma.outbox_action where id = v_id2) <> 'sent'
@@ -473,10 +473,10 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c1 from cma.upsert_connection('verify_crm', 'Verify CRM one', '1000001', null, null) c;
+    select c.connection_id into v_c1 from cma.upsert_connection('verifycrm', 'Verify CRM one', '1000001', null, null) c;
     perform cma.set_writeback_field(v_c1, 'country', 'verify_country', 'if_empty', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verify_shop_id_1', 'slot', true);
-    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verify_shop_orders', 'always', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_ref', 'verifyshop_id_1', 'slot', true);
+    perform cma.set_writeback_field(v_c1, 'commerce_orders', 'verifyshop_orders', 'always', true);
     perform set_config('app.user_id', v_ing1::text, true);
     v_a := cma.enqueue_contact_writeback(v_c1, '9000001', '{"country": "GB"}', null);
     v_b := cma.enqueue_contact_writeback(v_c1, '9000002', '{"country": "NL"}', null);
@@ -696,8 +696,8 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c1 from cma.upsert_connection('verify_crm', 'Verify CRM one', '1000001', null, null) c;
-    select c.connection_id into v_c2 from cma.upsert_connection('verify_crm', 'Verify CRM two', '1000002', null, null) c;
+    select c.connection_id into v_c1 from cma.upsert_connection('verifycrm', 'Verify CRM one', '1000001', null, null) c;
+    select c.connection_id into v_c2 from cma.upsert_connection('verifycrm', 'Verify CRM two', '1000002', null, null) c;
     perform cma.set_writeback_field(v_c1, 'country', 'verify_country', 'if_empty', true);
     perform cma.set_writeback_field(v_c2, 'country', 'verify_country', 'if_empty', true);
     perform cma.set_tenant_setting('outbox.max_attempts', '1');
@@ -844,9 +844,9 @@ begin
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     select id into v_ing2 from cma.app_user where tenant_id = v_t2 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_crm', 'Verify CRM one', '1000001') returning id into v_c1;
+    values (v_t1, 'verifycrm', 'Verify CRM one', '1000001') returning id into v_c1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t2, 'verify_crm', 'Verify CRM two', '1000001') returning id into v_c2;
+    values (v_t2, 'verifycrm', 'Verify CRM two', '1000001') returning id into v_c2;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);

@@ -64,7 +64,7 @@ Expected: the route list with `/configuration/sources`, `/configuration/sources/
 ```bash
 run_migration dev 52_sources_configuration.sql 53_verify_sources_configuration.sql 0008e-dev-$(date +%F) 33_verify_intake_core.sql 31_verify_ingest_crm_records.sql
 ```
-Expected: `connected to cma as martin@pulse4all.com`; the last lines of `52` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `53` ends with the verdict row `PASS | 13 PASS, 0 FAIL`; `provoked FAIL lines: 4` and the verdict `PROVOKED, NOT A PASS | 10 PASS, 3 FAIL` (A1, B1 and B8); `33_verify_intake_core.sql: 2 PASS rows`, `31_verify_ingest_crm_records.sql: 2 PASS rows`. A `REFUSED` line means the session is not on dev: check `cma_db dev`.
+Expected: `connected to cma as martin@pulse4all.com`; the last lines of `52` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `53` ends with the verdict row `PASS | 16 PASS, 0 FAIL`; `provoked FAIL lines: 4` and the verdict `PROVOKED, NOT A PASS | 13 PASS, 3 FAIL` (A1, B1 and B8); `33_verify_intake_core.sql: 2 PASS rows`, `31_verify_ingest_crm_records.sql: 2 PASS rows`. A `REFUSED` line means the session is not on dev: check `cma_db dev`. If `52` stops with `adapter names must be lower-case letters and digits only before 0008e; these connections break the rule: …`, nothing was applied: the line names the tenant, adapter and name; send it to me before going on.
 
 **Studio (cma-dev-pg)** (what the migration set on the existing connections)
 ```sql
@@ -89,7 +89,7 @@ Expected: `True	7`.
 rec=records/0008e-prod-$(date +%F); mkdir -p "$rec" && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/52_sources_configuration.sql > "$rec/52.txt" 2>&1; tail -3 "$rec/52.txt"
 for f in 33_verify_intake_core.sql 31_verify_ingest_crm_records.sql; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "$rec/${f%%_*}-rerun.txt") PASS rows"; done
 ```
-Expected: `connected to cma as martin@pulse4all.com`; `INSERT 0 1`, `COMMIT`, `RESET` (on a rerun `INSERT 0 0`); `33_verify_intake_core.sql: 2 PASS rows`, `31_verify_ingest_crm_records.sql: 2 PASS rows`.
+Expected: `connected to cma as martin@pulse4all.com`; `INSERT 0 1`, `COMMIT`, `RESET` (on a rerun `INSERT 0 0`; the pre-flight's `adapter names must be …` line instead means nothing was applied, as in step 2); `33_verify_intake_core.sql: 2 PASS rows`, `31_verify_ingest_crm_records.sql: 2 PASS rows`.
 
 **Studio (cma-prod-pg)** (read only)
 ```sql
@@ -101,12 +101,13 @@ select p.oid::regprocedure as fn, has_function_privilege('cma_app', p.oid, 'exec
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'cma' and p.proname in ('connection_held_kinds_of', 'set_connection_kind', 'sources', 'connection_catalogs',
   'markets_all', 'business_hours_all', 'business_holidays_all', 'message_rules', 'linked_account_systems', 'linked_accounts',
-  'set_user_external_id', 'remove_user_external_id')
+  'set_user_external_id', 'remove_user_external_id', 'find_tenants_for_identity', 'add_person', 'upsert_connection')
 order by 1;
+select adapter from cma.integration_connection where adapter !~ '^[a-z0-9]+$';
 select count(*) as ids_linked from cma.app_user_external_id where system ~ '^[a-z0-9]+_(owner|user)$';
 reset role;
 ```
-Expected: one row `0008e` with today's time and your login; `HubSpot Subscriptions` `hubspot` `crm` `active` (and the Make automation connection of `GO_LIVE_RUNBOOK.md` 2b, if you created it, with an empty kind); twelve functions, `app` true and `reader` false on every row; `ids_linked` equal to the owners you linked on 12 October (7.6), unchanged by the migration.
+Expected: one row `0008e` with today's time and your login; `HubSpot Subscriptions` `hubspot` `crm` `active` (and the Make automation connection of `GO_LIVE_RUNBOOK.md` 2b, if you created it, with an empty kind); fifteen functions (the twelve of 0008e and the three it replaced), `app` true and `reader` false on every row; the adapter query returns 0 rows (prod holds only `hubspot`, which `52`'s pre-flight checked as well); `ids_linked` equal to the owners you linked on 12 October (7.6), unchanged by the migration.
 
 ## 4. Merge and watch the prod build
 

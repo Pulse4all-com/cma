@@ -162,9 +162,9 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    select c.connection_id into v_c1 from cma.upsert_connection('verify_shop', 'Verify shop one', 'one.example.com', null, null) c;
-    select c.connection_id into v_c2 from cma.upsert_connection('verify_shop', 'Verify shop two', 'two.example.com', null, null) c;
-    select c.connection_id into v_c3 from cma.upsert_connection('verify_shop', 'Verify shop three', 'three.example.com', null, null) c;
+    select c.connection_id into v_c1 from cma.upsert_connection('verifyshop', 'Verify shop one', 'one.example.com', null, null) c;
+    select c.connection_id into v_c2 from cma.upsert_connection('verifyshop', 'Verify shop two', 'two.example.com', null, null) c;
+    select c.connection_id into v_c3 from cma.upsert_connection('verifyshop', 'Verify shop three', 'three.example.com', null, null) c;
     perform cma.upsert_market('GB', 'United Kingdom', 'Europe/London', 'en', 'GBP');
     perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
 
@@ -259,9 +259,9 @@ begin
     v_t1 := cma.create_tenant('verify-0007b-one', 'Verify 0007b one', 'Europe/Amsterdam');
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_shop', 'Verify shop one', 'one.example.com') returning id into v_c1;
+    values (v_t1, 'verifyshop', 'Verify shop one', 'one.example.com') returning id into v_c1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_shop', 'Verify shop two', 'two.example.com') returning id into v_c2;
+    values (v_t1, 'verifyshop', 'Verify shop two', 'two.example.com') returning id into v_c2;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -275,7 +275,7 @@ begin
       {"sourceId": "1002", "ordersCount": 0, "amountSpent": 0, "currency": "GBP", "updatedAt": "2026-10-02T09:00:00Z"}]') u;
     select * into r from cma.commerce_customer where connection_id = v_c1 and source_id = '1001';
     if v_txt is distinct from 'inserted,inserted' or r.amount_spent <> 120.51 or r.amount_currency <> 'GBP' or r.orders_count <> 2
-       or r.locale <> 'en-GB' or r.source_system <> 'verify_shop' or r.source_created_at <> '2026-10-01T09:00:00Z'::timestamptz or v_provoke then
+       or r.locale <> 'en-GB' or r.source_system <> 'verifyshop' or r.source_created_at <> '2026-10-01T09:00:00Z'::timestamptz or v_provoke then
       raise exception 'FAIL C1: customers gave % and hold %, %, %', v_txt, r.amount_spent, r.amount_currency, r.orders_count;
     end if;
 
@@ -382,7 +382,7 @@ begin
     select v_t1, v_admin, ar.id from cma.app_role ar where ar.tenant_id = v_t1 and ar.key = 'admin';
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_shop', 'Verify shop one', 'one.example.com') returning id into v_c1;
+    values (v_t1, 'verifyshop', 'Verify shop one', 'one.example.com') returning id into v_c1;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
@@ -411,7 +411,7 @@ begin
        or r.currency <> 'GBP' or r.total_amount <> 99.90 or r.tax_amount <> 9.90 or r.landing_host <> 'shop.example.com'
        or r.landing_path <> '/products/verify' or r.referring_host <> 'search.example.com'
        or r.utm <> '{"source": "verify", "medium": "cpc", "campaign": "42"}'::jsonb or r.tags <> array['alpha', 'beta']
-       or not r.prior_count_exact or r.order_name <> '#1001' or r.source_system <> 'verify_shop' or r.is_test or v_provoke then
+       or not r.prior_count_exact or r.order_name <> '#1001' or r.source_system <> 'verifyshop' or r.is_test or v_provoke then
       raise exception 'FAIL D1: orders gave % and 5001 holds %', v_txt, row_to_json(r);
     end if;
     select string_agg(line_source_id || ':' || coalesce(sku, '∅') || ':' || quantity || ':' || coalesce(unit_price::text, '∅') || ':' || coalesce(currency, '∅'),
@@ -616,9 +616,9 @@ begin
     select id into v_ing1 from cma.app_user where tenant_id = v_t1 and email = 'ingest@system.invalid';
     select id into v_ing2 from cma.app_user where tenant_id = v_t2 and email = 'ingest@system.invalid';
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t1, 'verify_shop', 'Verify shop one', 'one.example.com') returning id into v_c1;
+    values (v_t1, 'verifyshop', 'Verify shop one', 'one.example.com') returning id into v_c1;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id)
-    values (v_t2, 'verify_shop', 'Verify shop two', 'two.example.com') returning id into v_c2;
+    values (v_t2, 'verifyshop', 'Verify shop two', 'two.example.com') returning id into v_c2;
 
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);

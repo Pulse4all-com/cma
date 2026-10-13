@@ -19,7 +19,10 @@
 --      hours and holidays; alert rules of both triggers with their alerts; the linked-account
 --      systems from the connections and from held ids; the linked accounts in the directory's
 --      scope; people's ids by a manager for an agent, refused for a managing person, an id held by
---      another person refused, an agent refused; the other tenant sees nothing of the first
+--      another person refused, an agent refused; the other tenant sees nothing of the first; the
+--      reserved names (add_person refuses a login system ending in _owner or _user, and
+--      find_tenants_for_identity never matches a linked id); upsert_connection refuses an adapter
+--      name with an underscore
 -- Provoke: set provoke below to true; A1, B1 and B8 must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -321,17 +324,70 @@ begin
     v_rows := v_rows || array['19', 'B9 the other tenant sees nothing of the first',
       case when v_ok then 'PASS' else 'FAIL' end, ''];
 
+    -- B10. add_person refuses a login system ending in _owner or _user (a linked account's name),
+    --      after the form check and before the employer is looked up
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_admin::text, true);
+    v_n := 0;
+    v_detail := '';
+    begin
+      perform cma.add_person('verify-new@example.invalid', 'new', 'no-such-employer', 'agent', 'verifyx_owner', 'l-1');
+    exception
+      when sqlstate 'CMA04' then
+        if starts_with(sqlerrm, 'a login system cannot end in _owner or _user') then v_n := v_n + 1; end if;
+        v_detail := sqlerrm;
+      when others then v_detail := sqlstate || ' ' || sqlerrm;
+    end;
+    begin
+      perform cma.add_person('verify-new@example.invalid', 'new', 'no-such-employer', 'agent', 'verifyx_user', 'l-1');
+    exception
+      when sqlstate 'CMA04' then
+        if starts_with(sqlerrm, 'a login system cannot end in _owner or _user') then v_n := v_n + 1; end if;
+      when others then null;
+    end;
+    begin   -- a plain login system passes both login-system checks and stops at the unknown employer
+      perform cma.add_person('verify-new@example.invalid', 'new', 'no-such-employer', 'agent', 'verifyx', 'l-1');
+    exception
+      when sqlstate 'CMA02' then v_n := v_n + 1;
+      when others then null;
+    end;
+    v_rows := v_rows || array['20', 'B10 add_person refuses a login system ending in _owner or _user',
+      case when v_n = 3 then 'PASS' else 'FAIL' end, format('%s of 3; %s', v_n, v_detail)];
+
+    -- B11. a linked id never signs anyone in: find_tenants_for_identity does not match it, while the
+    --      tenant's Ingest user is still found by its sign-in id
+    perform cma.set_user_external_id(v_a2, 'verifycrm_owner', 'o1');
+    select count(*) into v_n from cma.find_tenants_for_identity('verifycrm_owner', 'o1');
+    v_ok := v_n = 0
+            and exists (select 1 from cma.app_user_external_id where user_id = v_a2 and system = 'verifycrm_owner' and external_id = 'o1')
+            and exists (select 1 from cma.find_tenants_for_identity('ingest', 'ingest') f where f.tenant_id = v_t1);
+    v_rows := v_rows || array['21', 'B11 find_tenants_for_identity never matches a linked id',
+      case when v_ok then 'PASS' else 'FAIL' end, format('%s row(s) for verifycrm_owner/o1', v_n)];
+
+    -- B12. upsert_connection refuses an adapter name that is not lower-case letters and digits only
+    v_ok := false;
+    v_detail := 'not refused';
+    begin
+      perform cma.upsert_connection('verify_crm', 'Verify underscore', 'portal-9', null, null);
+    exception when sqlstate 'CMA04' then
+      v_ok := sqlerrm = 'an adapter name is lower-case letters and digits only';
+      v_detail := sqlerrm;
+    end;
+    v_ok := v_ok and not exists (select 1 from cma.integration_connection where adapter = 'verify_crm');
+    v_rows := v_rows || array['22', 'B12 upsert_connection refuses an adapter with an underscore',
+      case when v_ok then 'PASS' else 'FAIL' end, v_detail];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
     when others then
-      v_rows := v_rows || array['20', 'B the block ran to the end', 'FAIL', sqlerrm];
+      v_rows := v_rows || array['29', 'B the block ran to the end', 'FAIL', sqlerrm];
   end;
   insert into verify_0008e (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008e values (20, 'B the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008e values (29, 'B the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
@@ -343,7 +399,7 @@ from (select ord, check_name, result, detail from verify_0008e
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008e where result = 'PASS') = 13
+                  when (select count(*) from verify_0008e where result = 'PASS') = 16
                        and not exists (select 1 from verify_0008e where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008e where result = 'PASS'),

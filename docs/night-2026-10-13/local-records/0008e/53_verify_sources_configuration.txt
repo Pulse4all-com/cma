@@ -11,7 +11,7 @@ SET
 (1 row)
 
 DO
-psql:53_verify_sources_configuration.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:53_verify_sources_configuration.sql:53: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
 DO
@@ -31,7 +31,10 @@ DO
  B7 linked accounts in the directory's scope                               | PASS   | admin sees 3; manager sees verifycrm_owner=o-1 verifycrm_owner=o-mgr
  B8 people's ids by the People rule                                        | PASS   | 5 of 5 refusals
  B9 the other tenant sees nothing of the first                             | PASS   | 
- verdict                                                                   | PASS   | 13 PASS, 0 FAIL
-(14 rows)
+ B10 add_person refuses a login system ending in _owner or _user           | PASS   | 3 of 3; a login system cannot end in _owner or _user; those name linked accounts
+ B11 find_tenants_for_identity never matches a linked id                   | PASS   | 0 row(s) for verifycrm_owner/o1
+ B12 upsert_connection refuses an adapter with an underscore               | PASS   | an adapter name is lower-case letters and digits only
+ verdict                                                                   | PASS   | 16 PASS, 0 FAIL
+(17 rows)
 
 RESET

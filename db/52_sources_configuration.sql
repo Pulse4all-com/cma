@@ -13,8 +13,8 @@
 -- set_telephony_tag, upsert_commerce_store, upsert_market, set_market_status, set_market_alias,
 -- remove_market_alias, set_business_hours, set_business_holiday, remove_business_holiday,
 -- upsert_message_rule, upsert_assignment_rule, set_message_rule_enabled, set_user_external_id,
--- remove_user_external_id). This addition holds only what had no function (README Decision log,
--- 13 October 2026, night):
+-- remove_user_external_id). This addition holds what had no function, and replaces three functions
+-- for two rules of the review (README Decision log, 13 October 2026):
 --
 --   connection kind    integration_connection.kind: crm, telephony, commerce or automation, the kind
 --                      of source a connection is in the data model's terms (the tables its data lands
@@ -43,6 +43,14 @@
 --                      the People rule instead of users.manage_all: a manager links agents, an admin
 --                      anyone (cma.assert_may_manage of 0004). The order of the checks is unchanged,
 --                      so 33 F1 and F2 hold as before; an id another person holds stays CMA03
+--   reserved names     a system name ending in _owner or _user names a linked account, never a
+--                      sign-in: cma.find_tenants_for_identity() (0002) never matches one, and
+--                      cma.add_person() (0004) refuses one as a login system (CMA04). Both are
+--                      otherwise unchanged; without this, a manager who may edit linked ids could
+--                      rewrite a sign-in id stored under such a name
+--   adapter names      lower-case letters and digits only, so <adapter>_owner and <adapter>_user read
+--                      one way: cma.upsert_connection() (0006) refuses any other name (CMA04), and
+--                      this script refuses to run while an existing connection breaks the rule
 --
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid,
 -- CMA06 not permitted.
@@ -64,6 +72,23 @@ do $$
 begin
   if not exists (select 1 from cma.schema_migration where version = '0008d') then
     raise exception 'addition 0008d (50_legacy_time_import.sql) must run before 0008e';
+  end if;
+end
+$$;
+
+-- Adapter names are lower-case letters and digits only (section 6). Refuse to run while an existing
+-- connection breaks the rule: renaming one is a decision, not a side effect of a migration
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(format('tenant %s, adapter %s, name %s', c.tenant_id, c.adapter, c.name), '; '
+                    order by c.tenant_id, c.adapter, c.name)
+  into v_bad
+  from cma.integration_connection c
+  where c.adapter !~ '^[a-z0-9]+$';
+  if v_bad is not null then
+    raise exception 'adapter names must be lower-case letters and digits only before 0008e; these connections break the rule: %', v_bad;
   end if;
 end
 $$;
@@ -454,7 +479,141 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 6. Privileges: the application only
+-- 6. Reserved names and adapter names (README Decision log, 13 October 2026)
+-- ---------------------------------------------------------------------------------------------
+-- Login step 1 as in 0002, plus: a system name ending in _owner or _user is a linked account, never a
+-- sign-in, so it never finds a tenant. Still the one SECURITY DEFINER function, owned by cma_owner.
+create or replace function cma.find_tenants_for_identity(p_system text, p_external_id text)
+returns table (tenant_id uuid)
+language sql stable security definer
+set search_path = pg_catalog, cma
+as $$
+  select x.tenant_id
+  from cma.app_user_external_id x
+  join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id
+  join cma.tenant   t on t.id = x.tenant_id
+  where x.system = p_system
+    and x.external_id = p_external_id
+    and u.status = 'active'
+    and t.status = 'active'
+    and p_system !~ '_(owner|user)$'
+  order by t.slug
+$$;
+alter function cma.find_tenants_for_identity(text, text) owner to cma_owner;
+
+-- Adds a person as in 0004, plus: a login system ending in _owner or _user is refused (CMA04), because
+-- those names are linked accounts, which a manager may edit on People. Signature, every other check
+-- and their order unchanged.
+create or replace function cma.add_person(
+  p_email             text,
+  p_display_name      text,
+  p_organisation_key  text,
+  p_role_key          text,
+  p_login_system      text,
+  p_login_id          text,
+  p_timezone          text default null
+)
+returns uuid
+language plpgsql
+as $$
+declare
+  v_actor   uuid := cma.assert_any_permission(array['users.manage_agents', 'users.manage_all']);
+  v_tenant  uuid := cma.current_tenant_id();
+  v_email   text := lower(btrim(coalesce(p_email, '')));
+  v_name    text := btrim(coalesce(p_display_name, ''));
+  v_login   text := btrim(coalesce(p_login_id, ''));
+  v_system  text := lower(btrim(coalesce(p_login_system, '')));
+  v_org     uuid;
+  v_role    uuid;
+  v_user    uuid;
+  v_status  text;
+  v_owner   uuid;
+  v_current text;
+begin
+  if v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+    raise exception 'email % is not an email address', p_email using errcode = 'CMA04';
+  end if;
+  if length(v_name) < 1 or length(v_name) > 100 then
+    raise exception 'the display name must be 1 to 100 characters' using errcode = 'CMA04';
+  end if;
+  if v_system !~ '^[a-z0-9_]+$' then
+    raise exception 'login system % must be a token such as google or mock', p_login_system using errcode = 'CMA04';
+  end if;
+  if v_system ~ '_(owner|user)$' then
+    raise exception 'a login system cannot end in _owner or _user; those name linked accounts' using errcode = 'CMA04';
+  end if;
+  if v_login = '' or length(v_login) > 200 or v_login ~ '[[:space:]]' then
+    raise exception 'the login id must be 1 to 200 characters without spaces' using errcode = 'CMA04';
+  end if;
+  if p_timezone is not null and not cma.is_timezone(p_timezone) then
+    raise exception '% is not a time zone Postgres knows', p_timezone using errcode = 'CMA04';
+  end if;
+  select id into v_org from cma.organisation where tenant_id = v_tenant and key = p_organisation_key and status = 'active';
+  if v_org is null then
+    raise exception 'no active employer % in the current tenant', p_organisation_key using errcode = 'CMA02';
+  end if;
+  v_role := cma.assert_role_assignable(p_role_key);
+
+  select u.id, u.status into v_user, v_status from cma.app_user u where u.tenant_id = v_tenant and u.email = v_email;
+  if v_user is not null and v_status <> 'active' then
+    raise exception '% exists but is inactive; reactivating is a separate step', v_email using errcode = 'CMA03';
+  end if;
+
+  select x.user_id into v_owner from cma.app_user_external_id x
+  where x.tenant_id = v_tenant and x.system = v_system and x.external_id = v_login;
+  if v_owner is not null and v_owner is distinct from v_user then
+    raise exception 'this login id already belongs to another person in the current tenant' using errcode = 'CMA03';
+  end if;
+
+  if v_user is not null then
+    select x.external_id into v_current from cma.app_user_external_id x
+    where x.tenant_id = v_tenant and x.user_id = v_user and x.system = v_system;
+    if v_current is not null and v_current <> v_login then
+      raise exception '% already has a different % login id; changing it is a separate step', v_email, v_system using errcode = 'CMA03';
+    end if;
+    if v_current is null then
+      insert into cma.app_user_external_id (tenant_id, user_id, system, external_id) values (v_tenant, v_user, v_system, v_login);
+    end if;
+    return v_user;   -- rerun: the same person, nothing else changes
+  end if;
+
+  insert into cma.app_user (tenant_id, organisation_id, email, display_name, timezone)
+  values (v_tenant, v_org, v_email, v_name, p_timezone)
+  returning id into v_user;
+  insert into cma.app_user_external_id (tenant_id, user_id, system, external_id) values (v_tenant, v_user, v_system, v_login);
+  insert into cma.user_role (tenant_id, user_id, role_id, granted_by) values (v_tenant, v_user, v_role, v_actor);
+  return v_user;
+end
+$$;
+
+-- Adds or updates a connection as in 0006, plus: the adapter name is lower-case letters and digits
+-- only (CMA04), so a person's id in it reads <adapter>_owner or <adapter>_user one way.
+create or replace function cma.upsert_connection(p_adapter text, p_name text, p_external_account_id text,
+                                                 p_signing_secret_name text, p_token_secret_name text)
+returns table (connection_id uuid, key text)
+language plpgsql
+as $$
+#variable_conflict use_column
+begin
+  perform cma.assert_permission('tenant.configure');
+  if coalesce(p_adapter, '') !~ '^[a-z0-9]+$' then
+    raise exception 'an adapter name is lower-case letters and digits only' using errcode = 'CMA04';
+  end if;
+  return query
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, signing_secret_name, token_secret_name)
+    values (cma.current_tenant_id(), p_adapter, btrim(p_name), btrim(p_external_account_id),
+            nullif(btrim(p_signing_secret_name), ''), nullif(btrim(p_token_secret_name), ''))
+    on conflict (tenant_id, adapter, external_account_id)
+      do update set name = excluded.name, signing_secret_name = excluded.signing_secret_name,
+                    token_secret_name = excluded.token_secret_name
+    returning id, integration_connection.key;
+exception when check_violation or not_null_violation then
+  raise exception 'invalid connection: %', sqlerrm using errcode = 'CMA04';
+end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 7. Privileges: the application only
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -472,7 +631,10 @@ begin
     'cma.linked_account_systems()',
     'cma.linked_accounts()',
     'cma.set_user_external_id(uuid,text,text)',
-    'cma.remove_user_external_id(uuid,text)'
+    'cma.remove_user_external_id(uuid,text)',
+    'cma.find_tenants_for_identity(text,text)',
+    'cma.add_person(text,text,text,text,text,text,text)',
+    'cma.upsert_connection(text,text,text,text,text)'
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
@@ -481,7 +643,7 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 7. Reporting view: the kind joins the connection (no key, no secret names, as before)
+-- 8. Reporting view: the kind joins the connection (no key, no secret names, as before)
 -- ---------------------------------------------------------------------------------------------
 create or replace view cma_read.integration_connection as
   select id, tenant_id, adapter, name, external_account_id, status, created_at, updated_at, kind
@@ -489,7 +651,7 @@ create or replace view cma_read.integration_connection as
   where cma_read.reader_sees(tenant_id);
 
 insert into cma.schema_migration (version, description)
-values ('0008e', 'Sources, markets and alert rules configuration reads, the connection kind, linked accounts on People (set_user_external_id follows the People rule)')
+values ('0008e', 'Sources, markets and alert rules configuration reads, the connection kind, linked accounts on People (set_user_external_id follows the People rule); _owner and _user reserved for linked accounts; adapter names lower-case letters and digits')
 on conflict (version) do nothing;
 
 commit;

@@ -142,30 +142,30 @@ RESET
 SET
  version |                                                                                                                                                             description                                                                                                                                                              |      applied_by      | applied_at 
 ---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
- 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                                                                                                                                                                                                                              | martin@pulse4all.com | 2026-10-12
- 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views                                                                                                                                                                                                 | martin@pulse4all.com | 2026-10-12
- 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                                                                                                                                                                                                                   | martin@pulse4all.com | 2026-10-12
- 0003a   | Team people: team_people for Add day and the person filter                                                                                                                                                                                                                                                                           | martin@pulse4all.com | 2026-10-12
- 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads                                                                                                                                                                                                               | martin@pulse4all.com | 2026-10-12
- 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                                                                                                                                                                                                                    | martin@pulse4all.com | 2026-10-12
- 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                                                                                                                                                                                                                   | martin@pulse4all.com | 2026-10-12
- 0003e   | Team now: today's day and current status per person whose time is kept, for the Live board, needs monitoring.live                                                                                                                                                                                                                    | martin@pulse4all.com | 2026-10-12
- 0004    | Teams and skills: team, team_member, skill, skill_level, user_skill; the admin role, users.manage split into users.manage_agents and users.manage_all; directory, add_person and the people and catalog functions                                                                                                                    | martin@pulse4all.com | 2026-10-12
- 0005    | Roster: absence types, roster weeks with publications, versioned entries (shift or absence within the business day), coverage targets, the planner functions, the own schedule and today's shift reads, the adherence tolerance setting                                                                                              | martin@pulse4all.com | 2026-10-12
- 0005a   | Configuration: work status, app link, absence type and coverage target functions for tenant.configure; the scheduler system user and role per tenant with workday.close_forgotten; cma.close_forgotten_workdays() and the auto-close grace setting; a system end keeps a day flagged                                                 | martin@pulse4all.com | 2026-10-12
- 0005b   | My profile: cma.my_profile(), the acting person's own details, role, teams and skills for the My account page                                                                                                                                                                                                                        | martin@pulse4all.com | 2026-10-12
- 0006    | Ingest and CRM records: connections with field mapping, pipelines and stages, the ingest log, thin CRM records and contacts with refs, the Ingest system user, crm_records_per_day                                                                                                                                                   | martin@pulse4all.com | 2026-10-12
- 0007    | Intake core: markets with aliases, office hours and holidays, business time, connection settings and slots, CRM calls, call outcomes, associations, forms and submissions, sync cursors and runs, contact forget, people's ids in other systems                                                                                      | martin@pulse4all.com | 2026-10-12
- 0007a   | Telephony: calls with a stale guard on the source version, tags with history, lines with market, the keyed-hash call link to CRM calls, contact forget clearing linked telephony hashes                                                                                                                                              | martin@pulse4all.com | 2026-10-12
- 0007b   | Commerce: stores (one per connection, unique handle), customers, orders with lines replaced as a set, order_kind (first, repeat, renewal, unknown) from the prior order count and the renewal settings, reclassified when a setting changes, the store in connection_config                                                          | martin@pulse4all.com | 2026-10-12
- 0007c   | Outbox and CRM contact write-back: write-back fields per CRM connection (always, if_empty, slot), the outbox with forward-only states, dedupe and supersede per contact, claim with SKIP LOCKED and backoff, parking after outbox.max_attempts and resolve by a person, outbox_status, the write-back fields in connection_config    | martin@pulse4all.com | 2026-10-12
- 0007d   | Lead metrics and data quality: speed to lead with its summary, lead to order, intake per day, the data-quality checks, their reporting views                                                                                                                                                                                         | martin@pulse4all.com | 2026-10-12
- 0008    | Messaging core and record alerts: messages, deliveries with delivered, read and acknowledged times, alert rules, record alerts for the ingest service, manual messages, the caller's reads and writes, stats                                                                                                                         | martin@pulse4all.com | 2026-10-12
- 0008a   | Assignment alerts (a record alerts the person its owner maps to, once per record and owner) and messages from automations through the ingest service (owners and emails as targets)                                                                                                                                                  | martin@pulse4all.com | 2026-10-12
- 0008b   | Workday window and forgotten-day close: window start and end per tenant (clock-in refused before the start, time counted up to the end, corrections within it), forgotten days closed at the planned shift end or the auto-close time with a notice to the person and a digest to management                                         | martin@pulse4all.com | 2026-10-12
- 0008c   | Alert times in the tenant's time zone: the created and assigned time in the body of record and assignment alerts uses the tenant's zone, not the market's                                                                                                                                                                            | martin@pulse4all.com | 2026-10-12
- 0008d   | Legacy time import: time_event source import with its batch, import batches staged, loaded and withdrawn as a unit, sessions, the person map and the days written; stage, load and void for tenant.configure; imported days closed by rule or clipped need a correction, a withdrawn day is no day; the batch key in the day history | martin@pulse4all.com | 2026-10-12
- 0008e   | Sources, markets and alert rules configuration reads, the connection kind, linked accounts on People (set_user_external_id follows the People rule)                                                                                                                                                                                  | martin@pulse4all.com | 2026-10-12
+ 0001    | Foundation: tenants, users, roles, permissions, channels, tenant separation, audit log, reporting views                                                                                                                                                                                                                              | martin@pulse4all.com | <date>
+ 0002    | Time model: work statuses, workdays, append-only time events with corrections, per-user time zones, identity lookup, reporting views                                                                                                                                                                                                 | martin@pulse4all.com | <date>
+ 0003    | Corrections: correct_workday (also Add day), team_hours, team_day, CMA06, nothing before the start                                                                                                                                                                                                                                   | martin@pulse4all.com | <date>
+ 0003a   | Team people: team_people for Add day and the person filter                                                                                                                                                                                                                                                                           | martin@pulse4all.com | <date>
+ 0003b   | Tenant settings (catalog, tenant values, read and write functions), the workday.export permission and the export reads                                                                                                                                                                                                               | martin@pulse4all.com | <date>
+ 0003c   | Team status time: seconds per person per day per status for the Dashboard, needs performance.team                                                                                                                                                                                                                                    | martin@pulse4all.com | <date>
+ 0003d   | Clock in and app links: time_is_kept guard on day creation (open_workday, Add day), app_link table and app_links()                                                                                                                                                                                                                   | martin@pulse4all.com | <date>
+ 0003e   | Team now: today's day and current status per person whose time is kept, for the Live board, needs monitoring.live                                                                                                                                                                                                                    | martin@pulse4all.com | <date>
+ 0004    | Teams and skills: team, team_member, skill, skill_level, user_skill; the admin role, users.manage split into users.manage_agents and users.manage_all; directory, add_person and the people and catalog functions                                                                                                                    | martin@pulse4all.com | <date>
+ 0005    | Roster: absence types, roster weeks with publications, versioned entries (shift or absence within the business day), coverage targets, the planner functions, the own schedule and today's shift reads, the adherence tolerance setting                                                                                              | martin@pulse4all.com | <date>
+ 0005a   | Configuration: work status, app link, absence type and coverage target functions for tenant.configure; the scheduler system user and role per tenant with workday.close_forgotten; cma.close_forgotten_workdays() and the auto-close grace setting; a system end keeps a day flagged                                                 | martin@pulse4all.com | <date>
+ 0005b   | My profile: cma.my_profile(), the acting person's own details, role, teams and skills for the My account page                                                                                                                                                                                                                        | martin@pulse4all.com | <date>
+ 0006    | Ingest and CRM records: connections with field mapping, pipelines and stages, the ingest log, thin CRM records and contacts with refs, the Ingest system user, crm_records_per_day                                                                                                                                                   | martin@pulse4all.com | <date>
+ 0007    | Intake core: markets with aliases, office hours and holidays, business time, connection settings and slots, CRM calls, call outcomes, associations, forms and submissions, sync cursors and runs, contact forget, people's ids in other systems                                                                                      | martin@pulse4all.com | <date>
+ 0007a   | Telephony: calls with a stale guard on the source version, tags with history, lines with market, the keyed-hash call link to CRM calls, contact forget clearing linked telephony hashes                                                                                                                                              | martin@pulse4all.com | <date>
+ 0007b   | Commerce: stores (one per connection, unique handle), customers, orders with lines replaced as a set, order_kind (first, repeat, renewal, unknown) from the prior order count and the renewal settings, reclassified when a setting changes, the store in connection_config                                                          | martin@pulse4all.com | <date>
+ 0007c   | Outbox and CRM contact write-back: write-back fields per CRM connection (always, if_empty, slot), the outbox with forward-only states, dedupe and supersede per contact, claim with SKIP LOCKED and backoff, parking after outbox.max_attempts and resolve by a person, outbox_status, the write-back fields in connection_config    | martin@pulse4all.com | <date>
+ 0007d   | Lead metrics and data quality: speed to lead with its summary, lead to order, intake per day, the data-quality checks, their reporting views                                                                                                                                                                                         | martin@pulse4all.com | <date>
+ 0008    | Messaging core and record alerts: messages, deliveries with delivered, read and acknowledged times, alert rules, record alerts for the ingest service, manual messages, the caller's reads and writes, stats                                                                                                                         | martin@pulse4all.com | <date>
+ 0008a   | Assignment alerts (a record alerts the person its owner maps to, once per record and owner) and messages from automations through the ingest service (owners and emails as targets)                                                                                                                                                  | martin@pulse4all.com | <date>
+ 0008b   | Workday window and forgotten-day close: window start and end per tenant (clock-in refused before the start, time counted up to the end, corrections within it), forgotten days closed at the planned shift end or the auto-close time with a notice to the person and a digest to management                                         | martin@pulse4all.com | <date>
+ 0008c   | Alert times in the tenant's time zone: the created and assigned time in the body of record and assignment alerts uses the tenant's zone, not the market's                                                                                                                                                                            | martin@pulse4all.com | <date>
+ 0008d   | Legacy time import: time_event source import with its batch, import batches staged, loaded and withdrawn as a unit, sessions, the person map and the days written; stage, load and void for tenant.configure; imported days closed by rule or clipped need a correction, a withdrawn day is no day; the batch key in the day history | martin@pulse4all.com | <date>
+ 0008e   | Sources, markets and alert rules configuration reads, the connection kind, linked accounts on People (set_user_external_id follows the People rule); _owner and _user reserved for linked accounts; adapter names lower-case letters and digits                                                                                      | martin@pulse4all.com | <date>
 (24 rows)
 
 RESET
@@ -199,7 +199,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 INSERT 0 2
@@ -207,32 +207,20 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a13191-5131-76ba-9cce-24cd494fc154
+ <uuid>
 (1 row)
 
- status 
---------
- open
-(1 row)
-
- status | zero_length 
---------+-------------
- ended  | t
-(1 row)
-
- status 
---------
- ended
-(1 row)
-
-psql:07_verify_time_model.sql:119: ERROR:  workday 01a13191-5138-78b1-838d-2f2df6a05077 is already ended; resuming is a correction
-CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 25 at RAISE
+psql:07_verify_time_model.sql:114: ERROR:  the workday starts at <time>
+CONTEXT:  PL/pgSQL function cma.open_workday(timestamp with time zone) line 31 at RAISE
+psql:07_verify_time_model.sql:116: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:07_verify_time_model.sql:118: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:07_verify_time_model.sql:119: ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK
 BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 INSERT 0 2
@@ -240,36 +228,28 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a13191-5141-7597-8947-ee31eeaf1715
+ <uuid>
 (1 row)
 
- status 
---------
- open
-(1 row)
-
-              set_config              
---------------------------------------
- 01a13191-5141-76ee-a0c8-e7ac504298d7
-(1 row)
-
-psql:07_verify_time_model.sql:142: ERROR:  a user can only end their own workday
-CONTEXT:  PL/pgSQL function end_workday(uuid,timestamp with time zone,text) line 14 at RAISE
+psql:07_verify_time_model.sql:137: ERROR:  the workday starts at <time>
+CONTEXT:  PL/pgSQL function cma.open_workday(timestamp with time zone) line 31 at RAISE
+psql:07_verify_time_model.sql:139: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:07_verify_time_model.sql:142: ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK
 BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
          email         | business_date | status | working_h | paid_h | is_capped | needs_correction | has_correction 
 -----------------------+---------------+--------+-----------+--------+-----------+------------------+----------------
- agent.one@example.com | 2026-10-09    | ended  |      8.00 |   8.00 | f         | f                | f
- agent.one@example.com | 2026-10-10    | ended  |      5.92 |   5.92 | f         | f                | f
- agent.one@example.com | 2026-10-11    | ended  |      8.07 |   8.07 | f         | f                | t
- agent.two@example.com | 2026-10-10    | open   |     12.00 |  12.00 | t         | t                | f
- agent.two@example.com | 2026-10-11    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.one@example.com | <date>    | ended  |      8.00 |   8.00 | f         | f                | f
+ agent.one@example.com | <date>    | ended  |      5.92 |   5.92 | f         | f                | f
+ agent.one@example.com | <date>    | ended  |      8.07 |   8.07 | f         | f                | t
+ agent.two@example.com | <date>    | open   |     12.00 |  12.00 | t         | t                | f
+ agent.two@example.com | <date>    | ended  |      8.00 |   8.00 | f         | f                | f
 (5 rows)
 
 ROLLBACK
@@ -282,7 +262,7 @@ SET
 
               set_config              
 --------------------------------------
- 01a13190-a999-714f-afc2-2162363c9e68
+ <uuid>
 (1 row)
 
  invest_days 
@@ -292,7 +272,7 @@ SET
 
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
  subs_days 
@@ -310,7 +290,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 psql:07_verify_time_model.sql:176: ERROR:  permission denied for view workday_summary_all
@@ -319,7 +299,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 psql:07_verify_time_model.sql:184: ERROR:  permission denied for table time_event
@@ -328,7 +308,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 psql:07_verify_time_model.sql:190: ERROR:  permission denied for table time_event
@@ -337,12 +317,12 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
               set_config              
 --------------------------------------
- 01a13190-a9de-7a90-805f-e47f59a76fa7
+ <uuid>
 (1 row)
 
  kind 
@@ -352,8 +332,8 @@ SET
 
  business_date | status | working_h | needs_correction | has_correction 
 ---------------+--------+-----------+------------------+----------------
- 2026-10-10    | ended  |      8.00 | f                | t
- 2026-10-11    | ended  |      8.00 | f                | f
+ <date>    | ended  |      8.00 | f                | t
+ <date>    | ended  |      8.00 | f                | f
 (2 rows)
 
  kind |   source   | has_reason | approved_by_manager | actor_is_manager | actor_db_role 
@@ -366,7 +346,7 @@ BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 INSERT 0 2
@@ -374,7 +354,7 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a13191-515f-78c5-aeb5-2977fc1c47aa
+ <uuid>
 (1 row)
 
  agent_may_correct 
@@ -382,15 +362,14 @@ SET
  f
 (1 row)
 
-psql:07_verify_time_model.sql:236: ERROR:  user 01a13191-515f-78c5-aeb5-2977fc1c47aa lacks permission workday.team
-CONTEXT:  PL/pgSQL function assert_permission(text) line 13 at RAISE
-PL/pgSQL function correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) line 9 at assignment
+psql:07_verify_time_model.sql:236: ERROR:  the workday starts at <time>
+CONTEXT:  PL/pgSQL function cma.open_workday(timestamp with time zone) line 31 at RAISE
 ROLLBACK
 BEGIN
 SET
               set_config              
 --------------------------------------
- 01a13190-a98f-730a-b81a-5805d06e455a
+ <uuid>
 (1 row)
 
 INSERT 0 2
@@ -398,17 +377,13 @@ INSERT 0 2
 SET
               set_config              
 --------------------------------------
- 01a13191-5165-71f0-be41-312c5cc71cbd
+ <uuid>
 (1 row)
 
- status 
---------
- open
-(1 row)
-
-SET
-psql:07_verify_time_model.sql:260: ERROR:  new row for relation "time_event" violates check constraint "time_event_correction_needs_reason_and_approver"
-DETAIL:  Failing row contains (01a13191-5169-7110-b0c4-29a792383eee, 01a13190-a98f-730a-b81a-5805d06e455a, 01a13191-5166-7db7-a844-092ba0d1cc21, 01a13191-5165-71f0-be41-312c5cc71cbd, end, null, 2026-10-12 19:22:49.572736+00, 2026-10-12 19:22:49.577072+00, correction, null, null, null, null).
+psql:07_verify_time_model.sql:255: ERROR:  the workday starts at <time>
+CONTEXT:  PL/pgSQL function cma.open_workday(timestamp with time zone) line 31 at RAISE
+psql:07_verify_time_model.sql:256: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:07_verify_time_model.sql:260: ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK
 BEGIN
 SET
