@@ -1,8 +1,12 @@
 "use client";
 
 /**
- * Native <dialog> confirmation. Esc closes it (built in), Enter activates the
- * focused confirm button. Calm wording: what happens, what comes next.
+ * Native <dialog> confirmation. Esc closes it (built in). Calm wording: what happens, what comes next.
+ *
+ * An ordinary confirmation opens on its confirm button, so Enter confirms. An irreversible one (it
+ * removes data or changes it for good: README Decision log, 13 October 2026) opens on Cancel; Enter
+ * activates only the focused button, so Enter at open cancels, and the confirm button is a
+ * destructive secondary action without a keycap, never the primary one.
  */
 import { useEffect, useRef, type ReactNode } from "react";
 import { Button } from "./primitives";
@@ -16,6 +20,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
   busy = false,
+  irreversible = false,
 }: {
   open: boolean;
   title: string;
@@ -25,15 +30,20 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
   busy?: boolean;
+  irreversible?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
-    if (open && !d.open) d.showModal();
+    if (open && !d.open) {
+      d.showModal();
+      // showModal focuses the first button, the confirm button; an irreversible change starts on Cancel
+      if (irreversible) d.querySelector<HTMLButtonElement>("[data-confirm-cancel]")?.focus();
+    }
     if (!open && d.open) d.close();
-  }, [open]);
+  }, [open, irreversible]);
 
   return (
     <dialog
@@ -47,10 +57,16 @@ export function ConfirmDialog({
       <h2 className="text-panel font-semibold text-p4a-heading">{title}</h2>
       <div className="mt-2 text-body">{children}</div>
       <div className="mt-6 flex gap-3">
-        <Button variant="primary" size="md" onClick={onConfirm} disabled={busy} autoFocus shortcut="Enter">
-          {confirmLabel}
-        </Button>
-        <Button variant="outlined" size="md" onClick={onCancel} disabled={busy} shortcut="Esc">
+        {irreversible ? (
+          <Button variant="destructive" size="md" onClick={onConfirm} disabled={busy} data-confirm="irreversible">
+            {confirmLabel}
+          </Button>
+        ) : (
+          <Button variant="primary" size="md" onClick={onConfirm} disabled={busy} autoFocus shortcut="Enter">
+            {confirmLabel}
+          </Button>
+        )}
+        <Button variant="outlined" size="md" onClick={onCancel} disabled={busy} shortcut="Esc" data-confirm-cancel="">
           {cancelLabel}
         </Button>
       </div>

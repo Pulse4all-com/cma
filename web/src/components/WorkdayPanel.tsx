@@ -224,6 +224,7 @@ export function WorkdayPanel({
         onConfirm={confirmEnd}
         onCancel={() => setConfirming(false)}
         busy={pending}
+        irreversible
       >
         {copy.myDay.confirmBody}
       </ConfirmDialog>

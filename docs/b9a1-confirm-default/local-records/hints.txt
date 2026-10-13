@@ -1,0 +1,1 @@
+hints: PASS (91 headers and 20 tiles on 9 pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links)

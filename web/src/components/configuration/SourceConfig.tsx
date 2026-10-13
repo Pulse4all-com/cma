@@ -68,7 +68,8 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
   const [storeEdit, setStoreEdit] = useState<number | null>(null);
   const [store, setStore] = useState<SourceStore>(detail.store ?? { handle: "", name: "", market: marketCodes[0] ?? "", currency: "", timeZone: "" });
   const [storeProblem, setStoreProblem] = useState<string | null>(null);
-  // switching a line off removes its stored calls (addition 0008f), so it asks first; switching on does not
+  // switching a line off removes its stored calls (addition 0008f), so it asks first, on Cancel (an irreversible
+  // confirmation); the box stays ticked until the save is confirmed; switching on does not ask
   const [lineOff, setLineOff] = useState<SourceLine | null>(null);
 
   async function rename() {
@@ -535,7 +536,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         {t.switchOffConfirm.replace("{name}", conn.name)}
       </ConfirmDialog>
 
-      <ConfirmDialog open={lineOff !== null} title={t.lineOff} confirmLabel={t.lineOff} cancelLabel={c.cancel} busy={state.kind === "saving"}
+      <ConfirmDialog open={lineOff !== null} title={t.lineOff} confirmLabel={t.lineOff} cancelLabel={c.cancel} busy={state.kind === "saving"} irreversible
         onCancel={() => setLineOff(null)}
         onConfirm={async () => {
           if (lineOff && await save(() => send("PUT", `${base}/lines`, { lineRef: lineOff.lineRef, market: lineOff.market, isCounted: false }))) setLineOff(null);

@@ -346,6 +346,7 @@ export function RosterPlanner({
         onConfirm={confirm === "copy" ? copyPrevious : publish}
         onCancel={() => setConfirm(null)}
         busy={pending}
+        irreversible={confirm === "copy"}
       >
         {confirm === "copy" ? t.copyConfirm : t.publishConfirm}
       </ConfirmDialog>

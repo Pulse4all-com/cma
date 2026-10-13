@@ -242,6 +242,7 @@ export function TeamsConfig({ teams, skills, copy }: { teams: TeamInfo[]; skills
         confirmLabel={t.dissolve}
         cancelLabel={c.cancel}
         busy={state.kind === "saving"}
+        irreversible
         onCancel={() => setDissolving(null)}
         onConfirm={async () => {
           if (!dissolving) return;

@@ -1,0 +1,31 @@
+FAIL  working and productive is productive                     got "productive", wanted "otherWork"
+FAIL  working, not productive is other work                    got "otherWork", wanted "productive"
+FAIL  not working, paid is a paid pause                        got "paidPause", wanted "unpaidPause"
+FAIL  not working, unpaid is an unpaid pause                   got "unpaidPause", wanted "paidPause"
+FAIL  an ended day is clocked out, whatever its last status    got "clockedOut", wanted "productive"
+FAIL  no day is not clocked in                                 got "notClockedIn", wanted "clockedOut"
+FAIL  the order is work, pauses, then off the clock            got ["productive","otherWork","paidPause","unpaidPause","clockedOut","notC, wanted ["notClockedIn","clockedOut","unpaidPause","paidPause","otherWork","pr
+FAIL  rows sort by group, then by name                         got ["Ada","Zoë","Ana","Bo","Cas","Dee","Abe"], wanted ["Zoë","Ada","Ana","Bo","Cas","Dee","Abe"]
+FAIL  six tiles with their counts when every group has a status got [["productive",2],["otherWork",1],["paidPause",1],["unpaidPause",1],[", wanted [["productive",1],["otherWork",1],["paidPause",1],["unpaidPause",1],["
+FAIL  no paid pause tile without a paid pause status           got ["productive","otherWork","unpaidPause","clockedOut","notClockedIn"], wanted ["productive","otherWork","paidPause","unpaidPause","clockedOut","notC
+FAIL  the day-state tiles exist even with no status at all     got ["clockedOut","notClockedIn"], wanted []
+FAIL  the group filter keeps that group                        got ["p7","p1"], wanted ["p1"]
+FAIL  the employer filter keeps that employer, across groups   got ["p7","p2","p5"], wanted ["p2","p5"]
+FAIL  both filters combine                                     got ["p1"], wanted ["p7","p1"]
+FAIL  no filter keeps everyone                                 got 7, wanted 6
+FAIL  employers by name, a person without one left out         got [{"key":"company","name":"Company"},{"key":"partner","name":"Partner"}, wanted [{"key":"partner","name":"Partner"},{"key":"company","name":"Company"}
+FAIL  team keys per person, sorted                             got {"p1":["aa","zz"],"p2":["aa"],"p9":["mm"]}, wanted {"p1":["zz","aa"],"p2":["aa"],"p9":["mm"]}
+FAIL  the team filter keeps the team's people across groups    got ["p1","p2"], wanted ["p1"]
+FAIL  the team filter combines with the others                 got ["p1"], wanted []
+FAIL  no team filter without memberships changes nothing       got 7, wanted 2
+FAIL  teams on the board by name, a team of nobody on it left out got [{"key":"aa","name":"Alpha"},{"key":"zz","name":"Zulu"}], wanted [{"key":"aa","name":"Alpha"},{"key":"mm","name":"Not on the board"},{"
+FAIL  since counts whole seconds from the instant              got 1830, wanted 1800
+FAIL  since is never negative                                  got 0, wanted -3570
+FAIL  worked adds the running stretch to the closed ones       got 2430, wanted 600
+FAIL  worked stands still while paused or ended                got 9000, wanted 9030
+FAIL  worked stops at the day's end                            got 1500, wanted 2430
+FAIL  a stretch begun after the day's end counts nothing       got 54000, wanted 54030
+FAIL  a refused clock-in gives the window start, nothing else does got ["07:00",null,null,null], wanted ["07:00","25:00",null,null]
+FAIL  the format drops the hour below one                      got ["0:05","59:59","1:00:00","10:20:30"], wanted ["0:05","59:59","1:00:00","10:20:31"]
+
+ALL 29 PROVOKED CHECKS FAILED, as they must
