@@ -19,6 +19,14 @@ export class Pace {
     this.interval = Math.max(0, intervalMs * paceFactor());
     this.next = 0;
   }
+  /** Milliseconds until the next slot, without taking it (a caller with a deadline can decline). */
+  delay() {
+    return Math.max(0, this.next - Date.now());
+  }
+  /** No slot before the instant atMs (a source's own reset time after a 429); never moves a slot earlier. */
+  holdUntil(atMs) {
+    if (Number.isFinite(atMs)) this.next = Math.max(this.next, atMs);
+  }
   async wait() {
     const now = Date.now();
     const at = Math.max(now, this.next);

@@ -8,10 +8,12 @@
  * The key is sync:<object type>:<id>:<version>. An adapter gives the version (the source's modified
  * time for reconcile and backfill, so the same unchanged object is read once however often a job
  * lists it; a run-specific value where every run must read again). Adapters answer canonical
- * { id, version } items; nothing here reads a vendor payload.
+ * { id, version, inline? } items; inline, when the listing itself already holds the object as the
+ * source's API answered it, is carried in memory to the adapter's read-back (never recorded), so the
+ * object is not read a second time. Nothing here reads a vendor payload.
  */
 import { contextOf } from "./connection.mjs";
-import { recordEvents } from "./events.mjs";
+import { recordEvents, inlineOf } from "./events.mjs";
 import { processEvents } from "./process.mjs";
 
 const ID = /^[^\s:][^\s]{0,99}$/;
@@ -21,7 +23,7 @@ export function syncEvent(job, objectType, item, prefix = "sync") {
   const id = String(item.id);
   const version = String(item.version ?? "").slice(0, 40);
   const at = Number.isFinite(Date.parse(version)) ? new Date(version).toISOString() : new Date().toISOString();
-  return {
+  const event = {
     key: `${prefix}:${objectType}:${id}:${version}`.slice(0, 200),
     sourceType: `cma.${job}`,
     kind: "changed",
@@ -30,6 +32,8 @@ export function syncEvent(job, objectType, item, prefix = "sync") {
     occurredAt: at,
     raw: { job },
   };
+  if (item.inline !== undefined && item.inline !== null) event.inline = item.inline;
+  return event;
 }
 
 /**
@@ -48,7 +52,7 @@ export async function recordAndProcess(adapter, connection, objectType, items, b
   const due = recorded.rows.filter((r) => r.isNew && r.status === "received").map((r) => r.eventId);
   counts.skipped += recorded.rows.length - due.length;
   if (!due.length) return counts;
-  const r = await processEvents(adapter, connection, due, budget);
+  const r = await processEvents(adapter, connection, due, budget, inlineOf(events));
   counts.upserted += r.events.processed;
   counts.skipped += r.events.ignored;
   counts.failed += r.events.failed + Math.max(0, due.length - r.claimed);
