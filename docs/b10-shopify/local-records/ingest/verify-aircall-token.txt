@@ -1,0 +1,24 @@
+verify/aircall-token.mjs
+
+PASS  the right token is accepted                                      got {"ok":true}
+PASS  a wrong token of the same length is refused                      got {"ok":false,"reason":"bad_token"}
+PASS  a missing token is refused                                       got {"ok":false,"reason":"missing_token"}
+PASS  an empty token is refused                                        got {"ok":false,"reason":"missing_token"}
+PASS  a token that is not a string is refused                          got {"ok":false,"reason":"missing_token"}
+PASS  a shorter token (a prefix of the right one) is refused           got {"ok":false,"reason":"bad_token"}
+PASS  a longer token (the right one plus a character) is refused       got {"ok":false,"reason":"bad_token"}
+PASS  the token inside data does not count                             got {"ok":false,"reason":"missing_token"}
+PASS  a body that is not JSON is refused                               got {"ok":false,"reason":"not_json"}
+PASS  a JSON array is refused                                          got {"ok":false,"reason":"not_json"}
+PASS  an empty secret refuses everything                               got {"ok":false,"reason":"bad_token"}
+PASS  sameToken: different lengths are false without a compare         got false
+PASS  sameToken: multi-byte characters compare by bytes                got false
+PASS  the adapter accepts its webhook's token                          got {"ok":true}
+PASS  the adapter refuses another token                                got false
+PASS  an unreadable signing secret throws SecretUnavailable (the server answers 500) got "SecretUnavailable"
+PASS  verify.mjs imports timingSafeEqual from node:crypto              got true
+PASS  …calls it on the two buffers                                     got true
+PASS  …after the length check                                          got true
+PASS  …and never compares a token with === or !==                      got false
+
+ALL 20 PASS

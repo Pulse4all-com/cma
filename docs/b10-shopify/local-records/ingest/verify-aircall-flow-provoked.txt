@@ -1,0 +1,92 @@
+verify/aircall-flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  an unknown key → 404                                             got 404, wanted 200
+FAIL  the HubSpot connection's key on /aircall → 404                   got 404, wanted 200
+FAIL  the Aircall connection's key on /hubspot → 404                   got 404, wanted 200
+FAIL  no token → 401                                                   got 401, wanted 200
+FAIL  a wrong token of the same length → 401                           got 401, wanted 200
+FAIL  a token of another length → 401                                  got 401, wanted 200
+FAIL  another connection's token (replay) → 401                        got 401, wanted 200
+FAIL  a body that is not JSON → 401                                    got 401, wanted 200
+FAIL  refused requests wrote nothing                                   got 0, wanted 1
+FAIL  …and asked Aircall nothing                                       got 0, wanted 1
+FAIL  …and answered with an empty body                                 got "", wanted "unauthorized"
+FAIL  call.created → 200                                               got 200, wanted 401
+FAIL  …recorded and processed                                          got "processed", wanted "received"
+FAIL  …the call: outbound, initial, started, user and line as ids      got ["outbound","initial","2026-10-13T09:36:32.000Z","9200000001","9300000, wanted []
+FAIL  …its counterpart as HMAC(pepper, E.164)                          got "0da345bfb583b690ddbdcfbe8e2ea87d862ebfd0fba6a3b3a7ebac6280371ddd", wanted null
+FAIL  …one read of /v1/calls/{id} with the connection's Basic auth     got [1,true], wanted [2,true]
+FAIL  the first event of a connection without lines read the catalogs  got [2,2], wanted [0,0]
+FAIL  …lines with name and the company's own digits, no market yet, counted got [["9300000001","+442000000900",null,true],["9300000002","+442000000901, wanted []
+FAIL  call.answered → answered at                                      got "2026-10-13T09:36:40.000Z", wanted null
+FAIL  call.tagged → both tags open                                     got ["9400000001","9400000002"], wanted []
+FAIL  call.untagged → the removed tag closed, the other open           got [["9400000001"],["9400000002"]], wanted [["9400000001","9400000002"],[]]
+FAIL  call.ended → done, ended at, duration 71, talk 63 seconds        got ["done","2026-10-13T09:37:43.000Z",71,63], wanted ["answered",null,0,null]
+FAIL  call.archived → archived                                         got true, wanted false
+FAIL  the six events: six rows, all processed                          got [{"status":"processed","n":6}], wanted [{"status":"processed","n":5}]
+FAIL  raw holds the allowlisted keys only                              got ["answered_at","archived","direction","duration","ended_at","started_a, wanted ["recording"]
+FAIL  the same delivery again (Aircall retries) → 200                  got 200, wanted 500
+FAIL  …still six events, no second read                                got [6,0], wanted [7,1]
+FAIL  call.hungup, user.created, contact.created → 200                 got [200,200,200], wanted [401,401,401]
+FAIL  …recorded as ignored, event_not_handled                          got ["call.hungup:event_not_handled","contact.created:event_not_handled",", wanted []
+FAIL  …and nothing asked of Aircall                                    got 0, wanted 1
+FAIL  read-back: call.ended before call.answered still ends done with both times got ["done","2026-10-13T09:36:40.000Z","2026-10-13T09:37:43.000Z"], wanted ["answered","2026-10-13T09:36:40.000Z",null]
+FAIL  replay: call.ended on the replay connection → 200                got 200, wanted 401
+FAIL  replay: call.answered arriving after it → 200                    got 200, wanted 401
+FAIL  …the older event is stale: the call stays done, versioned at the ended event got ["done","2026-10-13T09:37:43.000Z","2026-10-13T09:38:23.000Z"], wanted ["answered",null,"2026-10-13T09:36:51.000Z"]
+FAIL  …both events processed                                           got 2, wanted 1
+FAIL  …and nothing asked of Aircall (no read, no catalog)              got 0, wanted 1
+FAIL  …the hash made from the event's own number                       got "dbb8fab71b028536054856ce6a76c06d92e40c2ac2116a1c0c5bc1eed8625ec7", wanted null
+FAIL  without the variable the replay setting is ignored: the call read from the API got [1,"done"], wanted [0,"answered"]
+FAIL  Aircall down: the five events failed with http_503, retried later got [5,true], wanted [5,false]
+FAIL  the sweep claims the five and reads the call once                got [5,1], wanted [5,5]
+FAIL  …the call is done with its tag                                   got ["done",["9400000001"]], wanted ["initial",[]]
+FAIL  a 429 → 200, the event failed rate_limited, retried later        got [200,"failed","rate_limited",true], wanted [200,"processed",null,false]
+FAIL  …the next event is not tried before Aircall's reset: failed rate_limited, no request got [200,"rate_limited",0], wanted [200,null,1]
+FAIL  …one request in all: no retry in a loop                          got 1, wanted 2
+FAIL  …the log names the limit and when calls resume, never a token    got true, wanted false
+FAIL  the sweep reads them once the reset has passed                   got ["done","done",true], wanted [null,null,false]
+FAIL  a national number on a GB line hashes as GB                      got "c69670cdf120003199c4a9b39b534f2ae6b6eac39b1c82295a375c5c450dabc8", wanted "9373f706c41d846fb24c93b9021fa7517bbe6877cadf3660f61300f999091c56"
+FAIL  …on a line without a market as the tenant's first active market (NL) got "ef687da41a576cd93a93ce2eb10237086d24fff39a5c89ab1f2334ba1a2bf72f", wanted "dba8bd7fefde8f476243501180a90da5517de6039142886dd28af5dd6d90b061"
+FAIL  switching line two off removes its stored call (0008f)           got false, wanted true
+FAIL  …a call on it afterwards is read, not stored, and counted as skipped_uncounted_line got [1,false,true], wanted [1,true,false]
+FAIL  the sweep refreshes a catalog an hour old: names from Aircall, market and counted kept got [1,[["Test line GB","GB",true],["Test line two renamed",null,false]]], wanted [0,[["Test line GB",null,true],["Test line two",null,true]]]
+FAIL  …the tag's counted flag kept                                     got false, wanted true
+FAIL  …and not again within the hour                                   got 0, wanted 2
+FAIL  link_calls pairs the call with the seeded CRM call, 30 seconds apart got [["4200000001",-30]], wanted []
+FAIL  …recorded as a link_calls run on the CRM connection              got ["succeeded"], wanted []
+FAIL  reconcile without the webhook_id setting: the run fails with webhook_id_not_set got ["failed","webhook_id_not_set"], wanted ["succeeded",null]
+FAIL  …after listing: the call the webhook missed is in, with its tag  got ["done",["9400000002"]], wanted [null,[]]
+FAIL  …from the listing alone: no call read a second time              got 0, wanted 1
+FAIL  …two day windows over 26 hours, 50 per page, ascending           got [2,true,true], wanted [1,true,false]
+FAIL  …the account checked first (GET /v1/company)                     got "/v1/company", wanted "/v1/calls"
+FAIL  …counts: every listed call fetched                               got 10, wanted 0
+FAIL  …the job reports the failed run                                  got 1, wanted 0
+FAIL  reconcile with a webhook_id Aircall does not have: webhook_missing got "webhook_missing", wanted "webhook_id_not_set"
+FAIL  …unchanged calls listed again are read once: nothing upserted    got [0,true], wanted [5,false]
+FAIL  …a day over the 10,000 cap is split into halves                  got 2, wanted 0
+FAIL  a webhook holding another token than the signing secret: webhook_token_mismatch got "webhook_token_mismatch", wanted null
+FAIL  an inactive webhook that cannot be re-activated: webhook_inactive got "webhook_inactive", wanted null
+FAIL  an inactive webhook is re-activated (PUT active true with its six events) and recorded: webhook_reactivated got ["webhook_reactivated",true,true,6], wanted [null,false,null,null]
+FAIL  …no webhook is ever created by a job                             got false, wanted true
+FAIL  an active webhook with this connection's token: the run succeeds got ["succeeded",null], wanted ["failed","webhook_missing"]
+FAIL  a connection whose account is not the key's company: account_mismatch, nothing listed got ["account_mismatch",0], wanted [null,2]
+FAIL  the replay connection (dev): nothing to reconcile, nothing asked of Aircall got [["succeeded:0"],0], wanted [["failed:0"],1]
+FAIL  backfill: Aircall failing on the third day → the run fails, the first two days kept got ["http_503",true,false,1791756000000,false], wanted [null,true,true,null,true]
+FAIL  …the call on line two (not counted) not stored, counted as skipped, not upserted got [false,2,1,1], wanted [true,2,2,0]
+FAIL  …a second run continues at the third day and finishes            got [null,1791756000,true], wanted ["http_503",1791583200,false]
+FAIL  …paced at aircall_max_per_minute 6 (10 s, scaled 0.01 here: 100 ms between calls) got true, wanted false
+FAIL  …a third run with the same start does nothing                    got [null,0], wanted [null,4]
+FAIL  …backfill of another object is refused                           got "UsageError", wanted "ran"
+FAIL  …the replay connection (dev) refuses a backfill                  got "replay_connection", wanted null
+FAIL  tenant one's token on tenant two's key → 401                     got 401, wanted 200
+FAIL  tenant two's own token → 200                                     got 200, wanted 401
+FAIL  …read with tenant two's key, the row in tenant two, hashed with its pepper got [true,["01a134a8-1279-76d2-8118-76f583e70f03"],"9896b95ee3819072f9c19a, wanted [false,["01a134a8-125a-7b9a-b9e0-946181a7eb4c"],"d189f62403592640bdc77
+FAIL  tenant one sees none of tenant two's calls, lines or events      got [0,0,0], wanted [1,2,1]
+FAIL  no customer number in any form in the telephony rows, events, cursors or runs got [], wanted ["+44 20 0000 0001","442000000001","2000000001","020 0000 0002","02000
+FAIL  no name, email, comment, recording, voicemail, asset or contact  got false, wanted true
+FAIL  no token or API key in the database                              got false, wanted true
+FAIL  the logs hold no number, name, email or token                    got [false,false,false], wanted [true,true,true]
+FAIL  the logs hold the webhook and job lines                          got true, wanted false
+
+ALL 88 PROVOKED CHECKS FAILED, as they must

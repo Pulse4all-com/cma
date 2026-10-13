@@ -1,0 +1,17 @@
+$ the files the Dockerfile copies: package.json package-lock.json src jobs
+jobs
+package-lock.json
+package.json
+src
+
+$ npm ci --omit=dev
+found 0 vulnerabilities
+
+$ every module imported
+44 modules of src imported; adapters: hubspot aircall shopify automation; jobs: backfill.mjs outbox.mjs poll-forms.mjs reconcile.mjs sweep.mjs
+
+$ PORT=8090 INGEST_VERSION=b10local node src/server.mjs, then /health, a malformed key on /shopify, a GET on /shopify
+health: {"ok":true,"version":"b10local"}
+POST /shopify/short: 404
+GET /shopify/<key>: 404
+server log: {"severity":"INFO","message":"listening","port":8090,"version":"b10local","time":"2026-10-13T09:52:51.470Z"}

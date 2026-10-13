@@ -1,0 +1,15 @@
+01 no check on the customer's hash | 56 exit 0 | A2 the two columns, their check and their partial indexes;B3 a plain number and malformed hashes refused, nothing written;verdict;
+02 the order index without its WHERE | 56 exit 0 | A2 the two columns, their check and their partial indexes;verdict;
+03 the customer's hash not lower-cased | 56 exit 0 | B the block ran to the end;verdict;
+04 a read without the hash keeps the old one | 56 exit 0 | B2 a read without the hash clears it; a stale read leaves it; a newer read sets it;verdict;
+05 a customer's deletion leaves its orders' hashes | 56 exit 0 | B5 a customer's deletion clears its hash and its orders' in that connection only;verdict;
+06 a customer's deletion clears every connection's orders | 56 exit 0 | B5 a customer's deletion clears its hash and its orders' in that connection only;verdict;
+07 an order's deletion keeps its hash | 56 exit 0 | B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b;B6 an order's hash meets an earlier call's, the lookup by hash uses the index;verdict;
+08 the order upsert ignores phoneHash on insert | 56 exit 0 | B3 a plain number and malformed hashes refused, nothing written;B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b;B5 a customer's deletion clears its hash and its orders' in that connection only;B6 an order's hash meets an earlier call's, the lookup by hash uses the index;verdict;
+09 an email column added to the customers | 56 exit 0 | A3 nothing else personal: the tables hold 0007b's columns plus phone_hash;verdict;
+10 the order view exposes the hash | 56 exit 0 | A4 the reporting views leave the hash out;verdict;
+11 the customer upsert executable by everyone | 56 exit 0 | A5 the upserts are the application's only, in the caller's rights;verdict;
+12 the order upsert as security definer | 56 exit 0 | A5 the upserts are the application's only, in the caller's rights;verdict;
+13 the addition not recorded | 56 exit 0 | A1 addition 0008g recorded;verdict;
+14 a relaxed check that lets a number in | 56 exit 0 | A2 the two columns, their check and their partial indexes;B3 a plain number and malformed hashes refused, nothing written;B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b;verdict;
+15 the order's hash taken from the customer row instead of the item | 56 exit 0 | B3 a plain number and malformed hashes refused, nothing written;B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b;B5 a customer's deletion clears its hash and its orders' in that connection only;B6 an order's hash meets an earlier call's, the lookup by hash uses the index;verdict;

@@ -1,0 +1,86 @@
+verify/shopify-flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  an unknown key → 404                                             got 404, wanted 200
+FAIL  the HubSpot connection's key on /shopify → 404                   got 404, wanted 200
+FAIL  the Shopify connection's key on /hubspot → 404                   got 404, wanted 200
+FAIL  no HMAC header → 401                                             got 401, wanted 200
+FAIL  an HMAC that is not a SHA-256 digest → 401                       got 401, wanted 200
+FAIL  an HMAC with another secret → 401                                got 401, wanted 200
+FAIL  a body changed after signing → 401                               got 401, wanted 200
+FAIL  tenant two's secret on tenant one's key → 401                    got 401, wanted 200
+FAIL  refused requests wrote nothing and asked Shopify nothing         got [0,0], wanted [1,1]
+FAIL  …and answered with an empty body                                 got "", wanted "unauthorized"
+FAIL  another shop's domain and an unhandled topic, correctly signed → 200 got [200,200], wanted [401,401]
+FAIL  …recorded as ignored (portal_mismatch, event_not_handled), nothing read got [["customers/create:portal_mismatch","products/update:event_not_handle, wanted [[],1]
+FAIL  customers/create → 200                                           got 200, wanted 401
+FAIL  …keyed sh:<X-Shopify-Webhook-Id>, processed, the topic and ids in raw only got ["processed","commerce_customer","created",["apiVersion","eventId","to, wanted ["received","commerce_customer","created",[]]
+FAIL  …the customer: state, locale, count, amount, currency            got ["ENABLED","en-GB",0,"0.00","GBP"], wanted []
+FAIL  …its phone as HMAC(pepper, E.164), the store's market as default region got "2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb234807cc960", wanted null
+FAIL  …one token minted for the shop by the client credentials grant, one GraphQL read at 2026-10 got [1,1,"2026-10"], wanted [2,2,"2025-10"]
+FAIL  …one HubSpot search, by the email in lower case                  got [1,{"propertyName":"email","operator":"EQ","value":"test1@example.com", wanted [0,null]
+FAIL  …a pending write-back for contact 5100000001 with the customer's values got [1,"5100000001","pending",{"commerce_orders":0,"commerce_ref":"7100000, wanted [0,null,null,null]
+FAIL  …its reason the store connection and the customer id             got "commerce_customer:01a134a8-98c9-7707-b603-f3811211c942:7100000001", wanted null
+FAIL  the same delivery again (a Shopify retry) → 200, no new event, no read got [200,3,0], wanted [500,4,1]
+FAIL  orders/create (first order of C1, 13 lines) → 200                got 200, wanted 401
+FAIL  …first, prior 0 exact                                            got ["first",0,true], wanted ["unknown",null,false]
+FAIL  …13 lines: the first ten and a page after them                   got [13,1], wanted [10,0]
+FAIL  …a line: sku, product and variant ids, quantity, unit price      got {"line_source_id":"730000000101","sku":"SKU-1","product_ref":"80000000, wanted {}
+FAIL  …the landing page as host and path, UTM from the visit, the referrer's host only got ["shop.example.com","/products/aed",{"campaign":"autumn","medium":"cpc, wanted []
+FAIL  …the source name, the app id, tags de-duplicated, amounts        got ["web","580111",["aed"],"120.00"], wanted []
+FAIL  …the order's own phone hashed first (national, GB default region) got "25f2a34a25cda4790e3ae88de686a87ab0906d2ed38b6cbb7bfda50bab1f7cb0", wanted "2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb234807cc960"
+FAIL  …the customer upserted with it (count 1) and no second search: the earlier write-back knows its contact got [1,1], wanted [0,2]
+FAIL  …the newer write-back supersedes the pending one (totals 1 order, 120.00) got [["superseded","pending"],1,120], wanted [["pending"],0,0]
+FAIL  a second order of C1 → repeat, prior 1, the customer's phone hashed (no order phone) got ["repeat",1,"2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb2348, wanted ["first",0,null]
+FAIL  an order of the renewal source name → renewal                    got "renewal", wanted "first"
+FAIL  an order the search does not hold yet → unknown, prior null      got ["unknown",null], wanted ["repeat",1]
+FAIL  …its next read (orders/updated) counts again → repeat            got "repeat", wanted "unknown"
+FAIL  a guest order (no customer) → unknown, its phone hashed          got ["unknown",null,"47bfeeee1e2e08482b1dff7ac5e88ec10a998db84643d2d330068, wanted ["first","0",null]
+FAIL  orders/cancelled → cancelled at, with its reason                 got [true,"CUSTOMER"], wanted [false,null]
+FAIL  orders/delete → deleted without a read, its hash cleared         got [true,null], wanted [false,"47bfeeee1e2e08482b1dff7ac5e88ec10a998db84643d2d330068c7688bc44
+FAIL  a customer whose id a held contact's refs hold → that contact, no search got ["5100000007",0], wanted [null,1]
+FAIL  Email and Phone withheld → 200, processed, no hash (nothing fails) got [200,"processed",null], wanted [200,"failed","x"]
+FAIL  …the match by the commerce_ref properties instead (one search, both slots) got [1,[{"propertyName":"contact_shopify_id_1","operator":"EQ","value":"71, wanted [0,[]]
+FAIL  …written back to the contact holding the id                      got "5100000003", wanted null
+FAIL  no contact for the email, and two contacts → nothing written back got 0, wanted 2
+FAIL  …counted as match_none and match_several in the processed log (no ids) got [1,1], wanted [0,0]
+FAIL  one token minted for every read of the shop so far               got 1, wanted 2
+FAIL  a token within five minutes of its expiry is minted again        got 3, wanted 2
+FAIL  a connection without its store row: 200, the event failed store_not_configured for the sweep got [200,"failed","store_not_configured"], wanted [200,"processed",null]
+FAIL  HubSpot answering 429 on the batch update → the actions failed rate_limited, attempted again later got [0,true,true], wanted [7,false,false]
+FAIL  …then sent                                                       got [0,6], wanted [6,0]
+FAIL  H1 (empty): id in slot 1, store, totals, country and language; currency disabled after the enqueue never written got ["7100000001","flow-afde0ee3-a","2","240","GB","en",null], wanted [null,null,null,null,null,null,"GBP"]
+FAIL  H2: an agent's country kept (if_empty), the id in slot 2, no store or totals (not slot 1) got ["NL","7199999999","7100000002",null,null], wanted ["GB","7100000002",null,"flow-afde0ee3-a","2"]
+FAIL  H6: both slots taken → no id, no totals; the result says slots_full got ["7199999997","7199999998",null,"slots_full"], wanted ["7100000006",null,"0","written"]
+FAIL  H3 (found by its ref): slot 1 already holds the id → present, totals written got ["present","flow-afde0ee3-a"], wanted ["written",null]
+FAIL  only the enabled write-back properties read and written (never contact_netsuite_id or email) got [true,true,"NS-1"], wanted [false,false,null]
+FAIL  a third order of C1: always writes only the difference (totals), not what is unchanged got ["contact_shopify_total_orders","contact_shopify_total_spent"], wanted ["contact_shopify_store"]
+FAIL  a contact gone from HubSpot → failed contact_not_found           got "contact_not_found", wanted null
+      burst: answered in 647 to 926 ms (median 813); token mints 1; GraphQL throttled 0
+FAIL  a burst of 200 orders/create → 200 for every one                 got true, wanted false
+FAIL  …every answer inside Shopify's five seconds                      got true, wanted false
+FAIL  …one token minted for the whole burst                            got 1, wanted 200
+      burst events after the inline read-back: failed 183, processed 17
+FAIL  …200 events recorded, each once                                  got 200, wanted 201
+FAIL  …after the sweep: every order stored once, all renewals          got [{"order_kind":"renewal","n":200}], wanted [{"order_kind":"renewal","n":199}]
+FAIL  …every event processed                                           got 200, wanted 0
+FAIL  …Shopify refused for cost at most a handful of calls (the bucket paces the reads) got true, wanted false
+FAIL  reconcile: an order changed without a webhook is read back (its new tag) got ["aed","renewed-by-hand"], wanted ["aed"]
+FAIL  …one succeeded run per object type                               got ["commerce_customer:succeeded","commerce_order:succeeded"], wanted []
+FAIL  …the subscription check recreated ORDERS_UPDATED at the connection's address, run error subscriptions_recreated got ["subscriptions_recreated",["https://ingest.example.com/shopify/1fb8f4, wanted [null,[]]
+FAIL  …a second check finds all seven: succeeded                       got ["succeeded",null], wanted ["failed","subscriptions_recreated"]
+FAIL  …an unchanged order is not read a second time                    got 0, wanted 1
+FAIL  …none left for this connection → subscriptions_missing (the script recreates them) got "subscriptions_missing", wanted null
+FAIL  backfill: the listing failing on its second page → the run fails, the first page kept got ["graphql_error",100,false], wanted [null,150,true]
+FAIL  …a second run continues from the cursor and finishes             got [null,150], wanted ["graphql_error",100]
+FAIL  …a third run with the same start does nothing                    got [null,0], wanted [null,1]
+FAIL  …backfill of another object is refused                           got "UsageError", wanted "ran"
+FAIL  tenant two's shop with its own secret → its row in tenant two, hashed with its own pepper got [200,"01a134a8-98a5-787b-998b-01109950bf43","0a28767e65c265f6787c48f02, wanted [401,"01a134a8-988e-7e99-83bd-fab6874d0b7a","7ec81cd94a15891109ff2614d
+FAIL  …no write-back without a CRM connection on that store            got 0, wanted 1
+FAIL  tenant one sees none of tenant two's customers or events         got [0,0], wanted [1,1]
+FAIL  no fixture email in any database row of the flow (audit log included) got [], wanted ["Test1@Example.com","test1@example.com","test2@example.com","test2@ex
+FAIL  no fixture phone number, in any form, in any database row        got [], wanted ["+44 20 0000 0101","442000000101","+442000000101","2000000101","+44 2
+FAIL  no name, address, note, client secret or token in the database   got false, wanted true
+FAIL  the logs hold no email, number, name, token or secret            got [false,false,false], wanted [true,true,true]
+FAIL  the logs hold the webhook, processed, outbox, sweep, reconcile and backfill lines got true, wanted false
+
+ALL 80 PROVOKED CHECKS FAILED, as they must

@@ -1,0 +1,21 @@
+verify/shopify-signature.mjs
+
+PASS  signBody equals the documented construction                      got "5FP/d615qfTnJzdhweFBNhvZXeu2hSy9zQCtvSweKsg="
+PASS  a valid HMAC is accepted                                         got {"ok":true}
+PASS  the header name is X-Shopify-Hmac-Sha256 (as Node lower-cases it) got "x-shopify-hmac-sha256"
+PASS  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}
+PASS  a body changed by one byte is refused                            got {"ok":false,"reason":"bad_signature"}
+PASS  the raw bytes count: a re-serialised body (spaces) is refused    got "bad_signature"
+PASS  a missing header is refused                                      got {"ok":false,"reason":"missing_header"}
+PASS  a header that is not a base64 SHA-256 digest is refused          got {"ok":false,"reason":"missing_header"}
+PASS  a hex digest (another encoding) is refused                       got false
+PASS  no secret: refused                                               got {"ok":false,"reason":"bad_signature"}
+PASS  surrounding whitespace in the header is tolerated                got {"ok":true}
+PASS  an empty body is signed as empty                                 got {"ok":true}
+PASS  sameDigest: equal strings                                        got true
+PASS  sameDigest: another length, no compare                           got false
+PASS  sameDigest: not strings                                          got false
+PASS  the compare uses crypto.timingSafeEqual                          got true
+PASS  …and no plain equality on the digest                             got false
+
+ALL 17 PASS
