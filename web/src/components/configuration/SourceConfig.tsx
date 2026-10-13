@@ -14,7 +14,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceSettings, SourceStore } from "@/lib/data";
+import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceSettings, SourceStore } from "@/lib/data";
 import {
   coerceSettingValue, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
@@ -68,6 +68,8 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
   const [storeEdit, setStoreEdit] = useState<number | null>(null);
   const [store, setStore] = useState<SourceStore>(detail.store ?? { handle: "", name: "", market: marketCodes[0] ?? "", currency: "", timeZone: "" });
   const [storeProblem, setStoreProblem] = useState<string | null>(null);
+  // switching a line off removes its stored calls (addition 0008f), so it asks first; switching on does not
+  const [lineOff, setLineOff] = useState<SourceLine | null>(null);
 
   async function rename() {
     const v = name.trim();
@@ -388,7 +390,9 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
                     </td>
                     <td className={td}>
                       <input type="checkbox" className="h-4 w-4" aria-label={`${t.counted}: ${l.name}`} checked={l.isCounted}
-                        onChange={(e) => save(() => send("PUT", `${base}/lines`, { lineRef: l.lineRef, market: l.market, isCounted: e.target.checked }))} />
+                        onChange={(e) => e.target.checked
+                          ? save(() => send("PUT", `${base}/lines`, { lineRef: l.lineRef, market: l.market, isCounted: true }))
+                          : setLineOff(l)} />
                     </td>
                   </tr>
                 ))}
@@ -529,6 +533,14 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         onCancel={() => setConfirmOff(false)}
         onConfirm={async () => { if (await save(() => send("PUT", base, { isActive: false }))) setConfirmOff(false); }}>
         {t.switchOffConfirm.replace("{name}", conn.name)}
+      </ConfirmDialog>
+
+      <ConfirmDialog open={lineOff !== null} title={t.lineOff} confirmLabel={t.lineOff} cancelLabel={c.cancel} busy={state.kind === "saving"}
+        onCancel={() => setLineOff(null)}
+        onConfirm={async () => {
+          if (lineOff && await save(() => send("PUT", `${base}/lines`, { lineRef: lineOff.lineRef, market: lineOff.market, isCounted: false }))) setLineOff(null);
+        }}>
+        {t.lineOffConfirm.replace("{name}", lineOff?.name ?? "")}
       </ConfirmDialog>
     </>
   );

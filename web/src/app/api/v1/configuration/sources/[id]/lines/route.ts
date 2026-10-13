@@ -5,7 +5,7 @@ import { data } from "@/lib/data";
 export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
-/** { lineRef, market, isCounted }: a line's market (null clears) and whether its calls count (set_telephony_number). Answers the connection with its catalogs */
+/** { lineRef, market, isCounted }: a line's market (null clears) and whether its calls count and are stored (set_telephony_number; switching a line off removes its stored calls, addition 0008f). Answers the connection with its catalogs */
 export async function PUT(request: Request, { params }: Params) {
   return forPrincipal(async (me) => {
     assertSameSiteWrite(request);
