@@ -1,0 +1,36 @@
+$ bash docs/ingest/alert.sh prod --email alerts@example.com --dry-run
+== dry run: alert policy "cma-ingest 429" in p4a-cma-prod; no gcloud call, nothing read or changed
+a real run finds or creates the email channel "CMA ingest alerts" for alerts@example.com, then creates the policy, or updates the one with this name
+{
+  "displayName": "cma-ingest 429",
+  "documentation": {
+    "mimeType": "text/markdown",
+    "content": "Cloud Armor answered 429 to requests for cma-ingest (backend cma-ingest-backend, policy cma-ingest-armor) in the last 5 minutes: a client went over its rate limit (rule 900: 2,400 per minute per IP on /shopify/; rule 1000: 600 per minute per IP otherwise). These requests never reach the Cloud Run request log. Check whether a source retries (HubSpot, Aircall and Shopify retry with backoff) or someone floods the endpoint; the limits are set by docs/ingest/front.sh (README Decision log, 13 October 2026)."
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "429 from the load balancer for cma-ingest-backend, summed over 5 minutes, above 0",
+      "conditionThreshold": {
+        "filter": "resource.type = \"https_lb_rule\" AND metric.type = \"loadbalancing.googleapis.com/https/request_count\" AND resource.labels.backend_target_name = \"cma-ingest-backend\" AND metric.labels.response_code = 429",
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "trigger": { "count": 1 },
+        "evaluationMissingData": "EVALUATION_MISSING_DATA_INACTIVE"
+      }
+    }
+  ],
+  "alertStrategy": { "autoClose": "1800s" },
+  "notificationChannels": [ "projects/p4a-cma-prod/notificationChannels/<the email channel for alerts@example.com>" ],
+  "userLabels": { "service": "cma-ingest" },
+  "enabled": true
+}
+exit 0

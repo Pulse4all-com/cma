@@ -1,0 +1,26 @@
+verify/shopify-client.mjs
+
+PASS  five callers at once: one token minted, all get it               got [1,1]
+PASS  …sent form-encoded with the client id and secret (the fake refuses otherwise) got "shpat_fixture_1"
+PASS  a second call reuses the cached token                            got ["shpat_fixture_1",1]
+PASS  within five minutes of its expiry the token is minted again      got ["shpat_fixture_2",2]
+PASS  …six minutes before, it is still used                            got ["shpat_fixture_2",2]
+PASS  no client id setting → client_id_not_set                         got "client_id_not_set"
+PASS  another client id → the token request refused (token_http_400)   got "token_http_400"
+PASS  a missing client secret → client_secret_unavailable              got "client_secret_unavailable"
+PASS  a shop that is not <handle>.myshopify.com → shop_invalid         got "shop_invalid"
+PASS  a query answers its data, at version 2026-10 with the shop's token got [{"ok":true},true,true]
+PASS  the bucket learns the shop's restore rate and maximum from throttleStatus got [100,1000]
+{"severity":"WARNING","message":"shopify throttled","connection":"c1","code":"rate_limited","available":3,"time":"2026-10-13T15:01:59.875Z"}
+PASS  a THROTTLED answer → rate_limited, the estimate emptied          got ["rate_limited",0]
+PASS  a withheld protected field (ACCESS_DENIED) → the data with the field null, nothing fails got "ok"
+PASS  another error without data → graphql_error                       got "graphql_error"
+PASS  a 401 → http_401 and the token dropped (the next call mints)     got ["http_401","ok",1]
+PASS  a 429 → rate_limited                                             got "rate_limited"
+PASS  waitFor: 300 points at 100 a second from empty → 3 seconds       got 3000
+PASS  a webhook never waits past its budget: 300 points short → throttled at once got ["throttled",true]
+PASS  …a short wait that leaves a second of its budget is waited for   got ["ok",true]
+PASS  a job waits for the refill instead (500 points at 1000 a second: about half a second) got ["ok",true]
+PASS  three callers sharing a bucket of 100 at 1000 a second queue behind each other (reserved before the wait) got true
+
+ALL 21 PASS

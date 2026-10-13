@@ -1,0 +1,34 @@
+front.sh against a fake gcloud (docs/a5-audits/local-records/README.md): every gcloud call logged, reads answered as in prod after 12 October 2026
+
+== 1. rule 900 missing, rule 1000 present (the first run after this change)
+c. policy cma-ingest-armor exists
+c. rule 900 (create): /shopify/, 2400 requests per 60 s per IP, then 429
+c. rule 1000 (update): every other request, 600 requests per 60 s per IP, then 429
+c. cma-ingest-armor is attached to cma-ingest-backend
+exit 0
+-- the rule calls:
+gcloud compute security-policies rules describe 900 --project=p4a-cma-prod --security-policy=cma-ingest-armor
+gcloud compute security-policies rules create 900 --project=p4a-cma-prod --security-policy=cma-ingest-armor --expression=request.path.startsWith('/shopify/') --action=throttle --rate-limit-threshold-count=2400 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+gcloud compute security-policies rules describe 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor
+gcloud compute security-policies rules update 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor --src-ip-ranges=* --action=throttle --rate-limit-threshold-count=600 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+
+== 2. both rules present, --shopify-rate-per-minute 3000 (a rerun that changes the limit)
+c. policy cma-ingest-armor exists
+c. rule 900 (update): /shopify/, 3000 requests per 60 s per IP, then 429
+c. rule 1000 (update): every other request, 600 requests per 60 s per IP, then 429
+c. cma-ingest-armor is attached to cma-ingest-backend
+exit 0
+-- the rule calls:
+gcloud compute security-policies rules describe 900 --project=p4a-cma-prod --security-policy=cma-ingest-armor
+gcloud compute security-policies rules update 900 --project=p4a-cma-prod --security-policy=cma-ingest-armor --expression=request.path.startsWith('/shopify/') --action=throttle --rate-limit-threshold-count=3000 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+gcloud compute security-policies rules describe 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor
+gcloud compute security-policies rules update 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor --src-ip-ranges=* --action=throttle --rate-limit-threshold-count=600 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+
+== 3. refusals
+--shopify-rate-per-minute is not a positive number
+exit 2
+--shopify-rate-per-minute is not a positive number
+exit 2
+
+== 4. git show HEAD:docs/ingest/front.sh against the same fake (before this change): rule 1000's call
+gcloud compute security-policies rules update 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor --src-ip-ranges=* --action=throttle --rate-limit-threshold-count=600 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet

@@ -1,0 +1,24 @@
+verify/outbox.mjs
+
+PASS  only enabled fields are planned with (currency disabled)         got ["id_1","id_2","store","orders","spent","country","language"]
+PASS  an empty contact: slot 1, store, totals, country and language written got {"id_1":"7100000001","store":"shop-gb","orders":"2","spent":"240","cou
+PASS  …the result: ref written in slot 1                               got ["written",1]
+PASS  if_empty keeps an agent's country and language                   got [null,null,"not_empty","not_empty"]
+PASS  if_empty: the same value is unchanged, not written               got "unchanged"
+PASS  slot 1 held by another id → slot 2                               got [null,"7100000001",2]
+PASS  …and then no store or totals (they describe the customer in slot 1) got [null,null,null,"not_slot_one"]
+PASS  both slots held by other ids → nothing of the ref, slots_full    got [null,null,"slots_full","slot_taken","slot_taken"]
+PASS  the id already in slot 2 → present, nothing written for the ref, no totals got ["present",2,[]]
+PASS  everything current → nothing to write (240 equals 240.00)        got [[],"present"]
+PASS  always writes only the difference                                got {"orders":"2","spent":"240"}
+PASS  always overwrites a different store                              got "shop-gb"
+PASS  no customer id → no store or totals, the codes by their mode     got [null,{"country":"GB"}]
+PASS  a planned property is always one of the enabled fields           got true
+PASS  assertConfigured: a configured property passes                   got "accepted"
+PASS  assertConfigured: a property not in the fields is refused        got "property_not_configured"
+PASS  assertConfigured: a disabled field's property is refused         got "property_not_configured"
+PASS  assertConfigured: email is refused                               got "property_not_configured"
+PASS  no enabled write-back field → the action fails writeback_not_configured got [{"ids":["a1"],"outcome":"failed","result":null,"error":"writeback_not
+PASS  an action this writer does not handle → action_not_supported     got ["action_not_supported"]
+
+ALL 20 PASS

@@ -32,7 +32,7 @@ Cloud Run jobs on the same image (`node jobs/<name>.mjs`), as `cma-ingest@<proje
 
 | Job | Schedule | Does | `sync_run` |
 |---|---|---|---|
-| `ingest-sweep` | every minute | per connection, due events (received, or failed with the backoff passed) claimed and read back in parts of 100 until none is due (at most about 45 seconds); records still without a contact in their first hour read again, at most every ten minutes; Aircall's lines and tags at most hourly per connection; per tenant `cma.link_calls(now() − 2 h)` | `link_calls` on the tenant's first HubSpot connection (the events are the sweep's own audit) |
+| `ingest-sweep` | every minute | per connection, due events (received, or failed with the backoff passed) claimed and read back in parts of 100 until none is due (at most about 45 seconds); records still without a contact in their first hour read again, at most every ten minutes; Aircall's lines and tags at most hourly per connection; per tenant `cma.link_calls(now() − 2 h)`; last, the outbox guard: per tenant the outbox actions of active connections still waiting ten minutes after they fell due, counted (`outboxPending`) and logged as a warning per connection (section Outbox) | `link_calls` on the tenant's first HubSpot connection (the events are the sweep's own audit) |
 | `ingest-poll-forms` | every minute | the form catalog (`GET /marketing/v3/forms`) at most hourly into `cma.connection_form` (names only; counted, lead source, market and kept fields stay as configured); per counted, active form the submissions newest first, 50 per page, until the form's cursor (`forms:<guid>`: time and conversion id of the newest read), on its first poll until `intake.start_date`; the contact by a CRM search on the definition's email field (one → resolved, none → not_found, several → ambiguous, no email → no_email), the email in memory for that search only; page host and path, UTM parameters, kept fields only (never the email field) | `forms_poll`, stream `forms` |
 | `ingest-reconcile` | 02:30 | per connection and object type (deal, ticket, crm_call, contact) everything modified in the last 26 hours by CRM search, read back like a webhook (stale guard: a newer row stays); contacts only when the CMA holds them; Aircall: the calls created in the look-back (`telephony_call`) and the webhook check (section Aircall); Shopify: the customers and orders updated in the look-back and the store's subscriptions, recreated when Shopify deleted one (section Shopify); `--lookback-minutes <n>` shortens the look-back | `reconcile`, stream the object type; Shopify also `subscriptions_check`, stream `webhooks` |
 | `ingest-outbox` | no schedule (since 0008h) | per CRM connection (HubSpot), the due contact write-backs of 0007c claimed 50 at a time, applied against the contacts' current values by mode and written in one batch update, each finished as sent with what was written and skipped or failed with a short code; generic, and nothing enqueues an action today (section Outbox) | none: the outbox rows are its audit |
@@ -90,6 +90,14 @@ Expected: `accessor on ingest-hubspot-dev-signing`, `accessor on ingest-hubspot-
 
 For prod the same with `prod` (instance `cma-prod-pg`, min instances 1, max 5, no header logging), from the same commit as the dev deploy: the image already exists, so the output says `no build` and prod runs what dev tested.
 
+The service's caps in both projects: min 1 and max 5 instances in prod, min 0 and max 2 in dev; concurrency 20; a database pool of 5 per instance (`CMA_DB_POOL_MAX`; 3 per job); 1 CPU and 512 MiB; a 30-second request timeout; and startup CPU boost (`--cpu-boost`, since 13 October 2026, sixth Gemini audit FIND-04: a new instance starts with extra CPU, so a cold start answers sooner). The route answers after its read-back, not before: Cloud Run throttles the CPU once the response is sent, so work after it would crawl (Decision log, 13 October 2026). To see the boost on the deployed service:
+
+**Terminal**
+```bash
+gcloud run services describe cma-ingest --project=p4a-cma-prod --region=europe-west4 --format=json | grep -o '"run.googleapis.com/startup-cpu-boost": *"[a-z]*"'
+```
+Expected: `"run.googleapis.com/startup-cpu-boost": "true"` (the same with `p4a-cma-dev`).
+
 **Public front in prod** (README Architecture, Ingest API; Decision log, 12 October 2026). In prod `cma-ingest` is reached as `https://ingest.pulse4all.app` through the web load balancer (backend `cma-ingest-backend` without IAP, Cloud Armor policy `cma-ingest-armor`, certificate `cma-ingest-cert` next to `cma-web-cert`, a host rule on `cma-web-urlmap`), and its ingress is `internal-and-cloud-load-balancing`, so the `run.app` address refuses everyone. Dev keeps `--ingress=all` and its `run.app` address. The full prod sequence is `docs/ingest/PROD_RUNBOOK.md`; the front alone, in this order:
 
 **Terminal** (in `~/cma`, on main; the service first, so the front has something to point at)
@@ -102,7 +110,38 @@ Expected: as above, plus `ingress: internal-and-cloud-load-balancing`, `public U
 ```bash
 bash docs/ingest/front.sh prod --host ingest.pulse4all.app
 ```
-Expected: lines `a.` to `e.` (`created` the first time, `exists` on a rerun), then the A record `ingest.pulse4all.app → <address of cma-web-ip>`, the certificate status (`PROVISIONING` at first) and the two checks. `--rate-per-minute <n>` changes the throttle (default 600 per IP).
+Expected: lines `a.` to `e.` (`created` the first time, `exists` on a rerun; the two rules `c. rule 900 (create|update): /shopify/, 2400 requests per 60 s per IP, then 429` and `c. rule 1000 (create|update): every other request, 600 requests per 60 s per IP, then 429`), then the A record `ingest.pulse4all.app → <address of cma-web-ip>`, the certificate status (`PROVISIONING` at first) and the two checks. `--rate-per-minute <n>` changes rule 1000 (default 600 per IP), `--shopify-rate-per-minute <n>` rule 900 (default 2400 per IP).
+
+**Cloud Armor rules** of `cma-ingest-armor` (README Decision log, 12 and 13 October 2026). Rules are evaluated by priority, the lowest number first, and a request a throttle rule matches stops there, so Shopify's deliveries count against rule 900 only:
+
+| Priority | Matches | Per client IP | Over the limit |
+|---|---|---|---|
+| 900 (since 13 October 2026) | `request.path.startsWith('/shopify/')` | 2,400 requests per 60 seconds | `429` (deny-429) |
+| 1000 (since 12 October 2026) | every other request (source IP ranges `*`) | 600 requests per 60 seconds | `429` (deny-429) |
+| default | everything else | allow | |
+
+Rule 900 exists because a store's renewal run sends its order and customer deliveries in a burst from Shopify's senders (sixth Gemini audit FIND-01); the general limit stays at 600 (about 2.5 requests per second at peak on 13 October 2026, no 429 in the last day). There is no IP allow-list: every source signs its requests, and a 429 makes HubSpot, Aircall and Shopify retry with backoff. Both rules are created by `front.sh`, or updated to its values when they exist, so a rerun is how a limit changes. What step c would send, without any gcloud call:
+
+**Terminal**
+```bash
+bash docs/ingest/front.sh prod --host ingest.pulse4all.app --dry-run
+```
+Expected: the three rows above (900, 1000, default) and the two `gcloud compute security-policies rules create` commands (step c updates a rule that exists), the first with `--expression=request.path.startsWith('/shopify/')` and `--rate-limit-threshold-count=2400`, the second with `--src-ip-ranges=*` and `--rate-limit-threshold-count=600`, both `--action=throttle --exceed-action=deny-429 --enforce-on-key=IP`.
+
+**Terminal** (after a real run: the rules in the policy)
+```bash
+gcloud compute security-policies describe cma-ingest-armor --project=p4a-cma-prod --flatten='rules[]' --format='table(rules.priority,rules.match.expr.expression,rules.rateLimitOptions.rateLimitThreshold.count,rules.action)'
+```
+Expected: three rows: `900  request.path.startsWith('/shopify/')  2400  throttle`, `1000  600  throttle` (no expression: it matches the source ranges `*`) and `2147483647  allow` (the default rule).
+
+**The 429 alert** (README Decision log, 13 October 2026, fifth Gemini audit FIND-02). Cloud Armor answers a throttled request at the load balancer, so its 429s never reach the Cloud Run request log, and the backend's logging is off; the load balancer's request count holds them. `docs/ingest/alert.sh` creates the Cloud Monitoring alert policy `cma-ingest 429` on `loadbalancing.googleapis.com/https/request_count`, filtered to `backend_target_name = cma-ingest-backend` and `response_code = 429`, summed over 5 minutes and firing when the sum is above 0, with an email channel (created when the project has none for the address). An existing policy with that name is updated, never duplicated. It uses `gcloud monitoring policies` (GA) and `gcloud beta monitoring channels` (channels exist only in beta and alpha); the policy goes in as JSON with `--policy`, so no policy file is kept. In dev the policy finds no series (no load balancer) and stays quiet.
+
+**Terminal** (first what it would create, then the policy; the address is where alerts go, for example a group)
+```bash
+bash docs/ingest/alert.sh prod --email <address> --dry-run
+bash docs/ingest/alert.sh prod --email <address>
+```
+Expected: the dry run prints the policy JSON: the filter with `resource.labels.backend_target_name = "cma-ingest-backend"` and `metric.labels.response_code = 429`, `"alignmentPeriod": "300s"` with `ALIGN_SUM` and `REDUCE_SUM`, `COMPARISON_GT` 0; the real run prints `a. email channel created|exists: projects/p4a-cma-prod/notificationChannels/<id>`, `b. policy created|updated: projects/p4a-cma-prod/alertPolicies/<id>`, and the check line `cma-ingest 429  True  <the filter>  300s  <the channel>`. A rerun says `exists` and `updated`.
 
 **Browser:** IONOS → pulse4all.app → DNS → add an A record, host `ingest`, the printed address; the other records stay as they are.
 
@@ -260,6 +299,14 @@ reset role;
 ```
 Expected today: no rows. Once a later decision configures a write-back and schedules the job: `sent` rows growing, `pending` only for the last minute, `needs_review` none (each needs a person: `select cma.outbox_resolve('<id>', 'retry' | 'drop');` after the context block).
 
+**The outbox guard** (sixth Gemini audit FIND-05, 13 October 2026). Because the job has no schedule, an action enqueued now would wait unseen. The sweep (every minute) counts, per tenant and active connection, the actions the outbox still has to deliver (`pending`, `failed` for a retry, or `in_flight` from a run that never finished) that fell due more than ten minutes ago, returns the total as `outboxPending` and logs one warning per connection (`sweep: outbox actions overdue, ingest-outbox unscheduled or not running`, code `outbox_pending`, the connection id and the count; no action or contact id). The sweep cannot see Cloud Scheduler (`cma-ingest` holds no Scheduler role), so the missing schedule is read from the rows: a scheduled outbox claims due actions every minute, so ten minutes late means no run claimed them. Reports → Data quality shows the same count as the row "Contact updates not sent" (`outbox_pending`) while it is above 0 and hides it at 0. Expected today: no such warning and no such row.
+
+**Terminal** (the guard's warnings of the last day)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep AND jsonPayload.code="outbox_pending"' --project=p4a-cma-prod --freshness=1d --limit=10 --format='value(timestamp,jsonPayload.connection,jsonPayload.outboxPending)'
+```
+Expected: nothing. A line means actions are waiting: find what enqueued them (the Studio query above), then schedule the job (a `deploy.sh` change, Open decisions) or stop what enqueues them.
+
 ## Replay (dev and local only, invented data)
 
 **Terminal** (in `~/cma/ingest`, after `npm ci`; the dev signing secret read into a variable without echo)
@@ -288,7 +335,7 @@ Expected: six lines `200 call.… {"received":1,"new":1}`; in **Studio (cma-dev-
 | `node verify/<name>.mjs --provoke` | every check must fail | nothing |
 | `npm test` (also) | `verify/forms.mjs`: page host, path and UTM, the email kept out, kept fields, the poll's cursor stop, the search window, synthetic event keys, job arguments | nothing (pure) |
 | `node verify/flow.mjs [--provoke]` | the service end to end against a fake HubSpot | a local PostgreSQL with `db/00…33`, see the file's header |
-| `node verify/jobs-flow.mjs [--provoke]` | the jobs end to end against a fake HubSpot: sweep, forms poll, backfill with an interruption, reconcile, tenant isolation, no email stored or logged | a local PostgreSQL with `db/00…37`, see the file's header |
+| `node verify/jobs-flow.mjs [--provoke]` | the jobs end to end against a fake HubSpot: sweep, the sweep's outbox guard (an action ten minutes overdue reported with one warning and no ids; a fresh one, another tenant's and a delivered one not), forms poll, backfill with an interruption, reconcile, tenant isolation, no email stored or logged | a local PostgreSQL with `db/00…38`, see the file's header |
 | `npm test` (also) | `verify/aircall-token.mjs` (right, wrong, missing and wrong-length tokens, timingSafeEqual in the code), `verify/aircall-mapping.mjs` (the six events and the unhandled ones, the call mapping and allowlist, the hash's region, the fingerprint, replay only with `INGEST_ALLOW_REPLAY=1`, the pace setting, the reset after a 429, day windows), `verify/aircall-scripts.mjs` (both scripts and the Aircall replay against fakes and a fake `gcloud`: the account check, the refusal on an existing webhook, the token piped to `versions add` and never printed, the owner match) | nothing (pure; localhost only) |
 | `npm test` (also) | `verify/shopify-signature.mjs` (the HMAC of the raw body: right, wrong secret, a changed byte, a re-serialised body, missing or malformed header, timingSafeEqual in the code), `verify/shopify-mapping.mjs` (the seven topics and their kinds, the webhook-id key and its fallbacks, shop pinning, unhandled topics, ids, the prior-count arithmetic including a customer with older orders and the search lag, customers and orders mapped with nothing personal, pages reduced to host, path and UTM, lines, the queries asking for no more than they need, the API version and the route's budget), `verify/shopify-client.mjs` (one token for five callers, cached, minted again within five minutes of its expiry, refusals; THROTTLED, ACCESS_DENIED, 401 and 429 answers; the cost bucket: a webhook never waiting past its budget, a job waiting, callers queueing), `verify/shopify-scripts.mjs` (`shopify-subscribe.mjs` against a fake Shopify and a fake `gcloud`: refusals, the seven topics with `uri`, a rerun creating nothing, a missing topic recreated, list, delete, source names, never the secret or the token), `verify/outbox.mjs` (the modes: `if_empty` keeps an agent's value, `slot` fills 1 then 2 and stops at full, the totals only with slot 1, `always` writes only a difference, a property not configured refused); `verify/hash.mjs` also proves an order's or customer's phone hashes like a call's | nothing (pure; localhost only) |
 | `node verify/shopify-flow.mjs [--provoke]` | the Shopify adapter end to end against a fake Shopify (token grant, GraphQL with a cost bucket) and a fake HubSpot: the route and its HMAC, another shop and another topic ignored, duplicates, customers hashed and matched by email, held refs or the ref properties, the link kept in the CMA (set, reused by later orders with one batch read and no search, cleared when its contact is gone and none or two answer, moved to the survivor of a merge, cleared by the customer's deletion and by the CRM's privacy deletion), Email and Phone withheld, no match and two matches, no outbox row and no HubSpot write even with write-back fields enabled, orders first, repeat, renewal and unknown with lines paged, the token's cache and expiry, a burst of 200 deliveries answered within Shopify's five seconds and read by the sweep, reconcile, the subscription check, the backfill resumed, tenant isolation, no email or number in any database row or log | a local PostgreSQL with `db/00…58`, see the file's header |

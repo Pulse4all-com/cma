@@ -7,8 +7,16 @@
  * (the CRM may associate the contact after the record was created), at most once per ten minutes
  * each. An adapter with catalogs of its own (telephony lines and tags) refreshes them, at most hourly
  * per connection by its own cursor; a catalog that cannot be read now is logged and read on a later
- * run. Last, per tenant, cma.link_calls(now() − 2 h) pairs telephony calls with CRM calls, one
+ * run. Then, per tenant, cma.link_calls(now() − 2 h) pairs telephony calls with CRM calls, one
  * sync_run row (job link_calls) on the tenant's first CRM connection.
+ *
+ * Last, the outbox guard (sixth Gemini audit FIND-05, 13 October 2026): ingest-outbox runs without a
+ * schedule since 0008h, so an action enqueued now would wait unseen. The sweep cannot see Cloud
+ * Scheduler (cma-ingest holds no Scheduler role), so it reads the missing schedule from the rows: an
+ * action still waiting OUTBOX_LATE after it fell due is one no outbox run claimed, which a scheduled
+ * outbox (every minute) would have done. Per tenant the sweep counts them per connection, logs a
+ * warning with the count (code outbox_pending, no ids) and returns the total as outboxPending; Data
+ * quality shows the same count (web, getDataQuality), hidden at 0.
  *
  * The event log is the sweep's own audit (every event's attempts, status and error); sync_run has
  * no job value for the sweep itself (migration 0007's vocabulary), so only the link step has a row.
@@ -25,11 +33,12 @@ import { codeOf, withRun } from "./runner.mjs";
 const PART = 100;
 const LINK_LOOKBACK_MS = 2 * 60 * 60_000;
 const REREAD_EVERY_MS = 10 * 60_000;
+export const OUTBOX_LATE = "10 minutes";
 
 export async function runSweep({ connectionId = null, adapters = ADAPTERS, maxMs = 45_000, now = () => Date.now() } = {}) {
   const started = now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:sweep" });
-  const total = { connections: 0, claimed: 0, processed: 0, ignored: 0, eventsFailed: 0, reread: 0, catalogs: 0, links: 0, failed: 0 };
+  const total = { connections: 0, claimed: 0, processed: 0, ignored: 0, eventsFailed: 0, reread: 0, catalogs: 0, links: 0, outboxPending: 0, failed: 0 };
   for (const c of connections) {
     const adapter = Object.hasOwn(adapters, c.adapter) ? adapters[c.adapter] : null;
     if (!adapter) continue;
@@ -87,6 +96,22 @@ export async function runSweep({ connectionId = null, adapters = ADAPTERS, maxMs
     } catch (err) {
       total.failed += 1;
       warn("sweep: link_calls not recorded", { connection: c.connectionId, code: codeOf(err) });
+    }
+  }
+
+  // The outbox guard, once per tenant as its Ingest user (any served connection gives the context)
+  const anyOfTenant = new Map();
+  for (const c of connections) if (!anyOfTenant.has(c.tenantId)) anyOfTenant.set(c.tenantId, c);
+  for (const c of anyOfTenant.values()) {
+    try {
+      const late = await storeFor(contextOf(c), c.connectionId).outboxLate(OUTBOX_LATE, connectionId);
+      for (const l of late) {
+        total.outboxPending += l.count;
+        warn("sweep: outbox actions overdue, ingest-outbox unscheduled or not running", { connection: l.connectionId, code: "outbox_pending", outboxPending: l.count });
+      }
+    } catch (err) {
+      total.failed += 1;
+      warn("sweep: outbox not checked", { connection: c.connectionId, code: codeOf(err) });
     }
   }
   info("sweep", { ...total, ms: now() - started });

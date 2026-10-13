@@ -1,5 +1,5 @@
 /**
- * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…37 and a
+ * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…38 and a
  * fake HubSpot API. Everything is invented: tenants, portals, ids, secrets, emails (example.com).
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
@@ -13,7 +13,9 @@
  *
  * Proves: the sweep processes due events, respects the backoff, parks an event at
  * ingest.max_attempts and never claims it again, reads a record without a contact again (once per
- * ten minutes) and records link_calls; the forms poll refreshes the catalog keeping configuration,
+ * ten minutes) and records link_calls; the sweep's outbox guard (brief A5) reports an outbox action
+ * still waiting ten minutes after it fell due (outboxPending, one warning per connection with the count
+ * and no ids), not a fresh one, not another tenant's and not a delivered one; the forms poll refreshes the catalog keeping configuration,
  * reads counted forms only, stops at the start date and at its cursor, resolves contacts by the
  * definition's email field, keeps host, path, UTM and kept fields only, is idempotent across runs,
  * and a failed contact search leaves the cursor for the next run; the backfill starts at
@@ -35,7 +37,7 @@ console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAI
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…37; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…38; see the header)`);
     process.exit(2);
   }
 }
@@ -196,6 +198,7 @@ const { runReconcile } = await import("../src/jobs/reconcile.mjs");
 const { runBackfill } = await import("../src/jobs/backfill.mjs");
 const { UsageError } = await import("../src/jobs/runner.mjs");
 const { recordEvents } = await import("../src/core/events.mjs");
+const { applyUnits } = await import("../src/core/store.mjs");
 const { closeDb } = await import("../src/core/db.mjs");
 
 // ---- Setup as the admin login --------------------------------------------------------------------
@@ -288,6 +291,37 @@ await forceDue(4120000009);
 await sweep();
 expect("sweep: a parked event is never claimed again", (await eventOf(4120000009))?.attempts, 3, 4);
 fake.failIds.clear();
+
+// ---- A2. The outbox guard (ingest-outbox without a schedule, as in dev and prod since 0008h) -----
+// One write-back field and one action enqueued through the core's writes.writebacks as the Ingest user
+// (nothing in the CMA enqueues one today); the outbox job never runs here
+const guardLogs = (from) => logs.slice(from).map((l) => JSON.parse(l)).filter((l) => l.code === "outbox_pending");
+expect("outbox guard: no action → outboxPending 0, no warning", [s1.outboxPending, guardLogs(0).length], [0, 0], [1, 1]);
+await asAdmin(t1, () => q("select cma.set_writeback_field($1, 'country', 'contact_country', 'if_empty', true, 1::smallint)", [conn1]));
+const writeback = (country) => applyUnits(ctx1, conn1, [{ eventIds: [], status: "processed",
+  writes: { writebacks: [{ connectionId: conn1, contactId: "4300000001", values: { country }, reason: "verify:outbox-guard" }] } }]);
+const overdue = () => q("update cma.outbox_action set next_attempt_at = now() - interval '11 minutes' where connection_id = $1 and status = 'pending'", [conn1]);
+await writeback("GB");
+let l0 = logs.length;
+const g1 = await sweep();
+expect("outbox guard: a pending action just enqueued is not overdue yet", [g1.outboxPending, guardLogs(l0).length], [0, 0], [1, 1]);
+await overdue();
+l0 = logs.length;
+const g2 = await sweep();
+expect("outbox guard: due 11 minutes ago and never claimed → outboxPending 1", g2.outboxPending, 1, 0);
+expect("outbox guard: one warning with the connection and the count, no contact id", guardLogs(l0).map((l) => [l.severity, l.connection, l.outboxPending, JSON.stringify(l).includes("4300000001")]),
+  [["WARNING", conn1, 1, false]], []);
+expect("outbox guard: it does not fail the sweep", g2.failed, 0, 1);
+expect("outbox guard: another tenant's sweep does not count it", (await runSweep({ connectionId: conn2 })).outboxPending, 0, 1);
+await writeback("NL");
+const g3 = await sweep();
+expect("outbox guard: a newer action supersedes it and is not overdue yet", [g3.outboxPending, (await q("select status from cma.outbox_action where connection_id = $1 order by id", [conn1])).map((r) => r.status)],
+  [0, ["superseded", "pending"]], [1, ["pending", "pending"]]);
+await overdue();
+expect("outbox guard: overdue again → counted again", (await sweep()).outboxPending, 1, 0);
+await q("update cma.outbox_action set status = 'in_flight' where connection_id = $1 and status = 'pending'", [conn1]);
+await q("update cma.outbox_action set status = 'sent', sent_at = now() where connection_id = $1 and status = 'in_flight'", [conn1]);
+expect("outbox guard: a delivered action is not counted", (await sweep()).outboxPending, 0, 1);
 
 // ---- B. The forms poll ---------------------------------------------------------------------------
 let n0 = mark();

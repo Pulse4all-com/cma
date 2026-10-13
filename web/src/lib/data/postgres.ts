@@ -10,7 +10,7 @@ import type {
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
 } from "./types";
-import { applyConnections, rangeProblem, type IntakeCounts } from "@/lib/reports";
+import { OUTBOX_LATE_MINUTES, applyConnections, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 
 /**
@@ -1464,7 +1464,16 @@ export const postgresData: CmaData = {
   async getDataQuality(me): Promise<DataQualityCheck[]> {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<{ check_key: string; description: string; total: number | null }>(`select * from cma.data_quality()`);
-      return r.rows.map((x) => ({ key: x.check_key, description: x.description, total: x.total }));
+      // The outbox guard (brief A5), read after cma.data_quality() checked the permission; the same
+      // definition as the sweep's (ingest store, outboxLate)
+      const o = await q.query<{ n: number }>(
+        `select count(*)::integer as n
+           from cma.outbox_action o
+           join cma.integration_connection c on c.tenant_id = o.tenant_id and c.id = o.connection_id and c.status = 'active'
+          where o.tenant_id = cma.current_tenant_id()
+            and o.status in ('pending', 'failed', 'in_flight') and o.next_attempt_at < now() - make_interval(mins => $1)`,
+        [OUTBOX_LATE_MINUTES]);
+      return withOutboxPending(r.rows.map((x) => ({ key: x.check_key, description: x.description, total: x.total })), o.rows[0]?.n ?? 0);
     });
   },
 

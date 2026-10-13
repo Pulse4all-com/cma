@@ -1,0 +1,10 @@
+$ bash docs/ingest/front.sh prod --host ingest.pulse4all.app --dry-run
+== dry run: Cloud Armor policy cma-ingest-armor on cma-ingest-backend (p4a-cma-prod); no gcloud call, nothing read or changed
+rules by priority, the lowest first; a request a throttle rule matches stops there:
+  900      request.path.startsWith('/shopify/')          2400 requests per 60 s per IP, then 429
+  1000     every other request (source IP ranges *)      600 requests per 60 s per IP, then 429
+  default  everything else                               allow
+step c runs, per rule, create (or update, when the rule exists):
+gcloud compute security-policies rules create 900 --project=p4a-cma-prod --security-policy=cma-ingest-armor "--expression=request.path.startsWith('/shopify/')" --action=throttle --rate-limit-threshold-count=2400 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+gcloud compute security-policies rules create 1000 --project=p4a-cma-prod --security-policy=cma-ingest-armor "--src-ip-ranges=*" --action=throttle --rate-limit-threshold-count=600 --rate-limit-threshold-interval-sec=60 --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet
+exit 0

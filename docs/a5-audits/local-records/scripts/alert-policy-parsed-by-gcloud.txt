@@ -1,0 +1,7 @@
+The dry run's policy JSON (alert-dry-run.txt, from { to }) parsed with Cloud SDK 570.0.0's own AlertPolicy message
+(googlecloudsdk.command_lib.monitoring.util.MessageFromString, what --policy does); an unknown field or a wrong enum would raise
+displayName: cma-ingest 429 | combiner: OR | enabled: True
+filter: resource.type = "https_lb_rule" AND metric.type = "loadbalancing.googleapis.com/https/request_count" AND resource.labels.backend_target_name = "cma-ingest-backend" AND metric.labels.response_code = 429
+aggregation: 300s ALIGN_SUM REDUCE_SUM
+comparison: COMPARISON_GT 0.0 | duration: 0s | trigger count: 1 | missing data: EVALUATION_MISSING_DATA_INACTIVE
+autoClose: 1800s | channels: ['projects/p4a-cma-prod/notificationChannels/<the email channel for alerts@example.com>']

@@ -1,0 +1,23 @@
+deploy.sh on main (git show HEAD:docs/ingest/deploy.sh) and on this branch, each run in a throwaway copy of the tree (one local commit, so the image tag is that commit's: 98f54a0) against a fake gcloud and curl that answer as dev and prod do (the image exists, so no build). Every gcloud call is logged; below, the difference between main and the branch per deploy.
+
+== bash docs/ingest/deploy.sh dev --tenant pulse4all-subscriptions
+exit: main 0, branch 0; gcloud calls: main 15, branch 15
+13c13
+< gcloud run deploy cma-ingest --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:98f54a0 --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --no-invoker-iam-check --ingress=all --port=8080 --concurrency=20 --min-instances=0 --max-instances=2 --cpu=1 --memory=512Mi --timeout=30s --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=5|INGEST_VERSION=98f54a0|INGEST_PROJECT=p4a-cma-dev|INGEST_LOG_HEADER_NAMES=1|INGEST_READBACK_BUDGET_MS=3000|INGEST_SHOPIFY_READBACK_BUDGET_MS=1500|INGEST_PUBLIC_URLS=https://cma-ingest-x.a.run.app|INGEST_ALLOW_REPLAY=1 --quiet
+---
+> gcloud run deploy cma-ingest --project=p4a-cma-dev --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:98f54a0 --service-account=cma-ingest@p4a-cma-dev.iam.gserviceaccount.com --no-invoker-iam-check --ingress=all --port=8080 --concurrency=20 --min-instances=0 --max-instances=2 --cpu=1 --memory=512Mi --cpu-boost --timeout=30s --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-dev:europe-west4:cma-dev-pg|CMA_DB_USER=cma-ingest@p4a-cma-dev.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=5|INGEST_VERSION=98f54a0|INGEST_PROJECT=p4a-cma-dev|INGEST_LOG_HEADER_NAMES=1|INGEST_READBACK_BUDGET_MS=3000|INGEST_SHOPIFY_READBACK_BUDGET_MS=1500|INGEST_PUBLIC_URLS=https://cma-ingest-x.a.run.app|INGEST_ALLOW_REPLAY=1 --quiet
+
+== bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions
+exit: main 0, branch 0; gcloud calls: main 12, branch 12
+10c10
+< gcloud run deploy cma-ingest --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:98f54a0 --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --no-invoker-iam-check --ingress=internal-and-cloud-load-balancing --port=8080 --concurrency=20 --min-instances=1 --max-instances=5 --cpu=1 --memory=512Mi --timeout=30s --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=5|INGEST_VERSION=98f54a0|INGEST_PROJECT=p4a-cma-prod|INGEST_LOG_HEADER_NAMES=0|INGEST_READBACK_BUDGET_MS=3000|INGEST_SHOPIFY_READBACK_BUDGET_MS=1500|INGEST_PUBLIC_URLS=https://ingest.pulse4all.app,https://cma-ingest-x.a.run.app --quiet
+---
+> gcloud run deploy cma-ingest --project=p4a-cma-prod --region=europe-west4 --image=europe-west4-docker.pkg.dev/p4a-cma-prod/cma/ingest:98f54a0 --service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com --no-invoker-iam-check --ingress=internal-and-cloud-load-balancing --port=8080 --concurrency=20 --min-instances=1 --max-instances=5 --cpu=1 --memory=512Mi --cpu-boost --timeout=30s --set-env-vars=^|^CMA_DB_INSTANCE=p4a-cma-prod:europe-west4:cma-prod-pg|CMA_DB_USER=cma-ingest@p4a-cma-prod.iam|CMA_DB_NAME=cma|CMA_DB_POOL_MAX=5|INGEST_VERSION=98f54a0|INGEST_PROJECT=p4a-cma-prod|INGEST_LOG_HEADER_NAMES=0|INGEST_READBACK_BUDGET_MS=3000|INGEST_SHOPIFY_READBACK_BUDGET_MS=1500|INGEST_PUBLIC_URLS=https://ingest.pulse4all.app,https://cma-ingest-x.a.run.app --quiet
+
+== bash docs/ingest/deploy.sh prod --jobs
+exit: main 0, branch 0; gcloud calls: main 23, branch 23
+(identical)
+
+The changed call, flags only, split one per line (prod):
+16a17
+> --cpu-boost

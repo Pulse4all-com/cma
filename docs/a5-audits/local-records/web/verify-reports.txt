@@ -1,0 +1,30 @@
+PASS  the four groups parse, anything else is refused            got ["day","market","agent","pipeline",null,null,null,null]
+PASS  G cycles day, market, agent, pipeline and back             got ["market","agent","pipeline","day"]
+PASS  92 days pass, 93 and a backwards range do not              got [null,"length","order",null]
+PASS  percentile_cont: median and 80th percentile interpolate    got [900,4680,25,null]
+PASS  period figures as the summary computes them                got {"deals":8,"called":4,"medianBusinessMinutes":15,"p80BusinessMinutes":
+PASS  nothing known yet: shares and minutes are empty, not 0     got {"deals":1,"called":0,"medianBusinessMinutes":null,"p80BusinessMinutes
+PASS  by day: one group per business date, in order              got [["2026-10-05",3,3,0],["2026-10-06",5,1,3]]
+PASS  by agent: the person's id as key, not mapped under unknown got [["u-ana","Ana",2],["u-bo","Bo",3],["unknown",null,3]]
+PASS  an agent who is not mapped shows as Not mapped             got ["text","text","notMapped"]
+PASS  by market: codes, and unknown said in words                got [["GB","text"],["NL","text"],["unknown","unknownMarket"]]
+PASS  by pipeline: connection and pipeline as key, a missing label unknown got [["c1:","unknownPipeline"],["c1:p1","text"]]
+PASS  totals add counts only                                     got {"deals":8,"called":4,"openNotCalled":3}
+PASS  open deals not called: longest waiting first, no business time last got ["1007","1004","1008"]
+PASS  no row carries an owner id or a personal field             got []
+PASS  without telephony and a shop their figures are null, never 0 got [null,null,null,null,4]
+PASS  connected sources keep their zeros                         got [0,0]
+PASS  each source on its own: telephony counted, shop not connected got [0,null]
+PASS  totals stay null for a source that is not connected        got [null,7,0]
+PASS  a missing figure says which source is not there            got ["noTelephony","noShop","count"]
+PASS  markets in order, unknown last                             got ["BE","GB","NL","unknown"]
+PASS  the market filter keeps one market, none keeps all         got [1,4]
+PASS  bars against the busiest row (leads, deals and tickets)    got [100,33,56,11]
+PASS  records of a type from crm_records_per_day                 got 7
+PASS  owners without a person first, the rest in the database's order got ["owner_without_person","deal_without_contact","market_not_in_catalog"
+PASS  zero and not-available rows are muted, counts are not      got [true,false,false,true]
+PASS  business minutes: decimals under an hour, hours from an hour, a dash for none got ["7.5 min","7,5 min","1h 15m","–"]
+PASS  percentages whole, small shares not zero, a dash for none  got ["40%","67%","< 1%","0%","–"]
+PASS  counts with the locale's grouping                          got ["1,234","1.234"]
+
+ALL 28 PASS

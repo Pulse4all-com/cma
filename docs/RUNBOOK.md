@@ -125,7 +125,8 @@ node verify/scheduler.mjs; echo "exit $?"     # ALL 10 PASS
 It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job step exits 1 and every close check fails.
 
 The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `import`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
-of each script in `web/verify/` for its start command.
+of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
+workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do.
 
 ## 6. Logs
 

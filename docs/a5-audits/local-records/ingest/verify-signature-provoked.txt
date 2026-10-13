@@ -1,0 +1,22 @@
+verify/signature.mjs  (--provoke: every check must FAIL)
+
+FAIL  signV3 equals the documented construction                        got "3A3HP6wNx19p9aIlUtrpGv7a7ukK/KMwD3qBXAMsoIE=", wanted "x"
+FAIL  a valid v3 signature is accepted                                 got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  the method is part of the signature                              got "bad_signature", wanted "ok"
+FAIL  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a timestamp 6 minutes old is refused                             got {"ok":false,"reason":"stale_timestamp"}, wanted {"ok":true}
+FAIL  a timestamp 6 minutes ahead is refused                           got {"ok":false,"reason":"stale_timestamp"}, wanted {"ok":true}
+FAIL  a timestamp 4 minutes old is accepted                            got {"ok":true}, wanted {"ok":false,"reason":"stale_timestamp"}
+FAIL  a tampered body is refused                                       got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a wrong URI is refused                                           got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a query string is part of the URI                                got false, wanted true
+FAIL  one matching URI among the candidates is enough                  got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  a missing signature header is refused                            got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a missing timestamp header is refused                            got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a non-numeric timestamp is refused                               got {"ok":false,"reason":"bad_timestamp"}, wanted {"ok":true}
+FAIL  an empty secret is refused                                       got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a v1-style signature (hex SHA-256) is refused                    got false, wanted true
+FAIL  HubSpot's decoded characters in the URI                          got "https://ingest.example.com/hubspot/key:a/b@c?q=,;", wanted "https://ingest.example.com/hubspot/key%3Aa%2Fb%40c?q=%2C%3B"
+FAIL  a signature over the decoded URI is accepted                     got true, wanted false
+
+ALL 18 PROVOKED CHECKS FAILED, as they must

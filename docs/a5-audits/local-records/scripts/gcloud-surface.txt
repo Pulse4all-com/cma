@@ -1,0 +1,35 @@
+gcloud surface for alert policies and notification channels, read from the installed Cloud SDK (13 October 2026; the docs site is not reachable from this session)
+
+$ gcloud version | head -1
+Google Cloud SDK 570.0.0
+
+$ grep -n ReleaseTrack lib/surface/monitoring/policies/__init__.py lib/surface/monitoring/channels/__init__.py
+lib/surface/monitoring/policies/__init__.py:21:@base.ReleaseTracks(
+lib/surface/monitoring/policies/__init__.py-22-    base.ReleaseTrack.GA, base.ReleaseTrack.BETA, base.ReleaseTrack.ALPHA
+--
+lib/surface/monitoring/channels/__init__.py:21:@base.ReleaseTracks(base.ReleaseTrack.ALPHA, base.ReleaseTrack.BETA)
+lib/surface/monitoring/channels/__init__.py-22-class Channels(base.Group):
+
+$ gcloud monitoring --help (GA groups)
+     dashboards
+     policies
+     snoozes
+     uptime
+
+$ gcloud monitoring policies --help (GA commands)
+     create
+     delete
+     describe
+     list
+     migrate
+     update
+
+$ gcloud run deploy --help (the CPU boost flag)
+     --[no-]cpu-boost
+        Whether to allocate extra CPU to containers on startup to reduce the
+        perceived latency of a cold start request. Enabled by default when
+        unspecified on new services. Use --cpu-boost to enable and
+        --no-cpu-boost to disable.
+
+$ grep startup-cpu-boost lib/googlecloudsdk/api_lib/run/container_resource.py
+42:COLD_START_BOOST_ANNOTATION = 'run.googleapis.com/startup-cpu-boost'
