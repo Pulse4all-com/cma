@@ -35,9 +35,9 @@ const COUNTS_PER_CALL = 25;
 const FIRST_LINES = 10;
 const LINES_PER_PAGE = 100;
 const MAX_LINES = 500;
-// Cost estimates from Shopify's cost rules (an object 1, a connection 2 plus its size times a node);
-// every answer's throttleStatus corrects the bucket
-const COST = { orders: 80 * ORDERS_PER_CALL, customers: 4 * CUSTOMERS_PER_CALL, counts: COUNTS_PER_CALL + 1, lines: 2 + 5 * LINES_PER_PAGE };
+// Cost estimates per call from Shopify's cost rules (an object 1, a connection 2 plus its size times
+// a node); every answer's throttleStatus corrects the bucket
+const COST = { order: 80, customer: 4, count: 1, lines: 2 + 5 * LINES_PER_PAGE };
 
 const MONEY = "shopMoney { amount currencyCode }";
 const VISIT = "landingPage referrerUrl utmParameters { source medium campaign term content }";
@@ -143,7 +143,7 @@ export async function readBack({ connection, config, events, store, budget }) {
       continue;
     }
     try {
-      const data = await api.query(ORDERS_QUERY, { ids: part.map((g) => gid("commerce_order", g.objectId)) }, COST.orders);
+      const data = await api.query(ORDERS_QUERY, { ids: part.map((g) => gid("commerce_order", g.objectId)) }, COST.order * part.length);
       const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
       part.forEach((g, i) => orders.set(g.objectId, nodes[i] && idOf(nodes[i].id) === g.objectId ? nodes[i] : null));
     } catch (err) {
@@ -165,7 +165,7 @@ export async function readBack({ connection, config, events, store, budget }) {
       return [`q${i}`, atOrAfterSearch(idOf(o.customer.id), o.createdAt)];
     }));
     try {
-      const data = await api.query(countsQuery(part.length), vars, COST.counts);
+      const data = await api.query(countsQuery(part.length), vars, 1 + COST.count * part.length);
       part.forEach((g, i) => prior.set(g.objectId, priorCountOf(orders.get(g.objectId).customer.numberOfOrders, data?.[`c${i}`])));
     } catch (err) {
       stopped = codeOf(err);
@@ -208,7 +208,7 @@ export async function readBack({ connection, config, events, store, budget }) {
       continue;
     }
     try {
-      const data = await api.query(CUSTOMERS_QUERY, { ids: part.map((g) => gid("commerce_customer", g.objectId)) }, COST.customers);
+      const data = await api.query(CUSTOMERS_QUERY, { ids: part.map((g) => gid("commerce_customer", g.objectId)) }, COST.customer * part.length);
       const nodes = Array.isArray(data?.nodes) ? data.nodes : [];
       part.forEach((g, i) => customers.set(g.objectId, nodes[i] && idOf(nodes[i].id) === g.objectId ? nodes[i] : null));
     } catch (err) {

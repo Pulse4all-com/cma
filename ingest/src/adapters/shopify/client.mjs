@@ -15,8 +15,9 @@
  *             at the plan's restore rate; every answer carries extensions.cost.throttleStatus). One
  *             bucket estimate per shop and process: before a call its estimated cost is taken from the
  *             estimate, after the answer the estimate is the answer's currentlyAvailable. The webhook
- *             path never waits for points: a call the bucket cannot pay fails with throttled and the
- *             sweep reads it; a job waits for the refill. A THROTTLED answer or a 429 is rate_limited
+ *             path waits for points only while the wait leaves a second of its budget for the call;
+ *             otherwise the call fails with throttled and the sweep reads it; a job waits for the
+ *             refill. A THROTTLED answer or a 429 is rate_limited
  *
  * INGEST_SHOPIFY_API_BASE replaces https://{shop} for a fake API (the flow verifier): a URL with
  * {shop} in it, https, or http on the local machine. Errors carry a code only, never a body.
@@ -30,7 +31,10 @@ const SHOP = /^[a-z0-9][a-z0-9-]{0,59}\.myshopify\.com$/;
 const VERSION = /^\d{4}-(01|04|07|10)$/;
 const PER_CALL_MS = 4000;
 const TOKEN_MARGIN_MS = 5 * 60_000;
-const DEFAULT_BUCKET = { max: 1000, restore: 50 };
+// Until the shop's first answer: Shopify's documented restore rate for the standard plan (100 points
+// a second) and a bucket of 1000; every answer replaces both with the shop's own
+const DEFAULT_BUCKET = { max: 1000, restore: 100 };
+const CALL_RESERVE_MS = 1000;
 
 /** The shop's base URL: https://<handle>.myshopify.com, or the verifier's fake. */
 export function shopBase(shop) {
@@ -191,13 +195,13 @@ export function shopifyClient(connection, settings, budget) {
     version,
     /** One GraphQL request: data, or SourceError (throttled, rate_limited, timeout, http_<status>, graphql_error). */
     async query(text, variables = {}, cost = 10) {
+      // The points are taken before any wait, so the estimate can go below zero and a caller after
+      // this one waits behind it (a burst queues instead of every caller seeing the same refill)
       const need = Math.min(cost, bucket.max);
       const wait = waitFor(bucket, need);
-      if (wait > 0) {
-        if (!waits) throw new SourceError("throttled");
-        await sleep(Math.min(wait, 60_000));
-      }
+      if (wait > 0 && !waits && wait + CALL_RESERVE_MS > budget.remaining()) throw new SourceError("throttled");
       take(bucket, need);
+      if (wait > 0) await sleep(Math.min(wait, 60_000));
       const token = await tokenFor(connection, settings, budget.signal(PER_CALL_MS));
       let r;
       try {
