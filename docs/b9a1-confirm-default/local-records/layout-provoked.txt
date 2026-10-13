@@ -7,7 +7,8 @@
   lines: the box is unticked after Enter at open
   Dissolve on Teams: the confirmation does not open on Cancel
   Copy previous week on the planner: the confirmation does not open on Cancel
+  End workday: the confirmation does not open on its confirm button
   1279x800: the desktop-only gate is showing instead of the app
   1279x800: rail is 0px, token says 256
   1279x800: top bar is 0px, token says 56
-layout: FAIL (12 problems)
+layout: FAIL (13 problems)

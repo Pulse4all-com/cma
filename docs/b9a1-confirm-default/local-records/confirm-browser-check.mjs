@@ -84,13 +84,29 @@ async function opensOnCancel(where, p, writes, shot) {
   await opensOnCancel("planner copy previous week", p, writes, "roster-copy-confirm");
   await ctx.close();
 }
-// 4. My day: End workday (E), after clocking in through the API
+// 4. My day: End workday (E) is an ordinary confirmation: it opens on its confirm button, E then Enter
+//    ends the day (after clocking in through the API)
 {
   const r = await fetch(`${base}/api/v1/me/day/start`, { method: "POST", headers: headers("manager") });
   ok("my day: clocked in for the check", r.ok, r.status);
   const { ctx, p, writes } = await page("manager", "/day");
   await p.keyboard.press("e");
-  await opensOnCancel("my day end workday", p, writes, "end-workday-confirm");
+  await p.locator("dialog[open]").waitFor({ timeout: 5000 });
+  const s = await p.evaluate(() => {
+    const d = document.querySelector("dialog[open]");
+    const c = d?.querySelector("button");
+    return { confirmFocused: document.activeElement === c, focused: document.activeElement?.textContent?.trim(),
+             primary: !!c?.className.includes("bg-p4a-deepblue"), keycap: c?.querySelector("kbd")?.textContent?.trim() ?? null };
+  });
+  await p.screenshot({ path: `${shots}/end-workday-confirm-${lang}.png` });
+  ok(`my day end workday: opens on its confirm button (focus on "${s.focused}")`, s.confirmFocused, s);
+  ok("my day end workday: the confirm button is the primary style with the Enter keycap", s.primary && s.keycap === "Enter", s);
+  await p.keyboard.press("Enter");
+  await p.waitForTimeout(1000);
+  // the end goes through a server action (a POST to the page), so the day itself is read back
+  const day = (await (await fetch(`${base}/api/v1/me/day`, { headers: headers("manager") })).json()).data;
+  ok("my day end workday: E then Enter ends the day (status ended, the confirmation closed)",
+     day?.status === "ended" && day?.endedAt !== null && (await p.locator("dialog[open]").count()) === 0, { status: day?.status, writes });
   await ctx.close();
 }
 await b.close();

@@ -14,8 +14,8 @@ PASS  planner copy previous week: opens on Cancel (focus on "CancelEsc")
 PASS  planner copy previous week: the confirm button is the destructive secondary style without a keycap
 PASS  planner copy previous week: Enter at open cancels and writes nothing
 PASS  my day: clocked in for the check
-PASS  my day end workday: opens on Cancel (focus on "Keep workingEsc")
-PASS  my day end workday: the confirm button is the destructive secondary style without a keycap
-PASS  my day end workday: Enter at open cancels and writes nothing
+PASS  my day end workday: opens on its confirm button (focus on "End workdayEnter")
+PASS  my day end workday: the confirm button is the primary style with the Enter keycap
+PASS  my day end workday: E then Enter ends the day (status ended, the confirmation closed)
 
 ALL 19 PASS
