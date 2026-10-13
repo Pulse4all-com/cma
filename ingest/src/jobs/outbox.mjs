@@ -1,11 +1,15 @@
 /**
- * The outbox (DESIGN §4.3a, §5; migration 0007c; Cloud Run job ingest-outbox, every minute): per active
- * connection whose adapter writes contacts (HubSpot today), the due actions are claimed (50 at a
+ * The outbox (DESIGN §4.3a, §5; migration 0007c; Cloud Run job ingest-outbox): per active connection
+ * whose adapter writes contacts (HubSpot today), the due actions are claimed (50 at a
  * time, FOR UPDATE SKIP LOCKED, never two of one contact), the adapter applies them against the
  * contacts' current values and writes the difference in one batch update, and each action is
  * finished as sent with what was written and skipped, or failed with a short code (the claim already
  * set the backoff; the database parks an action after outbox.max_attempts for a person). Claims
  * repeat until fewer than 50 are due or the run's time is up.
+ *
+ * Generic and, since 0008h, unused: the CMA writes nothing back for a store's customers (README
+ * Decision log, 13 October 2026), so nothing enqueues an action today and the job is deployed without
+ * a schedule (docs/ingest/deploy.sh); it is kept for a write-back a later decision configures.
  *
  * The outbox rows are the job's audit (state, attempts, result, error, who resolved a parked one);
  * sync_run has no job value for it (migration 0007's vocabulary). Logs carry counts and codes only.

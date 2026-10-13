@@ -16,7 +16,8 @@
 --      in the caller's rights; nothing else changed (the table's other columns, the reporting view,
 --      the upserts' signatures)
 --   B  behaviour: a customer linked, the same link again writing nothing, relinked to another
---      contact and to another CRM connection, cleared and cleared again; a CRM connection known by
+--      contact and to another CRM connection, cleared, cleared again and an unknown customer's clear
+--      answered; a CRM connection known by
 --      its kind or, unset, by its rows; the refusals (an unknown customer, another store's customer,
 --      an inactive, telephony, empty or the store's own connection, a long id); the link's
 --      both-or-none rule on the table itself; the upserts leaving the link alone; the privacy
@@ -245,13 +246,14 @@ begin
     v_rows := v_rows || array['13', 'B3 relinked to another contact and connection; a CRM connection known by its rows',
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no outcome')];
 
-    -- B4. cleared with a null contact (or an empty one), and cleared again
+    -- B4. cleared with a null contact (or an empty one), cleared again, and a clear for a customer the
+    --     store does not hold (unknown, nothing fails)
     v_txt := cma.set_commerce_customer_contact(v_shop, 'cu-2', null, null) || ',' || cma.set_commerce_customer_contact(v_shop, 'cu-2', v_crm, '')
-             || ',' || cma.set_commerce_customer_contact(v_shop, 'cu-3', null, null);
-    v_ok := v_txt = 'cleared,unlinked,unlinked'
+             || ',' || cma.set_commerce_customer_contact(v_shop, 'cu-3', null, null) || ',' || cma.set_commerce_customer_contact(v_shop, 'cu-404', null, null);
+    v_ok := v_txt = 'cleared,unlinked,unlinked,unknown'
             and exists (select 1 from cma.commerce_customer where connection_id = v_shop and source_id = 'cu-2'
                           and crm_connection_id is null and crm_contact_source_id is null and matched_at is null);
-    v_rows := v_rows || array['14', 'B4 a null contact clears the link; clearing again changes nothing',
+    v_rows := v_rows || array['14', 'B4 a null contact clears the link; clearing again or an unknown customer changes nothing',
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no outcome')];
 
     -- B5. refusals, nothing written: an unknown customer and another store's customer (CMA02), an

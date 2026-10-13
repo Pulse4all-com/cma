@@ -43,7 +43,10 @@
 #   ingest-poll-forms  every minute   HubSpot forms: catalog hourly, submissions until the cursor
 #   ingest-reconcile   02:30          everything modified in the last 26 hours; Aircall: calls of the last 26 hours and the webhook;
 #                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
-#   ingest-outbox      every minute   CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection
+#   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
+#                                     Generic and unused since 0008h (the CMA writes nothing back for commerce), so it is deployed
+#                                     without a schedule, and a schedule an earlier deploy made is paused (gcloud scheduler jobs
+#                                     resume ingest-outbox … turns it on again when a write-back is configured)
 #   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
 # The arguments of an execution are appended to the job's command (node jobs/<name>.mjs).
 #
@@ -239,14 +242,19 @@ if [ "$JOBS" = 1 ]; then
   schedule ingest-sweep "* * * * *"
   schedule ingest-poll-forms "* * * * *"
   schedule ingest-reconcile "$RECONCILE_EVERY"
-  schedule ingest-outbox "* * * * *"
+  # The outbox has nothing to deliver since 0008h: no schedule, and one left by an earlier deploy is paused
+  if gcloud scheduler jobs describe ingest-outbox --project="$PROJECT" --location="$REGION" --format='value(state)' 2>/dev/null | grep -qx ENABLED; then
+    gcloud scheduler jobs pause ingest-outbox --project="$PROJECT" --location="$REGION" --quiet >/dev/null && echo "schedule ingest-outbox: paused (nothing to deliver since 0008h)"
+  else
+    echo "schedule ingest-outbox: none (the job runs only when executed)"
+  fi
 
   echo
   echo "== Studio (${INSTANCE_NAME}), once per database: the service's database user joins cma_app (the jobs run as it too)"
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms, ingest-outbox (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-backfill (manual)"
+  echo "ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
   echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|telephony_call|commerce_customer|commerce_order>,--from,<YYYY-MM-DD>"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"

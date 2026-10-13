@@ -1,8 +1,9 @@
 /**
- * Verifier: the Shopify adapter and the outbox worker end to end (brief B10), against a local
- * PostgreSQL with db/00…57 and a fake Shopify Admin API (token grant and GraphQL, with a cost bucket)
- * and a fake HubSpot (contact search, batch read and batch update). Everything is invented: tenants,
- * shops, ids, secrets, emails (example.com), names, addresses and numbers in the +44 20 0000 xxxx range.
+ * Verifier: the Shopify adapter end to end (briefs B10 and B10.1), against a local PostgreSQL with
+ * db/00…58 and a fake Shopify Admin API (token grant and GraphQL, with a cost bucket) and a fake
+ * HubSpot (contact search, batch read, and a batch update the CMA must never call). Everything is
+ * invented: tenants, shops, ids, secrets, emails (example.com), names, addresses and numbers in the
+ * +44 20 0000 xxxx range.
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
  *   INGEST_FLOW_ADMIN_USER=martin@pulse4all.com node verify/shopify-flow.mjs [--provoke]
@@ -14,21 +15,22 @@
  * tampered body, another tenant's secret: 404 or 401, nothing written, nothing asked of Shopify);
  * another shop's delivery and an unhandled topic ignored without a read; a duplicate delivery written
  * once; a customer read back with its keyed phone hash (the store's market as default region) and
- * matched to its HubSpot contact by email (one search), written back through the outbox; orders first,
- * repeat and renewal (the renewal setting) with their prior count, lines past the first page, the
- * landing page reduced to host, path and UTM, the order's phone hashed before the customer's; an order
- * the search does not hold yet written as unknown and corrected by its next read; a guest order;
- * cancellation and deletion; a customer known by its contact refs or an earlier write-back matched
- * without a search; Email and Phone withheld (null, nothing fails, the match by the ref properties);
- * no contact and two contacts counted, nothing written; the token minted once per shop, again when it
- * nears its expiry; a store without its row refused for the sweep; the outbox job: if_empty keeps an
- * agent's value, slot fills 1 then 2 and stops when both are taken, the totals only with slot 1,
- * always writes only a difference, a field disabled after the enqueue never written, only configured
- * properties read and written, a 429 failing with backoff and then sent, a contact gone failing; a
- * burst of 200 order deliveries answered within Shopify's five seconds, the rest read by the sweep
- * within the cost bucket; reconcile (a change the webhooks missed), the subscription check (a deleted
- * subscription recreated, none left); the backfill resuming after a failure; tenant isolation; and no
- * email, phone number, name, address, note, token or secret in the database rows or the logs.
+ * matched to its HubSpot contact by email (one search), the link kept in the CMA (0008h); orders
+ * first, repeat and renewal (the renewal setting) with their prior count, lines past the first page,
+ * the landing page reduced to host, path and UTM, the order's phone hashed before the customer's; an
+ * order the search does not hold yet written as unknown and corrected by its next read; a guest
+ * order; cancellation and deletion; the link reused by later orders (one batch read, no search); a
+ * customer known by its contact refs matched without a search; Email and Phone withheld (null,
+ * nothing fails, the match by the ref properties); no contact and two contacts counted, no link; the
+ * link cleared when its contact is gone and none or two contacts answer, moved to the survivor of a
+ * merge, cleared by the customer's deletion (also one the CMA never saw) and by the CRM's privacy
+ * deletion of the contact; no outbox row and no write to HubSpot, even with write-back fields
+ * configured; the token minted once per shop, again when it nears its expiry; a store without its
+ * row refused for the sweep; a burst of 200 order deliveries answered within Shopify's five seconds,
+ * the rest read by the sweep within the cost bucket; reconcile (a change the webhooks missed), the
+ * subscription check (a deleted subscription recreated, none left); the backfill resuming after a
+ * failure; tenant isolation; and no email, phone number, name, address, note, token or secret in the
+ * database rows or the logs. The outbox worker itself: verify/outbox-flow.mjs.
  */
 import http from "node:http";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -42,7 +44,7 @@ console.log(`verify/shopify-flow.mjs${PROVOKE ? "  (--provoke: every check must 
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…57; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…58; see the header)`);
     process.exit(2);
   }
 }
@@ -91,7 +93,7 @@ const fake = {
   withhold: { email: false, phone: false }, countLag: new Set(),
   shops: { [SHOP_A]: { client: CLIENT_A, secret: SECRET_A }, [SHOP_N]: { client: CLIENT_A, secret: SECRET_A }, [SHOP_X]: { client: CLIENT_X, secret: SECRET_X } },
   customers: {}, orders: {}, subscriptions: {},
-  hs: { contacts: {}, searches: [], reads: [], updates: [], update429: false },
+  hs: { contacts: {}, searches: [], reads: [], other: [] },
 };
 const shopOf = (o) => o.shop ?? SHOP_A;
 function addCustomer(key, o = {}) {
@@ -220,31 +222,20 @@ function hubspot(req, body, res) {
   if (url.pathname === "/crm/v3/objects/contacts/search") {
     fake.hs.searches.push({ t: Date.now(), body });
     const match = (c) => (body.filterGroups ?? []).some((g) => g.filters.every((f) => (f.propertyName === "email" ? String(c[f.propertyName] ?? "").toLowerCase() === String(f.value).toLowerCase() : String(c[f.propertyName] ?? "") === String(f.value))));
-    const results = Object.entries(contacts).filter(([, c]) => !c.deleted && match(c)).slice(0, body.limit ?? 10).map(([id]) => ({ id, properties: { hs_object_id: id } }));
+    const results = Object.entries(contacts).filter(([, c]) => !c.deleted && !c.mergedInto && match(c)).slice(0, body.limit ?? 10).map(([id]) => ({ id, properties: { hs_object_id: id } }));
     return json(200, { total: results.length, results });
   }
   if (url.pathname === "/crm/v3/objects/contacts/batch/read") {
     fake.hs.reads.push({ t: Date.now(), properties: body.properties, ids: body.inputs.map((i) => i.id) });
-    const found = body.inputs.filter((i) => contacts[i.id] && !contacts[i.id].deleted);
+    // A merged contact answers under the survivor's id (HubSpot keeps the merged id as an alias)
+    const resolve = (id) => (contacts[id]?.mergedInto ? contacts[id].mergedInto : id);
+    const found = body.inputs.filter((i) => contacts[resolve(i.id)] && !contacts[resolve(i.id)].deleted);
     const missing = body.inputs.filter((i) => !found.includes(i)).map((i) => i.id);
-    const results = found.map((i) => ({ id: i.id, properties: Object.fromEntries(body.properties.map((p) => [p, contacts[i.id][p] ?? null])) }));
+    const results = found.map((i) => ({ id: resolve(i.id), properties: Object.fromEntries(body.properties.map((p) => [p, contacts[resolve(i.id)][p] ?? null])) }));
     return json(missing.length ? 207 : 200, { status: "COMPLETE", results, ...(missing.length ? { errors: [{ status: "error", category: "OBJECT_NOT_FOUND", context: { ids: missing } }] } : {}) });
   }
-  if (url.pathname === "/crm/v3/objects/contacts/batch/update") {
-    if (fake.hs.update429) return json(429, { status: "error", message: "rate limited" });
-    fake.hs.updates.push({ t: Date.now(), inputs: body.inputs });
-    const results = [];
-    const missing = [];
-    for (const i of body.inputs) {
-      if (!contacts[i.id] || contacts[i.id].deleted) {
-        missing.push(i.id);
-        continue;
-      }
-      Object.assign(contacts[i.id], i.properties);
-      results.push({ id: i.id, properties: i.properties });
-    }
-    return json(missing.length ? 207 : 200, { status: "COMPLETE", results, ...(missing.length ? { errors: [{ status: "error", category: "OBJECT_NOT_FOUND", context: { ids: missing } }] } : {}) });
-  }
+  // Any other call (a batch update above all) is recorded: the CMA writes nothing to HubSpot (0008h)
+  fake.hs.other.push({ method: req.method, path: url.pathname });
   return json(404, { message: "not found" });
 }
 const fakeServer = http.createServer((req, res) => {
@@ -295,7 +286,8 @@ const { createIngestServer } = await import("../src/server.mjs");
 const { runSweep } = await import("../src/jobs/sweep.mjs");
 const { runReconcile } = await import("../src/jobs/reconcile.mjs");
 const { runBackfill } = await import("../src/jobs/backfill.mjs");
-const { runOutbox } = await import("../src/jobs/outbox.mjs");
+const { servedConnections, contextOf } = await import("../src/core/connection.mjs");
+const { applyUnits } = await import("../src/core/store.mjs");
 const { resetClients } = await import("../src/adapters/shopify/client.mjs");
 const { closeDb } = await import("../src/core/db.mjs");
 const service = createIngestServer();
@@ -342,7 +334,12 @@ const conn = await asAdmin(t1, async () => {
     ["commerce_store", "contact_shopify_store", "always", 1], ["commerce_orders", "contact_shopify_total_orders", "always", 1],
     ["commerce_spent", "contact_shopify_total_spent", "always", 1], ["country", "contact_country", "if_empty", 1],
     ["currency", "contact_currency", "if_empty", 1], ["language", "contact_language", "if_empty", 1]];
+  // Write-back fields as 0007c allowed them: kept configured here to prove the commerce match never uses them
   for (const [field, prop, mode, slot] of wb) await q("select cma.set_writeback_field($1, $2, $3, $4, true, $5::smallint)", [h.connection_id, field, prop, mode, slot]);
+  // The contact properties holding a Shopify customer id (connection fields, ref system shopify): the ref match
+  await q("select cma.set_connection_field($1, 'contact', 'ref', 'shopify', 'contact_shopify_id_1', 1::smallint)", [h.connection_id]);
+  await q("select cma.set_connection_field($1, 'contact', 'ref', 'shopify', 'contact_shopify_id_2', 2::smallint)", [h.connection_id]);
+  await q("select cma.set_connection_kind($1, 'crm')", [h.connection_id]);
   return { h: h.connection_id, a: a.connection_id, aKey: a.key, n: n.connection_id, nKey: n.key, hKey: h.key };
 });
 const connX = await asAdmin(t2, async () => {
@@ -352,7 +349,7 @@ const connX = await asAdmin(t2, async () => {
   await q("select cma.upsert_commerce_store($1, $2, 'Flow store X', 'GB', 'GBP', 'Europe/London')", [x.connection_id, `flow-${RUN}-x`]);
   return { x: x.connection_id, xKey: x.key };
 });
-// The HubSpot contacts (invented). H2 has an agent's country and another customer in slot 1; H6 both slots taken
+// The HubSpot contacts (invented); 5100000003 holds C3's id in a ref property
 Object.assign(fake.hs.contacts, {
   "5100000001": { email: "test1@example.com", contact_netsuite_id: "NS-1" },
   "5100000002": { email: "test2@example.com", contact_country: "NL", contact_shopify_id_1: "7199999999" },
@@ -384,11 +381,14 @@ const restOrder = (id) => ({ id: Number(id), admin_graphql_api_id: gidOf("Order"
   shipping_address: { address1: STREET, phone: ORDER_PHONE } });
 const count = async (table, c = conn.a) => Number((await q(`select count(*) as n from cma.${table} where connection_id = $1`, [c]))[0].n);
 const eventsOf = async (c = conn.a) => q("select event_key, object_type, object_id, kind, status, error, raw from cma.ingest_event where connection_id = $1 order by recorded_at, event_key", [c]);
-const customerRow = async (id, c = conn.a) => (await q("select state, locale, orders_count, amount_spent, amount_currency, phone_hash, source_deleted_at, raw from cma.commerce_customer where connection_id = $1 and source_id = $2", [c, id]))[0] ?? null;
+const customerRow = async (id, c = conn.a) => (await q(`select state, locale, orders_count, amount_spent, amount_currency, phone_hash, source_deleted_at, raw,
+  crm_connection_id, crm_contact_source_id, matched_at from cma.commerce_customer where connection_id = $1 and source_id = $2`, [c, id]))[0] ?? null;
+const linkOf = async (id) => { const r = await customerRow(id); return r ? [r.crm_connection_id, r.crm_contact_source_id] : null; };
 const orderRow = async (id, c = conn.a) => (await q(`select order_name, customer_source_id, is_test, total_amount, source_name, app_ref, landing_host, landing_path, utm, referring_host, tags,
   prior_orders_count, prior_count_exact, order_kind, phone_hash, cancelled_at, cancel_reason, source_deleted_at, raw from cma.commerce_order where connection_id = $1 and source_id = $2`, [c, id]))[0] ?? null;
 const linesOf = async (id) => (await q("select line_source_id, sku, product_ref, variant_ref, quantity, unit_price from cma.commerce_order_line where connection_id = $1 and order_source_id = $2 order by line_source_id", [conn.a, id]));
-const outbox = async () => q("select target_id, payload, reason, status, error, result from cma.outbox_action where connection_id = $1 order by id", [conn.h]);
+const outboxRows = async (t = t1) => Number((await q("select count(*) as n from cma.outbox_action where tenant_id = $1", [t]))[0].n);
+const readsOf = (since, id) => fake.hs.reads.filter((r) => r.t >= since && (!id || r.ids.includes(id)));
 const gql = (since, op = null, shop = SHOP_A) => fake.requests.filter((r) => r.t >= since && r.shop === shop && r.path.endsWith("graphql.json") && (!op || r.op === op));
 const mark = () => Date.now();
 const forceDue = (c = conn.a) => q("update cma.ingest_event set next_attempt_at = now() where connection_id = $1 and status = 'failed'", [c]);
@@ -419,7 +419,7 @@ expect("another shop's domain and an unhandled topic, correctly signed → 200",
 const ignored = (await eventsOf()).filter((e) => e.status === "ignored").map((e) => `${e.raw.topic}:${e.raw.ignored}`).sort();
 expect("…recorded as ignored (portal_mismatch, event_not_handled), nothing read", [ignored, gql(t0).length], [["customers/create:portal_mismatch", "products/update:event_not_handled"], 0], [[], 1]);
 
-// ---- C. A customer: read back, hashed, matched, written back ------------------------------------------
+// ---- C. A customer: read back, hashed, matched, the link kept in the CMA ---------------------------------
 t0 = mark();
 const first = await deliver(conn.aKey, "customers/create", payload1);
 expect("customers/create → 200", first.status, 200, 401);
@@ -431,10 +431,11 @@ expect("…the customer: state, locale, count, amount, currency", [cu?.state, cu
 expect("…its phone as HMAC(pepper, E.164), the store's market as default region", cu?.phone_hash, H(PEPPER1, "+442000000101"), null);
 expect("…one token minted for the shop by the client credentials grant, one GraphQL read at 2026-10", [fake.mints[SHOP_A], gql(t0).length, gql(t0)[0]?.version], [1, 1, "2026-10"], [2, 2, "2025-10"]);
 expect("…one HubSpot search, by the email in lower case", [fake.hs.searches.length, fake.hs.searches[0]?.body.filterGroups[0].filters[0]], [1, { propertyName: "email", operator: "EQ", value: "test1@example.com" }], [0, null]);
-let ob = await outbox();
-expect("…a pending write-back for contact 5100000001 with the customer's values", [ob.length, ob[0]?.target_id, ob[0]?.status, sorted(ob[0]?.payload)],
-  [1, "5100000001", "pending", sorted({ commerce_ref: C.c1, commerce_store: HANDLE_A, commerce_orders: 0, commerce_spent: 0, country: "GB", currency: "GBP", language: "en" })], [0, null, null, null]);
-expect("…its reason the store connection and the customer id", ob[0]?.reason, `commerce_customer:${conn.a}:${C.c1}`, null);
+expect("…linked in the CMA to contact 5100000001 of the HubSpot connection, with the time of the match", [cu?.crm_connection_id, cu?.crm_contact_source_id, Boolean(cu?.matched_at)],
+  [conn.h, "5100000001", true], [null, null, false]);
+const matched1 = cu?.matched_at?.toISOString();
+expect("…counted match_one and link_linked in the processed log", [sumCounts(processedLog(t0), "match_one"), sumCounts(processedLog(t0), "link_linked")], [1, 1], [0, 0]);
+expect("…no outbox row and nothing asked of HubSpot but the search", [await outboxRows(), fake.hs.reads.length, fake.hs.other.length], [0, 0, 0], [1, 1, 1]);
 t0 = mark();
 const again = await deliver(conn.aKey, "customers/create", payload1, { webhookId: first.webhookId });
 expect("the same delivery again (a Shopify retry) → 200, no new event, no read", [again.status, (await eventsOf()).length, gql(t0).length], [200, 3, 0], [500, 4, 1]);
@@ -452,17 +453,21 @@ expect("…the landing page as host and path, UTM from the visit, the referrer's
   ["shop.example.com", "/products/aed", sorted({ source: "google", medium: "cpc", campaign: "autumn" }), "www.google.com"], []);
 expect("…the source name, the app id, tags de-duplicated, amounts", [or?.source_name, or?.app_ref, or?.tags, or?.total_amount], ["web", "580111", ["aed"], "120.00"], []);
 expect("…the order's own phone hashed first (national, GB default region)", or?.phone_hash, H(PEPPER1, "+442000000201"), H(PEPPER1, "+442000000101"));
-expect("…the customer upserted with it (count 1) and no second search: the earlier write-back knows its contact", [(await customerRow(C.c1))?.orders_count, fake.hs.searches.length], [1, 1], [0, 2]);
-ob = await outbox();
-expect("…the newer write-back supersedes the pending one (totals 1 order, 120.00)", [ob.map((a) => a.status), ob.at(-1)?.payload.commerce_orders, ob.at(-1)?.payload.commerce_spent], [["superseded", "pending"], 1, 120], [["pending"], 0, 0]);
+cu = await customerRow(C.c1);
+expect("…the customer upserted with it (count 1) and no second search: its link is reused", [cu?.orders_count, fake.hs.searches.length], [1, 1], [0, 2]);
+expect("…the linked contact checked by one batch read of its id only (hs_object_id), the link and its time unchanged",
+  [readsOf(t0).map((r) => [r.ids, r.properties]), cu?.crm_contact_source_id, cu?.matched_at?.toISOString()], [[[["5100000001"], ["hs_object_id"]]], "5100000001", matched1], [[], null, null]);
+expect("…counted match_known, nothing written to the link", [sumCounts(processedLog(t0), "match_known"), Object.keys(processedLog(t0).at(-1)?.upserts ?? {}).filter((k) => k.startsWith("link_"))], [1, []], [0, ["link_linked"]]);
 const O2 = addOrder("7300000002", { customerId: C.c1 });
 await deliver(conn.aKey, "orders/create", restOrder(O2));
 or = await orderRow(O2);
 expect("a second order of C1 → repeat, prior 1, the customer's phone hashed (no order phone)", [or?.order_kind, or?.prior_orders_count, or?.phone_hash], ["repeat", 1, H(PEPPER1, "+442000000101")], ["first", 0, null]);
+expect("…still no second search for C1", fake.hs.searches.length, 1, 2);
 addCustomer("c2");
 const O3 = addOrder("7300000003", { customerId: C.c2, sourceName: "subscription_contract", appId: "580222" });
 await deliver(conn.aKey, "orders/create", restOrder(O3));
 expect("an order of the renewal source name → renewal", (await orderRow(O3))?.order_kind, "renewal", "first");
+expect("…its new customer C2 linked by email with the order (contact 5100000002)", await linkOf(C.c2), [conn.h, "5100000002"], null);
 const O4 = addOrder("7300000004", { customerId: C.c2 });
 fake.countLag.add(O4);
 await deliver(conn.aKey, "orders/create", restOrder(O4));
@@ -488,9 +493,10 @@ expect("orders/delete → deleted without a read, its hash cleared", [Boolean(or
 // ---- E. Known contacts, withheld fields, no match, two matches ------------------------------------------
 addCustomer("c7");
 let searches = fake.hs.searches.length;
+t0 = mark();
 await deliver(conn.aKey, "customers/create", restCustomer("c7"));
-ob = await outbox();
-expect("a customer whose id a held contact's refs hold → that contact, no search", [ob.at(-1)?.target_id, fake.hs.searches.length - searches], ["5100000007", 0], [null, 1]);
+expect("a customer whose id a held contact's refs hold → linked to that contact, no search", [await linkOf(C.c7), fake.hs.searches.length - searches, sumCounts(processedLog(t0), "match_ref")],
+  [[conn.h, "5100000007"], 0, 1], [null, 1, 0]);
 fake.withhold = { email: true, phone: true };
 addCustomer("c3");
 searches = fake.hs.searches.length;
@@ -499,22 +505,23 @@ const withheld = await deliver(conn.aKey, "customers/create", restCustomer("c3")
 cu = await customerRow(C.c3);
 expect("Email and Phone withheld → 200, processed, no hash (nothing fails)", [withheld.status, (await eventsOf()).find((e) => e.event_key === `sh:${withheld.webhookId}`)?.status, cu?.phone_hash], [200, "processed", null], [200, "failed", "x"]);
 const refSearch = fake.hs.searches.at(-1)?.body.filterGroups.map((g) => g.filters[0]);
-expect("…the match by the commerce_ref properties instead (one search, both slots)", [fake.hs.searches.length - searches, refSearch], [1, [
+expect("…the match by the contact ref properties of the HubSpot connection instead (one search, both slots)", [fake.hs.searches.length - searches, refSearch], [1, [
   { propertyName: "contact_shopify_id_1", operator: "EQ", value: C.c3 }, { propertyName: "contact_shopify_id_2", operator: "EQ", value: C.c3 }]], [0, []]);
-expect("…written back to the contact holding the id", (await outbox()).at(-1)?.target_id, "5100000003", null);
+expect("…linked to the contact holding the id", [cu?.crm_connection_id, cu?.crm_contact_source_id], [conn.h, "5100000003"], [null, null]);
 fake.withhold = { email: false, phone: false };
-const before = (await outbox()).length;
 t0 = mark();
 addCustomer("c4");
 addCustomer("c5");
 await deliver(conn.aKey, "customers/create", restCustomer("c4"));
 await deliver(conn.aKey, "customers/create", restCustomer("c5"));
-expect("no contact for the email, and two contacts → nothing written back", (await outbox()).length - before, 0, 2);
-expect("…counted as match_none and match_several in the processed log (no ids)", [sumCounts(processedLog(t0), "match_none"), sumCounts(processedLog(t0), "match_several")], [1, 1], [0, 0]);
+expect("no contact for the email, and two contacts → no link", [await linkOf(C.c4), await linkOf(C.c5)], [[null, null], [null, null]], [[conn.h, "5100000051"], [conn.h, "5100000051"]]);
+expect("…counted as match_none and match_several in the processed log (no ids), nothing to clear (link_unlinked)",
+  [sumCounts(processedLog(t0), "match_none"), sumCounts(processedLog(t0), "match_several"), sumCounts(processedLog(t0), "link_unlinked")], [1, 1, 2], [0, 0, 0]);
 addCustomer("c6");
 await deliver(conn.aKey, "customers/create", restCustomer("c6"));
 addCustomer("c2", { updatedAt: nowIso() });
 await deliver(conn.aKey, "customers/update", restCustomer("c2"));
+expect("C6 linked by email; C2 still linked after its update", [await linkOf(C.c6), await linkOf(C.c2)], [[conn.h, "5100000006"], [conn.h, "5100000002"]], [null, null]);
 
 // ---- F. The token: cached for 24 hours, minted again near its expiry --------------------------------
 expect("one token minted for every read of the shop so far", fake.mints[SHOP_A], 1, 2);
@@ -531,46 +538,51 @@ const noStore = await deliver(conn.nKey, "customers/create", { ...restCustomer("
 const nEvent = (await eventsOf(conn.n))[0];
 expect("a connection without its store row: 200, the event failed store_not_configured for the sweep", [noStore.status, nEvent?.status, nEvent?.error], [200, "failed", "store_not_configured"], [200, "processed", null]);
 
-// ---- H. The outbox job --------------------------------------------------------------------------------
-await asAdmin(t1, () => q("select cma.set_writeback_field($1, 'currency', 'contact_currency', 'if_empty', false)", [conn.h]));
-fake.hs.update429 = true;
+// ---- H. The link over time: a contact gone or merged, a customer deleted, the CRM's privacy deletion -----
+expect("C8 linked by email when created, known at its update (one search in all)", [await linkOf(C.c8), fake.hs.searches.filter((x) => x.body.filterGroups[0].filters[0].value === "later@example.com").length],
+  [[conn.h, "5100000008"], 1], [null, 2]);
+fake.hs.contacts["5100000006"].deleted = true;
+Object.assign(fake.hs.contacts, { "5100000061": { email: "full@example.com" }, "5100000062": { email: "Full@Example.com" } });
+fake.customers[C.c6].updatedAt = nowIso();
 t0 = mark();
-const o1 = await runOutbox({ connectionId: conn.h });
-ob = await outbox();
-expect("HubSpot answering 429 on the batch update → the actions failed rate_limited, attempted again later", [o1.sent, ob.filter((a) => a.status === "failed").every((a) => a.error === "rate_limited"),
-  (await q("select bool_and(next_attempt_at > now()) as later from cma.outbox_action where connection_id = $1 and status = 'failed'", [conn.h]))[0].later], [0, true, true], [7, false, false]);
-fake.hs.update429 = false;
-await q("update cma.outbox_action set next_attempt_at = now() where connection_id = $1 and status = 'failed'", [conn.h]);
-const o2 = await runOutbox({ connectionId: conn.h });
-const hs = fake.hs.contacts;
-expect("…then sent", [o2.actionsFailed, (await outbox()).filter((a) => a.status === "sent").length], [0, 6], [6, 0]);
-expect("H1 (empty): id in slot 1, store, totals, country and language; currency disabled after the enqueue never written",
-  [hs["5100000001"].contact_shopify_id_1, hs["5100000001"].contact_shopify_store, hs["5100000001"].contact_shopify_total_orders, hs["5100000001"].contact_shopify_total_spent,
-    hs["5100000001"].contact_country, hs["5100000001"].contact_language, hs["5100000001"].contact_currency],
-  [C.c1, HANDLE_A, "2", "240", "GB", "en", undefined], [null, null, null, null, null, null, "GBP"]);
-expect("H2: an agent's country kept (if_empty), the id in slot 2, no store or totals (not slot 1)",
-  [hs["5100000002"].contact_country, hs["5100000002"].contact_shopify_id_1, hs["5100000002"].contact_shopify_id_2, hs["5100000002"].contact_shopify_store, hs["5100000002"].contact_shopify_total_orders],
-  ["NL", "7199999999", C.c2, undefined, undefined], ["GB", C.c2, null, HANDLE_A, "2"]);
-expect("H6: both slots taken → no id, no totals; the result says slots_full",
-  [hs["5100000006"].contact_shopify_id_1, hs["5100000006"].contact_shopify_id_2, hs["5100000006"].contact_shopify_total_orders, (await outbox()).find((a) => a.target_id === "5100000006")?.result?.ref],
-  ["7199999997", "7199999998", undefined, "slots_full"], [C.c6, null, "0", "written"]);
-expect("H3 (found by its ref): slot 1 already holds the id → present, totals written", [(await outbox()).find((a) => a.target_id === "5100000003")?.result?.ref, hs["5100000003"].contact_shopify_store], ["present", HANDLE_A], ["written", undefined]);
-const allowed = ["contact_shopify_id_1", "contact_shopify_id_2", "contact_shopify_store", "contact_shopify_total_orders", "contact_shopify_total_spent", "contact_country", "contact_language"];
-expect("only the enabled write-back properties read and written (never contact_netsuite_id or email)", [
-  fake.hs.reads.every((r) => r.properties.every((p) => allowed.includes(p))),
-  fake.hs.updates.every((u) => u.inputs.every((i) => Object.keys(i.properties).every((p) => allowed.includes(p)))),
-  hs["5100000001"].contact_netsuite_id], [true, true, "NS-1"], [false, false, null]);
-const writesBefore = fake.hs.updates.length;
-const O6 = addOrder("7300000006", { customerId: C.c1 });
-await deliver(conn.aKey, "orders/create", restOrder(O6));
-await runOutbox({ connectionId: conn.h });
-const lastWrite = fake.hs.updates.slice(writesBefore).flatMap((u) => u.inputs).find((i) => i.id === "5100000001");
-expect("a third order of C1: always writes only the difference (totals), not what is unchanged", Object.keys(lastWrite?.properties ?? {}).sort(), ["contact_shopify_total_orders", "contact_shopify_total_spent"], ["contact_shopify_store"]);
-hs["5100000008"].deleted = true;
-const O7 = addOrder("7300000007", { customerId: C.c8 });
-await deliver(conn.aKey, "orders/create", restOrder(O7));
-await runOutbox({ connectionId: conn.h });
-expect("a contact gone from HubSpot → failed contact_not_found", (await outbox()).findLast((a) => a.target_id === "5100000008")?.error, "contact_not_found", null);
+await deliver(conn.aKey, "customers/update", restCustomer("c6"));
+expect("C6's contact deleted in HubSpot and two contacts now holding its email → the link cleared at the next read", await linkOf(C.c6), [null, null], [conn.h, "5100000006"]);
+expect("…counted match_contact_gone, match_several and link_cleared",
+  [sumCounts(processedLog(t0), "match_contact_gone"), sumCounts(processedLog(t0), "match_several"), sumCounts(processedLog(t0), "link_cleared")], [1, 1, 1], [0, 0, 0]);
+fake.hs.contacts["5100000008"].deleted = true;
+fake.customers[C.c8].updatedAt = nowIso();
+t0 = mark();
+await deliver(conn.aKey, "customers/update", restCustomer("c8"));
+expect("C8's contact deleted and no other contact holding its email → the link cleared (match_none)",
+  [await linkOf(C.c8), sumCounts(processedLog(t0), "match_none"), sumCounts(processedLog(t0), "link_cleared")], [[null, null], 1, 1], [[conn.h, "5100000008"], 0, 0]);
+fake.hs.contacts["5100000009"] = { email: "test2@example.com" };
+fake.hs.contacts["5100000002"].mergedInto = "5100000009";
+const matched2 = (await customerRow(C.c2))?.matched_at?.toISOString();
+const O8 = addOrder("7300000008", { customerId: C.c2 });
+t0 = mark();
+await deliver(conn.aKey, "orders/create", restOrder(O8));
+cu = await customerRow(C.c2);
+expect("C2's contact merged into another, then an order of C2 → relinked to the survivor (by email), a new match time",
+  [cu?.crm_contact_source_id, cu?.matched_at?.toISOString() !== matched2, sumCounts(processedLog(t0), "match_contact_gone"), sumCounts(processedLog(t0), "link_relinked")],
+  ["5100000009", true, 1, 1], ["5100000002", false, 0, 0]);
+t0 = mark();
+searches = fake.hs.searches.length;
+const del7 = await deliver(conn.aKey, "customers/delete", { id: Number(C.c7) });
+cu = await customerRow(C.c7);
+expect("customers/delete → the customer marked deleted and its link cleared, nothing read from Shopify or HubSpot",
+  [del7.status, Boolean(cu?.source_deleted_at), cu?.crm_contact_source_id, gql(t0).length, readsOf(t0).length + fake.hs.searches.length - searches, sumCounts(processedLog(t0), "link_cleared")],
+  [200, true, null, 0, 0, 1], [200, false, "5100000007", 1, 1, 0]);
+t0 = mark();
+const delU = await deliver(conn.aKey, "customers/delete", { id: 7100000099 });
+expect("…a deletion of a customer the CMA never held → processed, nothing to clear (link_unknown)",
+  [(await eventsOf()).find((e) => e.event_key === `sh:${delU.webhookId}`)?.status, sumCounts(processedLog(t0), "link_unknown")], ["processed", 1], ["failed", 0]);
+const [hConn] = await servedConnections({ connectionId: conn.h });
+const forget = await applyUnits(contextOf(hConn), conn.h, [{ eventIds: [], status: "processed", writes: { forgets: ["5100000003"] } }]);
+expect("the CRM's privacy deletion of contact 5100000003 (the HubSpot adapter's forget) → C3's link cleared, C1's kept",
+  [await linkOf(C.c3), await linkOf(C.c1), forget.counts.linksForgotten], [[null, null], [conn.h, "5100000001"], 1], [[conn.h, "5100000003"], [null, null], 0]);
+expect("no outbox row in tenant one and nothing written to HubSpot, with eight write-back fields enabled on its CRM connection", [
+  Number((await q("select count(*) as n from cma.writeback_field where connection_id = $1 and enabled", [conn.h]))[0].n), await outboxRows(), fake.hs.other,
+  fake.hs.reads.every((r) => r.properties.join() === "hs_object_id")], [8, 0, [], true], [0, 1, [{ method: "POST", path: "/crm/v3/objects/contacts/batch/update" }], false]);
 
 // ---- I. A burst of 200 order deliveries (a renewal run) ------------------------------------------------
 const BURST = 200;
@@ -654,9 +666,11 @@ expect("…backfill of another object is refused", await runBackfill({ connectio
 // ---- L. Tenant isolation ------------------------------------------------------------------------------------
 fake.customers["7700000001"] = { id: "7700000001", shop: SHOP_X, state: "ENABLED", locale: "nb-NO", email: "test1@example.com", phone: "+44 20 0000 0109", createdAt: nowIso(-60), updatedAt: nowIso(-30) };
 const rx = await deliver(connX.xKey, "customers/create", { id: 7700000001, email: "test1@example.com" }, { shop: SHOP_X, secret: SECRET_X });
-const rowX = (await q("select tenant_id, phone_hash, locale from cma.commerce_customer where connection_id = $1 and source_id = '7700000001'", [connX.x]))[0];
+const rowX = (await q("select tenant_id, phone_hash, locale, crm_contact_source_id from cma.commerce_customer where connection_id = $1 and source_id = '7700000001'", [connX.x]))[0];
 expect("tenant two's shop with its own secret → its row in tenant two, hashed with its own pepper", [rx.status, rowX?.tenant_id, rowX?.phone_hash], [200, t2, H(PEPPER2, "+442000000109")], [401, t1, H(PEPPER1, "+442000000109")]);
-expect("…no write-back without a CRM connection on that store", Number((await q("select count(*) as n from cma.outbox_action where tenant_id = $1", [t2]))[0].n), 0, 1);
+const processedX = logs.map((l) => JSON.parse(l)).filter((l) => l.message === "processed" && l.connection === connX.x);
+expect("…no link without a CRM connection on that store (match_not_configured), no outbox row", [rowX?.crm_contact_source_id, sumCounts(processedX, "match_not_configured"), await outboxRows(t2)],
+  [null, 1, 0], ["5100000001", 0, 1]);
 expect("tenant one sees none of tenant two's customers or events", await asAdmin(t1, async () => [
   Number((await q("select count(*) as n from cma.commerce_customer where connection_id = $1", [connX.x]))[0].n),
   Number((await q("select count(*) as n from cma.ingest_event where connection_id = $1", [connX.x]))[0].n)]), [0, 0], [1, 1]);
@@ -682,7 +696,8 @@ expect("no name, address, note, client secret or token in the database", /Invent
 const logText = logs.join("\n");
 expect("the logs hold no email, number, name, token or secret", [emails.some((e) => logText.includes(e)), numbers.some((n) => logText.includes(n)), /Invented|shpat_fixture|fixture-shopify-client-secret|fixture-hubspot-token/.test(logText)],
   [false, false, false], [true, true, true]);
-expect("the logs hold the webhook, processed, outbox, sweep, reconcile and backfill lines", ["webhook", "processed", "outbox", "sweep", "reconcile", "backfill"].every((m) => logs.some((l) => JSON.parse(l).message === m)), true, false);
+expect("the logs hold the webhook, processed, sweep, reconcile and backfill lines", ["webhook", "processed", "sweep", "reconcile", "backfill"].every((m) => logs.some((l) => JSON.parse(l).message === m)), true, false);
+expect("across the whole run: no outbox row in either tenant, no write to HubSpot", [await outboxRows(t1) + await outboxRows(t2), fake.hs.other.length], [0, 0], [1, 1]);
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone)
 for (const c of [conn.a, conn.n, conn.h]) await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [c]));

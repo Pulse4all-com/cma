@@ -7,7 +7,7 @@
  *   node verify/shopify-mapping.mjs --provoke   every check must FAIL
  */
 import {
-  TOPICS, SUBSCRIPTION_TOPICS, mapDelivery, mapEvents, idOf, gid, languageOf, priorCountOf, customerFromNode, orderFromNode, lineFromNode, utmOf, writebackValues,
+  TOPICS, SUBSCRIPTION_TOPICS, mapDelivery, mapEvents, idOf, gid, priorCountOf, customerFromNode, orderFromNode, lineFromNode, utmOf,
 } from "../src/adapters/shopify/map.mjs";
 import { countsQuery, atOrAfterSearch, ORDER_FIELDS, CUSTOMER_FIELDS } from "../src/adapters/shopify/read.mjs";
 import { listQuery, SUBSCRIPTION_CREATE } from "../src/adapters/shopify/reconcile.mjs";
@@ -97,12 +97,6 @@ expect("…the last visit when there is no first one", orderFromNode({ ...node, 
 expect("…a guest order: no customer id", orderFromNode({ ...node, customer: null }, { pepper: "p", region: "GB" }).customerId, null, "7100000001");
 expect("a line without an id is left out", lineFromNode({ sku: "x" }), null, {});
 expect("UTM: empty without a visit", utmOf(null), {}, { source: "x" });
-
-// ---- The write-back values and the language -----------------------------------------------------------------
-expect("write-back values: the customer's id, the store's handle, market and currency, counts, language", writebackValues(customerNode, { handle: "flow-a", market: "NO", currency: "NOK" }),
-  { commerce_ref: "7100000001", commerce_store: "flow-a", commerce_orders: 4, commerce_spent: "480.5", country: "NO", currency: "NOK", language: "no" }, {});
-expect("languages: en-GB → en, nb and nn → no, de → de, nonsense → null", [languageOf("en-GB"), languageOf("nb-NO"), languageOf("nn"), languageOf("de"), languageOf("x1"), languageOf(null)],
-  ["en", "no", "no", "de", null, null], ["en-gb", "nb", "nn", "de", "x1", null]);
 
 // ---- The queries ask for no more than they need ---------------------------------------------------------------
 expect("the order query asks for no name, email, address or note (the order phone and the customer's phone and email are read, hashed or used in memory)",

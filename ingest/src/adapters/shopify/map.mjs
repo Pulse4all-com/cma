@@ -15,7 +15,7 @@
  *
  * Objects: the GraphQL read-back (read.mjs) answers customers and orders; they become items of
  * cma.ingest_upsert_commerce_customers and _orders. The customer's email is never mapped (it is
- * used in memory by the match, match.mjs); phone numbers become the keyed hash of DESIGN §6.3 (the
+ * used in memory by the match, match.mjs, whose result is the contact link of 0008h); phone numbers become the keyed hash of DESIGN §6.3 (the
  * order's phone, else its customer's, the store's market as the default region) and are dropped.
  * Never kept: names, emails, phone numbers, addresses, notes, the landing page's query beyond the
  * five UTM tags, the referrer beyond its host.
@@ -128,16 +128,6 @@ function countOf(value) {
   if (value === undefined || value === null || value === "") return null;
   const s = String(value);
   return /^\d{1,9}$/.test(s) ? Number(s) : null;
-}
-
-/**
- * The language of a Shopify locale as ISO 639-1 lower case (en-GB → en). Norwegian Bokmål and
- * Nynorsk (nb, nn) become no, the code the CRM's language property uses (VENDOR_SETUP §1.1).
- */
-export function languageOf(locale) {
-  const m = /^([a-z]{2})(?:[-_][A-Za-z0-9]+)*$/.exec(String(locale ?? "").trim().toLowerCase());
-  if (!m) return null;
-  return m[1] === "nb" || m[1] === "nn" ? "no" : m[1];
 }
 
 /** The keyed hash of the first number that normalises, in the given order; null when none does or no pepper. */
@@ -271,17 +261,4 @@ export function orderFromNode(node, { pepper, region, prior = { prior: null, exa
   };
   if (Array.isArray(lines)) item.lines = lines.map(lineFromNode).filter(Boolean).slice(0, 500);
   return item;
-}
-
-/** The values the CRM write-back carries for one customer (DESIGN §4.3a), from the customer and the store. */
-export function writebackValues(customer, store) {
-  return {
-    commerce_ref: idOf(customer?.id),
-    commerce_store: store?.handle ?? null,
-    commerce_orders: countOf(customer?.numberOfOrders),
-    commerce_spent: amountOf(customer?.amountSpent),
-    country: store?.market ?? null,
-    currency: store?.currency ?? null,
-    language: languageOf(customer?.locale),
-  };
 }

@@ -22,8 +22,8 @@
 --                      contact's customers
 --   setting it         cma.set_commerce_customer_contact(store connection, customer id, CRM
 --                      connection, contact id) (ingest.write): links, relinks or, with a null contact,
---                      clears; answers linked, relinked, unchanged, cleared or unlinked. An unchanged
---                      link writes nothing (matched_at stays the time of the match)
+--                      clears; answers linked, relinked, unchanged, cleared, unlinked or unknown. An
+--                      unchanged link writes nothing (matched_at stays the time of the match)
 --   forgetting it      cma.forget_commerce_contact_links(CRM connection, contact id) (ingest.write):
 --                      clears every customer link to that contact, for the CRM's privacy deletion of
 --                      the contact (the ingest service calls it next to cma.ingest_contact_forget)
@@ -89,11 +89,13 @@ create index if not exists commerce_customer_crm_contact_idx
 -- 2. Setting and clearing it (ingest.write)
 -- ---------------------------------------------------------------------------------------------
 -- Links a store's customer to a contact of a CRM connection of the same tenant, or clears the link
--- with a null contact (the CRM connection is then not needed). The customer must exist in the store
--- connection (CMA02). The CRM connection must be active and a CRM connection: its kind is crm, or its
--- kind is unset and its rows are a CRM's only (0008e); another connection is CMA04. Answers linked (no
--- link before), relinked (another contact or connection before), unchanged (nothing written),
--- cleared, or unlinked (nothing to clear).
+-- with a null contact (the CRM connection is then not needed). To link, the customer must exist in
+-- the store connection (CMA02) and the CRM connection must be active and a CRM connection: its kind
+-- is crm, or its kind is unset and its rows are a CRM's only (0008e); another connection is CMA04.
+-- Answers linked (no link before), relinked (another contact or connection before), unchanged
+-- (nothing written), cleared, unlinked (nothing to clear) or unknown (a clear for a customer the
+-- store connection does not hold: nothing to clear either, so a deletion the CMA never saw the
+-- customer of does not fail).
 create or replace function cma.set_commerce_customer_contact(p_store_connection_id uuid, p_customer_id text,
                                                              p_crm_connection_id uuid, p_contact_id text)
 returns text
@@ -110,6 +112,9 @@ begin
   select * into v_row from cma.commerce_customer cc
   where cc.tenant_id = v_tenant and cc.connection_id = p_store_connection_id and cc.source_id = btrim(p_customer_id)
   for update;
+  if v_row.id is null and v_contact is null then
+    return 'unknown';
+  end if;
   if v_row.id is null then
     raise exception 'no customer % in store connection %', p_customer_id, p_store_connection_id using errcode = 'CMA02';
   end if;
