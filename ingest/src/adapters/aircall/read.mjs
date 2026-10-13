@@ -64,6 +64,7 @@ export function perMinuteOf(settings) {
 }
 
 const paces = new Map(); // connection id → { perMinute, pace } (per process)
+const holds = new Map(); // connection id → until when Aircall's reset holds it after a 429 (ms)
 
 /** The connection's pace in this process, rebuilt (keeping its next slot) when the setting changes. */
 export function paceOf(connectionId, perMinute) {
@@ -111,8 +112,9 @@ export function aircallClient(credentials, connection, settings, budget) {
   const headers = { authorization: `Basic ${Buffer.from(`${credentials.api_id}:${credentials.api_token}`).toString("base64")}` };
   const pace = paceOf(connection.connectionId, perMinuteOf(settings));
   const call = async (method, path, body) => {
-    // A deadline (the webhook's budget) never waits past itself for a slot: the sweep does the rest
-    if (pace.delay() + 200 > budget.remaining()) throw new SourceError("paced");
+    // A deadline (the webhook's budget) never waits past itself for a slot: the sweep does the rest.
+    // While Aircall's reset after a 429 holds the connection, that is the reason given
+    if (pace.delay() + 200 > budget.remaining()) throw new SourceError((holds.get(connection.connectionId) ?? 0) > Date.now() ? "rate_limited" : "paced");
     await pace.wait();
     try {
       return await requestJson(`${base}${path}`, { method, headers, body, signal: budget.signal(PER_CALL_MS) });
@@ -120,6 +122,7 @@ export function aircallClient(credentials, connection, settings, budget) {
       if (err instanceof SourceError && err.code === "rate_limited") {
         const at = resetAt(err.rateLimit);
         pace.holdUntil(at);
+        holds.set(connection.connectionId, at);
         warn("aircall rate limited", {
           connection: connection.connectionId, code: "rate_limited",
           limit: Number(err.rateLimit?.["x-aircallapi-limit"]) || null, remaining: Number(err.rateLimit?.["x-aircallapi-remaining"] ?? NaN),
@@ -334,4 +337,5 @@ export async function readBack({ connection, config, events, store, budget, inli
 /** Test aid: forget the paces of this process. */
 export function resetPaces() {
   paces.clear();
+  holds.clear();
 }
