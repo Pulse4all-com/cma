@@ -503,17 +503,28 @@ Expected: events `processed`; one call `outbound` with its times, about ten seco
 
 The adapter reads Aircall's lines and tags with the first event of the connection (its line catalog is empty) and then from the sweep at most hourly (`VENDOR_SETUP.md` §2.4; `docs/ingest/README.md`, section Aircall). Calls count only on counted lines, for the line's market; a line's market is also the default region of the call hash for numbers in national format. Pulse4all's account has 54 lines on 13 October 2026, each to be set by hand: there is no rule for lines yet.
 
-**Browser:** Configuration → Sources → Aircall Subscriptions → **Lines**: per line choose its market and switch **Counted** off for internal and test lines. **Tags**: every tag counts until switched off; switch off tags that are not about the customer conversation, if any.
+**Browser:** Configuration → Sources → Aircall Subscriptions → **Lines**: per line choose its market and switch **Counted** off for internal and test lines, and for every line of another business line (on Pulse4all's account: the Invest lines). **Tags**: every tag counts until switched off; switch off tags that are not about the customer conversation, if any.
 
-Expected: each change saved without a message and still there after a reload. Intake (Reports → Intake) no longer shows `No telephony connected` from the first call or line on (the CMA counts telephony as connected once an active telephony connection holds a line or a call).
+**Before the backfill (8.8), mark every other business line's line not counted** (addition 0008f, `db/54_uncounted_lines.sql`; Decision log, 13 October 2026). A connection stores calls on its counted lines only: a call on a line that does not count is not stored, and switching a line off removes the calls already stored on it, with their tags and links (the CRM calls stay), after a confirmation. A line still counted when the backfill runs fills this tenant with that business line's calls until it is switched off. Switching a line off by mistake is undone by switching it back on, but its earlier calls do not come back with a later backfill: the backfill does not take a call it listed before as new (README, Open decisions). So check the list before 8.8. A line added later in Aircall arrives counted: switch it off as soon as it appears if it is another business line's.
 
-The fallback in **Studio (cma-prod-pg)** after the context block, one line per statement (a line not yet read is added with its id as name):
+Expected: each change saved without a message and still there after a reload; switching **Counted** off asks first (`Stop counting this line`) and saves on confirmation. Intake (Reports → Intake) no longer shows `No telephony connected` from the first call or line on (the CMA counts telephony as connected once an active telephony connection holds a line or a call).
+
+The fallback in **Studio (cma-prod-pg)** after the context block, one line per statement (a line not yet read is added with its id as name; `false` as the last value switches it off and removes its stored calls):
 ```sql
 select number_ref, name, market, is_counted from cma.telephony_number where connection_id = '<aircall conn>' order by name;
 select cma.set_telephony_number('<aircall conn>', '<number_ref>', '<market code>', true);
 reset role;
 ```
 Expected: the lines, then an empty result per statement.
+
+The check before 8.8 in **Studio (cma-prod-pg)**: the lines not counted, and no stored call on any of them.
+```sql
+set role cma_owner;
+select n.number_ref, n.name, (select count(*) from cma.telephony_call t where t.tenant_id = n.tenant_id and t.connection_id = n.connection_id and t.number_ref = n.number_ref) as stored_calls
+from cma.telephony_number n where n.connection_id = '<aircall conn>' and not n.is_counted order by n.name;
+reset role;
+```
+Expected: one row per line that does not count (the other business line's, internal and test lines), each with `stored_calls` 0.
 
 ## 8.7 People: each agent's Aircall user id
 

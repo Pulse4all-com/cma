@@ -1,0 +1,89 @@
+verify/aircall-flow.mjs
+
+PASS  an unknown key → 404                                             got 404
+PASS  the HubSpot connection's key on /aircall → 404                   got 404
+PASS  the Aircall connection's key on /hubspot → 404                   got 404
+PASS  no token → 401                                                   got 401
+PASS  a wrong token of the same length → 401                           got 401
+PASS  a token of another length → 401                                  got 401
+PASS  another connection's token (replay) → 401                        got 401
+PASS  a body that is not JSON → 401                                    got 401
+PASS  refused requests wrote nothing                                   got 0
+PASS  …and asked Aircall nothing                                       got 0
+PASS  …and answered with an empty body                                 got ""
+PASS  call.created → 200                                               got 200
+PASS  …recorded and processed                                          got "processed"
+PASS  …the call: outbound, initial, started, user and line as ids      got ["outbound","initial","2026-10-13T06:45:18.000Z","9200000001","9300000
+PASS  …its counterpart as HMAC(pepper, E.164)                          got "0da345bfb583b690ddbdcfbe8e2ea87d862ebfd0fba6a3b3a7ebac6280371ddd"
+PASS  …one read of /v1/calls/{id} with the connection's Basic auth     got [1,true]
+PASS  the first event of a connection without lines read the catalogs  got [2,2]
+PASS  …lines with name and the company's own digits, no market yet, counted got [["9300000001","+442000000900",null,true],["9300000002","+442000000901
+PASS  call.answered → answered at                                      got "2026-10-13T06:45:26.000Z"
+PASS  call.tagged → both tags open                                     got ["9400000001","9400000002"]
+PASS  call.untagged → the removed tag closed, the other open           got [["9400000001"],["9400000002"]]
+PASS  call.ended → done, ended at, duration 71, talk 63 seconds        got ["done","2026-10-13T06:46:29.000Z",71,63]
+PASS  call.archived → archived                                         got true
+PASS  the six events: six rows, all processed                          got [{"status":"processed","n":6}]
+PASS  raw holds the allowlisted keys only                              got ["answered_at","archived","direction","duration","ended_at","started_a
+PASS  the same delivery again (Aircall retries) → 200                  got 200
+PASS  …still six events, no second read                                got [6,0]
+PASS  call.hungup, user.created, contact.created → 200                 got [200,200,200]
+PASS  …recorded as ignored, event_not_handled                          got ["call.hungup:event_not_handled","contact.created:event_not_handled","
+PASS  …and nothing asked of Aircall                                    got 0
+PASS  read-back: call.ended before call.answered still ends done with both times got ["done","2026-10-13T06:45:26.000Z","2026-10-13T06:46:29.000Z"]
+PASS  replay: call.ended on the replay connection → 200                got 200
+PASS  replay: call.answered arriving after it → 200                    got 200
+PASS  …the older event is stale: the call stays done, versioned at the ended event got ["done","2026-10-13T06:46:29.000Z","2026-10-13T06:47:09.000Z"]
+PASS  …both events processed                                           got 2
+PASS  …and nothing asked of Aircall (no read, no catalog)              got 0
+PASS  …the hash made from the event's own number                       got "dbb8fab71b028536054856ce6a76c06d92e40c2ac2116a1c0c5bc1eed8625ec7"
+PASS  without the variable the replay setting is ignored: the call read from the API got [1,"done"]
+PASS  Aircall down: the five events failed with http_503, retried later got [5,true]
+PASS  the sweep claims the five and reads the call once                got [5,1]
+PASS  …the call is done with its tag                                   got ["done",["9400000001"]]
+PASS  a 429 → 200, the event failed rate_limited, retried later        got [200,"failed","rate_limited",true]
+PASS  …the next event is not tried before Aircall's reset: failed rate_limited, no request got [200,"rate_limited",0]
+PASS  …one request in all: no retry in a loop                          got 1
+PASS  …the log names the limit and when calls resume, never a token    got true
+PASS  the sweep reads them once the reset has passed                   got ["done","done",true]
+PASS  a national number on a GB line hashes as GB                      got "c69670cdf120003199c4a9b39b534f2ae6b6eac39b1c82295a375c5c450dabc8"
+PASS  …on a line without a market as the tenant's first active market (NL) got "ef687da41a576cd93a93ce2eb10237086d24fff39a5c89ab1f2334ba1a2bf72f"
+PASS  the sweep refreshes a catalog an hour old: names from Aircall, market and counted kept got [1,[["Test line GB","GB",true],["Test line two renamed",null,false]]]
+PASS  …the tag's counted flag kept                                     got false
+PASS  …and not again within the hour                                   got 0
+PASS  link_calls pairs the call with the seeded CRM call, 30 seconds apart got [["4200000001",-30]]
+PASS  …recorded as a link_calls run on the CRM connection              got ["succeeded"]
+PASS  reconcile without the webhook_id setting: the run fails with webhook_id_not_set got ["failed","webhook_id_not_set"]
+PASS  …after listing: the call the webhook missed is in, with its tag  got ["done",["9400000002"]]
+PASS  …from the listing alone: no call read a second time              got 0
+PASS  …two day windows over 26 hours, 50 per page, ascending           got [2,true,true]
+PASS  …the account checked first (GET /v1/company)                     got "/v1/company"
+PASS  …counts: every listed call fetched                               got 9
+PASS  …the job reports the failed run                                  got 1
+PASS  reconcile with a webhook_id Aircall does not have: webhook_missing got "webhook_missing"
+PASS  …unchanged calls listed again are read once: nothing upserted    got [0,true]
+PASS  …a day over the 10,000 cap is split into halves                  got 2
+PASS  a webhook holding another token than the signing secret: webhook_token_mismatch got "webhook_token_mismatch"
+PASS  an inactive webhook that cannot be re-activated: webhook_inactive got "webhook_inactive"
+PASS  an inactive webhook is re-activated (PUT active true with its six events) and recorded: webhook_reactivated got ["webhook_reactivated",true,true,6]
+PASS  …no webhook is ever created by a job                             got false
+PASS  an active webhook with this connection's token: the run succeeds got ["succeeded",null]
+PASS  a connection whose account is not the key's company: account_mismatch, nothing listed got ["account_mismatch",0]
+PASS  the replay connection (dev): nothing to reconcile, nothing asked of Aircall got [["succeeded:0"],0]
+PASS  backfill: Aircall failing on the third day → the run fails, the first two days kept got ["http_503",true,false,1791756000000,false]
+PASS  …a second run continues at the third day and finishes            got [null,1791756000,true]
+PASS  …paced at aircall_max_per_minute 6 (10 s, scaled 0.01 here: 100 ms between calls) got true
+PASS  …a third run with the same start does nothing                    got [null,0]
+PASS  …backfill of another object is refused                           got "UsageError"
+PASS  …the replay connection (dev) refuses a backfill                  got "replay_connection"
+PASS  tenant one's token on tenant two's key → 401                     got 401
+PASS  tenant two's own token → 200                                     got 200
+PASS  …read with tenant two's key, the row in tenant two, hashed with its pepper got [true,["01a1340b-4cb1-7a89-a7c3-f86f84da1e6e"],"9896b95ee3819072f9c19a
+PASS  tenant one sees none of tenant two's calls, lines or events      got [0,0,0]
+PASS  no customer number in any form in the telephony rows, events, cursors or runs got []
+PASS  no name, email, comment, recording, voicemail, asset or contact  got false
+PASS  no token or API key in the database                              got false
+PASS  the logs hold no number, name, email or token                    got [false,false,false]
+PASS  the logs hold the webhook and job lines                          got true
+
+ALL 85 PASS

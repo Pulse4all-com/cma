@@ -1,0 +1,65 @@
+Two sessions at once on the fresh database at 55 (a committed throwaway tenant 'conc-test' with lines L1 and L2, both counted).
+Session W writes a call as the Ingest user (cma_app); session S switches the line off as the tenant's admin (cma_app).
+
+## Case 1: the write first (holds the line's shared lock for 3 s), then the switch-off
+ s |      at      | outcome  
+---+--------------+----------
+ W | 06:54:11.792 | inserted
+(1 row)
+
+     s     |      at      
+-----------+--------------
+ W commits | 06:54:14.798
+(1 row)
+
+            s            |      at      
+-------------------------+--------------
+ S starts the switch-off | 06:54:12.553
+(1 row)
+
+       s        |      at      
+----------------+--------------
+ S switched off | 06:54:14.804
+(1 row)
+
+After both:
+ calls_on_l1 
+-------------
+           0
+(1 row)
+
+   table_name   | ids_only_deletes 
+----------------+------------------
+ telephony_call |                1
+(1 row)
+
+Expected and seen: S waits until W commits, then removes W's call (0 calls on L1).
+
+## Case 2: the switch-off first (holds the line's exclusive lock for 3 s, not committed), then the write
+            s            |      at      
+-------------------------+--------------
+ S starts the switch-off | 06:54:14.911
+(1 row)
+
+     s     |      at      
+-----------+--------------
+ S commits | 06:54:17.933
+(1 row)
+
+         s          |      at      
+--------------------+--------------
+ W starts the write | 06:54:15.721
+(1 row)
+
+ s |      at      |        outcome         
+---+--------------+------------------------
+ W | 06:54:17.936 | skipped_uncounted_line
+(1 row)
+
+After both:
+ calls_on_l2 
+-------------
+           0
+(1 row)
+
+Expected and seen: W waits until S commits, then reads L2 as not counted and skips the call.

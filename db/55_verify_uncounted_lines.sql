@@ -17,8 +17,8 @@
 --      too, nothing of the call or its tags written); an unknown line stored; switching a line off
 --      removing its calls, taggings and links (a retired link included) and leaving the CRM calls
 --      and the connection's other lines; the audit rows of those deletes holding ids only; another
---      connection's and another tenant's calls untouched; switching back deleting nothing and the
---      line's calls stored again; a line added as not counted removing the calls stored while it
+--      connection's and another tenant's calls untouched; switching back deleting nothing and a call
+--      on the line stored again; a line added as not counted removing the calls stored while it
 --      was unknown; refusals (an agent, the Ingest user, the application calling the removal, a
 --      counted or missing line); the lines already off removed per connection, a rerun zeros; the
 --      audit exception narrow; the line locks the write and the removal take
@@ -322,7 +322,7 @@ begin
     v_rows := v_rows || array['16', 'B6 another connection''s and another tenant''s calls untouched',
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end, ''];
 
-    -- B7. switching line one back on deletes nothing; its calls are stored again (the next backfill)
+    -- B7. switching line one back on deletes nothing; a call on it is stored again
     v_before := format('%s/%s/%s/%s', (select count(*) from cma.telephony_call), (select count(*) from cma.telephony_call_tag),
                        (select count(*) from cma.call_link), (select count(*) from cma.audit_log where action = 'delete'));
     perform cma.set_telephony_number(v_tel, 'line-1', null, true);
@@ -335,7 +335,7 @@ begin
            'versionAt', v_s + interval '3 minutes', 'tags', jsonb_build_array('tag-a')))) with ordinality u(source_id, outcome, n);
     v_ok := v_before = v_detail and v_txt = 'c-1:inserted'
             and exists (select 1 from cma.telephony_call where connection_id = v_tel and source_id = 'c-1' and number_ref = 'line-1');
-    v_rows := v_rows || array['17', 'B7 switching a line back on deletes nothing; its calls are stored again',
+    v_rows := v_rows || array['17', 'B7 switching a line back on deletes nothing; a call on it is stored again',
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end,
       format('calls/taggings/links/deletes %s before, %s after; %s', v_before, v_detail, coalesce(v_txt, 'no outcome'))];
 

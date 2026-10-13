@@ -24,8 +24,9 @@
 --                      (telephony_call_tag) and links (call_link, retired ones included). The CRM
 --                      calls stay. A trigger on cma.telephony_number does it, so every path keeps
 --                      the rule; set_telephony_number itself is unchanged (return type void).
---                      Switching a line back on deletes nothing: its calls return through the next
---                      backfill
+--                      Switching a line back on deletes nothing and stores its new calls again;
+--                      earlier calls come back only through a read that takes them as new (the
+--                      reconcile and backfill skip a call they listed before; README, Open decisions)
 --   the deletes        cma.remove_uncounted_line_calls(tenant, connection, line), owner only: the
 --                      one place that deletes telephony calls. The application cannot delete from
 --                      these tables (0007a), so the trigger's function is SECURITY DEFINER, owned by

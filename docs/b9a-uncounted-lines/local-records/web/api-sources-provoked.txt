@@ -1,0 +1,36 @@
+verify/api.mjs against http://localhost:8082  (--provoke: every check must FAIL)
+
+FAIL  sources: an agent cannot read the connections got 403, wanted 200
+FAIL  sources: the manager cannot read them either got 403, wanted 200
+FAIL  sources: the admin reads every connection with its kind got [200,true,true], wanted [403,false,true]
+FAIL  sources: no secret value, only names and non-secret settings got true, wanted false
+FAIL  sources: a malformed id is a 400, an unknown one a 404 got [400,404], wanted [200,200]
+FAIL  sources: the admin opens one connection with its catalogs got [200,"01a1340c-0f12-7236-93ed-45a89b335f57",true], wanted [404,null,true]
+FAIL  sources: a settings write needs the request header got 400, wanted 200
+FAIL  sources: a cross-site settings write is refused got 403, wanted 200
+FAIL  sources: a secret-looking settings key is a 400 and changes nothing got [400,false], wanted [200,true]
+FAIL  sources: the manager cannot write settings   got 403, wanted 200
+FAIL  sources: a setting is written, read back and the settings restored got ["api verifier",true], wanted [null,true]
+FAIL  sources: a kind the connection's rows contradict is a 409 got 409, wanted 200
+FAIL  sources: a pipeline's counted switch is written and put back got [false,true,false,null], wanted [true,false,null,null]
+FAIL  sources: a form change with an unknown market is a 404 and writes nothing got [404,true,[]], wanted [200,false,[]]
+note  the connection has no call outcome: the outcome check is left out
+FAIL  markets: an agent cannot read them           got 403, wanted 200
+FAIL  markets: the admin reads markets with aliases, office hours and holidays got [200,true,true,true], wanted [403,true,true,true]
+FAIL  markets: UK is not a market code (use GB)    got 400, wanted 200
+FAIL  markets: overlapping office hours are a 400  got 400, wanted 200
+FAIL  markets: an alias is added, read back and removed; a second removal is a 404 got [true,false,404], wanted [false,true,200]
+FAIL  markets: a holiday is added and removed again got [true,false], wanted [false,true]
+FAIL  alert rules: the manager cannot read them    got 403, wanted 200
+FAIL  alert rules: the admin reads the rules and the pipelines a rule can name got [200,true,true,true], wanted [403,true,true,true]
+FAIL  alert rules: an assignment rule is written by name and listed got [200,"record_assigned",["verify-no-such-pipeline"],5], wanted [403,"record_created",[],null]
+FAIL  alert rules: the same name for the other trigger is a 409 got 409, wanted 200
+FAIL  alert rules: a rule is switched off, never deleted got false, wanted true
+FAIL  linked accounts: an agent cannot read them   got 403, wanted 200
+FAIL  linked accounts: the manager reads the systems and the ids held, never a sign-in id got [200,true,true], wanted [403,true,true]
+FAIL  linked accounts: the manager cannot link the admin (a managing person) got 403, wanted 200
+FAIL  linked accounts: nobody links their own id   got 403, wanted 200
+FAIL  linked accounts: an id with a space is a 400 got 400, wanted 200
+FAIL  linked accounts: the manager links a person; the same id for another person is a 409; put back got [true,409,true,true], wanted [false,200,true,true]
+
+ALL 31 PROVOKED CHECKS FAILED, as they must

@@ -1,0 +1,59 @@
+Seventeen deliberate breakages of db/54_uncounted_lines.sql, each applied to a fresh copy of the database at 53
+(create database … template), the mutated 54 run, then db/55_verify_uncounted_lines.sql against the copy.
+Per mutation: the rows that read FAIL (check, detail) and the verdict. The mutation definitions follow.
+
+skip-off:  B2 a line that does not count: skipped with its outcome, nothing written : c-2:inserted,c-3:inserted,c-2:deleted; B8 a line added as not counted removes the calls stored while it was unknown : c-6:inserted; B10 lines already off: their calls removed per connection, a rerun zeros : verify-0008f-one/Verify phones/3/3/2/1 verify-0008f-one/Verify phones two/0/0/0/0 ve; verdict : 14 PASS, 3 FAIL
+skip-unknown-lines-too:  B3 a line not in the catalog: the call is stored : c-4:skipped_uncounted_line; B4 switching a line off removes its calls, taggings and links; CRM calls stay : line one: 2 calls, 3 taggings, 2 links; 3 links made; verdict : 15 PASS, 2 FAIL
+trigger-update-only:  A2 the lines' trigger and its owner's function : tgtype 17, columns 7, enabled O, secdef t, owner cma_owner, config search_path=pg_catalog, cma, pg_temp, app f; B8 a line added as not counted removes the calls stored while it was unknown : c-6:skipped_uncounted_line; B10 lines already off: their calls removed per connection, a rerun zeros : verify-0008f-one/Verify phones/3/2/2/1 verify-0008f-one/Verify phones two/0/0/0/0 ve; verdict : 14 PASS, 3 FAIL
+removal-ignores-connection:  B5 the audit of those deletes holds ids only, no call data : call_link:2 telephony_call:3 telephony_call_tag:4; 1 row(s) with more than ids; B6 another connection's and another tenant's calls untouched : ; B11 the audit exception is narrow : ; verdict : 14 PASS, 3 FAIL
+removal-current-links-only:  B the block ran to the end : update or delete on table "telephony_call" violates foreign key constraint "call_link_tenant_id_telephony_call_id_fkey" on table "; verdict : 8 PASS, 1 FAIL
+audit-full-image:  B5 the audit of those deletes holds ids only, no call data : call_link:2 telephony_call:2 telephony_call_tag:3; 7 row(s) with more than ids; verdict : 16 PASS, 1 FAIL
+audit-ids-always:  B11 the audit exception is narrow : ; verdict : 16 PASS, 1 FAIL
+audit-keeps-times:  B5 the audit of those deletes holds ids only, no call data : call_link:2 telephony_call:2 telephony_call_tag:3; 5 row(s) with more than ids; verdict : 16 PASS, 1 FAIL
+switch-left-on:  B11 the audit exception is narrow : ; verdict : 16 PASS, 1 FAIL
+no-shared-lock:  B12 the line lock: shared for the call write, exclusive for the removal : shared f, exclusive t; verdict : 16 PASS, 1 FAIL
+no-exclusive-lock:  B12 the line lock: shared for the call write, exclusive for the removal : shared t, exclusive f; verdict : 16 PASS, 1 FAIL
+trigger-invoker:  A2 the lines' trigger and its owner's function : tgtype 21, columns 7, enabled O, secdef f, owner cma_owner, config search_path=pg_catalog, cma, pg_temp, app f; B the block ran to the end : permission denied for function remove_uncounted_line_calls; verdict : 4 PASS, 2 FAIL
+removal-for-app:  A3 the removals are the owner's only : cma.remove_uncounted_line_calls(uuid,uuid,text) is not the owner's only; ; B the block ran to the end : line line-3 counts; its calls stay; verdict : 12 PASS, 2 FAIL
+removal-on-counted-line:  B9 refusals: agent, Ingest user, the application calling the removals, a counted or missing line : 5 of 6 refusals; B10 lines already off: their calls removed per connection, a rerun zeros : verify-0008f-one/Verify phones/3/0/0/0 verify-0008f-one/Verify phones two/0/0/0/0 ve; verdict : 15 PASS, 2 FAIL
+one-off-skips-lines:  B10 lines already off: their calls removed per connection, a rerun zeros : verify-0008f-one/Verify phones/3/0/1/1 verify-0008f-one/Verify phones two/0/0/0/0 ve; verdict : 16 PASS, 1 FAIL
+trigger-fn-for-app:  A2 the lines' trigger and its owner's function : tgtype 21, columns 7, enabled O, secdef t, owner cma_owner, config search_path=pg_catalog, cma, pg_temp, app t; verdict : 16 PASS, 1 FAIL
+removal-on-any-switch:  B the block ran to the end : line line-1 counts; its calls stay; verdict : 5 PASS, 1 FAIL
+
+--- mutation definitions (old → new text in 54) ---
+M = {
+ 'skip-off': [("""    if v_line is not null and exists (select 1 from cma.telephony_number n
+                                      where n.tenant_id = v_tenant and n.connection_id = p_connection_id
+                                        and n.number_ref = v_line and not n.is_counted) then""",
+               """    if false then""")],
+ 'skip-unknown-lines-too': [("""    if v_line is not null and exists (select 1 from cma.telephony_number n
+                                      where n.tenant_id = v_tenant and n.connection_id = p_connection_id
+                                        and n.number_ref = v_line and not n.is_counted) then""",
+               """    if v_line is not null and not exists (select 1 from cma.telephony_number n
+                                      where n.tenant_id = v_tenant and n.connection_id = p_connection_id
+                                        and n.number_ref = v_line and n.is_counted) then""")],
+ 'trigger-update-only': [("after insert or update of is_counted on cma.telephony_number", "after update of is_counted on cma.telephony_number")],
+ 'removal-ignores-connection': [("where t.tenant_id = p_tenant_id and t.connection_id = p_connection_id and t.number_ref = p_number_ref;",
+                                 "where t.tenant_id = p_tenant_id and t.number_ref = p_number_ref;"),
+                                ("where ct.tenant_id = p_tenant_id and ct.connection_id = p_connection_id and ct.call_source_id = any (v_srcs);",
+                                 "where ct.tenant_id = p_tenant_id and ct.call_source_id = any (v_srcs);")],
+ 'removal-current-links-only': [("delete from cma.call_link l where l.tenant_id = p_tenant_id and l.telephony_call_id = any (v_ids);",
+                                 "delete from cma.call_link l where l.tenant_id = p_tenant_id and l.telephony_call_id = any (v_ids) and l.unlinked_at is null;")],
+ 'audit-full-image': [("     and coalesce(current_setting('cma.audit_keys_only', true), '') = 'uncounted_line' then", "     and false then")],
+ 'audit-ids-always': [("     and coalesce(current_setting('cma.audit_keys_only', true), '') = 'uncounted_line' then", "     then")],
+ 'audit-keeps-times': [("'telephony_call_id', v_old -> 'telephony_call_id', 'crm_call_id', v_old -> 'crm_call_id',",
+                        "'telephony_call_id', v_old -> 'telephony_call_id', 'crm_call_id', v_old -> 'crm_call_id', 'started_at', v_old -> 'started_at', 'tagged_at', v_old -> 'tagged_at',")],
+ 'switch-left-on': [("  perform set_config('cma.audit_keys_only', '', true);\n  return next;", "  return next;")],
+ 'no-shared-lock': [("    perform pg_advisory_xact_lock_shared(", "    perform pg_advisory_xact_lock_shared(1 + ")],
+ 'no-exclusive-lock': [("  perform pg_advisory_xact_lock(hashtextextended(", "  perform pg_advisory_xact_lock(1 + hashtextextended(")],
+ 'trigger-invoker': [("language plpgsql\nsecurity definer\nset search_path", "language plpgsql\nset search_path")],
+ 'removal-for-app': [("revoke execute on function cma.remove_uncounted_line_calls(uuid, uuid, text) from public;",
+                      "revoke execute on function cma.remove_uncounted_line_calls(uuid, uuid, text) from public;\ngrant execute on function cma.remove_uncounted_line_calls(uuid, uuid, text) to cma_app;")],
+ 'removal-on-counted-line': [("  if v_counted then\n    raise exception 'line % counts; its calls stay', p_number_ref using errcode = 'CMA03';\n  end if;", "")],
+ 'one-off-skips-lines': [("      lines_not_counted := lines_not_counted + 1;\n      calls_removed := calls_removed + r.calls;",
+                          "      lines_not_counted := lines_not_counted + 1;")],
+ 'trigger-fn-for-app': [("revoke execute on function cma.remove_calls_of_uncounted_line() from public;",
+                         "revoke execute on function cma.remove_calls_of_uncounted_line() from public;\ngrant execute on function cma.remove_calls_of_uncounted_line() to cma_app;")],
+ 'removal-on-any-switch': [("  if not new.is_counted then\n    if tg_op = 'INSERT' then", "  if true then\n    if tg_op = 'INSERT' then"),
+                            ("    elsif old.is_counted then", "    elsif true then")],
+}
