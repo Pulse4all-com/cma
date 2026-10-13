@@ -20,12 +20,15 @@ export type ShellPage =
   /** Intake reports (B11, migration 0007d) */
   | "speed-to-lead" | "intake" | "data-quality"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
+  /** Sources, Markets and Alert rules (addition 0008e, night of 13 October 2026) */
+  | "config-sources" | "config-markets" | "config-alert-rules"
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/intake" | "/reports/data-quality"
-  | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links";
+  | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
+  | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules";
 
 export interface NavItem {
   page: ShellPage;
@@ -142,6 +145,10 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "config-absences", href: "/configuration/absences", label: copy.nav.configAbsences, permission: "tenant.configure" },
         { page: "config-exports", href: "/configuration/exports", label: copy.nav.configExports, permission: "tenant.configure" },
         { page: "config-app-links", href: "/configuration/app-links", label: copy.nav.configAppLinks, permission: "tenant.configure" },
+        // The intake configuration (addition 0008e): what Martin set by SQL on 12 October 2026, now on screens
+        { page: "config-sources", href: "/configuration/sources", label: copy.nav.configSources, permission: "tenant.configure" },
+        { page: "config-markets", href: "/configuration/markets", label: copy.nav.configMarkets, permission: "tenant.configure" },
+        { page: "config-alert-rules", href: "/configuration/alert-rules", label: copy.nav.configAlertRules, permission: "tenant.configure" },
       ],
     },
   ];

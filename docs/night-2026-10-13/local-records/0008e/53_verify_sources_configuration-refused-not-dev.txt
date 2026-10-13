@@ -1,0 +1,25 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ false
+(1 row)
+
+psql:53_verify_sources_configuration.sql:51: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 53 runs in dev only
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
+psql:53_verify_sources_configuration.sql:53: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+ check_name |      result      |     detail     
+------------+------------------+----------------
+ verdict    | REFUSED: not dev | 0 PASS, 0 FAIL
+(1 row)
+
+RESET

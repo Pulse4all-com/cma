@@ -8,6 +8,7 @@ import type {
   StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
 } from "./types";
 import { applyConnections, rangeProblem, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
@@ -522,6 +523,95 @@ function toStat(r: StatDbRow): MessageStat {
     recipients: Number(r.recipients), delivered: Number(r.delivered), read: Number(r.read), acknowledged: Number(r.acknowledged),
     medianSecondsToRead: r.median_seconds_to_read === null ? null : Number(r.median_seconds_to_read),
   };
+}
+
+// ---- Sources, markets, alert rules and linked accounts (addition 0008e): cma.sources, connection_config,
+// connection_catalogs, markets_all, business_hours_all, business_holidays_all, message_rules,
+// linked_account_systems, linked_accounts. Every write is an existing function of 0006 to 0008a; the
+// values a write must pass back unchanged (secret names, routed and work type, kept fields) are read in
+// the same transaction, never taken from the screen.
+
+type SourceDbRow = {
+  connection_id: string; key: string; adapter: string; name: string; external_account_id: string; kind: SourceKind | null;
+  held_kinds: SourceKind[]; status: string; signing_secret_name: string | null; token_secret_name: string | null; settings: SourceSettings | null;
+  events_24h: number; events_waiting: number; events_needs_review: number; last_event_at: Date | null;
+  pipelines: number; forms: number; call_outcomes: number; fields: number; lines: number; tags: number; store_handle: string | null;
+};
+
+function toSource(r: SourceDbRow): SourceConnection {
+  return {
+    id: r.connection_id, key: r.key, adapter: r.adapter, name: r.name, accountId: r.external_account_id, kind: r.kind,
+    heldKinds: r.held_kinds ?? [], isActive: r.status === "active", signingSecretName: r.signing_secret_name, tokenSecretName: r.token_secret_name,
+    settings: r.settings ?? {}, events24h: r.events_24h, eventsWaiting: r.events_waiting, eventsParked: r.events_needs_review,
+    lastEventAt: r.last_event_at ? r.last_event_at.toISOString() : null, pipelines: r.pipelines, forms: r.forms, callOutcomes: r.call_outcomes,
+    fields: r.fields, lines: r.lines, tags: r.tags, storeHandle: r.store_handle,
+  };
+}
+
+async function readSource(q: Querier, id: string): Promise<SourceConnection> {
+  const r = await q.query<SourceDbRow>(`select * from cma.sources() where connection_id = $1::uuid`, [id]);
+  const row = r.rows[0];
+  if (!row) throw new CmaDbError("CMA02", "no such connection in the current tenant");
+  return toSource(row);
+}
+
+type ConfigJson = {
+  fields: { entity: string; field: string; refSystem: string | null; slot: number; property: string }[];
+  pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string }[];
+  store: { handle: string; name: string; market: string; currency: string; timeZone: string } | null;
+  writeback: { field: string; slot: number; property: string; mode: string; enabled: boolean }[];
+};
+
+type CatalogsJson = {
+  forms: { formId: string; name: string; isCounted: boolean; leadSource: string | null; market: string | null; keptFields: string[]; status: string }[];
+  callOutcomes: { outcomeRef: string; label: string; isConnected: boolean; status: string }[];
+  lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
+  tags: { tagRef: string; name: string; isCounted: boolean; status: string }[];
+  sampleIds: Record<string, string>;
+};
+
+async function readConfig(q: Querier, id: string): Promise<ConfigJson> {
+  const r = await q.query<{ c: ConfigJson }>(`select cma.connection_config($1::uuid) as c`, [id]);
+  return one(r.rows, "connection_config").c;
+}
+
+async function readCatalogs(q: Querier, id: string): Promise<CatalogsJson> {
+  const r = await q.query<{ c: CatalogsJson }>(`select cma.connection_catalogs($1::uuid) as c`, [id]);
+  return one(r.rows, "connection_catalogs").c;
+}
+
+function toPipeline(p: ConfigJson["pipelines"][number]): SourcePipeline {
+  return { recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType, isActive: p.status === "active" };
+}
+
+type MarketDbRow = {
+  code: string; name: string; time_zone: string; language_code: string; language_skill_key: string | null; min_language_level: number | null;
+  currency: string; status: string; sort_order: number; aliases: string[];
+};
+
+function toMarket(r: MarketDbRow): MarketConfig {
+  return {
+    code: r.code, name: r.name, timeZone: r.time_zone, languageCode: r.language_code, languageSkillKey: r.language_skill_key,
+    minLanguageLevel: r.min_language_level, currency: r.currency, isActive: r.status === "active", sortOrder: r.sort_order, aliases: r.aliases ?? [],
+  };
+}
+
+type RuleDbRow = {
+  rule_id: string; name: string; trigger: AlertRule["trigger"]; record_type: string; pipeline_ids: string[]; audience_permission: string;
+  match_language: boolean; only_clocked_in: boolean; fallback_permission: string | null; urgency: AlertRule["urgency"]; enabled: boolean;
+  max_age_minutes: number | null; alerts_30d: number; last_alert_at: Date | null;
+};
+
+function toRule(r: RuleDbRow): AlertRule {
+  return {
+    id: r.rule_id, name: r.name, trigger: r.trigger, recordType: r.record_type, pipelineIds: r.pipeline_ids ?? [], audiencePermission: r.audience_permission,
+    matchLanguage: r.match_language, onlyClockedIn: r.only_clocked_in, fallbackPermission: r.fallback_permission, urgency: r.urgency, enabled: r.enabled,
+    maxAgeMinutes: r.max_age_minutes, alerts30d: r.alerts_30d, lastAlertAt: r.last_alert_at ? r.last_alert_at.toISOString() : null,
+  };
+}
+
+async function readRules(q: Querier): Promise<AlertRule[]> {
+  return (await q.query<RuleDbRow>(`select * from cma.message_rules()`)).rows.map(toRule);
 }
 
 export const postgresData: CmaData = {
@@ -1138,6 +1228,191 @@ export const postgresData: CmaData = {
     return withTenant(ctx(me), async (q) => {
       const r = await q.query<StatDbRow>(`select * from cma.message_stats($1::date, $2::date)`, [range.from, range.to]);
       return r.rows.map(toStat);
+    });
+  },
+
+  // ---- Sources, markets, alert rules (addition 0008e): every function checks tenant.configure inside (CMA06) ----
+
+  async listSources(me): Promise<SourceConnection[]> {
+    return withTenant(ctx(me), async (q) => (await q.query<SourceDbRow>(`select * from cma.sources()`)).rows.map(toSource));
+  },
+
+  async getSource(me, id): Promise<SourceDetail> {
+    return withTenant(ctx(me), async (q) => {
+      const connection = await readSource(q, id);
+      const config = await readConfig(q, id);
+      const cat = await readCatalogs(q, id);
+      return {
+        connection,
+        pipelines: config.pipelines.map(toPipeline),
+        forms: cat.forms.map((f) => ({ formId: f.formId, name: f.name, isCounted: f.isCounted, leadSource: f.leadSource, market: f.market, keptFields: f.keptFields ?? [], isActive: f.status === "active" })),
+        callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
+        lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
+        tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, isActive: t.status === "active" })),
+        fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property })),
+        writeback: config.writeback.map((w) => ({ field: w.field, slot: w.slot, property: w.property, mode: w.mode, enabled: w.enabled })),
+        store: config.store,
+        sampleIds: cat.sampleIds ?? {},
+      };
+    });
+  },
+
+  async setSourceConnection(me, id, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      const cur = await readSource(q, id);
+      if (input.name !== undefined && input.name !== cur.name) {
+        // the name through the function that owns it, with the stored secret names passed back unchanged
+        await q.query(`select 1 from cma.upsert_connection($1, $2, $3, $4, $5)`, [cur.adapter, input.name, cur.accountId, cur.signingSecretName, cur.tokenSecretName]);
+      }
+      if (input.isActive !== undefined && input.isActive !== cur.isActive) {
+        await q.query(`select cma.set_connection_status($1::uuid, $2)`, [id, input.isActive ? "active" : "inactive"]);
+      }
+      if (input.kind !== undefined && input.kind !== cur.kind) {
+        await q.query(`select cma.set_connection_kind($1::uuid, $2)`, [id, input.kind]);
+      }
+    });
+  },
+
+  async setSourceSettings(me, id, settings): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_connection_settings($1::uuid, $2::jsonb)`, [id, JSON.stringify(settings)]));
+  },
+
+  async setSourcePipeline(me, id, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      const cur = (await readConfig(q, id)).pipelines.find((p) => p.recordType === input.recordType && p.pipelineId === input.pipelineId);
+      if (!cur || cur.isCounted !== input.isCounted) {
+        await q.query(`select cma.set_connection_pipeline($1::uuid, $2, $3, $4, $5, $6)`,
+          [id, input.recordType, input.pipelineId, input.isCounted, cur?.isRouted ?? false, cur?.workType ?? null]);
+      }
+      if (!cur || cur.isLead !== input.isLead) {
+        await q.query(`select cma.set_pipeline_lead($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.isLead]);
+      }
+    });
+  },
+
+  async setSourceForms(me, id, changes): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      const forms = (await readCatalogs(q, id)).forms;
+      for (const c of changes) {
+        const kept = forms.find((f) => f.formId === c.formId)?.keptFields ?? [];
+        await q.query(`select cma.set_form($1::uuid, $2, $3, $4, $5, $6::text[])`, [id, c.formId, c.isCounted, c.leadSource, c.market, kept]);
+      }
+    });
+  },
+
+  async setSourceCallOutcomes(me, id, changes): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      for (const c of changes) await q.query(`select cma.set_call_outcome($1::uuid, $2, $3)`, [id, c.outcomeRef, c.isConnected]);
+    });
+  },
+
+  async setSourceLine(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_number($1::uuid, $2, $3, $4)`, [id, input.lineRef, input.market, input.isCounted]));
+  },
+
+  async setSourceTag(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag($1::uuid, $2, $3)`, [id, input.tagRef, input.isCounted]));
+  },
+
+  async setSourceStore(me, id, store): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.upsert_commerce_store($1::uuid, $2, $3, $4, $5, $6)`,
+      [id, store.handle, store.name, store.market, store.currency, store.timeZone]));
+  },
+
+  async getMarkets(me) {
+    return withTenant(ctx(me), async (q) => {
+      const markets = (await q.query<MarketDbRow>(`select * from cma.markets_all()`)).rows.map(toMarket);
+      const hours = (await q.query<{ market: string; weekday: number; hours: string }>(`select * from cma.business_hours_all()`)).rows;
+      const holidays = (await q.query<{ market: string; day: string; name: string }>(`select market, to_char(day, 'YYYY-MM-DD') as day, name from cma.business_holidays_all()`)).rows;
+      return { markets, hours: hours.map((h) => ({ market: h.market, weekday: h.weekday, hours: h.hours })), holidays };
+    });
+  },
+
+  async upsertMarket(me, input, active): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.upsert_market($1, $2, $3, $4, $5, $6, $7::smallint, $8)`,
+        [input.code, input.name, input.timeZone, input.languageCode, input.currency, input.languageSkillKey, input.minLanguageLevel, input.sortOrder]);
+      const cur = await q.query<{ status: string }>(`select status from cma.markets_all() where code = $1`, [input.code]);
+      if ((cur.rows[0]?.status === "active") !== active) await q.query(`select cma.set_market_status($1, $2)`, [input.code, active ? "active" : "inactive"]);
+    });
+  },
+
+  async setMarketAlias(me, alias, code): Promise<void> {
+    await withTenant(ctx(me), (q) => code === null
+      ? q.query(`select cma.remove_market_alias($1)`, [alias])
+      : q.query(`select cma.set_market_alias($1, $2)`, [alias, code]));
+  },
+
+  async setOfficeHours(me, market, days): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      for (const d of days) await q.query(`select cma.set_business_hours($1, $2::smallint, $3)`, [market, d.weekday, d.hours]);
+    });
+  },
+
+  async setHoliday(me, market, day, name): Promise<void> {
+    await withTenant(ctx(me), (q) => name === null
+      ? q.query(`select cma.remove_business_holiday($1, $2::date)`, [market, day])
+      : q.query(`select cma.set_business_holiday($1, $2::date, $3)`, [market, day, name]));
+  },
+
+  async getAlertRules(me) {
+    return withTenant(ctx(me), async (q) => {
+      const rules = await readRules(q);
+      // the pipelines a rule can name: of the tenant's customer-record connections (kind crm, or rows that say so)
+      const sources = (await q.query<SourceDbRow>(`select * from cma.sources()`)).rows.map(toSource)
+        .filter((c) => c.kind === "crm" || (c.kind === null && c.heldKinds.includes("crm")));
+      const pipelines: AlertPipelineChoice[] = [];
+      for (const c of sources) {
+        for (const p of (await readConfig(q, c.id)).pipelines) {
+          pipelines.push({ connectionName: c.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted });
+        }
+      }
+      const age = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'alerts.max_age_minutes'`);
+      return { rules, pipelines, defaultMaxAgeMinutes: Number(age.rows[0]?.value ?? 60) };
+    });
+  },
+
+  async upsertAlertRule(me, input): Promise<string> {
+    return withTenant(ctx(me), async (q) => {
+      const same = (await readRules(q)).find((r) => r.name === input.name.trim());
+      if (same && same.trigger !== input.trigger) throw new CmaDbError("CMA03", "a rule of the other trigger holds this name");
+      const r = input.trigger === "record_assigned"
+        ? await q.query<{ id: string }>(`select cma.upsert_assignment_rule($1, $2, $3::text[], $4, $5) as id`,
+            [input.name, input.recordType, input.pipelineIds, input.urgency, input.maxAgeMinutes])
+        : await q.query<{ id: string }>(`select cma.upsert_message_rule($1, $2, $3::text[], $4, $5, $6, $7, $8, $9) as id`,
+            [input.name, input.recordType, input.pipelineIds, input.audiencePermission, input.matchLanguage, input.onlyClockedIn,
+             input.fallbackPermission, input.urgency, input.maxAgeMinutes]);
+      return one(r.rows, "upsert rule").id;
+    });
+  },
+
+  async setAlertRuleEnabled(me, id, enabled): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_message_rule_enabled($1::uuid, $2)`, [id, enabled]));
+  },
+
+  // ---- Linked accounts (addition 0008e): users.manage_agents or users.manage_all, the directory's scope ----
+
+  async getLinkedAccounts(me) {
+    return withTenant(ctx(me), async (q) => {
+      const systems = (await q.query<{ system: string; role: LinkedAccountSystem["role"]; connections: string[]; is_active: boolean }>(
+        `select * from cma.linked_account_systems()`)).rows;
+      const accounts = (await q.query<{ user_id: string; system: string; external_id: string }>(`select * from cma.linked_accounts()`)).rows;
+      return {
+        systems: systems.map((x) => ({ system: x.system, role: x.role, connections: x.connections ?? [], isActive: x.is_active })),
+        accounts: accounts.map((a) => ({ userId: a.user_id, system: a.system, externalId: a.external_id })),
+      };
+    });
+  },
+
+  async setLinkedAccount(me, userId, system, externalId): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      // the People rule, read in the same transaction: a person the caller sees must be editable (never
+      // oneself); a person the caller does not see is answered by the function itself (CMA06 for a managing
+      // person, CMA02 for nobody), as every other write of People is
+      const r = await q.query<{ may_edit: boolean }>(`select may_edit from cma.directory() where user_id = $1::uuid`, [userId]);
+      if (r.rows[0] && !r.rows[0].may_edit) throw new CmaDbError("CMA06", "may not edit this person");
+      if (externalId === null) await q.query(`select cma.remove_user_external_id($1::uuid, $2)`, [userId, system]);
+      else await q.query(`select cma.set_user_external_id($1::uuid, $2, $3)`, [userId, system, externalId]);
     });
   },
 

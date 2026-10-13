@@ -1,0 +1,6 @@
+DO
+BEGIN
+SET
+DO
+psql:52_sources_configuration.sql:94: ERROR:  adapter names must be lower-case letters and digits only before 0008e; these connections break the rule: tenant 01a13317-aa04-7493-b248-3bc4db39f773, adapter old_crm, name Old CRM
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE

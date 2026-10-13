@@ -25,6 +25,21 @@ const outDir = process.env.OUT_DIR ?? new URL("../../records/layout", import.met
 mkdirSync(outDir, { recursive: true });
 
 const problems = [];
+/**
+ * The mock's urgent fixture message pops up for every identity but the first one to poll the inbox, and
+ * its dialog holds the focus, so a header hint could never open on a fresh server for the others (seen on
+ * main, 13 October 2026). Acknowledge it first for the identities read here, as a person would.
+ */
+async function acknowledgeUrgent(subject) {
+  const r = await fetch(`${BASE}/api/v1/me/messages`, { headers: { "x-cma-mock-subject": subject } }).catch(() => null);
+  const list = (await r?.json().catch(() => null))?.data?.messages ?? [];
+  for (const m of list) {
+    if (m.urgency === "urgent" && !m.acknowledgedAt) {
+      await fetch(`${BASE}/api/v1/me/messages/${m.id}/ack`, { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
+    }
+  }
+}
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 async function expectShell(width, height) {
@@ -93,7 +108,8 @@ async function expectNavigation() {
     // The Configuration group (0005a): unnumbered pages for tenant.configure only (the admin); nobody else sees the group
     const configLinks = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll('a[href^="/configuration/"]') ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
     const wantConfig = subject === "admin"
-      ? [["/configuration/statuses"], ["/configuration/teams"], ["/configuration/absences"], ["/configuration/exports"], ["/configuration/app-links"]].map(([h]) => [null, h])
+      ? [["/configuration/statuses"], ["/configuration/teams"], ["/configuration/absences"], ["/configuration/exports"], ["/configuration/app-links"],
+         ["/configuration/sources"], ["/configuration/markets"], ["/configuration/alert-rules"]].map(([h]) => [null, h])
       : [];
     if (JSON.stringify(configLinks) !== JSON.stringify(wantConfig)) problems.push(`${subject}: configuration pages ${JSON.stringify(configLinks)}, expected ${JSON.stringify(wantConfig)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
@@ -209,14 +225,52 @@ async function expectGate(width, height) {
   await p.close();
 }
 
+// Sources, Markets and Alert rules (addition 0008e): at 1280 px as the admin, the shell without horizontal
+// scrolling, the main area never sideways, the page's own keycaps, and its tables there
+async function expectIntakeConfiguration() {
+  const cases = [
+    ["/configuration/sources", [], '[data-testid="sources"]'],
+    ["/configuration/sources/00000000-0000-7000-8000-00000000c001", ["B", "N", "S", "F", "O"], '[data-testid="source-forms"]'],
+    ["/configuration/sources/00000000-0000-7000-8000-00000000c002", ["B", "N", "S"], '[data-testid="source-lines"]'],
+    ["/configuration/sources/00000000-0000-7000-8000-00000000c003", ["B", "N", "S", "A"], '[data-testid="source-store"]'],
+    ["/configuration/markets", ["A", "I", "H"], '[data-testid="office-hours"]'],
+    ["/configuration/alert-rules", ["A"], '[data-testid="alert-rules"]'],
+  ];
+  for (const [path, keys, selector] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate((spill) => {
+      if (spill) document.querySelector("main table")?.setAttribute("style", "min-width: 2000px");
+      const main = document.querySelector("main");
+      return {
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        mainX: main ? main.scrollWidth - main.clientWidth : -1,
+        rail: document.querySelector("nav")?.getBoundingClientRect().width ?? 0,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+      };
+    }, provoke && path === "/configuration/alert-rules");
+    if (m.scrollX) problems.push(`admin ${path}: page scrolls horizontally at 1280`);
+    if (m.mainX > 0) problems.push(`admin ${path}: the main area scrolls sideways by ${m.mainX}px at 1280`);
+    if (Math.round(m.rail) !== 256) problems.push(`admin ${path}: rail is ${m.rail}px`);
+    for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`admin ${path}: keycap ${k} missing`);
+    if (await p.locator(selector).count() === 0) problems.push(`admin ${path}: ${selector} missing`);
+    const name = path.split("/").slice(2).join("-").replace(/00000000-0000-7000-8000-00000000/, "");
+    await p.screenshot({ path: `${outDir}/admin-${name}.png`, fullPage: true });
+    await ctx.close();
+  }
+}
+
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
 await expectReports();
+await expectIntakeConfiguration();
 if (provoke) await expectShell(1279, 800);
 else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card, Sources, Markets and Alert rules; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

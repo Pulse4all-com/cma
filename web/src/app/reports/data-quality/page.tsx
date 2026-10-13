@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HeaderHint } from "@/components/HeaderHint";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -37,6 +38,9 @@ export default async function DataQualityPage() {
   }
 
   const checks = orderChecks(await data().getDataQuality(me));
+  // The checks a person fixes by linking ids on People (addition 0008e), shown as a link to whoever may open People
+  const linksToPeople = new Set(["owner_without_person", "telephony_user_without_person"]);
+  const mayOpenPeople = holdsAny(me, ["users.manage_agents", "users.manage_all"]);
   const h = copy.hints;
   const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
   const th = "h-10 whitespace-nowrap px-3 font-semibold";
@@ -67,7 +71,12 @@ export default async function DataQualityPage() {
                   <td className={`${td} tabular text-right ${muted ? "" : "font-semibold text-p4a-heading"}`}>
                     {c.total === null ? <span className="text-small">{t.notAvailable}</span> : fmtCount(c.total, me.locale)}
                   </td>
-                  <td className={`${td} text-small`}>{fix}</td>
+                  <td className={`${td} text-small`}>
+                    {fix}
+                    {linksToPeople.has(c.key) && mayOpenPeople ? (
+                      <Link href="/team/people" className="ml-2 font-semibold text-p4a-deepblue underline" data-testid={`dq-link-${c.key}`}>{t.linkPeople}</Link>
+                    ) : null}
+                  </td>
                 </tr>
               );
             })}

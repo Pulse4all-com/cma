@@ -7,10 +7,20 @@
  * Covers the frozen-flags and retire rules as the database applies them, the status list order,
  * the form checks, market and level parsing, coverage targets, the minute settings and the
  * export preview in every format. Keys and names are fixture values; nothing branches on them.
+ * Since addition 0008e (night of 13 October 2026) also the Sources, Markets and Alert rules logic
+ * (src/lib/sources.ts, src/lib/alertRules.ts): sections per kind, the settings rules of
+ * cma.connection_settings_ok, the record link preview as cma.record_url builds it, the rules by name for
+ * forms and call outcomes (12 October 2026's rules reproduced on fixture names), office hours, the
+ * market form, and the alert rules' checks and effect in plain words.
  */
 import {
   exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, retireProblem, statusFormProblem, targetAt, visibleStatuses,
 } from "../src/lib/configuration.ts";
+import {
+  coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
+  planOutcomeRule, formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
+} from "../src/lib/sources.ts";
+import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -62,6 +72,97 @@ expect("preview in the defaults", exportPreview([], labels), ["with BOM", "Date,
 const tabs = [{ key: "export.csv.separator", value: "tab", isDefault: false }, { key: "export.csv.duration_format", value: "hh:mm", isDefault: false }, { key: "export.csv.utf8_bom", value: "false", isDefault: false }];
 expect("preview with tabs, hh:mm and no mark", exportPreview(tabs, labels), ["no BOM", "Date ⇥ Person ⇥ Worked", "2026-10-08 ⇥ A. Example ⇥ 7:30"], ["with BOM"]);
 expect("preview in minutes with a decimal comma stays one cell", exportPreview([{ key: "export.csv.duration_format", value: "minutes", isDefault: false }, { key: "export.csv.decimal_mark", value: "comma", isDefault: false }], labels)[2], "2026-10-08,A. Example,450", "2026-10-08,A. Example,\"7,5\"");
+
+// ---- Sources (addition 0008e) ----------------------------------------------------------------------
+expect("a customer-records connection has four sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields"], ["lines", "tags"]);
+expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags"], []);
+expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
+expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
+expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);
+expect("a settings key in the right form", settingKeyProblem("record_url_deal", ["app_host"], true), null, "key");
+expect("a secret-looking key is refused", settingKeyProblem("api_token", [], true), "secret", null);
+expect("the word key in a key is refused too", settingKeyProblem("license_key", [], true), "secret", null);
+expect("an upper-case key is refused", settingKeyProblem("AppHost", [], true), "key", null);
+expect("a new key that exists is a duplicate", settingKeyProblem("app_host", ["app_host"], true), "duplicate", null);
+expect("settings with a nested value are refused", settingsProblem({ a: { b: 1 } }), "value", null);
+expect("flat settings pass", settingsProblem({ app_host: "x.example.com", replay: true, retries: 3 }), null, "value");
+expect("settings measured as the database does", settingsSize({ a: "b", c: 1 }), 18, 13);
+expect("a boolean stays a boolean", coerceSettingValue("false", true), false, "false");
+expect("a number stays a number", coerceSettingValue(" 42 ", 7), 42, "42");
+expect("a new setting is text", coerceSettingValue("true"), "true", true);
+expect("the record type of a link template", recordTypeOfSetting("record_url_ticket"), "ticket", null);
+expect("no record type for another key", recordTypeOfSetting("app_host"), null, "app_host");
+const linkSettings = { app_host: "app.example.com" };
+expect("a record link as cma.record_url builds it", recordUrlPreview("https://{app_host}/r/{account}/deal/{id}", linkSettings, "147000", "41000123"),
+  "https://app.example.com/r/147000/deal/41000123", null);
+expect("no link without a valid host", recordUrlPreview("https://{app_host}/x/{id}", { app_host: "Bad Host" }, "1", "2"), null, "https://Bad Host/x/2");
+expect("no link while a placeholder stays unfilled", recordUrlPreview("https://x.example.com/{record}/{id}", {}, "1", "2"), null, "https://x.example.com/{record}/2");
+expect("no link that is not https", recordUrlPreview("http://x.example.com/{id}", {}, "1", "2"), null, "http://x.example.com/2");
+expect("words are lower case, trimmed, once", parseWords("Quote, contact;INFO, quote,"), ["quote", "contact", "info"], ["Quote", "contact", "INFO"]);
+expect("a name matches an include word", nameMatches("NL - Quote form", ["quote", "contact"], ["cancel"]), true, false);
+expect("an exclude word wins", nameMatches("NL - Quote cancellation", ["quote"], ["cancellation"]), false, true);
+expect("no include words match every name", nameMatches("Anything", [], []), true, false);
+expect("the first word found in the name", firstWordIn("Contact us for a quote", ["quote", "contact"]), "contact", "quote");
+const mk = [{ code: "GB", aliases: ["uk", "united kingdom"] }, { code: "NL", aliases: [] }, { code: "DE", aliases: [] }];
+expect("a UK prefix reads through the alias", prefixMarket("UK - Contact form", mk), "GB", "UK");
+expect("a code prefix is the market", prefixMarket("  nl Quote", mk), "NL", null);
+expect("three letters are no prefix", prefixMarket("NLD quote", mk), null, "NL");
+expect("an unknown prefix names no market", prefixMarket("ES - Quote", mk), null, "ES");
+// Martin's form rule of 12 October 2026, on fictional names
+const fixtureForms = [
+  ["f1", "NL - Quote form"], ["f2", "UK - Contact form"], ["f3", "DE Info request"], ["f4", "NL - Cancellation form"],
+  ["f5", "UK - Replacement request"], ["f6", "Support question"], ["f7", "Newsletter sign-up"], ["f8", "ES - Quote form"],
+].map(([formId, name]) => ({ formId, name, isCounted: true, leadSource: null, market: null, keptFields: [], isActive: true }));
+const leadRule = { include: ["quote", "contact", "info"], exclude: ["cancellation", "replacement", "support"], counted: "yes",
+  leadSource: { kind: "firstWord" }, market: { kind: "prefix" }, others: "notCounted" };
+const plan = planFormRule(fixtureForms, leadRule, mk);
+expect("the lead rule changes the forms it should", plan.map((p) => p.formId), ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"], ["f1"]);
+expect("a quote form gets quote and NL", plan.find((p) => p.formId === "f1")?.after, { isCounted: true, leadSource: "quote", market: "NL" }, { isCounted: true, leadSource: null, market: null });
+expect("a UK contact form gets contact and GB", plan.find((p) => p.formId === "f2")?.after, { isCounted: true, leadSource: "contact", market: "GB" }, { isCounted: true, leadSource: "contact", market: "UK" });
+expect("a cancellation form stops counting", plan.find((p) => p.formId === "f4")?.after, { isCounted: false, leadSource: null, market: null }, { isCounted: true, leadSource: null, market: "NL" });
+expect("a form without a market prefix keeps its market", plan.find((p) => p.formId === "f8")?.after, { isCounted: true, leadSource: "quote", market: null }, { isCounted: true, leadSource: "quote", market: "ES" });
+expect("a second run changes nothing", planFormRule(fixtureForms.map((f) => { const p = plan.find((x) => x.formId === f.formId); return p ? { ...f, ...p.after } : f; }), leadRule, mk).length, 0, 8);
+expect("a rule that sets nothing is refused", formRuleProblem({ ...leadRule, counted: "keep", leadSource: { kind: "keep" }, market: { kind: "keep" }, others: "keep" }), "nothing", null);
+expect("the first word needs include words", formRuleProblem({ ...leadRule, include: [] }), "noInclude", null);
+expect("a lead source value needs a value", formRuleProblem({ ...leadRule, leadSource: { kind: "value", value: " " } }), "leadSource", null);
+// Martin's call outcome rule of 12 October 2026
+const outcomes = [["o1", "Connected", false], ["o2", "Not reached", true], ["o3", "Voicemail", true], ["o4", "Do Not Call Or Email", false], ["o5", "Left live message", true], ["o6", "Busy", false]]
+  .map(([outcomeRef, label, isConnected]) => ({ outcomeRef, label, isConnected, isActive: true }));
+const outcomePlan = planOutcomeRule(outcomes, { include: parseWords("not reached, voicemail, no answer, busy, wrong number, incorrect data, email only, left live message"), exclude: [], connected: false, others: "opposite" });
+expect("the outcome rule: not reached and voicemail off, connected on", outcomePlan.map((p) => `${p.outcomeRef}=${p.after}`), ["o1=true", "o2=false", "o3=false", "o4=true", "o5=false"], ["o1=false"]);
+expect("others left alone change nothing", planOutcomeRule(outcomes, { include: ["busy"], exclude: [], connected: false, others: "keep" }).length, 0, 1);
+// Markets
+expect("office hours as typed", parseOfficeHours("9-12:30, 13-17"), "09:00-12:30,13:00-17:00", "9-12:30,13-17");
+expect("hours in four digits and to 24:00", parseOfficeHours("0900-2400"), "09:00-24:00", null);
+expect("empty hours are closed", parseOfficeHours("  "), "", null);
+expect("overlapping ranges are refused", parseOfficeHours("9-13, 12-17"), null, "09:00-13:00,12:00-17:00");
+expect("a range that closes before it opens is refused", parseOfficeHours("17-9"), null, "17:00-09:00");
+const hours = [{ market: "*", weekday: 1, hours: "09:00-17:00" }, { market: "GB", weekday: 1, hours: "08:00-16:00" }];
+expect("a market without own hours follows the default", effectiveHours(hours, "NL", 1), { hours: "09:00-17:00", fromDefault: true }, { hours: "", fromDefault: false });
+expect("a market with own hours is closed on a day without", effectiveHours(hours, "GB", 2), { hours: "", fromDefault: false }, { hours: "09:00-17:00", fromDefault: true });
+expect("UK is refused as a market code", marketFormProblem({ code: "UK", name: "x", timeZone: "Europe/London", languageCode: "en", currency: "GBP", languageSkillKey: null, minLanguageLevel: null }), "uk", null);
+expect("a minimum level needs a skill", marketFormProblem({ code: "NL", name: "x", timeZone: "Europe/Amsterdam", languageCode: "nl", currency: "EUR", languageSkillKey: null, minLanguageLevel: 3 }), "level", null);
+expect("a holiday date is a real date", parseDay("2026-02-30"), null, "2026-02-30");
+// Alert rules
+const choices = [{ connectionName: "C", recordType: "deal", pipelineId: "p2", label: "Web orders", isCounted: false }, { connectionName: "C", recordType: "deal", pipelineId: "p1", label: "Sales", isCounted: true },
+  { connectionName: "C", recordType: "ticket", pipelineId: "p3", label: "Support", isCounted: true }];
+expect("record types from the pipelines and the rules", recordTypes(choices, ["follow_up"]), ["deal", "follow_up", "ticket"], ["deal", "ticket"]);
+expect("pipelines of a type, counted first", pipelinesFor(choices, "deal").map((c) => c.pipelineId), ["p1", "p2"], ["p2", "p1"]);
+expect("pipeline labels, an unknown id as itself", pipelineLabels(["p1", "px"], choices, "deal"), ["Sales", "px"], ["Sales"]);
+expect("an empty age is the default", parseAge(""), null, 60);
+expect("an age above a week is refused", parseAge("10081"), "invalid", 10081);
+const rules = [{ name: "New deal", trigger: "record_created" }];
+expect("a new rule with a name in use is a duplicate", alertRuleProblem({ ...newRule("record_created", "deal"), name: "New deal" }, rules, true), "duplicate", null);
+expect("a name of the other trigger is refused on edit", alertRuleProblem({ ...newRule("record_assigned", "deal"), name: "New deal" }, rules, false), "trigger", null);
+expect("contact cannot raise alerts", alertRuleProblem({ ...newRule("record_created", "contact"), name: "x" }, rules, true), "recordType", null);
+const words = { effectCreated: "A new {record} in {where} alerts {who}.", effectAssigned: "When a {record} in {where} gets an owner, that owner's person is alerted.",
+  effectEveryPipeline: "any counted pipeline", effectPipelines: "{pipelines}", effectAudience: "the holders of {permission}", effectClockedIn: "clocked in",
+  effectLanguage: "with the language", effectFallback: "Else {permission}.", effectNoFallback: "Else nobody.", effectAge: "At most {minutes} minutes old.",
+  effectAgeDefault: "At most {minutes} minutes old (default).", soundNormal: "One tone.", soundUrgent: "A chime.", effectOff: "Off." };
+expect("the effect of a created-record rule", ruleEffect({ ...newRule("record_created", "deal"), enabled: true }, choices, 60, words),
+  ["A new deal in any counted pipeline alerts the holders of leads.accept, clocked in, with the language.", "Else leads.manage.", "At most 60 minutes old (default).", "One tone."], []);
+expect("the effect of an assignment rule, switched off", ruleEffect({ ...newRule("record_assigned", "deal"), pipelineIds: ["p1"], maxAgeMinutes: 30, enabled: false }, choices, 60, words),
+  ["Off.", "When a deal in Sales gets an owner, that owner's person is alerted.", "At most 30 minutes old.", "A chime."], ["Off."]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

@@ -1,0 +1,31 @@
+PASS  working and productive is productive                     got "productive"
+PASS  working, not productive is other work                    got "otherWork"
+PASS  not working, paid is a paid pause                        got "paidPause"
+PASS  not working, unpaid is an unpaid pause                   got "unpaidPause"
+PASS  an ended day is clocked out, whatever its last status    got "clockedOut"
+PASS  no day is not clocked in                                 got "notClockedIn"
+PASS  the order is work, pauses, then off the clock            got ["productive","otherWork","paidPause","unpaidPause","clockedOut","notC
+PASS  rows sort by group, then by name                         got ["Ada","Zoë","Ana","Bo","Cas","Dee","Abe"]
+PASS  six tiles with their counts when every group has a status got [["productive",2],["otherWork",1],["paidPause",1],["unpaidPause",1],["
+PASS  no paid pause tile without a paid pause status           got ["productive","otherWork","unpaidPause","clockedOut","notClockedIn"]
+PASS  the day-state tiles exist even with no status at all     got ["clockedOut","notClockedIn"]
+PASS  the group filter keeps that group                        got ["p7","p1"]
+PASS  the employer filter keeps that employer, across groups   got ["p7","p2","p5"]
+PASS  both filters combine                                     got ["p1"]
+PASS  no filter keeps everyone                                 got 7
+PASS  employers by name, a person without one left out         got [{"key":"company","name":"Company"},{"key":"partner","name":"Partner"}
+PASS  team keys per person, sorted                             got {"p1":["aa","zz"],"p2":["aa"],"p9":["mm"]}
+PASS  the team filter keeps the team's people across groups    got ["p1","p2"]
+PASS  the team filter combines with the others                 got ["p1"]
+PASS  no team filter without memberships changes nothing       got 7
+PASS  teams on the board by name, a team of nobody on it left out got [{"key":"aa","name":"Alpha"},{"key":"zz","name":"Zulu"}]
+PASS  since counts whole seconds from the instant              got 1830
+PASS  since is never negative                                  got 0
+PASS  worked adds the running stretch to the closed ones       got 2430
+PASS  worked stands still while paused or ended                got 9000
+PASS  worked stops at the day's end                            got 1500
+PASS  a stretch begun after the day's end counts nothing       got 54000
+PASS  a refused clock-in gives the window start, nothing else does got ["07:00",null,null,null]
+PASS  the format drops the hour below one                      got ["0:05","59:59","1:00:00","10:20:30"]
+
+ALL 29 PASS

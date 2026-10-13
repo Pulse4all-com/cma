@@ -5,7 +5,7 @@
  * browser or a database. Nothing here branches on a role key, a team key or a skill key: the
  * database says what is assignable and editable, this module only arranges it.
  */
-import type { DirectoryPerson, PersonSkill, RoleInfo, SkillDimension, SkillInfo, SkillInput } from "./data/types";
+import type { DirectoryPerson, LinkedAccount, LinkedAccountSystem, PersonSkill, RoleInfo, SkillDimension, SkillInfo, SkillInput } from "./data/types";
 
 /** Languages first, then work types, then channels, as the directory orders them */
 export const DIMENSIONS: readonly SkillDimension[] = ["language", "work_type", "channel"];
@@ -133,4 +133,43 @@ export function checkNewPerson(f: NewPersonForm): NewPersonProblem[] {
   const id = f.loginId.trim();
   if (id.length < 1 || id.length > 200 || /\s/.test(id) || f.loginSystem.trim().length < 1) out.push("login");
   return out;
+}
+
+// ---- Linked accounts (addition 0008e) -------------------------------------------------------------
+// A person's ids in the tenant's customer-record and telephony systems (<adapter>_owner, <adapter>_user),
+// typed by hand. The systems come from the tenant's connections; nothing here names a vendor.
+
+/** Per system the id as typed; an empty text means not linked */
+export type LinkedState = Record<string, string>;
+
+/** The person's linked ids for the systems shown, as the editor starts */
+export function linkedStateOf(accounts: readonly LinkedAccount[], userId: string, systems: readonly LinkedAccountSystem[]): LinkedState {
+  const out: LinkedState = {};
+  for (const s of systems) out[s.system] = accounts.find((a) => a.userId === userId && a.system === s.system)?.externalId ?? "";
+  return out;
+}
+
+/** An id the database accepts: 1 to 100 characters without spaces (empty unlinks) */
+export function linkedIdProblem(text: string): boolean {
+  const v = text.trim();
+  return v !== "" && (v.length > 100 || /\s/.test(v));
+}
+
+/** The writes between the ids as opened and as edited: a changed id links, an emptied one unlinks */
+export function linkedChanges(initial: LinkedState, next: LinkedState): { system: string; externalId: string | null }[] {
+  return Object.keys(next)
+    .filter((s) => (initial[s] ?? "").trim() !== next[s]!.trim())
+    .sort()
+    .map((s) => ({ system: s, externalId: next[s]!.trim() === "" ? null : next[s]!.trim() }));
+}
+
+/** How many of the shown systems a person has an id for */
+export function linkedCount(accounts: readonly LinkedAccount[], userId: string, systems: readonly LinkedAccountSystem[]): number {
+  return systems.filter((s) => accounts.some((a) => a.userId === userId && a.system === s.system)).length;
+}
+
+/** The label of a system from its connections: "Owner id in <connection>", "User id in <connection>", else the system itself */
+export function linkedLabel(s: LinkedAccountSystem, words: { linked_owner: string; linked_user: string; linkedSystem: string }): string {
+  if (s.connections.length === 0) return words.linkedSystem.replace("{system}", s.system);
+  return (s.role === "owner" ? words.linked_owner : words.linked_user).replace("{connection}", s.connections.join(", "));
 }

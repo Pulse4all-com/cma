@@ -1,6 +1,6 @@
-# Prod runbook: HubSpot into cma-ingest in prod
+# Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`). It replaces step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md`; Aircall, Make and Shopify stay in that phase as they are. Order: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8) and Shopify (phase 9). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -352,3 +352,357 @@ gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.serv
 ```
 Expected: mostly `200`; a few `401` or `404` are strangers; many `429` would come from Cloud Armor (then the rate-limit Open decision); `500` points at the database or a secret.
 - **Records:** the outputs of 7.1 to 7.8 (the checks, the counts, `cma.connection_config`) into `records/intake-prod-<date>/`, committed as a records PR afterwards.
+
+---
+
+# Phase 8. Aircall in prod
+
+Written on 13 October 2026 from `VENDOR_SETUP.md` §2 (`docs/night-2026-10-10/`), step 5 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` and what 12 October taught for HubSpot. The Aircall click paths of VENDOR_SETUP were written from Aircall's documentation and have not been walked through in Pulse4all's Aircall account; a step that depends on one says so. The connection's lines, tags and kind are set on **Configuration → Sources** (addition 0008e), each agent's Aircall user id on **Team → People → Linked accounts**; the SQL next to them is the fallback.
+
+**The gate.** The Aircall adapter (brief B9) is not on `main` on 13 October: `ingest/src/adapters/` holds `automation` and `hubspot` only, and the scripts this phase calls (`docs/ingest/aircall-webhook.mjs`, `docs/ingest/aircall-users.mjs`) and the backfill object `telephony_call` come with it. Until B9 is merged and deployed, run 8.1 and 8.2 only (they touch nothing the CMA reads) and stop there.
+
+**Terminal** (in `~/cma`, on a current `main`)
+```bash
+git switch -q main && git pull -q --ff-only && ls ingest/src/adapters docs/ingest/aircall-webhook.mjs docs/ingest/aircall-users.mjs
+```
+Expected after B9: `aircall automation hubspot` and the two script paths. `No such file or directory` for a script means B9 is not merged: 8.1 and 8.2 only.
+
+Also before 8.3: addition 0008e run in prod (`docs/night-2026-10-13/MORNING_RUNBOOK.md`), so the Sources page and the Linked accounts exist; the HubSpot phase done (7.1 to 7.8), because speed to lead pairs Aircall calls with the HubSpot call engagements the Aircall–HubSpot integration logs.
+
+**Data prerequisites** (Aircall side; the counts mean nothing without them):
+- Tagging on for every line, and agents tagging every call. The CMA counts tags as Aircall reports them; an untagged line counts as untagged calls, not as a gap.
+- Every agent who calls has their own Aircall user (a shared user cannot be linked to one person).
+- Each line's market known (the line's country is not read as its market; you set it in 8.6).
+- The Aircall–HubSpot integration on and logging every call on the contact (`VENDOR_SETUP.md` §2, last paragraph). It is not changed by this phase.
+- The Open decision "Aircall tags as a refinement of connected" stays open: this phase counts tags as tags, not as outcomes.
+
+## 8.1 The plan check
+
+**Browser:** Aircall Dashboard → **Integrations & API** → **API Keys** (`VENDOR_SETUP.md` §2.1; not walked through).
+
+Expected: the API Keys page with a button to generate a key. If the menu is missing, the plan has no API access: stop phase 8 and write down the plan's name (Open decisions).
+
+## 8.2 The API key into Secret Manager
+
+**Browser:** API Keys → **Generate an API key**, description `CMA ingest (prod)`. Aircall shows the API ID and the API token once. Keep the page open until the next step is done.
+
+**Terminal** (type it on its own line; the value is one line of JSON, `{"api_id":"<API ID>","api_token":"<API token>"}`)
+```bash
+put_secret p4a-cma-prod ingest-aircall-subs-token
+```
+Expected: the hidden prompt; paste, Enter; `stored ingest-aircall-subs-token (version added)`. Then close the Aircall page.
+
+**Terminal** (the key checked without showing it; Aircall's API takes the pair as basic authentication)
+```bash
+gcloud secrets versions access latest --secret=ingest-aircall-subs-token --project=p4a-cma-prod \
+  | python3 -c 'import json,sys,base64; d=json.load(sys.stdin); print("Authorization: Basic " + base64.b64encode((d["api_id"]+":"+d["api_token"]).encode()).decode())' \
+  | curl -s -o /dev/null -w "%{http_code}\n" -H @- https://api.aircall.io/v1/company
+```
+Expected: `200`. `401` means the pair is wrong or pasted with spaces; a Python error means the value is not the JSON line: run `put_secret` again (it adds a version).
+
+## 8.3 The connection
+
+**The account id.** `upsert_connection` takes the account the connection pins (the live portal's `147946837` for HubSpot). Which Aircall value B9 compares (the company id an Aircall event carries, or another) is B9's to state in `docs/ingest/README.md`; Aircall's Dashboard is not known to show a company id. Not grounded tonight: take the value B9's README names.
+
+**Studio (cma-prod-pg)** after the context block
+```sql
+select * from cma.upsert_connection('aircall', 'Aircall Subscriptions', '<account id per B9>',
+                                    'ingest-aircall-subs-signing', 'ingest-aircall-subs-token');
+```
+Expected: one row with `connection_id` and `key`. Keep both in the tab: the key goes into the webhook address, the id is `<aircall conn>` below.
+
+**Studio (cma-prod-pg)** (same tab; the kind decides the Sources page's sections and that People offers an Aircall user id)
+```sql
+select cma.set_connection_kind('<aircall conn>', 'telephony');
+select name, adapter, external_account_id, kind, status, signing_secret_name, token_secret_name
+from cma.sources() where connection_id = '<aircall conn>';
+reset role;
+```
+Expected: an empty result, then one row: `Aircall Subscriptions`, `aircall`, the account id, `telephony`, `active`, `ingest-aircall-subs-signing`, `ingest-aircall-subs-token`.
+
+**Browser:** `https://workspace.pulse4all.app/configuration/sources` → **Aircall Subscriptions**.
+
+Expected: the connection with kind Telephony, the two secret names (names only), and the Lines and Tags sections, both empty (`No tags received yet`). The kind can also be set here (Choose the kind → Telephony → Set kind) instead of the Studio statement; the page never creates a connection, because a connection names its secrets.
+
+## 8.4 The webhook and the service's access to it
+
+The webhook's token is the signing secret: Aircall puts it in every event, and only the API response that creates the webhook shows it (`VENDOR_SETUP.md` §2.3), which is why the script creates the webhook and stores the token. The secret is created empty first, so the service can read it from the first event on.
+
+**Terminal**
+```bash
+gcloud secrets create ingest-aircall-subs-signing --project=p4a-cma-prod --replication-policy=user-managed --locations=europe-west4
+```
+Expected: `Created secret [ingest-aircall-subs-signing].` (on a rerun: `already exists`, which is fine).
+
+**Terminal** (the accessor grants; always with `--front`, or the ingress goes back to `all`)
+```bash
+bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-aircall-subs-token --secret ingest-aircall-subs-signing
+```
+Expected: `accessor on ingest-aircall-subs-token`, `accessor on ingest-aircall-subs-signing`, `image … exists (sha256:…); no build` when B9's image was deployed already (else the build), a new revision, `health: {"ok":true,"version":"<short sha>"}` through the host, and `webhook address per connection: https://ingest.pulse4all.app/<adapter>/<connection key>`.
+
+**Terminal** (`<key>` from 8.3)
+```bash
+node docs/ingest/aircall-webhook.mjs --project p4a-cma-prod --url "https://ingest.pulse4all.app/aircall/<key>" --api-secret ingest-aircall-subs-token --token-secret ingest-aircall-subs-signing
+```
+Expected (B9's script as VENDOR_SETUP §2.3 describes it): the webhook id and the six events (`call.created`, `call.answered`, `call.ended`, `call.tagged`, `call.untagged`, `call.archived`); the token stored as a version of `ingest-aircall-subs-signing` and never printed. Run it once: a second run creates a second webhook (unless B9 says it checks), and both would deliver every event.
+
+## 8.5 The first events
+
+**Browser / phone:** from the Aircall app, call your own mobile on a Pulse4all line, answer, talk ten seconds, hang up; tag the call with any tag. Your own number is staff data; it is stored only as a keyed hash.
+
+**Terminal**
+```bash
+gcloud run services logs read cma-ingest --project=p4a-cma-prod --region=europe-west4 --limit=30 | grep -E "webhook|authentication" | tail -10
+```
+Expected: `webhook` lines for the Aircall route with `new` above 0; no `authentication failed` (that means the token in `ingest-aircall-subs-signing` is not this webhook's: the script's run did not store it, or a second webhook exists).
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select object_type, kind, status, error, count(*) from cma.ingest_event
+where connection_id = '<aircall conn>' and recorded_at > now() - interval '1 hour' group by 1, 2, 3, 4 order by 1, 2;
+select source_id, direction, status, started_at, answered_at, ended_at, talk_seconds, user_ref, number_ref,
+       counterpart_hash is not null as hashed
+from cma.telephony_call where connection_id = '<aircall conn>' order by started_at desc limit 3;
+select call_source_id, tag_ref, tagged_at, untagged_at from cma.telephony_call_tag
+where connection_id = '<aircall conn>' order by tagged_at desc limit 3;
+reset role;
+```
+Expected: events `processed`; one call `outbound` with its times, about ten seconds of talk, your Aircall user id in `user_ref`, the line in `number_ref`, `hashed` true; one tag row with `untagged_at` empty. `failed` with `pepper_unavailable` means the deploy in 8.4 ran without `--tenant`.
+
+## 8.6 Lines and tags
+
+The adapter reads Aircall's lines and tags with the first events (B9; `VENDOR_SETUP.md` §2.4). Calls count only on counted lines, for the line's market.
+
+**Browser:** Configuration → Sources → Aircall Subscriptions → **Lines**: per line choose its market and switch **Counted** off for internal and test lines. **Tags**: every tag counts until switched off; switch off tags that are not about the customer conversation, if any.
+
+Expected: each change saved without a message and still there after a reload. Intake (Reports → Intake) no longer shows `No telephony connected` from the first call or line on (the CMA counts telephony as connected once an active telephony connection holds a line or a call).
+
+The fallback in **Studio (cma-prod-pg)** after the context block, one line per statement (a line not yet read is added with its id as name):
+```sql
+select number_ref, name, market, is_counted from cma.telephony_number where connection_id = '<aircall conn>' order by name;
+select cma.set_telephony_number('<aircall conn>', '<number_ref>', '<market code>', true);
+reset role;
+```
+Expected: the lines, then an empty result per statement.
+
+## 8.7 People: each agent's Aircall user id
+
+**Terminal** (B9's script, the API key read with your own login and never printed)
+```bash
+node docs/ingest/aircall-users.mjs --project p4a-cma-prod --api-secret ingest-aircall-subs-token
+```
+Expected: one `select cma.set_user_external_id(…, 'aircall_user', '<Aircall user id>')` per Aircall user who is a CMA person, then a count on stderr, as `hubspot-owners.mjs` does in 7.6. Paste the lines in **Studio (cma-prod-pg)** after the context block, then `reset role;`. Expected: one row per person.
+
+Or by hand, one person at a time: **Browser:** Aircall Dashboard → Users → the user: the id is the number in the page's address (`VENDOR_SETUP.md` §2.5; not walked through). Then `https://workspace.pulse4all.app/team/people` → the person → **Linked accounts** → `User id in Aircall Subscriptions` → the id → Save.
+
+Expected: the People list's **Linked** column shows `2 of 2` for a person with their HubSpot owner id and their Aircall user id. An id already linked to someone else is refused with `This id is already linked to someone else`; nothing changes until it is unlinked there. A manager links the agents they may edit; an admin links everyone; nobody links their own ids on this page.
+
+**Browser:** Reports → **Data quality**. Expected: `Telephony users without a person` at 0 after the calls of every linked agent; a count above 0 lists Aircall users who called without a CMA person (a new agent, or an id typed wrong), with the link to People.
+
+## 8.8 Backfill from 1 October
+
+**Terminal** (`<aircall conn>` from 8.3)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<aircall conn>,--object,telephony_call,--from,2026-10-01
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed execution is run again with the same arguments (it continues where it stopped, as for HubSpot; B9 states Aircall's pacing).
+
+The sweep links calls of the last two hours only (`link_calls(now() − 2 h)`), so the backfilled calls are linked once, by hand:
+
+**Studio (cma-prod-pg)** after the context block
+```sql
+select cma.link_calls('2026-10-01 00:00 Europe/Amsterdam'::timestamptz);
+reset role;
+```
+Expected: the number of links made.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select count(*), min(started_at), max(started_at), count(*) filter (where user_ref is null) as without_user
+from cma.telephony_call where connection_id = '<aircall conn>';
+select count(*) from cma.call_link l join cma.telephony_call t on t.tenant_id = l.tenant_id and t.id = l.telephony_call_id
+where t.connection_id = '<aircall conn>' and l.unlinked_at is null;
+select job, stream, status, counts, error, started_at, finished_at from cma.sync_run
+where connection_id = '<aircall conn>' order by started_at desc limit 5;
+reset role;
+```
+Expected: calls from 1 October onward; links for most calls agents logged in HubSpot; a `backfill` row `succeeded` for stream `telephony_call`. Few links next to many calls means the Aircall–HubSpot integration does not log every call (data prerequisite) or the HubSpot calls carry no number (the `counterpart_hash` on `cma.crm_call` is empty).
+
+## 8.9 Day one
+
+- **The end-to-end check** of Phase 7 step 7 on the first real new deal: the Aircall call, its HubSpot call engagement, the `call_link` within two hours, the deal in `speed_to_lead_rows`. Compare the engagement's `occurred_at` with the Aircall call's `started_at` for the same call: equal within seconds means HubSpot's time is the start; minutes apart means the effective start comes from the link (DESIGN §4.4 does that already).
+- **Browser:** Reports → Intake: the calls column per day and market; Reports → Data quality: `Telephony calls without a logged call` after 24 hours.
+- **Records:** the outputs of 8.2 to 8.8 into `records/intake-prod-<date>/`, with the HubSpot ones.
+
+---
+
+# Phase 9. Shopify in prod
+
+Written on 13 October 2026 from `VENDOR_SETUP.md` §3 and §4 and step 6 of Phase 7. Shopify's Dev Dashboard click paths follow Shopify's documentation as of 10 October and have not been walked through in Pulse4all's organisation; the protected-data selection in particular may ask for a review (then §4's fallback). Per store: one connection, one store row, one set of subscriptions, one backfill.
+
+**The gate.** The Shopify adapter (brief B10) is not on `main` on 13 October: no `ingest/src/adapters/shopify`, no `docs/ingest/shopify-subscribe.mjs`, no outbox worker job (`ingest-outbox`, the writer of the HubSpot fields of 0007c), no backfill objects `commerce_customer` and `commerce_order`. Until B10 is merged and deployed with its job, run 9.1 to 9.3 only (Shopify-side setup and the secret) and stop there.
+
+**Terminal** (in `~/cma`, on a current `main`)
+```bash
+git switch -q main && git pull -q --ff-only && ls ingest/src/adapters docs/ingest/shopify-subscribe.mjs ingest/jobs
+```
+Expected after B10: `automation hubspot shopify` (with `aircall` after B9), the script path, and `outbox.mjs` among the jobs.
+
+**Data prerequisites:**
+- Every Pulse4all store installed (9.3) and subscribed (9.7). A store left out is missing from first orders and lead to order without any error.
+- Shopify grants the protected field **Email** (9.2). Without it the CMA cannot find the customer's HubSpot contact; `VENDOR_SETUP.md` §4 has the fallback (Make writes only the Shopify id), decided on the day.
+- The Make modules that write the nine contact properties of `VENDOR_SETUP.md` §1.1 are switched off before the write-back starts (9.4): one writer per property.
+- The renewal source names or app ids of the subscription app (9.5), or every renewal counts as a repeat order.
+- The HubSpot property Contact-Shopify Store has an option per store handle.
+
+## 9.1 The organisation check
+
+**Browser:** Shopify admin of any Pulse4all store → Settings → Apps → Develop apps → **Build apps in Dev Dashboard** → **Stores** (`VENDOR_SETUP.md` §3.1).
+
+Expected: the list of the organisation's stores. Every Pulse4all store in it → one app (9.2 once). A store in another organisation → one app per organisation, each with its own client secret: repeat 9.2 and 9.3 per organisation with the secret name `ingest-shopify-<organisation>-signing` instead of `ingest-shopify-app-signing`. Write the store handles down (the part before `.myshopify.com`).
+
+## 9.2 The app and its version
+
+**Browser:** Dev Dashboard → Apps → Create app → name **CMA ingest** → Versions → Create a version (`VENDOR_SETUP.md` §3.2):
+- Scopes `read_customers`, `read_orders`, and `read_all_orders` if offered (without it Shopify serves 60 days of orders; first versus repeat then comes from the customer's lifetime order count).
+- No app address, no extensions, no webhooks in the version (the CMA subscribes per store in 9.7).
+- Distribution **Custom**.
+- The app → API access requests → Protected customer data access → customer data with the field **Email** only (not name, phone, address); reason "match the customer to our CRM contact; not stored".
+- Release the version.
+
+Expected: version 1 released with the three scopes; the protected data request listed as granted for Email. If the Dashboard asks for a review or refuses, stop here and decide §4's fallback; the rest of the phase works either way (the match step is skipped when the email is withheld).
+
+## 9.3 Install per store and the client secret
+
+**Browser:** the app → Home → **Install app** → each Pulse4all store from 9.1, one by one. Then Settings → Credentials: note the **Client ID** (not a secret; it goes into each store connection's settings) and copy the **Client secret**.
+
+**Terminal** (on its own line)
+```bash
+put_secret p4a-cma-prod ingest-shopify-app-signing
+```
+Expected: `stored ingest-shopify-app-signing (version added)`. Every store connection of this app names this one secret: Shopify signs each store's webhooks with the app's client secret.
+
+**Terminal** (after B10 is deployed; always with `--front`)
+```bash
+bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-shopify-app-signing
+```
+Expected: `accessor on ingest-shopify-app-signing`, a new revision, `health: {"ok":true,…}`.
+
+**Terminal** (B10's outbox worker and its schedule)
+```bash
+bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: the four jobs of 7.2 plus `ingest-outbox` and its schedule (B10 states it), `no build`.
+
+## 9.4 Make switched off for the nine properties
+
+**Browser:** Make → every scenario that writes any of the nine properties of `VENDOR_SETUP.md` §1.1 (the private app "Pulse4all – Make Contacts" is the likely one) → remove those modules or mappings, save, keep the scenario on for everything else (`VENDOR_SETUP.md` §4). Not walked through: the scenario list was not reviewed for this runbook.
+
+Expected: no Make scenario names Contact-Shopify ID-1, ID-2, Store, Total orders, Total spent, Country, Currency or Language in a HubSpot module. Write the scenario names and what was removed into the records.
+
+## 9.5 The write-back fields and the renewal settings (once)
+
+**Studio (cma-prod-pg)** after the context block (`<hubspot conn>` is the live HubSpot connection of 7.3; `select connection_id, adapter, name from cma.sources();` lists it)
+```sql
+select cma.set_writeback_field('<hubspot conn>', 'commerce_ref',    'contact_shopify_id_1',         'slot',     true, 1::smallint);
+select cma.set_writeback_field('<hubspot conn>', 'commerce_ref',    'contact_shopify_id_2',         'slot',     true, 2::smallint);
+select cma.set_writeback_field('<hubspot conn>', 'commerce_store',  'contact_shopify_store',        'always',   true);
+select cma.set_writeback_field('<hubspot conn>', 'commerce_orders', 'contact_shopify_total_orders', 'always',   true);
+select cma.set_writeback_field('<hubspot conn>', 'commerce_spent',  'contact_shopify_total_spent',  'always',   true);
+select cma.set_writeback_field('<hubspot conn>', 'country',         'contact_country',              'if_empty', true);
+select cma.set_writeback_field('<hubspot conn>', 'currency',        'contact_currency',             'if_empty', true);
+select cma.set_writeback_field('<hubspot conn>', 'language',        'contact_language',             'if_empty', true);
+reset role;
+```
+Expected: eight empty results. Configuration → Sources → HubSpot Subscriptions shows them under the write-back section (read-only there).
+
+The renewal lists are tenant settings. Their values are the subscription app's order source name or app id, which no one has looked up yet: leave them empty now and set them in 9.8 from the backfilled orders.
+
+## 9.6 Per store: the connection, its settings and the store
+
+Repeat 9.6 to 9.8 per store. **Do the three in one sitting**: the store row makes Intake count the shop as connected (the `No shop connected` text disappears), so a store row without subscriptions and backfill shows zero orders as if the shop sold nothing.
+
+**Studio (cma-prod-pg)** after the context block (`<handle>` from 9.1)
+```sql
+select * from cma.upsert_connection('shopify', 'Shopify <store name>', '<handle>.myshopify.com',
+                                    'ingest-shopify-app-signing', null);
+```
+Expected: one row with `connection_id` (`<shop conn>`) and `key`.
+
+**Studio (cma-prod-pg)** (same tab)
+```sql
+select cma.set_connection_kind('<shop conn>', 'commerce');
+select cma.set_connection_settings('<shop conn>', '{"client_id":"<client id from 9.3>","api_version":"2026-10","shop_handle":"<handle>","crm_connection_id":"<hubspot conn>"}'::jsonb);
+reset role;
+```
+Expected: two empty results. The settings can also be typed on the Sources page (Settings → Add setting, one key per row → Save settings); the page refuses a key that names a secret.
+
+**Browser:** Configuration → Sources → Shopify <store name> → **Store** → **Add store**: the handle, the name, the store's market, its currency (three capital letters) and its time zone (for example `Europe/Amsterdam`) → Save.
+
+Expected: the store listed with its market. The fallback in Studio after the context block: `select cma.upsert_commerce_store('<shop conn>', '<handle>', '<store name>', '<market>', '<currency>', '<time zone>');` (answers the store's id). A handle another store holds is refused (`Another store already has this handle`).
+
+**Browser:** live portal → Settings → Properties → Contact-Shopify Store → the option `<handle>` exists (add it if not).
+
+## 9.7 Per store: the subscriptions and the first events
+
+**Terminal** (`<key>` of this store's connection)
+```bash
+node docs/ingest/shopify-subscribe.mjs --project p4a-cma-prod --shop <handle>.myshopify.com --client-id <client id from 9.3> --secret-name ingest-shopify-app-signing --url "https://ingest.pulse4all.app/shopify/<key>"
+```
+Expected (`VENDOR_SETUP.md` §3.4): seven subscriptions created (`CUSTOMERS_CREATE`, `CUSTOMERS_UPDATE`, `CUSTOMERS_DELETE`, `ORDERS_CREATE`, `ORDERS_UPDATED`, `ORDERS_CANCELLED`, `ORDERS_DELETE`) or listed as existing on a rerun. The nightly reconcile recreates a subscription Shopify removed after failed deliveries.
+
+The first real order or customer change of the store arrives within a minute; a store with few orders may take hours. No test order in a live store: it would be a real order in Shopify's books.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select object_type, kind, status, error, count(*) from cma.ingest_event
+where connection_id = '<shop conn>' and recorded_at > now() - interval '1 day' group by 1, 2, 3, 4 order by 1, 2;
+select status, count(*) from cma_read.outbox_action group by 1;
+reset role;
+```
+Expected: events `processed`; outbox actions `sent` once a customer matched a contact. A `401` in the service log for the Shopify route means the secret is not this app's client secret (or the store belongs to another organisation's app).
+
+## 9.8 Per store: backfill from 1 October
+
+**Terminal** (customers first, then orders)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<shop conn>,--object,commerce_customer,--from,2026-10-01
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<shop conn>,--object,commerce_order,--from,2026-10-01
+```
+Expected: two `has successfully completed` lines. A failed execution is run again with the same arguments.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select count(*), min(source_created_at), max(source_created_at) from cma.commerce_customer where connection_id = '<shop conn>';
+select order_kind, count(*), min(source_created_at), max(source_created_at) from cma.commerce_order
+where connection_id = '<shop conn>' group by 1 order by 1;
+select source_name, app_ref, count(*) from cma.commerce_order where connection_id = '<shop conn>' group by 1, 2 order by 3 desc;
+select job, stream, status, counts, error, started_at, finished_at from cma.sync_run
+where connection_id = '<shop conn>' order by started_at desc limit 5;
+reset role;
+```
+Expected: customers and orders since 1 October; `order_kind` mostly `first` and `repeat` (`renewal` stays 0 until the lists are set); the source names and app ids with their counts (no customer data); two `backfill` rows `succeeded`.
+
+The subscription app's renewals show as one `source_name` or `app_ref` with many orders (Shopify's own checkout is `web`, the point of sale `pos`). Once you have seen which one it is, set the lists and reclassify:
+
+**Studio (cma-prod-pg)** after the context block (comma-separated; leave a list empty when the other names the renewals)
+```sql
+select cma.set_tenant_setting('commerce.renewal_source_names', '<source name of the subscription app>');
+select cma.set_tenant_setting('commerce.renewal_app_ids', '<app id, or an empty string>');
+select cma.reclassify_orders();
+reset role;
+```
+Expected: one row per setting (`key`, `value`, `is_default` false), then the number of orders that changed kind; rerun the `order_kind` query: `renewal` filled, `repeat` lower.
+
+**Browser:** Reports → Intake (and Dashboard, the intake row): the `No shop connected` text is gone; first orders appear per day for the store's market.
+
+## 9.9 Day one
+
+- **Lead to order**: Studio after the context block, `select * from cma.lead_to_order_rows(current_date - 7, current_date) limit 20;` shows deals followed by a first order of the same contact within the window.
+- **Browser:** Reports → Data quality: `Shop customers without a contact` and the ambiguous count. Customers without a deal count as unmatched (the CMA holds a contact only while a record points to it), so a high number on day one is expected; a number that does not fall as deals come in means the email match is not happening (9.2).
+- **Browser:** live portal → a contact with a recent order: Contact-Shopify ID-1, Store and the totals filled within two minutes of the order; a contact that had a country keeps it.
+- **Records:** the outputs of 9.2 to 9.8 per store, the Make change of 9.4 and the renewal values into `records/intake-prod-<date>/`.

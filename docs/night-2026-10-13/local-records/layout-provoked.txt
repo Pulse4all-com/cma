@@ -1,0 +1,7 @@
+  manager /reports/intake?range=month: the main area scrolls sideways by 110px at 1280
+  manager /reports/data-quality: the header hint covers the header it explains
+  admin /configuration/alert-rules: the main area scrolls sideways by 1041px at 1280
+  1279x800: the desktop-only gate is showing instead of the app
+  1279x800: rail is 0px, token says 256
+  1279x800: top bar is 0px, token says 56
+layout: FAIL (6 problems)
