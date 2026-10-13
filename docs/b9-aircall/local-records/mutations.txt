@@ -1,0 +1,32 @@
+M1 the token compared with === instead of timingSafeEqual
+  aircall-token: exit 1, 3 of 20 FAILED; first: …calls it on the two buffers
+M2 replay allowed without INGEST_ALLOW_REPLAY
+  aircall-mapping: exit 1, 2 of 49 FAILED; first: the adapter attaches it only when INGEST_ALLOW_REPLAY=1
+  aircall-flow: exit 1, 1 of 85 FAILED; first: without the variable the replay setting is ignored: the call rea
+M3 no coalescing: one read per event
+  aircall-flow: exit 1, 1 of 85 FAILED; first: the sweep claims the five and reads the call once
+M4 no hold after a 429
+  aircall-flow: exit 1, 3 of 85 FAILED; first: …the next event is not tried before Aircall's reset: failed rate
+M5 raw keeps the whole call
+  aircall-mapping: exit 1, 2 of 49 FAILED; first: …raw holds the allowlisted keys only
+  aircall-flow: exit 1, 2 of 85 FAILED; first: raw holds the allowlisted keys only
+M6 the line's market ignored for the hash
+  aircall-flow: exit 1, 1 of 85 FAILED; first: a national number on a GB line hashes as GB
+M7 no account check in the jobs
+  aircall-flow: exit 1, 2 of 85 FAILED; first: …the account checked first (GET /v1/company)
+M8 no webhook check
+  aircall-flow: exit 1, 6 of 85 FAILED; first: reconcile without the webhook_id setting: the run fails with web
+M9 unhandled events read back
+  aircall-mapping: exit 1, 2 of 49 FAILED; first: another call event (call.hungup) → recorded as ignored, event_no
+  aircall-flow: exit 1, 2 of 85 FAILED; first: …recorded as ignored, event_not_handled
+M10 the webhook script creates a second webhook for the same URL
+  aircall-scripts: exit 1, 3 of 27 FAILED; first: webhook: a second run for the same URL → refused, prints the exi
+M11 the webhook script prints the token
+  aircall-scripts: exit 1, 1 of 27 FAILED; first: …and never the token or the API key
+M12 the webhook script skips the account check
+  aircall-scripts: exit 1, 5 of 27 FAILED; first: webhook: another company's key → refused, nothing created
+M13 the tag set left out of the upsert
+  aircall-mapping: exit 1, 2 of 49 FAILED; first: …its whole current tag set
+  aircall-flow: exit 1, 4 of 85 FAILED; first: call.tagged → both tags open
+M14 the listing read again per call (no inline object)
+  aircall-flow: exit 1, 1 of 85 FAILED; first: …from the listing alone: no call read a second time

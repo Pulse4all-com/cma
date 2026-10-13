@@ -1,0 +1,41 @@
+verify/mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  one canonical event per webhook event                            got 10, wanted 9
+FAIL  event key is hs:<eventId>                                        got "hs:3000000101", wanted "3000000101"
+FAIL  deal creation → created deal                                     got ["created","deal","4100000001"], wanted ["created","deal","0"]
+FAIL  occurredAt in ISO 8601                                           got "2026-10-10T09:00:00.000Z", wanted 1760086800000
+FAIL  attempt is attemptNumber + 1                                     got 2, wanted 1
+FAIL  property change → changed with the property name                 got ["changed","dealstage"], wanted ["changed",null]
+FAIL  call creation → created crm_call                                 got ["created","crm_call"], wanted ["created","call"]
+FAIL  contact→call association: the call is read back                  got ["associated","crm_call","4200000001",null], wanted ["associated","contact","4300000001",null]
+FAIL  deal→company association is not kept                             got "association_not_kept", wanted undefined
+FAIL  merge → merged on the surviving id, merged ids kept              got ["merged","4300000001",["4300000002"]], wanted ["merged","4300000002",[]]
+FAIL  deletion → deleted ticket                                        got ["deleted","ticket"], wanted ["changed","ticket"]
+FAIL  restore → restored deal                                          got "restored", wanted "created"
+FAIL  another portal → ignored portal_mismatch                         got "portal_mismatch", wanted undefined
+FAIL  events of this portal are not ignored                            got 8, wanted 10
+FAIL  no property value is kept (ids only)                             got false, wanted true
+FAIL  no acting user is kept                                           got false, wanted true
+FAIL  raw keeps the event id and subscription                          got ["3000000101","object.creation"], wanted [null,null]
+FAIL  contact.privacyDeletion → deleted contact, privacy flag          got ["deleted","contact","4300000001",true], wanted ["deleted","contact","4300000001",null]
+FAIL  deal.creation (object-named) → created deal                      got ["created","deal",3], wanted ["created","other",1]
+FAIL  DEAL_TO_CONTACT removal → associated deal, removal noted         got ["deal","4100000004",true,"4300000003"], wanted ["contact","4300000003",false,null]
+FAIL  an object (not an array) body is one event                       got 1, wanted 0
+FAIL  an event without an id or object is kept as malformed            got "malformed", wanted undefined
+FAIL  a company event is not kept                                      got "object_not_kept", wanted undefined
+FAIL  kept association direction: deal → contact                       got {"fromType":"deal","fromId":"2","toType":"contact","toId":"1"}, wanted null
+FAIL  deal properties: structural plus configured only                 got ["amount","closedate","createdate","deal_currency_code","dealstage","h, wanted ["dealname"]
+FAIL  contact properties: configured only                              got ["contact_country","contact_language","contact_shopify_id_1","contact_, wanted ["email"]
+FAIL  deal → record ids, pipeline, stage, owner                        got ["4100000001","p-sales","s-new","7100000001"], wanted ["4100000001",null,null,null]
+FAIL  record amount and currency from the mapping                      got ["1200.50","eur"], wanted [null,null]
+FAIL  no market property mapped: the contact's country                 got ["uk","en"], wanted [null,null]
+FAIL  record raw holds requested properties only                       got false, wanted true
+FAIL  record times                                                     got ["2026-10-10T09:00:00.000Z","2026-10-10T09:01:00.000Z"], wanted [null,null]
+FAIL  a mapped market property wins over the contact                   got null, wanted "GB"
+FAIL  contact → country, language and two ref slots                    got ["NL","nl",{"shopify":[null,"6000000002"]}], wanted ["NL","nl",{"shopify":["6000000002"]}]
+FAIL  primary contact: the labelled one                                got "12", wanted "9"
+FAIL  primary contact: the held one when still associated              got "12", wanted "9"
+FAIL  primary contact: else the lowest id                              got "9", wanted "12"
+FAIL  association diff: new added, gone removed                        got [{"fromType":"deal","fromId":"1","toType":"contact","toId":"2","remove, wanted []
+
+ALL 37 PROVOKED CHECKS FAILED, as they must

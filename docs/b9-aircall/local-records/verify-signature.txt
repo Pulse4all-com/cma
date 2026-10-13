@@ -1,0 +1,22 @@
+verify/signature.mjs
+
+PASS  signV3 equals the documented construction                        got "3A3HP6wNx19p9aIlUtrpGv7a7ukK/KMwD3qBXAMsoIE="
+PASS  a valid v3 signature is accepted                                 got {"ok":true}
+PASS  the method is part of the signature                              got "bad_signature"
+PASS  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}
+PASS  a timestamp 6 minutes old is refused                             got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 6 minutes ahead is refused                           got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 4 minutes old is accepted                            got {"ok":true}
+PASS  a tampered body is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a wrong URI is refused                                           got {"ok":false,"reason":"bad_signature"}
+PASS  a query string is part of the URI                                got false
+PASS  one matching URI among the candidates is enough                  got {"ok":true}
+PASS  a missing signature header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a missing timestamp header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a non-numeric timestamp is refused                               got {"ok":false,"reason":"bad_timestamp"}
+PASS  an empty secret is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a v1-style signature (hex SHA-256) is refused                    got false
+PASS  HubSpot's decoded characters in the URI                          got "https://ingest.example.com/hubspot/key:a/b@c?q=,;"
+PASS  a signature over the decoded URI is accepted                     got true
+
+ALL 18 PASS

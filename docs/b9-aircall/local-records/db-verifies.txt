@@ -1,0 +1,34 @@
+Fresh database cma_b9 on PostgreSQL 18.4: db/00 as postgres, then db/01 to db/53 as martin@pulse4all.com in README order with the seed reruns of docs/night-2026-10-13/local-records/0008e/order-of-the-fresh-database.txt (65 scripts; migrations and seeds with ON_ERROR_STOP, all clean). db/ is not changed by this pull request (git diff origin/main -- db: empty).
+Each verify's output compared with the same verify on the session's first fresh build (uuids, times and dates masked): 28 of 28 identical.
+
+Verdict lines per verify (the table rows ending in PASS, or the verdict row; 04, 07 and 10 print their checks without a verdict table):
+04-04_verify: (no verdict table)  [ERROR lines: 3]
+07-07_verify_time_model: (no verdict table)  [ERROR lines: 7]
+09-10_verify_corrections: (no verdict table)  [ERROR lines: 0]
+11-12_verify_team_people:  A function and migration row | PASS; C agent refused with CMA06 | PASS; D no acting user refused with CMA01 | PASS;  [ERROR lines: 1]
+14-14_verify_tenant_settings:  pulse4all-invest | export.csv.date_format = dd-mm-yyyy, export.csv.decimal_mark = comma, export.csv.duration_format = decimal_hours (default), export.csv.separator = semicolon, export.csv.utf8_bom = true (default) | PASS; pulse4a  [ERROR lines: 0]
+16-16_verify_team_status_time:  pulse4all-invest | analytics, manager, supervisor | PASS; pulse4all-subscriptions | analytics, manager, supervisor | PASS;  [ERROR lines: 0]
+21-18_verify_clock_in_app_links:  pulse4all-invest | agent, manager, supervisor | hubspot, aircall | PASS; pulse4all-subscriptions | agent, manager, supervisor | hubspot, aircall, team-sheet | PASS;  [ERROR lines: 0]
+22-07_verify_time_model: (no verdict table)  [ERROR lines: 7]
+23-10_verify_corrections: (no verdict table)  [ERROR lines: 0]
+24-16_verify_team_status_time:  pulse4all-invest | analytics, manager, supervisor | PASS; pulse4all-subscriptions | analytics, manager, supervisor | PASS;  [ERROR lines: 0]
+26-20_verify_team_now:  pulse4all-invest | analytics, manager, supervisor | PASS; pulse4all-subscriptions | analytics, manager, supervisor | PASS;  [ERROR lines: 0]
+31-22_verify_teams_skills:  pulse4all-invest | admin | admin | 0 | 0 | PASS; pulse4all-subscriptions | admin | admin | 5 | 11 | PASS;  [ERROR lines: 0]
+34-25_verify_roster:  pulse4all-invest | admin, manager | admin, agent, manager, supervisor | 5 | 0 | PASS; pulse4all-subscriptions | admin, manager | admin, agent, manager, supervisor | 5 | 3 | PASS;  [ERROR lines: 0]
+36-27_verify_configuration:  pulse4all-invest | 1 | scheduler | 120 (default) | 5 | 2 | PASS; pulse4all-subscriptions | 1 | scheduler | 120 (default) | 7 | 3 | PASS;  [ERROR lines: 0]
+38-29_verify_my_profile:  pulse4all-invest | 1 | PASS; pulse4all-subscriptions | 6 | PASS;  [ERROR lines: 0]
+40-31_verify_ingest_crm_records:  pulse4all-invest | 1 | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 1 | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+41-27_verify_configuration:  pulse4all-invest | 1 | scheduler | 120 (default) | 5 | 2 | PASS; pulse4all-subscriptions | 1 | scheduler | 120 (default) | 7 | 3 | PASS;  [ERROR lines: 0]
+43-33_verify_intake_core:  pulse4all-invest | 0 | 0 | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+45-35_verify_telephony:  pulse4all-invest | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+47-37_verify_commerce:  pulse4all-invest | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+49-39_verify_outbox:  pulse4all-invest | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+51-41_verify_lead_metrics:  pulse4all-invest | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+53-43_verify_messaging:  pulse4all-invest | 0 | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+55-45_verify_assignment_alerts:  pulse4all-invest | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+58-47_verify_workday_window:  pulse4all-invest | 07:00 to 22:00 | 17:00 | 60 | workday.team | 0 | PASS; pulse4all-subscriptions | 07:00 to 22:00 | 17:00 | 60 | workday.team | 1 | PASS;  [ERROR lines: 0]
+60-49_verify_alert_time_zone:  verdict | PASS | 7 PASS, 0 FAIL;  [ERROR lines: 0]
+63-51_verify_legacy_time_import:  pulse4all-invest | 0 | 0 | 0 | 0 | PASS; pulse4all-subscriptions | 0 | 0 | 0 | 0 | PASS;  [ERROR lines: 0]
+65-53_verify_sources_configuration:  verdict | PASS | 16 PASS, 0 FAIL;  [ERROR lines: 0]
+
+The ERROR lines in 04, 07 and 12 are the refusals those scripts provoke on purpose (for example 04's section F: 'Expected result is an error: new row violates row-level security policy'); identical in both builds.
