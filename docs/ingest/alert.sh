@@ -57,6 +57,8 @@ POLICY_NAME="cma-ingest 429"
 BACKEND=cma-ingest-backend
 CHANNEL_NAME="CMA ingest alerts"
 WINDOW=300s
+# Cloud Monitoring requires a non-zero duration when evaluationMissingData is set; a single 429 keeps the 5-minute sum above 0 for about five minutes, so 60s still fires on one 429
+DURATION=60s
 AUTO_CLOSE=1800s
 FILTER="resource.type = \"https_lb_rule\" AND metric.type = \"loadbalancing.googleapis.com/https/request_count\" AND resource.labels.backend_target_name = \"${BACKEND}\" AND metric.labels.response_code = 429"
 FILTER_JSON="${FILTER//\"/\\\"}"   # the filter as a JSON string's content: every " escaped
@@ -84,7 +86,7 @@ policy_json () {  # <notification channel name>: the whole policy, as create and
         ],
         "comparison": "COMPARISON_GT",
         "thresholdValue": 0,
-        "duration": "0s",
+        "duration": "${DURATION}",
         "trigger": { "count": 1 },
         "evaluationMissingData": "EVALUATION_MISSING_DATA_INACTIVE"
       }
@@ -146,5 +148,5 @@ fi
 echo
 echo "== check"
 gcloud monitoring policies describe "$NAME" --project="$PROJECT" \
-  --format='value(displayName,enabled,conditions[0].conditionThreshold.filter,conditions[0].conditionThreshold.aggregations[0].alignmentPeriod,notificationChannels)'
-echo "expected: ${POLICY_NAME}, True, the filter on ${BACKEND} and response_code = 429, ${WINDOW}, ${CHANNEL}"
+  --format='value(displayName,enabled,conditions[0].conditionThreshold.filter,conditions[0].conditionThreshold.aggregations[0].alignmentPeriod,conditions[0].conditionThreshold.duration,notificationChannels)'
+echo "expected: ${POLICY_NAME}, True, the filter on ${BACKEND} and response_code = 429, ${WINDOW}, ${DURATION}, ${CHANNEL}"

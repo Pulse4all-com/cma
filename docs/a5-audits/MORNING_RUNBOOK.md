@@ -37,9 +37,9 @@ Expected: `found 0 vulnerabilities` (or `added … packages`), no lint output af
 ```bash
 bash -n docs/ingest/alert.sh && bash -n docs/ingest/front.sh && bash -n docs/ingest/deploy.sh && echo syntax ok
 bash docs/ingest/front.sh prod --host ingest.pulse4all.app --dry-run
-bash docs/ingest/alert.sh prod --email <alert address> --dry-run | grep -E "backend_target_name|alignmentPeriod|COMPARISON"
+bash docs/ingest/alert.sh prod --email <alert address> --dry-run | grep -E 'backend_target_name|alignmentPeriod|COMPARISON|"duration"'
 ```
-Expected: `syntax ok`; the front's dry run lists `900  request.path.startsWith('/shopify/')  2400 requests per 60 s per IP, then 429`, `1000 … 600 …` and `default … allow`, then two `gcloud compute security-policies rules create` lines; the alert's three lines are the filter with `resource.labels.backend_target_name = \"cma-ingest-backend\"` and `metric.labels.response_code = 429`, `"alignmentPeriod": "300s",` and `"comparison": "COMPARISON_GT",`. Neither dry run calls gcloud.
+Expected: `syntax ok`; the front's dry run lists `900  request.path.startsWith('/shopify/')  2400 requests per 60 s per IP, then 429`, `1000 … 600 …` and `default … allow`, then two `gcloud compute security-policies rules create` lines; the alert's four lines are the filter with `resource.labels.backend_target_name = \"cma-ingest-backend\"` and `metric.labels.response_code = 429`, `"alignmentPeriod": "300s",`, `"comparison": "COMPARISON_GT",` and `"duration": "60s",`. Neither dry run calls gcloud.
 
 ## 2. Merge and watch the web build
 
@@ -125,11 +125,11 @@ The address is where the alert goes (a person or a group); it is passed on the c
 ```bash
 bash docs/ingest/alert.sh prod --email <alert address>
 ```
-Expected: `a. email channel created: projects/p4a-cma-prod/notificationChannels/<id>` (or `exists`), `b. policy created: projects/p4a-cma-prod/alertPolicies/<id>`, then the check line `cma-ingest 429  True  resource.type = "https_lb_rule" AND … response_code = 429  300s  projects/p4a-cma-prod/notificationChannels/<id>`. If it says it cannot list channels with `gcloud beta`, the beta component is missing (Cloud Shell has it). A rerun says `exists` and `policy updated`, never a second policy.
+Expected: `a. email channel created: projects/p4a-cma-prod/notificationChannels/<id>` (or `exists`), `b. policy created: projects/p4a-cma-prod/alertPolicies/<id>`, then the check line `cma-ingest 429  True  resource.type = "https_lb_rule" AND … response_code = 429  300s  60s  projects/p4a-cma-prod/notificationChannels/<id>`. A rerun after a failed policy create (the channel was made before the policy) says `a. email channel exists: projects/p4a-cma-prod/notificationChannels/<id>`, then `b. policy created`. If it says it cannot list channels with `gcloud beta`, the beta component is missing (Cloud Shell has it). A rerun says `exists` and `policy updated`, never a second policy.
 
 **Browser:** console → Monitoring → Alerting (project `p4a-cma-prod`) → Policies → `cma-ingest 429`.
 
-Expected: enabled, one condition (`429 from the load balancer for cma-ingest-backend, summed over 5 minutes, above 0`), the email channel; the condition's chart empty (no 429 counted).
+Expected: enabled, one condition (`429 from the load balancer for cma-ingest-backend, summed over 5 minutes, above 0`, for 1 minute), the email channel; the condition's chart empty (no 429 counted).
 
 Dev (optional, to try the script; dev has no load balancer, so the policy stays quiet there):
 
