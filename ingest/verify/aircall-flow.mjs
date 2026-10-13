@@ -1,5 +1,5 @@
 /**
- * Verifier: the Aircall adapter end to end (brief B9), against a local PostgreSQL with db/00…53 and a
+ * Verifier: the Aircall adapter end to end (brief B9), against a local PostgreSQL with db/00…55 and a
  * fake Aircall API. Everything is invented: tenants, companies, ids, tokens, emails (example.com) and
  * numbers in the +44 20 0000 0xxx range.
  *
@@ -19,7 +19,8 @@
  * events ending in the right state (read-back and, in replay, the stale guard); replay honoured only
  * with INGEST_ALLOW_REPLAY=1; five events of one call read once by the sweep; a 429 leaving the events
  * failed with backoff and holding further calls, no retry in a loop; the hash's default region from
- * the line's market, else the tenant's first active market; the catalogs kept configured and
+ * the line's market, else the tenant's first active market; a line switched off losing its call, a
+ * later call on it not stored (0008f; a backfill counts it skipped); the catalogs kept configured and
  * refreshed at most hourly; link_calls pairing with a seeded CRM call; the reconcile picking up a
  * missed call from the listing alone (no second read), reading an unchanged call once, splitting a
  * window over the 10,000 cap, and its webhook check (not set, missing, another token, inactive and
@@ -39,7 +40,7 @@ console.log(`verify/aircall-flow.mjs${PROVOKE ? "  (--provoke: every check must 
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…53; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…55; see the header)`);
     process.exit(2);
   }
 }
@@ -379,7 +380,6 @@ expect("the sweep reads them once the reset has passed", [(await callRow(C6))?.s
 
 // ---- H. The default region of the hash, and the catalogs kept and refreshed hourly ----------------------
 await asAdmin(t1, () => q("select cma.set_telephony_number($1, '9300000001', 'GB', true)", [conn.a]));
-await asAdmin(t1, () => q("select cma.set_telephony_number($1, '9300000002', null, false)", [conn.a]));
 await asAdmin(t1, () => q("select cma.set_telephony_tag($1, '9400000002', false)", [conn.a]));
 const C8 = 9100000008;
 const C9 = 9100000009;
@@ -389,6 +389,17 @@ await post(conn.aKey, event("call.ended", fake.calls[C8], S0 + 161));
 await post(conn.aKey, event("call.ended", fake.calls[C9], S0 + 162));
 expect("a national number on a GB line hashes as GB", (await callRow(C8))?.counterpart_hash, H(PEPPER1, "+442000000002"), hashNumber(PEPPER1, CUSTOMER[1], "NL"));
 expect("…on a line without a market as the tenant's first active market (NL)", (await callRow(C9))?.counterpart_hash, hashNumber(PEPPER1, CUSTOMER[2], "NL"), H(PEPPER1, "+442000000003"));
+// 0008f: a connection stores calls on its counted lines only. Switching line two off removes its call;
+// a call on it afterwards is read but not stored, and counted as skipped_uncounted_line
+await asAdmin(t1, () => q("select cma.set_telephony_number($1, '9300000002', null, false)", [conn.a]));
+expect("switching line two off removes its stored call (0008f)", Boolean(await callRow(C9)), false, true);
+const C13 = 9100000013;
+fake.calls[C13] = makeCall(C13, { ...ENDED, started_at: S0 + 62, raw_digits: CUSTOMER[2], number: lineOf(9300000002, LINE_X, "Test line two") });
+const logsBefore = logs.length;
+t0 = mark();
+await post(conn.aKey, event("call.ended", fake.calls[C13], S0 + 163));
+expect("…a call on it afterwards is read, not stored, and counted as skipped_uncounted_line", [reads(C13, t0), Boolean(await callRow(C13)),
+  logs.slice(logsBefore).some((l) => JSON.parse(l).upserts?.skipped_uncounted_line === 1)], [1, false, true], [1, true, false]);
 await q("update cma.sync_cursor set cursor = '{\"refreshedAt\": 0}'::jsonb where connection_id = $1 and stream = 'catalogs'", [conn.a]);
 fake.numbers[1] = lineOf(9300000002, LINE_X, "Test line two renamed");
 t0 = mark();
@@ -474,12 +485,17 @@ const F = Math.floor(fromAt.getTime() / 1000);
 const C11 = 9100000011;
 const C12 = 9100000012;
 fake.calls[C11] = makeCall(C11, { ...ENDED, started_at: F + day + 3600, tags: [] });
+const C14 = 9100000014; // on line two, which does not count (0008f)
 fake.calls[C12] = makeCall(C12, { ...ENDED, started_at: F + 2 * day + 3600, tags: [] });
+fake.calls[C14] = makeCall(C14, { ...ENDED, started_at: F + day + 7200, tags: [], number: lineOf(9300000002, LINE_X, "Test line two") });
 fake.listFailFromS = F + 2 * day;
 const bf1 = await runBackfill({ connectionId: conn.a, object: "telephony_call", from: fromDate });
 const cursor1 = (await q("select cursor from cma.sync_cursor where connection_id = $1 and stream = 'backfill:telephony_call'", [conn.a]))[0]?.cursor;
 expect("backfill: Aircall failing on the third day → the run fails, the first two days kept", [bf1.error, Boolean(await callRow(C11)), Boolean(await callRow(C12)), cursor1?.value, cursor1?.done],
   ["http_503", true, false, (F + 2 * day) * 1000, false], [null, true, true, null, true]);
+const bfCounts = (await runs(conn.a, "backfill")).at(-1)?.counts;
+expect("…the call on line two (not counted) not stored, counted as skipped, not upserted", [Boolean(await callRow(C14)), bfCounts?.fetched, bfCounts?.upserted, bfCounts?.skipped],
+  [false, 2, 1, 1], [true, 2, 2, 0]);
 fake.listFailFromS = null;
 await setSettings(conn.a, { webhook_id: HOOK, aircall_max_per_minute: "6" });
 t0 = mark();

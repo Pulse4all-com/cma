@@ -39,8 +39,8 @@ export function syncEvent(job, objectType, item, prefix = "sync") {
 /**
  * Records the items as events and processes the new ones (and known ones still due) with the
  * adapter's read-back. Answers sync_run counts: fetched (items given), upserted (events processed),
- * stale (rows the stale guard kept), skipped (versions already seen, or nothing to read), failed
- * (events left for the sweeper).
+ * stale (rows the stale guard kept), skipped (versions already seen, nothing to read, or a telephony
+ * call on a line that does not count), failed (events left for the sweeper).
  */
 export async function recordAndProcess(adapter, connection, objectType, items, budget, { job, prefix = "sync" } = {}) {
   const counts = { fetched: items.length, upserted: 0, stale: 0, skipped: 0, failed: 0 };
@@ -53,8 +53,10 @@ export async function recordAndProcess(adapter, connection, objectType, items, b
   counts.skipped += recorded.rows.length - due.length;
   if (!due.length) return counts;
   const r = await processEvents(adapter, connection, due, budget, inlineOf(events));
-  counts.upserted += r.events.processed;
-  counts.skipped += r.events.ignored;
+  // a telephony call on a line that does not count is read but not stored (migration 0008f)
+  const uncounted = Math.min(r.counts.skipped_uncounted_line ?? 0, r.events.processed);
+  counts.upserted += r.events.processed - uncounted;
+  counts.skipped += r.events.ignored + uncounted;
   counts.failed += r.events.failed + Math.max(0, due.length - r.claimed);
   counts.stale += r.counts.stale ?? 0;
   return counts;
