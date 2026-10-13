@@ -1,0 +1,15 @@
+$ npm ci
+
+found 0 vulnerabilities
+$ npm run lint
+> eslint
+
+exit 0
+$ npm test (the pure verifiers)
+ALL 18 PASS
+ALL 37 PASS
+ALL 20 PASS
+ALL 41 PASS
+ALL 20 PASS
+ALL 49 PASS
+ALL 27 PASS

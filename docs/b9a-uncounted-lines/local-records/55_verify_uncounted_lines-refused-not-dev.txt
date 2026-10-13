@@ -1,0 +1,25 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ false
+(1 row)
+
+psql:/home/user/cma/db/55_verify_uncounted_lines.sql:50: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 55 runs in dev only
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
+psql:/home/user/cma/db/55_verify_uncounted_lines.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+ check_name |      result      |     detail     
+------------+------------------+----------------
+ verdict    | REFUSED: not dev | 0 PASS, 0 FAIL
+(1 row)
+
+RESET

@@ -1,0 +1,44 @@
+The standalone build in mock auth and api data on a local database at 55 with web/verify/reports-fixture.sql:
+PUT /api/v1/configuration/sources/<telephony connection>/lines as the dev seed's admin, then the database read as the owner. The audit's delete rows before the switch come from the session's earlier runs on the
+same database (the aircall-flow verifier's tenants and the two-session test); the switch adds the admin's rows (login cma-web@local.iam).
+
+== before
+ number_ref | is_counted | calls | taggings | links 
+------------+------------+-------+----------+-------
+ n-nl       | t          |     2 |        1 |     0
+(1 row)
+
+     table_name     | deletes |                     old_row_keys                      |                         actor                         |        login         |  db_role  
+--------------------+---------+-------------------------------------------------------+-------------------------------------------------------+----------------------+-----------
+ telephony_call     |       3 | connection_id,id,reason,source_id,tenant_id           | conc-admin@example.invalid,flow-admin@example.invalid | martin@pulse4all.com | cma_owner
+ telephony_call_tag |       2 | call_source_id,connection_id,reason,tag_ref,tenant_id | flow-admin@example.invalid                            | martin@pulse4all.com | cma_owner
+(2 rows)
+
+PUT {lineRef: n-nl, isCounted: false} as admin: 200
+the answer re-reads the connection, lines: [('n-nl', False)]
+== after switching n-nl off through the route
+ number_ref | is_counted | calls | taggings | links 
+------------+------------+-------+----------+-------
+ n-nl       | f          |     0 |        0 |     0
+(1 row)
+
+     table_name     | deletes |                     old_row_keys                      |                                  actor                                  |                 login                  |  db_role  
+--------------------+---------+-------------------------------------------------------+-------------------------------------------------------------------------+----------------------------------------+-----------
+ telephony_call     |       5 | connection_id,id,reason,source_id,tenant_id           | admin@example.com,conc-admin@example.invalid,flow-admin@example.invalid | cma-web@local.iam,martin@pulse4all.com | cma_owner
+ telephony_call_tag |       3 | call_source_id,connection_id,reason,tag_ref,tenant_id | admin@example.com,flow-admin@example.invalid                            | cma-web@local.iam,martin@pulse4all.com | cma_owner
+(2 rows)
+
+PUT {lineRef: n-nl, isCounted: true} as admin: 200
+PUT {lineRef: n-nl, isCounted: false} as agent-two: 403
+== after switching it back on as admin and the agent's refused attempt
+ number_ref | is_counted | calls | taggings | links 
+------------+------------+-------+----------+-------
+ n-nl       | t          |     0 |        0 |     0
+(1 row)
+
+     table_name     | deletes |                     old_row_keys                      |                                  actor                                  |                 login                  |  db_role  
+--------------------+---------+-------------------------------------------------------+-------------------------------------------------------------------------+----------------------------------------+-----------
+ telephony_call     |       5 | connection_id,id,reason,source_id,tenant_id           | admin@example.com,conc-admin@example.invalid,flow-admin@example.invalid | cma-web@local.iam,martin@pulse4all.com | cma_owner
+ telephony_call_tag |       3 | call_source_id,connection_id,reason,tag_ref,tenant_id | admin@example.com,flow-admin@example.invalid                            | cma-web@local.iam,martin@pulse4all.com | cma_owner
+(2 rows)
+

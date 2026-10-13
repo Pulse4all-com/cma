@@ -1,0 +1,11 @@
+ set_config 
+------------
+ false
+(1 row)
+
+         tenant          | created_rules | assignment_rules | alerts | assignment_alerts | verdict 
+-------------------------+---------------+------------------+--------+-------------------+---------
+ pulse4all-invest        |             0 |                0 |      0 |                 0 | PASS
+ pulse4all-subscriptions |             0 |                0 |      0 |                 0 | PASS
+(2 rows)
+

@@ -1,0 +1,55 @@
+# A copy of the database at 0008e (53) holding what 54 meets in prod: lines already marked not counted
+# with calls, taggings and a link on them. Invented data, local only.
+
+## the fixture (as the owner, then the Ingest user through the 0007a functions)
+SET
+DO
+ number_ref | is_counted | calls | taggings | links 
+------------+------------+-------+----------+-------
+ line-a     | t          |     3 |        3 |     0
+ line-b     | f          |     2 |        2 |     1
+ line-c     | f          |     4 |        4 |     0
+(3 rows)
+
+
+## 54_uncounted_lines.sql, first run
+GRANT
+INSERT 0 1
+         tenant          |  connection  |            connection_id             | lines_not_counted | calls_removed | taggings_removed | links_removed 
+-------------------------+--------------+--------------------------------------+-------------------+---------------+------------------+---------------
+ pulse4all-subscriptions | Local phones | <uuid> |                 2 |             6 |                6 |             1
+(1 row)
+
+COMMIT
+RESET
+
+## after: the lines, the CRM call, the audit rows of the deletes
+SET
+ number_ref | is_counted | calls 
+------------+------------+-------
+ line-a     | t          |     3
+ line-b     | f          |     0
+ line-c     | f          |     0
+(3 rows)
+
+ crm_calls_kept 
+----------------
+              1
+(1 row)
+
+     table_name     | action | rows |                     old_row_keys                      | no_new_row |     actor_login      | actor_role 
+--------------------+--------+------+-------------------------------------------------------+------------+----------------------+------------
+ call_link          | delete |    1 | crm_call_id,id,reason,telephony_call_id,tenant_id     | t          | martin@pulse4all.com | cma_owner
+ telephony_call     | delete |    6 | connection_id,id,reason,source_id,tenant_id           | t          | martin@pulse4all.com | cma_owner
+ telephony_call_tag | delete |    6 | call_source_id,connection_id,reason,tag_ref,tenant_id | t          | martin@pulse4all.com | cma_owner
+(3 rows)
+
+
+## 54_uncounted_lines.sql, rerun
+         tenant          |  connection  |            connection_id             | lines_not_counted | calls_removed | taggings_removed | links_removed 
+-------------------------+--------------+--------------------------------------+-------------------+---------------+------------------+---------------
+ pulse4all-subscriptions | Local phones | <uuid> |                 2 |             0 |                0 |             0
+(1 row)
+
+COMMIT
+RESET

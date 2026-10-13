@@ -1,0 +1,9 @@
+PASS  the Counted hint says calls on an uncounted line are not stored and switching off removes them
+PASS  the first line counts at the start
+PASS  switching a line off asks for confirmation with that sentence and the line's name
+PASS  …and nothing is saved while it asks
+PASS  cancel keeps the line counted
+PASS  confirm switches the line off
+PASS  switching a line on does not ask, and it counts again
+
+ALL 7 PASS

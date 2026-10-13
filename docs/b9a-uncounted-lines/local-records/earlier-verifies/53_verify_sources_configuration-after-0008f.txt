@@ -1,0 +1,32 @@
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:/home/user/cma/db/53_verify_sources_configuration.sql:53: NOTICE:  schema "pg_temp" does not exist, skipping
+                                check_name                                 | result |                                                       detail                                                        
+---------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008e recorded                                                | PASS   | 
+ A2 kind column, check and reader view                                     | PASS   | id, tenant_id, adapter, name, external_account_id, status, created_at, updated_at, kind
+ A3 twelve functions, executable by cma_app only                           | PASS   | 
+ A4 existing connections carry the kind their rows imply                   | PASS   | 0 connection(s) without the kind their rows imply
+ B1 kind: unset, set, refused against held rows, unknown or for an agent   | PASS   | 3 of 3 refusals
+ B2 sources with kinds, settings and catalog sizes; a manager refused      | PASS   | verifyauto:automation::p0:f0:o0:l0:t0 verifycrm:crm:crm:p1:f2:o2:l0:t0 verifytel:telephony:telephony:p0:f0:o0:l1:t1
+ B3 catalogs with configuration and the newest record id                   | PASS   | 
+ B4 markets with aliases, office hours and holidays; an agent refused      | PASS   | GB[uk|united kingdom] NL[]
+ B5 alert rules of both triggers with their alerts; a manager refused      | PASS   | Assigned deal:record_assigned:urgent:t:p-sales:30:1 New deal:record_created:normal:f::-:0
+ B6 linked-account systems from connections and held ids; an agent refused | PASS   | oldcrm_owner:owner::f verifycrm_owner:owner:Verify customer records:t verifytel_user:user:Verify phones:t
+ B7 linked accounts in the directory's scope                               | PASS   | admin sees 3; manager sees verifycrm_owner=o-1 verifycrm_owner=o-mgr
+ B8 people's ids by the People rule                                        | PASS   | 5 of 5 refusals
+ B9 the other tenant sees nothing of the first                             | PASS   | 
+ B10 add_person refuses a login system ending in _owner or _user           | PASS   | 3 of 3; a login system cannot end in _owner or _user; those name linked accounts
+ B11 find_tenants_for_identity never matches a linked id                   | PASS   | 0 row(s) for verifycrm_owner/o1
+ B12 upsert_connection refuses an adapter with an underscore               | PASS   | an adapter name is lower-case letters and digits only
+ verdict                                                                   | PASS   | 16 PASS, 0 FAIL
+(17 rows)
+
