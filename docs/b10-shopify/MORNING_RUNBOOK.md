@@ -1,5 +1,7 @@
 # Morning runbook, B10: the Shopify adapter, the outbox worker and the phone hash (0008g)
 
+**Ran on 13 October 2026.** Steps 2 and 3: 0008g in dev at 10:25:04 UTC and in prod at 10:25:39 UTC (`cma.schema_migration`), records `records/0008g-dev-2026-10-13` (`57` 12 PASS; provoked all 12 FAIL) and `records/0008g-prod-2026-10-13` (`31`, `33` and `37` reruns PASS). Step 4, the merge, is `Pulse4all-com/cma#114`. The steps below stay as written; README (Environments) holds the status.
+
 Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. The local outputs are in `local-records/` (its `README.md` lists them).
 
 **Order matters:** 0008g (`56`) runs in dev and prod before the ingest service is deployed from this merge: the adapter sends the phone hash, which the 0007b functions would silently drop. Merging deploys nothing of the ingest service (only `web/**` and `cloudbuild.yaml` trigger a build, and this pull request changes neither); the ingest is deployed by hand with `docs/ingest/deploy.sh`. `56` needs addition 0008f (`54`) in the same database; without it, it stops with `addition 0008f (54_uncounted_lines.sql) must run before 0008g` and applies nothing.

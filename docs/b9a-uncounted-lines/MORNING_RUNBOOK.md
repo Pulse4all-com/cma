@@ -1,5 +1,7 @@
 # Morning runbook, B9a: a telephony connection stores calls on its counted lines only (0008f)
 
+**Ran on 13 October 2026.** Steps 2 and 3: 0008f in dev at 07:09:28 UTC and in prod at 07:10:06 UTC (`cma.schema_migration`), records `records/0008f-dev-2026-10-13` (`55` 17 PASS; provoked all 17 FAIL) and `records/0008f-prod-2026-10-13` (`54`'s one-off on Aircall Subscriptions: 5 lines not counted, 12 calls, 2 taggings and 12 links removed; `31`, `33` and `35` reruns PASS). Step 4, the merge, is `Pulse4all-com/cma#112`. The steps below stay as written; README (Environments) holds the status.
+
 Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. The local outputs are in `local-records/` (its `README.md` lists them).
 
 **Order matters:** run `54` in dev, verify with `55`, run `54` in prod, then merge. The merged Sources page tells people that switching a line off removes its calls; that is true only once `54` has run in prod. `54` needs addition 0008e (`52`) in the same database; without it, it stops with `addition 0008e (52_sources_configuration.sql) must run before 0008f` and applies nothing.

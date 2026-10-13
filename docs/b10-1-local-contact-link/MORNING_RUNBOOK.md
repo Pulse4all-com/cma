@@ -1,5 +1,7 @@
 # Morning runbook, B10.1: the commerce contact link (0008h), nothing written back
 
+**Ran on 13 October 2026.** Steps 2 and 3: 0008h in dev at 14:30:54 UTC and in prod at 14:31:27 UTC (`cma.schema_migration`), records `records/0008h-dev-2026-10-13` (`59` 13 PASS; provoked all 13 FAIL; `57` rerun 12 PASS) and `records/0008h-prod-2026-10-13` (`31`, `33` and `37` reruns PASS). Step 4, the merge, is `Pulse4all-com/cma#115`. The steps below stay as written; README (Environments) holds the status.
+
 Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. The local outputs are in `local-records/` (its `README.md` lists them).
 
 **What changes:** the CMA writes nothing back to HubSpot for Shopify (the HubSpot–Shopify app writes the Shopify contact fields and creates a Self Serve deal per new order; one writer per property). The Shopify match stays and is kept in the CMA: `cma.commerce_customer` gains the matched contact (addition 0008h). The outbox job `ingest-outbox` stays deployed but without a schedule (README Decision log, 13 October 2026).

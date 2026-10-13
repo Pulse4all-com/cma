@@ -1,5 +1,7 @@
 # Morning runbook, 13 October 2026: 0008e, the new configuration screens, then Aircall and Shopify
 
+**Ran on 13 October 2026.** Steps 2 and 3: 0008e in dev at 02:47:10 UTC and in prod at 02:48:25 UTC (`cma.schema_migration`), records `records/0008e-dev-2026-10-13` (`53` 16 PASS; provoked 13 PASS, 3 FAIL) and `records/0008e-prod-2026-10-13` (`31` and `33` reruns PASS). Step 4, the merge, is `Pulse4all-com/cma#110`. The steps below stay as written; README (Environments) holds the status.
+
 Read `NIGHT_NOTES.md` first (five minutes). Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see.
 
 **Order matters:** the merged web reads the functions of addition 0008e on every new screen and on People (the linked accounts), so 0008e runs in dev and prod from the pull request's branch **before** the merge. Until it runs in prod, a merged `main` would show People with an error.
