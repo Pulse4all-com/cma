@@ -29,6 +29,9 @@
 -- Nothing personal is stored (DESIGN §2.1): no names, email addresses, phone numbers or postal
 -- addresses of customers, no free-text notes. The ingest service reduces landing and referring URLs
 -- to host and path (and UTM tags) before they arrive; the upserts strip a query string again.
+-- One exception since addition 0008g (56_commerce_phone_hash.sql, 13 October 2026): customers and
+-- orders carry phone_hash, the keyed hash of the phone number (HMAC with the tenant's pepper, as a
+-- call's counterpart_hash), never the number itself. This comment is the only change to this file.
 --
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid,
 -- CMA06 not permitted.

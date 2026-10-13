@@ -1,0 +1,12 @@
+01 the HMAC compared as hex | shopify-signature: 3 of 17 FAILED; shopify-flow: 50 of 80 FAILED;
+02 the event keyed by the event id | shopify-mapping: 2 of 53 FAILED; shopify-flow: 3 of 80 FAILED;
+03 the shop not pinned | shopify-mapping: 2 of 53 FAILED; shopify-flow: 1 of 80 FAILED;
+04 the customer's phone before the order's | hash: 1 of 26 FAILED; shopify-flow: 1 of 80 FAILED;
+05 the prior count without the newer orders | shopify-mapping: 5 of 53 FAILED; shopify-flow: 2 of 80 FAILED;
+06 the webhook waits for points past its budget | shopify-client: 1 of 21 FAILED;
+07 if_empty overwrites an agent's value | outbox: 4 of 20 FAILED; shopify-flow: 2 of 80 FAILED;
+08 the configuration check a no-op | outbox: 3 of 20 FAILED;
+09 known contacts ignored (always a search) | shopify-flow: 2 of 80 FAILED;
+10 the customer's email kept in raw | shopify-mapping: 1 of 53 FAILED; shopify-flow: 1 of 80 FAILED;
+11 slot 2 overwritten when both are taken | outbox: 1 of 20 FAILED; shopify-flow: 1 of 80 FAILED;
+12 one token per caller (no shared mint) | shopify-client: 4 of 21 FAILED; shopify-flow: ALL 80 PASS;

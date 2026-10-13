@@ -1,0 +1,30 @@
+verify/hash.mjs
+
+PASS  international format → E.164                                     got "+442000000001"
+PASS  national format with region GB → E.164                           got "+442000000001"
+PASS  00 prefix with region GB → E.164                                 got "+442000000001"
+PASS  national format with region NL → E.164                           got "+31200000001"
+PASS  the hash is HMAC-SHA256(pepper, E.164) in hex                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  national and international formats hash the same                 got true
+PASS  spaces, dashes and brackets do not change the hash               got true
+PASS  another region reads a national number differently               got false
+PASS  a different pepper gives a different hash                        got false
+PASS  another number gives another hash                                got false
+PASS  a national number without a region gives no hash                 got null
+PASS  too short to be a number gives no hash                           got null
+PASS  text gives no hash                                               got null
+PASS  no pepper gives no hash                                          got null
+PASS  a lower-case region is not used                                  got null
+PASS  the hash is 64 lower-case hex characters                         got true
+PASS  an outbound call hashes the number it called                     got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  no digits of either number remain in the call                    got false
+PASS  an inbound call hashes the number that called                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  a call of unknown direction gets no hash                         got null
+PASS  an order's own phone (national, the store's market GB) hashes like the call got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  an order without a phone takes its customer's                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  the order's phone comes before its customer's                    got "ef4e925fc1bf61e9d3a21c749481f0f35411901b8457c442409fec506fadc8ce"
+PASS  a customer's phone hashes like the call                          got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  Phone withheld by the store → no hash, nothing fails             got null
+PASS  no form of the number remains in the order or the customer       got []
+
+ALL 26 PASS

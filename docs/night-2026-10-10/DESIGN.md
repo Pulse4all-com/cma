@@ -40,7 +40,7 @@ Event keys (unique per connection): HubSpot `hs:<eventId>`; Aircall `ac:<event>:
 
 ### §2.1 What is never stored
 
-Names, email addresses, phone numbers, postal addresses, free-text bodies (deal names, ticket subjects and content, call notes and bodies, Aircall comments, form field values), recording or voicemail links. Phone numbers and form emails pass through the ingest service's memory only: a number becomes a keyed hash (§6.3), an email (form or Shopify customer) becomes a HubSpot contact id. Shopify access is Level 1 plus the one protected field **email** (needed for the match, §4.3a); names, phones and addresses stay redacted at the source.
+Names, email addresses, phone numbers, postal addresses, free-text bodies (deal names, ticket subjects and content, call notes and bodies, Aircall comments, form field values), recording or voicemail links. Phone numbers and form emails pass through the ingest service's memory only: a number becomes a keyed hash (§6.3), an email (form or Shopify customer) becomes a HubSpot contact id. Shopify access is Level 1 plus the one protected field **email** (needed for the match, §4.3a); names, phones and addresses stay redacted at the source. Changed on 13 October 2026 (README Decision log; addition 0008g, brief B10): the protected field **phone** is requested too, and a customer's or order's phone becomes the keyed hash of §6.3, as a call's does; names and addresses stay redacted.
 
 ---
 

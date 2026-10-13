@@ -8,6 +8,7 @@
 import { createHmac } from "node:crypto";
 import { toE164, hashNumber } from "../src/core/hash.mjs";
 import { callFromObject } from "../src/adapters/hubspot/map.mjs";
+import { orderFromNode, customerFromNode } from "../src/adapters/shopify/map.mjs";
 import { expect, verdict, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/hash.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
@@ -44,5 +45,18 @@ expect("no digits of either number remain in the call", /0000\s?0001|000\s?0009|
 const inbound = callFromObject({ id: "7002", properties: { hs_call_direction: "INBOUND", hs_call_from_number: "+44 20 0000 0001", hs_call_to_number: "+31 20 000 0009" } }, { pepper: PEPPER });
 expect("an inbound call hashes the number that called", inbound.counterpartHash, reference, null);
 expect("a call of unknown direction gets no hash", callFromObject({ id: "7003", properties: { hs_call_to_number: "+442000000001" } }, { pepper: PEPPER }).counterpartHash, null, reference);
+
+// Commerce (addition 0008g): the same pepper and the store's market as the default region, so an
+// order's phone meets an earlier call's hash
+const customer = { id: "gid://shopify/Customer/7100000001", defaultPhoneNumber: { phoneNumber: "+44 20 0000 0001" } };
+const order = (o) => orderFromNode({ id: "gid://shopify/Order/7300000001", createdAt: "2026-10-12T10:00:00Z", customer, ...o }, { pepper: PEPPER, region: "GB" });
+expect("an order's own phone (national, the store's market GB) hashes like the call", order({ phone: "020 0000 0001" }).phoneHash, reference, null);
+expect("an order without a phone takes its customer's", order({ phone: null }).phoneHash, reference, null);
+expect("the order's phone comes before its customer's", order({ phone: "+44 20 0000 0002" }).phoneHash, H("+442000000002"), reference);
+expect("a customer's phone hashes like the call", customerFromNode(customer, { pepper: PEPPER, region: "GB" }).phoneHash, reference, null);
+const withheld = orderFromNode({ id: "gid://shopify/Order/7300000002", createdAt: "2026-10-12T10:00:00Z", phone: null, customer: { id: "gid://shopify/Customer/7100000002", defaultPhoneNumber: null } }, { pepper: PEPPER, region: "GB" });
+expect("Phone withheld by the store → no hash, nothing fails", withheld.phoneHash, null, reference);
+const kept = JSON.stringify([order({ phone: "020 0000 0001" }), customerFromNode(customer, { pepper: PEPPER, region: "GB" })]);
+expect("no form of the number remains in the order or the customer", ["+442000000001", "442000000001", "02000000001", "2000000001", "020 0000 0001", "20 0000 0001"].filter((f) => kept.includes(f)), [], ["+442000000001"]);
 
 verdict();

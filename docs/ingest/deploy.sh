@@ -30,7 +30,8 @@
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
 # settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs; with --front the
-# public host first). Prints the Studio statement that makes the database user a member of cma_app,
+# public host first); INGEST_SHOPIFY_READBACK_BUDGET_MS=1500, the Shopify route's own inline read-back
+# budget (Shopify allows a delivery five seconds in all; brief B10). Prints the Studio statement that makes the database user a member of cma_app,
 # the service URL and /health.
 #
 # With --jobs (DESIGN §5, brief B8), the same steps up to the image, then instead of the service: the
@@ -40,7 +41,9 @@
 # only:
 #   ingest-sweep       every minute   due events, the second read, telephony catalogs (hourly), link_calls
 #   ingest-poll-forms  every minute   HubSpot forms: catalog hourly, submissions until the cursor
-#   ingest-reconcile   02:30          everything modified in the last 26 hours; Aircall: calls of the last 26 hours and the webhook
+#   ingest-reconcile   02:30          everything modified in the last 26 hours; Aircall: calls of the last 26 hours and the webhook;
+#                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
+#   ingest-outbox      every minute   CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection
 #   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
 # The arguments of an execution are appended to the job's command (node jobs/<name>.mjs).
 #
@@ -216,6 +219,7 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-sweep sweep.mjs 10m ""
   deploy_job ingest-poll-forms poll-forms.mjs 10m ""
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
+  deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
 
   # Cloud Scheduler calls each scheduled job's run endpoint as the scheduler account (run.invoker on those jobs only)
@@ -235,14 +239,15 @@ if [ "$JOBS" = 1 ]; then
   schedule ingest-sweep "* * * * *"
   schedule ingest-poll-forms "* * * * *"
   schedule ingest-reconcile "$RECONCILE_EVERY"
+  schedule ingest-outbox "* * * * *"
 
   echo
   echo "== Studio (${INSTANCE_NAME}), once per database: the service's database user joins cma_app (the jobs run as it too)"
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-backfill (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|telephony_call>,--from,<YYYY-MM-DD>"
+  echo "ingest-sweep, ingest-poll-forms, ingest-outbox (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-backfill (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|telephony_call|commerce_customer|commerce_order>,--from,<YYYY-MM-DD>"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0
@@ -268,7 +273,7 @@ INGRESS_FLAG=--ingress=all
 URLS="$(public_urls)"
 ENV_VARS="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=5" \
   "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" "INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}" \
-  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}" ${REPLAY_VARS[@]+"${REPLAY_VARS[@]}"})"
+  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_SHOPIFY_READBACK_BUDGET_MS=1500" "INGEST_PUBLIC_URLS=${URLS}" ${REPLAY_VARS[@]+"${REPLAY_VARS[@]}"})"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" --region="$REGION" \
   --image="$IMAGE" \

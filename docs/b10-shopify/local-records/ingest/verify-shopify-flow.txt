@@ -1,0 +1,86 @@
+verify/shopify-flow.mjs
+
+PASS  an unknown key → 404                                             got 404
+PASS  the HubSpot connection's key on /shopify → 404                   got 404
+PASS  the Shopify connection's key on /hubspot → 404                   got 404
+PASS  no HMAC header → 401                                             got 401
+PASS  an HMAC that is not a SHA-256 digest → 401                       got 401
+PASS  an HMAC with another secret → 401                                got 401
+PASS  a body changed after signing → 401                               got 401
+PASS  tenant two's secret on tenant one's key → 401                    got 401
+PASS  refused requests wrote nothing and asked Shopify nothing         got [0,0]
+PASS  …and answered with an empty body                                 got ""
+PASS  another shop's domain and an unhandled topic, correctly signed → 200 got [200,200]
+PASS  …recorded as ignored (portal_mismatch, event_not_handled), nothing read got [["customers/create:portal_mismatch","products/update:event_not_handle
+PASS  customers/create → 200                                           got 200
+PASS  …keyed sh:<X-Shopify-Webhook-Id>, processed, the topic and ids in raw only got ["processed","commerce_customer","created",["apiVersion","eventId","to
+PASS  …the customer: state, locale, count, amount, currency            got ["ENABLED","en-GB",0,"0.00","GBP"]
+PASS  …its phone as HMAC(pepper, E.164), the store's market as default region got "2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb234807cc960"
+PASS  …one token minted for the shop by the client credentials grant, one GraphQL read at 2026-10 got [1,1,"2026-10"]
+PASS  …one HubSpot search, by the email in lower case                  got [1,{"propertyName":"email","operator":"EQ","value":"test1@example.com"
+PASS  …a pending write-back for contact 5100000001 with the customer's values got [1,"5100000001","pending",{"commerce_orders":0,"commerce_ref":"7100000
+PASS  …its reason the store connection and the customer id             got "commerce_customer:01a134a8-2da3-7650-9d01-a6f9c5830db1:7100000001"
+PASS  the same delivery again (a Shopify retry) → 200, no new event, no read got [200,3,0]
+PASS  orders/create (first order of C1, 13 lines) → 200                got 200
+PASS  …first, prior 0 exact                                            got ["first",0,true]
+PASS  …13 lines: the first ten and a page after them                   got [13,1]
+PASS  …a line: sku, product and variant ids, quantity, unit price      got {"line_source_id":"730000000101","sku":"SKU-1","product_ref":"80000000
+PASS  …the landing page as host and path, UTM from the visit, the referrer's host only got ["shop.example.com","/products/aed",{"campaign":"autumn","medium":"cpc
+PASS  …the source name, the app id, tags de-duplicated, amounts        got ["web","580111",["aed"],"120.00"]
+PASS  …the order's own phone hashed first (national, GB default region) got "25f2a34a25cda4790e3ae88de686a87ab0906d2ed38b6cbb7bfda50bab1f7cb0"
+PASS  …the customer upserted with it (count 1) and no second search: the earlier write-back knows its contact got [1,1]
+PASS  …the newer write-back supersedes the pending one (totals 1 order, 120.00) got [["superseded","pending"],1,120]
+PASS  a second order of C1 → repeat, prior 1, the customer's phone hashed (no order phone) got ["repeat",1,"2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb2348
+PASS  an order of the renewal source name → renewal                    got "renewal"
+PASS  an order the search does not hold yet → unknown, prior null      got ["unknown",null]
+PASS  …its next read (orders/updated) counts again → repeat            got "repeat"
+PASS  a guest order (no customer) → unknown, its phone hashed          got ["unknown",null,"47bfeeee1e2e08482b1dff7ac5e88ec10a998db84643d2d330068
+PASS  orders/cancelled → cancelled at, with its reason                 got [true,"CUSTOMER"]
+PASS  orders/delete → deleted without a read, its hash cleared         got [true,null]
+PASS  a customer whose id a held contact's refs hold → that contact, no search got ["5100000007",0]
+PASS  Email and Phone withheld → 200, processed, no hash (nothing fails) got [200,"processed",null]
+PASS  …the match by the commerce_ref properties instead (one search, both slots) got [1,[{"propertyName":"contact_shopify_id_1","operator":"EQ","value":"71
+PASS  …written back to the contact holding the id                      got "5100000003"
+PASS  no contact for the email, and two contacts → nothing written back got 0
+PASS  …counted as match_none and match_several in the processed log (no ids) got [1,1]
+PASS  one token minted for every read of the shop so far               got 1
+PASS  a token within five minutes of its expiry is minted again        got 3
+PASS  a connection without its store row: 200, the event failed store_not_configured for the sweep got [200,"failed","store_not_configured"]
+PASS  HubSpot answering 429 on the batch update → the actions failed rate_limited, attempted again later got [0,true,true]
+PASS  …then sent                                                       got [0,6]
+PASS  H1 (empty): id in slot 1, store, totals, country and language; currency disabled after the enqueue never written got ["7100000001","flow-3702947d-a","2","240","GB","en",null]
+PASS  H2: an agent's country kept (if_empty), the id in slot 2, no store or totals (not slot 1) got ["NL","7199999999","7100000002",null,null]
+PASS  H6: both slots taken → no id, no totals; the result says slots_full got ["7199999997","7199999998",null,"slots_full"]
+PASS  H3 (found by its ref): slot 1 already holds the id → present, totals written got ["present","flow-3702947d-a"]
+PASS  only the enabled write-back properties read and written (never contact_netsuite_id or email) got [true,true,"NS-1"]
+PASS  a third order of C1: always writes only the difference (totals), not what is unchanged got ["contact_shopify_total_orders","contact_shopify_total_spent"]
+PASS  a contact gone from HubSpot → failed contact_not_found           got "contact_not_found"
+      burst: answered in 584 to 914 ms (median 795); token mints 1; GraphQL throttled 0
+PASS  a burst of 200 orders/create → 200 for every one                 got true
+PASS  …every answer inside Shopify's five seconds                      got true
+PASS  …one token minted for the whole burst                            got 1
+      burst events after the inline read-back: failed 182, processed 18
+PASS  …200 events recorded, each once                                  got 200
+PASS  …after the sweep: every order stored once, all renewals          got [{"order_kind":"renewal","n":200}]
+PASS  …every event processed                                           got 200
+PASS  …Shopify refused for cost at most a handful of calls (the bucket paces the reads) got true
+PASS  reconcile: an order changed without a webhook is read back (its new tag) got ["aed","renewed-by-hand"]
+PASS  …one succeeded run per object type                               got ["commerce_customer:succeeded","commerce_order:succeeded"]
+PASS  …the subscription check recreated ORDERS_UPDATED at the connection's address, run error subscriptions_recreated got ["subscriptions_recreated",["https://ingest.example.com/shopify/80f1a0
+PASS  …a second check finds all seven: succeeded                       got ["succeeded",null]
+PASS  …an unchanged order is not read a second time                    got 0
+PASS  …none left for this connection → subscriptions_missing (the script recreates them) got "subscriptions_missing"
+PASS  backfill: the listing failing on its second page → the run fails, the first page kept got ["graphql_error",100,false]
+PASS  …a second run continues from the cursor and finishes             got [null,150]
+PASS  …a third run with the same start does nothing                    got [null,0]
+PASS  …backfill of another object is refused                           got "UsageError"
+PASS  tenant two's shop with its own secret → its row in tenant two, hashed with its own pepper got [200,"01a134a8-2d7a-75e3-9da7-541fdff80f7c","0a28767e65c265f6787c48f02
+PASS  …no write-back without a CRM connection on that store            got 0
+PASS  tenant one sees none of tenant two's customers or events         got [0,0]
+PASS  no fixture email in any database row of the flow (audit log included) got []
+PASS  no fixture phone number, in any form, in any database row        got []
+PASS  no name, address, note, client secret or token in the database   got false
+PASS  the logs hold no email, number, name, token or secret            got [false,false,false]
+PASS  the logs hold the webhook, processed, outbox, sweep, reconcile and backfill lines got true
+
+ALL 80 PASS

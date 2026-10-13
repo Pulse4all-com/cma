@@ -581,21 +581,29 @@ Expected: calls from 1 October onward; links for most calls agents logged in Hub
 
 # Phase 9. Shopify in prod
 
-Written on 13 October 2026 from `VENDOR_SETUP.md` §3 and §4 and step 6 of Phase 7. Shopify's Dev Dashboard click paths follow Shopify's documentation as of 10 October and have not been walked through in Pulse4all's organisation; the protected-data selection in particular may ask for a review (then §4's fallback). Per store: one connection, one store row, one set of subscriptions, one backfill.
+Written on 13 October 2026 from `VENDOR_SETUP.md` §3 and §4 and step 6 of Phase 7; brought in line with the Shopify adapter (brief B10) the same day. Shopify's Dev Dashboard click paths follow Shopify's documentation as of 13 October and have not been walked through in Pulse4all's organisation. Per store: one connection, one store row with its renewal settings, one set of subscriptions, one backfill, two read-only checks. What each step relies on is in `docs/ingest/README.md`, sections Shopify and Outbox.
 
-**The gate.** The Shopify adapter (brief B10) is not on `main` on 13 October: no `ingest/src/adapters/shopify`, no `docs/ingest/shopify-subscribe.mjs`, no outbox worker job (`ingest-outbox`, the writer of the HubSpot fields of 0007c), no backfill objects `commerce_customer` and `commerce_order`. Until B10 is merged and deployed with its job, run 9.1 to 9.3 only (Shopify-side setup and the secret) and stop there.
+**The gate.** Brief B10 brings `ingest/src/adapters/shopify`, `docs/ingest/shopify-subscribe.mjs`, the outbox worker job `ingest-outbox` (the writer of the HubSpot fields of 0007c) and the backfill objects `commerce_customer` and `commerce_order`, and needs addition 0008g (`db/56_commerce_phone_hash.sql`) in the database first: the adapter sends the phone hash, which the 0007b functions would drop. Until B10 is merged, 0008g has run in prod (its morning runbook) and the service and jobs are deployed from it, run 9.1 to 9.3 only (Shopify-side setup and the secret) and stop there.
 
 **Terminal** (in `~/cma`, on a current `main`)
 ```bash
 git switch -q main && git pull -q --ff-only && ls ingest/src/adapters docs/ingest/shopify-subscribe.mjs ingest/jobs
 ```
-Expected after B10: `automation hubspot shopify` (with `aircall` after B9), the script path, and `outbox.mjs` among the jobs.
+Expected after B10: `aircall automation hubspot shopify`, the script path, and `outbox.mjs` among the jobs.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version in ('0008f', '0008g') order by 1;
+reset role;
+```
+Expected: `0008f` and `0008g`.
 
 **Data prerequisites:**
 - Every Pulse4all store installed (9.3) and subscribed (9.7). A store left out is missing from first orders and lead to order without any error.
-- Shopify grants the protected field **Email** (9.2). Without it the CMA cannot find the customer's HubSpot contact; `VENDOR_SETUP.md` §4 has the fallback (Make writes only the Shopify id), decided on the day.
+- Shopify grants the protected fields **Email** and **Phone** (9.2). Without Email the CMA cannot find a new customer's HubSpot contact; `VENDOR_SETUP.md` §4 has the fallback (Make writes only the Shopify id, and the CMA then matches by that id), decided on the day. Without Phone orders carry no phone hash, so an order cannot be matched to an earlier call (indirect sales, Open decisions); nothing fails.
 - The Make modules that write the nine contact properties of `VENDOR_SETUP.md` §1.1 are switched off before the write-back starts (9.4): one writer per property.
-- The renewal source names or app ids of the subscription app (9.5), or every renewal counts as a repeat order.
+- The renewal source names or app ids of each store's subscription app (9.6), or every renewal counts as a repeat order.
 - The HubSpot property Contact-Shopify Store has an option per store handle.
 
 ## 9.1 The organisation check
@@ -610,10 +618,10 @@ Expected: the list of the organisation's stores. Every Pulse4all store in it →
 - Scopes `read_customers`, `read_orders`, and `read_all_orders` if offered (without it Shopify serves 60 days of orders; first versus repeat then comes from the customer's lifetime order count).
 - No app address, no extensions, no webhooks in the version (the CMA subscribes per store in 9.7).
 - Distribution **Custom**.
-- The app → API access requests → Protected customer data access → customer data with the field **Email** only (not name, phone, address); reason "match the customer to our CRM contact; not stored".
+- The app → API access requests → Protected customer data access → customer data with the fields **Email** and **Phone** (not Name, not Address); reason "match the customer to our CRM contact and to earlier calls; neither stored, the phone only as a keyed hash".
 - Release the version.
 
-Expected: version 1 released with the three scopes; the protected data request listed as granted for Email. If the Dashboard asks for a review or refuses, stop here and decide §4's fallback; the rest of the phase works either way (the match step is skipped when the email is withheld).
+Expected: version 1 released with the three scopes; the protected data request listed as granted for Email and Phone (for a custom-distribution app Shopify lists both levels as always available: a selection, not a review). If the Dashboard asks for a review or refuses, stop here and decide §4's fallback; the rest of the phase works either way (without Email the match searches the contacts' Shopify id properties instead; without Phone the hash is empty).
 
 ## 9.3 Install per store and the client secret
 
@@ -635,7 +643,7 @@ Expected: `accessor on ingest-shopify-app-signing`, a new revision, `health: {"o
 ```bash
 bash docs/ingest/deploy.sh prod --jobs
 ```
-Expected: the four jobs of 7.2 plus `ingest-outbox` and its schedule (B10 states it), `no build`.
+Expected: the four jobs of 7.2 plus `ingest-outbox`, and `schedule ingest-outbox: * * * * * (Europe/Amsterdam)`, `no build`. The service deploy above also sets `INGEST_SHOPIFY_READBACK_BUDGET_MS=1500` (the Shopify route answers within 1.5 seconds of read-back and leaves the rest to the sweep; Shopify waits five seconds in all).
 
 ## 9.4 Make switched off for the nine properties
 
@@ -659,11 +667,11 @@ reset role;
 ```
 Expected: eight empty results. Configuration → Sources → HubSpot Subscriptions shows them under the write-back section (read-only there).
 
-The renewal lists are tenant settings. Their values are the subscription app's order source name or app id, which no one has looked up yet: leave them empty now and set them in 9.8 from the backfilled orders.
+The renewal lists are tenant settings; each store's subscription app is added to them in 9.6, before its backfill, so its orders are classified as they are written.
 
 ## 9.6 Per store: the connection, its settings and the store
 
-Repeat 9.6 to 9.8 per store. **Do the three in one sitting**: the store row makes Intake count the shop as connected (the `No shop connected` text disappears), so a store row without subscriptions and backfill shows zero orders as if the shop sold nothing.
+Repeat 9.6 to 9.8 per store. **Do the three in one sitting**: the store row makes Intake count the shop as connected (the `No shop connected` text disappears), so a store row without subscriptions and backfill shows zero orders as if the shop sold nothing. The store row, its settings and its renewal settings come first, so the first order read is already classified.
 
 **Studio (cma-prod-pg)** after the context block (`<handle>` from 9.1)
 ```sql
@@ -686,6 +694,23 @@ Expected: the store listed with its market. The fallback in Studio after the con
 
 **Browser:** live portal → Settings → Properties → Contact-Shopify Store → the option `<handle>` exists (add it if not).
 
+**The store's renewal settings.** Which of the store's orders are renewals is named by the subscription app's sales channel (`source_name`) or app id (`app_ref`). Look them up before the backfill (read-only; no customer data):
+
+**Terminal** (in `~/cma`)
+```bash
+node docs/ingest/shopify-subscribe.mjs --project p4a-cma-prod --shop <handle>.myshopify.com --client-id <client id from 9.3> --secret-name ingest-shopify-app-signing --source-names --days 60
+```
+Expected: one line per sales channel and app with its order count, the most frequent first, for example `412	web	580111	Online Store`, `236	subscription_contract	<app id>	<subscription app name>`, `9	pos	…`. The subscription app's renewals are the line with its name (Juo for Pulse4all); Shopify's own checkout is `web`, the point of sale `pos`. Write the line into the records.
+
+**Studio (cma-prod-pg)** after the context block. The lists are the tenant's, comma-separated, and hold every store's values: first read what is there, then set the list with this store's value added (leave a list as it is when the other names the renewals)
+```sql
+select key, value, is_default from cma.tenant_settings() where key in ('commerce.renewal_source_names', 'commerce.renewal_app_ids');
+select cma.set_tenant_setting('commerce.renewal_source_names', '<the values already there>,<this store''s source name>');
+select cma.set_tenant_setting('commerce.renewal_app_ids', '<the values already there>,<this store''s app id>');
+reset role;
+```
+Expected: the two rows as they were, then one row per setting with the new value and `is_default` false. A change reclassifies the tenant's orders in the same transaction (0007b), so a second store's value never undoes the first's.
+
 ## 9.7 Per store: the subscriptions and the first events
 
 **Terminal** (`<key>` of this store's connection)
@@ -704,7 +729,7 @@ where connection_id = '<shop conn>' and recorded_at > now() - interval '1 day' g
 select status, count(*) from cma_read.outbox_action group by 1;
 reset role;
 ```
-Expected: events `processed`; outbox actions `sent` once a customer matched a contact. A `401` in the service log for the Shopify route means the secret is not this app's client secret (or the store belongs to another organisation's app).
+Expected: events `processed`; outbox actions `sent` once a customer matched a contact. A `401` in the service log for the Shopify route means the secret is not this app's client secret (or the store belongs to another organisation's app). Events `failed` with `throttled` or `paced` are read by the sweep within minutes (a burst of renewals is answered at once and read by the sweep within Shopify's cost limit); `store_not_configured` means the store row of 9.6 is missing; `client_id_not_set` the setting; `token_http_400` a client id or secret of another app, or a store outside the app's organisation.
 
 ## 9.8 Per store: backfill from 1 October
 
@@ -728,16 +753,52 @@ reset role;
 ```
 Expected: customers and orders since 1 October; `order_kind` mostly `first` and `repeat` (`renewal` stays 0 until the lists are set); the source names and app ids with their counts (no customer data); two `backfill` rows `succeeded`.
 
-The subscription app's renewals show as one `source_name` or `app_ref` with many orders (Shopify's own checkout is `web`, the point of sale `pos`). Once you have seen which one it is, set the lists and reclassify:
+The source names and app ids should match what 9.6 found: the subscription app's line with many orders and `renewal` filled. A `source_name` or `app_ref` with many orders that the lists do not name is a renewal channel 9.6 missed: add it as in 9.6 (the settings change reclassifies the orders).
 
-**Studio (cma-prod-pg)** after the context block (comma-separated; leave a list empty when the other names the renewals)
+**The orders per kind per day (read-only, per store)**
+
+**Studio (cma-prod-pg)**
 ```sql
-select cma.set_tenant_setting('commerce.renewal_source_names', '<source name of the subscription app>');
-select cma.set_tenant_setting('commerce.renewal_app_ids', '<app id, or an empty string>');
-select cma.reclassify_orders();
+set role cma_owner;
+select (o.source_created_at at time zone s.time_zone)::date as day, o.order_kind, count(*) as orders
+from cma.commerce_order o
+join cma.commerce_store s on s.tenant_id = o.tenant_id and s.connection_id = o.connection_id
+where o.connection_id = '<shop conn>' and not o.is_test and o.source_deleted_at is null
+  and o.source_created_at >= now() - interval '14 days'
+group by 1, 2 order by 1, 2;
 reset role;
 ```
-Expected: one row per setting (`key`, `value`, `is_default` false), then the number of orders that changed kind; rerun the `order_kind` query: `renewal` filled, `repeat` lower.
+Expected: per day `first` and `repeat` orders spread over the days, and `renewal` orders clustered on the subscription app's billing days (many on a few days, few or none on the others); `unknown` only for orders without a customer (guest checkout) and for a new order whose count Shopify's search did not hold yet (it turns `first` or `repeat` at its next read, at the latest after the nightly reconcile). Renewals spread like web orders, or none at all, mean the renewal settings do not name the subscription app: back to 9.6. Write the result into the records.
+
+**The bridge check (read-only, per store):** the share of the store's customers whose id a HubSpot contact holds in its configured Contact-Shopify ID properties, as the CMA knows it: a contact it holds with the id among its refs, or a write-back of the customer that HubSpot answered with the id written or already present.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+with b as (
+  select cu.connection_id, cu.source_id,
+         exists (select 1 from cma.crm_contact_ref r
+                 join cma.crm_contact k on k.tenant_id = r.tenant_id and k.id = r.contact_id and k.source_deleted_at is null
+                 where r.tenant_id = cu.tenant_id and r.system = cu.source_system and r.external_id = cu.source_id) as by_ref,
+         exists (select 1 from cma.outbox_action o
+                 where o.tenant_id = cu.tenant_id and o.reason = 'commerce_customer:' || cu.connection_id || ':' || cu.source_id
+                   and o.status = 'sent' and o.result ->> 'ref' in ('written', 'present')) as by_writeback
+  from cma.commerce_customer cu
+  where cu.source_deleted_at is null
+)
+select s.handle, count(*) as customers,
+       count(*) filter (where by_ref or by_writeback) as bridged,
+       round(100.0 * count(*) filter (where by_ref or by_writeback) / nullif(count(*), 0), 1) as bridged_pct,
+       count(*) filter (where by_ref) as held_by_ref,
+       count(*) filter (where by_writeback) as written_back
+from b
+join cma.commerce_store s on s.connection_id = b.connection_id
+group by s.handle order by s.handle;
+select o.result ->> 'ref' as ref, o.status, count(*) from cma.outbox_action o
+where o.reason like 'commerce_customer:<shop conn>:%' group by 1, 2 order by 1, 2;
+reset role;
+```
+Expected: one row per store with `customers` the store's customers since the backfill's start and `bridged` at most that; in the first hour after the backfill `bridged` grows with every outbox run (one a minute, 50 write-backs per claim) and then holds. The share is the customers whose email found exactly one HubSpot contact (or whose id a contact already held); a share far below what you expect from how many buyers have a HubSpot contact means the email match is not happening (Email not granted, 9.2; the no-contact and several-contacts counts are on Reports → Data quality). The second query splits the write-backs: `written` and `present` bridge, `slots_full` means a contact holds two other Shopify ids already (data quality lists them), `failed` or `needs_review` need a look (`docs/ingest/README.md`, Outbox). Write both results into the records.
 
 **Browser:** Reports → Intake (and Dashboard, the intake row): the `No shop connected` text is gone; first orders appear per day for the store's market.
 
@@ -746,4 +807,4 @@ Expected: one row per setting (`key`, `value`, `is_default` false), then the num
 - **Lead to order**: Studio after the context block, `select * from cma.lead_to_order_rows(current_date - 7, current_date) limit 20;` shows deals followed by a first order of the same contact within the window.
 - **Browser:** Reports → Data quality: `Shop customers without a contact` and the ambiguous count. Customers without a deal count as unmatched (the CMA holds a contact only while a record points to it), so a high number on day one is expected; a number that does not fall as deals come in means the email match is not happening (9.2).
 - **Browser:** live portal → a contact with a recent order: Contact-Shopify ID-1, Store and the totals filled within two minutes of the order; a contact that had a country keeps it.
-- **Records:** the outputs of 9.2 to 9.8 per store, the Make change of 9.4 and the renewal values into `records/intake-prod-<date>/`.
+- **Records:** the outputs of 9.2 to 9.8 per store (the source names of 9.6, the orders per kind and the bridge check of 9.8), the Make change of 9.4 and the renewal values into `records/intake-prod-<date>/`.

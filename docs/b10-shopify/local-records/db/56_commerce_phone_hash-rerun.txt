@@ -1,0 +1,23 @@
+DO
+BEGIN
+SET
+DO
+psql:56_commerce_phone_hash.sql:66: NOTICE:  column "phone_hash" of relation "commerce_customer" already exists, skipping
+ALTER TABLE
+psql:56_commerce_phone_hash.sql:68: NOTICE:  column "phone_hash" of relation "commerce_order" already exists, skipping
+ALTER TABLE
+COMMENT
+COMMENT
+psql:56_commerce_phone_hash.sql:71: NOTICE:  relation "commerce_customer_phone_hash_idx" already exists, skipping
+CREATE INDEX
+psql:56_commerce_phone_hash.sql:72: NOTICE:  relation "commerce_order_phone_hash_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+REVOKE
+GRANT
+INSERT 0 0
+COMMIT
+RESET

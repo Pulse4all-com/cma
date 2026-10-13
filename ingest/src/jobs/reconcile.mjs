@@ -5,6 +5,9 @@
  * change) is listed by the adapter and read back through the same path as a webhook (synthetic
  * events, stale guard), one sync_run row per object type (job reconcile, stream the object type).
  * Events whose read-back fails are left to the sweep and counted as failed; the run still succeeds.
+ * An adapter with webhook subscriptions of its own to look after (Shopify) checks them after its
+ * streams, one more sync_run row (job subscriptions_check, stream webhooks), unless --object narrows
+ * the run.
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -45,6 +48,22 @@ export async function runReconcile({ connectionId = null, lookbackMinutes = DEFA
       } catch (err) {
         total.failed += 1;
         warn("reconcile: run not recorded", { connection: c.connectionId, stream: obj, code: codeOf(err) });
+      }
+    }
+    if (adapter.checkSubscriptions && !object) {
+      try {
+        const r = await withRun(store, { job: "subscriptions_check", stream: "webhooks", to: new Date() }, async (counts) => {
+          const error = await adapter.checkSubscriptions({ connection: c, store, budget, counts });
+          return error ? { error } : undefined;
+        });
+        total.runs += 1;
+        if (!r.ok) {
+          total.failed += 1;
+          warn("reconcile: subscriptions", { connection: c.connectionId, code: r.error });
+        }
+      } catch (err) {
+        total.failed += 1;
+        warn("reconcile: subscriptions check not recorded", { connection: c.connectionId, code: codeOf(err) });
       }
     }
   }

@@ -19,7 +19,7 @@
  *   INGEST_PROJECT            the Google Cloud project whose Secret Manager holds the secrets
  *   INGEST_PUBLIC_URLS        the service's public base URL(s), comma-separated: the URI a source signs
  *   INGEST_LOG_HEADER_NAMES   1 → log the header names (never the values) of every webhook (dev)
- *   INGEST_READBACK_BUDGET_MS 3000
+ *   INGEST_READBACK_BUDGET_MS 3000 (an adapter may have its own: INGEST_SHOPIFY_READBACK_BUDGET_MS 1500)
  *   CMA_DB_*                  the database, as src/core/db.mjs describes
  */
 import http from "node:http";
@@ -97,7 +97,7 @@ async function handleWebhook(req, res, adapter, key) {
 
   let events;
   try {
-    events = adapter.mapRequest(body, connection);
+    events = adapter.mapRequest(body, connection, req.headers);
   } catch {
     warn("body not readable", { connection: connection.connectionId, adapter: adapter.name, code: "bad_body" });
     send(res, 400);
@@ -118,7 +118,8 @@ async function handleWebhook(req, res, adapter, key) {
   let processed = null;
   if (due.length) {
     try {
-      processed = await processEvents(adapter, connection, due, new Budget(readbackBudgetMs()), inlineOf(events));
+      const ms = adapter.readbackBudgetMs ? adapter.readbackBudgetMs() : readbackBudgetMs();
+      processed = await processEvents(adapter, connection, due, new Budget(ms), inlineOf(events));
     } catch (err) {
       warn("read-back left to the sweeper", { connection: connection.connectionId, adapter: adapter.name, code: dbErrorCode(err) });
     }
