@@ -1,0 +1,25 @@
+DO
+BEGIN
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE TRIGGER
+REVOKE
+GRANT
+INSERT 0 1
+ tenant | connection | connection_id | lines_not_counted | calls_removed | taggings_removed | links_removed 
+--------+------------+---------------+-------------------+---------------+------------------+---------------
+(0 rows)
+
+COMMIT
+RESET

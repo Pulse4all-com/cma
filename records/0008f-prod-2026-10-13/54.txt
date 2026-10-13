@@ -1,0 +1,26 @@
+DO
+BEGIN
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER FUNCTION
+REVOKE
+CREATE TRIGGER
+REVOKE
+GRANT
+INSERT 0 1
+         tenant          |      connection       |            connection_id             | lines_not_counted | calls_removed | taggings_removed | links_removed 
+-------------------------+-----------------------+--------------------------------------+-------------------+---------------+------------------+---------------
+ pulse4all-subscriptions | Aircall Subscriptions | 01a133d9-e3ab-7ccb-a4ab-0ded73078018 |                 5 |            12 |                2 |            12
+(1 row)
+
+COMMIT
+RESET
