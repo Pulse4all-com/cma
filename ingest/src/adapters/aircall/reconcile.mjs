@@ -82,7 +82,8 @@ export async function checkWebhook(api, connection, settings) {
     return "signing_secret_unavailable";
   }
   const sameAsSecret = (token) => sameToken(typeof token === "string" ? token : "", secret);
-  if (!sameAsSecret(hook.token)) return "webhook_token_mismatch";
+  // The list shows each webhook's token (developer.aircall.io, Webhooks); compared when it is there
+  if (hook.token !== undefined && hook.token !== null && !sameAsSecret(hook.token)) return "webhook_token_mismatch";
   if (hook.active === true) return null;
   const events = Array.isArray(hook.events) && hook.events.length ? hook.events : Object.keys(EVENTS);
   let updated;
@@ -92,7 +93,7 @@ export async function checkWebhook(api, connection, settings) {
     return "webhook_inactive";
   }
   if (updated?.active !== true) return "webhook_inactive";
-  return updated.token === undefined || sameAsSecret(updated.token) ? "webhook_reactivated" : "webhook_reactivated_token_changed";
+  return updated.token === undefined || updated.token === null || sameAsSecret(updated.token) ? "webhook_reactivated" : "webhook_reactivated_token_changed";
 }
 
 /** Reconcile of telephony calls created between sinceMs and untilMs → process(items); answers { error } of the webhook check. */

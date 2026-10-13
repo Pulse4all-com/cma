@@ -359,7 +359,7 @@ Expected: mostly `200`; a few `401` or `404` are strangers; many `429` would com
 
 Written on 13 October 2026 from `VENDOR_SETUP.md` §2 (`docs/night-2026-10-10/`), step 5 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` and what 12 October taught for HubSpot. The Aircall click paths of VENDOR_SETUP were written from Aircall's documentation and have not been walked through in Pulse4all's Aircall account; a step that depends on one says so. The connection's lines, tags and kind are set on **Configuration → Sources** (addition 0008e), each agent's Aircall user id on **Team → People → Linked accounts**; the SQL next to them is the fallback.
 
-**The gate.** The Aircall adapter (brief B9) is not on `main` on 13 October: `ingest/src/adapters/` holds `automation` and `hubspot` only, and the scripts this phase calls (`docs/ingest/aircall-webhook.mjs`, `docs/ingest/aircall-users.mjs`) and the backfill object `telephony_call` come with it. Until B9 is merged and deployed, run 8.1 and 8.2 only (they touch nothing the CMA reads) and stop there.
+**The gate.** The Aircall adapter (brief B9, `Pulse4all-com/cma#111`) brings `ingest/src/adapters/aircall/`, the scripts this phase calls (`docs/ingest/aircall-webhook.mjs`, `docs/ingest/aircall-users.mjs`) and the backfill object `telephony_call`; how they work is `docs/ingest/README.md`, section Aircall. B9 is on `main` once that pull request is merged. Until it is merged and its image deployed (the service in 8.4 and the jobs with `deploy.sh prod --jobs`), run 8.1 and 8.2 only (they touch nothing the CMA reads) and stop there.
 
 **Terminal** (in `~/cma`, on a current `main`)
 ```bash
@@ -400,13 +400,23 @@ gcloud secrets versions access latest --secret=ingest-aircall-subs-token --proje
 ```
 Expected: `200`. `401` means the pair is wrong or pasted with spaces; a Python error means the value is not the JSON line: run `put_secret` again (it adds a version).
 
+Done on 13 October 2026: `ingest-aircall-subs-token` version 1 exists in `p4a-cma-prod` and `GET /v1/ping` answered `200` with it (Martin). Rerun 8.2 only to rotate the key.
+
 ## 8.3 The connection
 
-**The account id.** `upsert_connection` takes the account the connection pins (the live portal's `147946837` for HubSpot). Which Aircall value B9 compares (the company id an Aircall event carries, or another) is B9's to state in `docs/ingest/README.md`; Aircall's Dashboard is not known to show a company id. Not grounded tonight: take the value B9's README names.
+**The account id is the company's name: `Pulse4all`.** `upsert_connection` takes the account the connection pins (the live portal's `147946837` for HubSpot). An Aircall event names no company and `GET /v1/company` exposes no company id: on 13 October 2026 Pulse4all's account answered `company.name` `Pulse4all` and `company.id` null. So the account id is the company's `name` exactly as `GET /v1/company` gives it (`docs/ingest/README.md`, section Aircall): `aircall-webhook.mjs` (8.4) refuses to run when the API key answers for another name, and the reconcile and the backfill check it before they list anything. To see the name yourself:
+
+**Terminal** (the key read without showing it)
+```bash
+gcloud secrets versions access latest --secret=ingest-aircall-subs-token --project=p4a-cma-prod \
+  | python3 -c 'import json,sys,base64; d=json.load(sys.stdin); print("Authorization: Basic " + base64.b64encode((d["api_id"]+":"+d["api_token"]).encode()).decode())' \
+  | curl -s -H @- https://api.aircall.io/v1/company
+```
+Expected: `{"company":{"name":"Pulse4all",…,"id":null,…}}` (with the user and line counts).
 
 **Studio (cma-prod-pg)** after the context block
 ```sql
-select * from cma.upsert_connection('aircall', 'Aircall Subscriptions', '<account id per B9>',
+select * from cma.upsert_connection('aircall', 'Aircall Subscriptions', 'Pulse4all',
                                     'ingest-aircall-subs-signing', 'ingest-aircall-subs-token');
 ```
 Expected: one row with `connection_id` and `key`. Keep both in the tab: the key goes into the webhook address, the id is `<aircall conn>` below.
@@ -418,7 +428,7 @@ select name, adapter, external_account_id, kind, status, signing_secret_name, to
 from cma.sources() where connection_id = '<aircall conn>';
 reset role;
 ```
-Expected: an empty result, then one row: `Aircall Subscriptions`, `aircall`, the account id, `telephony`, `active`, `ingest-aircall-subs-signing`, `ingest-aircall-subs-token`.
+Expected: an empty result, then one row: `Aircall Subscriptions`, `aircall`, `Pulse4all`, `telephony`, `active`, `ingest-aircall-subs-signing`, `ingest-aircall-subs-token`.
 
 **Browser:** `https://workspace.pulse4all.app/configuration/sources` → **Aircall Subscriptions**.
 
@@ -442,9 +452,28 @@ Expected: `accessor on ingest-aircall-subs-token`, `accessor on ingest-aircall-s
 
 **Terminal** (`<key>` from 8.3)
 ```bash
-node docs/ingest/aircall-webhook.mjs --project p4a-cma-prod --url "https://ingest.pulse4all.app/aircall/<key>" --api-secret ingest-aircall-subs-token --token-secret ingest-aircall-subs-signing
+node docs/ingest/aircall-webhook.mjs --project p4a-cma-prod --url "https://ingest.pulse4all.app/aircall/<key>" --api-secret ingest-aircall-subs-token --token-secret ingest-aircall-subs-signing --account Pulse4all
 ```
-Expected (B9's script as VENDOR_SETUP §2.3 describes it): the webhook id and the six events (`call.created`, `call.answered`, `call.ended`, `call.tagged`, `call.untagged`, `call.archived`); the token stored as a version of `ingest-aircall-subs-signing` and never printed. Run it once: a second run creates a second webhook (unless B9 says it checks), and both would deliver every event.
+Expected: `webhook <webhook id>` and `events  call.created, call.answered, call.ended, call.tagged, call.untagged, call.archived`, then on stderr `-- token stored as a new version of ingest-aircall-subs-signing (not shown). Next: the connection setting webhook_id = <webhook id> …`. The token is never printed. Keep the webhook id for the next step.
+
+The script refuses, and creates nothing, when:
+- `--account` is not the name the key answers for: `refused: the API key in ingest-aircall-subs-token belongs to the Aircall company "<name>", not "Pulse4all"` (check 8.2 and 8.3);
+- `ingest-aircall-subs-signing` does not exist yet: `refused: the secret … does not exist yet` (the first block of this step);
+- a webhook for this URL exists already: it prints that webhook (`<id>  active true  events …  <url>`) and `refused: a webhook for this URL exists already`, so a second run never makes a second webhook (both would deliver every event). To start again on purpose: `--delete <id>`, then run it again. `--list` shows every webhook of the company (ids, active, events, URLs; never a token).
+
+If it prints `the webhook <id> exists, but its token could not be stored`, run it with `--delete <id>` and then again.
+
+**Browser:** `https://workspace.pulse4all.app/configuration/sources` → **Aircall Subscriptions** → **Settings** → Add setting: key `webhook_id`, value the webhook id from the script → Save settings.
+
+Expected: the setting listed after a reload. The nightly reconcile (02:30) checks this webhook: its `reconcile` run for stream `telephony_call` fails with `webhook_id_not_set` without the setting, `webhook_missing` when Aircall has no webhook with that id, `webhook_token_mismatch` when its token is not the one in `ingest-aircall-subs-signing`, and `webhook_reactivated` when Aircall had disabled it after failed deliveries and the job switched it on again (look at why the deliveries failed). The same page takes `aircall_max_per_minute` (default 60, the adapter's own limit on Aircall's API, shared with nothing else of the CMA): lower it if the other integrations on Pulse4all's Aircall account meet Aircall's limit of 120 per minute.
+
+The fallback in **Studio (cma-prod-pg)** after the context block (keeps the settings already there):
+```sql
+select cma.set_connection_settings('<aircall conn>',
+  coalesce((select settings from cma.integration_connection where id = '<aircall conn>'), '{}'::jsonb) || '{"webhook_id": "<webhook id>"}'::jsonb);
+reset role;
+```
+Expected: an empty result.
 
 ## 8.5 The first events
 
@@ -472,7 +501,7 @@ Expected: events `processed`; one call `outbound` with its times, about ten seco
 
 ## 8.6 Lines and tags
 
-The adapter reads Aircall's lines and tags with the first events (B9; `VENDOR_SETUP.md` §2.4). Calls count only on counted lines, for the line's market.
+The adapter reads Aircall's lines and tags with the first event of the connection (its line catalog is empty) and then from the sweep at most hourly (`VENDOR_SETUP.md` §2.4; `docs/ingest/README.md`, section Aircall). Calls count only on counted lines, for the line's market; a line's market is also the default region of the call hash for numbers in national format. Pulse4all's account has 54 lines on 13 October 2026, each to be set by hand: there is no rule for lines yet.
 
 **Browser:** Configuration → Sources → Aircall Subscriptions → **Lines**: per line choose its market and switch **Counted** off for internal and test lines. **Tags**: every tag counts until switched off; switch off tags that are not about the customer conversation, if any.
 
@@ -488,11 +517,11 @@ Expected: the lines, then an empty result per statement.
 
 ## 8.7 People: each agent's Aircall user id
 
-**Terminal** (B9's script, the API key read with your own login and never printed)
+**Terminal** (the Aircall key and the HubSpot token read with your own login and never printed; after 7.6, which put the HubSpot owner ids on the persons)
 ```bash
-node docs/ingest/aircall-users.mjs --project p4a-cma-prod --api-secret ingest-aircall-subs-token
+node docs/ingest/aircall-users.mjs --project p4a-cma-prod --api-secret ingest-aircall-subs-token --via-owners ingest-hubspot-subs-token
 ```
-Expected: one `select cma.set_user_external_id(…, 'aircall_user', '<Aircall user id>')` per Aircall user who is a CMA person, then a count on stderr, as `hubspot-owners.mjs` does in 7.6. Paste the lines in **Studio (cma-prod-pg)** after the context block, then `reset role;`. Expected: one row per person.
+Expected: per Aircall user whose email is a HubSpot owner's email, one line `select cma.set_user_external_id(x.user_id, 'aircall_user', '<Aircall user id>') from cma.app_user_external_id x where x.system = 'hubspot_owner' and x.external_id = '<owner id>';` (no email in the output), then on stderr `-- <n> Aircall user(s) matched to a HubSpot owner, of <m>` and `-- not matched (link by hand on Team → People → Linked accounts): <ids>`. Paste the lines in **Studio (cma-prod-pg)** after the context block, then `reset role;`. Expected: one row per statement; a statement whose owner id is on no person returns no row and changes nothing. `--also-domain newcogroup.com=pulse4all.com` also matches an address on the other domain, as in 7.6. Without `--via-owners` the script prints one statement per user by email instead.
 
 Or by hand, one person at a time: **Browser:** Aircall Dashboard → Users → the user: the id is the number in the page's address (`VENDOR_SETUP.md` §2.5; not walked through). Then `https://workspace.pulse4all.app/team/people` → the person → **Linked accounts** → `User id in Aircall Subscriptions` → the id → Save.
 
@@ -506,7 +535,7 @@ Expected: the People list's **Linked** column shows `2 of 2` for a person with t
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<aircall conn>,--object,telephony_call,--from,2026-10-01
 ```
-Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed execution is run again with the same arguments (it continues where it stopped, as for HubSpot; B9 states Aircall's pacing).
+Expected: `Execution [ingest-backfill-…] has successfully completed.` It lists the calls a day at a time, 50 per request, at `aircall_max_per_minute` (default 60) and takes each call from the listing (no second read), so two weeks of calls take minutes. A failed execution is run again with the same arguments: it continues at the last finished day. It fails at once with `account_mismatch` when the connection's account id is not the key's company name (8.3).
 
 The sweep links calls of the last two hours only (`link_calls(now() − 2 h)`), so the backfilled calls are linked once, by hand:
 
@@ -534,6 +563,7 @@ Expected: calls from 1 October onward; links for most calls agents logged in Hub
 
 - **The end-to-end check** of Phase 7 step 7 on the first real new deal: the Aircall call, its HubSpot call engagement, the `call_link` within two hours, the deal in `speed_to_lead_rows`. Compare the engagement's `occurred_at` with the Aircall call's `started_at` for the same call: equal within seconds means HubSpot's time is the start; minutes apart means the effective start comes from the link (DESIGN §4.4 does that already).
 - **Browser:** Reports → Intake: the calls column per day and market; Reports → Data quality: `Telephony calls without a logged call` after 24 hours.
+- **The first reconcile** (02:30): `select job, stream, status, error, counts from cma.sync_run where connection_id = '<aircall conn>' order by started_at desc limit 3;` as `cma_owner` in Studio. Expected: `reconcile`, `telephony_call`, `succeeded` with the calls of the last 26 hours fetched; an `error` is one of the webhook codes of 8.4 or `account_mismatch`.
 - **Records:** the outputs of 8.2 to 8.8 into `records/intake-prod-<date>/`, with the HubSpot ones.
 
 ---
