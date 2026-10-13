@@ -80,6 +80,10 @@ export function hubspotClient(token, budget) {
       }
       return results;
     },
+    /** POST /crm/v3/objects/{type}/batch/update with at most 100 inputs [{ id, properties }] (the outbox worker). */
+    async batchUpdate(type, inputs) {
+      return call("POST", `/crm/v3/objects/${API_OBJECT[type]}/batch/update`, { inputs });
+    },
     async associations(fromType, toType, ids) {
       const out = new Map();
       for (let i = 0; i < ids.length; i += BATCH_READ) {

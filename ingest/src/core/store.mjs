@@ -19,6 +19,17 @@
  *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
+ * For a commerce source (migrations 0007b, 0007c):
+ *   crmConnection(id)           the CRM connection a store's customers are matched to (settings
+ *                               crm_connection_id), active, same tenant: its adapter and secret names
+ *   writebackFields(id)         that CRM connection's enabled write-back fields
+ *   knownContacts({...})        what the CMA already knows of a customer's contact: the contacts whose
+ *                               refs hold the customer id (crm_contact_ref), and the contact of the
+ *                               customer's latest write-back that is not dropped (outbox_action)
+ *   connectionKey()             the connection's key (the address of its webhooks; an identifier)
+ *
+ * For the outbox job (migration 0007c): outboxClaim(limit), outboxFinish(groups).
+ *
  * For a telephony source (migration 0007a):
  *   lineMarkets(numberRefs)     the market configured on each of these lines (telephony_number)
  *   firstMarket()               the tenant's first active market (sort order, then code)
@@ -28,8 +39,11 @@
  * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts;
  * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a);
  * writes.telephonyTags and telephonyNumbers refresh the telephony catalogs (each the whole list),
- * writes.telephonyCalls upserts telephony calls, writes.cursors moves sync cursors in the same
- * transaction as the writes they describe.
+ * writes.telephonyCalls upserts telephony calls, writes.commerceCustomers and commerceOrders upsert a
+ * store's customers and orders (0007b, 0008g), writes.writebacks enqueues CRM contact write-backs
+ * ({ connectionId, contactId, values, reason }, cma.enqueue_contact_writeback of 0007c) after them,
+ * writes.tally adds named counts to the run's counts (no ids), writes.cursors moves sync cursors in
+ * the same transaction as the writes they describe.
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
  * writes unit by unit, so one bad object fails its own events only.
  */
@@ -143,6 +157,58 @@ export function storeFor(ctx, connectionId) {
     async linkCalls(since) {
       return withTenant(ctx, async (q) => (await q.query("select cma.link_calls($1) as n", [since])).rows[0].n);
     },
+    async crmConnection(id) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id ?? ""))) return null;
+      return withTenant(ctx, async (q) => {
+        const c = (await q.query(
+          `select id, adapter, external_account_id, signing_secret_name, token_secret_name from cma.integration_connection
+            where tenant_id = cma.current_tenant_id() and id = $1 and status = 'active'`, [id])).rows[0];
+        return c ? { tenantId: ctx.tenantId, connectionId: c.id, adapter: c.adapter, externalAccountId: c.external_account_id,
+          signingSecretName: c.signing_secret_name, tokenSecretName: c.token_secret_name, ingestUserId: ctx.userId } : null;
+      });
+    },
+    async writebackFields(crmConnectionId) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select field, slot, target_property, mode from cma.writeback_field
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and enabled order by field, slot`, [crmConnectionId])).rows
+        .map((r) => ({ field: r.field, slot: r.slot, property: r.target_property, mode: r.mode })));
+    },
+    async knownContacts({ crmConnectionId, refSystem, customerId, reason }) {
+      return withTenant(ctx, async (q) => {
+        const refs = (await q.query(
+          `select distinct k.source_id from cma.crm_contact_ref r
+             join cma.crm_contact k on k.tenant_id = r.tenant_id and k.id = r.contact_id
+            where r.tenant_id = cma.current_tenant_id() and k.connection_id = $1 and r.system = $2 and r.external_id = $3
+              and k.source_deleted_at is null
+            order by 1 limit 3`, [crmConnectionId, refSystem, customerId])).rows.map((r) => r.source_id);
+        const last = (await q.query(
+          `select target_id from cma.outbox_action
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and action = 'crm.contact.set_properties'
+              and target_type = 'contact' and reason = $2 and status <> 'dropped'
+            order by id desc limit 1`, [crmConnectionId, reason])).rows[0]?.target_id ?? null;
+        return { refContacts: refs, outboxContact: last };
+      });
+    },
+    async connectionKey() {
+      return withTenant(ctx, async (q) => (await q.query(
+        "select key from cma.integration_connection where tenant_id = cma.current_tenant_id() and id = $1", [connectionId])).rows[0]?.key ?? null);
+    },
+    async outboxClaim(limit = 50) {
+      return withTenant(ctx, async (q) => (await q.query(
+        "select action_id, action, target_type, target_id, payload, reason, attempts from cma.outbox_claim($1, $2)", [connectionId, limit])).rows);
+    },
+    async outboxFinish(groups) {
+      let n = 0;
+      await withTenant(ctx, async (q) => {
+        for (const g of groups) {
+          if (!g.ids.length) continue;
+          const r = await q.query("select cma.outbox_finish($1::uuid[], $2, $3::jsonb, $4) as n",
+            [g.ids, g.outcome, g.result ? JSON.stringify(g.result) : null, g.outcome === "failed" ? (g.error ?? "failed") : null]);
+          n += r.rows[0].n;
+        }
+      });
+      return n;
+    },
     async lineMarkets(numberRefs) {
       if (!numberRefs.length) return new Map();
       return withTenant(ctx, async (q) => new Map((await q.query(
@@ -171,6 +237,8 @@ const ORDER = [
   ["telephonyTags", "select cma.ingest_upsert_telephony_catalog($1, 'tag', $2::jsonb) as n", false],
   ["telephonyNumbers", "select cma.ingest_upsert_telephony_catalog($1, 'number', $2::jsonb) as n", false],
   ["telephonyCalls", "select outcome from cma.ingest_upsert_telephony_calls($1, $2::jsonb)", true],
+  ["commerceCustomers", "select outcome from cma.ingest_upsert_commerce_customers($1, $2::jsonb)", true],
+  ["commerceOrders", "select outcome from cma.ingest_upsert_commerce_orders($1, $2::jsonb)", true],
 ];
 
 async function writeAll(q, connectionId, units, counts) {
@@ -181,6 +249,18 @@ async function writeAll(q, connectionId, units, counts) {
       const r = await q.query(sql, [connectionId, JSON.stringify(part)]);
       if (chunked) for (const row of r.rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
     }
+  }
+  // CRM write-backs (0007c) after the facts they describe; one per contact and reason in this batch
+  const seen = new Set();
+  for (const w of units.flatMap((u) => u.writes?.writebacks ?? []).reverse()) {
+    const k = `${w.connectionId}|${w.contactId}|${w.reason}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    const r = await q.query("select cma.enqueue_contact_writeback($1, $2, $3::jsonb, $4) as id", [w.connectionId, w.contactId, JSON.stringify(w.values), w.reason]);
+    if (r.rows[0]?.id) counts.writebacks = (counts.writebacks ?? 0) + 1;
+  }
+  for (const t of units.map((u) => u.writes?.tally).filter(Boolean)) {
+    for (const [k, v] of Object.entries(t)) if (typeof v === "number") counts[k] = (counts[k] ?? 0) + v;
   }
   for (const c of units.flatMap((u) => u.writes?.cursors ?? [])) {
     await q.query("select cma.ingest_cursor_set($1, $2, $3::jsonb)", [connectionId, c.stream, JSON.stringify(c.cursor)]);

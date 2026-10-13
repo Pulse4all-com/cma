@@ -7,6 +7,9 @@
  *   pollForms                            the poll-forms job (forms.mjs)
  *   reconcileObjects, reconcile          the reconcile job (reconcile.mjs)
  *   backfillObjects, backfill            the backfill job (backfill.mjs)
+ *   crm                                  contact lookups for another adapter's match (match.mjs: the
+ *                                        commerce customer's contact, DESIGN §4.3a)
+ *   writeContacts                        the outbox job: claimed contact write-backs (write.mjs)
  */
 import { getSecret } from "../../core/secrets.mjs";
 import { verifyV3 } from "./verify.mjs";
@@ -15,6 +18,8 @@ import { readBack, RATES } from "./read.mjs";
 import { pollForms } from "./forms.mjs";
 import { reconcile, RECONCILE_OBJECTS } from "./reconcile.mjs";
 import { backfill, BACKFILL_OBJECTS } from "./backfill.mjs";
+import { findContactsByEmail, findContactsByProperties } from "./match.mjs";
+import { writeContacts } from "./write.mjs";
 
 export const hubspot = {
   name: "hubspot",
@@ -39,4 +44,6 @@ export const hubspot = {
   reconcile,
   backfillObjects: BACKFILL_OBJECTS,
   backfill,
+  crm: { findContactsByEmail, findContactsByProperties },
+  writeContacts,
 };
