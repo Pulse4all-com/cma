@@ -1,0 +1,14 @@
+  manager /reports/intake?range=month: the main area scrolls sideways by 110px at 1280
+  manager /reports/data-quality: the header hint covers the header it explains
+  admin /configuration/alert-rules: the main area scrolls sideways by 1041px at 1280
+  lines: the confirmation does not open on Cancel
+  lines: the box is unticked while the confirmation is open
+  lines: Enter at open called the lines route with [{"lineRef":"l-1","market":"NL","isCounted":false}]
+  lines: the box is unticked after Enter at open
+  Dissolve on Teams: the confirmation does not open on Cancel
+  Copy previous week on the planner: the confirmation does not open on Cancel
+  End workday: the confirmation does not open on its confirm button
+  1279x800: the desktop-only gate is showing instead of the app
+  1279x800: rail is 0px, token says 256
+  1279x800: top bar is 0px, token says 56
+layout: FAIL (13 problems)

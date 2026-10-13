@@ -1,0 +1,21 @@
+PASS  lines: the first line counts
+PASS  lines: opens on Cancel (focus on "CancelEsc")
+PASS  lines: the confirm button is the destructive secondary style without a keycap
+PASS  lines: Enter at open cancels and writes nothing
+PASS  lines: the confirmation carries the sentence
+PASS  lines: the box stayed ticked while the confirmation was open and after Enter
+PASS  lines: Esc cancels and writes nothing
+PASS  lines: a click on the confirm button saves once and the box unticks after the save
+PASS  lines: switching it on again does not ask
+PASS  teams dissolve: opens on Cancel (focus on "CancelEsc")
+PASS  teams dissolve: the confirm button is the destructive secondary style without a keycap
+PASS  teams dissolve: Enter at open cancels and writes nothing
+PASS  planner copy previous week: opens on Cancel (focus on "CancelEsc")
+PASS  planner copy previous week: the confirm button is the destructive secondary style without a keycap
+PASS  planner copy previous week: Enter at open cancels and writes nothing
+PASS  my day: clocked in for the check
+PASS  my day end workday: opens on its confirm button (focus on "End workdayEnter")
+PASS  my day end workday: the confirm button is the primary style with the Enter keycap
+PASS  my day end workday: E then Enter ends the day (status ended, the confirmation closed)
+
+ALL 19 PASS

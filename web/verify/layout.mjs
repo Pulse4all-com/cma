@@ -8,13 +8,18 @@
  * a person whose time is kept. On the intake reports and the Dashboard one header hint is opened
  * by keyboard focus: the panel must show, stay inside the viewport, and not cover the header or
  * label it explains when there is room below, and the Intake table scrolls inside its card so the
- * main area never scrolls sideways at 1280 px (12 October 2026). Saves screenshots under records/
- * for the release note.
+ * main area never scrolls sideways at 1280 px (12 October 2026). The irreversible confirmations (B9a.1,
+ * 13 October 2026): switching a line off, dissolving a team and copying the previous week open on Cancel,
+ * Enter at open writes nothing, the confirm button is the destructive secondary style without a keycap, and
+ * a line's box stays ticked until the switch-off is confirmed; End workday, an ordinary confirmation, opens
+ * on its confirm button (agent-two clocks in through the route for it, inside the mock's 07:00 to 22:00
+ * workday window). Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
- *       1279 px and demands the app shell, moves one hint panel over its header and lets the
- *       Intake table spill out of its card, expect FAIL, exit 1
+ *       1279 px and demands the app shell, moves one hint panel over its header, lets the
+ *       Intake table spill out of its card, focuses the confirm button of each irreversible
+ *       confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -39,7 +44,7 @@ async function acknowledgeUrgent(subject) {
     }
   }
 }
-for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 async function expectShell(width, height) {
@@ -262,15 +267,149 @@ async function expectIntakeConfiguration() {
   }
 }
 
+// Irreversible confirmations (B9a.1, 13 October 2026; README Decision log): a confirmation that removes data
+// or changes it for good opens on Cancel, so Enter at open cancels; its confirm button is the destructive
+// secondary style (the error colour, outlined) without a keycap. On Lines, as the admin: Enter at open does
+// not call the lines route, and the box stays ticked while the confirmation is open and changes only after
+// a confirmed save (then it is ticked again, so the mock stands as before). Dissolve on Teams (the admin)
+// and Copy previous week on the planner (the manager): Cancel at open, the style, Enter cancels without a
+// write. --provoke moves the focus to the confirm button before measuring (the old default) and unticks
+// the box while the confirmation is open, so every check here fails. End workday, an ordinary
+// confirmation, last
+async function expectIrreversibleConfirmations() {
+  const state = (p) => p.evaluate(() => {
+    const d = document.querySelector("dialog[open]");
+    if (!d) return null;
+    const confirm = d.querySelector("[data-confirm]") ?? d.querySelector("button"); // the confirm button comes first
+    return {
+      cancelFocused: document.activeElement?.hasAttribute("data-confirm-cancel") ?? false,
+      destructive: !!confirm && confirm.className.includes("border-p4a-error") && !confirm.className.includes("bg-p4a-deepblue"),
+      keycap: !!confirm?.querySelector("kbd"),
+    };
+  });
+  const oldDefault = (p) => p.evaluate(() => document.querySelector("dialog[open] button")?.focus());
+  const check = (where, s) => {
+    if (!s) return problems.push(`${where}: the confirmation did not open`);
+    if (!s.cancelFocused) problems.push(`${where}: the confirmation does not open on Cancel`);
+    if (!s.destructive) problems.push(`${where}: the confirm button is not the destructive secondary style`);
+    if (s.keycap) problems.push(`${where}: the confirm button shows a keycap`);
+  };
+
+  // Lines: the full flow
+  {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
+    const p = await ctx.newPage();
+    const puts = [];
+    p.on("request", (r) => { if (r.method() === "PUT" && new URL(r.url()).pathname.endsWith("/lines")) puts.push(r.postDataJSON()); });
+    await p.goto(BASE + "/configuration/sources/00000000-0000-7000-8000-00000000c002");
+    await p.waitForLoadState("networkidle");
+    const box = p.locator('[data-testid="source-lines"] input[type="checkbox"]').first();
+    const dialog = p.locator("dialog[open]");
+    if (!(await box.isChecked())) problems.push("lines: the first line of the mock does not count at the start");
+    await box.click();
+    await dialog.waitFor({ timeout: 5000 }).catch(() => undefined);
+    if (provoke) await oldDefault(p);
+    check("lines", await state(p));
+    if (provoke) await box.evaluate((el) => { el.checked = false; });
+    if (!(await box.isChecked())) problems.push("lines: the box is unticked while the confirmation is open");
+    await p.keyboard.press("Enter");
+    await p.waitForTimeout(800);
+    if (puts.length) problems.push(`lines: Enter at open called the lines route with ${JSON.stringify(puts)}`);
+    if (await dialog.count()) problems.push("lines: Enter at open left the confirmation open");
+    if (!(await box.isChecked())) problems.push("lines: the box is unticked after Enter at open");
+    if (!provoke) {
+      // confirmed: the save goes out once, then the box shows the line switched off
+      if (await box.isChecked()) {
+        await box.click();
+        const asked = await dialog.waitFor({ timeout: 5000 }).then(() => true, () => false);
+        if (!asked) problems.push("lines: unticking a counted line did not ask for confirmation");
+        else {
+          if (!(await box.isChecked())) problems.push("lines: the box is unticked before the switch-off is confirmed");
+          await dialog.locator("button").first().click();
+          await p.waitForFunction(() => !document.querySelector('[data-testid="source-lines"] input[type="checkbox"]')?.checked, null, { timeout: 5000 }).catch(() => undefined);
+          if (JSON.stringify(puts.map((x) => x?.isCounted)) !== "[false]") problems.push(`lines: a confirmed switch-off sent ${JSON.stringify(puts)}`);
+          if (await box.isChecked()) problems.push("lines: the box is still ticked after a confirmed switch-off");
+        }
+      }
+    }
+    // tick it again (switching on does not ask), so the mock stands as before
+    if (!(await box.isChecked())) {
+      await box.click();
+      await p.waitForFunction(() => document.querySelector('[data-testid="source-lines"] input[type="checkbox"]')?.checked, null, { timeout: 5000 }).catch(() => undefined);
+      if (await dialog.count()) problems.push("lines: switching a line on asked for confirmation");
+    }
+    await ctx.close();
+  }
+
+  // Dissolve on Teams, Copy previous week on the planner: open, measure, Enter (Esc when provoked: no write)
+  const cases = [
+    ["admin", "/configuration/teams", "Dissolve on Teams", (p) => p.locator("main button", { hasText: /^Dissolve$/ }).first().click()],
+    ["manager", "/roster/planner", "Copy previous week on the planner", (p) => p.keyboard.press("c")],
+  ];
+  for (const [subject, path, where, open] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    const writes = [];
+    p.on("request", (r) => { if (r.method() !== "GET" && new URL(r.url()).pathname.startsWith("/api/v1/") && !new URL(r.url()).pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${new URL(r.url()).pathname}`); });
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    await open(p);
+    await p.locator("dialog[open]").waitFor({ timeout: 5000 }).catch(() => undefined);
+    if (provoke) await oldDefault(p);
+    check(where, await state(p));
+    await p.keyboard.press(provoke ? "Escape" : "Enter");
+    await p.waitForTimeout(500);
+    if (writes.length) problems.push(`${where}: Enter at open wrote ${JSON.stringify(writes)}`);
+    if (await p.locator("dialog[open]").count()) problems.push(`${where}: Enter at open left the confirmation open`);
+    await ctx.close();
+  }
+  // End workday on My day is an ordinary confirmation (a workday ended by mistake is corrected, README
+  // Decision log, 13 October 2026): it opens on its confirm button, the primary style with the Enter keycap,
+  // so E then Enter ends the day. agent-two clocks in through the route, as in the theme verifier (inside
+  // the mock's workday window, 07:00 to 22:00); the dialog is closed with Esc, so the day is never ended
+  // here and a rerun finds it open. --provoke moves the focus to Cancel first
+  {
+    const start = await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": "agent-two", "x-cma-request": "1" } });
+    if (!start.ok) problems.push(`End workday: agent-two could not clock in (${start.status}; the mock's workday window is 07:00 to 22:00)`);
+    else {
+      const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-two" } });
+      const p = await ctx.newPage();
+      const writes = [];
+      p.on("request", (r) => { const u = new URL(r.url()); if (r.method() !== "GET" && u.pathname.startsWith("/api/v1/") && !u.pathname.startsWith("/api/v1/me/messages")) writes.push(`${r.method()} ${u.pathname}`); });
+      await p.goto(BASE + "/day");
+      await p.waitForLoadState("networkidle");
+      await p.keyboard.press("e");
+      await p.locator("dialog[open]").waitFor({ timeout: 5000 }).catch(() => undefined);
+      if (provoke) await p.evaluate(() => document.querySelector("dialog[open] button:last-of-type")?.focus());
+      const s = await p.evaluate(() => {
+        const d = document.querySelector("dialog[open]");
+        const confirm = d?.querySelector("button"); // the confirm button comes first
+        return d ? { confirmFocused: document.activeElement === confirm, primary: !!confirm?.className.includes("bg-p4a-deepblue"),
+                     keycap: confirm?.querySelector("kbd")?.textContent?.trim() ?? null } : null;
+      });
+      if (!s) problems.push("End workday: E did not open the confirmation");
+      else {
+        if (!s.confirmFocused) problems.push("End workday: the confirmation does not open on its confirm button");
+        if (!s.primary || s.keycap !== "Enter") problems.push(`End workday: the confirm button is not the primary style with the Enter keycap (${JSON.stringify(s)})`);
+      }
+      await p.keyboard.press("Escape");
+      await p.waitForTimeout(500);
+      if (writes.length) problems.push(`End workday: opening and closing the confirmation wrote ${JSON.stringify(writes)}`);
+      await ctx.close();
+    }
+  }
+}
+
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
 await expectReports();
 await expectIntakeConfiguration();
+await expectIrreversibleConfirmations();
 if (provoke) await expectShell(1279, 800);
 else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card, Sources, Markets and Alert rules; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

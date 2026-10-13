@@ -1,0 +1,2 @@
+  manager /reports/data-quality: header "Check": 0 info marks, expected 1
+hints: FAIL (1 problems)
