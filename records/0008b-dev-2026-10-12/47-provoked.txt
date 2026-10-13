@@ -1,0 +1,19 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/tmp/provoke.sql:100: ERROR:  FAIL A1: addition 0008b not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 9 at RAISE
+psql:/tmp/provoke.sql:265: ERROR:  FAIL B1: a tenant without settings has the window 2026-10-09 22:00:00+00 to 2026-10-10 22:00:00+00
+CONTEXT:  PL/pgSQL function inline_code_block line 43 at RAISE
+psql:/tmp/provoke.sql:425: ERROR:  FAIL C1: 01a12e53-1aa4-7264-bee9-acb1a7b710fe closed at 2026-10-10 14:30:00+00 (shift), expected 2026-10-10 14:30:00+00 (shift)
+CONTEXT:  PL/pgSQL function inline_code_block line 98 at RAISE
+         tenant          |     window     | auto_close_at | grace_minutes |  digest_to   | open_past_grace |       verdict        
+-------------------------+----------------+---------------+---------------+--------------+-----------------+----------------------
+ pulse4all-invest        | 00:00 to 24:00 | 24:00         | 120           | workday.team |               0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | 00:00 to 24:00 | 24:00         | 120           | workday.team |               0 | PROVOKED, NOT A PASS
+(2 rows)
+
