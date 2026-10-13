@@ -21,6 +21,11 @@
 #                     The polling fallback of NIGHT_NOTES D3 (no v3 signature on the project app) is
 #                     --reconcile-every "*/2 * * * *" --reconcile-lookback 10, a schedule change only
 #
+# Dev only, on the service and the jobs: INGEST_ALLOW_REPLAY=1, so a dev Aircall connection whose
+# settings hold {"replay": true} takes a call from the replayed event itself (tools/replay.mjs
+# --adapter aircall; there is no Aircall sandbox). Prod never sets it: --set-env-vars replaces every
+# variable on each deploy, so a prod service or job never carries it and ignores the setting.
+#
 # Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main. Rerunnable.
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
@@ -33,9 +38,9 @@
 # the service's database settings, and their Cloud Scheduler entries (Europe/Amsterdam) calling the
 # jobs' run endpoints as cma-ingest-scheduler@<project>, which holds run.invoker on the scheduled jobs
 # only:
-#   ingest-sweep       every minute   due events, the second read, link_calls
+#   ingest-sweep       every minute   due events, the second read, telephony catalogs (hourly), link_calls
 #   ingest-poll-forms  every minute   HubSpot forms: catalog hourly, submissions until the cursor
-#   ingest-reconcile   02:30          everything modified in the last 26 hours
+#   ingest-reconcile   02:30          everything modified in the last 26 hours; Aircall: calls of the last 26 hours and the webhook
 #   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
 # The arguments of an execution are appended to the job's command (node jobs/<name>.mjs).
 #
@@ -73,8 +78,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$ENV" in
-  dev)  PROJECT=p4a-cma-dev;  INSTANCE_NAME=cma-dev-pg;  MIN=0; MAX=2; LOG_HEADERS=1 ;;
-  prod) PROJECT=p4a-cma-prod; INSTANCE_NAME=cma-prod-pg; MIN=1; MAX=5; LOG_HEADERS=0 ;;
+  dev)  PROJECT=p4a-cma-dev;  INSTANCE_NAME=cma-dev-pg;  MIN=0; MAX=2; LOG_HEADERS=1; REPLAY_VARS=("INGEST_ALLOW_REPLAY=1") ;;
+  prod) PROJECT=p4a-cma-prod; INSTANCE_NAME=cma-prod-pg; MIN=1; MAX=5; LOG_HEADERS=0; REPLAY_VARS=() ;;
   *) echo "first argument is dev or prod"; exit 2 ;;
 esac
 REGION=europe-west4
@@ -194,7 +199,7 @@ if [ "$JOBS" = 1 ]; then
   gcloud iam service-accounts describe "$SCHED_SA" --project="$PROJECT" >/dev/null 2>&1 || \
     gcloud iam service-accounts create "$SCHED_SA_NAME" --project="$PROJECT" --display-name="CMA ingest scheduler" --quiet
   JOB_ENV="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=3" \
-    "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}")"
+    "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" ${REPLAY_VARS[@]+"${REPLAY_VARS[@]}"})"
   deploy_job () {  # <job> <script> <task timeout> <args, comma-separated; empty resets them>
     gcloud run jobs deploy "$1" \
       --project="$PROJECT" --region="$REGION" \
@@ -237,7 +242,7 @@ if [ "$JOBS" = 1 ]; then
   echo
   echo "== jobs on ${IMAGE}"
   echo "ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-backfill (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact>,--from,<YYYY-MM-DD>"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|telephony_call>,--from,<YYYY-MM-DD>"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0
@@ -263,7 +268,7 @@ INGRESS_FLAG=--ingress=all
 URLS="$(public_urls)"
 ENV_VARS="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=5" \
   "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" "INGEST_LOG_HEADER_NAMES=${LOG_HEADERS}" \
-  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}")"
+  "INGEST_READBACK_BUDGET_MS=3000" "INGEST_PUBLIC_URLS=${URLS}" ${REPLAY_VARS[@]+"${REPLAY_VARS[@]}"})"
 gcloud run deploy "$SERVICE" \
   --project="$PROJECT" --region="$REGION" \
   --image="$IMAGE" \
@@ -302,9 +307,10 @@ if [ -n "$FRONT" ]; then
     200) echo "FAIL run.app: 200, the run.app address answers although ingress is internal-and-cloud-load-balancing" ;;
     *) echo "run.app: ${RUNAPP:-no answer} (expected 404: refused)" ;;
   esac
-  echo "webhook address per connection: https://${FRONT}/hubspot/<connection key>"
+  echo "webhook address per connection: https://${FRONT}/<adapter>/<connection key>"
 else
   echo "health: $(curl -s --max-time 20 "${URL}/health" || echo 'no answer yet')"
-  echo "webhook address per connection: ${URL}/hubspot/<connection key>"
+  echo "webhook address per connection: ${URL}/<adapter>/<connection key>"
+  [ "${#REPLAY_VARS[@]}" -eq 0 ] || echo "replay: INGEST_ALLOW_REPLAY=1 (dev only: an Aircall connection with the setting replay true reads calls from replayed events)"
 fi
 echo "logs: gcloud run services logs read ${SERVICE} --project=${PROJECT} --region=${REGION} --limit=30"
