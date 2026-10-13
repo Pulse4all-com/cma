@@ -1,9 +1,11 @@
 /**
- * Contact lookups another adapter asks of a HubSpot connection (DESIGN §4.3a): the commerce adapter
- * finds the CRM contact of a store's customer by the customer's email, or, when the store withholds
- * the email, by the customer id in the contact properties the write-back fills (commerce_ref). Both
- * answer at most two contact ids: one is a match, none or two is no match. The email arrives in
- * memory and is never logged, stored or returned.
+ * Contact lookups another adapter asks of a HubSpot connection (DESIGN §4.3a; addition 0008h): the
+ * commerce adapter finds the CRM contact of a store's customer by the customer's email, or, when the
+ * store withholds the email, by the customer id in the contact properties that hold it (the
+ * connection's contact ref fields). Both answer at most two contact ids: one is a match, none or two
+ * is no match. The email arrives in memory and is never logged, stored or returned. existingContacts
+ * checks that contacts the CMA linked earlier still exist as themselves (one batch read, not a
+ * search): a deleted contact, or one merged into another, is not among them.
  *
  * HubSpot's CRM search allows five requests per second per account (developers.hubspot.com, API
  * usage guidelines); these lookups take one per 400 ms per CRM connection and process (RATES.search,
@@ -60,6 +62,20 @@ export async function findContactsByProperties({ connection, properties, value, 
     properties: ["hs_object_id"], limit: 2,
   });
   return [...new Set((r?.results ?? []).map((x) => String(x.id)))];
+}
+
+/**
+ * The contact ids among ids that HubSpot still holds under the same id (a batch read of 100 at a
+ * time, the object id only). A contact merged into another answers with the other's id, so it is
+ * not among them; a deleted one is missing.
+ */
+export async function existingContacts({ connection, ids, budget }) {
+  const want = [...new Set((ids ?? []).map(String).filter((id) => /^\d{1,20}$/.test(id)))];
+  if (!want.length) return new Set();
+  const api = await clientOf(connection, budget);
+  const found = await api.batchRead("contact", want, ["hs_object_id"]);
+  const answered = new Set(found.map((c) => String(c.id)));
+  return new Set(want.filter((id) => answered.has(id)));
 }
 
 /** Test aid: forget the search paces of this process. */

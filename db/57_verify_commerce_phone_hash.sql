@@ -93,11 +93,17 @@ begin
   insert into verify_0008g values (2, 'A2 the two columns, their check and their partial indexes',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
-  -- A3. nothing else personal: the two tables hold exactly 0007b's columns plus phone_hash
+  -- A3. nothing else personal: the two tables hold exactly 0007b's columns plus phone_hash (and,
+  --     once addition 0008h is recorded, its three link columns on the customers: a CRM connection,
+  --     a contact id and the time of the match, verified by 59)
   v_bad := '';
   select string_agg(column_name, ', ' order by ordinal_position) into v_cols
   from information_schema.columns where table_schema = 'cma' and table_name = 'commerce_customer';
-  if v_cols is distinct from 'id, tenant_id, connection_id, source_system, source_id, state, locale, orders_count, amount_spent, amount_currency, source_created_at, source_updated_at, source_deleted_at, synced_at, raw, phone_hash' then
+  v_detail := 'id, tenant_id, connection_id, source_system, source_id, state, locale, orders_count, amount_spent, amount_currency, source_created_at, source_updated_at, source_deleted_at, synced_at, raw, phone_hash';
+  if exists (select 1 from cma.schema_migration where version = '0008h') then
+    v_detail := v_detail || ', crm_connection_id, crm_contact_source_id, matched_at';
+  end if;
+  if v_cols is distinct from v_detail then
     v_bad := v_bad || format('commerce_customer [%s]; ', v_cols);
   end if;
   select string_agg(column_name, ', ' order by ordinal_position) into v_cols

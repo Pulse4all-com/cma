@@ -1,0 +1,25 @@
+DO
+BEGIN
+SET
+DO
+psql:db/58_commerce_contact_link.sql:62: NOTICE:  column "crm_connection_id" of relation "commerce_customer" already exists, skipping
+ALTER TABLE
+psql:db/58_commerce_contact_link.sql:65: NOTICE:  column "crm_contact_source_id" of relation "commerce_customer" already exists, skipping
+ALTER TABLE
+psql:db/58_commerce_contact_link.sql:66: NOTICE:  column "matched_at" of relation "commerce_customer" already exists, skipping
+ALTER TABLE
+DO
+COMMENT
+COMMENT
+COMMENT
+psql:db/58_commerce_contact_link.sql:86: NOTICE:  relation "commerce_customer_crm_contact_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+REVOKE
+GRANT
+INSERT 0 0
+COMMIT
+RESET

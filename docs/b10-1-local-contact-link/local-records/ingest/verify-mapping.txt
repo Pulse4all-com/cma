@@ -1,0 +1,41 @@
+verify/mapping.mjs
+
+PASS  one canonical event per webhook event                            got 10
+PASS  event key is hs:<eventId>                                        got "hs:3000000101"
+PASS  deal creation → created deal                                     got ["created","deal","4100000001"]
+PASS  occurredAt in ISO 8601                                           got "2026-10-10T09:00:00.000Z"
+PASS  attempt is attemptNumber + 1                                     got 2
+PASS  property change → changed with the property name                 got ["changed","dealstage"]
+PASS  call creation → created crm_call                                 got ["created","crm_call"]
+PASS  contact→call association: the call is read back                  got ["associated","crm_call","4200000001",null]
+PASS  deal→company association is not kept                             got "association_not_kept"
+PASS  merge → merged on the surviving id, merged ids kept              got ["merged","4300000001",["4300000002"]]
+PASS  deletion → deleted ticket                                        got ["deleted","ticket"]
+PASS  restore → restored deal                                          got "restored"
+PASS  another portal → ignored portal_mismatch                         got "portal_mismatch"
+PASS  events of this portal are not ignored                            got 8
+PASS  no property value is kept (ids only)                             got false
+PASS  no acting user is kept                                           got false
+PASS  raw keeps the event id and subscription                          got ["3000000101","object.creation"]
+PASS  contact.privacyDeletion → deleted contact, privacy flag          got ["deleted","contact","4300000001",true]
+PASS  deal.creation (object-named) → created deal                      got ["created","deal",3]
+PASS  DEAL_TO_CONTACT removal → associated deal, removal noted         got ["deal","4100000004",true,"4300000003"]
+PASS  an object (not an array) body is one event                       got 1
+PASS  an event without an id or object is kept as malformed            got "malformed"
+PASS  a company event is not kept                                      got "object_not_kept"
+PASS  kept association direction: deal → contact                       got {"fromType":"deal","fromId":"2","toType":"contact","toId":"1"}
+PASS  deal properties: structural plus configured only                 got ["amount","closedate","createdate","deal_currency_code","dealstage","h
+PASS  contact properties: configured only                              got ["contact_country","contact_language","contact_shopify_id_1","contact_
+PASS  deal → record ids, pipeline, stage, owner                        got ["4100000001","p-sales","s-new","7100000001"]
+PASS  record amount and currency from the mapping                      got ["1200.50","eur"]
+PASS  no market property mapped: the contact's country                 got ["uk","en"]
+PASS  record raw holds requested properties only                       got false
+PASS  record times                                                     got ["2026-10-10T09:00:00.000Z","2026-10-10T09:01:00.000Z"]
+PASS  a mapped market property wins over the contact                   got null
+PASS  contact → country, language and two ref slots                    got ["NL","nl",{"shopify":[null,"6000000002"]}]
+PASS  primary contact: the labelled one                                got "12"
+PASS  primary contact: the held one when still associated              got "12"
+PASS  primary contact: else the lowest id                              got "9"
+PASS  association diff: new added, gone removed                        got [{"fromType":"deal","fromId":"1","toType":"contact","toId":"2","remove
+
+ALL 37 PASS

@@ -19,13 +19,13 @@
  *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
- * For a commerce source (migrations 0007b, 0007c):
+ * For a commerce source (migrations 0007b, 0008h):
  *   crmConnection(id)           the CRM connection a store's customers are matched to (settings
  *                               crm_connection_id), active, same tenant: its adapter and secret names
- *   writebackFields(id)         that CRM connection's enabled write-back fields
- *   knownContacts({...})        what the CMA already knows of a customer's contact: the contacts whose
- *                               refs hold the customer id (crm_contact_ref), and the contact of the
- *                               customer's latest write-back that is not dropped (outbox_action)
+ *   refProperties(id, system)   that CRM connection's contact properties holding ids of a ref system
+ *                               (connection fields: entity contact, field ref)
+ *   customerLinks(ids)          the store customers' current contact links (0008h)
+ *   heldRefContacts({...})      the contacts the CMA holds whose refs hold a customer id (crm_contact_ref)
  *   connectionKey()             the connection's key (the address of its webhooks; an identifier)
  *
  * For the outbox job (migration 0007c): outboxClaim(limit), outboxFinish(groups).
@@ -40,8 +40,11 @@
  * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a);
  * writes.telephonyTags and telephonyNumbers refresh the telephony catalogs (each the whole list),
  * writes.telephonyCalls upserts telephony calls, writes.commerceCustomers and commerceOrders upsert a
- * store's customers and orders (0007b, 0008g), writes.writebacks enqueues CRM contact write-backs
- * ({ connectionId, contactId, values, reason }, cma.enqueue_contact_writeback of 0007c) after them,
+ * store's customers and orders (0007b, 0008g), writes.contactLinks sets or clears a customer's CRM
+ * contact link ({ customerId, crmConnectionId, contactId }, cma.set_commerce_customer_contact of
+ * 0008h) after them, writes.writebacks enqueues CRM contact write-backs ({ connectionId, contactId,
+ * values, reason }, cma.enqueue_contact_writeback of 0007c; generic, no commerce use since 0008h),
+ * writes.forgets runs a CRM privacy deletion (0007, and the commerce links to the contact, 0008h),
  * writes.tally adds named counts to the run's counts (no ids), writes.cursors moves sync cursors in
  * the same transaction as the writes they describe.
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
@@ -167,27 +170,26 @@ export function storeFor(ctx, connectionId) {
           signingSecretName: c.signing_secret_name, tokenSecretName: c.token_secret_name, ingestUserId: ctx.userId } : null;
       });
     },
-    async writebackFields(crmConnectionId) {
+    async refProperties(crmConnectionId, refSystem) {
       return withTenant(ctx, async (q) => (await q.query(
-        `select field, slot, target_property, mode from cma.writeback_field
-          where tenant_id = cma.current_tenant_id() and connection_id = $1 and enabled order by field, slot`, [crmConnectionId])).rows
-        .map((r) => ({ field: r.field, slot: r.slot, property: r.target_property, mode: r.mode })));
+        `select source_property from cma.connection_field
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and entity = 'contact' and field = 'ref' and ref_system = $2
+          order by slot`, [crmConnectionId, refSystem])).rows.map((r) => r.source_property));
     },
-    async knownContacts({ crmConnectionId, refSystem, customerId, reason }) {
-      return withTenant(ctx, async (q) => {
-        const refs = (await q.query(
-          `select distinct k.source_id from cma.crm_contact_ref r
-             join cma.crm_contact k on k.tenant_id = r.tenant_id and k.id = r.contact_id
-            where r.tenant_id = cma.current_tenant_id() and k.connection_id = $1 and r.system = $2 and r.external_id = $3
-              and k.source_deleted_at is null
-            order by 1 limit 3`, [crmConnectionId, refSystem, customerId])).rows.map((r) => r.source_id);
-        const last = (await q.query(
-          `select target_id from cma.outbox_action
-            where tenant_id = cma.current_tenant_id() and connection_id = $1 and action = 'crm.contact.set_properties'
-              and target_type = 'contact' and reason = $2 and status <> 'dropped'
-            order by id desc limit 1`, [crmConnectionId, reason])).rows[0]?.target_id ?? null;
-        return { refContacts: refs, outboxContact: last };
-      });
+    async customerLinks(customerIds) {
+      if (!customerIds.length) return new Map();
+      return withTenant(ctx, async (q) => new Map((await q.query(
+        `select source_id, crm_connection_id, crm_contact_source_id from cma.commerce_customer
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[]) and crm_contact_source_id is not null`,
+        [connectionId, customerIds])).rows.map((r) => [r.source_id, { crmConnectionId: r.crm_connection_id, contactId: r.crm_contact_source_id }])));
+    },
+    async heldRefContacts({ crmConnectionId, refSystem, customerId }) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select distinct k.source_id from cma.crm_contact_ref r
+           join cma.crm_contact k on k.tenant_id = r.tenant_id and k.id = r.contact_id
+          where r.tenant_id = cma.current_tenant_id() and k.connection_id = $1 and r.system = $2 and r.external_id = $3
+            and k.source_deleted_at is null
+          order by 1 limit 3`, [crmConnectionId, refSystem, customerId])).rows.map((r) => r.source_id));
     },
     async connectionKey() {
       return withTenant(ctx, async (q) => (await q.query(
@@ -241,6 +243,18 @@ const ORDER = [
   ["commerceOrders", "select outcome from cma.ingest_upsert_commerce_orders($1, $2::jsonb)", true],
 ];
 
+// The links of one batch, the last one per customer: after the customers they belong to (0008h)
+async function writeContactLinks(q, connectionId, units, counts) {
+  const last = new Map();
+  for (const l of units.flatMap((u) => u.writes?.contactLinks ?? [])) last.set(l.customerId, l);
+  for (const l of last.values()) {
+    const r = await q.query("select cma.set_commerce_customer_contact($1, $2, $3, $4) as outcome",
+      [connectionId, l.customerId, l.contactId ? l.crmConnectionId : null, l.contactId ?? null]);
+    const k = `link_${r.rows[0].outcome}`;
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+}
+
 async function writeAll(q, connectionId, units, counts) {
   for (const [kind, sql, chunked] of ORDER) {
     const items = units.flatMap((u) => u.writes?.[kind] ?? []);
@@ -250,6 +264,7 @@ async function writeAll(q, connectionId, units, counts) {
       if (chunked) for (const row of r.rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
     }
   }
+  await writeContactLinks(q, connectionId, units, counts);
   // CRM write-backs (0007c) after the facts they describe; one per contact and reason in this batch
   const seen = new Set();
   for (const w of units.flatMap((u) => u.writes?.writebacks ?? []).reverse()) {
@@ -267,7 +282,10 @@ async function writeAll(q, connectionId, units, counts) {
   }
   for (const contactId of units.flatMap((u) => u.writes?.forgets ?? [])) {
     await q.query("select cma.ingest_contact_forget($1, $2)", [connectionId, contactId]);
+    // the commerce customers linked to the contact lose the link too (0008h)
+    const r = await q.query("select cma.forget_commerce_contact_links($1, $2) as n", [connectionId, contactId]);
     counts.forgotten = (counts.forgotten ?? 0) + 1;
+    counts.linksForgotten = (counts.linksForgotten ?? 0) + Number(r.rows[0]?.n ?? 0);
   }
   // Record alerts (migration 0008): after the records are in, per record type, at most 500 ids a call;
   // the function resolves the rules and recipients and writes nothing for a record already alerted

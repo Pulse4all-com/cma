@@ -1,10 +1,10 @@
 /**
- * Shopify read-back (DESIGN §2, §4.3, §4.3a; addition 0008g): the customers and orders named by
+ * Shopify read-back (DESIGN §2, §4.3; additions 0008g and 0008h): the customers and orders named by
  * claimed events are read from the store's Admin GraphQL API (client.mjs) and turned into units for
- * the core to write, with the customer's CRM write-back.
+ * the core to write, with the customer's CRM contact kept in the CMA (nothing is written to the CRM).
  *
  *   deletions  customers/delete and orders/delete: no read; the customer or order is marked deleted at
- *              the event's time (its hash cleared, 0008g)
+ *              the event's time (its hash cleared, 0008g); a deleted customer's contact link is cleared
  *   orders     nodes(ids) five at a time: the fields of DESIGN §4.3, the first ten line items (the
  *              rest paged a hundred at a time, at most 500), the visit that brought the order
  *              (landing page and referrer reduced to host, path and UTM), the app and source name
@@ -15,7 +15,8 @@
  *              withholds it, and nothing fails), hashed with the tenant's pepper and the store's market
  *              as the default region (the hash of calls, DESIGN §6.3), then dropped
  *   the match  every customer read (on its own or with an order) is matched to its CRM contact once
- *              per batch (match.mjs) and, matched, written back through the outbox with its values
+ *              per batch (match.mjs): the link set when exactly one contact answers, cleared when none
+ *              or several do, left when the CRM still holds the linked contact
  *
  * Every call is paid from the shop's cost bucket. In a webhook the read never waits for points: what
  * the bucket or the CRM's search pace cannot pay now fails with throttled or paced and the sweep reads
@@ -27,7 +28,7 @@ import { getSecret } from "../../core/secrets.mjs";
 import { SourceError } from "../../core/http.mjs";
 import { shopifyClient, clientIdOf } from "./client.mjs";
 import { OBJECT_TYPES, gid, idOf, customerFromNode, orderFromNode, priorCountOf } from "./map.mjs";
-import { crmOf, matchCustomer } from "./match.mjs";
+import { crmOf, matchCustomers } from "./match.mjs";
 
 const ORDERS_PER_CALL = 5;
 const CUSTOMERS_PER_CALL = 50;
@@ -105,7 +106,8 @@ export async function readBack({ connection, config, events, store, budget }) {
       units.push(unit(g.events, "ignored"));
     } else if (g.latest.kind === "deleted") {
       const item = { sourceId: g.objectId, deletedAt: g.latest.occurredAt };
-      units.push(unit(g.events, "processed", null, g.objectType === "commerce_order" ? { commerceOrders: [item] } : { commerceCustomers: [item] }));
+      units.push(unit(g.events, "processed", null, g.objectType === "commerce_order" ? { commerceOrders: [item] }
+        : { commerceCustomers: [item], contactLinks: [{ customerId: g.objectId, crmConnectionId: null, contactId: null }] }));
     } else {
       toRead[g.objectType].push(g);
     }
@@ -217,27 +219,23 @@ export async function readBack({ connection, config, events, store, budget }) {
     }
   }
 
-  // The match, once per customer of the batch
-  let side = null;
-  try {
-    side = await crmOf(store, settings);
-  } catch (err) {
-    side = { error: codeOf(err) };
-  }
-  const matches = new Map(); // customer id → { outcome, writeback } | { error }
+  // The match, once per customer of the batch: the links checked in one read, then each customer
   const customerOf = (g) => (g.objectType === "commerce_order" ? idOf(orders.get(g.objectId)?.customer?.id) : g.objectId);
+  const toMatch = new Map(); // customer id → node
   for (const g of pending) {
     const cid = customerOf(g);
     const node = cid ? customers.get(cid) : null;
-    if (failed.has(g) || !node || matches.has(cid)) continue;
-    if (side?.error) {
-      matches.set(cid, { error: side.error });
-      continue;
-    }
+    if (!failed.has(g) && node) toMatch.set(cid, node);
+  }
+  let matches = new Map(); // customer id → { outcome, link }
+  let matchError = null;
+  let gone = 0;
+  if (toMatch.size) {
     try {
-      matches.set(cid, await matchCustomer({ connection, store, side, node, storeRow, budget }));
+      const side = await crmOf(store, settings, connection.adapter);
+      ({ matches, gone } = await matchCustomers({ connection, store, side, nodes: toMatch, budget }));
     } catch (err) {
-      matches.set(cid, { error: `crm_${codeOf(err)}`.slice(0, 60) });
+      matchError = `crm_${codeOf(err)}`.slice(0, 60);
     }
   }
 
@@ -255,11 +253,11 @@ export async function readBack({ connection, config, events, store, budget }) {
       units.push(unit(g.events, "ignored"));
       continue;
     }
-    const m = cid ? matches.get(cid) : null;
-    if (m?.error) {
-      units.push(unit(g.events, "failed", m.error));
+    if (cid && toMatch.has(cid) && matchError) {
+      units.push(unit(g.events, "failed", matchError));
       continue;
     }
+    const m = cid ? matches.get(cid) : null;
     const writes = {};
     const customerNode = cid ? customers.get(cid) : null;
     const customerItem = customerNode ? customerFromNode(customerNode, { pepper, region }) : null;
@@ -276,11 +274,17 @@ export async function readBack({ connection, config, events, store, budget }) {
       continue;
     }
     if (m) {
-      if (!tallied.has(cid)) writes.tally = { [`match_${m.outcome}`]: 1 };
+      if (!tallied.has(cid)) {
+        writes.tally = { [`match_${m.outcome}`]: 1 };
+        if (m.link) writes.contactLinks = [{ customerId: cid, ...m.link }];
+      }
       tallied.add(cid);
-      if (m.writeback) writes.writebacks = [m.writeback];
     }
     units.push(unit(g.events, "processed", null, writes));
+  }
+  if (gone && units.length) {
+    const first = units.find((u) => u.status === "processed" && u.writes?.tally);
+    if (first) first.writes.tally.match_contact_gone = gone;
   }
   pepper = null;
   return units;

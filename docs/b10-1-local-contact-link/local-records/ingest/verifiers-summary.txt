@@ -1,0 +1,17 @@
+signature: ALL 18 PASS | ALL 18 PROVOKED CHECKS FAILED, as they must
+mapping: ALL 37 PASS | ALL 37 PROVOKED CHECKS FAILED, as they must
+hash: ALL 26 PASS | ALL 26 PROVOKED CHECKS FAILED, as they must
+forms: ALL 41 PASS | ALL 41 PROVOKED CHECKS FAILED, as they must
+aircall-token: ALL 20 PASS | ALL 20 PROVOKED CHECKS FAILED, as they must
+aircall-mapping: ALL 49 PASS | ALL 49 PROVOKED CHECKS FAILED, as they must
+aircall-scripts: ALL 27 PASS | ALL 27 PROVOKED CHECKS FAILED, as they must
+shopify-signature: ALL 17 PASS | ALL 17 PROVOKED CHECKS FAILED, as they must
+shopify-mapping: ALL 51 PASS | ALL 51 PROVOKED CHECKS FAILED, as they must
+shopify-client: ALL 21 PASS | ALL 21 PROVOKED CHECKS FAILED, as they must
+shopify-scripts: ALL 21 PASS | ALL 21 PROVOKED CHECKS FAILED, as they must
+outbox: ALL 20 PASS | ALL 20 PROVOKED CHECKS FAILED, as they must
+flow: ALL 79 PASS | ALL 79 PROVOKED CHECKS FAILED, as they must
+jobs-flow: ALL 62 PASS | ALL 62 PROVOKED CHECKS FAILED, as they must
+aircall-flow: ALL 88 PASS | ALL 88 PROVOKED CHECKS FAILED, as they must
+shopify-flow: ALL 86 PASS | ALL 86 PROVOKED CHECKS FAILED, as they must
+outbox-flow: ALL 11 PASS | ALL 11 PROVOKED CHECKS FAILED, as they must

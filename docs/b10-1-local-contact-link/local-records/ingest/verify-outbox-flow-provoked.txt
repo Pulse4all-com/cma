@@ -1,0 +1,15 @@
+verify/outbox-flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  five enqueues → the first action of 5200000001 superseded by its newer one, four pending got [4,["superseded","pending","pending","pending","pending"]], wanted [5,["pending","pending","pending","pending","pending"]]
+FAIL  HubSpot answering 429 on the batch update → the actions failed rate_limited, attempted again later got [0,true,true], wanted [4,false,false]
+FAIL  …then sent                                                       got [0,4], wanted [4,0]
+FAIL  an empty contact: id in slot 1, store, totals, country and language; currency disabled after the enqueue never written got ["7100000001","flow-store","2","240","GB","en",null], wanted [null,null,null,null,null,null,"GBP"]
+FAIL  an agent's country kept (if_empty), the id in slot 2, no store or totals (not slot 1) got ["NL","7199999999","7100000002",null,null], wanted ["GB","7100000002",null,"flow-store","1"]
+FAIL  both slots taken → no id, no totals; the result says slots_full  got ["7199999997","7199999998",null,"slots_full"], wanted ["7100000006",null,"1","written"]
+FAIL  the id already in slot 1 → present, the store and totals written got ["present","flow-store"], wanted ["written",null]
+FAIL  only the enabled write-back properties read and written (never contact_netsuite_id) got [true,true,"NS-1"], wanted [false,false,null]
+FAIL  a newer total for the same customer: always writes only the difference (totals), not what is unchanged got ["contact_shopify_total_orders","contact_shopify_total_spent"], wanted ["contact_shopify_store"]
+FAIL  a contact gone from HubSpot → failed contact_not_found           got "contact_not_found", wanted null
+FAIL  the outbox log lines hold counts and codes only: no contact id, ref or value got [true,false], wanted [false,true]
+
+ALL 11 PROVOKED CHECKS FAILED, as they must
