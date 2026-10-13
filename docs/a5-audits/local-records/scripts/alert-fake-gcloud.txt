@@ -1,0 +1,54 @@
+alert.sh against a fake gcloud (docs/a5-audits/local-records/README.md): every gcloud call logged with its arguments (cut at 90 characters)
+
+== 1. no channel, no policy
+== alert policy "cma-ingest 429" → p4a-cma-prod
+a. email channel created: projects/p4a-cma-prod/notificationChannels/111
+b. policy created: projects/p4a-cma-prod/alertPolicies/222
+
+== check
+cma-ingest 429	True	(filter)	300s	(channel)
+expected: cma-ingest 429, True, the filter on cma-ingest-backend and response_code = 429, 300s, projects/p4a-cma-prod/notificationChannels/111
+exit 0
+gcloud [services] [enable] [monitoring.googleapis.com] [--project=p4a-cma-prod] [--quiet]
+gcloud [beta] [monitoring] [channels] [list] [--project=p4a-cma-prod] [--filter=type="email" AND labels.email_address="alerts@example.com"] [--format=value(name)]
+gcloud [beta] [monitoring] [channels] [create] [--project=p4a-cma-prod] [--type=email] [--display-name=CMA ingest alerts] [--channel-labels=email_address=alerts@example.com] [--format=value(name)] [--quiet]
+gcloud [monitoring] [policies] [list] [--project=p4a-cma-prod] [--filter=displayName="cma-ingest 429"] [--format=value(name)]
+gcloud [monitoring] [policies] [create] [--project=p4a-cma-prod] [--policy={
+  "displayName": "cma-ingest 429",
+  "documentation": {
+    "mimeType": "text/m] [--format=value(name)] [--quiet]
+gcloud [monitoring] [policies] [describe] [projects/p4a-cma-prod/alertPolicies/222] [--project=p4a-cma-prod] [--format=value(displayName,enabled,conditions[0].conditionThreshold.filter,conditions[0].c]
+
+== 2. the channel and one policy exist (a rerun)
+== alert policy "cma-ingest 429" → p4a-cma-prod
+a. email channel exists: projects/p4a-cma-prod/notificationChannels/9
+b. policy updated: projects/p4a-cma-prod/alertPolicies/5
+
+== check
+cma-ingest 429	True	(filter)	300s	(channel)
+expected: cma-ingest 429, True, the filter on cma-ingest-backend and response_code = 429, 300s, projects/p4a-cma-prod/notificationChannels/9
+exit 0
+(no create)
+
+== 3. two policies with the name
+== alert policy "cma-ingest 429" → p4a-cma-dev
+note: dev has no load balancer; the policy finds no series there and stays quiet
+a. email channel exists: projects/p4a-cma-dev/notificationChannels/9
+2 policies are named "cma-ingest 429" in p4a-cma-dev:
+projects/p4a-cma-dev/alertPolicies/5
+projects/p4a-cma-dev/alertPolicies/6
+delete all but one (gcloud monitoring policies delete <name> --project=p4a-cma-dev), then rerun; stopped
+exit 1
+create or update calls: 0
+
+== 4. refusals
+--email is required
+usage: bash docs/ingest/alert.sh prod|dev --email <address> [--dry-run]
+       the alert policy "cma-ingest 429" on the ingest backend's 429s (header of this file)
+exit 2
+--email notanemail is not an email address
+exit 2
+first argument is prod or dev
+usage: bash docs/ingest/alert.sh prod|dev --email <address> [--dry-run]
+       the alert policy "cma-ingest 429" on the ingest backend's 429s (header of this file)
+exit 2

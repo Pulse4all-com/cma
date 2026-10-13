@@ -31,7 +31,9 @@
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
 # settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs; with --front the
 # public host first); INGEST_SHOPIFY_READBACK_BUDGET_MS=1500, the Shopify route's own inline read-back
-# budget (Shopify allows a delivery five seconds in all; brief B10). Prints the Studio statement that makes the database user a member of cma_app,
+# budget (Shopify allows a delivery five seconds in all; brief B10); startup CPU boost (--cpu-boost: a new
+# instance starts with extra CPU, so a cold start answers sooner; sixth Gemini audit FIND-04, 13 October
+# 2026). Prints the Studio statement that makes the database user a member of cma_app,
 # the service URL and /health.
 #
 # With --jobs (DESIGN §5, brief B8), the same steps up to the image, then instead of the service: the
@@ -292,6 +294,7 @@ gcloud run deploy "$SERVICE" \
   --concurrency=20 \
   --min-instances="$MIN" --max-instances="$MAX" \
   --cpu=1 --memory=512Mi \
+  --cpu-boost \
   --timeout=30s \
   --set-env-vars="$ENV_VARS" \
   --quiet

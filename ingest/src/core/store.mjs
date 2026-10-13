@@ -29,6 +29,9 @@
  *   connectionKey()             the connection's key (the address of its webhooks; an identifier)
  *
  * For the outbox job (migration 0007c): outboxClaim(limit), outboxFinish(groups).
+ * For the sweep's outbox guard: outboxLate(lateBy, connectionId)   per active connection, the tenant's
+ *                               actions the outbox still has to deliver (pending, failed, or a claim that
+ *                               never finished) that fell due more than lateBy ago; connectionId null: all
  *
  * For a telephony source (migration 0007a):
  *   lineMarkets(numberRefs)     the market configured on each of these lines (telephony_number)
@@ -198,6 +201,16 @@ export function storeFor(ctx, connectionId) {
     async outboxClaim(limit = 50) {
       return withTenant(ctx, async (q) => (await q.query(
         "select action_id, action, target_type, target_id, payload, reason, attempts from cma.outbox_claim($1, $2)", [connectionId, limit])).rows);
+    },
+    async outboxLate(lateBy, onlyConnectionId = null) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select o.connection_id, count(*)::integer as n
+           from cma.outbox_action o
+           join cma.integration_connection c on c.tenant_id = o.tenant_id and c.id = o.connection_id and c.status = 'active'
+          where o.tenant_id = cma.current_tenant_id() and ($2::uuid is null or o.connection_id = $2::uuid)
+            and o.status in ('pending', 'failed', 'in_flight') and o.next_attempt_at < now() - $1::interval
+          group by o.connection_id order by o.connection_id`, [lateBy, onlyConnectionId])).rows
+        .map((r) => ({ connectionId: r.connection_id, count: r.n })));
     },
     async outboxFinish(groups) {
       let n = 0;

@@ -828,7 +828,10 @@ export interface Intake {
   rows: IntakeDay[];
 }
 
-/** One check of cma.data_quality(); total null for a check whose source is not installed */
+/**
+ * One check of cma.data_quality(); total null for a check whose source is not installed. The outbox
+ * guard's row (outbox_pending, brief A5) follows them while its count is above 0 (reports.ts)
+ */
 export interface DataQualityCheck {
   key: string;
   /** The database's own description, for a check this screen does not know yet */

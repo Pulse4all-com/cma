@@ -2,10 +2,14 @@
 # The public front of cma-ingest in prod (README Architecture, Ingest API; Decision log, 12 October 2026):
 # a host on the existing web load balancer, so the run.app address can refuse everyone.
 #
-#   bash docs/ingest/front.sh prod --host <host> [--rate-per-minute <n>]
+#   bash docs/ingest/front.sh prod --host <host> [--rate-per-minute <n>] [--shopify-rate-per-minute <n>] [--dry-run]
 #
 #   --host <host>            the public name, for example ingest.pulse4all.app (an A record at IONOS)
 #   --rate-per-minute <n>    Cloud Armor's throttle per client IP (default 600); excess answers 429
+#   --shopify-rate-per-minute <n>   the throttle per client IP on /shopify/ (default 2400; sixth Gemini
+#                            audit, 13 October 2026): a store's renewal run sends its deliveries in bursts
+#   --dry-run                prints the Cloud Armor rules and the commands of step c, then stops; no
+#                            gcloud call, nothing read or changed
 #
 # Runs from Cloud Shell in ~/cma under your own account, after `bash docs/ingest/deploy.sh prod --front <host>`
 # (the Cloud Run service must exist). Rerunnable: every step skips what exists. In p4a-cma-prod:
@@ -17,8 +21,11 @@
 #      IAP, logging off (the Cloud Run request log is the one record). No backend timeout is set:
 #      Google refuses timeoutSec on a backend with a serverless NEG, and the Cloud Run service's own
 #      request timeout (30s, deploy.sh) applies
-#   c. Cloud Armor policy cma-ingest-armor: rule 1000 throttles per IP (<n> per 60 s, deny-429), the
-#      default rule allows; no IP allow-list; attached to cma-ingest-backend
+#   c. Cloud Armor policy cma-ingest-armor, rules by priority (the lowest number is evaluated first, and
+#      a request a throttle rule matches stops there): rule 900 throttles request.path.startsWith('/shopify/')
+#      per IP (2400 per 60 s, deny-429), rule 1000 every other request per IP (<n> per 60 s, deny-429),
+#      the default rule allows; no IP allow-list; attached to cma-ingest-backend. Each rule is created,
+#      or updated to these values when it exists
 #   d. Google-managed certificate cma-ingest-cert for <host>, added to cma-web-proxy next to the
 #      certificates it holds (cma-web-cert); never replacing one
 #   e. host rule on cma-web-urlmap: path matcher cma-ingest, default service cma-ingest-backend, host <host>
@@ -26,7 +33,7 @@
 set -euo pipefail
 
 usage () {
-  echo "usage: bash docs/ingest/front.sh prod --host <host> [--rate-per-minute <n>]"
+  echo "usage: bash docs/ingest/front.sh prod --host <host> [--rate-per-minute <n>] [--shopify-rate-per-minute <n>] [--dry-run]"
   echo "       builds cma-ingest's public front on the web load balancer in p4a-cma-prod (header of this file)"
 }
 [ $# -gt 0 ] || { usage; exit 1; }
@@ -35,10 +42,14 @@ ENV="$1"
 shift
 HOST=""
 RATE=600
+SHOPIFY_RATE=2400
+DRY_RUN=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --host) HOST="${2:?--host needs a host name}"; shift 2 ;;
     --rate-per-minute) RATE="${2:?--rate-per-minute needs a number}"; shift 2 ;;
+    --shopify-rate-per-minute) SHOPIFY_RATE="${2:?--shopify-rate-per-minute needs a number}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
     *) echo "unknown argument $1"; usage; exit 2 ;;
   esac
 done
@@ -51,6 +62,7 @@ esac
 [ -n "$HOST" ] || { echo "--host is required"; usage; exit 2; }
 [[ "$HOST" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { echo "--host $HOST is not a host name"; exit 2; }
 [[ "$RATE" =~ ^[1-9][0-9]{0,6}$ ]] || { echo "--rate-per-minute is not a positive number"; exit 2; }
+[[ "$SHOPIFY_RATE" =~ ^[1-9][0-9]{0,6}$ ]] || { echo "--shopify-rate-per-minute is not a positive number"; exit 2; }
 
 REGION=europe-west4
 SERVICE=cma-ingest
@@ -64,6 +76,36 @@ WEB_CERT=cma-web-cert
 PROXY=cma-web-proxy
 URLMAP=cma-web-urlmap
 ADDRESS=cma-web-ip
+# The throttle rules of step c: priority, what the rule matches, requests per 60 s per client IP
+SHOPIFY_PRIORITY=900
+SHOPIFY_MATCH="--expression=request.path.startsWith('/shopify/')"
+ALL_PRIORITY=1000
+ALL_MATCH="--src-ip-ranges=*"
+
+throttle_args () {  # <priority> <match flag> <requests per 60 s>: the arguments after the verb
+  printf '%s\n' "$1" "--project=${PROJECT}" "--security-policy=${POLICY}" "$2" --action=throttle \
+    "--rate-limit-threshold-count=$3" --rate-limit-threshold-interval-sec=60 \
+    --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP
+}
+
+if [ "$DRY_RUN" = 1 ]; then
+  echo "== dry run: Cloud Armor policy ${POLICY} on ${BACKEND} (${PROJECT}); no gcloud call, nothing read or changed"
+  echo "rules by priority, the lowest first; a request a throttle rule matches stops there:"
+  printf '  %-8s %-45s %s\n' "$SHOPIFY_PRIORITY" "request.path.startsWith('/shopify/')" "${SHOPIFY_RATE} requests per 60 s per IP, then 429"
+  printf '  %-8s %-45s %s\n' "$ALL_PRIORITY" "every other request (source IP ranges *)" "${RATE} requests per 60 s per IP, then 429"
+  printf '  %-8s %-45s %s\n' "default" "everything else" "allow"
+  echo "step c runs, per rule, create (or update, when the rule exists):"
+  for rule in "${SHOPIFY_PRIORITY}|${SHOPIFY_MATCH}|${SHOPIFY_RATE}" "${ALL_PRIORITY}|${ALL_MATCH}|${RATE}"; do
+    IFS='|' read -r prio match n <<<"$rule"
+    mapfile -t args < <(throttle_args "$prio" "$match" "$n")
+    printf 'gcloud compute security-policies rules create'
+    for a in "${args[@]}"; do
+      case "$a" in *[\'\*\(\)]*) printf ' "%s"' "$a" ;; *) printf ' %s' "$a" ;; esac
+    done
+    printf ' --quiet\n'
+  done
+  exit 0
+fi
 
 echo "== front of ${SERVICE} → https://${HOST} (${PROJECT})"
 
@@ -109,7 +151,7 @@ else
   echo "b. ${NEG} added to ${BACKEND}"
 fi
 
-# c. Cloud Armor: one policy, one throttle rule per client IP, the default rule stays allow
+# c. Cloud Armor: one policy, two throttle rules per client IP (/shopify/ first), the default rule stays allow
 if gcloud compute security-policies describe "$POLICY" --project="$PROJECT" >/dev/null 2>&1; then
   echo "c. policy ${POLICY} exists"
 else
@@ -117,13 +159,15 @@ else
     --description="cma-ingest: rate limit per client IP (README Decision log, 12 October 2026)" --quiet
   echo "c. policy ${POLICY} created"
 fi
-RULE_VERB=create
-gcloud compute security-policies rules describe 1000 --project="$PROJECT" --security-policy="$POLICY" >/dev/null 2>&1 && RULE_VERB=update
-gcloud compute security-policies rules "$RULE_VERB" 1000 --project="$PROJECT" --security-policy="$POLICY" \
-  --src-ip-ranges='*' --action=throttle \
-  --rate-limit-threshold-count="$RATE" --rate-limit-threshold-interval-sec=60 \
-  --conform-action=allow --exceed-action=deny-429 --enforce-on-key=IP --quiet >/dev/null
-echo "c. rule 1000 (${RULE_VERB}): ${RATE} requests per 60 s per IP, then 429"
+throttle_rule () {  # <priority> <match flag> <requests per 60 s> <what it matches>: created, or updated when it exists
+  local verb=create args
+  gcloud compute security-policies rules describe "$1" --project="$PROJECT" --security-policy="$POLICY" >/dev/null 2>&1 && verb=update
+  mapfile -t args < <(throttle_args "$1" "$2" "$3")
+  gcloud compute security-policies rules "$verb" "${args[@]}" --quiet >/dev/null
+  echo "c. rule $1 (${verb}): $4, $3 requests per 60 s per IP, then 429"
+}
+throttle_rule "$SHOPIFY_PRIORITY" "$SHOPIFY_MATCH" "$SHOPIFY_RATE" "/shopify/"
+throttle_rule "$ALL_PRIORITY" "$ALL_MATCH" "$RATE" "every other request"
 if gcloud compute backend-services describe "$BACKEND" --project="$PROJECT" --global --format='value(securityPolicy)' | grep -q "/securityPolicies/${POLICY}$"; then
   echo "c. ${POLICY} is attached to ${BACKEND}"
 else

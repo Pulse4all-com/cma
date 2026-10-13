@@ -17,7 +17,8 @@ function describe(c: DataQualityCheck, copy: Copy): { label: string; fix: string
 
 /**
  * Data quality (Report, B11): one row per check of cma.data_quality() (migration 0007d) with its
- * current count and one line on what fixing it means; checks with nothing to fix are muted, and CRM
+ * current count and one line on what fixing it means, and the outbox guard's row (outbox_pending,
+ * brief A5) while its count is above 0; checks with nothing to fix are muted, and CRM
  * owners without a person come first. Shown to people holding reports.view or tenant.configure; the
  * database checks again on every read. Counts only, no record of any customer. Every column header
  * explains itself in a hint (copy.hints).

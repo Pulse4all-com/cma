@@ -633,6 +633,8 @@ put_secret p4a-cma-prod ingest-shopify-app-signing
 ```
 Expected: `stored ingest-shopify-app-signing (version added)`. Every store connection of this app names this one secret: Shopify signs each store's webhooks with the app's client secret.
 
+Rotation (README Decision log, 13 October 2026, sixth Gemini audit FIND-02): the client secret is rotated in the Dev Dashboard (the app → Settings → Credentials), then the new value is added as a new version of `ingest-shopify-app-signing` with the `put_secret` line above; no Secret Manager rotation schedule (the service reads the latest version within five minutes, and Shopify retries a delivery refused meanwhile).
+
 **Terminal** (after B10 is deployed; always with `--front`)
 ```bash
 bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-shopify-app-signing

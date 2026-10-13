@@ -1,0 +1,18 @@
+$ npm ci --no-audit --no-fund   (in ingest/)
+added 246 packages in 4s
+
+$ npm run lint   (in ingest/)
+exit 0
+
+$ eslint -c ingest/eslint.config.mjs docs/ingest/*.mjs
+exit 0
+
+$ node --check (every .mjs of src, jobs, tools, verify and docs/ingest)
+72 files, 0 errors
+
+$ bash -n docs/ingest/alert.sh
+exit 0
+$ bash -n docs/ingest/front.sh
+exit 0
+$ bash -n docs/ingest/deploy.sh
+exit 0

@@ -1,0 +1,55 @@
+verify/shopify-mapping.mjs
+
+PASS  orders/create → commerce_order, created, the order id            got ["commerce_order","created","7300000001"]
+PASS  the key is sh:<X-Shopify-Webhook-Id> (Shopify's duplicate key)   got "sh:b54557e4-bdd9-4b37-8a5f-bf7d70bcd043"
+PASS  occurred at X-Shopify-Triggered-At                               got "2026-10-13T08:00:01.123Z"
+PASS  raw holds the topic, the delivery's ids, its time and version only got {"topic":"orders/create","eventId":"98880550-7158-44d4-b7cd-2c97c8a091
+PASS  nothing of the body beyond the id reaches the event              got false
+PASS  the seven topics and their kinds                                 got {"customers/create":"commerce_customer:created","customers/update":"co
+PASS  the same seven as subscription topics                            got ["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_CREA
+PASS  another shop's domain → ignored portal_mismatch                  got "portal_mismatch"
+PASS  the shop domain compared without case                            got undefined
+PASS  no shop domain → ignored portal_mismatch                         got "portal_mismatch"
+PASS  another topic → ignored event_not_handled                        got "event_not_handled"
+PASS  no id → ignored malformed                                        got "malformed"
+PASS  the id from admin_graphql_api_id when id is missing              got "7100000009"
+PASS  no webhook id → the event id with the topic                      got "sh:orders/create:98880550-7158-44d4-b7cd-2c97c8a091b5"
+PASS  neither → a digest of the body (a retry of the same body keys the same) got [true,true]
+PASS  no Triggered-At → the body's updated_at                          got "2026-10-13T08:00:00.000Z"
+PASS  a body that is not one JSON object → SyntaxError                 got ["SyntaxError","SyntaxError"]
+PASS  ids: a number, a digit string and a gid                          got ["7300000001","7300000001","7300000001"]
+PASS  ids: nothing else                                                got [null,null,null,null,null,null]
+PASS  gid of an order and a customer                                   got ["gid://shopify/Order/1","gid://shopify/Customer/2"]
+PASS  a first order: lifetime 1, one at or after → 0, exact            got {"prior":0,"exact":true}
+PASS  a customer with three older orders: lifetime 4, one at or after → 3 got {"prior":3,"exact":true}
+PASS  an older order read later: lifetime 5, three at or after → 2     got {"prior":2,"exact":true}
+PASS  a count that is a lower bound (AT_LEAST) → not exact             got {"prior":2,"exact":false}
+PASS  the search does not hold the order yet (0) → unknown             got {"prior":null,"exact":false}
+PASS  more at or after than the lifetime → 0, not exact                got {"prior":0,"exact":false}
+PASS  no lifetime count → unknown                                      got {"prior":null,"exact":false}
+PASS  the count's search: customer and creation at or after            got "customer_id:7100000001 AND created_at:>='2026-10-12T10:00:00Z'"
+PASS  one count query, one alias per order                             got "query CmaPriorCounts($q0: String!, $q1: String!) { c0: ordersCount(qu
+PASS  a customer: id, state, locale, count, amount, currency, times    got ["7100000001","ENABLED","nb-NO",4,"480.5","NOK","2026-01-02T03:04:05.0
+PASS  …its keys: no email, name or address, the phone as a hash        got ["amountSpent","createdAt","currency","locale","ordersCount","phoneHas
+PASS  …no email, number, name or address anywhere in it                got false
+PASS  an order: ids, name, times, test, currency, amounts (a missing tax amount is null) got ["7300000001","#1001","7100000001","2026-10-12T10:00:00.000Z",false,"G
+PASS  …the source name and the app id (the renewal lists' values)      got ["subscription_contract","580111"]
+PASS  …the landing page as host (lower case) and path, never its query or fragment got ["shop.example.com","/products/aed"]
+PASS  …UTM from the visit's own tags, else the landing page's          got {"source":"news","medium":"email","campaign":"autumn"}
+PASS  …the referrer's host only                                        got "www.google.com"
+PASS  …tags as text only, the prior count and its exactness            got [["aed","pads"],3,true]
+PASS  …its lines: id, sku, product and variant ids, quantity, unit price, currency got [{"lineId":"1","sku":"AED-1","productRef":"8000000001","variantRef":"8
+PASS  …no email, number, name, address or note anywhere in it          got false
+PASS  …lines that could not all be read → no lines key (the stored lines stay) got false
+PASS  …the last visit when there is no first one                       got "/b"
+PASS  …a guest order: no customer id                                   got null
+PASS  a line without an id is left out                                 got null
+PASS  UTM: empty without a visit                                       got {}
+PASS  the order query asks for no name, email, address or note (the order phone and the customer's phone and email are read, hashed or used in memory) got false
+PASS  the customer query reads the email and the phone only through their default fields got [true,true,false]
+PASS  listings ask for ids and times only                              got true
+PASS  subscriptions are created with uri (callbackUrl is deprecated in 2026-10) got true
+PASS  the API version: the setting, else 2026-10                       got ["2027-01","2026-10","2026-10","2026-10"]
+PASS  the route's budget: default 1500, the setting from 100 to 4000   got [1500,800,1500,1500,1500]
+
+ALL 51 PASS

@@ -222,6 +222,25 @@ export function orderChecks(checks: DataQualityCheck[]): DataQualityCheck[] {
   return [...first, ...checks.filter((c) => !FIRST_CHECKS.includes(c.key))];
 }
 
+/**
+ * The outbox guard's row (brief A5; sixth Gemini audit FIND-05, 13 October 2026). ingest-outbox runs
+ * without a schedule since 0008h, so an outbox action of an active connection still waiting
+ * OUTBOX_LATE_MINUTES after it fell due is one no outbox run claimed; the sweep counts and logs the
+ * same (ingest/src/jobs/sweep.mjs, OUTBOX_LATE). Not a check of cma.data_quality() (no migration): the
+ * row follows the database's checks, and only while the count is above 0.
+ */
+export const OUTBOX_PENDING_CHECK = "outbox_pending";
+export const OUTBOX_LATE_MINUTES = 10;
+
+export function withOutboxPending(checks: DataQualityCheck[], pending: number): DataQualityCheck[] {
+  if (!(pending > 0)) return checks;
+  return [...checks, {
+    key: OUTBOX_PENDING_CHECK,
+    description: `Outbox actions not delivered ${OUTBOX_LATE_MINUTES} minutes after they fell due (ingest-outbox unscheduled or not running)`,
+    total: pending,
+  }];
+}
+
 /** A check with nothing to fix (0, or a source not installed) is shown muted */
 export function isMuted(c: DataQualityCheck): boolean {
   return c.total === null || c.total === 0;

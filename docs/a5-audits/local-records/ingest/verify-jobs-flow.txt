@@ -1,0 +1,75 @@
+verify/jobs-flow.mjs
+
+PASS  sweep: a due event processed                                     got "processed"
+PASS  sweep: the deal read back, still without a contact               got [true,null]
+PASS  sweep: a record without a contact read again (one reread event)  got 1
+PASS  sweep: within ten minutes it is not read again                   got 1
+PASS  sweep: ten minutes later the second read finds the contact       got "4300000001"
+PASS  sweep: the contact taken in with its country through the alias   got "GB"
+PASS  sweep: link_calls recorded once per run, succeeded               got ["succeeded","succeeded","succeeded"]
+PASS  sweep: the run's totals count the processed event                got true
+PASS  sweep: HubSpot failing → the event failed, attempt 1             got ["failed",1,"http_503"]
+PASS  sweep: the backoff is respected (not claimed again at once)      got 1
+PASS  sweep: due again → attempt 2, still failed                       got ["failed",2]
+PASS  sweep: at ingest.max_attempts (3) the event is parked as needs_review got ["needs_review",3]
+PASS  sweep: a parked event is never claimed again                     got 3
+PASS  outbox guard: no action → outboxPending 0, no warning            got [0,0]
+PASS  outbox guard: a pending action just enqueued is not overdue yet  got [0,0]
+PASS  outbox guard: due 11 minutes ago and never claimed → outboxPending 1 got 1
+PASS  outbox guard: one warning with the connection and the count, no contact id got [["WARNING","01a135c8-8076-77e7-bd76-8a47b4c0eba4",1,false]]
+PASS  outbox guard: it does not fail the sweep                         got 0
+PASS  outbox guard: another tenant's sweep does not count it           got 0
+PASS  outbox guard: a newer action supersedes it and is not overdue yet got [0,["superseded","pending"]]
+PASS  outbox guard: overdue again → counted again                      got 1
+PASS  outbox guard: a delivered action is not counted                  got 0
+PASS  forms: the catalog refreshed, names from HubSpot                 got ["Quote test","Not counted test"]
+PASS  forms: the refresh kept the configuration (counted, market, kept fields) got [[true,"GB",["product_interest","work_email"]],[false,null,[]]]
+PASS  forms: four submissions since the start date, not the older one  got ["c-0002","c-0003","c-0004","c-0005"]
+PASS  forms: contacts resolved (no email, several, none, one)          got [["no_email",null],["ambiguous",null],["not_found",null],["resolved","
+PASS  forms: host and path only, UTM parsed                            got ["www.example.com","/nl/kopen",{"source":"google","campaign":"autumn"}
+PASS  forms: kept values only the kept field, never the email field    got {"product_interest":"AED Plus"}
+PASS  forms: one contact search per distinct email, on the definition's email field got [3,true]
+PASS  forms: a form not counted is never read                          got 0
+PASS  forms: the run recorded, fetched and upserted four               got [["forms","succeeded",4,4]]
+PASS  forms: the run's totals                                          got [4,0]
+PASS  forms: a second run writes nothing new                           got 4
+PASS  forms: …reads one page (stops at the cursor), no catalog, no search got [1,0,0]
+PASS  forms: a new submission arrives on the next run                  got "resolved"
+PASS  forms: a rate-limited contact search fails the run (rate_limited) got ["failed","rate_limited"]
+PASS  forms: …the submission is not written without its contact        got 0
+PASS  forms: …and the cursor did not move                              got {"at":1791626760000,"id":"c-0006","emailField":"work_email"}
+PASS  forms: the next run writes it                                    got "not_found"
+PASS  backfill: an interruption fails the run with its code            got ["failed","http_503",1]
+PASS  backfill: without --from it starts at intake.start_date (00:00 in the tenant's zone) got "2026-09-30T22:00:00.000Z"
+PASS  backfill: the first page was written before the interruption     got [true,true,false]
+PASS  backfill: the cursor stands at the first page's last created time got [1791018000000,false]
+PASS  backfill: the rerun succeeds                                     got ["succeeded",0]
+PASS  backfill: it resumed at the cursor, not at the start             got "1791018000000"
+PASS  backfill: the first page's deals were not read again             got false
+PASS  backfill: every deal since the start date, and the one created earlier and closed since got [true,true,true]
+PASS  backfill: both streams' cursors done                             got [["backfill:deal:closedate","true"],["backfill:deal:createdate","true"
+PASS  backfill: searches within a run paced (at least 40 ms apart at a pace factor of 0.1) got true
+PASS  backfill: a finished backfill with the same start reads nothing again got 0
+PASS  backfill: form submissions from an earlier date fill the older one got "resolved"
+PASS  backfill: an object the adapter does not backfill is refused     got true
+PASS  reconcile: setup, the webhook's newer read of a deal stored      got "333.00"
+PASS  reconcile: the change the webhook missed arrives                 got "250.00"
+PASS  reconcile: a newer row is left alone (stale)                     got "333.00"
+PASS  reconcile: one run per object type, all succeeded                got [["deal","succeeded"],["ticket","succeeded"],["crm_call","succeeded"],
+PASS  reconcile: the stale read counted                                got true
+PASS  reconcile: the default look-back is 26 hours                     got true
+PASS  reconcile: only held contacts are read                           got [true,false]
+PASS  reconcile: the unheld contact counted as skipped                 got true
+PASS  reconcile: the run's totals                                      got [4,0]
+PASS  reconcile: a second run lists the same and reads nothing again   got [true,0,0]
+PASS  reconcile: --lookback-minutes 10 asks the last ten minutes, one object type got [true,9]
+PASS  isolation: an unfiltered sweep serves tenant two's due event     got "processed"
+PASS  isolation: …read with tenant two's token                         got true
+PASS  isolation: tenant two's record and run rows live in tenant two   got [["01a135c8-8051-79cc-961a-5d59e581749e"],["01a135c8-8051-79cc-961a-5d
+PASS  isolation: tenant one sees none of tenant two's runs or cursors  got [0,0]
+PASS  isolation: the tenant one's requests all carried tenant one's token got true
+PASS  no email in the submissions, cursors, runs, events, contacts or forms got false
+PASS  the logs hold no email, token or contact id                      got [false,false,false]
+PASS  the logs hold the jobs' counts                                   got true
+
+ALL 71 PASS

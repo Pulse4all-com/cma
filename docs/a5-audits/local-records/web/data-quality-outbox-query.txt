@@ -1,0 +1,25 @@
+BEGIN
+SET
+UPDATE 1
+INSERT 0 2
+SET
+-- cma.data_quality(): the permission check runs, the checks as before (writeback_parked 0)
+      check_key       | total 
+----------------------+-------
+ owner_without_person |     0
+ writeback_parked     |     0
+(2 rows)
+
+-- the web query with OUTBOX_LATE_MINUTES = 10: expected 1 (the 11-minute one, not the 2-minute one)
+ n 
+---
+ 1
+(1 row)
+
+-- another tenant (pulse4all-subscriptions) sees none of it: expected 0
+ n 
+---
+ 0
+(1 row)
+
+ROLLBACK

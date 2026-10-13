@@ -1,0 +1,5 @@
+count 0: no row (hidden)                     ["deal_without_contact","owner_without_person"]
+count null-ish (NaN): no row                 ["deal_without_contact","owner_without_person"]
+count 3: row last, total 3, not muted        [["deal_without_contact","owner_without_person","outbox_pending"],3,false,true]
+orderChecks keeps owners first, the row last ["owner_without_person","deal_without_contact","outbox_pending"]
+the input list is not changed                2

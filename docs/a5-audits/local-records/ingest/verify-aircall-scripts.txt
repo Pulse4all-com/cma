@@ -1,0 +1,31 @@
+verify/aircall-scripts.mjs
+
+PASS  webhook: another company's key → refused, nothing created        got [1,true,0,false]
+PASS  webhook: a URL that is not https → usage, no API call            got [2,1]
+PASS  webhook: a URL that is not /aircall/<key> → usage                got 2
+PASS  webhook: the signing secret does not exist yet → refused, nothing created got [1,true,0]
+PASS  webhook: created with the six events and the URL                 got [0,"https://ingest.example.com/aircall/key00000000000000000000000001",
+PASS  …the token went to gcloud secrets versions add on standard input, exactly got "fixture-new-webhook-token-0001"
+PASS  …the output names the webhook id, the events and the setting to add got [true,true,true]
+PASS  …and never the token or the API key                              got false
+PASS  webhook: a second run for the same URL → refused, prints the existing id, nothing created got [1,true,1,true]
+PASS  …nothing stored a second time                                    got "fixture-new-webhook-token-0001"
+PASS  webhook --list: the webhook with active and events, marked for --url, no token got [0,true,false]
+PASS  webhook: another connection's URL is its own webhook             got [0,2,true]
+PASS  …(a third, for the next check)                                   got 0
+PASS  webhook --delete <id>: deleted                                   got [0,"deleted bbbbbbbb-0000-4000-8000-000000000003",false]
+PASS  webhook: the token cannot be stored → exit 1 with the id to delete, the token not shown got [1,true,false]
+PASS  users: one email statement per Aircall user with an email        got [0,3,"select cma.set_user_external_id(u.id, 'aircall_user', '920000000
+PASS  …the user without an email listed as not matched, by id          got true
+PASS  users --also-domain: the other domain's address matches too      got true
+PASS  users --via-owners: per match the statement through the HubSpot owner id, no email got [0,["select cma.set_user_external_id(x.user_id, 'aircall_user', '92000
+PASS  …on stderr the count matched and the ids not matched, no emails  got [true,true,false]
+PASS  users --via-owners --also-domain: the partner address matches the owner on the other domain got true
+PASS  …the HubSpot owners read with the HubSpot token, the users with the Aircall key got [true,true]
+PASS  …and no secret printed by any run                                got false
+PASS  replay --adapter aircall: one request per event, each 200        got [0,6,true]
+PASS  …the token in the body, as Aircall sends it, and never printed   got [true,false]
+PASS  …without --fresh the fixture's times as they are                 got 1791622801
+PASS  …with --fresh every time moved by the same amount, the first call starting now got [true,true,true]
+
+ALL 27 PASS
