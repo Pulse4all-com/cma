@@ -1,0 +1,85 @@
+[
+  {
+    "resource": "call",
+    "event": "call.hungup",
+    "timestamp": 1791622870,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "answered",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": null,
+      "duration": 0,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": null,
+      "recording": null,
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [],
+      "participants": []
+    }
+  },
+  {
+    "resource": "user",
+    "event": "user.created",
+    "timestamp": 1791623000,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9200000009,
+      "name": "Invented New Agent",
+      "email": "agent.nine@example.com"
+    }
+  },
+  {
+    "resource": "contact",
+    "event": "contact.created",
+    "timestamp": 1791623100,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9500000001,
+      "first_name": "Invented",
+      "last_name": "Customer",
+      "phone_numbers": [
+        {
+          "label": "Mobile",
+          "value": "+44 20 0000 0001"
+        }
+      ],
+      "emails": [
+        {
+          "label": "Work",
+          "value": "customer@example.com"
+        }
+      ]
+    }
+  }
+]
