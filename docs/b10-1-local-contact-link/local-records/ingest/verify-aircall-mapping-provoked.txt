@@ -1,0 +1,53 @@
+verify/aircall-mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  the six events are the six of the subscription                   got ["call.created","call.answered","call.ended","call.tagged","call.untag, wanted []
+FAIL  each of the six → its key ac:<event>:<call id>:<timestamp>       got ["ac:call.created:9100000001:1791622801","ac:call.answered:9100000001:, wanted []
+FAIL  …kinds: created, then changed for the other five                 got ["created","changed","changed","changed","changed","changed"], wanted ["created","changed","changed","changed","changed","deleted"]
+FAIL  …object telephony_call with the call's id, the event as source type got "telephony_call:9100000001:call.ended", wanted "telephony_call:9100000001:call.created"
+FAIL  …occurred at the event's timestamp (UNIX seconds)                got "2026-10-10T09:00:01.000Z", wanted "1970-01-21T17:40:22.801Z"
+FAIL  …none ignored                                                    got 0, wanted 6
+FAIL  …raw holds the event, resource and timestamp only                got {"event":"call.tagged","resource":"call","timestamp":1791622902}, wanted {"event":"call.tagged"}
+FAIL  …no token, number, name, email, comment or link in the events    got false, wanted true
+FAIL  …and no object in memory without the replay allowance            got false, wanted true
+FAIL  the same delivery again gives the same key (Aircall's retries are absorbed) got "ac:call.answered:9100000001:1791622809", wanted "ac:call.answered:9100000001:1791622809x"
+FAIL  another call event (call.hungup) → recorded as ignored, event_not_handled got ["telephony_call","event_not_handled"], wanted ["telephony_call",null]
+FAIL  another resource (user, contact) → ignored, event_not_handled, under its own type got ["user:event_not_handled","contact:event_not_handled"], wanted ["user:undefined","contact:undefined"]
+FAIL  …and the contact's name, number and email are not in the event   got false, wanted true
+FAIL  a call event without a call id → ignored, malformed              got "malformed", wanted undefined
+FAIL  a call event without a timestamp keeps a stable key              got "ac:call.ended:5:none", wanted "ac:call.ended:5:"
+FAIL  a body that is not one object is refused (the server answers 400) got "refused", wanted "mapped"
+FAIL  with the replay allowance the event holds its own call in memory got ["replay",9100000001,"2026-10-10T09:01:41.000Z"], wanted [null,null,null]
+FAIL  the adapter attaches it only when INGEST_ALLOW_REPLAY=1          got [false,true], wanted [true,true]
+FAIL  replay is on only with INGEST_ALLOW_REPLAY=1 and the setting     got [true,true,false,false], wanted [false,false,false,false]
+FAIL  without the variable the setting does nothing (a prod-configured service) got false, wanted true
+FAIL  a call → direction, status, times (UNIX → ISO), duration         got ["outbound","done","2026-10-10T09:00:00.000Z","2026-10-10T09:00:08.000, wanted []
+FAIL  …the user and the line as ids only, archived, the version        got ["9200000001","9300000001",false,"2026-10-10T09:02:00.000Z"], wanted []
+FAIL  …the other party's number as HMAC(pepper, E.164)                 got "52f0dbac3bc223fcd7e1c5a538e3ed1f9cbfd18dfe48271308bae6a737846fce", wanted null
+FAIL  …its whole current tag set                                       got [{"tagRef":"9400000001","name":"Interested"}], wanted []
+FAIL  …raw holds the allowlisted keys only                             got ["answered_at","archived","direction","duration","ended_at","started_a, wanted ["archived","cost","direction"]
+FAIL  …no number, name, email, comment, recording or link anywhere in the item got false, wanted true
+FAIL  …the line's number neither                                       got false, wanted true
+FAIL  a national number takes the region given (the line's market)     got "729c1f1db7dc49a1cbdcc944a82bebe9753d1080beac371235d8fefe1707ab98", wanted null
+FAIL  …another region reads it differently                             got [true,false], wanted [true,true]
+FAIL  an anonymous caller gets no hash                                 got null, wanted "x"
+FAIL  an unanswered inbound call: missed reason, no answer time        got ["inbound","agents_did_not_answer",null], wanted ["inbound",null,null]
+FAIL  a call without tags in the object leaves the tag set out (tags kept as they are) got false, wanted true
+FAIL  an empty tag list is the empty set (closes every tag)            got [], wanted null
+FAIL  tags: ids as refs, names, duplicates once, tagged_by left out    got [{"tagRef":"1","name":"A"}], wanted []
+FAIL  an object without a direction is not a call                      got null, wanted {}
+FAIL  rawOf drops nested objects and long strings                      got {"status":"done","duration":3}, wanted {"status":"done"}
+FAIL  unixIso: 0 and empty are no time                                 got [null,null,null], wanted ["1970-01-01T00:00:00.000Z",null,null]
+FAIL  the fingerprint ignores the number                               got true, wanted false
+FAIL  …and changes when a tag, the status or the archive changes       got [true,true,true], wanted [false,false,false]
+FAIL  a line → ref, name, digits (the company's own number)            got {"numberRef":"9300000001","name":"Test line GB","digits":"+44 20 0000 , wanted null
+FAIL  a tag → ref and name (colour left out)                           got {"tagRef":"9400000002","name":"Call back"}, wanted null
+FAIL  aircall_max_per_minute: default 60, numbers and digit strings 1 to 120 got [60,30,20,60,60], wanted [60,60,60,500,60]
+FAIL  …a pace of 30 per minute lets one call through every 2 seconds   got 2000, wanted 1000
+FAIL  …the same connection keeps its pace                              got true, wanted false
+FAIL  after a 429: until X-AircallApi-Reset (UNIX seconds)             got 30000, wanted 0
+FAIL  …in milliseconds too                                             got 20000, wanted 0
+FAIL  …60 seconds without the header, never more than 70               got [60000,70000], wanted [0,600000]
+FAIL  26 hours → two day windows, the second of 2 hours                got [24,2], wanted [26]
+FAIL  a backfill of 12 days → 12 windows                               got 12, wanted 1
+
+ALL 49 PROVOKED CHECKS FAILED, as they must

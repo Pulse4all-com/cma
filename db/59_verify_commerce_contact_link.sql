@@ -89,8 +89,8 @@ begin
     v_bad := v_bad || 'the foreign key into the tenant''s connections is missing; ';
   end if;
   if not exists (select 1 from pg_indexes where schemaname = 'cma' and tablename = 'commerce_customer' and indexname = 'commerce_customer_crm_contact_idx'
-                 and indexdef like '%(tenant_id, crm_connection_id, crm_contact_source_id)%') then
-    v_bad := v_bad || 'the index is missing; ';
+                 and indexdef like '%(tenant_id, crm_connection_id, crm_contact_source_id) WHERE (crm_contact_source_id IS NOT NULL)') then
+    v_bad := v_bad || 'the partial index is missing; ';
   end if;
   insert into verify_0008h values (2, 'A2 the link columns, their checks, the foreign key and the index',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
@@ -257,13 +257,21 @@ begin
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no outcome')];
 
     -- B5. refusals, nothing written: an unknown customer and another store's customer (CMA02), an
-    --     inactive CRM connection (CMA02), the store itself, a telephony connection, one without kind
-    --     or rows, a long contact id (CMA04)
+    --     inactive CRM connection (CMA02), the store itself (even with its kind forced to crm, so only
+    --     the explicit rule can refuse it), a telephony connection, one without kind or rows, a long
+    --     contact id (CMA04)
     v_n := 0;
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-404', v_crm, 'k-1'); exception when sqlstate 'CMA02' then v_n := v_n + 1; end;
     begin perform cma.set_commerce_customer_contact(v_shop2, 'cu-3', v_crm, 'k-1'); exception when sqlstate 'CMA02' then v_n := v_n + 1; end;
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-3', v_crm_off, 'k-1'); exception when sqlstate 'CMA02' then v_n := v_n + 1; end;
+    v_txt := (select kind from cma.integration_connection where id = v_shop);
+    perform set_config('role', 'cma_owner', true);
+    update cma.integration_connection set kind = 'crm' where id = v_shop;
+    perform set_config('role', 'cma_app', true);
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-3', v_shop, 'k-1'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
+    perform set_config('role', 'cma_owner', true);
+    update cma.integration_connection set kind = v_txt where id = v_shop;
+    perform set_config('role', 'cma_app', true);
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-3', v_tel, 'k-1'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-3', v_blank, 'k-1'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
     begin perform cma.set_commerce_customer_contact(v_shop, 'cu-3', v_crm, repeat('k', 101)); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;

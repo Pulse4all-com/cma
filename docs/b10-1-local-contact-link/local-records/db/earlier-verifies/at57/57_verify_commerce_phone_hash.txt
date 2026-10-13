@@ -1,0 +1,36 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/57_verify_commerce_phone_hash.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+                                             check_name                                              | result |                                      detail                                      
+-----------------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------
+ A1 addition 0008g recorded                                                                          | PASS   | 
+ A2 the two columns, their check and their partial indexes                                           | PASS   | 
+ A3 nothing else personal: the tables hold 0007b's columns plus phone_hash                           | PASS   | 
+ A4 the reporting views leave the hash out                                                           | PASS   | 
+ A5 the upserts are the application's only, in the caller's rights                                   | PASS   | 
+ B1 a customer's hash stored lower-cased; the 0007b shape still taken                                | PASS   | cu-1:inserted,cu-2:inserted
+ B2 a read without the hash clears it; a stale read leaves it; a newer read sets it                  | PASS   | stale
+ B3 a plain number and malformed hashes refused, nothing written                                     | PASS   | 8 of 8 refusals
+ B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b | PASS   | or-1:inserted:first,or-2:inserted:repeat,or-3:inserted:renewal | deleted:renewal
+ B5 a customer's deletion clears its hash and its orders' in that connection only                    | PASS   | deleted
+ B6 an order's hash meets an earlier call's, the lookup by hash uses the index                       | PASS   | or-4<k-1/t-1 | commerce_order_phone_hash_idx, commerce_customer_phone_hash_idx
+ B7 permissions and tenant isolation                                                                 | PASS   | 3 of 3 refusals
+ verdict                                                                                             | PASS   | 12 PASS, 0 FAIL
+(13 rows)
+
+RESET

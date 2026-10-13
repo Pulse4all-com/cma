@@ -1,0 +1,17 @@
+# 16 deliberate breakages of 58, each on a fresh copy at 57 (b101_57), then 59 against it: name | exit of the mutated 58 | the checks that failed
+01 no rule that the link is whole | 58 exit 0 | A2 the link columns, their checks, the foreign key and the index;B6 the table refuses half a link and another tenant's connection;verdict;
+02 no foreign key to the connection | 58 exit 0 | A2 the link columns, their checks, the foreign key and the index;B6 the table refuses half a link and another tenant's connection;verdict;
+03 the index without its WHERE | 58 exit 0 | A2 the link columns, their checks, the foreign key and the index;verdict;
+04 the same link again rewrites the time | 58 exit 0 | B2 the same link again writes nothing;verdict;
+05 any connection kind accepted | 58 exit 0 | B5 seven refusals, nothing written;B6 the table refuses half a link and another tenant's connection;verdict;
+06 a connection without kind or rows accepted | 58 exit 0 | B5 seven refusals, nothing written;B6 the table refuses half a link and another tenant's connection;verdict;
+07 the store itself accepted | 58 exit 0 | B5 seven refusals, nothing written;B6 the table refuses half a link and another tenant's connection;verdict;
+08 a clear for an unknown customer raises | 58 exit 0 | B the block ran to the end;verdict;
+09 the forget clears every contact of the connection | 58 exit 0 | B8 the privacy forget clears that contact's links only;B9 permissions and tenant isolation;verdict;
+10 the forget ignores the connection | 58 exit 0 | B8 the privacy forget clears that contact's links only;B9 permissions and tenant isolation;verdict;
+11 the set function executable by everyone | 58 exit 0 | A3 the functions are the application's only, in the caller's rights;verdict;
+12 the forget as security definer | 58 exit 0 | A3 the functions are the application's only, in the caller's rights;verdict;
+13 the addition not recorded | 58 exit 0 | A1 addition 0008h recorded;verdict;
+14 no permission check on the set function | 58 exit 0 | B9 permissions and tenant isolation;verdict;
+15 an email column added to the customers | 58 exit 0 | A4 nothing else changed (columns, reporting view, upserts, no deletes);verdict;
+16 an over-long contact id accepted | 58 exit 0 | B5 seven refusals, nothing written;B6 the table refuses half a link and another tenant's connection;verdict;
