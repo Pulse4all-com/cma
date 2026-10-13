@@ -1,0 +1,10 @@
+$ (the files the Dockerfile copies: package.json, package-lock.json, src, jobs) npm ci --omit=dev
+added 166 packages in 2s
+
+$ node -e "import every adapter and job module"
+adapters: hubspot aircall automation
+
+$ PORT=18080 INGEST_VERSION=b9local node src/server.mjs & ; curl /health; curl -X POST /aircall/<malformed key>
+{"ok":true,"version":"b9local"}
+POST /aircall/not-a-key → 404
+server log: {"severity":"INFO","message":"listening","port":18080,"version":"b9local","time":"2026-10-13T04:01:27.632Z"}

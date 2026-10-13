@@ -19,9 +19,17 @@
  *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
+ * For a telephony source (migration 0007a):
+ *   lineMarkets(numberRefs)     the market configured on each of these lines (telephony_number)
+ *   firstMarket()               the tenant's first active market (sort order, then code)
+ *   lineCount()                 how many lines the connection's catalog holds
+ *
  * Writes: a read-back answers units, one per object it read ({ eventIds, status, error?, writes }); a
  * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts;
- * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a).
+ * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a);
+ * writes.telephonyTags and telephonyNumbers refresh the telephony catalogs (each the whole list),
+ * writes.telephonyCalls upserts telephony calls, writes.cursors moves sync cursors in the same
+ * transaction as the writes they describe.
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
  * writes unit by unit, so one bad object fails its own events only.
  */
@@ -135,6 +143,21 @@ export function storeFor(ctx, connectionId) {
     async linkCalls(since) {
       return withTenant(ctx, async (q) => (await q.query("select cma.link_calls($1) as n", [since])).rows[0].n);
     },
+    async lineMarkets(numberRefs) {
+      if (!numberRefs.length) return new Map();
+      return withTenant(ctx, async (q) => new Map((await q.query(
+        `select number_ref, market from cma.telephony_number
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and number_ref = any ($2::text[]) and market is not null`,
+        [connectionId, numberRefs])).rows.map((r) => [r.number_ref, r.market])));
+    },
+    async firstMarket() {
+      return withTenant(ctx, async (q) => (await q.query(
+        "select code from cma.market where tenant_id = cma.current_tenant_id() and status = 'active' order by sort_order, code limit 1")).rows[0]?.code ?? null);
+    },
+    async lineCount() {
+      return withTenant(ctx, async (q) => Number((await q.query(
+        "select count(*) as n from cma.telephony_number where tenant_id = cma.current_tenant_id() and connection_id = $1", [connectionId])).rows[0].n));
+    },
   };
 }
 
@@ -145,6 +168,9 @@ const ORDER = [
   ["contacts", "select outcome from cma.ingest_upsert_contacts($1, $2::jsonb)", true],
   ["calls", "select outcome from cma.ingest_upsert_calls($1, $2::jsonb)", true],
   ["associations", "select outcome from cma.ingest_upsert_associations($1, $2::jsonb)", true],
+  ["telephonyTags", "select cma.ingest_upsert_telephony_catalog($1, 'tag', $2::jsonb) as n", false],
+  ["telephonyNumbers", "select cma.ingest_upsert_telephony_catalog($1, 'number', $2::jsonb) as n", false],
+  ["telephonyCalls", "select outcome from cma.ingest_upsert_telephony_calls($1, $2::jsonb)", true],
 ];
 
 async function writeAll(q, connectionId, units, counts) {
@@ -155,6 +181,9 @@ async function writeAll(q, connectionId, units, counts) {
       const r = await q.query(sql, [connectionId, JSON.stringify(part)]);
       if (chunked) for (const row of r.rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
     }
+  }
+  for (const c of units.flatMap((u) => u.writes?.cursors ?? [])) {
+    await q.query("select cma.ingest_cursor_set($1, $2, $3::jsonb)", [connectionId, c.stream, JSON.stringify(c.cursor)]);
   }
   for (const contactId of units.flatMap((u) => u.writes?.forgets ?? [])) {
     await q.query("select cma.ingest_contact_forget($1, $2)", [connectionId, contactId]);

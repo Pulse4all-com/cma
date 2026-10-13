@@ -1,0 +1,18 @@
+$ npm ci
+
+added 246 packages in 3s
+
+$ npm run lint
+> cma-ingest@0.1.0 lint
+> eslint
+
+no output, exit 0
+
+$ eslint (ingest config) docs/ingest/aircall-webhook.mjs docs/ingest/aircall-users.mjs docs/ingest/hubspot-owners.mjs
+clean, exit 0
+
+$ node --check on every .mjs of src, jobs, tools, verify and the two docs scripts
+52 files, 0 with errors
+
+$ bash -n docs/ingest/deploy.sh
+syntax ok

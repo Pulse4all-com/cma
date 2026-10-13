@@ -14,14 +14,15 @@ import { info, warn } from "./log.mjs";
 
 /**
  * Processes the given events (in parts of at most 500, while the budget lasts) or, with ids null, the
- * next due ones. Answers the totals.
+ * next due ones. Answers the totals. inline: the in-memory objects of these events by event key
+ * (events.mjs inlineOf), handed to the adapter's readBack as they are; the core never reads them.
  */
-export async function processEvents(adapter, connection, ids, budget) {
+export async function processEvents(adapter, connection, ids, budget, inline = null) {
   const total = { claimed: 0, events: { processed: 0, ignored: 0, failed: 0 }, counts: {} };
   const parts = ids ? chunks(ids) : [null];
   for (const part of parts) {
     if (budget.expired()) break;
-    const r = await processPart(adapter, connection, part, budget);
+    const r = await processPart(adapter, connection, part, budget, inline);
     total.claimed += r.claimed;
     for (const k of Object.keys(total.events)) total.events[k] += r.events?.[k] ?? 0;
     for (const [k, v] of Object.entries(r.counts ?? {})) total.counts[k] = (total.counts[k] ?? 0) + (typeof v === "number" ? v : 0);
@@ -29,7 +30,7 @@ export async function processEvents(adapter, connection, ids, budget) {
   return total;
 }
 
-async function processPart(adapter, connection, ids, budget) {
+async function processPart(adapter, connection, ids, budget, inline) {
   const started = Date.now();
   const ctx = contextOf(connection);
   const claimed = await claimEvents(ctx, connection.connectionId, ids, ids ? ids.length : 100);
@@ -38,7 +39,7 @@ async function processPart(adapter, connection, ids, budget) {
   const config = await store.config();
   let units;
   try {
-    units = await adapter.readBack({ connection, config, events: claimed, store, budget });
+    units = await adapter.readBack({ connection, config, events: claimed, store, budget, inline: inline ?? new Map() });
   } catch (err) {
     // An adapter that throws fails every claimed event with its code (never a message: it may hold data)
     const code = typeof err?.code === "string" ? err.code : "readback_error";

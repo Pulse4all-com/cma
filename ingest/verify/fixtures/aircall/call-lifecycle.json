@@ -1,0 +1,344 @@
+[
+  {
+    "resource": "call",
+    "event": "call.created",
+    "timestamp": 1791622801,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "initial",
+      "started_at": 1791622800,
+      "answered_at": null,
+      "ended_at": null,
+      "duration": 0,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": null,
+      "recording": null,
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [],
+      "participants": []
+    }
+  },
+  {
+    "resource": "call",
+    "event": "call.answered",
+    "timestamp": 1791622809,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "answered",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": null,
+      "duration": 0,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": null,
+      "recording": null,
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [],
+      "participants": []
+    }
+  },
+  {
+    "resource": "call",
+    "event": "call.ended",
+    "timestamp": 1791622901,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "done",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": 1791622871,
+      "duration": 71,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": "https://assets.example.com/calls/9100000001",
+      "recording": "https://recordings.example.com/r/0001.mp3",
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [
+        {
+          "id": 1,
+          "content": "free text that must not be stored",
+          "posted_at": 1791622890
+        }
+      ],
+      "tags": [],
+      "participants": []
+    }
+  },
+  {
+    "resource": "call",
+    "event": "call.tagged",
+    "timestamp": 1791622902,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "done",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": 1791622871,
+      "duration": 71,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": "https://assets.example.com/calls/9100000001",
+      "recording": "https://recordings.example.com/r/0001.mp3",
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [
+        {
+          "id": 9400000001,
+          "name": "Interested",
+          "color": "#00B388",
+          "tagged_by": {
+            "id": 9200000001,
+            "name": "Invented Agent",
+            "email": "agent.one@example.com"
+          }
+        },
+        {
+          "id": 9400000002,
+          "name": "Call back",
+          "color": "#FFAA00",
+          "tagged_by": {
+            "id": 9200000001,
+            "name": "Invented Agent"
+          }
+        }
+      ],
+      "participants": []
+    }
+  },
+  {
+    "resource": "call",
+    "event": "call.untagged",
+    "timestamp": 1791622903,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "done",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": 1791622871,
+      "duration": 71,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": false,
+      "cost": "0.0",
+      "asset": "https://assets.example.com/calls/9100000001",
+      "recording": "https://recordings.example.com/r/0001.mp3",
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [
+        {
+          "id": 9400000001,
+          "name": "Interested",
+          "color": "#00B388",
+          "tagged_by": {
+            "id": 9200000001,
+            "name": "Invented Agent",
+            "email": "agent.one@example.com"
+          }
+        }
+      ],
+      "participants": []
+    }
+  },
+  {
+    "resource": "call",
+    "event": "call.archived",
+    "timestamp": 1791622904,
+    "token": "fixture-aircall-webhook-token-0001",
+    "data": {
+      "id": 9100000001,
+      "direct_link": "https://api.aircall.io/v1/calls/9100000001",
+      "sid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx01",
+      "direction": "outbound",
+      "status": "done",
+      "started_at": 1791622800,
+      "answered_at": 1791622808,
+      "ended_at": 1791622871,
+      "duration": 71,
+      "raw_digits": "+44 20 0000 0001",
+      "missed_call_reason": null,
+      "archived": true,
+      "cost": "0.0",
+      "asset": "https://assets.example.com/calls/9100000001",
+      "recording": "https://recordings.example.com/r/0001.mp3",
+      "recording_short_url": null,
+      "voicemail": null,
+      "voicemail_short_url": null,
+      "user": {
+        "id": 9200000001,
+        "direct_link": "https://api.aircall.io/v1/users/9200000001",
+        "name": "Invented Agent",
+        "email": "agent.one@example.com",
+        "available": true
+      },
+      "number": {
+        "id": 9300000001,
+        "direct_link": "https://api.aircall.io/v1/numbers/9300000001",
+        "name": "Test line GB",
+        "digits": "+44 20 0000 0900",
+        "country": "GB",
+        "time_zone": "Europe/London"
+      },
+      "contact": null,
+      "assigned_to": null,
+      "transferred_by": null,
+      "transferred_to": null,
+      "teams": [],
+      "comments": [],
+      "tags": [
+        {
+          "id": 9400000001,
+          "name": "Interested",
+          "color": "#00B388",
+          "tagged_by": {
+            "id": 9200000001,
+            "name": "Invented Agent",
+            "email": "agent.one@example.com"
+          }
+        }
+      ],
+      "participants": []
+    }
+  }
+]

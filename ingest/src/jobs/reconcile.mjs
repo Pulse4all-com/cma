@@ -32,7 +32,8 @@ export async function runReconcile({ connectionId = null, lookbackMinutes = DEFA
       try {
         const r = await withRun(store, { job: "reconcile", stream: obj, from: new Date(sinceMs), to: new Date(untilMs) }, async (counts) => {
           const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "reconcile" }));
-          await adapter.reconcile({ connection: c, store, budget, object: obj, sinceMs, untilMs, process, counts });
+          // An adapter may answer { error } after its listing (a check that failed); the run then fails with it
+          return adapter.reconcile({ connection: c, store, budget, object: obj, sinceMs, untilMs, process, counts });
         });
         total.runs += 1;
         for (const k of ["fetched", "upserted", "stale", "skipped"]) total[k] += r.counts[k];

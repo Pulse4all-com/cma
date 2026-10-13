@@ -1,0 +1,10 @@
+signature          exit 0  ALL 18 PASS                              | provoked exit 0  ALL 18 PROVOKED CHECKS FAILED, as they must
+mapping            exit 0  ALL 37 PASS                              | provoked exit 0  ALL 37 PROVOKED CHECKS FAILED, as they must
+hash               exit 0  ALL 20 PASS                              | provoked exit 0  ALL 20 PROVOKED CHECKS FAILED, as they must
+forms              exit 0  ALL 41 PASS                              | provoked exit 0  ALL 41 PROVOKED CHECKS FAILED, as they must
+aircall-token      exit 0  ALL 20 PASS                              | provoked exit 0  ALL 20 PROVOKED CHECKS FAILED, as they must
+aircall-mapping    exit 0  ALL 49 PASS                              | provoked exit 0  ALL 49 PROVOKED CHECKS FAILED, as they must
+aircall-scripts    exit 0  ALL 27 PASS                              | provoked exit 0  ALL 27 PROVOKED CHECKS FAILED, as they must
+flow               exit 0  ALL 79 PASS                              | provoked exit 0  ALL 79 PROVOKED CHECKS FAILED, as they must
+jobs-flow          exit 0  ALL 62 PASS                              | provoked exit 0  ALL 62 PROVOKED CHECKS FAILED, as they must
+aircall-flow       exit 0  ALL 85 PASS                              | provoked exit 0  ALL 85 PROVOKED CHECKS FAILED, as they must

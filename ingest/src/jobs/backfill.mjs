@@ -32,7 +32,7 @@ export async function runBackfill({ connectionId, object, from = null, adapters 
   const budget = new JobBudget(adapter.rates);
   const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
-    await adapter.backfill({ connection: c, store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
+    return adapter.backfill({ connection: c, store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
   });
   const total = { connection: c.connectionId, object, from: date, ...r.counts, error: r.error, failed: r.ok ? 0 : 1 };
   info("backfill", { ...total, ms: Date.now() - started });

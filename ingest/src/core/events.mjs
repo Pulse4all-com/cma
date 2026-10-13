@@ -3,9 +3,11 @@
  * Canonical events come from an adapter's map step; nothing here reads a vendor payload.
  *
  * A canonical event: { key, sourceType, kind, objectType, objectId, propertyName?, occurredAt,
- * attempt?, raw?, ignore? }. raw holds ids and timestamps only. ignore names why the event needs no
- * read-back (for example portal_mismatch); such an event is recorded, kept in raw.ignored, and
- * finished as ignored in the same transaction, so it is never read back.
+ * attempt?, raw?, ignore?, inline? }. raw holds ids and timestamps only. ignore names why the event
+ * needs no read-back (for example portal_mismatch); such an event is recorded, kept in raw.ignored,
+ * and finished as ignored in the same transaction, so it is never read back. inline is an object the
+ * adapter hands itself for the read-back of this request or job run (an object from the source's own
+ * API listing, or a replayed event's object in dev): it lives in memory only and is never recorded.
  */
 import { withTenant } from "./db.mjs";
 
@@ -54,7 +56,8 @@ export async function recordEvents(ctx, connectionId, events) {
 
 /**
  * Claims the given events (or the next due ones when ids is null) and returns them with what the
- * adapter needs to read back: source type, occurrence time and the recorded raw (ids only).
+ * adapter needs to read back: the event key, source type, occurrence time and the recorded raw (ids
+ * only).
  */
 export async function claimEvents(ctx, connectionId, ids, limit = BATCH) {
   return withTenant(ctx, async (q) => {
@@ -63,13 +66,13 @@ export async function claimEvents(ctx, connectionId, ids, limit = BATCH) {
       [connectionId, ids, limit]);
     if (claimed.rowCount === 0) return [];
     const detail = await q.query(
-      `select id, source_type, occurred_at, raw from cma.ingest_event
+      `select id, event_key, source_type, occurred_at, raw from cma.ingest_event
         where tenant_id = cma.current_tenant_id() and connection_id = $1 and id = any ($2::uuid[])`,
       [connectionId, claimed.rows.map((r) => r.event_id)]);
     const byId = new Map(detail.rows.map((d) => [d.id, d]));
     return claimed.rows.map((r) => ({
       eventId: r.event_id, kind: r.kind, objectType: r.object_type, objectId: r.object_id, propertyName: r.property_name,
-      attempts: r.attempts, sourceType: byId.get(r.event_id)?.source_type ?? null,
+      attempts: r.attempts, key: byId.get(r.event_id)?.event_key ?? null, sourceType: byId.get(r.event_id)?.source_type ?? null,
       occurredAt: byId.get(r.event_id)?.occurred_at?.toISOString() ?? null, raw: byId.get(r.event_id)?.raw ?? {},
     }));
   });
@@ -87,6 +90,13 @@ export async function finishEvents(q, connectionId, groups) {
     }
   }
   return n;
+}
+
+/** The in-memory objects of a list of canonical events, by event key (empty when none carries one). */
+export function inlineOf(events) {
+  const out = new Map();
+  for (const e of events) if (e.inline !== undefined && e.inline !== null && e.key) out.set(e.key, e.inline);
+  return out;
 }
 
 export { chunks };

@@ -26,7 +26,7 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 import { ADAPTERS } from "./adapters/index.mjs";
 import { lookupConnection, contextOf } from "./core/connection.mjs";
-import { recordEvents } from "./core/events.mjs";
+import { recordEvents, inlineOf } from "./core/events.mjs";
 import { processEvents } from "./core/process.mjs";
 import { readRawBody, BodyTooLarge } from "./core/rawbody.mjs";
 import { Budget, readbackBudgetMs } from "./core/budget.mjs";
@@ -118,7 +118,7 @@ async function handleWebhook(req, res, adapter, key) {
   let processed = null;
   if (due.length) {
     try {
-      processed = await processEvents(adapter, connection, due, new Budget(readbackBudgetMs()));
+      processed = await processEvents(adapter, connection, due, new Budget(readbackBudgetMs()), inlineOf(events));
     } catch (err) {
       warn("read-back left to the sweeper", { connection: connection.connectionId, adapter: adapter.name, code: dbErrorCode(err) });
     }
