@@ -174,7 +174,7 @@ export function LiveBoard({
         // At 1280 px the nine columns can be wider than the main area: the table scrolls inside its own
         // box, never the page (as the report tables, addition 0008i)
         <div className="overflow-x-auto" data-testid="live-people-scroll" role="region" aria-label={t.title} tabIndex={0}>
-        <table className="w-full border-collapse text-body">
+        <table className="w-full border-collapse text-body leading-table">
           <thead>
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
               <th className={th}>{t.person}</th>

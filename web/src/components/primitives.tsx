@@ -42,7 +42,8 @@ export function Button({
       type="button"
       className={[
         "inline-flex items-center gap-3 whitespace-nowrap rounded-button font-semibold",
-        "disabled:bg-p4a-bgblue disabled:text-p4a-muted disabled:opacity-60 disabled:hover:bg-p4a-bgblue",
+        // 7.2 Disabled: Background Blue fill, Muted text, no border, 60 % opacity, no hover
+        "disabled:border-transparent disabled:bg-p4a-bgblue disabled:text-p4a-muted disabled:opacity-60 disabled:hover:bg-p4a-bgblue",
         variantClass[variant],
         sizeClass[size],
         className,

@@ -121,7 +121,7 @@ cd ~/cma/web && npm run build >/dev/null && cp -r .next/static .next/standalone/
 ```bash
 cd ~/cma/web && for v in theme layout hints; do BASE=http://localhost:8080 node verify/$v.mjs | tail -1; BASE=http://localhost:8080 node verify/$v.mjs --provoke | tail -1; done
 ```
-Expected, in order: `theme: PASS (36 pages, …)`, `theme: FAIL (5 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, …)`, `layout: FAIL (17 problems)`, `hints: PASS (157 headers and 27 tiles on 14 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
+Expected, in order: `theme: PASS (36 pages, …, 8 tables per 7.6 and 3.3, …)`, `theme: FAIL (6 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, …)`, `layout: FAIL (17 problems)`, `hints: PASS (157 headers and 27 tiles on 14 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
 
 ## 7. A hand check in prod
 

@@ -100,7 +100,7 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
               <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-body" data-testid="missed-callbacks">
+                <table className="w-full border-collapse text-body leading-table" data-testid="missed-callbacks">
                   <thead>
                     <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
                       <th className={th}>{t.missedLine}{hint(t.missedLine, h.missedLine)}</th>

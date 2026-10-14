@@ -3,4 +3,5 @@
   /: p borderTopColor #ff0000 is not in the palette
   /: p outlineColor #ff0000 is not in the palette
   /reports/data-quality: hint text is #666666, not Inkt Body like the other text
-theme: FAIL (5 problems)
+  /reports/inbound?range=month: inbound-table: cells at line-height 1.60 (7.6, 3.3)
+theme: FAIL (6 problems)

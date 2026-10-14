@@ -141,7 +141,7 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
               {showWaiting ? <li className="flex items-center gap-2"><span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${WAITING_CLASS}`} />{t.waitingLegend}</li> : null}
             </ul>
             <div className="overflow-x-auto" data-testid="inbound-scroll" role="region" aria-label={t.title} tabIndex={0}>
-              <table className="w-full border-collapse text-body" data-testid="inbound-table">
+              <table className="w-full border-collapse text-body leading-table" data-testid="inbound-table">
                 <thead>
                   <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
                     <th className={th}>{t[group]}{hint(t[group], groupHint[group])}</th>

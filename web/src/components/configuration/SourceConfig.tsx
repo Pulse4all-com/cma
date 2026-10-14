@@ -210,7 +210,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
       <Card title={t.sectionSettings}>
         <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.settingsIntro} {t.settingsNever}</p>
         {sections.includes("missedReasons") ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="call-link-hint">{t.callLinkHint}</p> : null}
-        <table className="w-full border-collapse text-body" data-testid="source-settings">
+        <table className="w-full border-collapse text-body leading-table" data-testid="source-settings">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr><th className={`${th} w-72`}>{t.settingKey}</th><th className={th}>{t.settingValue}</th><th className={th}></th></tr>
           </thead>
@@ -249,7 +249,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
         <Card title={t.sectionPipelines}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.pipelinesIntro}</p>
           {detail.pipelines.length === 0 ? <p className="text-body text-p4a-muted">{t.pipelinesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-pipelines">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-pipelines">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.recordType}</th>
@@ -289,7 +289,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
             <Button variant="outlined" shortcut="F" data-shortcut="f" disabled={detail.forms.length === 0} onClick={() => setRuleOpen({ kind: "forms", opened: tick() })}>{t.applyRule}</Button>
           </div>
           {detail.forms.length === 0 ? <p className="text-body text-p4a-muted">{t.formsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-forms">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-forms">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.form}</th>
@@ -323,7 +323,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
             <Button variant="outlined" shortcut="O" data-shortcut="o" disabled={detail.callOutcomes.length === 0} onClick={() => setRuleOpen({ kind: "outcomes", opened: tick() })}>{t.applyRuleOutcomes}</Button>
           </div>
           {detail.callOutcomes.length === 0 ? <p className="text-body text-p4a-muted">{t.outcomesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-outcomes">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-outcomes">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.outcome}</th><th className={th}>{t.connected}{hint(t.connected, t.hintConnected)}</th></tr>
               </thead>
@@ -348,7 +348,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
         <Card title={t.sectionFields}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.fieldsIntro}</p>
           {detail.fields.length === 0 ? <p className="text-body text-p4a-muted">{t.fieldsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-fields">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-fields">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.entity}</th><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}>{t.property}{hint(t.property, t.hintProperty)}</th></tr>
               </thead>
@@ -368,7 +368,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
             <>
               <h3 className="mb-2 mt-6 text-body font-semibold text-p4a-heading">{t.writeback}</h3>
               <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.writebackIntro}</p>
-              <table className="w-full border-collapse text-body" data-testid="source-writeback">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-writeback">
                 <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                   <tr><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}>{t.property}</th><th className={th}>{t.mode}</th><th className={th}>{t.status}</th></tr>
                 </thead>
@@ -394,7 +394,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
         <Card title={t.sectionLines}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.linesIntro}</p>
           {detail.lines.length === 0 ? <p className="text-body text-p4a-muted">{t.linesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-lines">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-lines">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.line}</th>
@@ -434,7 +434,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
         <Card title={t.sectionTags}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.tagsIntro}</p>
           {detail.tags.length === 0 ? <p className="text-body text-p4a-muted">{t.tagsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-tags">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-tags">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.tag}</th><th className={th}>{t.counted}{hint(t.counted, t.hintTagCounted)}</th></tr>
               </thead>
@@ -461,7 +461,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
           {detail.missedReasons.length === 0 ? <p className="text-body text-p4a-muted">{t.missedReasonsEmpty}</p> : (
             // a code can be 60 characters without a break: the table scrolls inside its card, never past it
             <div className="overflow-x-auto" data-testid="source-missed-reasons-scroll">
-            <table className="w-full border-collapse text-body" data-testid="source-missed-reasons">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-missed-reasons">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.reasonCode}{hint(t.reasonCode, t.hintReasonCode)}</th>

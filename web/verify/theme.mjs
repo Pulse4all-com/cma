@@ -10,14 +10,17 @@
  * (the Team screen, 0004) as the admin. The intake reports (B11): Speed to lead, Intake and Data quality
  * as the manager, Intake and the Dashboard's Intake row for a tenant without telephony or a shop;
  * since addition 0008i Inbound (by day as the manager, by hour as the analyst) and the Live board of a
- * tenant without telephony.
+ * tenant without telephony; on Inbound, the Live board and the telephony connection's Sources page every
+ * table per docs/style/Pulse4all-Style.md 7.6 and 3.3 (header row, 14px cells at line-height 1.4, rows
+ * of at least 40px, zebra rows).
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026).
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
- *       off-palette element and a stray font, and greys out one hint panel, expect FAIL, exit 1
+ *       off-palette element and a stray font, greys out one hint panel and sets one Inbound table back
+ *       to line-height 1.6, expect FAIL, exit 1
  *
  * Needs the app running in mock mode and Playwright's Chromium installed
  * (npx playwright install chromium).
@@ -70,7 +73,7 @@ const pages = [
   { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },
   { path: "/hours" }, { path: "/team/hours" },
   { path: "/reports/dashboard?range=month", subject: "supervisor" },
-  { path: "/live/board", subject: "supervisor" },
+  { path: "/live/board", subject: "supervisor", tables: true },
   { path: "/team/people", subject: "admin" },
   { path: "/roster/planner", subject: "manager" },
   { path: "/roster/planner/print", subject: "manager" },
@@ -85,7 +88,7 @@ const pages = [
   // Sources, a connection of each kind, Markets and Alert rules (addition 0008e), as the admin
   { path: "/configuration/sources", subject: "admin" },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin" },
-  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c002", subject: "admin" },
+  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c002", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c003", subject: "admin" },
   { path: "/configuration/markets", subject: "admin" },
   { path: "/configuration/alert-rules", subject: "admin" },
@@ -97,14 +100,15 @@ const pages = [
   { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
   // Inbound and the Live board's inbound part (addition 0008i): the reasons' series and the bars, and the
   // board of a tenant without telephony
-  { path: "/reports/inbound?range=month", subject: "manager" },
-  { path: "/reports/inbound?range=month&group=hour", subject: "analyst" },
+  { path: "/reports/inbound?range=month", subject: "manager", tables: true },
+  { path: "/reports/inbound?range=month&group=hour", subject: "analyst", tables: true },
   { path: "/live/board", subject: "invest-analyst" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 let hintsChecked = 0;
+let tablesChecked = 0;
 const hintsSkipped = [];
-for (const { path, subject, start } of pages) {
+for (const { path, subject, start, tables } of pages) {
   // Clock in is an action: open the day through the route, so the page shows the clock
   if (start) await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
   const ctx = await b.newContext({
@@ -174,6 +178,46 @@ for (const { path, subject, start } of pages) {
   }
   for (const [text, color] of found.headings) if (rgbToHex(color) !== "#2e61a6") problems.push(`${path}: heading "${text}" is ${rgbToHex(color)}, not Deep Blue Heading`);
   if (rgbToHex(found.body) !== "#1c2127") problems.push(`${path}: body text is ${rgbToHex(found.body)}, not Inkt Body`);
+  // Tables and data grids on this pull request's screens (docs/style/Pulse4all-Style.md 7.6 and 3.3, addition
+  // 0008i): a Background Blue header row in 13px Semi Bold Deep Blue Heading; body cells at 14px or smaller,
+  // Inkt Body or Muted, with line-height 1.4; rows of at least 40px; zebra rows in Warm Off-White. --provoke
+  // sets the manager's Inbound table back to the prose line-height
+  if (tables) {
+    const t = await p.evaluate((spoil) => {
+      const hex = (c) => { const m = /rgba?\((\d+), (\d+), (\d+)/.exec(c); return m ? "#" + [m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("") : c; };
+      if (spoil) document.querySelector('[data-testid="inbound-table"]')?.style.setProperty("line-height", "1.6");
+      const out = { tables: 0, problems: [] };
+      for (const table of document.querySelectorAll("main table")) {
+        if (table.getClientRects().length === 0) continue;
+        out.tables++;
+        const id = table.dataset.testid ?? "a table";
+        const bad = new Set();
+        for (const th of table.querySelectorAll("thead th")) {
+          if (th.getClientRects().length === 0) continue;
+          const cs = getComputedStyle(th);
+          const bg = [th.closest("tr"), th.closest("thead")].map((e) => getComputedStyle(e).backgroundColor);
+          if (cs.fontSize !== "13px" || cs.fontWeight !== "600" || hex(cs.color) !== "#2e61a6") bad.add(`header ${cs.fontSize} ${cs.fontWeight} ${hex(cs.color)}`);
+          if (!bg.some((c) => hex(c) === "#eaf4fc")) bad.add("header row not Background Blue");
+        }
+        const rows = [...table.querySelectorAll("tbody tr")];
+        rows.forEach((tr, i) => {
+          if (tr.getBoundingClientRect().height < 39.5) bad.add(`a row of ${Math.round(tr.getBoundingClientRect().height)}px`);
+          if (i % 2 === 1 && hex(getComputedStyle(tr).backgroundColor) !== "#fdfbf1") bad.add("no zebra rows");
+          for (const td of tr.children) {
+            const cs = getComputedStyle(td);
+            if (parseFloat(cs.fontSize) > 14) bad.add(`a cell of ${cs.fontSize}`);
+            if (Math.abs(parseFloat(cs.lineHeight) / parseFloat(cs.fontSize) - 1.4) > 0.02) bad.add(`cells at line-height ${(parseFloat(cs.lineHeight) / parseFloat(cs.fontSize)).toFixed(2)}`);
+            if (!["#1c2127", "#5b6472"].includes(hex(cs.color))) bad.add(`a cell in ${hex(cs.color)}`);
+          }
+        });
+        for (const x of bad) out.problems.push(`${id}: ${x}`);
+      }
+      return out;
+    }, provoke && path === "/reports/inbound?range=month" && subject === "manager");
+    if (t.tables === 0) problems.push(`${path}: no table to check`);
+    tablesChecked += t.tables;
+    for (const x of t.problems) problems.push(`${path}: ${x} (7.6, 3.3)`);
+  }
   await ctx.close();
 }
 await b.close();
@@ -181,5 +225,5 @@ if (hintsChecked < 5) problems.push(`only ${hintsChecked} report pages showed a 
 
 const unique = [...new Set(problems)];
 for (const x of unique) console.log("  " + x);
-console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours, a header hint open on ${hintsChecked} report pages${hintsSkipped.length ? `; not on ${hintsSkipped.join(", ")}, where an alert dialog holds the focus` : ""})` : `theme: FAIL (${unique.length} problems)`);
+console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours, ${tablesChecked} tables per 7.6 and 3.3, a header hint open on ${hintsChecked} report pages${hintsSkipped.length ? `; not on ${hintsSkipped.join(", ")}, where an alert dialog holds the focus` : ""})` : `theme: FAIL (${unique.length} problems)`);
 process.exit(unique.length === 0 ? 0 : 1);
