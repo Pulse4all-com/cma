@@ -38,11 +38,11 @@ Every code Aircall gave in `unanswered_by_reason` has a row in the missed-reason
 
 ## The web app (step 4)
 
-| What | Time (UTC) |
-|---|---|
-| Build of `516b9e5` (the B15 merge), run by hand | 14:48 |
-| Build of `516b9e5` by trigger `cma-web-main` | 14:50 |
-| `cma-web` on `516b9e5` live | from 14:51 |
+| What | Build id | Time (UTC) |
+|---|---|---|
+| Build of `516b9e5` (the B15 merge), run by hand | `b0a5ece3` | 14:48 |
+| Build of `516b9e5` by trigger `cma-web-main` | `2983e838` | 14:50 |
+| `cma-web` on `516b9e5` live | | from 14:51 |
 
 The trigger's build appeared about 3.5 minutes after the merge, so the manual run and the trigger built
 and deployed the same image twice (harmless). The build check now waits 4 minutes after a merge before a
@@ -51,4 +51,3 @@ manual run (README, Decision log, 14 October 2026).
 ## Not in the report
 
 - The per-day rows, the unanswered calls per reason and the time to answer of the read-only check.
-- The build ids.

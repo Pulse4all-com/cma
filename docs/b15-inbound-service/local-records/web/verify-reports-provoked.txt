@@ -35,7 +35,9 @@ FAIL  25 October by hour, each call in its line's zone, as 61 B3 got [["01=3","0
 FAIL  a line without a market: the tenant's zone, market unknown, the line's name, as 61 B4 got ["2026-10-22=1","00=1","unknown=1","Line without market=1"], wanted ["2026-10-21=1","23=1","NL=1","NL line=1"]
 FAIL  unanswered as a share of the calls with an outcome, a waiting call left out got [50,100,null], wanted [50,50,0]
 FAIL  one column per reason that occurs, most frequent first, labelled from the catalog got ["unknown:Unknown:3:true","brand_new_code:brand_new_code:1:true","no_a, wanted ["brand_new_code:brand_new_code:1:true","no_available_agent:no_availab
-FAIL  the reasons in the style's series without Leaf Green, Neutral, Denim last; no red, amber or green got [["bg-p4a-deepblue","bg-p4a-lightblue","bg-p4a-rose","bg-p4a-inkt"],[", wanted [["bg-p4a-deepblue","bg-p4a-lightblue","bg-p4a-green","bg-p4a-denim"],
+FAIL  the reasons in the style's series without Leaf Green, Neutral, Denim last; no red, amber or green got [["bg-p4a-deepblue","bg-p4a-lightblue","bg-p4a-rose","bg-p4a-inkt","bg, wanted [["bg-p4a-deepblue","bg-p4a-lightblue","bg-p4a-green","bg-p4a-denim","
+FAIL  a colour per code: the catalog by code takes the series, a code without a row follows, cycling got [["abandoned_in_ivr:bg-p4a-deepblue","agents_did_not_answer:bg-p4a-lig, wanted [["abandoned_in_ivr:bg-p4a-denim","agents_did_not_answer:bg-p4a-muted"
+FAIL  the same code keeps its colour when the period's totals change order got [["out_of_opening_hours","agents_did_not_answer","brand_new_code"],["a, wanted [["out_of_opening_hours","agents_did_not_answer","brand_new_code"],["a
 FAIL  a row's bar: answered first, then the reasons in column order, shares adding up to 1 got [["answered","unknown","brand_new_code","no_available_agent","short_ab, wanted [["unknown","answered"],0.5]
 FAIL  group labels: a date, an unknown market, a line without a name, an hour got [{"kind":"date","date":"2026-10-25"},{"kind":"unknownMarket"},{"kind":, wanted [{"kind":"date","date":"2026-10-25"},{"kind":"text","text":"unknown"},
 FAIL  time to answer: seconds under a minute, minutes and seconds from a minute, a dash for none got ["17 s","21 s","1m 05s","–"], wanted ["17.0 s","20,6 s","65 s","0 s"]
@@ -45,4 +47,4 @@ FAIL  business minutes: decimals under an hour, hours from an hour, a dash for n
 FAIL  percentages whole, small shares not zero, a dash for none  got ["40%","67%","< 1%","0%","–"], wanted ["40%","66,7%","0%","0%","0%"]
 FAIL  counts with the locale's grouping                          got ["1,234","1.234"], wanted ["1234","1234"]
 
-ALL 46 PROVOKED CHECKS FAILED, as they must
+ALL 48 PROVOKED CHECKS FAILED, as they must

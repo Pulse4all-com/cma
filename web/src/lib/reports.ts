@@ -449,9 +449,10 @@ export function unansweredPct(f: Pick<InboundFigures, "answered" | "unanswered">
  * the series order of docs/style/Pulse4all-Style.md 7.7 without Leaf Green, which reads as Available on
  * the Live board, then the neutral grey, with Denim moved last because it sits too close to Deep Blue to
  * tell apart in a row's small bar: Deep Blue, Light Blue, Soft Rose, Inkt, Neutral, Denim (Martin,
- * B15.1, 14 October 2026). Never the error red or the warning amber: a reason is a category, not a
- * verdict. No text sits on a Light Blue or Soft Rose segment (7.8); the segments carry none, the label is
- * in the column header and the legend. Answered calls are Leaf Green next to them.
+ * B15.1, 14 October 2026). Each reason keeps its colour by code (`reasonColours`). Never the error red
+ * or the warning amber: a reason is a category, not a verdict. No text sits on a Light Blue or Soft Rose
+ * segment (7.8); the segments carry none, the label is in the column header and the legend. Answered
+ * calls are Leaf Green next to them.
  */
 export const REASON_SERIES: readonly string[] = ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted", "bg-p4a-denim"];
 export const ANSWERED_CLASS = "bg-p4a-green";
@@ -466,21 +467,36 @@ export interface ReasonColumn {
   countsInServiceLevel: boolean;
 }
 
+const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Each reason's colour, fixed by its code so that it keeps the colour across periods, groupings and
+ * markets (Martin, review of B15.1): the catalog's codes sorted by code take the series in order, and the
+ * codes without a catalog row that occur follow after the catalog, by code; both cycle through the series
+ */
+export function reasonColours(codes: readonly string[], catalog: readonly MissedReason[]): Map<string, string> {
+  const known = [...new Set(catalog.map((r) => r.code))].sort(byCode);
+  const others = [...new Set(codes)].filter((c) => !known.includes(c)).sort(byCode);
+  return new Map([...known, ...others].map((code, i) => [code, REASON_SERIES[i % REASON_SERIES.length]!]));
+}
+
 /**
  * One column per reason that occurs in the rows, the most frequent first (then by code), labelled from
  * the catalog: a code means the same in every telephony system of a tenant, and the first source
- * system's row gives its label; without a row the code is its own label ("unknown" as `unknownLabel`)
+ * system's row gives its label; without a row the code is its own label ("unknown" as `unknownLabel`).
+ * The colour comes from the code, not the column's place (`reasonColours`)
  */
 export function reasonColumns(rows: readonly Pick<InboundFigures, "unansweredByReason">[], catalog: readonly MissedReason[], unknownLabel: string): ReasonColumn[] {
   const totals = new Map<string, number>();
   for (const r of rows) for (const [code, n] of Object.entries(r.unansweredByReason)) if (n > 0) totals.set(code, (totals.get(code) ?? 0) + n);
   const sorted = [...catalog].sort((a, b) => a.sourceSystem.localeCompare(b.sourceSystem) || a.code.localeCompare(b.code));
+  const colours = reasonColours([...totals.keys()], catalog);
   return [...totals.entries()]
-    .sort(([a, x], [b, y]) => y - x || (a < b ? -1 : a > b ? 1 : 0))
-    .map(([code, total], i) => {
+    .sort(([a, x], [b, y]) => y - x || byCode(a, b))
+    .map(([code, total]) => {
       const row = sorted.find((r) => r.code === code);
       return {
-        code, total, className: REASON_SERIES[i % REASON_SERIES.length]!,
+        code, total, className: colours.get(code)!,
         label: row?.label ?? (code === UNKNOWN_REASON ? unknownLabel : code),
         countsInServiceLevel: row?.countsInServiceLevel ?? true,
       };

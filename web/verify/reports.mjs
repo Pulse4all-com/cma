@@ -224,11 +224,29 @@ expect("one column per reason that occurs, most frequent first, labelled from th
   ["brand_new_code:brand_new_code:1:true", "no_available_agent:no_available_agent:1:true", "short_abandoned:short_abandoned:1:true", "unknown:unknown:3:true"]);
 const classes = [...REASON_SERIES, ANSWERED_CLASS, WAITING_CLASS];
 expect("the reasons in the style's series without Leaf Green, Neutral, Denim last; no red, amber or green",
-  [cols.map((c) => c.className), REASON_SERIES, REASON_SERIES.filter((c) => /error|warning|red|green|success/.test(c)), classes.filter((c) => /error|warning|red/.test(c))],
-  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt"],
-    ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted", "bg-p4a-denim"], [], []],
-  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-green", "bg-p4a-denim"],
-    ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-green", "bg-p4a-denim", "bg-p4a-rose", "bg-p4a-inkt"], ["bg-p4a-green"], ["bg-p4a-error"]]);
+  [REASON_SERIES, REASON_SERIES.filter((c) => /error|warning|red|green|success/.test(c)), classes.filter((c) => /error|warning|red/.test(c))],
+  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted", "bg-p4a-denim"], [], []],
+  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-green", "bg-p4a-denim", "bg-p4a-rose", "bg-p4a-inkt"], ["bg-p4a-green"], ["bg-p4a-error"]]);
+// Pulse4all's six seeded reasons (02) in the seed's order; the rows below add a code without a catalog row
+const seedCatalog = ["out_of_opening_hours", "short_abandoned", "abandoned_in_ivr", "no_available_agent", "agents_did_not_answer", "unknown"]
+  .map((code) => ({ sourceSystem: "aircall", code, label: code, countsInServiceLevel: true, needsCallback: true }));
+const colourOf = (rows) => reasonColumns(rows, seedCatalog, "Unknown").map((c) => `${c.code}:${c.className}`).sort();
+expect("a colour per code: the catalog by code takes the series, a code without a row follows, cycling",
+  [colourOf([{ unansweredByReason: { unknown: 7, short_abandoned: 6, out_of_opening_hours: 5, no_available_agent: 4, agents_did_not_answer: 3, abandoned_in_ivr: 2, brand_new_code: 1 } }]),
+    cols.map((c) => `${c.code}:${c.className}`)],
+  [["abandoned_in_ivr:bg-p4a-deepblue", "agents_did_not_answer:bg-p4a-lightblue", "brand_new_code:bg-p4a-deepblue", "no_available_agent:bg-p4a-rose",
+    "out_of_opening_hours:bg-p4a-inkt", "short_abandoned:bg-p4a-muted", "unknown:bg-p4a-denim"],
+    ["unknown:bg-p4a-rose", "brand_new_code:bg-p4a-inkt", "no_available_agent:bg-p4a-muted", "short_abandoned:bg-p4a-lightblue"]],
+  [["abandoned_in_ivr:bg-p4a-denim", "agents_did_not_answer:bg-p4a-muted", "brand_new_code:bg-p4a-deepblue", "no_available_agent:bg-p4a-inkt",
+    "out_of_opening_hours:bg-p4a-rose", "short_abandoned:bg-p4a-lightblue", "unknown:bg-p4a-deepblue"],
+    ["unknown:bg-p4a-deepblue", "brand_new_code:bg-p4a-lightblue", "no_available_agent:bg-p4a-rose", "short_abandoned:bg-p4a-inkt"]]);
+const weekOne = reasonColumns([{ unansweredByReason: { out_of_opening_hours: 5, agents_did_not_answer: 2, brand_new_code: 1 } }], seedCatalog, "Unknown");
+const weekTwo = reasonColumns([{ unansweredByReason: { agents_did_not_answer: 6, short_abandoned: 3, brand_new_code: 2, out_of_opening_hours: 1 } }], seedCatalog, "Unknown");
+expect("the same code keeps its colour when the period's totals change order",
+  [weekOne.map((c) => c.code), weekTwo.map((c) => c.code),
+    weekOne.every((c) => weekTwo.find((d) => d.code === c.code)?.className === c.className)],
+  [["out_of_opening_hours", "agents_did_not_answer", "brand_new_code"], ["agents_did_not_answer", "short_abandoned", "brand_new_code", "out_of_opening_hours"], true],
+  [["out_of_opening_hours", "agents_did_not_answer", "brand_new_code"], ["agents_did_not_answer", "short_abandoned", "brand_new_code", "out_of_opening_hours"], false]);
 const bar = inboundBar(inByMarket.total, cols);
 expect("a row's bar: answered first, then the reasons in column order, shares adding up to 1",
   [bar.map((b) => b.key), Math.round(bar.reduce((a, b) => a + b.share, 0) * 1000) / 1000],
