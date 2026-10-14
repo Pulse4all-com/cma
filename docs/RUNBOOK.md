@@ -73,7 +73,10 @@ gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=3 \
   --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
 ```
 
-QUEUED → WORKING → SUCCESS takes 2 to 4 minutes. On FAILURE, read the cause:
+QUEUED → WORKING → SUCCESS takes 2 to 4 minutes. The build itself appears 2 to 4 minutes after the
+merge (3.5 minutes on 14 October 2026): look again at 4 minutes before you start the trigger by hand
+(README, Release flow), because a manual run next to a late automatic one deploys the same image twice
+(harmless). On FAILURE, read the cause:
 
 ```bash
 id=$(gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="value(id)")

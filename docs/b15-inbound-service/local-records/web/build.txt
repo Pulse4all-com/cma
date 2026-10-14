@@ -3,18 +3,23 @@
 > next build
 
 ▲ Next.js 16.3.8 (Turbopack)
-✓ Running next.config.ts took 26ms
+✓ Running next.config.ts took 32ms
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
 
   Creating an optimized production build ...
-✓ Compiled successfully in 951ms
+✓ Compiled successfully in 13.0s
   Running TypeScript ...
-  Finished TypeScript in 2.4s ...
+  Finished TypeScript in 8.7s ...
   Collecting page data using 3 workers ...
   Generating static pages using 3 workers (0/33) ...
   Generating static pages using 3 workers (8/33) 
   Generating static pages using 3 workers (16/33) 
   Generating static pages using 3 workers (24/33) 
-✓ Generating static pages using 3 workers (33/33) in 341ms
+✓ Generating static pages using 3 workers (33/33) in 348ms
   Finalizing page optimization ...
 
 Route (app)

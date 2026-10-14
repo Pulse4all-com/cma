@@ -223,10 +223,10 @@ expect("one column per reason that occurs, most frequent first, labelled from th
   ["unknown:Unknown:3:true", "brand_new_code:brand_new_code:1:true", "no_available_agent:no_available_agent:1:true", "short_abandoned:Hung up early:1:false"],
   ["brand_new_code:brand_new_code:1:true", "no_available_agent:no_available_agent:1:true", "short_abandoned:short_abandoned:1:true", "unknown:unknown:3:true"]);
 const classes = [...REASON_SERIES, ANSWERED_CLASS, WAITING_CLASS];
-expect("the reasons in the style's series order without Leaf Green, then Neutral; never red, amber or a green among them",
+expect("the reasons in the style's series without Leaf Green, Neutral, Denim last; no red, amber or green",
   [cols.map((c) => c.className), REASON_SERIES, REASON_SERIES.filter((c) => /error|warning|red|green|success/.test(c)), classes.filter((c) => /error|warning|red/.test(c))],
-  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-denim", "bg-p4a-rose"],
-    ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-denim", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted"], [], []],
+  [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt"],
+    ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted", "bg-p4a-denim"], [], []],
   [["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-green", "bg-p4a-denim"],
     ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-green", "bg-p4a-denim", "bg-p4a-rose", "bg-p4a-inkt"], ["bg-p4a-green"], ["bg-p4a-error"]]);
 const bar = inboundBar(inByMarket.total, cols);

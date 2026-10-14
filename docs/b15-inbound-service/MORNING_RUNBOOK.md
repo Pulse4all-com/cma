@@ -101,15 +101,26 @@ Expected: one `0008i` row with today's time and your login; `pulse4all-invest | 
 cd ~/cma && gh pr merge <number> --squash --delete-branch && git switch main -q && git pull -q && git log --oneline -1
 gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
 ```
-Expected: the merge commit; a build for its short SHA, `QUEUED` or `WORKING`, then `SUCCESS` after 2 to 4 minutes (RUNBOOK section 3).
+Expected: the merge commit; then a build for its short SHA, `QUEUED` or `WORKING`, then `SUCCESS` (RUNBOOK section 3). The build appears 2 to 4 minutes after the merge (3.5 minutes on 14 October 2026), so the list may still show the previous build. Run the list again at 4 minutes before you start the trigger by hand: a manual run next to a late automatic one deploys the same image twice (harmless, but a second deploy for nothing).
+
+**Terminal** (only when the list still has no build for the merge's short SHA 4 minutes after the merge)
+```bash
+cd ~/cma && gcloud builds triggers run cma-web-main --project=p4a-cma-prod --region=europe-west4 --sha=$(git rev-parse HEAD)
+```
+Expected: the build's details; the list then shows it for the merge's short SHA (README, Release flow).
 
 ## 5. The new image on dev, the API verifier
 
 **Terminal** (RUNBOOK section 4 with the merge's short SHA, then section 5; inside 07:00 to 22:00 Amsterdam)
 ```bash
-cd ~/cma/web && node verify/api.mjs | tee ../records/0008i-dev-$(date +%F)/verify-api.txt | tail -2; node verify/api.mjs --provoke | tail -1
+cd ~/cma/web && node verify/api.mjs | tee ../records/0008i-dev-$(date +%F)/verify-api.txt | grep -E "^(note|ALL)"; node verify/api.mjs --provoke | tail -1
 ```
-Expected: `ALL 234 PASS` (219 before and 15 of Inbound; the check of a tenant without telephony needs `invest-analyst`, which dev does not have, and says `note`), then `ALL 234 PROVOKED CHECKS FAILED, as they must`. One missed-reason label of dev's Aircall connection is written and put back; with no telephony connection in dev's tenant the five catalog checks say `note` and the counts are 229.
+Expected: three `note` lines and `ALL 228 PASS`, then `ALL 228 PROVOKED CHECKS FAILED, as they must` (as on 14 October 2026, `records/0008i-dev-2026-10-14`). The verifier has 235 checks, 219 from before B15 and 16 of Inbound; dev leaves out 7, one `note` per group:
+- `invest-analyst has no access here: the check of a tenant without sources is left out`: 1 check from before B15; dev has no `invest-analyst`.
+- `no telephony connection in this tenant: the 5 checks of the missed-reason catalog are left out`: dev's tenant has no telephony connection, so no missed-reason label is written.
+- `invest-analyst has no access here: the check of a tenant without telephony is left out`: 1 check of Inbound, for the same reason as the first.
+
+That is 218 checks from before B15 and 10 of Inbound.
 
 ## 6. The browser verifiers against a local mock server
 
