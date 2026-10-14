@@ -33,9 +33,9 @@ Expected: `type cma_db run_migration` prints both functions.
 
 Expected: no change to `cloudbuild.yaml`, `ingest/` or `records/`; in `db/` the new `60` and `61` and the appended block at the end of `02`; no other script that has run in prod changes.
 
-**Terminal** (the pull request's number from the page)
+**Terminal** (the pull request's number from the page; `--force` because the branch was rebuilt on 14 October 2026, so an earlier local copy of it cannot fast-forward)
 ```bash
-cd ~/cma && gh pr checkout <number> && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | grep -E "reports/inbound|telephony/inbound-now|missed-reasons"; echo "build exit: ${PIPESTATUS[0]}"; cd ~/cma
+cd ~/cma && gh pr checkout <number> --force && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | grep -E "reports/inbound|telephony/inbound-now|missed-reasons"; echo "build exit: ${PIPESTATUS[0]}"; cd ~/cma
 ```
 Expected: three route lines (`/api/v1/configuration/sources/[id]/missed-reasons`, `/api/v1/reports/inbound`, `/api/v1/telephony/inbound-now`) and `/reports/inbound`, then `build exit: 0`. **Do not merge yet.**
 
