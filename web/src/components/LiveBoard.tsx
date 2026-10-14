@@ -3,16 +3,17 @@
 /**
  * The Live board's tiles, filters and rows. The rows come from the server (one read per page);
  * the two figures that change by the second, since and worked so far, tick here from the row's
- * instants, as the clock on My day does, so nothing is polled for the tick. The board re-reads
- * the page every 10 seconds while the tab is visible (router.refresh, the fallback until the
- * realtime service; README: Roadmap step 2) and once more when the tab comes back.
+ * instants, as the clock on My day does, so nothing is polled for the tick. The page re-reads
+ * itself every 10 seconds while the tab is visible (LiveRefresh, since addition 0008i one poll for
+ * the whole page) and once more when the tab comes back.
  *
  * Colours come from the flag groups in lib/dashboard, never from a status key or name, and every
  * colour mark sits next to its label. Filters are client-side (G for the group, E for the
- * employer) and survive a refresh: the server's rows change, the choice does not.
+ * employer) and survive a refresh: the server's rows change, the choice does not. Tiles and the
+ * table follow docs/style/Pulse4all-Style.md 7.3 and 7.6 (padding 24px, Muted labels, zebra rows,
+ * a hover row).
  */
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useSyncExternalStore } from "react";
 import type { Copy } from "@/lib/copy";
 import type { Group } from "@/lib/dashboard";
 import type { WorkdayClock } from "@/lib/data";
@@ -44,8 +45,6 @@ export interface BoardRow {
   shift: { label: string | null; published: boolean; flag: Adherence | null };
 }
 
-const REFRESH_MS = 10_000;
-
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
 function subscribe(onTick: () => void) {
   const id = setInterval(onTick, 1000);
@@ -70,37 +69,10 @@ export function LiveBoard({
   copy: Copy;
 }) {
   const t = copy.live;
-  const router = useRouter();
   const now = useSyncExternalStore(subscribe, nowSeconds, serverNow);
   const [group, setGroup] = useState<LiveGroup | "">("");
   const [employer, setEmployer] = useState("");
   const [team, setTeam] = useState("");
-
-  // The poll: every 10 seconds while visible, paused while hidden, once more on return
-  useEffect(() => {
-    let id: ReturnType<typeof setInterval> | null = null;
-    const start = () => {
-      if (id === null) id = setInterval(() => router.refresh(), REFRESH_MS);
-    };
-    const stop = () => {
-      if (id !== null) clearInterval(id);
-      id = null;
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        router.refresh();
-        start();
-      } else {
-        stop();
-      }
-    };
-    if (document.visibilityState === "visible") start();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [router]);
 
   const labels = groupLabels(copy);
   const flagLabel = (f: Adherence): string =>
@@ -134,11 +106,11 @@ export function LiveBoard({
             title={label(tile.group).hint}
             onClick={() => setGroup(group === tile.group ? "" : tile.group)}
             className={[
-              "rounded-card border bg-white p-4 text-left",
+              "rounded-card border bg-white p-6 text-left",
               group === tile.group ? "border-p4a-deepblue" : "border-p4a-border hover:border-p4a-denim",
             ].join(" ")}
           >
-            <p className="flex items-center gap-2 text-caption text-p4a-grey">
+            <p className="flex items-center gap-2 text-small text-p4a-muted">
               {isGroup(tile.group) ? <Swatch group={tile.group} /> : null}
               {label(tile.group).label}
             </p>
@@ -199,7 +171,10 @@ export function LiveBoard({
       {shown.length === 0 ? (
         <p className="text-body text-p4a-muted">{t.empty}</p>
       ) : (
-        <table className="w-full border-collapse text-body">
+        // At 1280 px the nine columns can be wider than the main area: the table scrolls inside its own
+        // box, never the page (as the report tables, addition 0008i)
+        <div className="overflow-x-auto" data-testid="live-people-scroll" role="region" aria-label={t.title} tabIndex={0}>
+        <table className="w-full border-collapse text-body leading-table">
           <thead>
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
               <th className={th}>{t.person}</th>
@@ -215,7 +190,7 @@ export function LiveBoard({
           </thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite">
+              <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                 <td className="whitespace-nowrap px-3">{r.displayName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.teams.map((x) => x.name).join(", ")}</td>
@@ -247,6 +222,7 @@ export function LiveBoard({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

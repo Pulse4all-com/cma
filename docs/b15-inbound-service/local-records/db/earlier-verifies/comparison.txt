@@ -1,0 +1,69 @@
+Every verify 04 to 59 on a copy of the fresh database at 59 and on a copy at 61 (60, the seed rerun 02 and 61 applied),
+run as martin@pulse4all.com with ON_ERROR_STOP=0, outputs masked (uuids, times, dates). Claude Code, 14 October 2026.
+
+DIFFERENT  04_verify.txt
+DIFFERENT  07_verify_time_model.txt
+DIFFERENT  10_verify_corrections.txt
+identical  12_verify_team_people.txt
+DIFFERENT  14_verify_tenant_settings.txt
+identical  16_verify_team_status_time.txt
+identical  18_verify_clock_in_app_links.txt
+identical  20_verify_team_now.txt
+identical  22_verify_teams_skills.txt
+identical  25_verify_roster.txt
+identical  27_verify_configuration.txt
+identical  29_verify_my_profile.txt
+identical  31_verify_ingest_crm_records.txt
+identical  33_verify_intake_core.txt
+identical  35_verify_telephony.txt
+identical  37_verify_commerce.txt
+identical  39_verify_outbox.txt
+identical  41_verify_lead_metrics.txt
+identical  43_verify_messaging.txt
+identical  45_verify_assignment_alerts.txt
+identical  47_verify_workday_window.txt
+identical  49_verify_alert_time_zone.txt
+identical  51_verify_legacy_time_import.txt
+identical  53_verify_sources_configuration.txt
+identical  55_verify_uncounted_lines.txt
+identical  57_verify_commerce_phone_hash.txt
+identical  59_verify_commerce_contact_link.txt
+
+The differences:
+- 04: the new table in the RLS, policy, audit-trigger and table listings; in the audit summary 12 inserts into
+  telephony_missed_reason (6 reasons x 2 tenants), 6 more tenant_setting inserts (3 settings x 2 tenants), and
+  4 more updates each of app_role and app_user (two per tenant), made by the extra run of 02 after 60: each changes only
+  updated_at, as every earlier run of 02 does (the audit rows fall between the end of 60 and the end of 02).
+- 07: the new table in the table listing and the 0008i row in the migration table.
+- 10: the 0008i row in the migration table.
+- 14: the three telephony settings in each Pulse4all tenant's settings (3, 20, 30), verdict PASS in both tenants.
+The ERROR lines of 04 (3), 07 (7) and 12 (1) are the refusals these scripts provoke on purpose, the same at 59 and at 61.
+
+PASS rows at 61 (35, 41, 53 and 55 named by the brief):
+  12_verify_team_people.txt                 4 PASS, 0 FAIL
+  14_verify_tenant_settings.txt             2 PASS, 0 FAIL
+  16_verify_team_status_time.txt            2 PASS, 0 FAIL
+  18_verify_clock_in_app_links.txt          2 PASS, 0 FAIL
+  20_verify_team_now.txt                    2 PASS, 0 FAIL
+  22_verify_teams_skills.txt                2 PASS, 0 FAIL
+  25_verify_roster.txt                      2 PASS, 0 FAIL
+  27_verify_configuration.txt               2 PASS, 0 FAIL
+  29_verify_my_profile.txt                  2 PASS, 0 FAIL
+  31_verify_ingest_crm_records.txt          2 PASS, 0 FAIL
+  33_verify_intake_core.txt                 2 PASS, 0 FAIL
+  35_verify_telephony.txt                   2 PASS, 0 FAIL
+  37_verify_commerce.txt                    2 PASS, 0 FAIL
+  39_verify_outbox.txt                      2 PASS, 0 FAIL
+  41_verify_lead_metrics.txt                2 PASS, 0 FAIL
+  43_verify_messaging.txt                   2 PASS, 0 FAIL
+  45_verify_assignment_alerts.txt           2 PASS, 0 FAIL
+  47_verify_workday_window.txt              2 PASS, 0 FAIL
+  49_verify_alert_time_zone.txt             8 PASS, 0 FAIL
+  51_verify_legacy_time_import.txt          2 PASS, 0 FAIL
+  53_verify_sources_configuration.txt      17 PASS, 0 FAIL
+  55_verify_uncounted_lines.txt            18 PASS, 0 FAIL
+  57_verify_commerce_phone_hash.txt        13 PASS, 0 FAIL
+  59_verify_commerce_contact_link.txt      14 PASS, 0 FAIL
+
+Rerun after review round 1 (14 October 2026: missed_count since the latest callback, check B15 in 61): every output
+above identical to this file's earlier run, at 59 and at 61.

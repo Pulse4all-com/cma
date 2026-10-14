@@ -75,7 +75,7 @@ expect("preview in minutes with a decimal comma stays one cell", exportPreview([
 
 // ---- Sources (addition 0008e) ----------------------------------------------------------------------
 expect("a customer-records connection has four sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields"], ["lines", "tags"]);
-expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags"], []);
+expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags", "missedReasons"], ["lines", "tags"]);
 expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
 expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
 expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);

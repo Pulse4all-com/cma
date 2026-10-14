@@ -9,6 +9,7 @@ import type {
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
+  InboundFigures, InboundNow, InboundService, MissedReason,
 } from "./types";
 import { OUTBOX_LATE_MINUTES, applyConnections, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
@@ -156,6 +157,38 @@ async function readConnections(q: Querier): Promise<SourceConnections> {
   );
   const row = one(r.rows, "connections");
   return { telephony: row.telephony, commerce: row.commerce };
+}
+
+// ---- Inbound service and callbacks (addition 0008i): the rows as the functions answer them ----------
+type InboundDbRow = {
+  group_key: string | null; group_label: string | null; offered: number; answered: number; unanswered: number; waiting: number;
+  answered_within_target: number; service_level_base: number; service_level_pct: string | null; avg_answer_seconds: string | null;
+  p80_answer_seconds: string | null; unanswered_by_reason: Record<string, number>;
+};
+type ReasonDbRow = { source_system: string; code: string; label: string; counts_in_service_level: boolean; needs_callback: boolean };
+type MissedReasonDb = { code: string; label: string; countsInServiceLevel: boolean; needsCallback: boolean; inCatalog: boolean; seenCalls: number; lastSeenAt: string | null };
+type CallbackDbRow = {
+  call_id: string; connection_id: string; source_id: string; line_ref: string | null; line_name: string | null; market: string;
+  reason_code: string; reason_label: string; started_at: Date; missed_count: number; waiting_seconds: number;
+  waiting_business_seconds: number | null; record_url: string | null;
+};
+
+function toFigures(x: Omit<InboundDbRow, "group_key" | "group_label">): InboundFigures {
+  return {
+    offered: x.offered ?? 0, answered: x.answered ?? 0, unanswered: x.unanswered ?? 0, waiting: x.waiting ?? 0,
+    answeredWithinTarget: x.answered_within_target ?? 0, serviceLevelBase: x.service_level_base ?? 0,
+    serviceLevelPct: num(x.service_level_pct), avgAnswerSeconds: num(x.avg_answer_seconds), p80AnswerSeconds: num(x.p80_answer_seconds),
+    unansweredByReason: x.unanswered_by_reason ?? {},
+  };
+}
+
+function emptyFigures(): InboundFigures {
+  return { offered: 0, answered: 0, unanswered: 0, waiting: 0, answeredWithinTarget: 0, serviceLevelBase: 0, serviceLevelPct: null,
+    avgAnswerSeconds: null, p80AnswerSeconds: null, unansweredByReason: {} };
+}
+
+function toReason(x: ReasonDbRow): MissedReason {
+  return { sourceSystem: x.source_system, code: x.code, label: x.label, countsInServiceLevel: x.counts_in_service_level, needsCallback: x.needs_callback };
 }
 
 function ctx(me: Principal): TenantContext {
@@ -1242,6 +1275,11 @@ export const postgresData: CmaData = {
       const connection = await readSource(q, id);
       const config = await readConfig(q, id);
       const cat = await readCatalogs(q, id);
+      // A telephony connection's missed-call reasons and newest call id (addition 0008i)
+      const telephony = connection.kind === "telephony" || (connection.kind === null && connection.heldKinds.includes("telephony"));
+      const reasons = telephony
+        ? (await q.query<{ r: { missedReasons: MissedReasonDb[]; sampleCallId: string | null } }>(`select cma.connection_missed_reasons($1::uuid) as r`, [id])).rows[0]!.r
+        : { missedReasons: [], sampleCallId: null };
       return {
         connection,
         pipelines: config.pipelines.map(toPipeline),
@@ -1252,7 +1290,11 @@ export const postgresData: CmaData = {
         fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property })),
         writeback: config.writeback.map((w) => ({ field: w.field, slot: w.slot, property: w.property, mode: w.mode, enabled: w.enabled })),
         store: config.store,
-        sampleIds: cat.sampleIds ?? {},
+        sampleIds: { ...(cat.sampleIds ?? {}), ...(reasons.sampleCallId ? { call: reasons.sampleCallId } : {}) },
+        missedReasons: reasons.missedReasons.map((x) => ({
+          code: x.code, label: x.label, countsInServiceLevel: x.countsInServiceLevel, needsCallback: x.needsCallback,
+          inCatalog: x.inCatalog, seenCalls: x.seenCalls, lastSeenAt: x.lastSeenAt ? new Date(x.lastSeenAt).toISOString() : null,
+        })),
       };
     });
   },
@@ -1312,6 +1354,11 @@ export const postgresData: CmaData = {
 
   async setSourceTag(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag($1::uuid, $2, $3)`, [id, input.tagRef, input.isCounted]));
+  },
+
+  async setSourceMissedReason(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_missed_reason($1::uuid, $2, $3, $4, $5)`,
+      [id, input.code, input.label, input.countsInServiceLevel, input.needsCallback]));
   },
 
   async setSourceStore(me, id, store): Promise<void> {
@@ -1474,6 +1521,53 @@ export const postgresData: CmaData = {
             and o.status in ('pending', 'failed', 'in_flight') and o.next_attempt_at < now() - make_interval(mins => $1)`,
         [OUTBOX_LATE_MINUTES]);
       return withOutboxPending(r.rows.map((x) => ({ key: x.check_key, description: x.description, total: x.total })), o.rows[0]?.n ?? 0);
+    });
+  },
+
+  async getInboundService(me, range, group): Promise<InboundService> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission first; the connection state, the catalog and the setting follow
+      const r = await q.query<InboundDbRow>(`select * from cma.inbound_service($1::date, $2::date, $3)`, [range.from, range.to, group]);
+      const connections = await readConnections(q);
+      const reasons = (await q.query<ReasonDbRow>(`select * from cma.missed_reasons()`)).rows.map(toReason);
+      const set = await q.query<{ key: string; value: string }>(
+        `select key, value from cma.tenant_settings() where key in ('telephony.service_level_seconds', 'telephony.waiting_max_minutes')`);
+      const setting = (key: string, fallback: number) => Number(set.rows.find((x) => x.key === key)?.value ?? fallback);
+      const rows = r.rows.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toFigures(x) }));
+      const totalRow = r.rows.find((x) => x.group_key === null);
+      return {
+        ...range, group, telephony: connections.telephony, reasons,
+        serviceLevelSeconds: setting("telephony.service_level_seconds", 20), waitingMaxMinutes: setting("telephony.waiting_max_minutes", 30),
+        rows: connections.telephony ? rows : [],
+        total: totalRow ? toFigures(totalRow) : emptyFigures(),
+      };
+    });
+  },
+
+  async getInboundNow(me): Promise<InboundNow> {
+    return withTenant(ctx(me), async (q) => {
+      const t = (await q.query<InboundDbRow & { business_date: string; waiting_now: number; longest_waiting_seconds: number | null;
+        service_level_seconds: number; waiting_max_minutes: number }>(`select * from cma.inbound_today()`)).rows[0]!;
+      // cma.record_url (migration 0008) builds the call's link from the connection's record_url_call template; null without one
+      const cb = await q.query<CallbackDbRow>(
+        `select m.*, cma.record_url(m.connection_id, 'call', m.source_id) as record_url from cma.missed_callbacks() m`);
+      const sum = (await q.query<{ anonymous_count: number; lookback_days: number }>(`select * from cma.missed_callbacks_summary()`)).rows[0]!;
+      const connections = await readConnections(q);
+      return {
+        telephony: connections.telephony,
+        today: connections.telephony ? {
+          ...toFigures(t), date: t.business_date, waitingNow: t.waiting_now, longestWaitingSeconds: t.longest_waiting_seconds,
+          serviceLevelSeconds: t.service_level_seconds, waitingMaxMinutes: t.waiting_max_minutes,
+        } : null,
+        callbacks: connections.telephony ? cb.rows.map((x) => ({
+          callId: x.call_id, connectionId: x.connection_id, sourceId: x.source_id, lineRef: x.line_ref, lineName: x.line_name, market: x.market,
+          reasonCode: x.reason_code, reasonLabel: x.reason_label, startedAt: x.started_at.toISOString(), missedCount: x.missed_count,
+          waitingSeconds: x.waiting_seconds, waitingBusinessSeconds: x.waiting_business_seconds, recordUrl: x.record_url,
+        })) : [],
+        anonymousCount: connections.telephony ? sum.anonymous_count : 0,
+        lookbackDays: sum.lookback_days,
+      };
     });
   },
 

@@ -4,9 +4,12 @@
  * One connection's page (Sources, addition 0008e): the connection itself (name, vendor, kind, account,
  * status, secret names as names only), its non-secret settings with a live preview of a record link,
  * and the sections its kind has: pipelines, forms, call outcomes and fields for customer records; lines
- * and tags for telephony; the store for a shop. Every write goes to a route that calls the database
+ * and tags for telephony, and since addition 0008i its missed-call reasons (label, in the service level,
+ * needs a callback); the store for a shop. Every write goes to a route that calls the database
  * function owning the value, and every answer re-reads the page, so a table shows the database's state.
- * Nothing here names a vendor, a pipeline, a form, a market or an outcome.
+ * Nothing here names a vendor, a pipeline, a form, a market or an outcome. Tables follow
+ * docs/style/Pulse4all-Style.md 7.6 (rows of at least 40px, zebra rows, a hover row; the row's name Semi
+ * Bold as its header, its id Muted).
  *
  * Keyboard: B back to all sources, N renames, S adds a setting, F applies a rule to forms, O to call
  * outcomes, A adds or edits the store; Ctrl+Enter saves a dialog, Esc closes it.
@@ -14,22 +17,25 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceSettings, SourceStore } from "@/lib/data";
+import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore } from "@/lib/data";
 import {
   coerceSettingValue, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
+import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
 import { Badge, Button, Card, Keycap } from "../primitives";
 import { FormRuleDialog, OutcomeRuleDialog } from "./SourceRules";
 import { kindLabel } from "./SourcesList";
-import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } from "./shared";
+import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
 const EXAMPLE_ID = "123456789";
 
 type Row = { id: number; key: string; text: string; isNew: boolean };
 
-export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale }) {
+export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
+  detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+}) {
   const c = copy.configuration;
   const t = copy.configSources;
   const conn = detail.connection;
@@ -39,6 +45,8 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
   const seq = useRef(0);
   const tick = () => ++seq.current;
   const hint = (labelText: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", labelText)} text={text} />;
+  // a header over a narrow column (a checkbox) may wrap, so the missed-reason table fits its card at 1280 px
+  const thWrap = th.replace("whitespace-nowrap", "whitespace-normal");
   const sections = sourceSections(conn.kind, conn.heldKinds);
   const marketCodes = markets.map((m) => m.code);
 
@@ -71,6 +79,10 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
   // switching a line off removes its stored calls (addition 0008f), so it asks first, on Cancel (an irreversible
   // confirmation); the box stays ticked until the save is confirmed; switching on does not ask
   const [lineOff, setLineOff] = useState<SourceLine | null>(null);
+  // a missed-call reason's label (addition 0008i); its two switches save at once from the table
+  const [reasonEdit, setReasonEdit] = useState<{ reason: SourceMissedReason; opened: number } | null>(null);
+  const [reasonLabel, setReasonLabel] = useState("");
+  const [reasonProblem, setReasonProblem] = useState<string | null>(null);
 
   async function rename() {
     const v = name.trim();
@@ -107,6 +119,19 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
     if (lead.length > 60) return setFormProblem(t.ruleLeadSourceProblem);
     const body = { forms: [{ formId: formEdit.form.formId, isCounted: formDraft.isCounted, leadSource: lead || null, market: formDraft.market || null }] };
     if (await save(() => send("PUT", `${base}/forms`, body))) setFormEdit(null);
+  }
+
+  /** One reason as it would be saved: the current label and switches, with the change given */
+  function sendReason(r: SourceMissedReason, change: Partial<Pick<SourceMissedReason, "label" | "countsInServiceLevel" | "needsCallback">>) {
+    const body = { code: r.code, label: r.label, countsInServiceLevel: r.countsInServiceLevel, needsCallback: r.needsCallback, ...change };
+    return save(() => send("PUT", `${base}/missed-reasons`, body));
+  }
+
+  async function saveReasonLabel() {
+    if (!reasonEdit) return;
+    const v = reasonLabel.trim();
+    if (v.length === 0 || v.length > 100) return setReasonProblem(t.reasonLabelProblem);
+    if (await sendReason(reasonEdit.reason, { label: v })) setReasonEdit(null);
   }
 
   async function saveStore() {
@@ -184,13 +209,14 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
       {/* ---- settings ---- */}
       <Card title={t.sectionSettings}>
         <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.settingsIntro} {t.settingsNever}</p>
-        <table className="w-full border-collapse text-body" data-testid="source-settings">
+        {sections.includes("missedReasons") ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="call-link-hint">{t.callLinkHint}</p> : null}
+        <table className="w-full border-collapse text-body leading-table" data-testid="source-settings">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr><th className={`${th} w-72`}>{t.settingKey}</th><th className={th}>{t.settingValue}</th><th className={th}></th></tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id}>
+              <tr key={r.id} className={tr}>
                 <td className={td}>
                   {r.isNew
                     ? <input aria-label={t.settingKey} className={`${field} w-full`} value={r.key} maxLength={60} onChange={(e) => setRows(rows.map((x) => (x.id === r.id ? { ...x, key: e.target.value } : x)))} />
@@ -223,7 +249,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <Card title={t.sectionPipelines}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.pipelinesIntro}</p>
           {detail.pipelines.length === 0 ? <p className="text-body text-p4a-muted">{t.pipelinesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-pipelines">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-pipelines">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.recordType}</th>
@@ -234,16 +260,16 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
               </thead>
               <tbody>
                 {detail.pipelines.map((p) => (
-                  <tr key={`${p.recordType}:${p.pipelineId}`} className={p.isActive ? "" : "text-p4a-muted"}>
+                  <tr key={`${p.recordType}:${p.pipelineId}`} className={`${tr} ${p.isActive ? "" : "text-p4a-muted"}`}>
                     <td className={`${td} text-small`}>{p.recordType}</td>
                     <td className={td}><span className="font-semibold">{p.label}</span> <span className="text-caption text-p4a-muted">({p.pipelineId})</span></td>
                     <td className={td}>
-                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.counted}: ${p.label}`} checked={p.isCounted}
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${p.label}`} checked={p.isCounted}
                         onChange={(e) => save(() => send("PUT", `${base}/pipelines`, { recordType: p.recordType, pipelineId: p.pipelineId, isCounted: e.target.checked, isLead: p.isLead }))} />
                     </td>
                     <td className={td}>
                       {p.recordType === "deal" ? (
-                        <input type="checkbox" className="h-4 w-4" aria-label={`${t.lead}: ${p.label}`} checked={p.isLead}
+                        <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.lead}: ${p.label}`} checked={p.isLead}
                           onChange={(e) => save(() => send("PUT", `${base}/pipelines`, { recordType: p.recordType, pipelineId: p.pipelineId, isCounted: p.isCounted, isLead: e.target.checked }))} />
                       ) : <span className="text-caption text-p4a-muted">{t.leadDealsOnly}</span>}
                     </td>
@@ -263,7 +289,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
             <Button variant="outlined" shortcut="F" data-shortcut="f" disabled={detail.forms.length === 0} onClick={() => setRuleOpen({ kind: "forms", opened: tick() })}>{t.applyRule}</Button>
           </div>
           {detail.forms.length === 0 ? <p className="text-body text-p4a-muted">{t.formsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-forms">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-forms">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.form}</th>
@@ -275,7 +301,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
               </thead>
               <tbody>
                 {detail.forms.map((f) => (
-                  <tr key={f.formId} className={f.isActive ? "" : "text-p4a-muted"} data-form={f.formId}>
+                  <tr key={f.formId} className={`${tr} ${f.isActive ? "" : "text-p4a-muted"}`} data-form={f.formId}>
                     <td className={td}><span className="font-semibold">{f.name}</span> <span className="text-caption text-p4a-muted">({f.formId})</span></td>
                     <td className={td}>{f.isCounted ? <Badge tone="success">{copy.configSources.on}</Badge> : <Badge tone="neutral">{copy.configSources.off}</Badge>}</td>
                     <td className={`${td} text-small`}>{f.leadSource ?? "–"}</td>
@@ -297,16 +323,16 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
             <Button variant="outlined" shortcut="O" data-shortcut="o" disabled={detail.callOutcomes.length === 0} onClick={() => setRuleOpen({ kind: "outcomes", opened: tick() })}>{t.applyRuleOutcomes}</Button>
           </div>
           {detail.callOutcomes.length === 0 ? <p className="text-body text-p4a-muted">{t.outcomesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-outcomes">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-outcomes">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.outcome}</th><th className={th}>{t.connected}{hint(t.connected, t.hintConnected)}</th></tr>
               </thead>
               <tbody>
                 {detail.callOutcomes.map((o) => (
-                  <tr key={o.outcomeRef} className={o.isActive ? "" : "text-p4a-muted"}>
+                  <tr key={o.outcomeRef} className={`${tr} ${o.isActive ? "" : "text-p4a-muted"}`}>
                     <td className={td}><span className="font-semibold">{o.label}</span> <span className="text-caption text-p4a-muted">({o.outcomeRef})</span></td>
                     <td className={td}>
-                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.connected}: ${o.label}`} checked={o.isConnected}
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.connected}: ${o.label}`} checked={o.isConnected}
                         onChange={(e) => save(() => send("PUT", `${base}/call-outcomes`, { outcomes: [{ outcomeRef: o.outcomeRef, isConnected: e.target.checked }] }))} />
                     </td>
                   </tr>
@@ -322,13 +348,13 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <Card title={t.sectionFields}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.fieldsIntro}</p>
           {detail.fields.length === 0 ? <p className="text-body text-p4a-muted">{t.fieldsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-fields">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-fields">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.entity}</th><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}>{t.property}{hint(t.property, t.hintProperty)}</th></tr>
               </thead>
               <tbody>
                 {detail.fields.map((f) => (
-                  <tr key={`${f.entity}:${f.field}:${f.refSystem ?? ""}:${f.slot}`}>
+                  <tr key={`${f.entity}:${f.field}:${f.refSystem ?? ""}:${f.slot}`} className={tr}>
                     <td className={`${td} text-small`}>{f.entity}</td>
                     <td className={`${td} text-small`}>{f.field}{f.refSystem ? ` · ${f.refSystem}` : ""}</td>
                     <td className={`${td} text-right tabular-nums text-small`}>{f.slot}</td>
@@ -342,13 +368,13 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
             <>
               <h3 className="mb-2 mt-6 text-body font-semibold text-p4a-heading">{t.writeback}</h3>
               <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.writebackIntro}</p>
-              <table className="w-full border-collapse text-body" data-testid="source-writeback">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-writeback">
                 <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                   <tr><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}>{t.property}</th><th className={th}>{t.mode}</th><th className={th}>{t.status}</th></tr>
                 </thead>
                 <tbody>
                   {detail.writeback.map((w) => (
-                    <tr key={`${w.field}:${w.slot}`} className={w.enabled ? "" : "text-p4a-muted"}>
+                    <tr key={`${w.field}:${w.slot}`} className={`${tr} ${w.enabled ? "" : "text-p4a-muted"}`}>
                       <td className={`${td} text-small`}>{w.field}</td>
                       <td className={`${td} text-right tabular-nums text-small`}>{w.slot}</td>
                       <td className={`${td} text-small`}>{w.property}</td>
@@ -368,7 +394,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <Card title={t.sectionLines}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.linesIntro}</p>
           {detail.lines.length === 0 ? <p className="text-body text-p4a-muted">{t.linesEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-lines">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-lines">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.line}</th>
@@ -379,7 +405,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
               </thead>
               <tbody>
                 {detail.lines.map((l) => (
-                  <tr key={l.lineRef} className={l.isActive ? "" : "text-p4a-muted"}>
+                  <tr key={l.lineRef} className={`${tr} ${l.isActive ? "" : "text-p4a-muted"}`}>
                     <td className={td}><span className="font-semibold">{l.name}</span> <span className="text-caption text-p4a-muted">({l.lineRef})</span></td>
                     <td className={`${td} tabular-nums text-small`}>{l.digits ?? "–"}</td>
                     <td className={td}>
@@ -390,7 +416,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
                       </select>
                     </td>
                     <td className={td}>
-                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.counted}: ${l.name}`} checked={l.isCounted}
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${l.name}`} checked={l.isCounted}
                         onChange={(e) => e.target.checked
                           ? save(() => send("PUT", `${base}/lines`, { lineRef: l.lineRef, market: l.market, isCounted: true }))
                           : setLineOff(l)} />
@@ -408,22 +434,71 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <Card title={t.sectionTags}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.tagsIntro}</p>
           {detail.tags.length === 0 ? <p className="text-body text-p4a-muted">{t.tagsEmpty}</p> : (
-            <table className="w-full border-collapse text-body" data-testid="source-tags">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-tags">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr><th className={th}>{t.tag}</th><th className={th}>{t.counted}{hint(t.counted, t.hintTagCounted)}</th></tr>
               </thead>
               <tbody>
                 {detail.tags.map((x) => (
-                  <tr key={x.tagRef} className={x.isActive ? "" : "text-p4a-muted"}>
+                  <tr key={x.tagRef} className={`${tr} ${x.isActive ? "" : "text-p4a-muted"}`}>
                     <td className={td}><span className="font-semibold">{x.name}</span> <span className="text-caption text-p4a-muted">({x.tagRef})</span></td>
                     <td className={td}>
-                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.counted}: ${x.name}`} checked={x.isCounted}
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${x.name}`} checked={x.isCounted}
                         onChange={(e) => save(() => send("PUT", `${base}/tags`, { tagRef: x.tagRef, isCounted: e.target.checked }))} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          )}
+        </Card>
+      ) : null}
+
+      {/* ---- missed-call reasons (addition 0008i) ---- */}
+      {sections.includes("missedReasons") ? (
+        <Card title={t.sectionMissedReasons}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.missedReasonsIntro}</p>
+          {detail.missedReasons.length === 0 ? <p className="text-body text-p4a-muted">{t.missedReasonsEmpty}</p> : (
+            // a code can be 60 characters without a break: the table scrolls inside its card, never past it
+            <div className="overflow-x-auto" data-testid="source-missed-reasons-scroll">
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-missed-reasons">
+              <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                <tr>
+                  <th className={th}>{t.reasonCode}{hint(t.reasonCode, t.hintReasonCode)}</th>
+                  <th className={th}>{t.reasonLabel}{hint(t.reasonLabel, t.hintReasonLabel)}</th>
+                  <th className={thWrap}>{t.reasonInServiceLevel}{hint(t.reasonInServiceLevel, t.hintReasonInServiceLevel)}</th>
+                  <th className={thWrap}>{t.reasonNeedsCallback}{hint(t.reasonNeedsCallback, t.hintReasonNeedsCallback)}</th>
+                  <th className={`${th} text-right`}>{t.reasonSeen}{hint(t.reasonSeen, t.hintReasonSeen)}</th>
+                  <th className={th}>{t.reasonLastSeen}</th>
+                  <th className={th}><span className="sr-only">{t.editReason}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.missedReasons.map((r) => (
+                  <tr key={r.code} className={tr}>
+                    <td className={td}>
+                      <span className="text-small">{r.code}</span>
+                      {r.inCatalog ? null : <span className="ml-2"><Badge tone="neutral">{t.reasonDefaults}</Badge></span>}
+                    </td>
+                    <td className={`${td} font-semibold`}>{r.label}</td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.reasonInServiceLevel}: ${r.label}`} checked={r.countsInServiceLevel}
+                        onChange={(e) => sendReason(r, { countsInServiceLevel: e.target.checked })} />
+                    </td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.reasonNeedsCallback}: ${r.label}`} checked={r.needsCallback}
+                        onChange={(e) => sendReason(r, { needsCallback: e.target.checked })} />
+                    </td>
+                    <td className={`${td} tabular-nums text-right`}>{r.seenCalls}</td>
+                    <td className={`${td} whitespace-nowrap tabular-nums text-small`}>{r.lastSeenAt ? fmtDate(dateKeyInZone(r.lastSeenAt, timeZone), locale, "compact") : "–"}</td>
+                    <td className={`${td} text-right`}>
+                      <Button variant="text" size="sm" onClick={() => { setReasonLabel(r.label); setReasonProblem(null); setReasonEdit({ reason: r, opened: tick() }); }}>{c.edit}</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
           )}
         </Card>
       ) : null}
@@ -494,6 +569,18 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <OutcomeRuleDialog key={ruleOpen.opened} outcomes={detail.callOutcomes} copy={copy} busy={state.kind === "saving"}
           onClose={() => setRuleOpen(null)}
           onSave={async (changes) => { if (await save(() => send("PUT", `${base}/call-outcomes`, { outcomes: changes }))) setRuleOpen(null); }} />
+      ) : null}
+
+      {reasonEdit ? (
+        <FormDialog key={reasonEdit.opened} title={`${t.editReason}: ${reasonEdit.reason.code}`} onSave={saveReasonLabel} onClose={() => setReasonEdit(null)} busy={state.kind === "saving"} saveLabel={c.save} cancelLabel={c.cancel}>
+          <label className={label}>
+            {t.reasonLabel}
+            <input className={field} value={reasonLabel} maxLength={100} onChange={(e) => setReasonLabel(e.target.value)} />
+            <span className="font-normal text-caption text-p4a-muted">{t.hintReasonLabel}</span>
+          </label>
+          {reasonProblem ? <p className="text-small text-p4a-error">{reasonProblem}</p> : null}
+          <SaveNote state={state} c={c} />
+        </FormDialog>
       ) : null}
 
       {storeEdit !== null ? (

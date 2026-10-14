@@ -13,10 +13,11 @@
  * change by the second take the instant as an argument, so a tab left open ticks without polling
  * and the server's rows stay equal between two reads of an unchanged team.
  */
-import type { Instant, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
+import type { Instant, InboundToday, MissedCallback, MissedReason, TeamMembership, TeamNowPerson, WorkdayClock } from "./data/types";
 // With its extension, so verify/live.mjs can run this module under Node's type stripping, which
 // resolves no extensionless path (tsconfig: allowImportingTsExtensions)
 import { GROUPS, groupOf, type Group } from "./dashboard.ts";
+import { inboundCalls, unansweredPct, type InboundLine, type TelephonyCallFixture } from "./reports.ts";
 
 export type LiveGroup = Group | "clockedOut" | "notClockedIn";
 
@@ -146,4 +147,88 @@ export function fmtSeconds(s: number): string {
   return h > 0
     ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`
     : `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+// ---- Inbound today and the missed calls not called back (addition 0008i, brief B15) ---------------
+
+/** The tiles of the inbound row, in order; each a figure of cma.inbound_today */
+export type InboundTileKey = "offered" | "answered" | "unansweredPct" | "serviceLevel" | "avgAnswer" | "waitingNow" | "longestWaiting";
+export const INBOUND_TILES: readonly InboundTileKey[] = ["offered", "answered", "unansweredPct", "serviceLevel", "avgAnswer", "waitingNow", "longestWaiting"];
+
+/** A tile's value, before formatting: a count, a percentage (0 to 100), seconds, or nothing yet */
+export type InboundTileValue = { kind: "count"; value: number } | { kind: "pct"; value: number | null } | { kind: "seconds"; value: number | null };
+
+export function inboundTileValue(today: InboundToday, key: InboundTileKey): InboundTileValue {
+  switch (key) {
+    case "offered": return { kind: "count", value: today.offered };
+    case "answered": return { kind: "count", value: today.answered };
+    case "unansweredPct": return { kind: "pct", value: unansweredPct(today) };
+    case "serviceLevel": return { kind: "pct", value: today.serviceLevelPct };
+    case "avgAnswer": return { kind: "seconds", value: today.avgAnswerSeconds };
+    case "waitingNow": return { kind: "count", value: today.waitingNow };
+    case "longestWaiting": return { kind: "seconds", value: today.longestWaitingSeconds };
+  }
+}
+
+/** A telephony call of the fixture with the caller as an opaque key, standing in for the hash (never shown) */
+export type CallerCall = TelephonyCallFixture & { caller: string | null };
+
+/**
+ * The missed calls not called back, as cma.missed_callbacks_of finds them: per caller the latest
+ * missed inbound call whose reason needs a callback, started within the lookback, with no later
+ * callback (an outbound call to the caller, connected or not, or an answered inbound call from them, on
+ * any connection); missed_count the caller's missed calls in the lookback since their latest callback
+ * before that call (missed Monday, called back Monday, missed Tuesday is 1); oldest first. Calls without
+ * a caller are counted apart (anonymous), never listed. businessSeconds gives the office seconds of a
+ * market (null without one), as cma.business_seconds_of.
+ */
+export function missedCallbacks(
+  calls: readonly CallerCall[], lines: readonly InboundLine[], catalog: readonly MissedReason[], tenantZone: string,
+  waitingMaxMinutes: number, lookbackDays: number, nowMs: number,
+  businessSeconds: (market: string, from: Instant, toMs: number) => number | null,
+  recordUrl: (connectionId: string, sourceId: string) => string | null,
+): { rows: MissedCallback[]; anonymousCount: number } {
+  const since = nowMs - Math.max(0, lookbackDays) * 86_400_000;
+  const recent = calls.filter((c) => Date.parse(c.startedAt) >= since);
+  const byId = new Map(recent.map((c) => [`${c.connectionId}/${c.sourceId}`, c]));
+  const missed = inboundCalls(recent, lines, catalog, tenantZone, waitingMaxMinutes, nowMs)
+    .filter((c) => c.reasonCode !== null)
+    .map((c) => {
+      const raw = byId.get(`${c.connectionId}/${c.sourceId}`);
+      return { ...c, caller: raw?.caller ?? null, lineRef: raw?.lineRef ?? null };
+    });
+  const anonymousCount = missed.filter((c) => c.caller === null && c.needsCallback).length;
+  const latest = new Map<string, (typeof missed)[number]>();
+  for (const c of missed) {
+    if (c.caller === null || !c.needsCallback) continue;
+    const cur = latest.get(c.caller);
+    if (!cur || c.startedAt > cur.startedAt || (c.startedAt === cur.startedAt && c.sourceId > cur.sourceId)) latest.set(c.caller, c);
+  }
+  const rows: MissedCallback[] = [];
+  for (const [caller, m] of latest) {
+    const at = Date.parse(m.startedAt);
+    const callbacks = calls.filter((o) => o.caller === caller && !o.deleted && (o.direction === "outbound" || o.answeredAt !== null))
+      .map((o) => Date.parse(o.startedAt));
+    if (callbacks.some((t) => t > at)) continue;
+    const lastCallback = Math.max(-Infinity, ...callbacks.filter((t) => t < at));
+    rows.push({
+      callId: `${m.connectionId}/${m.sourceId}`, connectionId: m.connectionId, sourceId: m.sourceId, lineRef: m.lineRef,
+      lineName: m.lineName, market: m.market, reasonCode: m.reasonCode!, reasonLabel: m.reasonLabel!, startedAt: m.startedAt,
+      missedCount: missed.filter((c) => c.caller === caller && Date.parse(c.startedAt) > lastCallback).length,
+      waitingSeconds: Math.max(0, Math.floor((nowMs - Date.parse(m.startedAt)) / 1000)),
+      waitingBusinessSeconds: m.market === "unknown" ? null : businessSeconds(m.market, m.startedAt, nowMs),
+      recordUrl: recordUrl(m.connectionId, m.sourceId),
+    });
+  }
+  return { rows: sortCallbacks(rows), anonymousCount };
+}
+
+/** Oldest first, then by the call's id, as the database orders them */
+export function sortCallbacks<T extends Pick<MissedCallback, "startedAt" | "sourceId">>(rows: readonly T[]): T[] {
+  return [...rows].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.sourceId.localeCompare(b.sourceId));
+}
+
+/** How long a missed call has waited: office time in the line's market, else (a line without a market) the time since the call */
+export function callbackWaiting(r: Pick<MissedCallback, "waitingBusinessSeconds" | "waitingSeconds">): { kind: "business" | "elapsed"; seconds: number } {
+  return r.waitingBusinessSeconds === null ? { kind: "elapsed", seconds: r.waitingSeconds } : { kind: "business", seconds: r.waitingBusinessSeconds };
 }

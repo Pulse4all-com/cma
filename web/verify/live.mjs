@@ -9,12 +9,19 @@
  * ranking), the tiles (a flag group only when an active status belongs to it, the two day states
  * always, counts before any filter), the filters, the employers, and the two figures that tick
  * (since, worked so far, which stops at the day's end since addition 0008b) from fixed instants,
- * and the window start read from a refused clock-in.
+ * and the window start read from a refused clock-in. Since addition 0008i (brief B15) also the inbound
+ * tiles and the missed calls not called back as 61 proves them in the database: a caller missed twice
+ * as one row, called back by an outbound attempt on another connection and by an answered inbound
+ * call, an earlier outbound call not counting, a later missed call calling nobody back, the lookback, a
+ * reason without a callback, anonymous calls counted and never listed, a waiting call not missed and a
+ * lost one missed, oldest first, office time or the time since the call, the link only with a template,
+ * no caller in any answer, and the times missed counted since the latest callback (61 B15).
  */
 import {
-  LIVE_GROUPS, employersOf, filterRows, fmtSeconds, liveGroupOf, liveRows, secondsSince, teamKeysByUser, teamsOf, tiles, workedSeconds,
-  workdayStartsAt,
+  INBOUND_TILES, LIVE_GROUPS, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
+  secondsSince, sortCallbacks, teamKeysByUser, teamsOf, tiles, workedSeconds, workdayStartsAt,
 } from "../src/lib/live.ts";
+import { personalDataIn } from "../src/lib/reports.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -118,6 +125,77 @@ expect("a refused clock-in gives the window start, nothing else does",
   ["07:00", null, null, null], ["07:00", "25:00", null, null]);
 expect("the format drops the hour below one", [fmtSeconds(5), fmtSeconds(3599), fmtSeconds(3600), fmtSeconds(37230)],
   ["0:05", "59:59", "1:00:00", "10:20:30"], ["0:05", "59:59", "1:00:00", "10:20:31"]);
+
+// ---- inbound today and the missed calls not called back (addition 0008i) -------------------------
+const today = { offered: 28, answered: 17, unanswered: 10, waiting: 1, answeredWithinTarget: 11, serviceLevelBase: 25, serviceLevelPct: 44,
+  avgAnswerSeconds: 17.2, p80AnswerSeconds: 25.8, unansweredByReason: {}, date: "2026-10-14", waitingNow: 1, longestWaitingSeconds: 120,
+  serviceLevelSeconds: 20, waitingMaxMinutes: 30 };
+expect("the inbound tiles in order with their values",
+  INBOUND_TILES.map((k) => inboundTileValue(today, k)),
+  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 37 }, { kind: "pct", value: 44 },
+    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }, { kind: "seconds", value: 120 }],
+  [{ kind: "count", value: 28 }, { kind: "count", value: 17 }, { kind: "pct", value: 35.7 }, { kind: "pct", value: 44 },
+    { kind: "seconds", value: 17.2 }, { kind: "count", value: 1 }, { kind: "seconds", value: 120 }]);
+// The calls of 61 B6 to B10 (invented ids; callers are opaque keys standing in for the hash)
+const NOW = Date.parse("2026-10-14T12:00:00Z");
+const ago = (minutes) => new Date(NOW - minutes * 60_000).toISOString();
+const reasons = [{ sourceSystem: "tel", code: "out_of_opening_hours", label: "Outside hours", countsInServiceLevel: false, needsCallback: false }];
+const lines = [{ connectionId: "c", lineRef: "nl", name: "NL line", market: "NL", zone: "Europe/Amsterdam", isCounted: true }];
+const call = (sourceId, direction, minutesAgo, answerAfter, ended, reason, lineRef, caller, connectionId = "c") => ({
+  sourceId, connectionId, sourceSystem: "tel", direction, startedAt: ago(minutesAgo),
+  answeredAt: answerAfter === null ? null : new Date(NOW - minutesAgo * 60_000 + answerAfter * 1000).toISOString(),
+  endedAt: ended ? new Date(NOW - minutesAgo * 60_000 + 30_000).toISOString() : null, missedReason: reason, lineRef, caller,
+});
+const calls = [
+  call("w-1", "inbound", 5, null, false, null, "nl", "h9"), call("w-2", "inbound", 40, null, false, null, "none", "h10"),
+  call("c1-a", "inbound", 180, null, true, "no_available_agent", "nl", "h1"), call("c1-b", "inbound", 60, null, true, "agents_did_not_answer", "nl", "h1"),
+  call("c2-a", "inbound", 120, null, true, "no_available_agent", "nl", "h2"), call("c2-o", "outbound", 60, null, true, null, "b", "h2", "c-b"),
+  call("c3-a", "inbound", 120, null, true, "no_available_agent", "nl", "h3"), call("c3-b", "inbound", 30, 10, true, null, "nl", "h3"),
+  call("c4-o", "outbound", 300, 6, true, null, "nl", "h4"), call("c4-a", "inbound", 120, null, true, "abandoned_in_ivr", "nl", "h4"),
+  call("c5-a", "inbound", 4 * 1440, null, true, "no_available_agent", "nl", "h5"),
+  call("c6-a", "inbound", 120, null, true, "out_of_opening_hours", "nl", "h6"),
+  call("c7-a", "inbound", 150, null, true, "no_available_agent", "nl", "h7"), call("c7-b", "inbound", 20, null, true, "out_of_opening_hours", "nl", "h7"),
+  call("an-1", "inbound", 120, null, true, "no_available_agent", "nl", null), call("an-2", "inbound", 90, null, true, null, "nl", null),
+  call("an-3", "inbound", 80, null, true, "out_of_opening_hours", "nl", null),
+];
+const business = (market, from, toMs) => (market === "NL" ? Math.floor((toMs - Date.parse(from)) / 1000) : null);
+const url = (connectionId, sourceId) => (sourceId === "c1-b" ? `https://phone.example.com/calls/${sourceId}` : null);
+const cb = (lookback) => missedCallbacks(calls, lines, reasons, "Europe/Amsterdam", 30, lookback, NOW, business, url);
+const three = cb(3);
+expect("a caller missed twice is one row (2), oldest first; a later missed call calls nobody back",
+  three.rows.map((r) => `${r.sourceId}:${r.reasonCode}:${r.missedCount}`),
+  ["c7-a:no_available_agent:2", "c4-a:abandoned_in_ivr:1", "c1-b:agents_did_not_answer:2", "w-2:unknown:1"],
+  ["c1-a:no_available_agent:2", "c4-a:abandoned_in_ivr:1", "c1-b:agents_did_not_answer:1"]);
+expect("called back by an outbound attempt and by an answered call; an earlier outbound call does not count",
+  ["c2-a", "c3-a", "c4-a"].map((id) => three.rows.some((r) => r.sourceId === id)), [false, false, true], [true, true, false]);
+expect("the lookback (3 days out, 5 in) and a reason without a callback",
+  [three.rows.some((r) => r.sourceId === "c5-a"), cb(5).rows.some((r) => r.sourceId === "c5-a"), three.rows.some((r) => r.sourceId === "c6-a")],
+  [false, true, false], [true, true, true]);
+expect("anonymous calls counted and never listed; a waiting call is not missed",
+  [three.anonymousCount, three.rows.some((r) => r.sourceId.startsWith("an-")), three.rows.some((r) => r.sourceId === "w-1")],
+  [2, false, false], [3, true, true]);
+expect("waiting in office time, or the time since the call for a line without a market",
+  three.rows.map((r) => callbackWaiting(r)),
+  [{ kind: "business", seconds: 9000 }, { kind: "business", seconds: 7200 }, { kind: "business", seconds: 3600 }, { kind: "elapsed", seconds: 2400 }],
+  [{ kind: "elapsed", seconds: 9000 }, { kind: "elapsed", seconds: 7200 }, { kind: "elapsed", seconds: 3600 }, { kind: "business", seconds: 2400 }]);
+expect("the link only where the connection has a template",
+  three.rows.map((r) => r.recordUrl !== null), [false, false, true, false], [true, true, true, true]);
+expect("no caller, hash, number or name in an answer",
+  [personalDataIn(three), ["h1", "h4", "h10"].some((h) => JSON.stringify(three).includes(`"${h}"`))], [[], false], [["$.rows"], true]);
+// 61 B15: missed, called back, missed again later counts 1 (by outbound calls, the latest of two, and
+// by an answered inbound call)
+const again = missedCallbacks([...calls,
+  call("d-1", "inbound", 50 * 60, null, true, "no_available_agent", "nl", "h11"), call("d-2", "outbound", 49 * 60, null, true, null, "nl", "h11"),
+  call("d-3", "inbound", 26 * 60, null, true, "no_available_agent", "nl", "h11"), call("d-4", "outbound", 25 * 60, 7, true, null, "nl", "h11"),
+  call("d-5", "inbound", 50, null, true, "agents_did_not_answer", "nl", "h11"),
+  call("e-1", "inbound", 27 * 60, null, true, "no_available_agent", "nl", "h12"), call("e-2", "inbound", 26 * 60, null, true, "abandoned_in_ivr", "nl", "h12"),
+  call("e-3", "inbound", 25 * 60, 9, true, null, "nl", "h12"), call("e-4", "inbound", 45, null, true, "no_available_agent", "nl", "h12"),
+], lines, reasons, "Europe/Amsterdam", 30, 3, NOW, business, url);
+expect("times missed counts the missed calls since the latest callback",
+  again.rows.filter((r) => /^[de]-/.test(r.sourceId)).map((r) => `${r.sourceId}:${r.missedCount}`), ["d-5:1", "e-4:1"], ["d-5:3", "e-4:3"]);
+expect("oldest first, then by the call's id",
+  sortCallbacks([{ startedAt: ago(10), sourceId: "b" }, { startedAt: ago(20), sourceId: "z" }, { startedAt: ago(10), sourceId: "a" }]).map((r) => r.sourceId),
+  ["z", "a", "b"], ["a", "b", "z"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

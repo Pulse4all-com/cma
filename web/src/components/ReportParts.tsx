@@ -1,6 +1,7 @@
 /**
  * Building blocks of the intake reports (B11): the no-permission card, the not-connected state, the
- * grouping switch, the external record link and the Dashboard's Intake row. Server components; the
+ * grouping switches (Speed to lead, and Inbound since 0008i), the external record link and the
+ * Dashboard's Intake row. Server components; the
  * figures arrive from the data layer and lib/reports arranges them. No customer data: ids, counts,
  * codes and links only. Every Intake tile explains itself in a hint, with the text of the matching
  * report header (copy.hints).
@@ -8,9 +9,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { CrmRecordsDay, Intake, SpeedToLeadGroup, SpeedToLeadRow } from "@/lib/data";
+import type { CrmRecordsDay, InboundGroup, Intake, SpeedToLeadGroup, SpeedToLeadRow } from "@/lib/data";
 import {
-  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, intakeTotals, nextGroup, recordsOfType, SPEED_TO_LEAD_GROUPS, speedFigures,
+  fillHint, fmtBusinessMinutes, fmtCount, fmtPct, INBOUND_GROUPS, intakeTotals, nextGroup, nextInboundGroup, recordsOfType, SPEED_TO_LEAD_GROUPS,
+  speedFigures,
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
@@ -51,6 +53,38 @@ export function GroupSwitch({
           <Link
             key={g}
             href={{ pathname: "/reports/speed-to-lead", query: { ...query, group: g } }}
+            aria-current={g === group ? "page" : undefined}
+            data-shortcut={g === next ? "g" : undefined}
+            className={[
+              "inline-flex h-10 items-center rounded-button border px-4 text-body font-semibold",
+              g === group ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue",
+            ].join(" ")}
+          >
+            {labels[g]}
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+/** Day, market, line or hour as links on the Inbound report (addition 0008i); G moves to the next one */
+export function InboundGroupSwitch({
+  group, query, copy,
+}: { group: InboundGroup; query: Record<string, string>; copy: Copy }) {
+  const t = copy.inbound;
+  const labels: Record<InboundGroup, string> = { day: t.day, market: t.market, line: t.line, hour: t.hour };
+  const next = nextInboundGroup(group);
+  return (
+    <div className="flex flex-col gap-2 text-small font-semibold">
+      <span className="flex items-center gap-2">
+        {t.groupBy} <Keycap>G</Keycap>
+      </span>
+      <nav aria-label={t.groupBy} className="flex gap-2">
+        {INBOUND_GROUPS.map((g) => (
+          <Link
+            key={g}
+            href={{ pathname: "/reports/inbound", query: { ...query, group: g } }}
             aria-current={g === group ? "page" : undefined}
             data-shortcut={g === next ? "g" : undefined}
             className={[

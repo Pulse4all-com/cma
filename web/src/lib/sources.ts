@@ -9,11 +9,12 @@ import type { MarketConfig, SourceCallOutcome, SourceForm, SourceKind, SourceSet
 
 export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
 
-export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "lines" | "tags" | "store";
+export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "lines" | "tags" | "missedReasons" | "store";
 
 const SECTIONS: Record<SourceKind, SourceSection[]> = {
   crm: ["pipelines", "forms", "callOutcomes", "fields"],
-  telephony: ["lines", "tags"],
+  // missedReasons: the missed-call reasons of the inbound report and the Live board (addition 0008i)
+  telephony: ["lines", "tags", "missedReasons"],
   commerce: ["store"],
   automation: [],
 };

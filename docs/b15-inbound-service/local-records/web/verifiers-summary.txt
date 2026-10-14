@@ -1,0 +1,22 @@
+copy           exit 0: copy: PASS (1153 keys, en and nl)
+               provoked exit 1: copy: FAIL (5 problems)
+corrections    exit 0: ALL 31 PASS
+               provoked exit 0: ALL 31 PROVOKED CHECKS FAILED, as they must
+csv            exit 0: ALL 16 PASS
+               provoked exit 0: ALL 16 PROVOKED CHECKS FAILED, as they must
+dashboard      exit 0: ALL 17 PASS
+               provoked exit 0: ALL 17 PROVOKED CHECKS FAILED, as they must
+live           exit 0: ALL 39 PASS
+               provoked exit 0: ALL 39 PROVOKED CHECKS FAILED, as they must
+team           exit 0: team: PASS (26 checks)
+               provoked exit 0: team: ALL 26 PROVOKED CHECKS FAILED, as they must
+roster         exit 0: roster: PASS (31 checks)
+               provoked exit 0: roster: ALL 31 PROVOKED CHECKS FAILED, as they must
+configuration  exit 0: ALL 92 PASS
+               provoked exit 0: ALL 92 PROVOKED CHECKS FAILED, as they must
+messages       exit 0: ALL 24 PASS
+               provoked exit 0: ALL 24 PROVOKED CHECKS FAILED, as they must
+import         exit 0: ALL 23 PASS
+               provoked exit 0: ALL 23 PROVOKED CHECKS FAILED, as they must
+reports        exit 0: ALL 46 PASS
+               provoked exit 0: ALL 46 PROVOKED CHECKS FAILED, as they must

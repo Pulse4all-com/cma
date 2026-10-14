@@ -851,6 +851,108 @@ export interface CrmRecordsDay {
   closedNow: number;
 }
 
+// ---- Inbound service and callbacks (addition 0008i; brief B15, 14 October 2026). Ids, codes, line names
+// and counts only: no number, no name and never the caller's hash reach these shapes.
+
+/** How cma.inbound_service groups its calls */
+export type InboundGroup = "day" | "market" | "line" | "hour";
+
+/** A missed-reason code as the tenant's catalog holds it (cma.missed_reasons); a code without a row counts with the defaults */
+export interface MissedReason {
+  sourceSystem: string;
+  code: string;
+  label: string;
+  countsInServiceLevel: boolean;
+  needsCallback: boolean;
+}
+
+/** The measures of a set of inbound calls (one group, the total, or today) */
+export interface InboundFigures {
+  /** Inbound calls on counted lines */
+  offered: number;
+  answered: number;
+  /** Not answered and no longer waiting */
+  unanswered: number;
+  /** No outcome yet: not answered, not ended, started within telephony.waiting_max_minutes */
+  waiting: number;
+  answeredWithinTarget: number;
+  /** The service level's denominator: answered calls and unanswered calls whose reason counts */
+  serviceLevelBase: number;
+  /** 0 to 100 with one decimal; null without a call in the denominator */
+  serviceLevelPct: number | null;
+  avgAnswerSeconds: number | null;
+  p80AnswerSeconds: number | null;
+  /** Unanswered calls per reason code ("unknown" for a call without a reason) */
+  unansweredByReason: Record<string, number>;
+}
+
+/** One group of cma.inbound_service */
+export interface InboundServiceRow extends InboundFigures {
+  /** The business date, the market code ("unknown" without one), connection:line ref, or the hour 00 to 23 */
+  groupKey: string;
+  /** The date, the market, the line's name, or the hour; null for a call without a line */
+  groupLabel: string | null;
+}
+
+export interface InboundService {
+  from: DateKey;
+  to: DateKey;
+  group: InboundGroup;
+  /** False when the tenant has no telephony connected: the screen says so, never 0 */
+  telephony: boolean;
+  /** telephony.service_level_seconds and telephony.waiting_max_minutes, for the hints */
+  serviceLevelSeconds: number;
+  waitingMaxMinutes: number;
+  /** The tenant's catalog, for the labels of the reason columns */
+  reasons: MissedReason[];
+  rows: InboundServiceRow[];
+  /** Over every call of the period (the database's own total, not a sum of the groups) */
+  total: InboundFigures;
+}
+
+/** Today's inbound in the tenant's zone, for the Live board (cma.inbound_today) */
+export interface InboundToday extends InboundFigures {
+  date: DateKey;
+  waitingNow: number;
+  /** Seconds the longest waiting call has waited; null when nobody waits */
+  longestWaitingSeconds: number | null;
+  serviceLevelSeconds: number;
+  waitingMaxMinutes: number;
+}
+
+/** A caller's latest missed inbound call not called back (cma.missed_callbacks); never the caller's hash */
+export interface MissedCallback {
+  callId: string;
+  connectionId: string;
+  /** The call's id in the telephony system */
+  sourceId: string;
+  lineRef: string | null;
+  lineName: string | null;
+  /** A catalog market code, or "unknown" */
+  market: string;
+  reasonCode: string;
+  reasonLabel: string;
+  startedAt: Instant;
+  /** The caller's missed calls in the lookback */
+  missedCount: number;
+  waitingSeconds: number;
+  /** Office seconds since the call in the line's market; null for a line without a market */
+  waitingBusinessSeconds: number | null;
+  /** The call in its own system, from the connection's record_url_call template; null without one */
+  recordUrl: string | null;
+}
+
+/** The Live board's inbound part (monitoring.live) */
+export interface InboundNow {
+  /** False when the tenant has no telephony connected: the board says so, never 0 */
+  telephony: boolean;
+  today: InboundToday | null;
+  callbacks: MissedCallback[];
+  /** Missed calls without a caller's hash in the lookback that need a callback: counted, never listed */
+  anonymousCount: number;
+  lookbackDays: number;
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -939,6 +1041,30 @@ export interface SourceTag {
   isActive: boolean;
 }
 
+/**
+ * A missed-call reason of a telephony connection (addition 0008i): a code the connection has seen on
+ * its unanswered inbound calls or a catalog row of its adapter, with the label and switches in force
+ * (the catalog's, or the defaults: the code as label, both switches on)
+ */
+export interface SourceMissedReason {
+  code: string;
+  label: string;
+  countsInServiceLevel: boolean;
+  needsCallback: boolean;
+  /** False while only the defaults apply: nobody saved the code yet */
+  inCatalog: boolean;
+  /** Unanswered inbound calls of this connection with the code */
+  seenCalls: number;
+  lastSeenAt: Instant | null;
+}
+
+export interface SourceMissedReasonInput {
+  code: string;
+  label: string;
+  countsInServiceLevel: boolean;
+  needsCallback: boolean;
+}
+
 /** Which source property feeds which canonical field (read only in this increment) */
 export interface SourceField {
   entity: string;
@@ -976,8 +1102,13 @@ export interface SourceDetail {
   fields: SourceField[];
   writeback: SourceWriteback[];
   store: SourceStore | null;
-  /** The newest record id per record type, for the record link preview (ids only) */
+  /**
+   * The newest record id per record type, for the record link preview (ids only); a telephony
+   * connection's newest call id under "call" (addition 0008i), for record_url_call
+   */
   sampleIds: Record<string, string>;
+  /** A telephony connection's missed-call reasons (addition 0008i); empty for another kind */
+  missedReasons: SourceMissedReason[];
 }
 
 /** The connection's own fields a person may change; each only when given */
@@ -1301,6 +1432,8 @@ export interface CmaData {
   setSourceCallOutcomes(me: Principal, id: string, changes: SourceOutcomeChange[]): Promise<void>;
   setSourceLine(me: Principal, id: string, input: SourceLineInput): Promise<void>;
   setSourceTag(me: Principal, id: string, input: SourceTagInput): Promise<void>;
+  /** One missed-call reason of a telephony connection (set_telephony_missed_reason, 0008i); another kind of connection CMA04 */
+  setSourceMissedReason(me: Principal, id: string, input: SourceMissedReasonInput): Promise<void>;
   /** The connection's store (upsert_commerce_store); a handle another store holds CMA03 */
   setSourceStore(me: Principal, id: string, store: SourceStore): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
@@ -1339,4 +1472,10 @@ export interface CmaData {
   getDataQuality(me: Principal): Promise<DataQualityCheck[]>;
   /** CRM records created per business date, type, market and pipeline. Needs performance.team */
   getCrmRecordsPerDay(me: Principal, range: HoursRange): Promise<CrmRecordsDay[]>;
+
+  // ---- Inbound service and callbacks (addition 0008i): the database checks the permission on every call (CMA06)
+  /** Inbound calls per group with the total and the catalog. Needs reports.view or performance.team; at most 92 days */
+  getInboundService(me: Principal, range: HoursRange, group: InboundGroup): Promise<InboundService>;
+  /** Today's inbound and the missed calls not called back, for the Live board. Needs monitoring.live */
+  getInboundNow(me: Principal): Promise<InboundNow>;
 }

@@ -52,6 +52,8 @@
   --text-caption--line-height: 1.4;
   --text-clock: 56px;
   --text-clock--line-height: 1.1;
+  /* inside tables and data grids (section 3.3, dense screens); prose keeps 1.6 */
+  --leading-table: 1.4;
 
   /* shape */
   --radius-button: 4px;

@@ -43,7 +43,7 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
-      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} copy={copy} locale={me.locale} />
+      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} copy={copy} locale={me.locale} timeZone={me.timeZone} />
     </ConfigurationPage>
   );
 }

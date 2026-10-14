@@ -1,0 +1,35 @@
+DO
+BEGIN
+SET
+DO
+psql:db/60_inbound_service.sql:102: NOTICE:  relation "telephony_missed_reason" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:db/60_inbound_service.sql:108: NOTICE:  policy "tenant_readonly" for relation "cma.telephony_missed_reason" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+COMMENT
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET
