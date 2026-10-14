@@ -4,7 +4,8 @@
  * Exports: the five CSV settings of 0003b as choices, each saved at once, with a preview line in
  * the chosen format, and the two minute settings (adherence tolerance, the forgotten clock-out
  * grace); since addition 0008j also the seconds of talk time from which an outbound call is connected,
- * which the telephony connection's Sources page links to. Use default resets a value to the catalog's.
+ * which the telephony connection's Sources page links to; since addition 0008l the two invitation settings
+ * (how many days a link works, the email domains invitations may go to). Use default resets a value to the catalog's.
  * Every value goes through /api/v1/configuration/settings and is validated by the database against
  * its catalog.
  */
@@ -15,6 +16,7 @@ import {
   EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
   type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
 } from "@/lib/configuration";
+import { normaliseDomains, parseValidDays } from "@/lib/invitations";
 import { Button } from "../primitives";
 import { SaveNote, field, label, send, useSave } from "./shared";
 
@@ -23,6 +25,8 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const t = copy.configExports;
   const { state, save } = useSave(c);
   const [minutes, setMinutes] = useState<Partial<Record<MinuteSettingKey | SecondSettingKey, string>>>({});
+  const [days, setDays] = useState<string | undefined>(undefined);
+  const [domains, setDomains] = useState<string | undefined>(undefined);
   const valueOf = (key: string) => settings.find((s) => s.key === key);
   const preview = exportPreview(settings, {
     date: copy.exports.date, person: copy.exports.person, worked: copy.exports.worked, bom: t.values_true, noBom: t.values_false,
@@ -52,6 +56,28 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
     await save(() => send("PUT", "/api/v1/configuration/settings", { key, value: String(n) }));
     setMinutes((prev) => { const next = { ...prev }; delete next[key]; return next; });
   }
+
+  async function saveDays() {
+    if (days === undefined) return;
+    const n = parseValidDays(days);
+    if (n === null || String(n) === valueOf("auth.invitation_valid_days")?.value) return;
+    await save(() => send("PUT", "/api/v1/configuration/settings", { key: "auth.invitation_valid_days", value: String(n) }));
+    setDays(undefined);
+  }
+
+  async function saveDomains() {
+    if (domains === undefined) return;
+    const v = normaliseDomains(domains);
+    if (v === null || v === (valueOf("auth.invitation_email_domains")?.value ?? "")) return;
+    // an empty list is the catalog's default (no domain check): reset rather than store an empty value
+    await save(() => send("PUT", "/api/v1/configuration/settings", { key: "auth.invitation_email_domains", value: v === "" ? null : v }));
+    setDomains(undefined);
+  }
+
+  const daysSetting = valueOf("auth.invitation_valid_days");
+  const domainsSetting = valueOf("auth.invitation_email_domains");
+  const badDays = days !== undefined && parseValidDays(days) === null;
+  const badDomains = domains !== undefined && normaliseDomains(domains) === null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -118,6 +144,39 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
               </label>
             );
           })}
+        </div>
+      </section>
+
+      <section data-testid="invitation-settings">
+        <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.invitations}</h2>
+        <div className="grid grid-cols-2 gap-6">
+          <label id={settingAnchor("auth.invitation_valid_days")} className={`${label} scroll-mt-24`}>
+            <span>
+              {t.auth_invitation_valid_days}
+              {daysSetting?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+            </span>
+            <span className="flex gap-2">
+              <input className={`${field} w-32 tabular-nums ${badDays ? "border-p4a-error" : ""}`} inputMode="numeric"
+                value={days ?? daysSetting?.value ?? ""} onChange={(e) => setDays(e.target.value)} onBlur={saveDays}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+              {daysSetting && !daysSetting.isDefault ? (
+                <Button variant="text" size="md" onClick={() => save(() => send("PUT", "/api/v1/configuration/settings", { key: "auth.invitation_valid_days", value: null }))}>
+                  {t.resetToDefault}
+                </Button>
+              ) : null}
+            </span>
+            <span className="font-normal text-caption text-p4a-muted">{t.daysHint}</span>
+          </label>
+          <label id={settingAnchor("auth.invitation_email_domains")} className={`${label} scroll-mt-24`}>
+            <span>
+              {t.auth_invitation_email_domains}
+              {domainsSetting?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+            </span>
+            <input className={`${field} ${badDomains ? "border-p4a-error" : ""}`} maxLength={100} placeholder="example.com"
+              value={domains ?? domainsSetting?.value ?? ""} onChange={(e) => setDomains(e.target.value)} onBlur={saveDomains}
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+            <span className={`font-normal text-caption ${badDomains ? "text-p4a-error" : "text-p4a-muted"}`}>{badDomains ? t.domainsProblem : t.domainsHint}</span>
+          </label>
         </div>
       </section>
     </div>

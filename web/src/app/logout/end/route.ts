@@ -1,20 +1,23 @@
 import { getAccess } from "@/lib/auth/identity";
+import { config } from "@/lib/config";
 import { data } from "@/lib/data";
+import { logoutLocation } from "@/lib/logout";
+import { isSameOriginPost } from "@/lib/origin";
 import { dateKeyInZone } from "@/lib/time";
 
 /**
- * POST /logout/end: end the caller's workday if it is open, then send the
- * browser to IAP's cookie-clearing address. IAP clears its cookie and lands on
- * /logout/done, which asks for a fresh login (verified parameter:
- * gcp-iap-mode=CLEAR_LOGIN_COOKIE, docs "Using query parameters and headers").
+ * POST /logout/end: end the caller's workday if it is open, then send the browser to IAP's cookie-clearing
+ * address (verified parameter: gcp-iap-mode=CLEAR_LOGIN_COOKIE, docs "Using query parameters and headers").
+ * Where IAP lands afterwards follows CMA_LOGOUT_TARGET (src/lib/logout.ts): /logout/done (legacy, the
+ * default) or the static signed-out page outside IAP.
  */
 export async function POST(request: Request) {
   // Same-origin only: a cross-site form must not be able to end someone's day
-  const site = request.headers.get("sec-fetch-site");
-  const origin = request.headers.get("origin");
-  const host = request.headers.get("host");
-  const sameOrigin = site === "same-origin" || (origin !== null && host !== null && new URL(origin).host === host);
-  if (!sameOrigin) return new Response("Forbidden", { status: 403 });
+  if (!isSameOriginPost({
+    secFetchSite: request.headers.get("sec-fetch-site"),
+    origin: request.headers.get("origin"),
+    host: request.headers.get("host"),
+  })) return new Response("Forbidden", { status: 403 });
 
   const access = await getAccess();
   if (access?.kind === "granted") {
@@ -27,6 +30,6 @@ export async function POST(request: Request) {
   // load balancer, not the public domain, so an absolute URL would be wrong
   return new Response(null, {
     status: 303,
-    headers: { Location: "/logout/done?gcp-iap-mode=CLEAR_LOGIN_COOKIE" },
+    headers: { Location: logoutLocation(config.logoutTarget) },
   });
 }

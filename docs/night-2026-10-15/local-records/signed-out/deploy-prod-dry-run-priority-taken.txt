@@ -1,0 +1,7 @@
+== signed-out page, prod (p4a-cma-prod); dry run: nothing in Google Cloud is changed
+   local files in <scratch>/home/signed-out-prod-20261014T211446Z
+a. storage.publicAccessPrevention is not enforced for p4a-cma-prod (effective policy: not set)
+e. cma-web-urlmap exported to <scratch>/home/cma-web-urlmap-20261014T211446Z.yaml. To put it back as it was:
+   gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<scratch>/home/cma-web-urlmap-20261014T211446Z.yaml --quiet
+e. STOP: path matcher web already has a route rule with priority 1 or 2; check the map by hand
+exit 1 (calls that change something: 0)

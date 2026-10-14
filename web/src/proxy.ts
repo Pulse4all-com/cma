@@ -17,6 +17,11 @@
  * client sends can impersonate anyone; the app only ever sees what this file
  * set. Static assets and the health route are not gated here (IAP in front of
  * the load balancer still gates them).
+ *
+ * /signed-out (README, Authentication; docs/signed-out) is never served by cma-web: the load balancer
+ * sends it to the public bucket, and its IAP-clearing form to IAP. The matcher has no exception for it,
+ * so a request for it that reaches cma-web gets the same check as any page (no valid token, 401) and,
+ * with a valid one, a 404 (web/verify/signed-out.mjs proves both from this file and the app's routes).
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { config as appConfig } from "@/lib/config";

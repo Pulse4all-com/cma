@@ -1,0 +1,5 @@
+== signed-out page, prod (p4a-cma-prod); dry run: nothing in Google Cloud is changed
+   local files in <scratch>/home/signed-out-prod-20261014T211446Z
+a. STOP: the organisation policy storage.publicAccessPrevention is enforced for p4a-cma-prod, so the bucket cannot be
+   public. Nothing was created or changed. A folder or project exception is a decision for Martin (README, Open decisions).
+exit 1 (calls that change something: 0)

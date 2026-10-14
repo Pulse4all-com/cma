@@ -7,7 +7,8 @@
  * database's answer and never a guess.
  *
  * Keyboard: Down or Up enters the table, the arrows move between rows, Enter opens the row's
- * editor, A adds a person, I shows or hides inactive people, T filters by team, Esc closes.
+ * editor, A adds a person, V invites someone by email (addition 0008l), I shows or hides inactive
+ * people, T filters by team, Esc closes.
  */
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -15,6 +16,7 @@ import type { Copy } from "@/lib/copy";
 import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import { filterPeople, linkedCount, linkedLabel, skillLabel } from "@/lib/team";
 import { HeaderHint } from "./HeaderHint";
+import { InviteDialog, type InviteContext } from "./InviteDialog";
 import { PersonDialog, type PersonDialogTarget } from "./PersonDialog";
 import { Badge, Button, Keycap } from "./primitives";
 
@@ -28,6 +30,7 @@ export function TeamDirectory({
   maySetSkills,
   defaultLoginSystem,
   linked,
+  invite,
   copy,
 }: {
   people: DirectoryPerson[];
@@ -41,6 +44,8 @@ export function TeamDirectory({
   defaultLoginSystem: string;
   /** Linked accounts (addition 0008e) */
   linked: LinkedAccounts;
+  /** What the Invite dialog needs (addition 0008l) */
+  invite: InviteContext;
   copy: Copy;
 }) {
   const t = copy.team;
@@ -49,6 +54,7 @@ export function TeamDirectory({
   const [team, setTeam] = useState("");
   const [target, setTarget] = useState<PersonDialogTarget | null>(null);
   const [opened, setOpened] = useState(0);
+  const [inviting, setInviting] = useState(0);
   const body = useRef<HTMLTableSectionElement>(null);
   const opener = useRef<HTMLElement | null>(null);
 
@@ -124,6 +130,12 @@ export function TeamDirectory({
           <span className="pb-2 text-caption text-p4a-grey">
             {t.peopleShown.replace("{n}", String(rows.length)).replace("{total}", String(people.length))}
           </span>
+          <Button variant="outlined" shortcut="V" data-shortcut="v" data-testid="invite-open" onClick={() => {
+            opener.current = document.activeElement as HTMLElement | null;
+            setInviting((n) => n + 1);
+          }}>
+            {copy.invitations.invite}
+          </Button>
           <Button variant="primary" shortcut="A" data-shortcut="a" onClick={() => open({ mode: "add" })}>
             {t.add}
           </Button>
@@ -219,6 +231,23 @@ export function TeamDirectory({
           </tbody>
         </table>
       )}
+
+      {inviting > 0 ? (
+        <InviteDialog
+          key={`invite-${inviting}`}
+          mode={{ kind: "create" }}
+          context={invite}
+          copy={copy}
+          onClose={() => {
+            setInviting(0);
+            requestAnimationFrame(() => opener.current?.focus());
+          }}
+          onDone={() => {
+            setInviting(0);
+            router.refresh();
+          }}
+        />
+      ) : null}
 
       {target ? (
         <PersonDialog

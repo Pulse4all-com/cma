@@ -21,8 +21,10 @@
  * agent (addition 0008j) for seven identities: the per-agent page only for performance.team (the reader,
  * with reports.view alone, sees Calls and not Calls per agent), the keycaps K, N and G, the tag table and
  * the per-agent table with two rows opened inside their cards, Enter opening a row and Down moving to the
- * next person, the right-most header's hint inside the viewport, the not-connected state. Saves
- * screenshots under records/ for the release note.
+ * next person, the right-most header's hint inside the viewport, the not-connected state. Invitations
+ * (addition 0008l): People with the Invitations section and the Invite dialog for the admin and the
+ * manager (only the roles each may give), and /invite/<token> in its four states for an account that is no
+ * person yet, plus a sign-in of another business line. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -31,7 +33,8 @@
  *       lets the Calls tag table and the per-agent table spill out of theirs,
  *       widens the missed-reason table past its card on Sources,
  *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
- *       irreversible confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
+ *       irreversible confirmation (unticking the line's box) and Cancel on End workday, lets the invitations
+ *       table spill out of its card and expects the expired invitation open, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -490,6 +493,98 @@ async function expectIntakeConfiguration() {
   }
 }
 
+// Invitations (addition 0008l, 15 October 2026): People at 1280 px as the admin with the Invitations section
+// below the people, its table inside its card, the keycaps V (Invite) and A (Add a person); V opens the
+// dialog inside the viewport with every role the admin may give, and the manager's dialog offers only the
+// roles it may grant; /invite/<token> for an account that is no person yet (the mock's invitee identities)
+// in its four states, open (Accept focused), another account, expired and invalid, each one card inside
+// the viewport without horizontal scrolling, and a person of the main tenant opening the second tenant's link
+// (other_tenant). --provoke lets the invitations table spill out of its card and opens the expired link
+// expecting it open
+async function expectInvitations() {
+  const TOKENS = { open: "mock-open-invitation".padEnd(43, "0"), expired: "mock-expired-invitation".padEnd(43, "0") };
+  for (const subject of ["admin", "manager"]) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/team/people");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate((spill) => {
+      const section = document.querySelector('[data-testid="invitations"]');
+      const table = section?.querySelector("table");
+      if (spill && table) table.setAttribute("style", "min-width: 2400px");
+      const main = document.querySelector("main");
+      const edge = section ? section.getBoundingClientRect().right - parseFloat(getComputedStyle(section).paddingRight) : 0;
+      return {
+        section: !!section,
+        rows: section?.querySelectorAll('[data-testid="invitation-row"]').length ?? 0,
+        tableFits: !table || (table.getBoundingClientRect().right <= edge + 0.5 && table.parentElement.scrollWidth <= table.parentElement.clientWidth),
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        mainX: main ? main.scrollWidth - main.clientWidth : -1,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+      };
+    }, provoke && subject === "admin");
+    if (!m.section) problems.push(`${subject} /team/people: the Invitations section is missing`);
+    if (m.rows === 0) problems.push(`${subject} /team/people: no invitation listed`);
+    if (!m.tableFits) problems.push(`${subject} /team/people: the invitations table does not fit its card at 1280`);
+    if (m.scrollX || m.mainX > 0) problems.push(`${subject} /team/people: scrolls sideways at 1280`);
+    for (const k of ["V", "A"]) if (!m.keycaps.includes(k)) problems.push(`${subject} /team/people: keycap ${k} missing`);
+    await p.locator('[data-testid="invitations"]').scrollIntoViewIfNeeded();
+    await p.screenshot({ path: `${outDir}/${subject}-people-invitations.png` });
+    await p.keyboard.press("v");
+    await p.locator('[data-testid="invite-dialog"][open]').waitFor({ timeout: 5000 }).catch(() => undefined);
+    const d = await p.evaluate(() => {
+      const dialog = document.querySelector('[data-testid="invite-dialog"][open]');
+      if (!dialog) return null;
+      const r = dialog.getBoundingClientRect();
+      return {
+        inside: r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight + 0.5 && r.right <= window.innerWidth + 0.5,
+        roles: [...dialog.querySelectorAll('[data-testid="invite-role"] option')].map((o) => o.value).filter(Boolean),
+        focus: document.activeElement?.getAttribute("type"),
+      };
+    });
+    const wantRoles = subject === "admin" ? ["agent", "analytics", "supervisor", "manager", "admin"] : ["agent", "analytics", "supervisor"];
+    if (!d) problems.push(`${subject} /team/people: V does not open the Invite dialog`);
+    else {
+      if (!d.inside) problems.push(`${subject} Invite dialog: not inside the viewport at 1280 x 800`);
+      if (JSON.stringify(d.roles) !== JSON.stringify(wantRoles)) problems.push(`${subject} Invite dialog: roles ${d.roles.join(",")}, wanted ${wantRoles.join(",")}`);
+      if (d.focus !== "email") problems.push(`${subject} Invite dialog: does not open on the email field`);
+    }
+    await p.screenshot({ path: `${outDir}/${subject}-invite-dialog.png` });
+    await ctx.close();
+  }
+  const states = [
+    ["invitee-one", TOKENS.open, "open"],
+    ["invitee-other", TOKENS.open, "wrong_account"],
+    ["invitee-one", TOKENS.expired, provoke ? "open" : "expired"],
+    ["invitee-one", "mock-no-such-invitation".padEnd(43, "0"), "invalid"],
+    // a person of the main tenant opening the second tenant's link: no second business line without a tenant picker
+    ["admin", "mock-tenant-two-invitation".padEnd(43, "0"), "other_tenant"],
+  ];
+  for (const [subject, token, state] of states) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(`${BASE}/invite/${token}`);
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate(() => {
+      const card = document.querySelector('[data-testid^="invite-"]');
+      const r = card?.getBoundingClientRect();
+      return {
+        state: card?.getAttribute("data-testid")?.slice("invite-".length) ?? null,
+        inside: !!r && r.top >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth,
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        focus: document.activeElement?.tagName === "BUTTON" ? document.activeElement.textContent?.trim() : null,
+        rail: !!document.querySelector("nav"),
+      };
+    });
+    if (m.state !== state) problems.push(`/invite as ${subject}: shows ${m.state}, wanted ${state}`);
+    if (!m.inside || m.scrollX) problems.push(`/invite ${state}: the card is not inside the viewport at 1280`);
+    if (m.rail) problems.push(`/invite ${state}: shows the Workspace's navigation to someone who is no person yet`);
+    if (state === "open" && !(m.focus ?? "").startsWith("Accept")) problems.push("/invite open: Accept is not focused");
+    await p.screenshot({ path: `${outDir}/invite-${state}.png` });
+    await ctx.close();
+  }
+}
+
 // Irreversible confirmations (B9a.1, 13 October 2026; README Decision log): a confirmation that removes data
 // or changes it for good opens on Cancel, so Enter at open cancels; its confirm button is the destructive
 // secondary style (the error colour, outlined) without a keycap. On Lines, as the admin: Enter at open does
@@ -630,11 +725,12 @@ await expectReports();
 await expectLiveBoard();
 await expectCalls();
 await expectIntakeConfiguration();
+await expectInvitations();
 await expectIrreversibleConfirmations();
 if (provoke) await expectShell(1279, 800);
 else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Sources (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

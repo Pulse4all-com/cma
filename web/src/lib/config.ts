@@ -6,6 +6,8 @@
  * switched on explicitly in the Cloud Run service (done for this increment only,
  * while no real data is involved).
  */
+import { parseLogoutTarget } from "@/lib/logout";
+
 export type AuthMode = "iap" | "mock";
 export type DataMode = "api" | "mock";
 
@@ -25,6 +27,11 @@ export const config = {
   iapJwksUrl: process.env.IAP_JWKS_URL || undefined,
   /** Default copy language until the per-user preference exists (handover open item) */
   defaultLocale: pick("CMA_DEFAULT_LOCALE", ["en", "nl"] as const, "en"),
+  /**
+   * Where Log out lands (src/lib/logout.ts): legacy (default) or signed-out, the static page outside IAP.
+   * Switched by the build's _LOGOUT_TARGET only after docs/signed-out/deploy.sh has run and been tested
+   */
+  logoutTarget: parseLogoutTarget(process.env.CMA_LOGOUT_TARGET),
   /** Git short SHA injected by Cloud Build, "dev" locally */
   version: process.env.CMA_VERSION ?? "dev",
 } as const;

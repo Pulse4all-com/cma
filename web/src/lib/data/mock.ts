@@ -16,7 +16,10 @@ import type {
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
+  Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
 } from "./types";
+import { createHash, randomBytes } from "node:crypto";
+import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
   applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
@@ -561,6 +564,9 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "export.csv.utf8_bom", value: "true", isDefault: true },
   // the connected-call threshold (addition 0008j), at its default
   { key: "telephony.connected_min_seconds", value: "10", isDefault: true },
+  // the invitation settings (addition 0008l), at their defaults
+  { key: "auth.invitation_valid_days", value: "7", isDefault: true },
+  { key: "auth.invitation_email_domains", value: "", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -593,6 +599,10 @@ type MockState = {
   intakeConfig?: Map<string, MockIntakeConfig>;
   /** The missed-reason catalog per tenant (addition 0008i), seeded on first use */
   missedReasons?: Map<string, MissedReason[]>;
+  /** Invitations of both fictional tenants (addition 0008l), seeded on first use; the token's hash only */
+  invitations?: MockInvitation[];
+  /** Identities that accepted an invitation, as `${provider}:${subject}`, with the person they became */
+  invitees?: Map<string, Principal>;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
@@ -1055,6 +1065,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
+  "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1406,6 +1417,107 @@ function assertMockMarket(me: Principal, code: string | null, allowDefault = fal
   if (!seedIntakeConfig(me).markets.some((m) => m.code === code)) throw new CmaDbError("CMA02", "no such market");
 }
 
+// ---- Invitations (addition 0008l): fixture rows per tenant, shaped like cma.invitations() ----------------
+// The fixture's tokens are fictional, fixed values so the browser verifiers can open each state of
+// /invite/<token>; only their hashes are kept, as in the database. Mock identities whose subject starts with
+// "invitee" have no person yet (as a signed-in account the CMA does not know), until they accept.
+
+type MockInvitation = Omit<Invitation, "state"> & { tenantId: string; tokenHash: string; createdBy: string };
+
+/** Fixture tokens: 43 url-safe characters, as the database makes them (verify/layout.mjs opens them) */
+export const MOCK_INVITE_TOKENS = {
+  open: "mock-open-invitation".padEnd(43, "0"),
+  expired: "mock-expired-invitation".padEnd(43, "0"),
+  tenantTwo: "mock-tenant-two-invitation".padEnd(43, "0"),
+} as const;
+
+const inviteHash = (token: string) => createHash("sha256").update(token, "utf8").digest("hex");
+const inviteeKey = (provider: string, subject: string) => `${provider}:${subject}`;
+
+function mockInvitationState(i: MockInvitation): Invitation["state"] {
+  if (i.acceptedAt) return "accepted";
+  if (i.revokedAt) return "revoked";
+  return Date.parse(i.expiresAt) <= Date.now() ? "expired" : "open";
+}
+
+function seedInvitations(): MockInvitation[] {
+  if (state.invitations) return state.invitations;
+  const t1 = MOCK_PRINCIPAL.tenantId;
+  const day = 86_400_000;
+  const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+  const role = (key: string) => MOCK_ROLES.find((r) => r.key === key)!;
+  const org = (key: string) => MOCK_ORGANISATIONS.find((o) => o.key === key)!;
+  const row = (x: { id: string; tenantId: string; token: string; email: string; displayName: string; locale: string; roleKey: string; orgKey: string;
+    teams?: string[]; skills?: [string, number | null][]; createdBy: string; createdByName: string; createdAgo: number; validFor: number;
+    accepted?: { name: string; ago: number }; revoked?: { name: string; ago: number } }): MockInvitation => ({
+    invitationId: x.id, tenantId: x.tenantId, tokenHash: inviteHash(x.token), email: x.email, displayName: x.displayName, locale: x.locale,
+    roleKey: x.roleKey, roleName: role(x.roleKey).name, organisationKey: x.orgKey, organisationName: org(x.orgKey).name,
+    teams: (x.teams ?? []).map(mockTeam), skills: (x.skills ?? []).map(([k, l]) => mockSkill(k, l)),
+    createdAt: at(-x.createdAgo * day), createdBy: x.createdBy, createdByName: x.createdByName, expiresAt: at((x.validFor - x.createdAgo) * day),
+    renewedAt: null, acceptedAt: x.accepted ? at(-x.accepted.ago * day) : null, acceptedUserId: x.accepted ? crypto.randomUUID() : null,
+    acceptedName: x.accepted?.name ?? null, revokedAt: x.revoked ? at(-x.revoked.ago * day) : null, revokedByName: x.revoked?.name ?? null,
+  });
+  state.invitations = [
+    row({ id: "00000000-0000-7000-8000-0000000e0001", tenantId: t1, token: MOCK_INVITE_TOKENS.open, email: "invitee-one@example.com", displayName: "Invitee One",
+          locale: "en", roleKey: "agent", orgKey: "newco", teams: ["nl"], skills: [["nl", 3], ["sales", null]], createdBy: MOCK_MANAGER_ID,
+          createdByName: "Test manager", createdAgo: 1, validFor: 7 }),
+    row({ id: "00000000-0000-7000-8000-0000000e0002", tenantId: t1, token: MOCK_INVITE_TOKENS.expired, email: "invitee-late@example.com", displayName: "Invitee Late",
+          locale: "nl", roleKey: "supervisor", orgKey: "newco", teams: ["de"], createdBy: MOCK_MANAGER_ID, createdByName: "Test manager", createdAgo: 9, validFor: 7 }),
+    row({ id: "00000000-0000-7000-8000-0000000e0003", tenantId: t1, token: "mock-accepted-invitation".padEnd(43, "0"), email: "invitee-joined@example.com",
+          displayName: "Invitee Joined", locale: "en", roleKey: "agent", orgKey: "newco", createdBy: MOCK_MANAGER_ID, createdByName: "Test manager",
+          createdAgo: 5, validFor: 7, accepted: { name: "Invitee Joined", ago: 4 } }),
+    row({ id: "00000000-0000-7000-8000-0000000e0004", tenantId: t1, token: "mock-revoked-invitation".padEnd(43, "0"), email: "old.invite@example.com",
+          displayName: "Old invite", locale: "nl", roleKey: "analytics", orgKey: "pulse4all", createdBy: MOCK_ADMIN_ID, createdByName: "Test admin",
+          createdAgo: 6, validFor: 7, revoked: { name: "Test admin", ago: 5 } }),
+    row({ id: "00000000-0000-7000-8000-0000000e0005", tenantId: t1, token: "mock-manager-invitation".padEnd(43, "0"), email: "new.manager@example.com",
+          displayName: "New manager", locale: "en", roleKey: "manager", orgKey: "pulse4all", createdBy: MOCK_ADMIN_ID, createdByName: "Test admin",
+          createdAgo: 0, validFor: 7 }),
+    row({ id: "00000000-0000-7000-8000-0000000e0006", tenantId: MOCK_TENANT_2, token: MOCK_INVITE_TOKENS.tenantTwo, email: "invitee-two@example.com",
+          displayName: "Invitee Two", locale: "nl", roleKey: "analytics", orgKey: "pulse4all", createdBy: MOCK_INVEST_ANALYST_ID,
+          createdByName: "Test invest analyst", createdAgo: 0, validFor: 7 }),
+  ];
+  return state.invitations;
+}
+
+function mockSetting(key: string): string {
+  return (state.config?.settings ?? MOCK_SETTINGS).find((x) => x.key === key)?.value ?? MOCK_SETTING_DEFAULTS[key] ?? "";
+}
+
+/** The role an invitation may carry for this caller, as cma.assert_invitation_allowed answers */
+/** The fixture's system role (the scheduler's, 0008b): a role row of the tenant that is never assignable to people */
+const MOCK_UNASSIGNABLE_ROLES = ["scheduler"];
+
+function invitableRole(me: Principal, roleKey: string) {
+  const role = MOCK_ROLES.find((r) => r.key === roleKey);
+  if (!role && MOCK_UNASSIGNABLE_ROLES.includes(roleKey)) throw new CmaDbError("CMA06", "the role is not assignable to people");
+  if (!role) throw new CmaDbError("CMA02", "unknown role");
+  if (role.isManaging && !me.permissions.includes("users.manage_all")) throw new CmaDbError("CMA06", "a managing role needs users.manage_all");
+  return role;
+}
+
+function assertInvitationAllowed(me: Principal, email: string): void {
+  const domains = mockSetting("auth.invitation_email_domains");
+  if (domains && !domains.split(",").includes(email.split("@")[1] ?? "")) throw new CmaDbError("CMA04", "outside the email domains");
+  if (me.tenantId === MOCK_PRINCIPAL.tenantId && [...seedPeople().values()].some((p) => p.email === email)) {
+    throw new CmaDbError("CMA03", "a person with this address exists");
+  }
+}
+
+function newMockLink(i: MockInvitation): InvitationLink {
+  const token = randomBytes(32).toString("base64url");
+  i.tokenHash = inviteHash(token);
+  return { invitationId: i.invitationId, token, expiresAt: i.expiresAt };
+}
+
+/** The invitation a caller may act on: their tenant, a role within their ceiling */
+function mockInvitationFor(me: Principal, id: string): MockInvitation {
+  assertManage(me);
+  const i = seedInvitations().find((x) => x.invitationId === id && x.tenantId === me.tenantId);
+  if (!i) throw new CmaDbError("CMA02", "invitation not found");
+  invitableRole(me, i.roleKey);
+  return i;
+}
+
 export const mockData: CmaData = {
   /**
    * Any verified identity may work as the test agent. A real person behind IAP
@@ -1413,6 +1525,10 @@ export const mockData: CmaData = {
    * employer and tenant are the test agent's.
    */
   async findPrincipal(identity) {
+    // An identity that accepted an invitation is the person it became; an invitee-* identity has none yet
+    const invitee = state.invitees?.get(inviteeKey(identity.provider, identity.subject));
+    if (invitee) return invitee;
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject.startsWith("invitee")) return null;
     if (identity.provider === MOCK_IDENTITY.provider && identity.subject === MOCK_IDENTITY.subject) {
       return MOCK_PRINCIPAL;
     }
@@ -1930,6 +2046,105 @@ export const mockData: CmaData = {
   },
 
   // ---- Configuration (migration 0005a): the same refusals as the database functions ----
+
+  // Invitations (0008l): the cheap rules of the functions hold here too; the database proves the real ones
+  async listInvitations(me): Promise<Invitation[]> {
+    assertManage(me);
+    const all = me.permissions.includes("users.manage_all");
+    return seedInvitations()
+      .filter((i) => i.tenantId === me.tenantId && (all || !MOCK_ROLES.find((r) => r.key === i.roleKey)?.isManaging))
+      .map(({ tenantId: _t, tokenHash: _h, createdBy: _c, ...rest }) => ({ ...rest, state: mockInvitationState({ tenantId: _t, tokenHash: _h, createdBy: _c, ...rest }) }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async createInvitation(me, input): Promise<InvitationLink> {
+    assertManage(me);
+    const role = invitableRole(me, input.roleKey);
+    const org = MOCK_ORGANISATIONS.find((o) => o.key === input.organisationKey);
+    if (!org) throw new CmaDbError("CMA02", "unknown employer");
+    const teams = input.teamKeys.map((k) => {
+      if (!MOCK_TEAMS.some((t) => t.key === k)) throw new CmaDbError("CMA02", "unknown team");
+      return mockTeam(k);
+    });
+    if (input.skills.length > 0 && !me.permissions.includes("skills.manage")) throw new CmaDbError("CMA06", "skills need skills.manage");
+    const skills = input.skills.map((x) => {
+      const s = MOCK_SKILLS.find((k) => k.key === x.key);
+      if (!s) throw new CmaDbError("CMA02", "unknown skill");
+      if (s.levels.length > 0 ? !s.levels.some((l) => l.level === x.level) : x.level !== undefined) throw new CmaDbError("CMA04", "level outside the scale");
+      return mockSkill(x.key, x.level ?? null);
+    });
+    const email = input.email.trim().toLowerCase();
+    assertInvitationAllowed(me, email);
+    if (seedInvitations().some((i) => i.tenantId === me.tenantId && i.email === email && !i.acceptedAt && !i.revokedAt)) {
+      throw new CmaDbError("CMA03", "a pending invitation for this address");
+    }
+    const days = Number(mockSetting("auth.invitation_valid_days")) || 7;
+    const i: MockInvitation = {
+      invitationId: crypto.randomUUID(), tenantId: me.tenantId, tokenHash: "", email, displayName: input.displayName.trim(), locale: input.locale,
+      roleKey: role.key, roleName: role.name, organisationKey: org.key, organisationName: org.name, teams, skills,
+      createdAt: new Date().toISOString(), createdBy: me.userId, createdByName: me.displayName,
+      expiresAt: new Date(Date.now() + days * 86_400_000).toISOString(), renewedAt: null, acceptedAt: null, acceptedUserId: null,
+      acceptedName: null, revokedAt: null, revokedByName: null,
+    };
+    seedInvitations().push(i);
+    return newMockLink(i);
+  },
+
+  async renewInvitation(me, invitationId): Promise<InvitationLink> {
+    const i = mockInvitationFor(me, invitationId);
+    if (i.acceptedAt || i.revokedAt) throw new CmaDbError("CMA03", "accepted or revoked");
+    assertInvitationAllowed(me, i.email);
+    const days = Number(mockSetting("auth.invitation_valid_days")) || 7;
+    Object.assign(i, { expiresAt: new Date(Date.now() + days * 86_400_000).toISOString(), renewedAt: new Date().toISOString(), createdBy: me.userId });
+    return newMockLink(i);
+  },
+
+  async revokeInvitation(me, invitationId): Promise<void> {
+    const i = mockInvitationFor(me, invitationId);
+    if (i.acceptedAt) throw new CmaDbError("CMA03", "accepted");
+    if (!i.revokedAt) Object.assign(i, { revokedAt: new Date().toISOString(), revokedByName: me.displayName });
+  },
+
+  async previewInvitation(identity, token): Promise<InvitationPreview> {
+    const none: InvitationPreview = { result: "invalid", tenantName: null, roleName: null, invitedEmail: null, locale: null, expiresAt: null };
+    const i = INVITE_TOKEN_RE.test(token) ? seedInvitations().find((x) => x.tokenHash === inviteHash(token)) : undefined;
+    if (!i || i.revokedAt) return none;
+    const tenantName = i.tenantId === MOCK_TENANT_2 ? "Pulse4all invest (test)" : MOCK_PRINCIPAL.tenantName;
+    const principal = await mockData.findPrincipal(identity);
+    if (principal?.tenantId === i.tenantId) return { ...none, result: "already_member", tenantName, locale: i.locale };
+    if (i.acceptedAt) return none;
+    // a sign-in that works in the other fictional tenant (no tenant picker yet), as cma.invitation_other_tenant
+    if (principal) return { ...none, result: "other_tenant", tenantName, locale: i.locale };
+    if (Date.parse(i.expiresAt) <= Date.now()) return { ...none, result: "expired", tenantName, locale: i.locale, expiresAt: i.expiresAt };
+    if (identity.email.trim().toLowerCase() !== i.email) {
+      return { result: "wrong_account", tenantName, roleName: i.roleName, invitedEmail: i.email, locale: i.locale, expiresAt: i.expiresAt };
+    }
+    return { result: "open", tenantName, roleName: i.roleName, invitedEmail: i.email, locale: i.locale, expiresAt: i.expiresAt };
+  },
+
+  async acceptInvitation(identity, token): Promise<InvitationAcceptResult> {
+    const preview = await mockData.previewInvitation(identity, token);
+    if (preview.result !== "open") return preview.result;
+    const i = seedInvitations().find((x) => x.tokenHash === inviteHash(token))!;
+    const role = MOCK_ROLES.find((r) => r.key === i.roleKey)!;
+    const org = MOCK_ORGANISATIONS.find((o) => o.key === i.organisationKey)!;
+    const userId = crypto.randomUUID();
+    const principal: Principal = {
+      ...MOCK_PRINCIPAL, tenantId: i.tenantId, tenantName: preview.tenantName ?? MOCK_PRINCIPAL.tenantName, userId, displayName: i.displayName,
+      organisationName: org.name, roleKey: role.key, permissions: [...role.permissions],
+      timeZone: org.timeZone,
+    };
+    (state.invitees ??= new Map()).set(inviteeKey(identity.provider, identity.subject), principal);
+    if (i.tenantId === MOCK_PRINCIPAL.tenantId) {
+      seedPeople().set(userId, {
+        userId, email: i.email, displayName: i.displayName, isActive: true, organisationKey: org.key, organisationName: org.name,
+        timeZone: org.timeZone, roleKey: role.key, roleName: role.name, isManaging: role.isManaging, timeKept: role.permissions.includes("workday.own"),
+        teams: i.teams, skills: i.skills, mayEdit: false,
+      });
+    }
+    Object.assign(i, { acceptedAt: new Date().toISOString(), acceptedUserId: userId, acceptedName: i.displayName });
+    return "accepted";
+  },
 
   async listConfigStatuses(me) {
     assertConfigure(me);

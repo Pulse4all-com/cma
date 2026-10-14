@@ -54,6 +54,14 @@ const ONLY_INBOUND = process.argv.includes("--inbound");
  * so they run against dev, a local database with reports-fixture.sql or a cma-web in mock data mode alike.
  */
 const ONLY_CALLS = process.argv.includes("--calls");
+/**
+ * --invitations runs only the checks of invitations by email (addition 0008l, night of 15 October 2026), and
+ * only on request: they are not part of the full run. An invitation is never deleted and an accepted one makes
+ * a person, so each run leaves its invitations revoked or accepted and one person, `invitee-api-<time>`
+ * (system mock), deactivated at the end (dev data, as the rule of --sources). Against dev, a local database or
+ * a cma-web in mock data mode alike.
+ */
+const ONLY_INVITATIONS = process.argv.includes("--invitations");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -126,8 +134,9 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS) && health.body?.data === "mock"))) {
-  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
+const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS;
+if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_GROUP && health.body?.data === "mock"))) {
+  console.error(`Not a mock-auth, ${ONLY_GROUP ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
 }
 if (ONLY_REPORTS) {
@@ -144,6 +153,10 @@ if (ONLY_CALLS) {
 }
 if (ONLY_INBOUND) {
   await inboundChecks();
+  verdict();
+}
+if (ONLY_INVITATIONS) {
+  await invitationChecks();
   verdict();
 }
 
@@ -1339,4 +1352,93 @@ async function callsChecks() {
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
   }
+}
+
+// ---- invitations by email (addition 0008l), 15 checks, --invitations only --------------------------------
+// The manager and the admin invite (users.manage_agents within its ceiling, users.manage_all every role but
+// the system one); the invitee is a mock identity without a person (invitee-api-<time>, its address
+// <subject>@example.com) until it accepts. Never a token in a list; GET /invite changes nothing; Accept is a
+// same-origin form post. Each run leaves its invitations revoked or accepted and its one person deactivated.
+async function invitationChecks() {
+  const H = { "x-cma-request": "1" };
+  const sj = (s, method, path, body, headers = H) =>
+    call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const inv = "/api/v1/team/invitations";
+  const run = Date.now().toString(36);
+  const invitee = `invitee-api-${run}`;
+  const other = `invitee-api-other-${run}`;
+  const body = (email, roleKey, organisationKey) => ({ email, displayName: `API verifier ${run}`, locale: "en", roleKey, organisationKey, teamKeys: [], skills: [] });
+  const tokenFree = (x) => !/"token"|tokenHash|token_hash/.test(JSON.stringify(x));
+  const page = async (s, token) => {
+    const r = await call(s, `/invite/${token}`);
+    return r.status === 200 ? (/data-testid="invite-([a-z_]+)"/.exec(String(r.body))?.[1] ?? "none") : `${r.status}`;
+  };
+  const accept = async (s, token, headers = { "sec-fetch-site": "same-origin" }) => {
+    const res = await fetch(BASE + "/invite/accept", {
+      method: "POST", redirect: "manual",
+      headers: { "x-cma-mock-subject": s, "content-type": "application/x-www-form-urlencoded", ...headers },
+      body: `token=${encodeURIComponent(token)}`,
+    });
+    return { status: res.status, location: res.headers.get("location") };
+  };
+
+  expect("invitations: an agent cannot list them", (await get(AGENT, inv)).status, 403, 200);
+  const listed = await get(MANAGER, inv);
+  expect("invitations: the manager lists them, never a token or hash", [listed.status, Array.isArray(listed.body?.data), tokenFree(listed.body)], [200, true, true], [200, true, false]);
+  const org = ((await get(ADMIN, "/api/v1/team/organisations")).body?.data ?? [])[0]?.key ?? "none";
+  const roles = (await get(MANAGER, "/api/v1/team/roles")).body?.data ?? [];
+  const grantable = roles.filter((r) => r.assignable).map((r) => r.key);
+  const managing = roles.filter((r) => !r.assignable).map((r) => r.key);
+  expect("invitations: a write needs the request header; cross-site is refused",
+    [(await sj(MANAGER, "POST", inv, body(`x-${run}@example.com`, grantable[0], org), {})).status,
+      (await sj(MANAGER, "POST", inv, body(`x-${run}@example.com`, grantable[0], org), { ...H, "sec-fetch-site": "cross-site" })).status],
+    [400, 403], [201, 201]);
+  expect("invitations: a malformed body is a 400", [(await sj(MANAGER, "POST", inv, body("not an address", grantable[0], org))).status,
+    (await sj(MANAGER, "POST", inv, { ...body(`x-${run}@example.com`, grantable[0], org), locale: "xx" })).status], [400, 400], [201, 201]);
+  const refused = [];
+  for (const k of managing) refused.push((await sj(MANAGER, "POST", inv, body(`m-${k}-${run}@example.com`, k, org))).status);
+  expect("invitations: the manager may not invite a role above its ceiling", refused.length > 0 && refused.every((x) => x === 403), true, false);
+  expect("invitations: the system role and an unknown role are refused",
+    [(await sj(ADMIN, "POST", inv, body(`s-${run}@example.com`, "scheduler", org))).status, (await sj(ADMIN, "POST", inv, body(`u-${run}@example.com`, "no_such_role", org))).status],
+    [403, 404], [201, 201]);
+
+  const made = await sj(MANAGER, "POST", inv, body(`${invitee}@example.com`, grantable.includes("agent") ? "agent" : grantable[0], org));
+  const token = made.body?.data?.token ?? "";
+  const id = made.body?.data?.invitationId ?? "";
+  const days = (Date.parse(made.body?.data?.expiresAt ?? 0) - Date.now()) / 86_400_000;
+  expect("invitations: created with a 43-character token, valid for days", [made.status, /^[A-Za-z0-9_-]{43}$/.test(token), days > 0.9 && days <= 30], [201, true, true], [201, false, true]);
+  expect("invitations: the same address again is a 409", (await sj(MANAGER, "POST", inv, body(`${invitee}@example.com`, grantable[0], org))).status, 409, 201);
+  const row = ((await get(MANAGER, inv)).body?.data ?? []).find((x) => x.invitationId === id);
+  expect("invitations: listed open, without the token", [row?.state, tokenFree(row ?? {})], ["open", true], ["open", false]);
+
+  expect("invite: the link opens for its address, shows another account to anyone else, and changes nothing",
+    [await page(invitee, token), await page(other, token), ((await get(MANAGER, inv)).body?.data ?? []).find((x) => x.invitationId === id)?.state],
+    ["open", "wrong_account", "open"], ["accepted", "open", "accepted"]);
+  const renewed = await sj(MANAGER, "POST", `${inv}/${id}/renew`, {});
+  const token2 = renewed.body?.data?.token ?? "";
+  expect("invitations: a new link replaces the old one", [renewed.status, token2 !== token && token2.length === 43, await page(invitee, token), await page(invitee, token2)],
+    [200, true, "invalid", "open"], [200, false, "open", "open"]);
+  const adminOnly = managing[0] ? await sj(ADMIN, "POST", inv, body(`a-${run}@example.com`, managing[0], org)) : null;
+  const adminId = adminOnly?.body?.data?.invitationId;
+  expect("invitations: the manager cannot renew or revoke an invitation above its ceiling",
+    adminId ? [(await sj(MANAGER, "POST", `${inv}/${adminId}/renew`, {})).status, (await sj(MANAGER, "POST", `${inv}/${adminId}/revoke`, {})).status] : [403, 403],
+    [403, 403], [200, 200]);
+  if (adminId) await sj(ADMIN, "POST", `${inv}/${adminId}/revoke`, {});
+
+  const cross = await accept(invitee, token2, { "sec-fetch-site": "cross-site" });
+  const wrong = await accept(other, token2);
+  expect("invite: Accept refuses a cross-site post; another account goes back to the link",
+    [cross.status, wrong.status, wrong.location === `/invite/${token2}`, (await call(invitee, "/api/v1/me")).status], [403, 303, true, 403], [303, 303, true, 200]);
+  const done = await accept(invitee, token2);
+  const me = await get(invitee, "/api/v1/me");
+  expect("invite: Accept sets the person up with the invited role and goes home; the link then leads home",
+    [done.status, done.location, me.status, me.body?.data?.roleKey === (grantable.includes("agent") ? "agent" : grantable[0]),
+      (await call(invitee, `/invite/${token2}`)).status],
+    [303, "/", 200, true, 307], [303, "/", 403, true, 200]);
+  const after = ((await get(MANAGER, inv)).body?.data ?? []).find((x) => x.invitationId === id);
+  expect("invitations: accepted by the person, and an accepted one cannot be revoked",
+    [after?.state, after?.acceptedUserId === me.body?.data?.userId, (await sj(MANAGER, "POST", `${inv}/${id}/revoke`, {})).status], ["accepted", true, 409], ["open", true, 200]);
+
+  // Put back what can be: the person made by this run is deactivated (people are never deleted)
+  if (me.body?.data?.userId) await sj(ADMIN, "PUT", `/api/v1/team/directory/${me.body.data.userId}/active`, { active: false });
 }

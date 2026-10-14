@@ -427,6 +427,65 @@ export interface AddPersonInput {
   timeZone: string | null;
 }
 
+/** An invitation's state, computed by the database (cma.invitation_state) */
+export type InvitationState = "open" | "expired" | "accepted" | "revoked";
+
+/** One row of cma.invitations() (addition 0008l): never a token or its hash */
+export interface Invitation {
+  invitationId: string;
+  email: string;
+  displayName: string;
+  /** The language of the mail and of the /invite page, a copy locale */
+  locale: string;
+  roleKey: string;
+  roleName: string;
+  organisationKey: string;
+  organisationName: string;
+  teams: { key: string; name: string }[];
+  skills: PersonSkill[];
+  state: InvitationState;
+  createdAt: Instant;
+  createdByName: string;
+  expiresAt: Instant;
+  renewedAt: Instant | null;
+  acceptedAt: Instant | null;
+  acceptedUserId: string | null;
+  acceptedName: string | null;
+  revokedAt: Instant | null;
+  revokedByName: string | null;
+}
+
+export interface CreateInvitationInput {
+  email: string;
+  displayName: string;
+  locale: string;
+  roleKey: string;
+  organisationKey: string;
+  teamKeys: string[];
+  skills: SkillInput[];
+}
+
+/** The answer to create and renew, the only places a token travels; it is never stored or listed */
+export interface InvitationLink {
+  invitationId: string;
+  token: string;
+  expiresAt: Instant;
+}
+
+/** What /invite/<token> may show (cma.invitation_preview): read only, never a change */
+export interface InvitationPreview {
+  /** other_tenant: the sign-in already works in another business line (no tenant picker yet) */
+  result: "open" | "invalid" | "expired" | "wrong_account" | "already_member" | "other_tenant";
+  tenantName: string | null;
+  roleName: string | null;
+  /** The invited address: for open and wrong_account only, to the link's holder */
+  invitedEmail: string | null;
+  locale: string | null;
+  expiresAt: Instant | null;
+}
+
+export type InvitationAcceptResult = "accepted" | "invalid" | "expired" | "wrong_account" | "already_member" | "other_tenant";
+
 /** A skill to set on a person: the level for a scaled dimension, left out for a binary one */
 export interface SkillInput {
   key: string;
@@ -1498,6 +1557,24 @@ export interface CmaData {
   setPersonTeams(me: Principal, userId: string, teamKeys: string[]): Promise<void>;
   /** The full list of a person's skills with levels; needs skills.manage too. Bad level CMA04 */
   setPersonSkills(me: Principal, userId: string, skills: SkillInput[]): Promise<void>;
+
+  // ---- Invitations (addition 0008l): users.manage_agents or users.manage_all, the role ceiling of Add a person
+  /** The invitations the caller may see, with their state; never a token */
+  listInvitations(me: Principal): Promise<Invitation[]>;
+  /**
+   * A new invitation (cma.create_invitation): the token once. A role above the caller's ceiling or the
+   * system role CMA06; an unknown employer, role, team or skill CMA02; a person or a pending invitation with
+   * the address CMA03; an address outside the domain setting or a bad level CMA04
+   */
+  createInvitation(me: Principal, input: CreateInvitationInput): Promise<InvitationLink>;
+  /** A new link for an open or expired invitation; the old one stops working. Accepted or revoked CMA03 */
+  renewInvitation(me: Principal, invitationId: string): Promise<InvitationLink>;
+  /** Revokes an open or expired invitation; a revoked one stays revoked. Accepted CMA03 */
+  revokeInvitation(me: Principal, invitationId: string): Promise<void>;
+  /** For the signed-in identity, before it is a person: what the link shows. Changes nothing */
+  previewInvitation(identity: Identity, token: string): Promise<InvitationPreview>;
+  /** For the signed-in identity: accepts the invitation in its tenant (cma.accept_invitation) */
+  acceptInvitation(identity: Identity, token: string): Promise<InvitationAcceptResult>;
 
   // ---- Configuration (migration 0005a): the database checks tenant.configure on every call (CMA06)
   /** Every status with its flags, the default, active or retired, and its usage */

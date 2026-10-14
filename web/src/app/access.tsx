@@ -26,7 +26,7 @@ export async function resolve(): Promise<Resolved> {
   return { ok: true, me: access.principal, copy: t(access.principal.locale) };
 }
 
-export function NoAccess({ copy, identity = null }: { copy: Copy; identity?: Identity | null }) {
+export function NoAccess({ copy, identity = null, switchHref = null }: { copy: Copy; identity?: Identity | null; switchHref?: string | null }) {
   return (
     <div className="flex h-full items-center justify-center bg-p4a-sand p-8">
       <div className="max-w-md">
@@ -42,6 +42,13 @@ export function NoAccess({ copy, identity = null }: { copy: Copy; identity?: Ide
             <dd className="tabular mt-1 select-all font-semibold text-p4a-body" data-testid="account-id">{identity.subject}</dd>
             <dd className="mt-2 text-caption text-p4a-grey">{copy.noAccess.idHint}</dd>
           </dl>
+        ) : null}
+        {switchHref ? (
+          // Only with the signed-out page in place (CMA_LOGOUT_TARGET=signed-out): IAP clears its cookie and
+          // the browser lands outside IAP, where Google's account chooser can be reached
+          <a href={switchHref} className="mt-6 inline-flex font-semibold text-p4a-deepblue underline" data-testid="no-access-switch">
+            {copy.noAccess.useAnother}
+          </a>
         ) : null}
       </div>
     </div>

@@ -1,0 +1,22 @@
+== signed-out page, prod (p4a-cma-prod); applying
+   local files in <scratch>/home/signed-out-prod-20261014T211447Z
+a. storage.publicAccessPrevention is not enforced for p4a-cma-prod (effective policy: not set)
+e. cma-web-urlmap exported to <scratch>/home/cma-web-urlmap-20261014T211447Z.yaml. To put it back as it was:
+   gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<scratch>/home/cma-web-urlmap-20261014T211447Z.yaml --quiet
+e. plan: path matcher web uses pathRules; converted to 3 route rules, same matching
+e. plan: the two route rules added to path matcher web (host rule workspace.example.test)
+e. check: apart from the two route rules (and a converted path matcher's same matching), the map is as exported
+e. plan written: <scratch>/home/signed-out-prod-20261014T211447Z/urlmap-new.json (imported), <scratch>/home/signed-out-prod-20261014T211447Z/urlmap-validate.json (with 9 tests, validated only)
++ gcloud storage buckets create gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --location=europe-west4 --uniform-bucket-level-access --public-access-prevention=inherited
++ gcloud storage buckets add-iam-policy-binding gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --member=allUsers --role=roles/storage.objectViewer
+c. page rendered: <scratch>/home/signed-out-prod-20261014T211447Z/signed-out.html (script sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM=)
++ gcloud storage cp <scratch>/home/signed-out-prod-20261014T211447Z/signed-out.html gs://p4a-cma-prod-signed-out/signed-out "--content-type=text/html; charset=utf-8" "--cache-control=public, max-age=300"
++ gcloud storage cp <scratch>/home/signed-out-prod-20261014T211447Z/logo-blue.png gs://p4a-cma-prod-signed-out/signed-out/logo-blue.png "--cache-control=public, max-age=300"
++ gcloud storage cp /home/user/cma/web/src/fonts/Montserrat-VF.ttf gs://p4a-cma-prod-signed-out/signed-out/Montserrat-VF.ttf --content-type=font/ttf "--cache-control=public, max-age=300"
+c. STOP: gs://p4a-cma-prod-signed-out must hold only the page and its two brand files; it holds:
+   other.csv
+   signed-out
+   signed-out/Montserrat-VF.ttf
+   signed-out/logo-blue.png
+   Remove what does not belong there by hand (it is public), then rerun.
+exit 1 (calls that change something: 5)

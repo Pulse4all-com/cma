@@ -1,0 +1,124 @@
+<!doctype html>
+<!--
+  The signed-out page (README, Authentication; Decision log 15 October 2026). A static file outside IAP:
+  docs/signed-out/deploy.sh uploads it as the object "signed-out" of the bucket <project>-signed-out, next to
+  the logo and Montserrat under signed-out/, and the load balancer serves it at /signed-out. Log out lands
+  here (CMA_LOGOUT_TARGET=signed-out) after IAP cleared its cookie, so nothing signs the browser in again
+  until the person chooses Log in.
+
+  Rules (web/verify/signed-out.mjs checks them): no identity, no data, no cookies read or written, no fetch
+  or XHR, no external script or stylesheet; the one inline script is allowed by its hash in the CSP below.
+  No tenant or company name: {{DISPLAY_NAME}} and {{LOGO_FILE}} are written in by the deploy script. The
+  wording is copy.ts's signedOut keys, English and Dutch, chosen from the browser's language.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM='; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="application-name" content="{{DISPLAY_NAME}}">
+<title>You're logged out</title>
+<style>
+  @font-face {
+    font-family: "Montserrat";
+    src: url("/signed-out/Montserrat-VF.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+  :root {
+    --sand: #FFFDF6; --white: #FFFFFF; --bg-blue: #EAF4FC; --light-blue: #9ECFF5; --denim: #3B6FB3;
+    --deep-blue: #265BA4; --heading: #2E61A6; --body: #1C2127; --grey: #666666; --border: #D9E2EC; --muted: #5B6472;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--sand); color: var(--body);
+    font-family: "Montserrat", "Segoe UI", Arial, sans-serif; font-size: 16px; line-height: 1.6;
+    display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px;
+  }
+  main {
+    width: 100%; max-width: 480px; background: var(--white); border: 1px solid var(--border);
+    border-radius: 15px; padding: 32px 24px;
+  }
+  .logo { display: block; width: 160px; max-width: 100%; height: auto; margin-bottom: 32px; }
+  h1 { margin: 0; color: var(--heading); font-size: 32px; line-height: 1.25; font-weight: 700; }
+  .subtitle { margin: 8px 0 0; }
+  .actions { margin-top: 32px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+  .button {
+    display: inline-flex; align-items: center; height: 48px; padding: 0 24px; border-radius: 4px;
+    background: var(--deep-blue); color: var(--white); font-weight: 600; text-decoration: none;
+  }
+  .button:hover { background: var(--denim); }
+  a { color: var(--deep-blue); font-weight: 600; }
+  a:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
+  .shared { margin: 32px 0 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+  @media (max-width: 480px) {
+    main { padding: 24px 16px; }
+    h1 { font-size: 24px; }
+    .button { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <img class="logo" src="/signed-out/{{LOGO_FILE}}" alt="{{DISPLAY_NAME}}">
+  <h1 id="title">You're logged out</h1>
+  <p class="subtitle" id="subtitle">Your Workspace session on this browser has ended.</p>
+  <div class="actions">
+    <a class="button" id="log-in" href="/" autofocus>Log in</a>
+    <a id="use-another" href="https://accounts.google.com/AddSession">Use another account</a>
+  </div>
+  <p class="shared" id="shared">On a shared computer? Logging out here does not log you out of Google. When you leave, also <a id="google-logout" href="https://accounts.google.com/Logout">log out of Google</a>.</p>
+</main>
+<script>
+(function () {
+  // Wording: copy.ts, signedOut (English and Dutch); English when the browser asks for anything else
+  var T = {
+    en: {
+      title: "You're logged out",
+      subtitle: "Your Workspace session on this browser has ended.",
+      logIn: "Log in",
+      useAnother: "Use another account",
+      shared: "On a shared computer? Logging out here does not log you out of Google. When you leave, also {logOutOfGoogle}.",
+      logOutOfGoogle: "log out of Google"
+    },
+    nl: {
+      title: "Je bent uitgelogd",
+      subtitle: "Je sessie in de Workspace op deze browser is beëindigd.",
+      logIn: "Inloggen",
+      useAnother: "Ander account gebruiken",
+      shared: "Op een gedeelde computer? Uitloggen hier logt je niet uit bij Google. Log bij vertrek ook {logOutOfGoogle}.",
+      logOutOfGoogle: "uit bij Google"
+    }
+  };
+  var first = ((navigator.languages && navigator.languages[0]) || navigator.language || "en").toLowerCase();
+  var lang = first.slice(0, 2) === "nl" ? "nl" : "en";
+  var t = T[lang];
+  document.documentElement.lang = lang;
+  var name = document.querySelector('meta[name="application-name"]').getAttribute("content");
+  document.title = t.title + (name ? " · " + name : "");
+  document.getElementById("title").textContent = t.title;
+  document.getElementById("subtitle").textContent = t.subtitle;
+  var logIn = document.getElementById("log-in");
+  logIn.textContent = t.logIn;
+  // Both addresses are Google's own web pages, opened by the browser, not an API: AddSession adds an
+  // account and returns to this Workspace's start page (its host as the browser sees it); Logout signs the
+  // browser out of Google. The Workspace itself never signs anyone out of Google.
+  var another = document.getElementById("use-another");
+  another.textContent = t.useAnother;
+  another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/");
+  var shared = document.getElementById("shared");
+  var link = document.getElementById("google-logout");
+  var parts = t.shared.split("{logOutOfGoogle}");
+  link.textContent = t.logOutOfGoogle;
+  while (shared.firstChild) shared.removeChild(shared.firstChild);
+  shared.appendChild(document.createTextNode(parts[0]));
+  shared.appendChild(link);
+  shared.appendChild(document.createTextNode(parts[1] || ""));
+  logIn.focus();
+})();
+</script>
+</body>
+</html>

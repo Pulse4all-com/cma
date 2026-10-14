@@ -113,6 +113,9 @@ const pages = [
   // a tenant without telephony: the page says so in words and has no header to explain
   { path: "/reports/calls?range=month", subject: "invest-analyst", noHint: true },
   { path: "/logout" }, { path: "/no-access" },
+  // Invitations (addition 0008l): the link for an account that is no person yet, open and for another account
+  { path: `/invite/${"mock-open-invitation".padEnd(43, "0")}`, subject: "invitee-one" },
+  { path: `/invite/${"mock-open-invitation".padEnd(43, "0")}`, subject: "invitee-other" },
 ];
 let hintsChecked = 0;
 let tablesChecked = 0;
