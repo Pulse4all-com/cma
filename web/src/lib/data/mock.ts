@@ -278,6 +278,10 @@ function mockLiveCalls(now: number): CallerCall[] {
     // missed, then called in again and answered: not listed
     call("910000701", "inbound", 200, null, true, "no_available_agent", "l-1", "caller-g"),
     call("910000702", "inbound", 60, 9, true, null, "l-1", "caller-g"),
+    // missed yesterday, called back an hour later, missed again today: listed, missed 1 time (since the callback)
+    call("910001001", "inbound", 26 * 60, null, true, "no_available_agent", "l-1", "caller-i"),
+    call("910001002", "outbound", 25 * 60, 8, true, null, "l-1", "caller-i"),
+    call("910001003", "inbound", 75, null, true, "agents_did_not_answer", "l-1", "caller-i"),
     // anonymous: counted, never listed
     call("910000801", "inbound", 70, null, true, "no_available_agent", "l-1", null),
     call("910000802", "inbound", 32, null, true, null, "l-2", null),

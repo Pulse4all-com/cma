@@ -64,3 +64,6 @@ PASS rows at 61 (35, 41, 53 and 55 named by the brief):
   55_verify_uncounted_lines.txt            18 PASS, 0 FAIL
   57_verify_commerce_phone_hash.txt        13 PASS, 0 FAIL
   59_verify_commerce_contact_link.txt      14 PASS, 0 FAIL
+
+Rerun after review round 1 (14 October 2026: missed_count since the latest callback, check B15 in 61): every output
+above identical to this file's earlier run, at 59 and at 61.

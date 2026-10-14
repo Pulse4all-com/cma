@@ -21,6 +21,7 @@
 --                            0008i inbound calls on the NL line for Inbound and the Live board: every
 --                            reason of Pulse4all's seed and a code nobody saved, answered calls, a
 --                            caller missed twice and then called back, a caller missed twice and not,
+--                            a caller missed, called back and missed again (times missed 1),
 --                            an anonymous caller, a call older than the lookback, a call waiting now,
 --                            the connection's catalog rows and its record_url_call template (callers
 --                            as invented 64-hex hashes, never made from a number)
@@ -176,6 +177,11 @@ begin
         -- caller a5 outside opening hours, caller a6 with a code nobody saved
         ('7200051', 'inbound',  (now() - interval '14 hours') at time zone 'UTC',             null, true,  'out_of_opening_hours',  repeat('a5', 32)),
         ('7200061', 'inbound',  (now() - interval '50 minutes') at time zone 'UTC',           null, true,  'abandoned_in_classic',  repeat('a6', 32)),
+        -- caller a9 missed a day ago, called back an hour later, missed again: listed, missed 1 time
+        -- (the missed calls since the latest callback)
+        ('7200091', 'inbound',  (now() - interval '26 hours') at time zone 'UTC',             null, true,  'no_available_agent',    repeat('a9', 32)),
+        ('7200092', 'outbound', (now() - interval '25 hours') at time zone 'UTC',             7,    true,  null,                    repeat('a9', 32)),
+        ('7200093', 'inbound',  (now() - interval '40 minutes') at time zone 'UTC',           null, true,  'agents_did_not_answer', repeat('a9', 32)),
         -- an anonymous caller (no hash): counted, never listed
         ('7200071', 'inbound',  (now() - interval '70 minutes') at time zone 'UTC',           null, true,  'no_available_agent',    null),
         -- waiting now: not answered, not ended

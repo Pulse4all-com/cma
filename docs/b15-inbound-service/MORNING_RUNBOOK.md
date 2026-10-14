@@ -45,7 +45,7 @@ Expected: three route lines (`/api/v1/configuration/sources/[id]/missed-reasons`
 ```bash
 run_migration dev 60_inbound_service.sql 61_verify_inbound_service.sql 0008i-dev-$(date +%F) 35_verify_telephony.sql 41_verify_lead_metrics.sql 53_verify_sources_configuration.sql 55_verify_uncounted_lines.sql
 ```
-Expected: `connected to cma as martin@pulse4all.com`; the last lines of `60` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `61` ends with the verdict row `PASS | 19 PASS, 0 FAIL`; `provoked FAIL lines: 20` and the verdict `PROVOKED, NOT A PASS | 0 PASS, 19 FAIL`; `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `53_verify_sources_configuration.sql: 17 PASS rows`, `55_verify_uncounted_lines.sql: 18 PASS rows`. A `REFUSED` line means the session is not on dev: check `cma_db dev`.
+Expected: `connected to cma as martin@pulse4all.com`; the last lines of `60` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `61` ends with the verdict row `PASS | 20 PASS, 0 FAIL`; `provoked FAIL lines: 21` and the verdict `PROVOKED, NOT A PASS | 0 PASS, 20 FAIL`; `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `53_verify_sources_configuration.sql: 17 PASS rows`, `55_verify_uncounted_lines.sql: 18 PASS rows`. A `REFUSED` line means the session is not on dev: check `cma_db dev`.
 
 **Terminal** (`60` again, then the seed)
 ```bash
@@ -121,17 +121,17 @@ cd ~/cma/web && npm run build >/dev/null && cp -r .next/static .next/standalone/
 ```bash
 cd ~/cma/web && for v in theme layout hints; do BASE=http://localhost:8080 node verify/$v.mjs | tail -1; BASE=http://localhost:8080 node verify/$v.mjs --provoke | tail -1; done
 ```
-Expected, in order: `theme: PASS (36 pages, …)`, `theme: FAIL (5 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, …)`, `layout: FAIL (15 problems)`, `hints: PASS (157 headers and 27 tiles on 14 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
+Expected, in order: `theme: PASS (36 pages, …)`, `theme: FAIL (5 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, …)`, `layout: FAIL (16 problems)`, `hints: PASS (157 headers and 27 tiles on 14 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
 
 ## 7. A hand check in prod
 
 **Browser:** workspace.pulse4all.app → Reports → Inbound (key after Intake) → This week, then Group by Hour (G).
 
-Expected: one row per day with offered, answered, unanswered, service level, average and 80th percentile, one column per missed reason with the seed's labels, a total row; by hour the evening hours show the `Outside opening hours` column. Hover an info mark: the service level's hint names 20 seconds.
+Expected: one row per day with offered, answered, unanswered, service level, average and 80th percentile, one column per missed reason with the seed's labels, a total row; the reasons coloured Deep Blue, Light Blue, Denim, Soft Rose, Inkt and Neutral, most frequent first, answered calls Leaf Green, no text on the bars; by hour the evening hours show the `Outside opening hours` column. Hover an info mark: the service level's hint names 20 seconds.
 
 **Browser:** Live → Live board.
 
-Expected: the Inbound today tiles, then Missed, not called back with one row per caller (line, market, reason, missed at, waiting, times missed), no link icon yet (the call link template is not set: README, Open decisions), and below it the count of anonymous missed calls when there are any; the board refreshes every 10 seconds.
+Expected: the Inbound today tiles, then Missed, not called back with one row per caller (line, market, reason, missed at, waiting, times missed since the caller's latest callback), no link icon yet (the call link template is not set: README, Open decisions), and below it the count of anonymous missed calls when there are any; the board refreshes every 10 seconds.
 
 **Browser:** Configuration → Sources → the Aircall connection.
 

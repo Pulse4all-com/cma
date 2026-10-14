@@ -2,7 +2,7 @@ verify/api.mjs against http://localhost:8082  (--provoke: every check must FAIL)
 
 FAIL  identity in two tenants is refused           got 403, wanted 200
 FAIL  unknown identity is refused                  got 403, wanted 200
-FAIL  tenant comes from the identity only          got 01a13a85-ced5-7274-b3a0-9fd8c9679668, wanted 00000000-0000-7000-8000-00000000beef
+FAIL  tenant comes from the identity only          got 01a13aa1-059e-7907-aa0b-79973827aada, wanted 00000000-0000-7000-8000-00000000beef
 FAIL  ?as= is a 303 to the same path, relative     got [303,"/day",true], wanted [303,"http://localhost/day",true]
 FAIL  ?as= keeps the other parameters              got [303,"/day?date=2026-10-01"], wanted [303,"/day?as=supervisor&date=2026-10-01"]
 FAIL  an invalid ?as= is a 400                     got [400,"bad-mock-subject"], wanted [303,null]
@@ -15,7 +15,7 @@ FAIL  start opens the own day today                got ["2026-10-14",true], want
 FAIL  a second start is the same day               got true, wanted false
 FAIL  the own day ends at the window end, 22:00    got 2026-10-14T20:00:00.000Z, wanted 2026-10-14T21:00:00.000Z
 FAIL  two users have two different days            got false, wanted true
-FAIL  hours show the caller's own day              got ["2026-10-14T13:10:41.842Z","2026-10-14T13:10:41.917Z"], wanted ["2026-10-14T13:10:41.917Z","2026-10-14T13:10:41.842Z"]
+FAIL  hours show the caller's own day              got ["2026-10-14T13:42:33.544Z","2026-10-14T13:42:33.619Z"], wanted ["2026-10-14T13:42:33.619Z","2026-10-14T13:42:33.544Z"]
 FAIL  a user parameter cannot redirect hours       got {"from":"2026-10-01","to":"2026-10-14","days":[{"date":"2026, wanted {"from":"2026-10-01","to":"2026-10-14","days":[{"date":"2026
 FAIL  an agent cannot read team hours              got 403, wanted 200
 FAIL  an agent cannot list the team                got 403, wanted 200
@@ -35,7 +35,7 @@ FAIL  correction leaves no past day open or capped got [0,true,true], wanted [1,
 FAIL  end needs the request header                 got 400, wanted 200
 FAIL  cross-site end is refused                    got 403, wanted 200
 FAIL  end ends the own day                         got ended, wanted working
-FAIL  start on an ended day changes nothing        got ["ended","2026-10-14T13:10:42.432Z"], wanted ["working",null]
+FAIL  start on an ended day changes nothing        got ["ended","2026-10-14T13:42:34.201Z"], wanted ["working",null]
 FAIL  a second end changes nothing                 got true, wanted false
 FAIL  log out on an ended day changes nothing      got [303,true], wanted [303,false]
 FAIL  the other user's day is untouched            got working, wanted ended
@@ -56,7 +56,7 @@ FAIL  time per status is bounded to 92 days        got 400, wanted 200
 FAIL  a link that needs a permission is hidden from the agent got [true,true,true], wanted [true,false,true]
 FAIL  every link is https, for anyone with a role  got [200,true], wanted [200,false]
 FAIL  the profile is the caller's own row          got [true,true,true], wanted [true,true,false]
-FAIL  a query cannot pick another person's profile got 01a13a85-cf2e-729c-8d18-b7111a188992, wanted 01a13a85-cf2d-7c69-b915-b0ea6ae30a72
+FAIL  a query cannot pick another person's profile got 01a13aa1-0603-7ed7-a796-982e2b7d0364, wanted 01a13aa1-0603-72d9-b547-672ea0d7befe
 FAIL  the profile names the person as /me does     got [true,true,true], wanted [true,true,false]
 FAIL  the profile says whose time is kept          got [200,false,true,true], wanted [200,true,true,true]
 FAIL  an unknown identity gets no profile          got 403, wanted 200
@@ -144,7 +144,7 @@ FAIL  sources: the manager cannot read them either got 403, wanted 200
 FAIL  sources: the admin reads every connection with its kind got [200,true,true], wanted [403,false,true]
 FAIL  sources: no secret value, only names and non-secret settings got true, wanted false
 FAIL  sources: a malformed id is a 400, an unknown one a 404 got [400,404], wanted [200,200]
-FAIL  sources: the admin opens one connection with its catalogs got [200,"01a13a89-1716-7f2d-a18c-689b398e5a09",true], wanted [404,null,true]
+FAIL  sources: the admin opens one connection with its catalogs got [200,"01a13aa3-393a-73f2-b777-ce6d79a5b27f",true], wanted [404,null,true]
 FAIL  sources: a settings write needs the request header got 400, wanted 200
 FAIL  sources: a cross-site settings write is refused got 403, wanted 200
 FAIL  sources: a secret-looking settings key is a 400 and changes nothing got [400,false], wanted [200,true]

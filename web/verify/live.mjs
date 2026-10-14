@@ -12,9 +12,10 @@
  * and the window start read from a refused clock-in. Since addition 0008i (brief B15) also the inbound
  * tiles and the missed calls not called back as 61 proves them in the database: a caller missed twice
  * as one row, called back by an outbound attempt on another connection and by an answered inbound
- * call, an earlier outbound call not counting, a later missed call calling nobody back, the lookback, a reason without a callback, anonymous
- * calls counted and never listed, a waiting call not missed and a lost one missed, oldest first, office
- * time or the time since the call, the link only with a template, and no caller in any answer.
+ * call, an earlier outbound call not counting, a later missed call calling nobody back, the lookback, a
+ * reason without a callback, anonymous calls counted and never listed, a waiting call not missed and a
+ * lost one missed, oldest first, office time or the time since the call, the link only with a template,
+ * no caller in any answer, and the times missed counted since the latest callback (61 B15).
  */
 import {
   INBOUND_TILES, LIVE_GROUPS, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
@@ -181,6 +182,17 @@ expect("the link only where the connection has a template",
   three.rows.map((r) => r.recordUrl !== null), [false, false, true, false], [true, true, true, true]);
 expect("no caller, hash, number or name in an answer",
   [personalDataIn(three), ["h1", "h4", "h10"].some((h) => JSON.stringify(three).includes(`"${h}"`))], [[], false], [["$.rows"], true]);
+// 61 B15: missed, called back, missed again later counts 1 (by outbound calls, the latest of two, and
+// by an answered inbound call)
+const again = missedCallbacks([...calls,
+  call("d-1", "inbound", 50 * 60, null, true, "no_available_agent", "nl", "h11"), call("d-2", "outbound", 49 * 60, null, true, null, "nl", "h11"),
+  call("d-3", "inbound", 26 * 60, null, true, "no_available_agent", "nl", "h11"), call("d-4", "outbound", 25 * 60, 7, true, null, "nl", "h11"),
+  call("d-5", "inbound", 50, null, true, "agents_did_not_answer", "nl", "h11"),
+  call("e-1", "inbound", 27 * 60, null, true, "no_available_agent", "nl", "h12"), call("e-2", "inbound", 26 * 60, null, true, "abandoned_in_ivr", "nl", "h12"),
+  call("e-3", "inbound", 25 * 60, 9, true, null, "nl", "h12"), call("e-4", "inbound", 45, null, true, "no_available_agent", "nl", "h12"),
+], lines, reasons, "Europe/Amsterdam", 30, 3, NOW, business, url);
+expect("times missed counts the missed calls since the latest callback",
+  again.rows.filter((r) => /^[de]-/.test(r.sourceId)).map((r) => `${r.sourceId}:${r.missedCount}`), ["d-5:1", "e-4:1"], ["d-5:3", "e-4:3"]);
 expect("oldest first, then by the call's id",
   sortCallbacks([{ startedAt: ago(10), sourceId: "b" }, { startedAt: ago(20), sourceId: "z" }, { startedAt: ago(10), sourceId: "a" }]).map((r) => r.sourceId),
   ["z", "a", "b"], ["a", "b", "z"]);

@@ -25,7 +25,9 @@
 --      call, a later missed call that calls nobody back, the lookback, a reason without a callback,
 --      anonymous calls); tenant three with tenant two's hash strings, also in the owner's rights.
 --      The hash in no answer; the catalog written by a configuring person only, with its refusals;
---      the permissions of the reads and tenant isolation
+--      the permissions of the reads and tenant isolation. Last, times missed since the latest
+--      callback: missed, called back, missed again later counts 1 (by outbound calls, the latest of
+--      two, and by an answered inbound call)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -184,7 +186,8 @@ declare
   v_now      timestamptz := now();
   v_d        timestamptz := timestamptz '2026-09-15 10:00:00+00';   -- a Tuesday, CEST
   v_h        text[] := array[repeat('a1', 32), repeat('a2', 32), repeat('a3', 32), repeat('a4', 32), repeat('a5', 32),
-                             repeat('a6', 32), repeat('a7', 32), repeat('a8', 32), repeat('a9', 32), repeat('b1', 32)];
+                             repeat('a6', 32), repeat('a7', 32), repeat('a8', 32), repeat('a9', 32), repeat('b1', 32),
+                             repeat('b2', 32), repeat('b3', 32)];
 begin
   if not current_setting('verify.is_dev')::boolean then
     return;
@@ -539,6 +542,30 @@ begin
     v_rows := v_rows || array['24', 'B14 the reads'' permissions and refusals; tenant isolation',
       case when v_ok and not v_provoke then 'PASS' else 'FAIL' end, format('%s of 16 refusals; tenant three offered/reasons/catalog/one/two %s', v_n, v_txt)];
 
+    -- B15. times missed since the last callback (written last, so the checks above keep their calls):
+    --      caller 11 missed two days ago and was called back, missed a day ago and was called back again
+    --      an hour later (outbound calls), and missed 50 minutes ago; caller 12 missed twice a day ago,
+    --      called in an hour later and was answered, and missed 45 minutes ago. Each is listed with its
+    --      latest call and counts 1, not 3 (every missed call) or 2 (since the first callback): only the
+    --      missed calls after the latest callback count
+    perform set_config('app.tenant_id', v_t2::text, true);
+    perform set_config('app.user_id', v_ing2::text, true);
+    perform cma.ingest_upsert_telephony_calls(v_tel2, jsonb_build_array(
+      pg_temp.v0008i_call('d-1', 'inbound', v_now - interval '50 hours', null, 30, 'no_available_agent', 'line-nl', v_h[11]),
+      pg_temp.v0008i_call('d-2', 'outbound', v_now - interval '49 hours', null, 25, null, 'line-nl', v_h[11]),
+      pg_temp.v0008i_call('d-3', 'inbound', v_now - interval '26 hours', null, 30, 'no_available_agent', 'line-nl', v_h[11]),
+      pg_temp.v0008i_call('d-4', 'outbound', v_now - interval '25 hours', 7, 120, null, 'line-nl', v_h[11]),
+      pg_temp.v0008i_call('d-5', 'inbound', v_now - interval '50 minutes', null, 30, 'agents_did_not_answer', 'line-nl', v_h[11]),
+      pg_temp.v0008i_call('e-1', 'inbound', v_now - interval '27 hours', null, 30, 'no_available_agent', 'line-nl', v_h[12]),
+      pg_temp.v0008i_call('e-2', 'inbound', v_now - interval '26 hours', null, 30, 'abandoned_in_ivr', 'line-nl', v_h[12]),
+      pg_temp.v0008i_call('e-3', 'inbound', v_now - interval '25 hours', 9, 200, null, 'line-nl', v_h[12]),
+      pg_temp.v0008i_call('e-4', 'inbound', v_now - interval '45 minutes', null, 30, 'no_available_agent', 'line-nl', v_h[12])));
+    perform set_config('app.user_id', v_analyst2::text, true);
+    select string_agg(source_id || ':' || missed_count, ',' order by started_at) into v_txt
+    from cma.missed_callbacks() where source_id ~ '^[de]-';
+    v_rows := v_rows || array['25', 'B15 times missed counts the missed calls since the latest callback',
+      case when v_txt = 'd-5:1,e-4:1' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none listed')];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -561,7 +588,7 @@ from (select ord, check_name, result, detail from verify_0008i
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008i where result = 'PASS') = 19
+                  when (select count(*) from verify_0008i where result = 'PASS') = 20
                        and not exists (select 1 from verify_0008i where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008i where result = 'PASS'),

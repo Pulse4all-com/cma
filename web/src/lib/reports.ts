@@ -445,12 +445,14 @@ export function unansweredPct(f: Pick<InboundFigures, "answered" | "unanswered">
 }
 
 /**
- * The neutral series for missed reasons, in order (palette tokens only, written out so Tailwind finds
- * them): the blues and greys of the palette, never a red, a rose, the warning amber or the success
- * green, because a reason is a category, not a verdict. Answered calls are Leaf Green next to them.
- * Pulse4all-Style.md is not in the repository; this order is the CMA's until Martin confirms the style's.
+ * The series for missed reasons, in order (palette tokens only, written out so Tailwind finds them):
+ * the style's series order without Leaf Green, which reads as Available on the Live board, then the
+ * neutral grey: Deep Blue, Light Blue, Denim, Soft Rose, Inkt, Neutral (Martin, 14 October 2026). Never
+ * the error red or the warning amber: a reason is a category, not a verdict. No text sits on a Light
+ * Blue or Soft Rose segment (Pulse4all-Style 7.8); the segments carry none, the label is in the column
+ * header and the legend. Answered calls are Leaf Green next to them.
  */
-export const REASON_SERIES: readonly string[] = ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-inkt", "bg-p4a-grey", "bg-p4a-denim", "bg-p4a-border"];
+export const REASON_SERIES: readonly string[] = ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-denim", "bg-p4a-rose", "bg-p4a-inkt", "bg-p4a-muted"];
 export const ANSWERED_CLASS = "bg-p4a-green";
 export const WAITING_CLASS = "bg-p4a-bgblue-dark";
 

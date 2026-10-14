@@ -14,17 +14,17 @@
  * a line's box stays ticked until the switch-off is confirmed; End workday, an ordinary confirmation, opens
  * on its confirm button (agent-two clocks in through the route for it, inside the mock's 07:00 to 22:00
  * workday window). Inbound and the Live board (addition 0008i): the Inbound report at 1280 px with its
- * keycaps, a hint on its right-most reason column and its table scrolling inside its card, the
- * not-connected state for a tenant without telephony; the Live board for every identity that holds it,
- * with the inbound tiles, the missed calls and a tile's hint inside the viewport, or the not-connected
- * state, and no horizontal scrolling. Saves screenshots under records/ for the release note.
+ * keycaps, a hint on its right-most reason column, its table scrolling inside its card and no text on a
+ * Light Blue or Soft Rose reason mark, the not-connected state for a tenant without telephony; the
+ * Live board for every identity that holds it, with the inbound tiles, the missed calls and a tile's
+ * hint inside the viewport, or the not-connected state, and no horizontal scrolling. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
  *       1279 px and demands the app shell, moves one hint panel over its header, lets the
- *       Intake and Inbound tables spill out of their cards, widens the Live board's inbound tiles past
- *       the main area, focuses the confirm button of each irreversible
- *       confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
+ *       Intake and Inbound tables spill out of their cards, writes a count on a Light Blue reason mark,
+ *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
+ *       irreversible confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -186,6 +186,17 @@ async function expectReports() {
       }, [provoke && subject === "manager", path.startsWith("/reports/inbound") ? "inbound-scroll" : "intake-scroll"]);
       if (!w) problems.push(`${subject} ${path}: the table has no scroll container`);
       else if (w.main > 0) problems.push(`${subject} ${path}: the main area scrolls sideways by ${w.main}px at 1280`);
+    }
+    // No text on a Light Blue or Soft Rose segment or dot of the reason series (Pulse4all-Style 7.8);
+    // --provoke writes a count into the first Light Blue one
+    if (path.startsWith("/reports/inbound") && subject === "manager") {
+      const t = await p.evaluate((spill) => {
+        const marks = [...document.querySelectorAll('[data-testid="inbound-legend"] .bg-p4a-lightblue, [data-testid="inbound-legend"] .bg-p4a-rose, [data-testid="inbound-table"] .bg-p4a-lightblue, [data-testid="inbound-table"] .bg-p4a-rose')];
+        if (spill && marks[0]) marks[0].textContent = "3";
+        return { marks: marks.length, withText: marks.filter((m) => (m.textContent ?? "").trim() !== "").length };
+      }, provoke);
+      if (t.marks === 0) problems.push(`${subject} ${path}: no Light Blue or Soft Rose reason mark to check`);
+      if (t.withText > 0) problems.push(`${subject} ${path}: ${t.withText} Light Blue or Soft Rose reason marks carry text`);
     }
     if (Math.round(m.rail) !== 256) problems.push(`${subject} ${path}: rail is ${m.rail}px`);
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${subject} ${path}: keycap ${k} missing`);
@@ -473,5 +484,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, the Live board for 6 identities, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

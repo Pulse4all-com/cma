@@ -176,8 +176,9 @@ export type CallerCall = TelephonyCallFixture & { caller: string | null };
 /**
  * The missed calls not called back, as cma.missed_callbacks_of finds them: per caller the latest
  * missed inbound call whose reason needs a callback, started within the lookback, with no later
- * outbound call to the caller (connected or not) and no later answered inbound call from them on any
- * connection; missed_count every missed call of the caller in the lookback; oldest first. Calls without
+ * callback (an outbound call to the caller, connected or not, or an answered inbound call from them, on
+ * any connection); missed_count the caller's missed calls in the lookback since their latest callback
+ * before that call (missed Monday, called back Monday, missed Tuesday is 1); oldest first. Calls without
  * a caller are counted apart (anonymous), never listed. businessSeconds gives the office seconds of a
  * market (null without one), as cma.business_seconds_of.
  */
@@ -205,13 +206,15 @@ export function missedCallbacks(
   }
   const rows: MissedCallback[] = [];
   for (const [caller, m] of latest) {
-    const calledBack = calls.some((o) => o.caller === caller && !o.deleted && Date.parse(o.startedAt) > Date.parse(m.startedAt)
-      && (o.direction === "outbound" || o.answeredAt !== null));
-    if (calledBack) continue;
+    const at = Date.parse(m.startedAt);
+    const callbacks = calls.filter((o) => o.caller === caller && !o.deleted && (o.direction === "outbound" || o.answeredAt !== null))
+      .map((o) => Date.parse(o.startedAt));
+    if (callbacks.some((t) => t > at)) continue;
+    const lastCallback = Math.max(-Infinity, ...callbacks.filter((t) => t < at));
     rows.push({
       callId: `${m.connectionId}/${m.sourceId}`, connectionId: m.connectionId, sourceId: m.sourceId, lineRef: m.lineRef,
       lineName: m.lineName, market: m.market, reasonCode: m.reasonCode!, reasonLabel: m.reasonLabel!, startedAt: m.startedAt,
-      missedCount: missed.filter((c) => c.caller === caller).length,
+      missedCount: missed.filter((c) => c.caller === caller && Date.parse(c.startedAt) > lastCallback).length,
       waitingSeconds: Math.max(0, Math.floor((nowMs - Date.parse(m.startedAt)) / 1000)),
       waitingBusinessSeconds: m.market === "unknown" ? null : businessSeconds(m.market, m.startedAt, nowMs),
       recordUrl: recordUrl(m.connectionId, m.sourceId),

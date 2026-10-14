@@ -6,8 +6,8 @@ csv            exit 0: ALL 16 PASS
                provoked exit 0: ALL 16 PROVOKED CHECKS FAILED, as they must
 dashboard      exit 0: ALL 17 PASS
                provoked exit 0: ALL 17 PROVOKED CHECKS FAILED, as they must
-live           exit 0: ALL 38 PASS
-               provoked exit 0: ALL 38 PROVOKED CHECKS FAILED, as they must
+live           exit 0: ALL 39 PASS
+               provoked exit 0: ALL 39 PROVOKED CHECKS FAILED, as they must
 team           exit 0: team: PASS (26 checks)
                provoked exit 0: team: ALL 26 PROVOKED CHECKS FAILED, as they must
 roster         exit 0: roster: PASS (31 checks)

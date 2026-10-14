@@ -434,7 +434,7 @@ const en = {
     missedReason: "Why the phone system says the call was missed.",
     missedAt: "When the caller's latest missed call started, in your time zone.",
     missedWaiting: "Office time in the line's market since the missed call. For a line without a market, the time since the call.",
-    missedTimes: "How often this caller was missed in the last {days} days.",
+    missedTimes: "How often this caller was missed since the last callback, within {days} days.",
   },
   live: {
     title: "Live board",
@@ -1662,7 +1662,7 @@ const nl: Copy = {
     missedReason: "Waarom het telefoniesysteem het gesprek als gemist aanmerkt.",
     missedAt: "Wanneer het laatste gemiste gesprek van de beller begon, in jouw tijdzone.",
     missedWaiting: "Kantoortijd in de markt van de lijn sinds het gemiste gesprek. Voor een lijn zonder markt de tijd sinds het gesprek.",
-    missedTimes: "Hoe vaak deze beller de afgelopen {days} dagen is gemist.",
+    missedTimes: "Hoe vaak deze beller is gemist sinds de laatste keer terugbellen, binnen {days} dagen.",
   },
   live: {
     title: "Livebord",

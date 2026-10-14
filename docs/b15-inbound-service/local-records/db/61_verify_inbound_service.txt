@@ -11,7 +11,7 @@ SET
 (1 row)
 
 DO
-psql:db/61_verify_inbound_service.sql:56: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:db/61_verify_inbound_service.sql:58: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
 CREATE FUNCTION
@@ -38,8 +38,9 @@ DO
  B12 the hash is in no answer                                                                                   | PASS   | 0 hash strings found in 14391 characters of answers
  B13 a configuring person writes the catalog; the Ingest user and an agent cannot; nine refusals                | PASS   | agents_did_not_answer:Nobody picked up:true:false | 9 of 9 refusals
  B14 the reads' permissions and refusals; tenant isolation                                                      | PASS   | 16 of 16 refusals; tenant three offered/reasons/catalog/one/two 1/0/0/0/0
- verdict                                                                                                        | PASS   | 19 PASS, 0 FAIL
-(20 rows)
+ B15 times missed counts the missed calls since the latest callback                                             | PASS   | d-5:1,e-4:1
+ verdict                                                                                                        | PASS   | 20 PASS, 0 FAIL
+(21 rows)
 
 DROP FUNCTION
 RESET

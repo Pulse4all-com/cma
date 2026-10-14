@@ -1,4 +1,4 @@
-Mutations of db/60_inbound_service.sql, each on a fresh copy of the database at 59 (the mutated 60, then 02, then the final 61 unchanged).
+Mutations of db/60_inbound_service.sql after review round 1 (missed_count since the latest callback), each on a fresh copy of the database at 59 (the mutated 60, then 02, then the final 61 unchanged).
 Each line: what the mutation breaks, its name, and the checks of 61 that failed (the verdict then reads FAIL).
 
 a call at exactly N seconds counts as late: sl_strict: caught by: B1 B2
@@ -12,15 +12,17 @@ an empty reason kept (equivalent: the ingest write already stores an empty reaso
 deleted calls counted: deleted_counted: caught by: B1 B2
 outbound calls offered: outbound_offered: caught by: B1 B2 B7 B10 B14
 no total row: no_total_row: caught by: B2
-an answered call does not call back: no_answered_callback: caught by: B7 B8 B10
-an outbound attempt does not call back: no_outbound_callback: caught by: B7 B8 B10
+an answered call does not call back: no_answered_callback: caught by: B7 B8 B10 B15
+an outbound attempt does not call back: no_outbound_callback: caught by: B7 B8 B10 B15
 a later missed call counts as a callback: unanswered_inbound_calls_back: caught by: B7 B10
-an earlier outbound call counts: earlier_outbound_counts: caught by: B7 B8 B10
+an earlier outbound call counts: earlier_outbound_counts: caught by: B7 B8 B10 B15
 needs_callback ignored: needs_callback_ignored: caught by: B7 B9 B10
 missed_count always 1: count_one: caught by: B7
+missed_count counts every missed call in the lookback, callbacks ignored: count_every_missed: caught by: B15
+missed_count counts from the first callback, not the latest: count_from_first_callback: caught by: B15
 no lookback: no_lookback: caught by: B7 B9 B10
 anonymous calls listed: anon_listed: caught by: B7 B10
-the hash returned as the source id: hash_returned: caught by: B7 B8 B9 B11 B12
+the hash returned as the source id: hash_returned: caught by: B7 B8 B9 B11 B12 B15
 callbacks matched across tenants (visible in the owner rights): cross_tenant_match: caught by: B11
 a read in the owner rights: security_definer: caught by: A4
 no permission check on today: no_permission_today: caught by: B14

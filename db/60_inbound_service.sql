@@ -52,6 +52,8 @@
 --                      tenant's zone (a line without a market, a call without a line)
 --   called back        any later outbound call to the same caller (connected or not), or any later
 --                      answered inbound call from them, on any telephony connection of the tenant
+--   times missed       missed_count: the caller's missed calls in the lookback since their latest
+--                      callback before the listed call, all of them in the lookback without one
 --
 -- counterpart_hash gets its third purpose here: callback matching, inside one tenant only. The hash
 -- is never shown and no function of this addition returns it.
@@ -333,8 +335,10 @@ $$;
 -- with a reason that needs a callback started within telephony.callback_lookback_days, with no
 -- later outbound call to the caller and no later answered inbound call from them on any telephony
 -- connection of the tenant. Missed: unanswered and not waiting. missed_count counts the caller's
--- missed calls in the lookback (every reason). Oldest first. Calls without a hash are left out
--- (cma.missed_callbacks_summary_of counts them).
+-- missed calls in the lookback (every reason) since their latest callback before the listed call (the
+-- latest outbound call to them or answered inbound call from them), all of them without one: missed
+-- Monday, called back Monday and missed Tuesday is 1 (Martin, 14 October 2026). Oldest first. Calls
+-- without a hash are left out (cma.missed_callbacks_summary_of counts them).
 create or replace function cma.missed_callbacks_of(p_tenant_id uuid)
 returns table (
   call_id                   uuid,
@@ -367,17 +371,29 @@ as $$
     select distinct on (m.h) m.*
     from m where m.needs_callback
     order by m.h, m.started_at desc, m.call_id desc
+  ),
+  -- a callback: any outbound call to the caller, connected or not, or an answered inbound call from
+  -- them, on any telephony connection of the tenant; the latest one after the listed call (which takes
+  -- the caller off the list) and the latest one before it (from which missed_count counts)
+  k as (
+    select l.*, cb.next_callback_at, cb.last_callback_at
+    from l
+    cross join lateral (
+      select max(o.started_at) filter (where o.started_at > l.started_at) as next_callback_at,
+             max(o.started_at) filter (where o.started_at < l.started_at) as last_callback_at
+      from cma.telephony_call o
+      where o.tenant_id = p_tenant_id and o.counterpart_hash = l.h and o.source_deleted_at is null
+        and (o.direction = 'outbound' or (o.direction = 'inbound' and o.answered_at is not null))
+    ) cb
   )
-  select l.call_id, l.connection_id, l.source_id, l.line_ref, l.line_name, l.market, l.reason_code, l.reason_label,
-         l.started_at, (select count(*)::integer from m where m.h = l.h),
-         greatest(0, floor(extract(epoch from now() - l.started_at)))::integer,
-         cma.business_seconds_of(p_tenant_id, nullif(l.market, 'unknown'), l.started_at, now())
-  from l
-  where not exists (select 1 from cma.telephony_call o
-                    where o.tenant_id = p_tenant_id and o.counterpart_hash = l.h
-                      and o.source_deleted_at is null and o.started_at > l.started_at
-                      and (o.direction = 'outbound' or (o.direction = 'inbound' and o.answered_at is not null)))
-  order by l.started_at, l.source_id
+  select k.call_id, k.connection_id, k.source_id, k.line_ref, k.line_name, k.market, k.reason_code, k.reason_label,
+         k.started_at,
+         (select count(*)::integer from m where m.h = k.h and (k.last_callback_at is null or m.started_at > k.last_callback_at)),
+         greatest(0, floor(extract(epoch from now() - k.started_at)))::integer,
+         cma.business_seconds_of(p_tenant_id, nullif(k.market, 'unknown'), k.started_at, now())
+  from k
+  where k.next_callback_at is null
+  order by k.started_at, k.source_id
 $$;
 
 -- The callers listed, the anonymous missed calls (no hash, so never matched: missed calls of the
