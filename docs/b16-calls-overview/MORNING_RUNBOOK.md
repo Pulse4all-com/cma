@@ -2,7 +2,7 @@
 
 Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them).
 
-**What changes:** Reports → Calls (`/reports/calls`, `reports.view` or `performance.team`): calls, inbound and outbound, answered and connected, conversations, talk time and untagged conversations per day, week, market or line, with the previous equal period, and the tag use in the same grouping. Reports → Calls per agent (`/reports/calls-per-agent`, `performance.team` only): the same figures per person, sorted by name, each row opening on that person's conversations per counted tag. Both pages filter by market (K) and line (N). Configuration → Sources, a telephony connection: the threshold of a connected call in plain words, with a link to its setting under Configuration → Exports → Other settings. Addition 0008j (`62`, `63`) holds the setting `telephony.connected_min_seconds` (default 10) and the functions; `02` sets Pulse4all's value 10 for both tenants, to be confirmed by Kira against Aircall's "x sec" (README, Data model: calls overview and calls per agent; Decision log, 14 October 2026).
+**What changes:** Reports → Calls (`/reports/calls`, `reports.view` or `performance.team`): calls, inbound and outbound, answered and connected, conversations, talk time and untagged conversations per day, week, market or line, with the previous period like for like (a period that is still running against the same point in the previous one), and the tag use in the same grouping. Reports → Calls per agent (`/reports/calls-per-agent`, `performance.team` only): the same figures per person, sorted by name, each row opening on that person's conversations per counted tag. Both pages filter by market (K) and line (N). Configuration → Sources, a telephony connection: the threshold of a connected call in plain words, with a link to its setting under Configuration → Exports → Other settings. Addition 0008j (`62`, `63`) holds the setting `telephony.connected_min_seconds` (default 10) and the functions; `02` sets Pulse4all's value 10 for both tenants, to be confirmed by Kira against Aircall's "x sec" (README, Data model: calls overview and calls per agent; Decision log, 14 October 2026).
 
 **Order matters:**
 - 0008i (`60`) must have run first; without it `62` stops with `addition 0008i (60_inbound_service.sql) must run before 0008j` and applies nothing. It ran in dev and prod on 14 October 2026.
@@ -46,7 +46,7 @@ Expected: four route lines (`/api/v1/reports/calls`, `/api/v1/reports/calls-per-
 ```bash
 run_migration dev 62_calls_overview.sql 63_verify_calls_overview.sql 0008j-dev-$(date +%F) 35_verify_telephony.sql 41_verify_lead_metrics.sql 55_verify_uncounted_lines.sql 61_verify_inbound_service.sql
 ```
-Expected: `connected to cma as martin@pulse4all.com`; the last lines of `62` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `63` ends with the verdict row `PASS | 16 PASS, 0 FAIL`; `provoked FAIL lines: 17` and the verdict `PROVOKED, NOT A PASS | 0 PASS, 16 FAIL`; `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `55_verify_uncounted_lines.sql: 18 PASS rows`, `61_verify_inbound_service.sql: 21 PASS rows` (its 20 checks and the verdict). A `REFUSED` line means the session is not on dev: check `cma_db dev`.
+Expected: `connected to cma as martin@pulse4all.com`; the last lines of `62` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `63` ends with the verdict row `PASS | 19 PASS, 0 FAIL`; `provoked FAIL lines: 20` and the verdict `PROVOKED, NOT A PASS | 0 PASS, 19 FAIL`; `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `55_verify_uncounted_lines.sql: 18 PASS rows`, `61_verify_inbound_service.sql: 21 PASS rows` (its 20 checks and the verdict). A `REFUSED` line means the session is not on dev: check `cma_db dev`.
 
 **Terminal** (`62` again, then the seed)
 ```bash
@@ -128,14 +128,14 @@ Expected: the build's details; the list then shows it for the merge's short SHA 
 ```bash
 cd ~/cma/web && node verify/api.mjs | tee ../records/0008j-dev-$(date +%F)/verify-api.txt | grep -E "^(note|ALL)"; node verify/api.mjs --provoke | tail -1
 ```
-Expected: five `note` lines and `ALL 241 PASS`, then `ALL 241 PROVOKED CHECKS FAILED, as they must`. The verifier has 250 checks, 235 from before B16 and 15 of Calls; dev leaves out 9, one `note` per group:
+Expected: five `note` lines and `ALL 242 PASS`, then `ALL 242 PROVOKED CHECKS FAILED, as they must`. The verifier has 251 checks, 235 from before B16 and 16 of Calls; dev leaves out 9, one `note` per group:
 - `invest-analyst has no access here: the check of a tenant without sources is left out`: 1 check from before B15; dev has no `invest-analyst`.
 - `no telephony connection in this tenant: the 5 checks of the missed-reason catalog are left out`: dev's tenant has no telephony connection.
 - `invest-analyst has no access here: the check of a tenant without telephony is left out`: 1 check of Inbound.
 - `reader has no access here: the check of reports.view without performance.team is left out`: 1 check of Calls; dev has no identity with `reports.view` alone (the mock fixture and the local fixture have `reader`).
 - `invest-analyst has no access here: the check of a tenant without telephony is left out` a second time: 1 check of Calls.
 
-That is 228 checks from before B16, as on 14 October 2026 (`records/0008i-dev-2026-10-14`), and 13 of Calls. Dev's tenant has no telephony connection, so the Calls checks there read empty answers; the local run on a database with calls passed all 249 (`local-records/web/verify-api-local-db.txt`).
+That is 228 checks from before B16, as on 14 October 2026 (`records/0008i-dev-2026-10-14`), and 14 of Calls. Dev's tenant has no telephony connection, so the Calls checks there read empty answers; the local run on a database with calls passed all 250 (`local-records/web/verify-api-local-db.txt`).
 
 ## 6. The browser verifiers against a local mock server
 
@@ -147,13 +147,13 @@ cd ~/cma/web && npm run build >/dev/null && cp -r .next/static .next/standalone/
 ```bash
 cd ~/cma/web && for v in theme layout hints; do BASE=http://localhost:8080 node verify/$v.mjs | tail -1; BASE=http://localhost:8080 node verify/$v.mjs --provoke | tail -1; done
 ```
-Expected, in order: `theme: PASS (40 pages, …, 11 tables per 7.6 and 3.3, a header hint open on 11 report pages)`, `theme: FAIL (6 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down), …)`, `layout: FAIL (22 problems)`, `hints: PASS (241 headers and 59 tiles on 20 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
+Expected, in order: `theme: PASS (40 pages, …, 11 tables per 7.6 and 3.3, a header hint open on 11 report pages)`, `theme: FAIL (6 problems)`, `layout: PASS (1280, 1920, gate at 1279, …, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like), …)`, `layout: FAIL (24 problems)`, `hints: PASS (241 headers and 59 tiles on 20 pages, …)`, `hints: FAIL (1 problems)`. The layout verifier writes its screenshots to `records/layout/`.
 
 ## 7. A hand check in prod
 
 **Browser:** workspace.pulse4all.app → Reports → Calls (after Inbound) → This week, then Group by Week (G).
 
-Expected: four tiles (calls, inbound, outbound, average talk time), each with the change against the previous equal period in grey, never green or red; for This week or This month the previous period is complete while the current one is not, so the change reads low until the period ends. Below: inbound and outbound per day as stacked columns (inbound Deep Blue, outbound Leaf Green), the Outbound section (connected calls, connected share, talk time on connected calls), and Tags: the share of untagged conversations, the tags of the whole period as horizontal bars (at most 12, then Other) and a table with one row per week and one column per tag, counts with the row's share. No number, no caller, no call id. Hover the info mark of Connected: its hint names 10 seconds.
+Expected: four tiles (calls, inbound, outbound, average talk time), each with the change against the previous period in grey, never green or red. This week is still running, so each change reads "vs the same point in the previous period": last week's days up to today's weekday, today's up to the current time (hover the line: its title names the dates and "the last day up to the current time"). Choose a custom week that has ended (C): the changes read "vs the previous period", the whole week before. Below: inbound and outbound per day as stacked columns (inbound Deep Blue, outbound Leaf Green), the Outbound section (connected calls, connected share, talk time on connected calls), and Tags: the share of untagged conversations, the tags of the whole period as horizontal bars (at most 12, then Other) and a table with one row per week and one column per tag, counts with the row's share. No number, no caller, no call id. Hover the info mark of Connected: its hint names 10 seconds.
 
 **Browser:** press K, choose NL; press N, choose a line.
 

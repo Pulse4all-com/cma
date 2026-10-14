@@ -1015,10 +1015,17 @@ export interface CallsOverview {
   rows: CallsRow[];
   /** Over every call of the period (the database's own total, not a sum of the groups) */
   total: CallsFigures;
-  /** The same totals over the previous equal period, for the deltas */
+  /**
+   * The same totals over the previous period, for the deltas, like for like: a period that ended compares
+   * with the whole previous equal period; one that reaches today with the same elapsed dates, the last of
+   * them up to the current time of day (previousPartial). previousTo falls before previousFrom for a period
+   * that starts after today: nothing to compare with
+   */
   previous: CallsFigures;
   previousFrom: DateKey;
   previousTo: DateKey;
+  /** The period reaches today, so the previous one is cut to the same point: "the same point in the previous period" */
+  previousPartial: boolean;
   /** The markets and lines with calls in the period, for the filters (the line list within the chosen market) */
   markets: string[];
   lines: CallsLine[];

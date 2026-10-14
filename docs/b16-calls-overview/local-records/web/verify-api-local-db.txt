@@ -2,7 +2,7 @@ verify/api.mjs against http://localhost:8081
 
 PASS  identity in two tenants is refused           got 403
 PASS  unknown identity is refused                  got 403
-PASS  tenant comes from the identity only          got 01a13b5f-a7d3-7401-91bd-67b0e7ff293b
+PASS  tenant comes from the identity only          got 01a13ba5-c2fd-7edb-a626-663b0e6eddb7
 PASS  ?as= is a 303 to the same path, relative     got [303,"/day",true]
 PASS  ?as= keeps the other parameters              got [303,"/day?date=2026-10-01"]
 PASS  an invalid ?as= is a 400                     got [400,"bad-mock-subject"]
@@ -15,7 +15,7 @@ PASS  start opens the own day today                got ["2026-10-14",true]
 PASS  a second start is the same day               got true
 PASS  the own day ends at the window end, 22:00    got 2026-10-14T20:00:00.000Z
 PASS  two users have two different days            got false
-PASS  hours show the caller's own day              got ["2026-10-14T17:14:18.837Z","2026-10-14T17:14:18.970Z"]
+PASS  hours show the caller's own day              got ["2026-10-14T18:30:21.387Z","2026-10-14T18:30:21.470Z"]
 PASS  a user parameter cannot redirect hours       got {"from":"2026-10-01","to":"2026-10-14","days":[{"date":"2026
 PASS  an agent cannot read team hours              got 403
 PASS  an agent cannot list the team                got 403
@@ -36,7 +36,7 @@ PASS  correction leaves no past day open or capped got [0,true,true]
 PASS  end needs the request header                 got 400
 PASS  cross-site end is refused                    got 403
 PASS  end ends the own day                         got ended
-PASS  start on an ended day changes nothing        got ["ended","2026-10-14T17:14:19.731Z"]
+PASS  start on an ended day changes nothing        got ["ended","2026-10-14T18:30:22.226Z"]
 PASS  a second end changes nothing                 got true
 PASS  log out on an ended day changes nothing      got [303,true]
 PASS  the other user's day is untouched            got working
@@ -57,7 +57,7 @@ PASS  time per status is bounded to 92 days        got 400
 PASS  a link that needs a permission is hidden from the agent got [true,true,true]
 PASS  every link is https, for anyone with a role  got [200,true]
 PASS  the profile is the caller's own row          got [true,true,true]
-PASS  a query cannot pick another person's profile got 01a13b5f-a839-7f02-9811-cec93ab63fab
+PASS  a query cannot pick another person's profile got 01a13ba5-c36a-7f1a-bfbc-8901c6e5bfc7
 PASS  the profile names the person as /me does     got [true,true,true]
 PASS  the profile says whose time is kept          got [200,false,true,true]
 PASS  an unknown identity gets no profile          got 403
@@ -145,7 +145,7 @@ PASS  sources: the manager cannot read them either got 403
 PASS  sources: the admin reads every connection with its kind got [200,true,true]
 PASS  sources: no secret value, only names and non-secret settings got true
 PASS  sources: a malformed id is a 400, an unknown one a 404 got [400,404]
-PASS  sources: the admin opens one connection with its catalogs got [200,"01a13b62-98a4-79bb-86cc-46ec247b4c45",true]
+PASS  sources: the admin opens one connection with its catalogs got [200,"01a13ba8-15c0-7593-b181-8982f4b01d1e",true]
 PASS  sources: a settings write needs the request header got 400
 PASS  sources: a cross-site settings write is refused got 403
 PASS  sources: a secret-looking settings key is a 400 and changes nothing got [400,false]
@@ -244,6 +244,7 @@ PASS  calls: no hash, number, call id or telephony user id in any answer got []
 PASS  calls: the days add up to the total (every count and the talk time) got [true,true,true,true,true,true,true,true,true]
 PASS  calls: every group, the total and the previous period are coherent got true
 PASS  calls: the previous period is as long as the period and ends the day before it got [true,true]
+PASS  calls: like for like, a running period against the same point, an ended one against the whole previous period got [true,"2026-10-04","2026-10-07",false,"2026-09-24","2026-10-
 PASS  calls: the threshold comes from the settings got [10,10]
 PASS  calls: a market and a line narrow all four answers alike got [true,true]
 PASS  calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview got [true,true,true,true]
@@ -252,4 +253,4 @@ PASS  calls: the whole period's tag use equals its groups', tag by tag got true
 PASS  calls: reports.view alone reads Calls, not Calls per agent got [200,200,403,403]
 PASS  calls: without telephony both pages say so, never 0 got [false,0,0,false,0]
 
-ALL 249 PASS
+ALL 250 PASS

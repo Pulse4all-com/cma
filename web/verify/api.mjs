@@ -1194,7 +1194,7 @@ async function inboundChecks() {
   }
 }
 
-// ---- calls overview and calls per agent (addition 0008j, brief B16), 13 checks, 15 with the reader and the tenant without telephony ----
+// ---- calls overview and calls per agent (addition 0008j, brief B16), 14 checks, 16 with the reader and the tenant without telephony ----
 // Calls needs reports.view or performance.team, Calls per agent performance.team, each answered 403 by the
 // route and again by the database. Counts, seconds, line, tag and staff names only: no number, no customer
 // name, no call id, no telephony user id and never the caller's hash in any answer. Reads only.
@@ -1247,6 +1247,14 @@ async function callsChecks() {
   const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000) + 1;
   expect("calls: the previous period is as long as the period and ends the day before it",
     [days(d.previousFrom, d.previousTo) === days(d.from, d.to), days(d.previousTo, d.from) === 2], [true, true], [false, true]);
+  // like for like (README Decision log, 14 October 2026): a period that reaches today against the same
+  // elapsed dates, the last of them up to now (3 days ago to 3 ahead: 10 to 7 days ago); one that ended
+  // against the whole previous equal period (10 days ago to yesterday: 20 to 11 days ago)
+  const ahead = (await overview(ANALYST, `from=${day(-3)}&to=${day(3)}&group=day`)).body?.data;
+  const ended = (await overview(ANALYST, `from=${day(-10)}&to=${day(-1)}&group=day`)).body?.data;
+  expect("calls: like for like, a running period against the same point, an ended one against the whole previous period",
+    [ahead?.previousPartial, ahead?.previousFrom, ahead?.previousTo, ended?.previousPartial, ended?.previousFrom, ended?.previousTo, d.previousPartial],
+    [true, day(-10), day(-7), false, day(-20), day(-11), true], [false, day(-10), day(-4), false, day(-20), day(-11), true]);
   const settings = (await get(ANALYST, "/api/v1/settings")).body?.data ?? [];
   expect("calls: the threshold comes from the settings",
     [d.connectedMinSeconds, per?.connectedMinSeconds], [Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value), Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value)], [-1, -1]);

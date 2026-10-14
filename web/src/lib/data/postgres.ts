@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
+import { dateKeyInZone } from "@/lib/time";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -1632,14 +1633,15 @@ export const postgresData: CmaData = {
       const connections = await readConnections(q);
       const lists = await callsFilterLists(q, range, filter);
       const current = r.rows.filter((x) => x.period === "current");
-      // the database's previous equal period, named for the deltas
-      const prev = previousPeriod(range);
+      // the previous period the database compared with (like for like: a period that reaches today
+      // against the same point in the previous one), named for the deltas; today as the page resolves it
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
       return {
         ...range, group, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
         rows: connections.telephony ? current.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toCallsFigures(x) })) : [],
         total: toCallsFigures(current.find((x) => x.group_key === null)),
         previous: toCallsFigures(r.rows.find((x) => x.period === "previous")),
-        previousFrom: prev.from, previousTo: prev.to,
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
         ...(connections.telephony ? lists : { markets: [], lines: [] }),
       };
     });

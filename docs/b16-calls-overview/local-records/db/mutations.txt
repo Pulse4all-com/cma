@@ -1,65 +1,44 @@
-Thirty deliberate breakages of db/62_calls_overview.sql, each applied to a fresh copy of the database at 61, then 02, then 63.
-Each line: the mutation, the checks of 63 that caught it, and 63's verdict. Claude Code, 14 October 2026.
+Thirty-nine deliberate breakages of db/62_calls_overview.sql, each applied to a fresh copy of the database at 61, then 02, then 63.
+Each line: the mutation, the checks of 63 that caught it, and 63's verdict. Claude Code, 14 October 2026; rerun after the like-for-like
+previous period (review of the pull request): previous_shifted and previous_shorter rewritten for the new code, and nine new ones
+on the elapsed span and the cut-off (previous_whole_always to application_read_whole_previous).
 
-talk_with_ringing: CAUGHT by B1, B3, B4, B5, B6, B7, B8, B12  (FAIL|8 PASS, 8 FAIL)
-connected_strictly_above: CAUGHT by B1, B3, B4, B5, B6, B8, B9, B10, B12  (FAIL|7 PASS, 9 FAIL)
-connected_without_threshold: CAUGHT by B1, B3, B4, B5, B6, B8, B12  (FAIL|9 PASS, 7 FAIL)
-uncounted_lines_counted: CAUGHT by B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B12  (FAIL|5 PASS, 11 FAIL)
-deleted_calls_counted: CAUGHT by B1, B3, B4, B5, B6, B7, B8, B10, B12  (FAIL|7 PASS, 9 FAIL)
-removed_tags_current: CAUGHT by B3, B4, B5, B6, B8, B9, B12  (FAIL|9 PASS, 7 FAIL)
-only_counted_tags_tag: CAUGHT by B3, B4, B5, B6, B8, B9, B12  (FAIL|9 PASS, 7 FAIL)
-person_tags_uncounted_too: CAUGHT by B4, B9  (FAIL|14 PASS, 2 FAIL)
-market_filter_ignored: CAUGHT by B5  (FAIL|15 PASS, 1 FAIL)
-line_filter_ignored: CAUGHT by B2, B5  (FAIL|14 PASS, 2 FAIL)
-tenant_zone_for_lines: CAUGHT by B1, B3, B4, B7, B8, B12  (FAIL|10 PASS, 6 FAIL)
-previous_shifted: CAUGHT by B7, B12  (FAIL|14 PASS, 2 FAIL)
-previous_shorter: CAUGHT by B7, B12  (FAIL|14 PASS, 2 FAIL)
-week_is_month: CAUGHT by B7  (FAIL|15 PASS, 1 FAIL)
-untagged_not_only_conversations: CAUGHT by B3, B5, B7, B12  (FAIL|12 PASS, 4 FAIL)
-time_of_day_utc: CAUGHT by B8  (FAIL|15 PASS, 1 FAIL)
-unlinked_users_not_distinct: CAUGHT by B8  (FAIL|15 PASS, 1 FAIL)
-people_with_unanswered: CAUGHT by B8  (FAIL|15 PASS, 1 FAIL)
-mapping_any_system: CAUGHT by B4, B8, B9, B10  (FAIL|12 PASS, 4 FAIL)
-mapping_any_tenant: CAUGHT by B10  (FAIL|15 PASS, 1 FAIL)
-per_person_reports_view: CAUGHT by B9  (FAIL|15 PASS, 1 FAIL)
-overview_performance_only: CAUGHT by B9  (FAIL|15 PASS, 1 FAIL)
-filters_unchecked: CAUGHT by B9  (FAIL|15 PASS, 1 FAIL)
-granted_to_public: CAUGHT by A3  (FAIL|15 PASS, 1 FAIL)
-returns_user_ref: CAUGHT by B4, B11  (FAIL|14 PASS, 2 FAIL)
-total_summed_avg: CAUGHT by B1, B7, B12  (FAIL|13 PASS, 3 FAIL)
-not_linked_dropped: CAUGHT by B5, B8, B9, B10  (FAIL|12 PASS, 4 FAIL)
-outbound_talk_all_conversations: CAUGHT by B12  (FAIL|15 PASS, 1 FAIL)
-person_untagged_counted_only: CAUGHT by B4, B5  (FAIL|14 PASS, 2 FAIL)
-order_by_figures: CAUGHT by B8, B10  (FAIL|14 PASS, 2 FAIL)
-
-The mutations, as text replacements in 62:
-- talk_with_ringing: 'tc.started_at, tc.answered_at, tc.talk_seconds,' -> 'tc.started_at, tc.answered_at, tc.duration_seconds as talk_seconds,'
-- connected_strictly_above: 'coalesce(c.talk_seconds >= c.connected_min, false)' -> 'coalesce(c.talk_seconds > c.connected_min, false)'
-- connected_without_threshold: 'coalesce(c.talk_seconds >= c.connected_min, false)' -> 'c.answered_at is not null'
-- uncounted_lines_counted: 'and coalesce(n.is_counted, true)\n      and (p_from' -> 'and (p_from'
-- deleted_calls_counted: 'and tc.source_deleted_at is null\n      and tc.started_at is not null\n      and coalesce(n.is_counted' -> 'and tc.started_at is not null\n      and coalesce(n.is_counted'
-- removed_tags_current: 'and ct.untagged_at is null) tg on true' -> ') tg on true'
-- only_counted_tags_tag: 'from cma.telephony_call_tag ct\n    where ct.tenant_id = p_tenant_id and ct.connection_id = c.connection_id and' -> 'from cma.telephony_call_tag ct join cma.telephony_tag tt on tt.tenant_id = ct.tenant_id and tt.connection_id ='
-- person_tags_uncounted_too: 'tg.tag_ref = tr.ref and tg.is_counted' -> 'tg.tag_ref = tr.ref'
-- market_filter_ignored: 'where (p_market is null or c.mk = p_market)' -> 'where (true or c.mk = p_market)'
-- line_filter_ignored: 'and (p_line is null or c.lk = p_line)' -> 'and (true or c.lk = p_line)'
-- tenant_zone_for_lines: 'coalesce(m.time_zone, s.tenant_zone) as z' -> 's.tenant_zone as z'
-- previous_shifted: 'p_from - (p_to - p_from + 1), p_from - 1,' -> 'p_from - (p_to - p_from + 1), p_from,'
-- previous_shorter: 'p_from - (p_to - p_from + 1), p_from - 1,' -> 'p_from - (p_to - p_from), p_from - 1,'
-- week_is_month: "date_trunc('week', (c.started_at at time zone c.z)::date::timestamp)::date" -> "date_trunc('month', (c.started_at at time zone c.z)::date::timestamp)::date"
-- untagged_not_only_conversations: '(count(*) filter (where c.is_conversation and not c.is_tagged))::integer\n  from c' -> '(count(*) filter (where not c.is_tagged))::integer\n  from c'
-- time_of_day_utc: '(c.started_at at time zone c.z)::time,' -> "(c.started_at at time zone 'UTC')::time,"
-- unlinked_users_not_distinct: '(count(distinct p.user_ref))::integer' -> '(count(p.user_ref))::integer'
-- people_with_unanswered: "and (x.is_answered_inbound or x.direction = 'outbound')" -> 'and true'
-- mapping_any_system: "xi.system = x.source_system || '_user'" -> "xi.system like '%\\_user'"
-- mapping_any_tenant: 'on xi.tenant_id = p_tenant_id and xi.system' -> 'on xi.system'
-- per_person_reports_view: "perform cma.assert_permission('performance.team');\n  perform cma.report_range(v_tenant, p_from, p_to);\n  perfo" -> "perform cma.assert_any_permission(array['reports.view', 'performance.team']);\n  perform cma.report_range(v_ten"
-- overview_performance_only: "perform cma.assert_any_permission(array['reports.view', 'performance.team']);\n  if p_group is null or p_group " -> "perform cma.assert_permission('performance.team');\n  if p_group is null or p_group not in ('day', 'week', 'mar"
-- filters_unchecked: 'if p_market is not null and p_market !~' -> 'if false and p_market !~'
-- granted_to_public: "execute format('revoke execute on function %s from public', f);" -> "execute format('grant execute on function %s to public', f);"
-- returns_user_ref: 'select r.row_kind, r.user_id, r.tk, r.tn, r.n\n  from r' -> 'select r.row_kind, r.user_id, r.tk, r.tn || coalesce((select min(p.user_ref) from p where p.user_id is not dis'
-- total_summed_avg: 'round(avg(c.talk_seconds) filter (where c.is_conversation), 1),' -> 'round(case when grouping(g.k) = 1 then null else avg(c.talk_seconds) filter (where c.is_conversation) end, 1),'
-- not_linked_dropped: 'from cma.calls_people_of(p_tenant_id, p_from, p_to, p_market, p_line) p\n  group by' -> "from cma.calls_people_of(p_tenant_id, p_from, p_to, p_market, p_line) p\n  where p.row_kind = 'person'\n  group "
-- outbound_talk_all_conversations: 'coalesce(sum(c.talk_seconds) filter (where c.is_connected_outbound), 0)::bigint,\n         round(avg(c.talk_sec' -> 'coalesce(sum(c.talk_seconds) filter (where c.is_conversation), 0)::bigint,\n         round(avg(c.talk_seconds) '
-- person_untagged_counted_only: 'select p.row_kind, p.user_id, p.display_name, null, null, (count(*) filter (where not p.is_tagged))::integer' -> 'select p.row_kind, p.user_id, p.display_name, null, null, (count(*) filter (where not exists (select 1 from un'
-- order_by_figures: "order by grouping(p.row_kind), p.row_kind = 'not_linked', p.display_name, p.user_id" -> "order by grouping(p.row_kind), p.row_kind = 'not_linked', count(*) desc, p.user_id"
+talk_with_ringing: CAUGHT by B1, B3, B4, B5, B6, B7, B8, B12, B13, B14, B15  (FAIL|8 PASS, 11 FAIL)
+connected_strictly_above: CAUGHT by B1, B3, B4, B5, B6, B8, B9, B10, B12  (FAIL|10 PASS, 9 FAIL)
+connected_without_threshold: CAUGHT by B1, B3, B4, B5, B6, B8, B12  (FAIL|12 PASS, 7 FAIL)
+uncounted_lines_counted: CAUGHT by B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B12  (FAIL|8 PASS, 11 FAIL)
+deleted_calls_counted: CAUGHT by B1, B3, B4, B5, B6, B7, B8, B10, B12  (FAIL|10 PASS, 9 FAIL)
+removed_tags_current: CAUGHT by B3, B4, B5, B6, B8, B9, B12  (FAIL|12 PASS, 7 FAIL)
+only_counted_tags_tag: CAUGHT by B3, B4, B5, B6, B8, B9, B12  (FAIL|12 PASS, 7 FAIL)
+person_tags_uncounted_too: CAUGHT by B4, B9  (FAIL|17 PASS, 2 FAIL)
+market_filter_ignored: CAUGHT by B5, B14  (FAIL|17 PASS, 2 FAIL)
+line_filter_ignored: CAUGHT by B2, B5  (FAIL|17 PASS, 2 FAIL)
+tenant_zone_for_lines: CAUGHT by B1, B3, B4, B7, B8, B12, B15  (FAIL|12 PASS, 7 FAIL)
+previous_shifted: CAUGHT by B7, B12, B13, B14, B15  (FAIL|14 PASS, 5 FAIL)
+previous_shorter: CAUGHT by B7, B12, B13, B14, B15  (FAIL|14 PASS, 5 FAIL)
+previous_whole_always: CAUGHT by B13, B14  (FAIL|17 PASS, 2 FAIL)
+previous_never_cut: CAUGHT by B14  (FAIL|18 PASS, 1 FAIL)
+previous_cut_when_ended: CAUGHT by B7, B12, B15  (FAIL|16 PASS, 3 FAIL)
+cut_strictly_before: CAUGHT by B14  (FAIL|18 PASS, 1 FAIL)
+cut_in_tenant_zone: CAUGHT by B14  (FAIL|18 PASS, 1 FAIL)
+cut_on_every_date: CAUGHT by B14  (FAIL|18 PASS, 1 FAIL)
+today_in_utc: CAUGHT by B15  (FAIL|18 PASS, 1 FAIL)
+current_cut_too: CAUGHT by B1, B3, B5, B7, B10, B13  (FAIL|13 PASS, 6 FAIL)
+application_read_whole_previous: CAUGHT by B13  (FAIL|18 PASS, 1 FAIL)
+week_is_month: CAUGHT by B7  (FAIL|18 PASS, 1 FAIL)
+untagged_not_only_conversations: CAUGHT by B3, B5, B7, B12, B14, B15  (FAIL|13 PASS, 6 FAIL)
+time_of_day_utc: CAUGHT by B8, B13, B14  (FAIL|16 PASS, 3 FAIL)
+unlinked_users_not_distinct: CAUGHT by B8  (FAIL|18 PASS, 1 FAIL)
+people_with_unanswered: CAUGHT by B8  (FAIL|18 PASS, 1 FAIL)
+mapping_any_system: CAUGHT by B4, B8, B9, B10  (FAIL|15 PASS, 4 FAIL)
+mapping_any_tenant: CAUGHT by B10  (FAIL|18 PASS, 1 FAIL)
+per_person_reports_view: CAUGHT by B9  (FAIL|18 PASS, 1 FAIL)
+overview_performance_only: CAUGHT by B9  (FAIL|18 PASS, 1 FAIL)
+filters_unchecked: CAUGHT by B9  (FAIL|18 PASS, 1 FAIL)
+granted_to_public: CAUGHT by A3  (FAIL|18 PASS, 1 FAIL)
+returns_user_ref: CAUGHT by B4, B11  (FAIL|17 PASS, 2 FAIL)
+total_summed_avg: CAUGHT by B1, B7, B12, B14, B15  (FAIL|14 PASS, 5 FAIL)
+not_linked_dropped: CAUGHT by B5, B8, B9, B10  (FAIL|15 PASS, 4 FAIL)
+outbound_talk_all_conversations: CAUGHT by B12, B14, B15  (FAIL|16 PASS, 3 FAIL)
+person_untagged_counted_only: CAUGHT by B4, B5  (FAIL|17 PASS, 2 FAIL)
+order_by_figures: CAUGHT by B8, B10  (FAIL|17 PASS, 2 FAIL)

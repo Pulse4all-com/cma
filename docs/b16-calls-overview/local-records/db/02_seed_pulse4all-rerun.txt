@@ -2,12 +2,12 @@ DO
 SET
             create_tenant             
 --------------------------------------
- 01a13b5f-a7d3-7401-91bd-67b0e7ff293b
+ 01a13ba5-c2fd-7edb-a626-663b0e6eddb7
 (1 row)
 
             create_tenant             
 --------------------------------------
- 01a13b5f-a7e6-7bc5-97e6-b9458e38dfe9
+ 01a13ba5-c30c-7223-98b3-e029b7441da0
 (1 row)
 
 INSERT 0 0

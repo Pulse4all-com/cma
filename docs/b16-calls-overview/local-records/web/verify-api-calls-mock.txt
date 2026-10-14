@@ -8,6 +8,7 @@ PASS  calls: no hash, number, call id or telephony user id in any answer got []
 PASS  calls: the days add up to the total (every count and the talk time) got [true,true,true,true,true,true,true,true,true]
 PASS  calls: every group, the total and the previous period are coherent got true
 PASS  calls: the previous period is as long as the period and ends the day before it got [true,true]
+PASS  calls: like for like, a running period against the same point, an ended one against the whole previous period got [true,"2026-10-04","2026-10-07",false,"2026-09-24","2026-10-
 PASS  calls: the threshold comes from the settings got [10,10]
 PASS  calls: a market and a line narrow all four answers alike got [true,true]
 PASS  calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview got [true,true,true,true]
@@ -16,4 +17,4 @@ PASS  calls: the whole period's tag use equals its groups', tag by tag got true
 PASS  calls: reports.view alone reads Calls, not Calls per agent got [200,200,403,403]
 PASS  calls: without telephony both pages say so, never 0 got [false,0,0,false,0]
 
-ALL 15 PASS
+ALL 16 PASS

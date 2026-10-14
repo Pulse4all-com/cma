@@ -633,6 +633,8 @@ export interface CallRecord {
   lineKey: string;
   lineName: string | null;
   market: string;
+  /** The zone of the line's market, else the tenant's: the date and the time of day are in it */
+  zone: string;
   date: DateKey;
   /** The Monday of the date's ISO week */
   weekStart: DateKey;
@@ -682,7 +684,7 @@ export function callRecords(
     const date = dateKeyInZone(c.startedAt, zone);
     const r: CallRecord = {
       connectionId: c.connectionId, sourceSystem: c.sourceSystem, direction: c.direction,
-      lineKey: `${c.connectionId}:${c.lineRef ?? ""}`, lineName: line?.name ?? c.lineRef, market: line?.market ?? "unknown",
+      lineKey: `${c.connectionId}:${c.lineRef ?? ""}`, lineName: line?.name ?? c.lineRef, market: line?.market ?? "unknown", zone,
       date, weekStart: startOfWeek(date), localTime: timeInZone(c.startedAt, zone), userRef: c.userRef ?? null,
       isAnsweredInbound: answeredIn, isConnectedOutbound: connectedOut, isConversation: answeredIn || connectedOut,
       talkSeconds: talk, tagRefs, isTagged: tagRefs.length > 0,
@@ -753,10 +755,33 @@ export function groupCalls(calls: readonly CallRecord[], from: DateKey, to: Date
   return { rows, total: callsFigures(period) };
 }
 
-/** The previous equal period: as many business dates, ending the day before `from` */
-export function previousPeriod(range: HoursRange): HoursRange {
+/** The previous period the deltas compare with: its dates, and whether it is cut to the same point */
+export interface PreviousPeriod extends HoursRange {
+  /** The period reaches today: the previous one holds the same elapsed dates, the last up to the time of day */
+  partial: boolean;
+}
+
+/**
+ * The previous period, like for like, as cma.calls_overview_of picks it (README Decision log, 14 October
+ * 2026): it starts as many dates before `from` as the period holds. A period that ended before today
+ * compares with the whole previous equal period, ending the day before `from`; one that reaches today
+ * with the same elapsed span (its dates up to today, shifted back by the period's length), and on that
+ * span's last date only up to the time of day (previousCalls). A period that starts after today has no
+ * elapsed date, so `to` falls before `from` and it compares with nothing. `today` is in the zone the page
+ * resolves its period in.
+ */
+export function previousPeriod(range: HoursRange, today: DateKey): PreviousPeriod {
   const days = daysBetween(range.from, range.to) + 1;
-  return { from: addDays(range.from, -days), to: addDays(range.from, -1) };
+  const partial = range.to >= today;
+  return { from: addDays(range.from, -days), to: addDays(partial ? today : range.to, -days), partial };
+}
+
+/**
+ * The calls of the previous period, as cma.calls_figures_of counts them for the deltas: its dates, and
+ * when it is cut, on its last date only the calls up to `now`'s time of day in each call's own zone
+ */
+export function previousCalls(calls: readonly CallRecord[], prev: PreviousPeriod, now: Instant): CallRecord[] {
+  return inPeriod(calls, prev.from, prev.to).filter((c) => !prev.partial || c.date < prev.to || c.localTime <= timeInZone(now, c.zone));
 }
 
 /**

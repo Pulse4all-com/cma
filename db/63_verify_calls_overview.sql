@@ -3,7 +3,7 @@
 -- =============================================================================================
 -- Dev only: the script refuses a database that does not hold the dev seed's active test person
 -- (agent.two@example.com, db/03); prod never holds example.com people. Block A checks structure
--- and privileges; block B works on two throwaway tenants inside a subtransaction that is always
+-- and privileges; block B works on three throwaway tenants inside a subtransaction that is always
 -- rolled back. Universal otherwise: nothing of the seed is used; adapters, lines, tags, users, calls
 -- and hashes are invented data values (no hash below is made from a real number). Every check writes
 -- one row, PASS or FAIL, and the last result lists them with the verdict, because Cloud SQL Studio
@@ -15,7 +15,11 @@
 --   B  behaviour. Tenant one (Europe/Amsterdam; lines NL, a second NL line, GB, and an NL line that
 --      does not count; two people linked to telephony users, two users without a person; a counted
 --      and an uncounted tag) over 26 October to 1 November 2026, whose previous equal period (19 to
---      25 October) crosses the DST change of 25 October: talk time without ringing and a call at
+--      25 October) crosses the DST change of 25 October. The previous period depends on the instant
+--      it is measured at (like for like: a period that reaches today compares with the same elapsed
+--      span), so the checks of the previous period read cma.calls_overview_of at fixed instants, and
+--      tenant three holds calls placed relative to today for the application's read at the real
+--      time. Checked: talk time without ringing and a call at
 --      exactly the threshold; an uncounted line's calls never counted (skipped by the write, and one
 --      written past it); the untagged rule with a counted, an uncounted and a removed tag; an
 --      uncounted tag out of the tags per person but still making a call tagged; the market and line
@@ -26,7 +30,9 @@
 --      reads, reports.view enough for the overview and the tag use) and the refusals; tenant
 --      isolation with tenant two's equal refs, also in the owner's rights; no hash, number, call id
 --      or telephony user id in any answer; the overview per market and its computed total, a deleted
---      call never counted
+--      call never counted; a period that reaches today compared with the same elapsed dates, the last
+--      of them cut at the current time of day in each call's own zone, and a period that ended
+--      compared with the whole previous equal period
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -101,8 +107,8 @@ begin
   foreach v_fn in array array[
     'cma.calls_overview(date,date,text,text,text)', 'cma.calls_tag_use(date,date,text,text,text)',
     'cma.calls_per_person(date,date,text,text)', 'cma.calls_per_person_tags(date,date,text,text)', 'cma.calls_filters_check(text,text)',
-    'cma.calls_of(uuid,timestamptz,timestamptz,text,text)', 'cma.calls_figures_of(uuid,date,date,text,text,text)',
-    'cma.calls_overview_of(uuid,date,date,text,text,text)', 'cma.calls_tag_use_of(uuid,date,date,text,text,text)',
+    'cma.calls_of(uuid,timestamptz,timestamptz,text,text)', 'cma.calls_figures_of(uuid,date,date,text,text,text,timestamptz)',
+    'cma.calls_overview_of(uuid,date,date,text,text,text,timestamptz)', 'cma.calls_tag_use_of(uuid,date,date,text,text,text)',
     'cma.calls_people_of(uuid,date,date,text,text)', 'cma.calls_per_person_of(uuid,date,date,text,text)',
     'cma.calls_per_person_tags_of(uuid,date,date,text,text)'] loop
     if to_regprocedure(v_fn) is null then
@@ -134,16 +140,17 @@ begin
 end
 $$;
 
--- B. Behaviour on two throwaway tenants (rolled back)
+-- B. Behaviour on three throwaway tenants (rolled back)
 do $$
 declare
   v_provoke  boolean := current_setting('verify.provoke')::boolean;
   v_rows     text[] := '{}';
-  v_t1 uuid; v_t2 uuid;
+  v_t1 uuid; v_t2 uuid; v_t3 uuid;
   v_admin1 uuid; v_agent1 uuid; v_analyst1 uuid; v_super1 uuid; v_reader1 uuid; v_ing1 uuid;
   v_anna uuid; v_bram uuid; v_cas uuid;
   v_admin2 uuid; v_analyst2 uuid; v_ing2 uuid; v_dora uuid;
-  v_tel1 uuid; v_tel2 uuid;
+  v_admin3 uuid; v_analyst3 uuid; v_ing3 uuid;
+  v_tel1 uuid; v_tel2 uuid; v_tel3 uuid;
   v_role uuid;
   v_nl text; v_nl2 text; v_gb text; v_off text;
   v_txt      text;
@@ -155,6 +162,10 @@ declare
   v_f        text[];
   v_i        integer;
   v_d        timestamptz := timestamptz '2026-10-26 00:00:00+00';
+  -- an instant after the period (2 November 10:00 CET): the previous period is the whole equal period
+  v_after    timestamptz := timestamptz '2026-11-02 09:00:00+00';
+  -- today in Amsterdam, for tenant three's calls placed relative to it
+  v_today    date := (now() at time zone 'Europe/Amsterdam')::date;
   v_h        text[] := array[repeat('c1', 32), repeat('c2', 32), repeat('c3', 32), repeat('c4', 32), repeat('c5', 32), repeat('c6', 32)];
   v_sale     jsonb := '[{"tagRef": "tg-sale", "name": "Sale"}]';
   v_info     jsonb := '[{"tagRef": "tg-info", "name": "Info"}]';
@@ -166,6 +177,7 @@ begin
   begin
     v_t1 := cma.create_tenant('verify-0008j-one', 'Verify 0008j one', 'Europe/Amsterdam');
     v_t2 := cma.create_tenant('verify-0008j-two', 'Verify 0008j two', 'Europe/Amsterdam');
+    v_t3 := cma.create_tenant('verify-0008j-three', 'Verify 0008j three', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-agent1@example.invalid', 'agent1') returning id into v_agent1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-analyst1@example.invalid', 'analyst1') returning id into v_analyst1;
@@ -178,6 +190,8 @@ begin
     insert into cma.app_user (tenant_id, email, display_name) values (v_t2, 'verify-admin2@example.invalid', 'admin2') returning id into v_admin2;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t2, 'verify-analyst2@example.invalid', 'analyst2') returning id into v_analyst2;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t2, 'verify-dora@example.invalid', 'Dora Verify') returning id into v_dora;
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t3, 'verify-admin3@example.invalid', 'admin3') returning id into v_admin3;
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t3, 'verify-analyst3@example.invalid', 'analyst3') returning id into v_analyst3;
     -- a role with reports.view only (no default role has it without performance.team)
     insert into cma.app_role (tenant_id, key, name) values (v_t1, 'verify_reader', 'Verify reader') returning id into v_role;
     insert into cma.role_permission (tenant_id, role_id, permission_key) values (v_t1, v_role, 'reports.view');
@@ -185,10 +199,12 @@ begin
     select ar.tenant_id, x.uid, ar.id
     from (values (v_t1, v_admin1, 'admin'), (v_t1, v_agent1, 'agent'), (v_t1, v_analyst1, 'analytics'), (v_t1, v_super1, 'supervisor'),
                  (v_t1, v_reader1, 'verify_reader'), (v_t1, v_anna, 'agent'), (v_t1, v_bram, 'agent'), (v_t1, v_cas, 'agent'),
-                 (v_t2, v_admin2, 'admin'), (v_t2, v_analyst2, 'analytics'), (v_t2, v_dora, 'agent')) as x(tid, uid, role_key)
+                 (v_t2, v_admin2, 'admin'), (v_t2, v_analyst2, 'analytics'), (v_t2, v_dora, 'agent'),
+                 (v_t3, v_admin3, 'admin'), (v_t3, v_analyst3, 'analytics')) as x(tid, uid, role_key)
     join cma.app_role ar on ar.tenant_id = x.tid and ar.key = x.role_key;
     select x.user_id into v_ing1 from cma.app_user_external_id x where x.tenant_id = v_t1 and x.system = 'ingest';
     select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest';
+    select x.user_id into v_ing3 from cma.app_user_external_id x where x.tenant_id = v_t3 and x.system = 'ingest';
     perform set_config('role', 'cma_app', true);
 
     -- tenant one: markets NL and GB, a telephony connection with four lines (NL, a second NL, GB, and
@@ -251,6 +267,15 @@ begin
       pg_temp.v0008j_call('src0008j-p6', 'inbound', timestamptz '2026-10-25 23:30:00+00', 5, 15, 'line-gb', 'tel-user-2', null, null),
       pg_temp.v0008j_call('src0008j-p4', 'outbound', timestamptz '2026-10-18 22:30:00+00', null, 20, 'line-nl', 'tel-user-2', null, null),
       pg_temp.v0008j_call('src0008j-p5', 'inbound', timestamptz '2026-10-18 21:30:00+00', 5, 65, 'line-nl', 'tel-user-1', null, null),
+      -- around the time of day the like-for-like checks measure at (B13 to B15), answered, untagged, no
+      -- user; their talk times (100, 200, 400, 800, 1600 seconds) name which of them a total holds:
+      -- 21 October 14:00:00 and 14:00:01 CEST on the NL line, 12:30 and 13:30 BST on the GB line,
+      -- and 20 October 23:00 CEST on the NL line
+      pg_temp.v0008j_call('src0008j-q1', 'inbound', timestamptz '2026-10-21 12:00:00+00', 5, 105, 'line-nl', null, null, null),
+      pg_temp.v0008j_call('src0008j-q2', 'inbound', timestamptz '2026-10-21 12:00:01+00', 5, 205, 'line-nl', null, null, null),
+      pg_temp.v0008j_call('src0008j-q3', 'inbound', timestamptz '2026-10-21 11:30:00+00', 5, 405, 'line-gb', null, null, null),
+      pg_temp.v0008j_call('src0008j-q4', 'inbound', timestamptz '2026-10-21 12:30:00+00', 5, 805, 'line-gb', null, null, null),
+      pg_temp.v0008j_call('src0008j-q5', 'inbound', timestamptz '2026-10-20 21:00:00+00', 5, 1605, 'line-nl', null, null, null),
       -- a conversation the telephony system deleted afterwards (below): never counted
       pg_temp.v0008j_call('src0008j-d1', 'inbound', v_d + interval '1 day 13 hours', 5, 65, 'line-nl', 'tel-user-1', null, v_sale)));
     perform cma.ingest_upsert_telephony_calls(v_tel1, jsonb_build_array(
@@ -284,6 +309,20 @@ begin
     perform cma.ingest_upsert_telephony_calls(v_tel2, jsonb_build_array(
       pg_temp.v0008j_call('src0008j-t2a', 'inbound', v_d + interval '9 hours', 5, 65, 'line-nl', 'tel-user-1', v_h[1], v_sale),
       pg_temp.v0008j_call('src0008j-t2b', 'outbound', v_d + interval '10 hours', 5, 15, 'line-nl', 'tel-user-1', v_h[2], null)));
+
+    -- tenant three: one NL line and four answered calls at 10:00 in Amsterdam, 16, 11, 9 and 7 days
+    -- before today (r1 to r4), for the application's read at the real time (B13, B15); no call on a
+    -- date where the time of day would decide, so the expectations hold at any hour
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_admin3::text, true);
+    perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+    select c.connection_id into v_tel3 from cma.upsert_connection('verifytel', 'Verify phones three', 'company-3', null, null) c;
+    perform cma.set_telephony_number(v_tel3, 'line-nl', 'NL', true);
+    perform set_config('app.user_id', v_ing3::text, true);
+    perform cma.ingest_upsert_telephony_calls(v_tel3, (
+      select jsonb_agg(pg_temp.v0008j_call('src0008j-r' || k, 'inbound', ((v_today - d)::timestamp + time '10:00') at time zone 'Europe/Amsterdam',
+                                           5, 65, 'line-nl', null, null, null) order by k)
+      from unnest(array[16, 11, 9, 7]) with ordinality as r(d, k)));
 
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
@@ -377,20 +416,21 @@ begin
       case when v_txt = 'GB:Info=1,GB:Test=1,GB:-=2,NL:Sale=3,NL:Info=1,NL:Test=1,NL:-=1,all:Sale=3,all:Info=2,all:Test=2,all:-=3'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
 
-    -- B7. the previous equal period (19 to 25 October, across the DST change): p1 and p2 at 02:30 CEST
-    --     and CET, p3 at 23:30 CET, p6 at 23:30 GMT on 25 October, p4 on 19 October; not p5 (18
-    --     October in Amsterdam) nor c0 (26 October 00:30 CET). By day and by ISO week over both weeks,
-    --     each call in its line's zone; the previous period of those 14 days holds p5 only
+    -- B7. the previous equal period (19 to 25 October, across the DST change), measured after the
+    --     period: p1 and p2 at 02:30 CEST and CET, p3 at 23:30 CET, p6 at 23:30 GMT on 25 October, q1
+    --     to q4 on 21 October, q5 on 20 October, p4 on 19 October; not p5 (18 October in Amsterdam)
+    --     nor c0 (26 October 00:30 CET). By day and by ISO week over both weeks, each call in its
+    --     line's zone; the previous period of those 14 days holds p5 only
     select format('%s/%s/%s %s/%s %s %s %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound, connected_pct,
                   conversations, talk_seconds_total, talk_seconds_avg, untagged_conversations) into v_txt
-    from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'day') where period = 'previous';
+    from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', v_after) where period = 'previous';
     select v_txt || ' | ' || string_agg(group_key || '=' || calls, ',' order by group_key) into v_txt
     from cma.calls_overview('2026-10-19', '2026-11-01', null, null, 'day') where period = 'current' and group_key is not null;
     select v_txt || ' | ' || string_agg(coalesce(group_key, period) || '=' || calls, ',' order by ordinality) into v_txt
-    from cma.calls_overview('2026-10-19', '2026-11-01', null, null, 'week') with ordinality;
+    from cma.calls_overview_of(v_t1, '2026-10-19', '2026-11-01', null, null, 'week', v_after) with ordinality;
     v_rows := v_rows || array['17', 'B7 the previous period''s totals, days and weeks across the DST change, each call in its line''s zone',
-      case when v_txt = '5/3/2 3/1 50.0 4 120 30.0 4 | 2026-10-19=1,2026-10-25=4,2026-10-26=3,2026-10-27=2,2026-10-28=2,2026-10-29=2,2026-10-30=1,2026-10-31=1,2026-11-01=1'
-                        || ' | 2026-10-19=5,2026-10-26=12,current=17,previous=1'
+      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 9 | 2026-10-19=1,2026-10-20=1,2026-10-21=4,2026-10-25=4,2026-10-26=3,2026-10-27=2,2026-10-28=2,2026-10-29=2,2026-10-30=1,2026-10-31=1,2026-11-01=1'
+                        || ' | 2026-10-19=10,2026-10-26=12,current=22,previous=1'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
 
     -- B8. per person through the linked accounts, by name: Anna (tel-user-1), Bram (tel-user-2); the
@@ -520,16 +560,88 @@ begin
     -- B12. the overview per market and its total, computed over every call (not summed): calls, inbound,
     --      outbound, answered inbound, connected outbound and its share, conversations, their talk time
     --      and its average, the connected outbound calls' talk time and its average, untagged; then the
-    --      previous period. The deleted call d1 is in none of them
+    --      previous period, measured after the period. The deleted call d1 is in none of them
     select string_agg(coalesce(group_key, period) || format(':%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound,
                       connected_outbound, coalesce(connected_pct::text, '-'), conversations, talk_seconds_total,
                       coalesce(talk_seconds_avg::text, '-'), outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'),
                       untagged_conversations), ' | ' order by ordinality) into v_txt
-    from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'market') with ordinality;
+    from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'market', v_after) with ordinality;
     v_rows := v_rows || array['22', 'B12 the overview per market, the computed total and the previous period',
       case when v_txt = 'GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80.0 2 | NL:8/5/3 4/1 33.3 5 490 98.0 out 10 10.0 1'
-                        || ' | current:12/6/6 5/3 50.0 8 710 88.8 out 170 56.7 3 | previous:5/3/2 3/1 50.0 4 120 30.0 out 20 20.0 4'
+                        || ' | current:12/6/6 5/3 50.0 8 710 88.8 out 170 56.7 3 | previous:10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 9'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
+
+    -- B13. a period that reaches today compares with the same elapsed dates (README Decision log, 14
+    --      October 2026). Measured on 28 October at 23:59 CET the period 26 October to 1 November has
+    --      three elapsed dates, so it compares with 19 to 21 October: p4, q5 and q1 to q4 (6 calls,
+    --      3100 seconds), not the calls of 25 October; on 26 October at 11:00 CET, its first day, with
+    --      19 October alone (p4, unanswered); on 25 October, before it starts, with nothing. The current
+    --      figures are the same at every instant. Tenant three, through the application's read at the
+    --      real time: 6 days before today to 3 after compares with 16 to 10 days ago (r1, r2; not r3
+    --      or r4); a period from tomorrow to 9 days after compares with nothing (r4, 7 days ago, would
+    --      be in the whole previous period)
+    v_txt := '';
+    foreach v_detail in array array['2026-10-28 22:59:00+00', '2026-10-26 10:00:00+00', '2026-10-25 12:00:00+00'] loop
+      select v_txt || case when v_txt = '' then '' else ' | ' end
+             || to_char(v_detail::timestamptz at time zone 'Europe/Amsterdam', 'YYYY-MM-DD HH24:MI') || ': ' || calls || ' calls ' || talk_seconds_total
+        into v_txt
+      from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', v_detail::timestamptz) where period = 'previous';
+    end loop;
+    select count(distinct x.rows) into v_n
+    from unnest(array['2026-10-28 22:59:00+00', '2026-10-26 10:00:00+00', '2026-10-25 12:00:00+00', '2026-11-02 09:00:00+00']::timestamptz[]) i(at)
+    cross join lateral (select string_agg(row_to_json(o)::text, '' order by o.ordinality) as rows
+                        from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', i.at) with ordinality o
+                        where o.period = 'current') x;
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_analyst3::text, true);
+    select v_txt || ' | current alike at ' || v_n || ' of 4'
+           || ' | today''s week ' || (select calls from cma.calls_overview(v_today - 6, v_today + 3, null, null, 'day') where period = 'previous')
+           || ' | from tomorrow ' || (select calls from cma.calls_overview(v_today + 1, v_today + 9, null, null, 'day') where period = 'previous')
+      into v_txt;
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    v_rows := v_rows || array['23', 'B13 a period that reaches today compares with the same elapsed dates',
+      case when v_txt = '2026-10-28 23:59: 6 calls 3100 | 2026-10-26 11:00: 1 calls 0 | 2026-10-25 13:00: 0 calls 0'
+                        || ' | current alike at 1 of 4 | today''s week 2 | from tomorrow 0'
+                and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
+
+    -- B14. on the previous span's last date only the calls up to the current time of day count, each
+    --      in its own zone. Measured on 28 October at 14:00 CET (13:00 GMT): of 21 October's calls q1
+    --      (14:00:00 in Amsterdam, at the time exactly) and q3 (12:30 in London) count, q2 (14:00:01)
+    --      and q4 (13:30 in London, 14:30 in Amsterdam) do not; q5 (20 October at 23:00) counts, an
+    --      earlier date counting whole; with p4: 4 calls, 2100 seconds (100 + 400 + 1600). Per market:
+    --      NL p4, q5 and q1; GB q3
+    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound,
+                  coalesce(connected_pct::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
+                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged_conversations) into v_txt
+    from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2026-10-28 13:00:00+00') where period = 'previous';
+    select v_txt || ' | NL ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', 'NL', null, 'day', '2026-10-28 13:00:00+00') where period = 'previous')
+           || ' | GB ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', 'GB', null, 'day', '2026-10-28 13:00:00+00') where period = 'previous')
+      into v_txt;
+    v_rows := v_rows || array['24', 'B14 on the previous span''s last date a call later than the time of day in its own zone is left out',
+      case when v_txt = '4/3/1 3/0 0.0 3 2100 700.0 out 0 - 3 | NL 3/1700 | GB 1/400'
+                and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
+
+    -- B15. a period that ended before today compares with the whole previous equal period. Measured on
+    --      2 November at 00:30 CET, just after the period: 19 to 25 October with every call of 25
+    --      October, also those later in the day than 00:30 (p1, p2 at 02:30, p3 and p6 at 23:30), and
+    --      q2 and q4: 10 calls, 3220 seconds; the same measured a year later. Tenant three, through the
+    --      application's read: 8 days before today to yesterday compares with 16 to 9 days ago (r1 to r3)
+    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound,
+                  coalesce(connected_pct::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
+                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged_conversations) into v_txt
+    from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2026-11-01 23:30:00+00') where period = 'previous';
+    select v_txt || ' | a year later ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2027-11-02 12:00:00+00') where period = 'previous')
+      into v_txt;
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_analyst3::text, true);
+    select v_txt || ' | to yesterday ' || (select calls from cma.calls_overview(v_today - 8, v_today - 1, null, null, 'day') where period = 'previous')
+      into v_txt;
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    v_rows := v_rows || array['25', 'B15 a period that ended before today compares with the whole previous equal period',
+      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 9 | a year later 10/3220 | to yesterday 3'
+                and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
@@ -553,7 +665,7 @@ from (select ord, check_name, result, detail from verify_0008j
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008j where result = 'PASS') = 16
+                  when (select count(*) from verify_0008j where result = 'PASS') = 19
                        and not exists (select 1 from verify_0008j where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008j where result = 'PASS'),

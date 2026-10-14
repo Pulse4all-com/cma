@@ -5,6 +5,8 @@
   supervisor /live/board: the main area scrolls sideways by 1416px at 1280
   manager /reports/calls: tag-table does not end inside its card at 1280
   manager /reports/calls: the main area scrolls sideways by 962px at 1280
+  manager /reports/calls: the deltas of range=month compare with partial,partial,partial,partial, expected whole four times
+  manager /reports/calls: the deltas of range=custom compare with whole,whole,whole,whole, expected partial four times
   manager /reports/calls-per-agent: agents-table does not end inside its card at 1280
   manager /reports/calls-per-agent: the main area scrolls sideways by 441px at 1280
   manager /reports/calls-per-agent: the per-agent table needs to scroll inside its card at 1280
@@ -20,4 +22,4 @@
   1279x800: the desktop-only gate is showing instead of the app
   1279x800: rail is 0px, token says 256
   1279x800: top bar is 0px, token says 56
-layout: FAIL (22 problems)
+layout: FAIL (24 problems)

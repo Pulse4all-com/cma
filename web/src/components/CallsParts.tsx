@@ -52,14 +52,25 @@ export function CallsGroupSwitch({ group, query, copy }: { group: CallsGroup; qu
   );
 }
 
-/** The previous equal period in words, for the deltas: one date, or from and to */
-export function previousLabel(from: string, to: string, locale: Locale): string {
-  return from === to ? fmtDate(from, locale, "short") : `${fmtDate(from, locale, "short")} – ${fmtDate(to, locale, "short")}`;
+/**
+ * What the deltas compare with, in words (README Decision log, 14 October 2026): "the previous period", or
+ * "the same point in the previous period" while this one is still running; and its dates for the title
+ * (one date, or from and to; the last day up to the current time when cut; none for a period that starts
+ * after today, which compares with nothing)
+ */
+export function previousLabel(from: string, to: string, partial: boolean, copy: Copy, locale: Locale): { text: string; dates: string | null; partial: boolean } {
+  const t = copy.calls;
+  const dates = to < from ? null : from === to ? fmtDate(from, locale, "short") : `${fmtDate(from, locale, "short")} – ${fmtDate(to, locale, "short")}`;
+  return {
+    text: partial ? t.previousPartial : t.previousWhole,
+    dates: dates !== null && partial ? t.previousUpToNow.replace("{dates}", dates) : dates,
+    partial,
+  };
 }
 
-/** A figure's change against the previous equal period, in words with an arrow; Muted whatever its direction */
-export function DeltaLine({ current, previous, previousText, copy, locale }: {
-  current: number | null; previous: number | null; previousText: string; copy: Copy; locale: Locale;
+/** A figure's change against the previous period, like for like, in words with an arrow; Muted whatever its direction */
+export function DeltaLine({ current, previous, compared, copy, locale }: {
+  current: number | null; previous: number | null; compared: { text: string; dates: string | null; partial: boolean }; copy: Copy; locale: Locale;
 }) {
   const t = copy.calls;
   const d = callsDelta(current, previous);
@@ -68,8 +79,9 @@ export function DeltaLine({ current, previous, previousText, copy, locale }: {
     : d.pct === null ? t.deltaNew
     : (d.direction === "up" ? t.deltaUp : t.deltaDown).replace("{pct}", fmtShare(d.pct / 100, locale));
   return (
-    <p className="mt-1 text-small text-p4a-muted" data-testid="delta" data-direction={d.direction}>
-      {text.replace("{previous}", previousText)}
+    <p className="mt-1 text-small text-p4a-muted" data-testid="delta" data-direction={d.direction}
+      data-compares={compared.partial ? "partial" : "whole"} title={compared.dates ?? undefined}>
+      {text.replace("{previous}", compared.text)}
     </p>
   );
 }

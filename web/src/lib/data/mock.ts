@@ -19,8 +19,8 @@ import type {
 } from "./types";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, callRecords, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
-  inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousPeriod, rangeProblem,
+  applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
+  inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
@@ -362,9 +362,9 @@ function assertCalls(me: Principal, range: HoursRange, filter: CallsFilter, grou
   if (parseCallsFilter(filter.market ?? "", filter.line ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
 }
 
-/** The fixture's calls of the range and the previous equal period, classified and filtered */
+/** The fixture's calls of the range and the previous period, classified and filtered */
 function mockCallRecords(me: Principal, range: HoursRange, filter: CallsFilter): CallRecord[] {
-  return callRecords(mockCalls(me, { from: previousPeriod(range).from, to: range.to }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin(), filter);
+  return callRecords(mockCalls(me, { from: previousPeriod(range, mockToday(me)).from, to: range.to }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin(), filter);
 }
 
 /** The markets and lines with calls in the period, the lines within the chosen market */
@@ -380,11 +380,13 @@ function mockCallsLists(me: Principal, range: HoursRange, filter: CallsFilter) {
 function mockCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): CallsOverview {
   const telephony = connectionsOf(me).telephony;
   const records = mockCallRecords(me, range, filter);
-  const prev = previousPeriod(range);
+  // like for like, as the database: a period that reaches today against the same point in the previous one
+  const prev = previousPeriod(range, mockToday(me));
   const { rows, total } = groupCalls(records, range.from, range.to, group);
   return {
     ...range, group, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total,
-    previous: groupCalls(records, prev.from, prev.to, group).total, previousFrom: prev.from, previousTo: prev.to,
+    previous: callsFigures(previousCalls(records, prev, new Date().toISOString())),
+    previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
     ...mockCallsLists(me, range, filter),
   };
 }

@@ -17,7 +17,8 @@
 --                      line the calls, inbound and outbound, answered inbound, connected outbound and
 --                      its share, conversations, their total and average talk time (and the connected
 --                      outbound calls' own) and the untagged ones, then a total row, then the same
---                      totals over the previous equal period (reports.view or performance.team)
+--                      totals over the previous period, like for like (below) (reports.view or
+--                      performance.team)
 --   tag use            cma.calls_tag_use(from, to, market, line, group): per group and per current tag
 --                      the conversations carrying it, and the untagged conversations; then the same
 --                      over the whole period (reports.view or performance.team)
@@ -51,6 +52,15 @@
 --   filters            p_market (a catalog market code, 'unknown' for a line without one, or null for
 --                      all) and p_line (connection id ':' line ref, as the line groups, or null) narrow
 --                      every read the same way, before anything is counted
+--   previous period    what the overview's deltas compare with, like for like (README Decision log,
+--                      14 October 2026). It starts as many dates before p_from as the period holds
+--                      (len = p_to - p_from + 1). A period that ended before today (in the tenant's
+--                      zone) compares with the whole previous equal period, [p_from - len, p_from - 1].
+--                      A period that reaches today compares with the same elapsed span: its
+--                      least(p_to, today) - p_from + 1 dates, so [p_from - len, least(p_to, today) - len],
+--                      and on that span's last date only the calls whose time of day is at most the
+--                      current time of day in their own zone. A period that starts after today has no
+--                      elapsed dates and compares with nothing. The current period's figures are never cut
 --
 -- Nothing personal: no function returns a call id, the hash or a number, and the application's reads
 -- return no telephony user id either (the users without a person are a count). Per-person figures are
@@ -175,8 +185,11 @@ $$;
 -- week (the Monday of the ISO week), market (the line's market or 'unknown') or line (connection:line
 -- ref, labelled with the line's name); then the total over every call as the last row, with group_key
 -- and group_label null (averages and shares do not add up across groups, so the total is computed,
--- not summed; it is there even for a period without calls).
-create or replace function cma.calls_figures_of(p_tenant_id uuid, p_from date, p_to date, p_market text, p_line text, p_group text)
+-- not summed; it is there even for a period without calls). With p_until (the previous period of a
+-- period that reaches today), the calls of p_to count only up to p_until's time of day in each
+-- call's own zone; the other dates count whole. Without it (null, the default) every date counts whole.
+create or replace function cma.calls_figures_of(p_tenant_id uuid, p_from date, p_to date, p_market text, p_line text, p_group text,
+                                                p_until timestamptz default null)
 returns table (
   group_key               text,
   group_label             text,
@@ -202,6 +215,7 @@ as $$
     cross join lateral cma.calls_of(p_tenant_id, (p_from - 1)::timestamp at time zone s.zone,
                                     (p_to + 2)::timestamp at time zone s.zone, p_market, p_line) x
     where x.business_date between p_from and p_to
+      and (p_until is null or x.business_date < p_to or x.local_time <= (p_until at time zone x.zone)::time)
   )
   select g.k, g.l,
          count(*)::integer,
@@ -231,8 +245,11 @@ as $$
 $$;
 
 -- The overview: the groups and the total of the period ('current'), then the total of the previous
--- equal period ('previous': the same number of business dates just before p_from), for the deltas
-create or replace function cma.calls_overview_of(p_tenant_id uuid, p_from date, p_to date, p_market text, p_line text, p_group text)
+-- period ('previous'), for the deltas, like for like as the header says: today is p_now's date in the
+-- tenant's zone; a period that reaches it compares with the same elapsed dates, the last of them up to
+-- p_now's time of day. p_now is now() for the application; a verifier gives a fixed instant
+create or replace function cma.calls_overview_of(p_tenant_id uuid, p_from date, p_to date, p_market text, p_line text, p_group text,
+                                                 p_now timestamptz default now())
 returns table (
   period                  text,
   group_key               text,
@@ -252,6 +269,17 @@ returns table (
 )
 language sql stable
 as $$
+  with s as (
+    select (p_now at time zone t.timezone)::date as today, p_to - p_from + 1 as len
+    from cma.tenant t where t.id = p_tenant_id
+  ),
+  -- the previous span: from as many dates before p_from as the period holds, to as many before the
+  -- period's last elapsed date (p_from - 1 for a period that ended); cut at p_now when it reaches today
+  v as (
+    select p_from - s.len as prev_from, least(p_to, s.today) - s.len as prev_to,
+           case when p_to >= s.today then p_now end as until
+    from s
+  )
   select x.period, x.group_key, x.group_label, x.calls, x.inbound, x.outbound, x.answered_inbound, x.connected_outbound,
          x.connected_pct, x.conversations, x.talk_seconds_total, x.talk_seconds_avg, x.outbound_talk_seconds, x.outbound_talk_avg,
          x.untagged_conversations
@@ -260,7 +288,8 @@ as $$
     from cma.calls_figures_of(p_tenant_id, p_from, p_to, p_market, p_line, p_group) with ordinality f
     union all
     select 'previous', 2, f.*
-    from cma.calls_figures_of(p_tenant_id, p_from - (p_to - p_from + 1), p_from - 1, p_market, p_line, p_group) with ordinality f
+    from v
+    cross join lateral cma.calls_figures_of(p_tenant_id, v.prev_from, v.prev_to, p_market, p_line, p_group, v.until) with ordinality f
     where f.group_key is null
   ) x
   order by x.part, x.ordinality
@@ -565,8 +594,8 @@ begin
     -- the reads of an explicit tenant, which the functions above call in the caller's rights
     -- (row-level security keeps them to the current tenant whatever tenant they are given)
     'cma.calls_of(uuid,timestamptz,timestamptz,text,text)',
-    'cma.calls_figures_of(uuid,date,date,text,text,text)',
-    'cma.calls_overview_of(uuid,date,date,text,text,text)',
+    'cma.calls_figures_of(uuid,date,date,text,text,text,timestamptz)',
+    'cma.calls_overview_of(uuid,date,date,text,text,text,timestamptz)',
     'cma.calls_tag_use_of(uuid,date,date,text,text,text)',
     'cma.calls_people_of(uuid,date,date,text,text)',
     'cma.calls_per_person_of(uuid,date,date,text,text)',
@@ -582,7 +611,7 @@ $$;
 -- 7. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008j', 'Calls overview and calls per agent: the connected-call threshold, calls, conversations, talk time and tag use per day, week, market and line with the previous period''s totals, the same per person with tags per person (no call id, hash or number returned)')
+values ('0008j', 'Calls overview and calls per agent: the connected-call threshold, calls, conversations, talk time and tag use per day, week, market and line with the previous period''s totals like for like, the same per person with tags per person (no call id, hash or number returned)')
 on conflict (version) do nothing;
 
 commit;

@@ -10,9 +10,9 @@ SET
  false
 (1 row)
 
-psql:/home/user/cma/db/63_verify_calls_overview.sql:55: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 63 runs in dev only
+psql:/home/user/cma/db/63_verify_calls_overview.sql:61: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 63 runs in dev only
 CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
-psql:/home/user/cma/db/63_verify_calls_overview.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:/home/user/cma/db/63_verify_calls_overview.sql:63: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
 CREATE FUNCTION

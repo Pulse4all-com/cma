@@ -266,7 +266,9 @@ async function expectReports() {
 // inside their cards (the tag table may scroll inside its card, the per-agent table fits); a row opens with
 // Enter on its name and Down moves to the next person; the opened rows, the not-linked one too, stay inside
 // the card; the right-most header's hint stays inside the viewport; a tenant without telephony says so in
-// words. --provoke lets the tag table spill out of its card and widens the per-agent table past it
+// words; the four deltas say what they compare with (like for like: this month, still running, with the
+// same point in the previous one; a week that ended with the whole previous week). --provoke lets the tag
+// table spill out of its card, widens the per-agent table past it and expects the labels swapped
 async function expectCalls() {
   const fits = (p, scrollId, spill) => p.evaluate(([id, spill]) => {
     const box = document.querySelector(`[data-testid="${id}"]`);
@@ -348,6 +350,17 @@ async function expectCalls() {
       }
       await hintInside(p, `[data-testid="${table}"] thead th:last-child button[data-header-hint]`, where);
       await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+      if (subject === "manager" && table === "tag-table") {
+        // a week that ended two days ago in any zone, by UTC dates
+        const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+        for (const [q, want] of [["range=month&group=day", "partial"], [`range=custom&from=${day(-8)}&to=${day(-2)}&group=day`, "whole"]]) {
+          await p.goto(`${BASE}/reports/calls?${q}`);
+          await p.waitForLoadState("networkidle");
+          const said = await p.evaluate(() => [...document.querySelectorAll('[data-testid="delta"]')].map((d) => d.getAttribute("data-compares")));
+          const expected = provoke ? (want === "partial" ? "whole" : "partial") : want;
+          if (said.length !== 4 || said.some((x) => x !== expected)) problems.push(`${where}: the deltas of ${q.split("&")[0]} compare with ${said.join(",") || "nothing"}, expected ${expected} four times`);
+        }
+      }
     }
     await ctx.close();
   }
@@ -608,5 +621,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down), Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like), Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

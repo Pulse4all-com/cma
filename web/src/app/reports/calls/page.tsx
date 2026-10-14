@@ -17,7 +17,8 @@ import { resolve } from "../../access";
  * Calls (Report, addition 0008j, brief B16; Aircall's General Performance and Outbound views): every call
  * on counted lines for a period, by day, ISO week, market or line (G cycles), narrowed by market (K) and
  * line (N). Four tiles (calls, inbound, outbound, average talk time), each with its change against the
- * previous equal period in Muted text with an arrow (a volume's change is neither good nor bad); the
+ * previous period in Muted text with an arrow (a volume's change is neither good nor bad), like for like:
+ * while the period runs, against the same point in the previous one, and the label says which; the
  * calls per group as stacked bars, inbound Deep Blue and outbound Leaf Green (the series order of
  * docs/style/Pulse4all-Style.md 7.7); the outbound calls with the connected ones (talk time of at least
  * telephony.connected_min_seconds) and their talk time; and the tags following the grouping: the untagged
@@ -57,14 +58,14 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
   const total = overview.total;
   const previous = overview.previous;
-  const prevText = previousLabel(overview.previousFrom, overview.previousTo, me.locale);
+  const prevLabel = previousLabel(overview.previousFrom, overview.previousTo, overview.previousPartial, copy, me.locale);
 
   const h = copy.hints;
   const fill = (text: string) => fillHint(text, { hours: h.officeHours, threshold: overview.connectedMinSeconds }, me.locale);
   const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
   const n = (x: number) => fmtCount(x, me.locale);
   const delta = (current: number | null, prev: number | null) =>
-    <DeltaLine current={current} previous={prev} previousText={prevText} copy={copy} locale={me.locale} />;
+    <DeltaLine current={current} previous={prev} compared={prevLabel} copy={copy} locale={me.locale} />;
   const chartTitle: Record<CallsGroup, string> = { day: t.chartDay, week: t.chartWeek, market: t.chartMarket, line: t.chartLine };
   const tagTitle: Record<CallsGroup, string> = { day: t.tagTableDay, week: t.tagTableWeek, market: t.tagTableMarket, line: t.tagTableLine };
 

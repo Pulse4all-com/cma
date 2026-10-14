@@ -22,7 +22,9 @@
  * ones 63 proves in the database: the four groups and G, the filters as the database checks them, talk
  * time without ringing and a call at exactly the threshold, an uncounted line and a deleted call left
  * out, the overview per market with its computed total and the previous period across the DST change,
- * days and ISO weeks in each line's zone, the untagged rule, tag use by market, the per-person rows and
+ * the previous period like for like (a period that reaches today against the same elapsed dates, the
+ * last of them up to the time of day in each call's zone; a period that ended against the whole previous
+ * one), days and ISO weeks in each line's zone, the untagged rule, tag use by market, the per-person rows and
  * the not-linked row, tags per person (counted only), the filters narrowing every figure alike; then the
  * screens: the deltas, the colours (series order, never a red), the top twelve tags and Other, the groups
  * by tags, the chart's axis, the per-agent bars and split, the formats, and no hash, number, call id or
@@ -33,10 +35,11 @@ import {
   groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
-  barShare, callRecords, callsDelta, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
+  barShare, callRecords, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
-  personSplit, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
+  personSplit, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
 } from "../src/lib/reports.ts";
+import { dateKeyInZone } from "../src/lib/time.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -337,6 +340,11 @@ const calls63 = [
   ccall("p6", "inbound", Date.parse("2026-10-25T23:30:00Z"), 5, 15, "line-gb", "tel-user-2"),
   ccall("p4", "outbound", Date.parse("2026-10-18T22:30:00Z"), null, 20, "line-nl", "tel-user-2"),
   ccall("p5", "inbound", Date.parse("2026-10-18T21:30:00Z"), 5, 65, "line-nl", "tel-user-1"),
+  ccall("q1", "inbound", Date.parse("2026-10-21T12:00:00Z"), 5, 105, "line-nl", null),
+  ccall("q2", "inbound", Date.parse("2026-10-21T12:00:01Z"), 5, 205, "line-nl", null),
+  ccall("q3", "inbound", Date.parse("2026-10-21T11:30:00Z"), 5, 405, "line-gb", null),
+  ccall("q4", "inbound", Date.parse("2026-10-21T12:30:00Z"), 5, 805, "line-gb", null),
+  ccall("q5", "inbound", Date.parse("2026-10-20T21:00:00Z"), 5, 1605, "line-nl", null),
   ccall("d1", "inbound", V + 37 * H, 5, 65, "line-nl", "tel-user-1", ["tg-sale"], { deleted: true }),
   ccall("off2", "outbound", V + 35 * H, 5, 55, "line-off", "tel-user-1"),
 ];
@@ -351,25 +359,44 @@ expect("talk time from the answer to the end, no ringing; a call at exactly the 
   [710, true, [3, 4, 2]], [768, true, [3, 3, 3]]);
 expect("a line that does not count and a deleted call are never counted, as 63 B2 and B12",
   [records().some((c) => c.lineKey === `${CONN}:line-off`), records().length, groupCalls(records(10, { market: null, line: `${CONN}:line-off` }), "2026-10-26", "2026-11-01", "day").total.calls],
-  [false, 19, 0], [true, 21, 1]);
-expect("the overview per market, the computed total and the previous period, as 63 B12",
-  [...week.rows.map((r) => `${r.groupKey}:${figs(r)}`), `current:${figs(week.total)}`,
-    `previous:${figs(groupCalls(records(), previousPeriod({ from: "2026-10-26", to: "2026-11-01" }).from, "2026-10-25", "day").total)}`],
+  [false, 24, 0], [true, 26, 1]);
+// the previous period's figures measured at an instant, as cma.calls_overview_of picks them (today in Amsterdam)
+const WEEK63 = { from: "2026-10-26", to: "2026-11-01" };
+const prevAt = (now, filter) => callsFigures(previousCalls(records(10, filter), previousPeriod(WEEK63, dateKeyInZone(now, "Europe/Amsterdam")), now));
+expect("the overview per market, the computed total and the previous period measured after it, as 63 B12",
+  [...week.rows.map((r) => `${r.groupKey}:${figs(r)}`), `current:${figs(week.total)}`, `previous:${figs(prevAt("2026-11-02T09:00:00Z"))}`],
   ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.8 out 170 56.7 3",
-    "previous:5/3/2 3/1 50 4 120 30 out 20 20 4"],
+    "previous:10/8/2 8/1 50 9 3220 357.8 out 20 20 9"],
   ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.75 out 170 56.7 3",
-    "previous:6/4/2 4/1 50 5 180 36 out 20 20 5"]);
-expect("the previous equal period: as many dates just before, across the DST change, a day and a month",
-  [previousPeriod({ from: "2026-10-26", to: "2026-11-01" }), previousPeriod({ from: "2026-10-14", to: "2026-10-14" }), previousPeriod({ from: "2026-10-01", to: "2026-10-31" })],
-  [{ from: "2026-10-19", to: "2026-10-25" }, { from: "2026-10-13", to: "2026-10-13" }, { from: "2026-08-31", to: "2026-09-30" }],
-  [{ from: "2026-10-19", to: "2026-10-26" }, { from: "2026-10-14", to: "2026-10-14" }, { from: "2026-09-01", to: "2026-09-30" }]);
+    "previous:5/3/2 3/1 50 4 120 30 out 20 20 4"]);
+expect("a period that ended: the whole previous equal period, across the DST change, a day and a month",
+  [previousPeriod(WEEK63, "2026-11-02"), previousPeriod({ from: "2026-10-14", to: "2026-10-14" }, "2026-10-15"), previousPeriod({ from: "2026-10-01", to: "2026-10-31" }, "2027-01-01")],
+  [{ from: "2026-10-19", to: "2026-10-25", partial: false }, { from: "2026-10-13", to: "2026-10-13", partial: false }, { from: "2026-08-31", to: "2026-09-30", partial: false }],
+  [{ from: "2026-10-19", to: "2026-10-26", partial: false }, { from: "2026-10-14", to: "2026-10-14", partial: false }, { from: "2026-09-01", to: "2026-09-30", partial: false }]);
+expect("a period that reaches today: the same elapsed dates, cut; from its first day; before it starts nothing",
+  [previousPeriod(WEEK63, "2026-10-28"), previousPeriod(WEEK63, "2026-11-01"), previousPeriod(WEEK63, "2026-10-26"), previousPeriod(WEEK63, "2026-10-25"),
+    previousPeriod({ from: "2026-10-01", to: "2026-10-31" }, "2026-10-14")],
+  [{ from: "2026-10-19", to: "2026-10-21", partial: true }, { from: "2026-10-19", to: "2026-10-25", partial: true }, { from: "2026-10-19", to: "2026-10-19", partial: true },
+    { from: "2026-10-19", to: "2026-10-18", partial: true }, { from: "2026-08-31", to: "2026-09-13", partial: true }],
+  [{ from: "2026-10-19", to: "2026-10-25", partial: false }, { from: "2026-10-19", to: "2026-10-25", partial: true }, { from: "2026-10-19", to: "2026-10-25", partial: false },
+    { from: "2026-10-19", to: "2026-10-25", partial: false }, { from: "2026-08-31", to: "2026-09-30", partial: false }]);
+expect("a period that reaches today compares with the same elapsed dates, as 63 B13",
+  ["2026-10-28T22:59:00Z", "2026-10-26T10:00:00Z", "2026-10-25T12:00:00Z"].map((now) => `${prevAt(now).calls} calls ${prevAt(now).talkSeconds}`),
+  ["6 calls 3100", "1 calls 0", "0 calls 0"], ["10 calls 3220", "10 calls 3220", "10 calls 3220"]);
+expect("on the previous span's last date only the calls up to the time of day in their own zone, as 63 B14",
+  [figs(prevAt("2026-10-28T13:00:00Z")), ...["NL", "GB"].map((m) => `${m} ${prevAt("2026-10-28T13:00:00Z", { market: m, line: null }).calls}/${prevAt("2026-10-28T13:00:00Z", { market: m, line: null }).talkSeconds}`)],
+  ["4/3/1 3/0 0 3 2100 700 out 0 null 3", "NL 3/1700", "GB 1/400"], ["6/5/1 5/0 0 5 3100 620 out 0 null 5", "NL 4/1900", "GB 2/1200"]);
+expect("a period that ended compares with the whole previous one, whatever the time of day, as 63 B15",
+  [figs(prevAt("2026-11-01T23:30:00Z")), figs(prevAt("2027-11-02T12:00:00Z"))],
+  ["10/8/2 8/1 50 9 3220 357.8 out 20 20 9", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"],
+  ["2/1/1 1/1 100 2 1620 810 out 20 20 2", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"]);
 expect("days and ISO weeks across the DST change, each call in its line's zone, as 63 B7",
   [groupCalls(records(), "2026-10-19", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.calls}`),
     groupCalls(records(), "2026-10-19", "2026-11-01", "week").rows.map((r) => `${r.groupKey}=${r.calls}`)],
-  [["2026-10-19=1", "2026-10-25=4", "2026-10-26=3", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
-    ["2026-10-19=5", "2026-10-26=12"]],
-  [["2026-10-18=1", "2026-10-25=3", "2026-10-26=4", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
-    ["2026-10-19=5", "2026-10-26=12"]]);
+  [["2026-10-19=1", "2026-10-20=1", "2026-10-21=4", "2026-10-25=4", "2026-10-26=3", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
+    ["2026-10-19=10", "2026-10-26=12"]],
+  [["2026-10-18=1", "2026-10-20=1", "2026-10-21=4", "2026-10-25=3", "2026-10-26=4", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
+    ["2026-10-19=10", "2026-10-26=12"]]);
 expect("untagged: any current tag counts, counted or not, as 63 B3",
   groupCalls(records(), "2026-10-26", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.untaggedConversations}`),
   ["2026-10-26=1", "2026-10-27=0", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"],
