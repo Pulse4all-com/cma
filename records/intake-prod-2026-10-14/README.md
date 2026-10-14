@@ -226,3 +226,47 @@ IE, NO, ES, FI, CH and IT: no orders (no sales yet).
 - The source-name lookup's lines and counts per store (9.6).
 - The sync runs' times and fetched counts (9.8).
 - The orders per kind per day per store (9.8) and the day-one checks (9.9).
+
+## FIND-03 log check
+
+The sixth Gemini audit's FIND-03 (README Decision log, 13 October 2026): a check of the logs for
+personal data once Shopify is live. Run by Martin on 14 October 2026, after all 14 stores were
+backfilled. Written down by Claude Code from his report, as above: counts and field paths only, no
+matched value.
+
+### Scope
+
+| Item | Value |
+|---|---|
+| Source | Cloud Logging, p4a-cma-prod |
+| Resources | `cma-ingest` (`cloud_run_revision`) and `ingest-backfill` (`cloud_run_job`) |
+| From | 2026-10-14T00:00Z |
+| Export size | about 10.4 MB |
+
+### Results
+
+| Pattern | Matches | Distinct values | Where |
+|---|---|---|---|
+| Phone numbers (`+` E.164 and 10-digit national) | 0 | 0 | |
+| Email addresses, excluding `@pulse4all.com` and `*.gserviceaccount.com` | 32 | 1 | Cloud Audit Logs, `protoPayload.response.spec…containers.0.env.1.value` (path shortened in the report) |
+
+The one email-shaped value is the service's IAM database user (domain `p4a-cma-prod.iam`), not
+personal data: `env.1` is `CMA_DB_USER`, second in the environment `docs/ingest/deploy.sh` sets on the
+service and the jobs.
+
+### Method
+
+- Counts and field paths only; no matched value was printed.
+- The export was deleted afterwards.
+
+### Outcome
+
+FIND-03 checked for the Shopify rollout: no phone number, and no email address but the database user
+above (`@pulse4all.com` and `*.gserviceaccount.com` excluded), in the logs of `cma-ingest` and
+`ingest-backfill` from 00:00 UTC on 14 October 2026, which covers the NL pilot and the rollout to the
+other 13 stores.
+
+### Not in the check
+
+- The other ingest jobs (`ingest-sweep`, `ingest-reconcile`, `ingest-poll-forms`, `ingest-outbox`).
+- Logs before 2026-10-14T00:00Z.
