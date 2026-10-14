@@ -187,7 +187,7 @@ async function expectReports() {
       if (!w) problems.push(`${subject} ${path}: the table has no scroll container`);
       else if (w.main > 0) problems.push(`${subject} ${path}: the main area scrolls sideways by ${w.main}px at 1280`);
     }
-    // No text on a Light Blue or Soft Rose segment or dot of the reason series (Pulse4all-Style 7.8);
+    // No text on a Light Blue or Soft Rose segment or dot of the reason series (docs/style/Pulse4all-Style.md 7.8);
     // --provoke writes a count into the first Light Blue one
     if (path.startsWith("/reports/inbound") && subject === "manager") {
       const t = await p.evaluate((spill) => {
