@@ -78,6 +78,8 @@ Shopify admin of any store → Settings → Apps → Develop apps → **Build ap
 
 ### 3.2 The prod app
 
+**Walked through on 14 October 2026; it differed.** `docs/ingest/PROD_RUNBOOK.md` 9.2 holds the path as it was: Create app manually; scopes `read_customers,read_orders` (`read_all_orders` not offered); embedded off, with the placeholder app URL `https://example.com`; no API access requests page and no distribution picker, because a custom-distribution app gets every customer field and the store owner's staff data automatically (README Decision log, 14 October 2026). The steps below stay as written.
+
 Dev Dashboard → Apps → Create app → name **CMA ingest** → Versions → Create a version:
 
 - Scopes: `read_customers`, `read_orders`, and `read_all_orders` if offered (without it Shopify serves only the last 60 days of orders; the CMA then computes first versus repeat from the customer's lifetime order count, DESIGN §4.3, so it still works).
