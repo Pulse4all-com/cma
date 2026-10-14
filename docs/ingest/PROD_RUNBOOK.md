@@ -581,7 +581,7 @@ Expected: calls from 1 October onward; links for most calls agents logged in Hub
 
 # Phase 9. Shopify in prod
 
-Written on 13 October 2026 from `VENDOR_SETUP.md` §3 and §4 and step 6 of Phase 7; brought in line with the Shopify adapter (brief B10) the same day, and with B10.1 after it: the CMA writes nothing back to HubSpot for Shopify and keeps each customer's matched contact in its own database (addition 0008h; README Decision log, 13 October 2026). Walked through for the NL store on 14 October 2026 (`records/intake-prod-2026-10-14`); 9.2, 9.3 and 9.6 to 9.9 were corrected the same day where the walk-through differed (the Dev Dashboard's click paths had followed Shopify's documentation as of 13 October). Per store: one connection, one store row with its renewal settings, one set of subscriptions, one backfill, two read-only checks. What each step relies on is in `docs/ingest/README.md`, section Shopify.
+Written on 13 October 2026 from `VENDOR_SETUP.md` §3 and §4 and step 6 of Phase 7; brought in line with the Shopify adapter (brief B10) the same day, and with B10.1 after it: the CMA writes nothing back to HubSpot for Shopify and keeps each customer's matched contact in its own database (addition 0008h; README Decision log, 13 October 2026). Walked through for the NL store on 14 October 2026 (`records/intake-prod-2026-10-14`); 9.2, 9.3 and 9.6 to 9.9 were corrected the same day where the walk-through differed (the Dev Dashboard's click paths had followed Shopify's documentation as of 13 October). The other 13 stores followed the same day, all at once (9.6, Several stores at once; same record), and Juo's renewal source names were corrected then (9.6). Per store: one connection, one store row with its renewal settings, one set of subscriptions, one backfill, two read-only checks. What each step relies on is in `docs/ingest/README.md`, section Shopify.
 
 **The gate.** Briefs B10 and B10.1 bring `ingest/src/adapters/shopify`, `docs/ingest/shopify-subscribe.mjs` and the backfill objects `commerce_customer` and `commerce_order`, and need additions 0008g (`db/56_commerce_phone_hash.sql`) and 0008h (`db/58_commerce_contact_link.sql`) in the database first: the adapter sends the phone hash, which the 0007b functions would drop, and keeps each customer's contact link with the function of 0008h. Until B10.1 is merged, 0008g and 0008h have run in prod (their morning runbooks) and the service and jobs are deployed from it, run 9.1 to 9.3 only (Shopify-side setup and the secret) and stop there. The outbox worker job `ingest-outbox` of B10 stays deployed but has no schedule: nothing enqueues a write-back since 0008h.
 
@@ -671,7 +671,7 @@ Expected: no rows. A row means the earlier 9.5 ran: harmless (nothing enqueues),
 
 ## 9.6 Per store: the connection, its settings and the store
 
-Repeat 9.6 to 9.8 per store. **Do the three in one sitting**: the store row makes Intake count the shop as connected (the `No shop connected` text disappears), so a store row without subscriptions and backfill shows zero orders as if the shop sold nothing. The store row, its settings and its renewal settings come first, so the first order read is already classified.
+Repeat 9.6 to 9.8 per store, or for several stores at once (the end of 9.6). **Do the three in one sitting**: the store row makes Intake count the shop as connected (the `No shop connected` text disappears), so a store row without subscriptions and backfill shows zero orders as if the shop sold nothing. The store row, its settings and its renewal settings come first, so the first order read is already classified.
 
 The Studio blocks of 9.6 and 9.9 that call a function carry the context block's second part themselves (each Run is a fresh session; `<tenant_id>` and `<user_id>` from its first part).
 
@@ -709,19 +709,75 @@ Expected: the store listed with its market. The fallback in Studio, in one Run b
 ```bash
 node docs/ingest/shopify-subscribe.mjs --project p4a-cma-prod --shop <handle>.myshopify.com --client-id <client id from 9.3> --secret-name ingest-shopify-app-signing --source-names --days 60
 ```
-Expected: a header `orders	source name	app id	app name`, then one line per sales channel and app with its order count, the most frequent first; Shopify's own checkout is `web`, the point of sale `pos`. Juo's renewals in the NL store (14 October 2026) were the line whose source name is Juo's app id, `876	9548333057	9548333057	Juo Subscriptions`, next to a line `…	subscription_contract_checkout_one	9548333057	…`: the same app id, but those are checkout orders, not renewals. So **name the source, not the app id**: an app id in `commerce.renewal_app_ids` makes every order of that app a renewal, its checkout orders included. Write the lines into the records.
+Expected: a header `orders	source name	app id	app name`, then one line per sales channel and app with its order count, the most frequent first; Shopify's own checkout is `web`, the point of sale `pos`. Juo shows two lines with its app id, both renewals (README Decision log, 14 October 2026): the line whose source name is the app id, `9548333057` (in the NL store `876	9548333057	9548333057	Juo Subscriptions`), Juo's draft-order renewals paid through Mollie; and the line `…	subscription_contract_checkout_one	9548333057	…`, Juo's renewals paid through Shopify (card or PayPal billing attempts). New Juo subscriptions come in as `web`. **Name the sources, not the app id**: an app id in `commerce.renewal_app_ids` makes every order of that app a renewal, whatever its source name. Write the lines into the records.
 
-**Studio (cma-prod-pg)** in one Run. The lists are the tenant's, comma-separated (empty entries are ignored), and hold every store's values: first read what is there, then set the source names with this store's renewal source added. Leave `commerce.renewal_app_ids` as it is unless an app id belongs to renewals alone (Juo's does not: Pulse4all keeps it empty)
+**Studio (cma-prod-pg)** in one Run. The lists are the tenant's, comma-separated (empty entries are ignored), and hold every store's values: first read what is there, then set the source names with this store's renewal sources added. Leave `commerce.renewal_app_ids` as it is (Pulse4all keeps it empty: Juo's two source names name its renewals)
 ```sql
 set role cma_app;
 select set_config('app.tenant_id', '<tenant_id>', false),
        set_config('app.user_id', '<user_id>', false),
        set_config('app.actor_label', 'studio:martin', false);
 select key, value, is_default from cma.tenant_settings() where key in ('commerce.renewal_source_names', 'commerce.renewal_app_ids');
-select cma.set_tenant_setting('commerce.renewal_source_names', '<the values already there>,<this store''s renewal source name>');
+select cma.set_tenant_setting('commerce.renewal_source_names', '<the values already there>,<this store''s renewal source names>');
 reset role;
 ```
-Expected: one row of three values, the two rows as they were, then one row with the new value and `is_default` false. For the NL store on 14 October 2026: `commerce.renewal_source_names` = `9548333057`, `commerce.renewal_app_ids` empty. A change reclassifies the tenant's orders in the same transaction (0007b), so a second store's value never undoes the first's.
+Expected: one row of three values, the two rows as they were, then one row with the new value and `is_default` false. Since 14 October 2026, for every Pulse4all store: `commerce.renewal_source_names` = `9548333057,subscription_contract_checkout_one`, `commerce.renewal_app_ids` empty (the NL pilot had set `9548333057` alone; corrected the same day). A store whose lines show only these two Juo sources adds nothing. A change reclassifies the tenant's orders in the same transaction (0007b), so a second store's value never undoes the first's.
+
+**Several stores at once** (the other 13 stores, 14 October 2026). The same steps in two runs: one Studio Run for every store's connection, settings and store row, then one Cloud Shell script for the subscriptions (9.7) and backfills (9.8). Look up each store's source names first, as above; the renewal lists are the tenant's, so they are set once.
+
+**Studio (cma-prod-pg)** in one Run (the temporary table lives only in this Run; one `values` row per store)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+create temp table new_store as
+select v.handle, v.name, v.market, v.currency, v.time_zone, c.connection_id, c.key
+from (values ('<handle>', '<store name>', '<market>', '<currency>', '<time zone>'),
+             ('<handle>', '<store name>', '<market>', '<currency>', '<time zone>')) v(handle, name, market, currency, time_zone)
+cross join lateral cma.upsert_connection('shopify', 'Shopify ' || v.name, v.handle || '.myshopify.com',
+                                         'ingest-shopify-app-signing', null) c;
+select cma.set_connection_kind(connection_id, 'commerce') from new_store;
+select cma.set_connection_settings(connection_id, jsonb_build_object('client_id', '<client id from 9.3>',
+         'api_version', '2026-10', 'shop_handle', handle, 'crm_connection_id', '<hubspot conn>')) from new_store;
+select cma.upsert_commerce_store(connection_id, handle, name, market, currency, time_zone) from new_store;
+select n.handle, n.market,
+       c.kind = 'commerce' and c.settings->>'shop_handle' = n.handle and c.store_handle = n.handle as ok,
+       concat_ws(' ', n.handle, n.connection_id, n.key) as line,
+       c::text as read_back
+from new_store n
+left join cma.sources() c on c.connection_id = n.connection_id and c.key = n.key
+order by n.handle;
+reset role;
+```
+Expected: one row of three values; one empty result per store from `set_connection_kind` and from `set_connection_settings`, then the stores' ids; then one row per store with `ok` true, `line` (the handle, `<shop conn>` and `<key>`) and `read_back`, the connection as the Sources page reads it, matched on its id and key (`c::text`: id and key first, `commerce`, the settings, the handle last). An empty `ok` means no connection matched that id and key. A rerun is safe: the same ids and keys come back. The table keeps `c.connection_id` and `c.key`, not the row `c`, which a table cannot hold (`column "c" has pseudo-type record`).
+
+**Terminal** (in `~/cma`): paste the `line` column, one store per line, then Ctrl-D
+```bash
+cat > ~/shopify-stores.txt
+```
+Expected: no output.
+
+**Terminal** (in `~/cma`; the client id of 9.3 in place of its placeholder before pasting)
+```bash
+cat > ~/shopify-rollout.sh <<'EOF'
+# One line per store in ~/shopify-stores.txt: <handle> <shop conn> <key>
+client_id='<client id from 9.3>'
+cd ~/cma || exit 1
+while read -r handle conn key <&3; do
+  [ -n "$key" ] || continue
+  echo "== $handle $(date -u +%T)"
+  node docs/ingest/shopify-subscribe.mjs --project p4a-cma-prod --shop "$handle.myshopify.com" --client-id "$client_id" --secret-name ingest-shopify-app-signing --url "https://ingest.pulse4all.app/shopify/$key"
+  for object in commerce_customer commerce_order; do
+    gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,"$conn",--object,"$object",--from,2026-10-01
+  done
+done 3< ~/shopify-stores.txt
+echo "== done $(date -u +%T)"
+EOF
+nohup bash ~/shopify-rollout.sh > ~/shopify-rollout.log 2>&1 &
+tail -f ~/shopify-rollout.log
+```
+Expected: after `nohup: ignoring input`, per store `== <handle>`, the seven subscriptions of 9.7 (or listed as existing on a rerun) and two `has successfully completed` lines of 9.8, customers first; `== done` at the end (Ctrl-C stops `tail` only). The stores run one after the other; keep the Cloud Shell tab open until `== done`. If the shell drops, the backfill that was running keeps running server-side (the job's task timeout is 86400 s), but the script stops: run it again with the stores not yet done in `~/shopify-stores.txt`. Then 9.7's and 9.8's Studio checks per store (the bridge check covers every store in one query) and 9.9.
 
 ## 9.7 Per store: the subscriptions and the first events
 
