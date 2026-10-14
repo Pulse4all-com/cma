@@ -777,6 +777,27 @@ export function previousPeriod(range: HoursRange, today: DateKey): PreviousPerio
 }
 
 /**
+ * The start of the telephony history, as cma.telephony_history_start_of gives it (addition 0008k): the
+ * earliest business date of the calls, each in its line's zone; the calls as callRecords classifies
+ * them (deleted calls, calls without a start and calls on a line that does not count are not among
+ * them) and without a filter, since the history start is tenant-wide. Null without a call
+ */
+export function historyStartOf(calls: readonly CallRecord[]): DateKey | null {
+  return calls.reduce<DateKey | null>((first, c) => (first === null || c.date < first ? c.date : first), null);
+}
+
+/**
+ * Whether the previous span starts before the telephony history (README Decision log, 14 October 2026,
+ * brief B16.1): the span then holds dates without data, so a change against it means nothing (prod's
+ * This month read "↑ 358,900 %" against a month before the first call), and every tile says "No history
+ * to compare yet" instead. A span that starts on the history's first date or later compares as before;
+ * without a history start (no call stored yet) the changes show as before too
+ */
+export function previousBeforeHistory(previousFrom: DateKey, historyStart: DateKey | null): boolean {
+  return historyStart !== null && previousFrom < historyStart;
+}
+
+/**
  * The calls of the previous period, as cma.calls_figures_of counts them for the deltas: its dates, and
  * when it is cut, on its last date only the calls up to `now`'s time of day in each call's own zone
  */
@@ -939,6 +960,16 @@ export function callsDelta(current: number | null, previous: number | null): { d
   if (current === null || previous === null) return { direction: "none", pct: null };
   if (current === previous) return { direction: "same", pct: 0 };
   return { direction: current > previous ? "up" : "down", pct: previous === 0 ? null : round1((100 * Math.abs(current - previous)) / previous) };
+}
+
+/**
+ * What a tile says against the previous period: "noHistory" when that span starts before the telephony
+ * history (previousBeforeHistory: no change at all, whatever the figures), else the change as callsDelta
+ * gives it
+ */
+export function callsChange(current: number | null, previous: number | null, previousFrom: DateKey, historyStart: DateKey | null):
+  { direction: "up" | "down" | "same" | "none" | "noHistory"; pct: number | null } {
+  return previousBeforeHistory(previousFrom, historyStart) ? { direction: "noHistory", pct: null } : callsDelta(current, previous);
 }
 
 /** Untagged conversations as a share of the conversations, 0 to 100; null without one */

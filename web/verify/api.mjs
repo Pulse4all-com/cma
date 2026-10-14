@@ -26,8 +26,8 @@
  * messages.send to one named person, the stats; one message per run, dev data), and since addition
  * 0008e (night of 13 October 2026) the Sources, Markets and Alert rules screens and linked accounts on
  * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data),
- * since addition 0008i Inbound and the Live board's inbound part, and since addition 0008j Calls and
- * Calls per agent (reads only).
+ * since addition 0008i Inbound and the Live board's inbound part, since addition 0008j Calls and
+ * Calls per agent (reads only), and since addition 0008k the telephony history start on Calls.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -1194,7 +1194,8 @@ async function inboundChecks() {
   }
 }
 
-// ---- calls overview and calls per agent (addition 0008j, brief B16), 14 checks, 16 with the reader and the tenant without telephony ----
+// ---- calls overview and calls per agent (addition 0008j, brief B16), 14 checks, 16 with the reader and the tenant without telephony;
+// since addition 0008k (brief B16.1) 3 more on the telephony history start, so 17 and 19 ----
 // Calls needs reports.view or performance.team, Calls per agent performance.team, each answered 403 by the
 // route and again by the database. Counts, seconds, line, tag and staff names only: no number, no customer
 // name, no call id, no telephony user id and never the caller's hash in any answer. Reads only.
@@ -1255,6 +1256,37 @@ async function callsChecks() {
   expect("calls: like for like, a running period against the same point, an ended one against the whole previous period",
     [ahead?.previousPartial, ahead?.previousFrom, ahead?.previousTo, ended?.previousPartial, ended?.previousFrom, ended?.previousTo, d.previousPartial],
     [true, day(-10), day(-7), false, day(-20), day(-11), true], [false, day(-10), day(-4), false, day(-20), day(-11), true]);
+  // the telephony history start (addition 0008k): the business date of the tenant's earliest stored call,
+  // tenant-wide, null without one; a previous span that starts before it shows no change (lib/reports
+  // previousBeforeHistory: previousFrom before historyStart), one from it on the change as before
+  const hs = d.historyStart;
+  const addDay = (key, n) => new Date(Date.parse(`${key}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  const filtered = (await overview(ANALYST, `${range}&group=day&market=${encodeURIComponent(groups[2]?.rows?.[0]?.groupKey ?? "unknown")}`)).body?.data;
+  const lined = (await overview(ANALYST, `${range}&group=line${groups[3]?.rows?.[0] ? `&line=${encodeURIComponent(groups[3].rows[0].groupKey)}` : ""}`)).body?.data;
+  const starts = [...groups, plain, ahead, ended, filtered, lined].map((g) => g?.historyStart);
+  expect("calls: the history start is tenant-wide: one date (or none) for every range, grouping and filter",
+    [starts.every((x) => x === hs), hs === null || (/^\d{4}-\d{2}-\d{2}$/.test(hs) && hs <= day(0))], [true, true], [false, true]);
+  const before = (o) => o?.historyStart != null && o.previousFrom < o.historyStart;
+  if (hs !== null) {
+    const ahead7 = (await overview(ANALYST, `from=${addDay(hs, -7)}&to=${addDay(hs, -1)}&group=day`)).body?.data;
+    const on = (await overview(ANALYST, `from=${hs}&to=${hs}&group=day`)).body?.data;
+    expect("calls: no call before the history start, one on its date",
+      [ahead7?.total?.calls, (on?.total?.calls ?? 0) >= 1], [0, true], [1, true]);
+    // a week from the history start compares with the week before it (no history: no change); the week
+    // after with the history's first week (the change as before: the database's previous figures)
+    const first = (await overview(ANALYST, `from=${hs}&to=${addDay(hs, 6)}&group=day`)).body?.data;
+    const next = (await overview(ANALYST, `from=${addDay(hs, 7)}&to=${addDay(hs, 13)}&group=day`)).body?.data;
+    const whole = next && !next.previousPartial ? (await overview(ANALYST, `from=${next.previousFrom}&to=${next.previousTo}&group=day`)).body?.data : null;
+    expect("calls: a previous span before the history start shows no change, from it on the change as before",
+      [before(first), before(next), next?.previousFrom === hs, whole === null || whole?.total?.calls === next?.previous?.calls],
+      [true, false, true, true], [false, true, true, true]);
+  } else {
+    // no call stored: nothing before or on a history start, and every previous span compares as before
+    expect("calls: no call before the history start, one on its date",
+      [d.total.calls, d.previous.calls], [0, 0], [1, 0]);
+    expect("calls: a previous span before the history start shows no change, from it on the change as before",
+      [before(d), before(ended), before(ahead)], [false, false, false], [true, false, false]);
+  }
   const settings = (await get(ANALYST, "/api/v1/settings")).body?.data ?? [];
   expect("calls: the threshold comes from the settings",
     [d.connectedMinSeconds, per?.connectedMinSeconds], [Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value), Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value)], [-1, -1]);

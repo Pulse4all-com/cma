@@ -1636,12 +1636,15 @@ export const postgresData: CmaData = {
       // the previous period the database compared with (like for like: a period that reaches today
       // against the same point in the previous one), named for the deltas; today as the page resolves it
       const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      // where the tenant's telephony history starts (addition 0008k), tenant-wide: a previous span before it shows no change
+      const history = await q.query<{ history_start: string | null }>(`select cma.telephony_history_start() as history_start`);
       return {
         ...range, group, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
         rows: connections.telephony ? current.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toCallsFigures(x) })) : [],
         total: toCallsFigures(current.find((x) => x.group_key === null)),
         previous: toCallsFigures(r.rows.find((x) => x.period === "previous")),
         previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        historyStart: history.rows[0]?.history_start ?? null,
         ...(connections.telephony ? lists : { markets: [], lines: [] }),
       };
     });

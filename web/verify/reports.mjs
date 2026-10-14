@@ -28,16 +28,19 @@
  * the not-linked row, tags per person (counted only), the filters narrowing every figure alike; then the
  * screens: the deltas, the colours (series order, never a red), the top twelve tags and Other, the groups
  * by tags, the chart's axis, the per-agent bars and split, the formats, and no hash, number, call id or
- * telephony user id in an answer.
+ * telephony user id in an answer. Since addition 0008k (brief B16.1) also the telephony history start on
+ * 65's own dataset (the earliest business date in its line's zone; deleted calls, calls without a start
+ * and calls on a line that does not count left out; a later call on an earlier date) and what a tile
+ * says: no change against a previous span that starts before it, the change as before from it on.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
   groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
-  barShare, callRecords, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
+  barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
-  personSplit, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
+  historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
 } from "../src/lib/reports.ts";
 import { dateKeyInZone } from "../src/lib/time.ts";
 
@@ -390,6 +393,48 @@ expect("a period that ended compares with the whole previous one, whatever the t
   [figs(prevAt("2026-11-01T23:30:00Z")), figs(prevAt("2027-11-02T12:00:00Z"))],
   ["10/8/2 8/1 50 9 3220 357.8 out 20 20 9", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"],
   ["2/1/1 1/1 100 2 1620 810 out 20 20 2", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"]);
+// The start of the telephony history (addition 0008k) on 65's own dataset: an NL line, a US line in Los
+// Angeles, an NL line that does not count, and lines in Kiritimati (UTC+14) and at UTC-12
+const histLines = [
+  { connectionId: CONN, lineRef: "h-nl", name: "NL", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
+  { connectionId: CONN, lineRef: "h-us", name: "US", market: "US", zone: "America/Los_Angeles", isCounted: true },
+  { connectionId: CONN, lineRef: "h-off", name: "Off", market: "NL", zone: "Europe/Amsterdam", isCounted: false },
+  { connectionId: CONN, lineRef: "h-ki", name: "KI", market: "KI", zone: "Pacific/Kiritimati", isCounted: true },
+  { connectionId: CONN, lineRef: "h-um", name: "UM", market: "UM", zone: "Etc/GMT+12", isCounted: true },
+];
+const hcall = (src, start, line, extra = {}) => ccall(src, "inbound", Date.parse(start), 5, 65, line, null, [], extra);
+const hist = [
+  hcall("h-nl", "2026-10-01T22:30:00Z", "h-nl"),                     // 2 October in Amsterdam, the earliest by its start
+  hcall("h-us", "2026-10-02T03:00:00Z", "h-us"),                     // 1 October, 20:00 in Los Angeles
+  hcall("h-del", "2026-09-25T10:00:00Z", "h-nl", { deleted: true }),
+  hcall("h-off", "2026-09-20T10:00:00Z", "h-off"),
+  { ...hcall("h-nostart", "2026-09-01T10:00:00Z", "h-nl"), startedAt: null },
+];
+const startOf = (calls, lines = histLines) => historyStartOf(callRecords(calls, lines, "Europe/Amsterdam", 10));
+expect("the history start: the earliest business date in its line's zone; deleted, unstarted and uncounted calls left out, as 65 B2 to B5 and B9",
+  [startOf(hist), startOf(hist, histLines.map((l) => (l.lineRef === "h-us" ? { ...l, market: "NL", zone: "Europe/Amsterdam" } : l))),
+    startOf(hist.map((c) => ({ ...c, deleted: false }))), startOf(hist, histLines.map((l) => ({ ...l, isCounted: true }))),
+    startOf([]), startOf(hist.slice(2)),
+    startOf([hcall("h-ki", "2026-09-26T10:30:00Z", "h-ki"), hcall("h-um", "2026-09-27T11:00:00Z", "h-um")])],
+  ["2026-10-01", "2026-10-02", "2026-09-25", "2026-09-20", null, null, "2026-09-26"],
+  ["2026-10-02", "2026-10-02", "2026-09-25", "2026-09-20", null, "2026-09-20", "2026-09-27"]);
+// prod on 14 October 2026, its history from 1 October: This month compares with 31 August to 13 September
+// (before the history: no change), This week with 5 to 7 October (the change as before); a span from the
+// history's first date compares, a day earlier does not; without a history start everything compares
+const HS = "2026-10-01";
+const monthPrev = previousPeriod({ from: "2026-10-01", to: "2026-10-31" }, "2026-10-14");
+const weekPrev = previousPeriod({ from: "2026-10-12", to: "2026-10-18" }, "2026-10-14");
+expect("a previous span before the history start shows no change; from it on, the change as before",
+  [previousBeforeHistory(monthPrev.from, HS), previousBeforeHistory(weekPrev.from, HS),
+    previousBeforeHistory(previousPeriod({ from: "2026-10-08", to: "2026-10-14" }, "2026-10-15").from, HS),
+    previousBeforeHistory(previousPeriod({ from: "2026-10-07", to: "2026-10-13" }, "2026-10-15").from, HS),
+    previousBeforeHistory(monthPrev.from, null),
+    callsChange(3590, 1, monthPrev.from, HS), callsChange(395, 335, weekPrev.from, HS), callsChange(4, 0, weekPrev.from, HS),
+    callsChange(3590, 1, monthPrev.from, null)],
+  [true, false, false, true, false, { direction: "noHistory", pct: null }, { direction: "up", pct: 17.9 }, { direction: "up", pct: null },
+    { direction: "up", pct: 358900 }],
+  [false, false, false, false, false, { direction: "up", pct: 358900 }, { direction: "noHistory", pct: null }, { direction: "up", pct: null },
+    { direction: "noHistory", pct: null }]);
 expect("days and ISO weeks across the DST change, each call in its line's zone, as 63 B7",
   [groupCalls(records(), "2026-10-19", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.calls}`),
     groupCalls(records(), "2026-10-19", "2026-11-01", "week").rows.map((r) => `${r.groupKey}=${r.calls}`)],

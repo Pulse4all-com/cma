@@ -7,15 +7,16 @@
  * Leaf Green (the series order), a counted tag Deep Blue, a tag that does not count Neutral, Other Light
  * Blue; every mark carries its label or a title, and no text sits on a Light Blue bar (7.8). A volume's
  * change against the previous period is neither good nor bad, so it is Muted with an arrow, never Leaf
- * Green or the error red (7.7 colours a delta only when its direction has a meaning). Counts, seconds,
- * line and tag names only: no number, no customer name, no call id, never the hash.
+ * Green or the error red (7.7 colours a delta only when its direction has a meaning); against a previous
+ * period that starts before the telephony history it says so in the same Muted text, with no change.
+ * Counts, seconds, line and tag names only: no number, no customer name, no call id, never the hash.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { CallsFigures, CallsGroup, CallsRow, TagUseRow } from "@/lib/data";
 import {
-  CALLS_GROUPS, callsBars, callsDelta, countAxis, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
+  CALLS_GROUPS, callsBars, callsChange, countAxis, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
   TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, weekNumber,
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
@@ -68,12 +69,26 @@ export function previousLabel(from: string, to: string, partial: boolean, copy: 
   };
 }
 
-/** A figure's change against the previous period, like for like, in words with an arrow; Muted whatever its direction */
-export function DeltaLine({ current, previous, compared, copy, locale }: {
-  current: number | null; previous: number | null; compared: { text: string; dates: string | null; partial: boolean }; copy: Copy; locale: Locale;
+/**
+ * A figure's change against the previous period, like for like, in words with an arrow; Muted whatever its
+ * direction. When the previous span starts before the telephony history (`previousFrom` before
+ * `historyStart`, callsChange) no change at all: "No history to compare yet", the history's first date in
+ * the title
+ */
+export function DeltaLine({ current, previous, compared, previousFrom, historyStart, copy, locale }: {
+  current: number | null; previous: number | null; compared: { text: string; dates: string | null; partial: boolean };
+  previousFrom: string; historyStart: string | null; copy: Copy; locale: Locale;
 }) {
   const t = copy.calls;
-  const d = callsDelta(current, previous);
+  const d = callsChange(current, previous, previousFrom, historyStart);
+  if (d.direction === "noHistory") {
+    return (
+      <p className="mt-1 text-small text-p4a-muted" data-testid="delta" data-direction="none" data-compares="none" data-history-start={historyStart ?? undefined}
+        title={historyStart ? t.historyStarts.replace("{date}", fmtDate(historyStart, locale)) : undefined}>
+        {t.deltaNoHistory}
+      </p>
+    );
+  }
   const text = d.direction === "none" ? t.deltaNone
     : d.direction === "same" ? t.deltaSame
     : d.pct === null ? t.deltaNew

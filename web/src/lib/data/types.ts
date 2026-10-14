@@ -1026,6 +1026,12 @@ export interface CallsOverview {
   previousTo: DateKey;
   /** The period reaches today, so the previous one is cut to the same point: "the same point in the previous period" */
   previousPartial: boolean;
+  /**
+   * The business date of the tenant's earliest stored call (cma.telephony_history_start, addition 0008k):
+   * tenant-wide, whatever the market and line filters; null without a call. A previous span that starts
+   * before it shows no change on any tile (previousBeforeHistory in lib/reports)
+   */
+  historyStart: DateKey | null;
   /** The markets and lines with calls in the period, for the filters (the line list within the chosen market) */
   markets: string[];
   lines: CallsLine[];
