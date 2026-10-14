@@ -1,0 +1,22 @@
+verify/api.mjs against http://localhost:8081
+
+PASS  reports: an agent is refused on every route  got [403,403,403,403]
+PASS  reports: the supervisor reads all but data quality got [200,200,200,403]
+PASS  reports: the analyst reads all four          got [200,200,200,200]
+PASS  reports: the manager reads data quality      got 200
+PASS  reports: more than 92 days is a 400 on every ranged route got [400,400,400]
+PASS  reports: 92 days are answered                got 200
+PASS  reports: a backwards range is a 400          got 400
+PASS  reports: a group outside the four is a 400   got [400,400,400]
+PASS  reports: each group answers as itself, none means day got ["day","market","agent","pipeline","day"]
+PASS  reports: no field named email, phone, name or firstname in the rows got []
+PASS  reports: statuses are called, not called open or closed got true
+PASS  reports: every record link is https or empty got true
+PASS  reports: the summary by day adds up to the rows got [6,4,1]
+PASS  reports: agents not mapped are one group without a label, never an owner id got [true,4,true]
+PASS  reports: intake figures follow the tenant's connections got true
+PASS  reports: data quality lists each check once with a count got [true,true,true]
+PASS  reports: without telephony and a shop those figures are null, never 0 got [{"telephony":false,"commerce":false},true,false]
+
+ALL 17 PASS
+exit 0

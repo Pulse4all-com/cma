@@ -1,0 +1,20 @@
+verify/api.mjs against http://localhost:8081  (--provoke: every check must FAIL)
+
+FAIL  invitations: an agent cannot list them       got 403, wanted 200
+FAIL  invitations: the manager lists them, never a token or hash got [200,true,true], wanted [200,true,false]
+FAIL  invitations: a write needs the request header; cross-site is refused got [400,403], wanted [201,201]
+FAIL  invitations: a malformed body is a 400       got [400,400], wanted [201,201]
+FAIL  invitations: the manager may not invite a role above its ceiling got true, wanted false
+FAIL  invitations: the system role and an unknown role are refused got [403,404], wanted [201,201]
+FAIL  invitations: created with a 43-character token, valid for days got [201,true,true], wanted [201,false,true]
+FAIL  invitations: the same address again is a 409 got 409, wanted 201
+FAIL  invitations: listed open, without the token  got ["open",true], wanted ["open",false]
+FAIL  invite: the link opens for its address, shows another account to anyone else, and changes nothing got ["open","wrong_account","open"], wanted ["accepted","open","accepted"]
+FAIL  invitations: a new link replaces the old one got [200,true,"invalid","open"], wanted [200,false,"open","open"]
+FAIL  invitations: the manager cannot renew or revoke an invitation above its ceiling got [403,403], wanted [200,200]
+FAIL  invite: Accept refuses a cross-site post; another account goes back to the link got [403,303,true,403], wanted [303,303,true,200]
+FAIL  invite: Accept sets the person up with the invited role and goes home; the link then leads home got [303,"/",200,true,307], wanted [303,"/",403,true,200]
+FAIL  invitations: accepted by the person, and an accepted one cannot be revoked got ["accepted",true,409], wanted ["open",true,200]
+
+ALL 15 PROVOKED CHECKS FAILED, as they must
+exit 0

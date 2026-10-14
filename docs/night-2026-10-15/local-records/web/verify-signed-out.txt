@@ -1,0 +1,14 @@
+PASS  the page reads and writes no cookie
+PASS  the page makes no request of its own (no fetch, XHR, beacon, socket, import)
+PASS  no external script, stylesheet or font: only the page's own files and Google's two addresses
+PASS  the CSP is present, exact, and allows the one inline script by its hash only
+PASS  no tenant or company name before the deploy: the name and the logo are placeholders
+PASS  English and Dutch, word for word copy.ts's signedOut, chosen from the browser's language
+PASS  the three links: Log in to / (focused), another account through Google's AddSession, Google's Logout
+PASS  Log out's Location: unset and legacy /logout/done, signed-out the static page, relative; a typo refused
+PASS  the route, the config and the build use the flag, legacy by default
+PASS  No access yet links to another account only with the flag
+PASS  /signed-out reaching cma-web gets the IAP check: in the matcher, no route, no public file
+
+signed-out: PASS (11 checks)
+exit 0
