@@ -18,5 +18,5 @@ messages       exit 0: ALL 24 PASS
                provoked exit 0: ALL 24 PROVOKED CHECKS FAILED, as they must
 import         exit 0: ALL 23 PASS
                provoked exit 0: ALL 23 PROVOKED CHECKS FAILED, as they must
-reports        exit 0: ALL 46 PASS
-               provoked exit 0: ALL 46 PROVOKED CHECKS FAILED, as they must
+reports        exit 0: ALL 48 PASS
+               provoked exit 0: ALL 48 PROVOKED CHECKS FAILED, as they must
