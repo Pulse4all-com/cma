@@ -1,0 +1,6 @@
+SET
+SET
+DO
+SET
+psql:/home/user/cma/web/verify/reports-fixture.sql:272: NOTICE:  fixture written
+DO

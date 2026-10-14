@@ -1,0 +1,20 @@
+verify/api.mjs against http://localhost:8080
+
+PASS  inbound: an agent is refused on the report and the board got [403,403]
+PASS  inbound: the supervisor and the analyst read both got [200,200,200,200]
+PASS  inbound: more than 92 days and a group outside the four are a 400 got [400,400,400,400]
+PASS  inbound: each group answers as itself, none means day got ["day","market","line","hour","day"]
+PASS  inbound: no hash, number or name in the report or the board got []
+PASS  inbound: the groups add up to the total (offered, answered, unanswered, waiting) got [true,true,true,true]
+PASS  inbound: every group and the total are coherent (outcomes, reasons, the service level) got true
+PASS  inbound: the hour groups are 00 to 23 and the service level's seconds come from the settings got [true,true]
+PASS  inbound: the board's today is coherent and its missed calls run oldest first got [true,true,true]
+PASS  inbound: the board's lookback and anonymous count are whole numbers got [true,true]
+PASS  reasons: the request header is required, the manager is refused got [400,403]
+PASS  reasons: the admin saves a label and a switch, read back with the connection got ["API verifier reason",false,true]
+PASS  reasons: the report labels the code from the catalog got API verifier reason
+PASS  reasons: an empty label and a customer-records connection are a 400 got [400,400]
+PASS  reasons: put back as it was                  got ["Unknown",true]
+PASS  inbound: without telephony the report and the board say so, never 0 got [false,0,false,null,0]
+
+ALL 16 PASS

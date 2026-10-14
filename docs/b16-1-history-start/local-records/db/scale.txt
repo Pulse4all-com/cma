@@ -1,0 +1,56 @@
+A copy of the fresh database at 64, pulse4all-subscriptions of the dev seed, with 300,000 invented calls: one every
+100 seconds from 1 October 2025 on two counted lines. Then 40,000 more over the 140 days before them, each deleted
+or on a line that does not count. Timings on this container, each read twice.
+SET
+
+1. 300,000 calls
+Timing is on.
+-- the history start of 64: windows of seven days through cma.calls_of
+ telephony_history_start_of 
+----------------------------
+ 2025-10-01
+(1 row)
+
+Time: 21.981 ms
+ telephony_history_start_of 
+----------------------------
+ 2025-10-01
+(1 row)
+
+Time: 16.831 ms
+-- the same through one unbounded read of cma.calls_of, the simplest form, not used
+    min     
+------------
+ 2025-10-01
+(1 row)
+
+Time: 466.562 ms
+    min     
+------------
+ 2025-10-01
+(1 row)
+
+Time: 418.360 ms
+-- for scale: the overview of 0008j for a month, unchanged by this pull request
+ count 
+-------
+    15
+(1 row)
+
+Time: 1627.229 ms (00:01.627)
+Timing is off.
+
+2. with 40,000 calls that do not count in the 140 days before: about twenty windows
+Timing is on.
+ telephony_history_start_of 
+----------------------------
+ 2025-10-01
+(1 row)
+
+Time: 51.336 ms
+ telephony_history_start_of 
+----------------------------
+ 2025-10-01
+(1 row)
+
+Time: 60.716 ms

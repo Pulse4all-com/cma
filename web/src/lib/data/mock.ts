@@ -20,7 +20,7 @@ import type {
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
   applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
-  inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
+  historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
@@ -264,8 +264,9 @@ function mockPeriodCalls(me: Principal, range: { from: DateKey; to: DateKey }): 
 // Tags from the test connection's catalog: Quote and Courtesy call count, Internal does not; some
 // conversations are untagged and some carry only Internal. Telephony users 900001 to 900004 are linked
 // to people of the fictional team (People, linked accounts), 900009 to nobody. The test line l-3 does not
-// count: its calls are in the fixture and in no figure. Dates are not cut at intake.start_date (the
-// database does not cut them either), so the previous equal period has calls too.
+// count: its calls are in the fixture and in no figure. The calls start at intake.start_date, as the
+// inbound calls do: there the fixture's telephony history starts (addition 0008k), so a previous period
+// before it shows no change, as in prod since its first calls of 1 October 2026.
 
 /** The telephony users of the fixture: four linked to a person, 900009 to nobody */
 const MOCK_TEL_USERS = ["900001", "900001", "900002", "900002", "900003", "900003", "900004", "900004", "900009"];
@@ -320,13 +321,18 @@ function mockConnectedMin(): number {
   return Number(list.find((x) => x.key === "telephony.connected_min_seconds")?.value ?? 10);
 }
 
-/** Every call of the fixture from a day before `from` to a day after `to` (up to now): both directions, both lines, and the test line that does not count */
+/**
+ * Every call of the fixture from a day before `from` to a day after `to` (up to now), none before
+ * intake.start_date (the first call of the fixture's telephony history): both directions, both lines,
+ * and the test line that does not count
+ */
 function mockCalls(me: Principal, range: HoursRange): TelephonyCallFixture[] {
   if (!connectionsOf(me).telephony) return [];
   const now = Date.now();
   const last = range.to < mockToday(me) ? addDays(range.to, 1) : mockToday(me);
+  const first = addDays(range.from, -1) < mockStartDate(me) ? mockStartDate(me) : addDays(range.from, -1);
   const out: TelephonyCallFixture[] = [];
-  for (let date = addDays(range.from, -1); date <= last; date = addDays(date, 1)) {
+  for (let date = first; date <= last; date = addDays(date, 1)) {
     for (const line of MOCK_INBOUND_LINES.filter((l) => l.isCounted)) out.push(...mockInboundOn(me, date, line, now), ...mockOutboundOn(me, date, line, now));
     const started = localMs(date, "11:15", "Europe/Amsterdam");
     if (started < now - 60_000) {
@@ -383,10 +389,12 @@ function mockCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, 
   // like for like, as the database: a period that reaches today against the same point in the previous one
   const prev = previousPeriod(range, mockToday(me));
   const { rows, total } = groupCalls(records, range.from, range.to, group);
+  // the history start as cma.telephony_history_start: the earliest call of the whole fixture, without the filter
+  const history = callRecords(mockCalls(me, { from: mockStartDate(me), to: mockToday(me) }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin());
   return {
     ...range, group, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total,
     previous: callsFigures(previousCalls(records, prev, new Date().toISOString())),
-    previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+    previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial, historyStart: historyStartOf(history),
     ...mockCallsLists(me, range, filter),
   };
 }

@@ -1,0 +1,14 @@
+M01 the tenant's zone instead of the line's: caught by B1, B3, B4, B5, B6, B7, verdict; FAIL   | 5 PASS, 6 FAIL
+M02 the first call's date by instant, no two-day window: caught by B1, B3, B4, B5, B6, B7, B9, verdict; FAIL   | 4 PASS, 7 FAIL
+M03 a window of one day after the earliest call instead of two: caught by B9, verdict; FAIL   | 10 PASS, 1 FAIL
+M04 no step past a window without a call: null: caught by B1, B3, B4, B6, B, verdict; FAIL   | 3 PASS, 5 FAIL
+M05 the earliest stored row, deleted or not, on any line: caught by B1, B2, B3, B4, B5, B6, B7, B8, B9, verdict; FAIL   | 2 PASS, 9 FAIL
+M06 the application's read without the permission check: caught by B1, verdict; FAIL   | 10 PASS, 1 FAIL
+M07 performance.team only: caught by B1, verdict; FAIL   | 10 PASS, 1 FAIL
+M08 the application's read in the owner's rights: caught by A2, verdict; FAIL   | 10 PASS, 1 FAIL
+M09 executable by everyone: caught by A2, verdict; FAIL   | 10 PASS, 1 FAIL
+M10 the start-index probe over every tenant's rows (equivalent: cma.calls_of still reads the tenant's calls only, so it walks more windows to the same answer): NOT CAUGHT; PASS   | 11 PASS, 0 FAIL
+M11 the application's read for no tenant: caught by B1, B3, B4, B6, B, verdict; FAIL   | 3 PASS, 5 FAIL
+M12 the earliest business date within the window the earliest call was found in, not up to two days after it: caught by B9, verdict; FAIL   | 10 PASS, 1 FAIL
+M13 the history start one day early: caught by B1, B3, B4, B5, B6, B7, B8, B9, verdict; FAIL   | 3 PASS, 8 FAIL
+M14 no record of the addition: caught by A1, verdict; FAIL   | 10 PASS, 1 FAIL
