@@ -14,6 +14,8 @@ export const field = "h-10 rounded-input border border-p4a-border bg-white px-3 
 export const label = "flex flex-col gap-2 text-small font-semibold text-p4a-body";
 export const th = "h-10 whitespace-nowrap px-3 text-left font-semibold";
 export const td = "border-t border-p4a-border px-3 py-2 align-middle";
+/** A body row of a configuration table (docs/style/Pulse4all-Style.md 7.6): at least 40px, zebra rows, a hover row */
+export const tr = "h-10 even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 
 export type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "problem"; message: string };
 
@@ -134,7 +136,7 @@ export function FormDialog({
 export function FlagField({ name, hint, checked, onChange, disabled }: { name: string; hint?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <label className="flex items-start gap-3 text-body">
-      <input type="checkbox" className="mt-1 h-4 w-4" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="mt-1 h-4 w-4 accent-p4a-deepblue" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       <span>
         <span className="font-semibold">{name}</span>
         {hint ? <span className="text-p4a-muted"> · {hint}</span> : null}

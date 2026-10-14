@@ -6,8 +6,10 @@
  * caller was missed and a link icon only when the connection has a call link template; then the count
  * of anonymous missed calls. A server component: the page's poll (LiveRefresh) reads it again every 10
  * seconds. Ids, codes, line names and counts only: no number, no name, never the caller's hash. A tenant
- * without telephony sees "No telephony connected", never 0. Tiles are white with Deep Blue figures; no
- * figure is a filled red tile.
+ * without telephony sees "No telephony connected", never 0. Tiles are white cards with Deep Blue figures
+ * and Muted labels (docs/style/Pulse4all-Style.md 7.3: radius 15px, padding 24px), four to a row at
+ * 1280 px and seven from 1536 px; no figure is a filled red tile. The table has zebra rows and a hover row
+ * (7.6).
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
@@ -21,8 +23,8 @@ import { Card } from "./primitives";
 
 function Tile({ label, info, value, testId }: { label: string; info: { about: string; text: string }; value: ReactNode; testId: string }) {
   return (
-    <div className="rounded-card border border-p4a-border bg-white p-4" data-testid={testId} data-tile="">
-      <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
+    <div className="rounded-card border border-p4a-border bg-white p-6" data-testid={testId} data-tile="">
+      <p className="flex items-start text-small text-p4a-muted" data-hint-anchor="">
         {label}
         <HeaderHint label={info.about} text={info.text} />
       </p>
@@ -82,7 +84,7 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-7 gap-4" data-testid="inbound-tiles">
+          <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7" data-testid="inbound-tiles">
             {INBOUND_TILES.map((key) => (
               <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint)} value={shown(key)} />
             ))}
@@ -93,7 +95,7 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
               {t.missedTitle}
               {hint(t.missedTitle, h.missedCallbacks)}
             </h3>
-            <p className="mb-4 text-caption text-p4a-grey">{t.missedIntro}</p>
+            <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
             {inbound.callbacks.length === 0 ? (
               <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
             ) : (
@@ -114,7 +116,7 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
                     {inbound.callbacks.map((r) => {
                       const w = callbackWaiting(r);
                       return (
-                        <tr key={r.callId} className="border-b border-p4a-border last:border-b-0">
+                        <tr key={r.callId} className="border-b border-p4a-border last:border-b-0 odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                           <td className={td}>{r.lineName ?? copy.inbound.unknownLine}</td>
                           <td className={td}>{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
                           <td className={td}>{r.reasonCode === "unknown" && r.reasonLabel === "unknown" ? copy.inbound.unknownReason : r.reasonLabel}</td>

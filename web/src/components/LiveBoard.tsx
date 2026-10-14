@@ -9,7 +9,9 @@
  *
  * Colours come from the flag groups in lib/dashboard, never from a status key or name, and every
  * colour mark sits next to its label. Filters are client-side (G for the group, E for the
- * employer) and survive a refresh: the server's rows change, the choice does not.
+ * employer) and survive a refresh: the server's rows change, the choice does not. Tiles and the
+ * table follow docs/style/Pulse4all-Style.md 7.3 and 7.6 (padding 24px, Muted labels, zebra rows,
+ * a hover row).
  */
 import { useState, useSyncExternalStore } from "react";
 import type { Copy } from "@/lib/copy";
@@ -104,11 +106,11 @@ export function LiveBoard({
             title={label(tile.group).hint}
             onClick={() => setGroup(group === tile.group ? "" : tile.group)}
             className={[
-              "rounded-card border bg-white p-4 text-left",
+              "rounded-card border bg-white p-6 text-left",
               group === tile.group ? "border-p4a-deepblue" : "border-p4a-border hover:border-p4a-denim",
             ].join(" ")}
           >
-            <p className="flex items-center gap-2 text-caption text-p4a-grey">
+            <p className="flex items-center gap-2 text-small text-p4a-muted">
               {isGroup(tile.group) ? <Swatch group={tile.group} /> : null}
               {label(tile.group).label}
             </p>
@@ -188,7 +190,7 @@ export function LiveBoard({
           </thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite">
+              <tr key={r.userId} className="h-10 border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                 <td className="whitespace-nowrap px-3">{r.displayName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.organisationName}</td>
                 <td className="whitespace-nowrap px-3 text-p4a-muted">{r.teams.map((x) => x.name).join(", ")}</td>

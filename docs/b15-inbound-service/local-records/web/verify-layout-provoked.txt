@@ -1,8 +1,9 @@
   manager /reports/intake?range=month: the main area scrolls sideways by 111px at 1280
   manager /reports/data-quality: the header hint covers the header it explains
-  manager /reports/inbound?range=month: the main area scrolls sideways by 384px at 1280
+  manager /reports/inbound?range=month: the main area scrolls sideways by 390px at 1280
   manager /reports/inbound?range=month: 1 Light Blue or Soft Rose reason marks carry text
   supervisor /live/board: the main area scrolls sideways by 1416px at 1280
+  admin /configuration/sources/00000000-0000-7000-8000-00000000c002: source-missed-reasons does not fit its card at 1280
   admin /configuration/alert-rules: the main area scrolls sideways by 1041px at 1280
   lines: the confirmation does not open on Cancel
   lines: the box is unticked while the confirmation is open
@@ -14,4 +15,4 @@
   1279x800: the desktop-only gate is showing instead of the app
   1279x800: rail is 0px, token says 256
   1279x800: top bar is 0px, token says 56
-layout: FAIL (16 problems)
+layout: FAIL (17 problems)

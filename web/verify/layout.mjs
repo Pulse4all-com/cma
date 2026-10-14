@@ -23,6 +23,7 @@
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
  *       1279 px and demands the app shell, moves one hint panel over its header, lets the
  *       Intake and Inbound tables spill out of their cards, writes a count on a Light Blue reason mark,
+ *       widens the missed-reason table past its card on Sources,
  *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
  *       irreversible confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
  */
@@ -303,7 +304,8 @@ async function expectGate(width, height) {
 }
 
 // Sources, Markets and Alert rules (addition 0008e): at 1280 px as the admin, the shell without horizontal
-// scrolling, the main area never sideways, the page's own keycaps, and its tables there
+// scrolling, the main area never sideways, the page's own keycaps, and its tables there; on a connection's
+// page every table inside its card (addition 0008i)
 async function expectIntakeConfiguration() {
   const cases = [
     ["/configuration/sources", [], '[data-testid="sources"]'],
@@ -333,6 +335,20 @@ async function expectIntakeConfiguration() {
     if (Math.round(m.rail) !== 256) problems.push(`admin ${path}: rail is ${m.rail}px`);
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`admin ${path}: keycap ${k} missing`);
     if (await p.locator(selector).count() === 0) problems.push(`admin ${path}: ${selector} missing`);
+    // A connection's page (docs/style/Pulse4all-Style.md 7.3 and 7.6): every table ends inside its card's
+    // padding and none needs to scroll at 1280; --provoke widens the missed-reason table
+    if (path.startsWith("/configuration/sources/")) {
+      const spilt = await p.evaluate((widen) => {
+        if (widen) document.querySelector('[data-testid="source-missed-reasons"]')?.setAttribute("style", "min-width: 1400px");
+        return [...document.querySelectorAll("main section table")].filter((t) => {
+          const card = t.closest("section");
+          const box = t.parentElement;
+          const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+          return t.getBoundingClientRect().right > edge + 0.5 || box.scrollWidth > box.clientWidth;
+        }).map((t) => t.dataset.testid ?? "a table");
+      }, provoke && path.endsWith("c002"));
+      for (const id of spilt) problems.push(`admin ${path}: ${id} does not fit its card at 1280`);
+    }
     const name = path.split("/").slice(2).join("-").replace(/00000000-0000-7000-8000-00000000/, "");
     await p.screenshot({ path: `${outDir}/admin-${name}.png`, fullPage: true });
     await ctx.close();
@@ -484,5 +500,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

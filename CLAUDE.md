@@ -6,6 +6,10 @@
 - web/CLAUDE.md and web/AGENTS.md hold the Next.js rules for web/. Read them before touching web/.
 - Write everything in English: code, comments, SQL, docs, commit messages and PR descriptions.
 
+## Style
+- docs/style/Pulse4all-Style.md is the style of everything the CMA shows. Every UI change follows it: colours, type, components (7.1 to 7.8) and tone of voice for copy.
+- Where two rules meet, the more specific wins. Where it says nothing, derive the choice from it and name it in the PR; never pick freely.
+
 ## Principles
 1. Configurable, not tailor-made: markets, skills, statuses, thresholds, SLAs and rules are tenant configuration or seed data, never code. Nothing Pulse4all- or vendor-specific is hardcoded; vendors sit behind adapters.
 2. Multi-tenant and role-based from the first line: every table is tenant-aware (`cma.setup_tenant_table()` for RLS, grants and audit), every query and route respects role permissions.

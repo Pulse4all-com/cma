@@ -20,7 +20,6 @@ PASS  a user parameter cannot redirect hours       got {"from":"2026-10-01","to"
 PASS  an agent cannot read team hours              got 403
 PASS  an agent cannot list the team                got 403
 PASS  the supervisor lists the people, agent included got [200,true]
-      (closed 1 leftover day(s): 2026-10-12)
 PASS  the supervisor closes open past days         got 0
 PASS  a correction needs the request header        got 400
 PASS  cross-site correction is refused             got 403

@@ -43,11 +43,13 @@ function Bar({ f, columns, copy }: { f: InboundFigures; columns: ReasonColumn[];
  * or hour (G cycles), with the calls offered and answered, the unanswered share, the service level, the
  * average and 80th percentile time to answer and one column per missed reason that occurs, labelled from
  * the tenant's catalog, a total row computed by the database over every call, and a small stacked bar per
- * row (answered, then the reasons in the neutral series, never a red). Shown to people holding
- * reports.view or performance.team; the database checks again on every read. A tenant without telephony
- * sees "No telephony connected", never 0. Counts, codes and line names only: no number, no name, never
- * the caller's hash. Every header explains itself in a hint, the service level's seconds filled in from
- * the tenant's settings. The table scrolls sideways inside its card where it is wider (1280 px).
+ * row (answered, then the reasons in the style's series, never a red). Tables, cards and charts follow
+ * docs/style/Pulse4all-Style.md 7.3 to 7.8 (body 14px with a 13px header row, zebra rows, a hover row, the
+ * total row Semi Bold Inkt). Shown to people holding reports.view or performance.team; the database
+ * checks again on every read. A tenant without telephony sees "No telephony connected", never 0. Counts,
+ * codes and line names only: no number, no name, never the caller's hash. Every header explains itself
+ * in a hint, the service level's seconds filled in from the tenant's settings. The table scrolls
+ * sideways inside its card where it is wider (1280 px).
  */
 export default async function InboundPage({ searchParams }: PageProps<"/reports/inbound">) {
   const r = await resolve();
@@ -139,9 +141,9 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
               {showWaiting ? <li className="flex items-center gap-2"><span aria-hidden="true" className={`inline-block h-2.5 w-2.5 rounded-full ${WAITING_CLASS}`} />{t.waitingLegend}</li> : null}
             </ul>
             <div className="overflow-x-auto" data-testid="inbound-scroll" role="region" aria-label={t.title} tabIndex={0}>
-              <table className="w-full border-collapse text-small" data-testid="inbound-table">
+              <table className="w-full border-collapse text-body" data-testid="inbound-table">
                 <thead>
-                  <tr className="bg-p4a-bgblue text-left text-p4a-heading">
+                  <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
                     <th className={th}>{t[group]}{hint(t[group], groupHint[group])}</th>
                     <th className={`${th} w-28`}>{t.calls}{hint(t.calls, h.inboundBar)}</th>
                     <th className={`${th} text-right`}>{t.offered}{hint(t.offered, h.offered)}</th>
@@ -164,14 +166,14 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
                 </thead>
                 <tbody>
                   {report.rows.map((x) => (
-                    <tr key={x.groupKey} className="border-b border-p4a-border">
+                    <tr key={x.groupKey} className="border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
                       <td className={`${td} font-semibold`}>{groupLabel(x, group, copy, me.locale)}</td>
                       {figures(x, false)}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="text-p4a-heading" data-testid="inbound-total">
+                  <tr className="text-p4a-body" data-testid="inbound-total">
                     <td className={`${td} font-semibold`}>{copy.reports.total}</td>
                     {figures(report.total, true)}
                   </tr>
