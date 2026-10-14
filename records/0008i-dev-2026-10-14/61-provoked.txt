@@ -1,0 +1,46 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/provoke.sql:58: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+                                                   check_name                                                   |        result        |                                                                                                                                                                detail                                                                                                                                                                
+----------------------------------------------------------------------------------------------------------------+----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008i recorded                                                                                     | FAIL                 | provoked
+ A2 the missed-reason catalog: key, row-level security, audit, no delete, the readers' view                     | FAIL                 | 
+ A3 the settings: service level 20 s, lookback 3 days, waiting at most 30 minutes                               | FAIL                 | telephony.callback_lookback_days=integer:3, telephony.service_level_seconds=integer:20, telephony.waiting_max_minutes=integer:30
+ A4 the functions are the application's only, in the caller's rights                                            | FAIL                 | 
+ A5 no function returns the hash; its comment names three purposes                                              | FAIL                 | 
+ B1 the service level with and without an excluded reason, a call at exactly N seconds                          | FAIL                 | 6/3/3/0 within 2 of 5 = 40.0; reasons {"unknown": 1, "short_abandoned": 1, "no_available_agent": 1} | within 2 of 6 = 33.3
+ B2 average and 80th percentile time to answer; the total row computed over every call                          | FAIL                 | avg 17.0, p80 20.6 | GB:3/0/3 0 of 3 = 0.0 avg - p80 - {"unknown": 2, "brand_new_code": 1} | NL:6/3/3 2 of 5 = 40.0 avg 17.0 p80 20.6 {"unknown": 1, "short_abandoned": 1, "no_available_agent": 1} | total:9/3/6 2 of 8 = 25.0 avg 17.0 p80 20.6 {"unknown": 3, "brand_new_code": 1, "short_abandoned": 1, "no_available_agent": 1}
+ B3 hours and dates across the DST change of 25 October 2026, each in its line's zone                           | FAIL                 | 01=3,02=2 | 2026-10-25=5
+ B4 a line without a market: the tenant's zone, market unknown, the line's name                                 | FAIL                 | 2026-10-22=1 | 00=1 | unknown=1 | Verify line without market=1
+ B5 an unknown code counts with the defaults; a missing reason is unknown                                       | FAIL                 | 0 of 3; {"unknown": 2, "brand_new_code": 1} | brand_new_code:brand_new_code:true:true:false:1,no_available_agent:no_available_agent:true:true:false:2,out_of_opening_hours:Outside hours:false:false:true:0,short_abandoned:Hung up early:false:true:true:1,unknown:unknown:true:true:false:3
+ B6 waiting now; a call older than waiting_max_minutes is left out                                              | FAIL                 | 1 waiting, longest ~300, N 20, max 30 | w-1:true:-,w-2:false:unknown,w-3:false:-
+ B7 a caller missed twice is one row with missed_count 2; oldest first                                          | FAIL                 | c7-a:no_available_agent:2:business,c4-a:abandoned_in_ivr:1:business,c1-b:agents_did_not_answer:2:business,w-2:unknown:1:none
+ B8 called back by an outbound attempt and by an answered inbound call; an earlier outbound call does not count | FAIL                 | c4-a
+ B9 a call older than the lookback; a reason without a callback                                                 | FAIL                 | 0/0 then 1/0, lookback 5
+ B10 anonymous calls counted, not listed                                                                        | FAIL                 | listed 4, anonymous 2, lookback 3
+ B11 another tenant's same hash string does not match, also in the owner's rights                               | FAIL                 | x-2
+ B12 the hash is in no answer                                                                                   | FAIL                 | 0 hash strings found in 14391 characters of answers
+ B13 a configuring person writes the catalog; the Ingest user and an agent cannot; nine refusals                | FAIL                 | agents_did_not_answer:Nobody picked up:true:false | 9 of 9 refusals
+ B14 the reads' permissions and refusals; tenant isolation                                                      | FAIL                 | 16 of 16 refusals; tenant three offered/reasons/catalog/one/two 1/0/0/0/0
+ B15 times missed counts the missed calls since the latest callback                                             | FAIL                 | d-5:1,e-4:1
+ verdict                                                                                                        | PROVOKED, NOT A PASS | 0 PASS, 20 FAIL
+(21 rows)
+
+DROP FUNCTION
+RESET
