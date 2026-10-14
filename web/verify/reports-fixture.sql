@@ -1,7 +1,8 @@
 -- =============================================================================================
 -- verify/reports-fixture.sql: a small intake fixture for running verify/api.mjs --reports (and the
 -- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026); since
--- addition 0008i also --inbound, on a database at db/61 (the inbound part needs 0008i)
+-- addition 0008i also --inbound, on a database at db/61 (the inbound part needs 0008i); since addition
+-- 0008j also --calls, on a database at db/63 (the calls part needs 0008j)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, and it
 -- refuses a database without the dev seed. All ids are invented; nothing personal is written (ids,
@@ -24,7 +25,14 @@
 --                            a caller missed, called back and missed again (times missed 1),
 --                            an anonymous caller, a call older than the lookback, a call waiting now,
 --                            the connection's catalog rows and its record_url_call template (callers
---                            as invented 64-hex hashes, never made from a number)
+--                            as invented 64-hex hashes, never made from a number); since 0008j calls
+--                            for Calls and Calls per agent: a GB line and a line that does not count,
+--                            a counted and an uncounted tag, telephony users linked to Agent Two and
+--                            the test supervisor and one linked to nobody, connected, not connected
+--                            and unanswered outbound calls and one at exactly the threshold, tagged,
+--                            untagged and only-uncounted-tag conversations, a call on the line that
+--                            does not count (skipped), calls of the previous period, and the mock
+--                            identity reader (reports.view without performance.team)
 --   pulse4all-invest         a CRM connection only, two deals and a form submission, and the mock
 --                            identity invest-analyst (analytics), so a tenant without telephony or
 --                            a shop can be read
@@ -189,6 +197,59 @@ begin
       ) c(id, dir, at, answer, ended, reason, hash)));
   else
     raise notice 'addition 0008i is not there: the inbound part of the fixture is left out';
+  end if;
+
+  -- ---- pulse4all-subscriptions, calls (addition 0008j) ------------------------------------------
+  if exists (select 1 from cma.setting where key = 'telephony.connected_min_seconds') then
+    perform set_config('app.user_id', v_ing::text, true);
+    perform cma.ingest_upsert_telephony_catalog(v_tel, 'number', '[{"numberRef": "n-nl", "name": "Fixture NL line", "digits": "+31000000001"},
+      {"numberRef": "n-gb", "name": "Fixture GB line", "digits": "+44000000002"}, {"numberRef": "n-off", "name": "Fixture line not counted", "digits": "+31000000003"}]');
+    perform cma.ingest_upsert_telephony_catalog(v_tel, 'tag', '[{"tagRef": "tg1", "name": "Fixture sale"}, {"tagRef": "tg2", "name": "Fixture info"},
+      {"tagRef": "tg3", "name": "Fixture internal"}]');
+    perform set_config('app.user_id', v_admin::text, true);
+    perform cma.set_telephony_number(v_tel, 'n-gb', 'GB', true);
+    perform cma.set_telephony_number(v_tel, 'n-off', 'NL', false);
+    perform cma.set_telephony_tag(v_tel, 'tg3', false);
+    perform cma.set_user_external_id(v_agent2, 'fixturetel_user', 'tu-1');
+    perform cma.set_user_external_id((select id from cma.app_user where tenant_id = v_subs and email = 'supervisor@example.com'), 'fixturetel_user', 'tu-2');
+    perform set_config('app.user_id', v_ing::text, true);
+    perform cma.ingest_upsert_telephony_calls(v_tel, (
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+               'sourceId', c.id, 'direction', c.dir, 'startedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'answeredAt', to_char(c.at + make_interval(secs => c.ring), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'endedAt', to_char(c.at + make_interval(secs => coalesce(c.ring, 0) + c.talk), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'numberRef', c.line, 'userRef', c.usr, 'tags', c.tags,
+               'versionAt', to_char(c.at + make_interval(secs => coalesce(c.ring, 0) + c.talk), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))))
+      from (values
+        -- outbound on NL: connected (60 s after 9 s of ringing), not connected (5 s), at exactly 10 s, unanswered
+        ('7300001', 'outbound', (now() - interval '3 days') at time zone 'UTC',             9,    60, 'n-nl', 'tu-1', '["tg1"]'::jsonb),
+        ('7300002', 'outbound', (now() - interval '3 days 1 hour') at time zone 'UTC',      7,    5,  'n-nl', 'tu-1', '[]'::jsonb),
+        ('7300003', 'outbound', (now() - interval '4 days') at time zone 'UTC',             12,   10, 'n-nl', 'tu-2', '["tg2"]'::jsonb),
+        ('7300004', 'outbound', (now() - interval '4 days 2 hours') at time zone 'UTC',     null, 30, 'n-nl', 'tu-2', null),
+        -- inbound on NL: an untagged conversation, one tagged only with the tag that does not count
+        ('7300005', 'inbound',  (now() - interval '5 days') at time zone 'UTC',             6,    240, 'n-nl', 'tu-2', '[]'::jsonb),
+        ('7300006', 'inbound',  (now() - interval '6 days') at time zone 'UTC',             4,    180, 'n-nl', 'tu-1', '["tg3"]'::jsonb),
+        -- GB, a telephony user linked to nobody: an inbound and an outbound conversation
+        ('7300007', 'inbound',  (now() - interval '2 days 3 hours') at time zone 'UTC',     5,    90,  'n-gb', 'tu-9', '["tg2"]'::jsonb),
+        ('7300008', 'outbound', (now() - interval '2 days 4 hours') at time zone 'UTC',     6,    45,  'n-gb', 'tu-9', '["tg1", "tg3"]'::jsonb),
+        -- the line that does not count: skipped by the write
+        ('7300009', 'outbound', (now() - interval '2 days') at time zone 'UTC',             5,    120, 'n-off', 'tu-1', '["tg1"]'::jsonb),
+        -- the previous period (the verifier reads the last 28 days)
+        ('7300010', 'outbound', (now() - interval '35 days') at time zone 'UTC',            8,    30,  'n-nl', 'tu-1', '[]'::jsonb),
+        ('7300011', 'inbound',  (now() - interval '40 days') at time zone 'UTC',            5,    60,  'n-gb', 'tu-2', '["tg2"]'::jsonb)
+      ) c(id, dir, at, ring, talk, line, usr, tags)));
+    -- a reports reader: reports.view without performance.team (mock identity reader)
+    perform set_config('role', 'cma_owner', true);
+    insert into cma.app_role (tenant_id, key, name) values (v_subs, 'reports_reader', 'Reports reader') on conflict (tenant_id, key) do nothing;
+    insert into cma.role_permission (tenant_id, role_id, permission_key)
+    select v_subs, ar.id, 'reports.view' from cma.app_role ar where ar.tenant_id = v_subs and ar.key = 'reports_reader' on conflict do nothing;
+    with u as (insert into cma.app_user (tenant_id, email, display_name) values (v_subs, 'reader@example.com', 'Test reader') returning id)
+    insert into cma.user_role (tenant_id, user_id, role_id) select v_subs, u.id, ar.id from u join cma.app_role ar on ar.tenant_id = v_subs and ar.key = 'reports_reader';
+    insert into cma.app_user_external_id (tenant_id, user_id, system, external_id)
+    select v_subs, id, 'mock', 'reader' from cma.app_user where tenant_id = v_subs and email = 'reader@example.com';
+    perform set_config('role', 'cma_app', true);
+  else
+    raise notice 'addition 0008j is not there: the calls part of the fixture is left out';
   end if;
 
   -- ---- pulse4all-invest: a CRM only ------------------------------------------------------------

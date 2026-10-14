@@ -12,7 +12,9 @@
  * since addition 0008i Inbound (by day as the manager, by hour as the analyst) and the Live board of a
  * tenant without telephony; on Inbound, the Live board and the telephony connection's Sources page every
  * table per docs/style/Pulse4all-Style.md 7.6 and 3.3 (header row, 14px cells at line-height 1.4, rows
- * of at least 40px, zebra rows).
+ * of at least 40px, zebra rows). Since addition 0008j Calls (by day as the manager, by market as the
+ * analyst, and for a tenant without telephony) and Calls per agent with a person's row and the not-linked
+ * row opened, their tables per 7.6 and 3.3 as well.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026).
@@ -103,12 +105,19 @@ const pages = [
   { path: "/reports/inbound?range=month", subject: "manager", tables: true },
   { path: "/reports/inbound?range=month&group=hour", subject: "analyst", tables: true },
   { path: "/live/board", subject: "invest-analyst" },
+  // Calls and Calls per agent (addition 0008j): the tiles, the bars and the tag table by day and by market,
+  // the per-agent table with a person's row and the not-linked row opened, and a tenant without telephony
+  { path: "/reports/calls?range=month", subject: "manager", tables: true },
+  { path: "/reports/calls?range=month&group=market", subject: "analyst", tables: true },
+  { path: "/reports/calls-per-agent?range=month", subject: "manager", tables: true, expand: true },
+  // a tenant without telephony: the page says so in words and has no header to explain
+  { path: "/reports/calls?range=month", subject: "invest-analyst", noHint: true },
   { path: "/logout" }, { path: "/no-access" },
 ];
 let hintsChecked = 0;
 let tablesChecked = 0;
 const hintsSkipped = [];
-for (const { path, subject, start, tables } of pages) {
+for (const { path, subject, start, tables, expand, noHint } of pages) {
   // Clock in is an action: open the day through the route, so the page shows the clock
   if (start) await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
   const ctx = await b.newContext({
@@ -118,10 +127,17 @@ for (const { path, subject, start, tables } of pages) {
   const p = await ctx.newPage();
   await p.goto(BASE + path);
   await p.waitForLoadState("networkidle");
+  // Calls per agent: open the first person's row and the not-linked row, so their splits are checked too
+  if (expand) {
+    await p.locator('[data-testid="agent-toggle"]').first().click();
+    await p.locator('[data-testid="agent-not-linked"] [data-testid="agent-toggle"]').click();
+    if (await p.locator('[data-testid="agent-split"]').count() !== 2) problems.push(`${path}: the rows did not open`);
+    await p.mouse.move(0, 0);
+  }
   // A report page: open one header hint by keyboard focus, so the panel is painted when the colours
   // are read. An urgent alert's dialog holds the focus where one is waiting (the supervisor's), so
   // that page is read without a hint; the other report pages must each show one
-  if (path.startsWith("/reports/")) {
+  if (path.startsWith("/reports/") && !noHint) {
     const mark = p.locator("main button[data-header-hint]").first();
     if (await mark.count() === 0) problems.push(`${path}: no header hint to open`);
     else {

@@ -3,13 +3,18 @@
 /**
  * Exports: the five CSV settings of 0003b as choices, each saved at once, with a preview line in
  * the chosen format, and the two minute settings (adherence tolerance, the forgotten clock-out
- * grace). Use default resets a value to the catalog's. Every value goes through
- * /api/v1/configuration/settings and is validated by the database against its catalog.
+ * grace); since addition 0008j also the seconds of talk time from which an outbound call is connected,
+ * which the telephony connection's Sources page links to. Use default resets a value to the catalog's.
+ * Every value goes through /api/v1/configuration/settings and is validated by the database against
+ * its catalog.
  */
 import { useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { TenantSetting } from "@/lib/data";
-import { EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, exportPreview, parseMinutes, type ExportSettingKey, type MinuteSettingKey } from "@/lib/configuration";
+import {
+  EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
+  type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
+} from "@/lib/configuration";
 import { Button } from "../primitives";
 import { SaveNote, field, label, send, useSave } from "./shared";
 
@@ -17,7 +22,7 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const c = copy.configuration;
   const t = copy.configExports;
   const { state, save } = useSave(c);
-  const [minutes, setMinutes] = useState<Partial<Record<MinuteSettingKey, string>>>({});
+  const [minutes, setMinutes] = useState<Partial<Record<MinuteSettingKey | SecondSettingKey, string>>>({});
   const valueOf = (key: string) => settings.find((s) => s.key === key);
   const preview = exportPreview(settings, {
     date: copy.exports.date, person: copy.exports.person, worked: copy.exports.worked, bom: t.values_true, noBom: t.values_false,
@@ -32,12 +37,13 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
     "export.csv.separator": "labels_export_csv_separator", "export.csv.decimal_mark": "labels_export_csv_decimal_mark",
     "export.csv.date_format": "labels_export_csv_date_format", "export.csv.duration_format": "labels_export_csv_duration_format", "export.csv.utf8_bom": "labels_export_csv_utf8_bom",
   };
-  const MINUTE_KEYS: Record<MinuteSettingKey, keyof Copy["configExports"]> = {
+  const MINUTE_KEYS: Record<MinuteSettingKey | SecondSettingKey, keyof Copy["configExports"]> = {
     "roster.adherence_tolerance_minutes": "roster_adherence_tolerance_minutes", "workday.auto_close_grace_minutes": "workday_auto_close_grace_minutes",
+    "telephony.connected_min_seconds": "telephony_connected_min_seconds",
   };
   const valueLabel = (v: string) => (VALUE_KEYS[v] ? t[VALUE_KEYS[v]] : v);
 
-  async function saveMinutes(key: MinuteSettingKey) {
+  async function saveMinutes(key: MinuteSettingKey | SecondSettingKey) {
     const text = minutes[key];
     if (text === undefined) return;
     const n = parseMinutes(text);
@@ -82,12 +88,13 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
       <section>
         <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.otherSettings}</h2>
         <div className="grid grid-cols-2 gap-6">
-          {MINUTE_SETTING_KEYS.map((key) => {
+          {[...MINUTE_SETTING_KEYS, ...SECOND_SETTING_KEYS].map((key) => {
             const s = valueOf(key);
             const text = minutes[key] ?? s?.value ?? "";
             const bad = minutes[key] !== undefined && parseMinutes(minutes[key] ?? "") === null;
+            const seconds = (SECOND_SETTING_KEYS as readonly string[]).includes(key);
             return (
-              <label key={key} className={label}>
+              <label key={key} id={settingAnchor(key)} className={`${label} scroll-mt-24`}>
                 <span>
                   {t[MINUTE_KEYS[key]]}
                   {s?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
@@ -107,7 +114,7 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
                     </Button>
                   ) : null}
                 </span>
-                <span className="font-normal text-caption text-p4a-muted">{t.minutesHint}</span>
+                <span className="font-normal text-caption text-p4a-muted">{seconds ? t.secondsHint : t.minutesHint}</span>
               </label>
             );
           })}

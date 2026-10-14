@@ -17,8 +17,8 @@ export type ShellPage =
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
   | "messages" | "messages-send"
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
-  /** Intake reports (B11, migration 0007d) and Inbound (addition 0008i) */
-  | "speed-to-lead" | "intake" | "inbound" | "data-quality"
+  /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j) */
+  | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "data-quality"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
   /** Sources, Markets and Alert rules (addition 0008e, night of 13 October 2026) */
   | "config-sources" | "config-markets" | "config-alert-rules"
@@ -26,7 +26,7 @@ export type ShellPage =
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
-  | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/data-quality"
+  | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules";
 
@@ -130,6 +130,10 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
         // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, as Intake
         { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
+        // Calls (addition 0008j, brief B16): the calls, conversations, talk time and tags, as Inbound; Calls per agent the
+        // same per person, for performance.team only (README Decision log, 14 October 2026)
+        { page: "calls", href: "/reports/calls", label: copy.nav.calls, permission: ["reports.view", "performance.team"] },
+        { page: "calls-per-agent", href: "/reports/calls-per-agent", label: copy.nav.callsPerAgent, permission: "performance.team" },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },

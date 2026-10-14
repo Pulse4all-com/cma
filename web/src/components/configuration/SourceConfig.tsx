@@ -21,6 +21,7 @@ import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, So
 import {
   coerceSettingValue, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
+import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
@@ -33,8 +34,10 @@ const EXAMPLE_ID = "123456789";
 
 type Row = { id: number; key: string; text: string; isNew: boolean };
 
-export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
+export function SourceConfig({ detail, markets, copy, locale, timeZone, connectedMinSeconds = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+  /** telephony.connected_min_seconds (addition 0008j), shown in words on a telephony connection */
+  connectedMinSeconds?: number | null;
 }) {
   const c = copy.configuration;
   const t = copy.configSources;
@@ -203,6 +206,17 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
           <dd className="text-small">{conn.signingSecretName ?? t.noSecret}</dd>
           <dt className="font-semibold">{t.tokenSecret}{hint(t.tokenSecret, t.secretHint)}</dt>
           <dd className="text-small">{conn.tokenSecretName ?? t.noSecret}</dd>
+          {sections.includes("missedReasons") ? (
+            <>
+              <dt className="font-semibold">{t.connectedCall}</dt>
+              <dd className="flex flex-wrap items-baseline gap-x-3" data-testid="source-connected-threshold">
+                <span>{t.connectedThreshold.replace("{seconds}", connectedMinSeconds === null ? "–" : new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB").format(connectedMinSeconds))}</span>
+                <Link href={`/configuration/exports#${settingAnchor("telephony.connected_min_seconds")}`} className="text-small font-semibold text-p4a-deepblue hover:underline">
+                  {t.connectedThresholdLink}
+                </Link>
+              </dd>
+            </>
+          ) : null}
         </dl>
       </Card>
 

@@ -1,0 +1,21 @@
+verify/api.mjs against http://localhost:8080  (--provoke: every check must FAIL)
+
+FAIL  reports: an agent is refused on every route  got [403,403,403,403], wanted [200,200,200,200]
+FAIL  reports: the supervisor reads all but data quality got [200,200,200,403], wanted [200,200,200,200]
+FAIL  reports: the analyst reads all four          got [200,200,200,200], wanted [200,200,200,403]
+FAIL  reports: the manager reads data quality      got 200, wanted 403
+FAIL  reports: more than 92 days is a 400 on every ranged route got [400,400,400], wanted [200,200,200]
+FAIL  reports: 92 days are answered                got 200, wanted 400
+FAIL  reports: a backwards range is a 400          got 400, wanted 200
+FAIL  reports: a group outside the four is a 400   got [400,400,400], wanted [200,200,200]
+FAIL  reports: each group answers as itself, none means day got ["day","market","agent","pipeline","day"], wanted ["day","day","day","day","day"]
+FAIL  reports: no field named email, phone, name or firstname in the rows got [], wanted ["name"]
+FAIL  reports: statuses are called, not called open or closed got true, wanted false
+FAIL  reports: every record link is https or empty got true, wanted false
+FAIL  reports: the summary by day adds up to the rows got [80,52,3], wanted [81,-1,-1]
+FAIL  reports: agents not mapped are one group without a label, never an owner id got [true,15,true], wanted [false,-1,false]
+FAIL  reports: intake figures follow the tenant's connections got true, wanted false
+FAIL  reports: data quality lists each check once with a count got [true,true,true], wanted [false,true,true]
+FAIL  reports: without telephony and a shop those figures are null, never 0 got [{"telephony":false,"commerce":false},true,false], wanted [{"telephony":true,"commerce":true},true,false]
+
+ALL 17 PROVOKED CHECKS FAILED, as they must

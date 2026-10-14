@@ -1,0 +1,23 @@
+DO
+SET
+            create_tenant             
+--------------------------------------
+ 01a13ba5-c2fd-7edb-a626-663b0e6eddb7
+(1 row)
+
+            create_tenant             
+--------------------------------------
+ 01a13ba5-c30c-7223-98b3-e029b7441da0
+(1 row)
+
+INSERT 0 0
+INSERT 0 0
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO
+DO

@@ -15,11 +15,13 @@ import type {
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
+  CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
 } from "./types";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, groupInbound, groupSpeedToLead, inboundCalls, inboundFigures, missedReasonOf, rangeProblem,
-  type InboundLine, type IntakeCounts, type TelephonyCallFixture,
+  applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
+  inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
+  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
 
@@ -216,34 +218,177 @@ function mockReasons(me: Principal): MissedReason[] {
   return list;
 }
 
+/**
+ * One business date's inbound calls on a line, in its zone; since addition 0008j an answered call
+ * carries the telephony user who took it and its current tags (the Calls reports)
+ */
+function mockInboundOn(me: Principal, date: DateKey, line: InboundLine, now: number): TelephonyCallFixture[] {
+  const out: TelephonyCallFixture[] = [];
+  const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+  const calls = Math.floor(hashOf(`${me.tenantId}:${date}:${line.lineRef}:calls`) * (weekend ? 4 : line.market === "NL" ? 22 : 12));
+  for (let i = 0; i < calls; i++) {
+    const h = (k: string) => hashOf(`${me.tenantId}:${date}:${line.lineRef}:${i}:${k}`);
+    const evening = h("evening") < 0.06;
+    const hour = evening ? 19 + Math.floor(h("hour") * 3) : 8 + Math.floor(h("hour") * 10);
+    const started = localMs(date, `${String(hour).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, line.zone!);
+    if (started > now - 60_000) continue;
+    const answered = !evening && h("answered") < 0.78;
+    const answerSeconds = Math.round(3 + h("speed") ** 2 * 70);
+    const code = evening ? "out_of_opening_hours" : MOCK_MISSED_CODES[Math.floor(h("reason") * MOCK_MISSED_CODES.length)]!;
+    out.push({
+      sourceId: String(800_000_000 + Math.floor(h("id") * 99_000_000)), connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM,
+      direction: "inbound", startedAt: new Date(started).toISOString(),
+      answeredAt: answered ? new Date(started + answerSeconds * 1000).toISOString() : null,
+      endedAt: new Date(started + (answered ? answerSeconds + 120 + Math.floor(h("talk") * 600) : 5 + Math.floor(h("ring") * 90)) * 1000).toISOString(),
+      missedReason: answered ? null : code, lineRef: line.lineRef,
+      userRef: answered ? mockUserOf(h("user")) : null, tagRefs: answered ? mockTagsOf(h("tag")) : [],
+    });
+  }
+  return out;
+}
+
 /** The fixture's inbound calls of the business dates in the range (the tenant's start date to today), each in its line's zone */
 function mockPeriodCalls(me: Principal, range: { from: DateKey; to: DateKey }): TelephonyCallFixture[] {
   const now = Date.now();
   const out: TelephonyCallFixture[] = [];
   for (const date of datesOf({ from: addDays(range.from, -1), to: addDays(range.to, 1) }, me)) {
-    for (const line of MOCK_INBOUND_LINES.filter((l) => l.isCounted)) {
-      const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
-      const calls = Math.floor(hashOf(`${me.tenantId}:${date}:${line.lineRef}:calls`) * (weekend ? 4 : line.market === "NL" ? 22 : 12));
-      for (let i = 0; i < calls; i++) {
-        const h = (k: string) => hashOf(`${me.tenantId}:${date}:${line.lineRef}:${i}:${k}`);
-        const evening = h("evening") < 0.06;
-        const hour = evening ? 19 + Math.floor(h("hour") * 3) : 8 + Math.floor(h("hour") * 10);
-        const started = localMs(date, `${String(hour).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, line.zone!);
-        if (started > now - 60_000) continue;
-        const answered = !evening && h("answered") < 0.78;
-        const answerSeconds = Math.round(3 + h("speed") ** 2 * 70);
-        const code = evening ? "out_of_opening_hours" : MOCK_MISSED_CODES[Math.floor(h("reason") * MOCK_MISSED_CODES.length)]!;
-        out.push({
-          sourceId: String(800_000_000 + Math.floor(h("id") * 99_000_000)), connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM,
-          direction: "inbound", startedAt: new Date(started).toISOString(),
-          answeredAt: answered ? new Date(started + answerSeconds * 1000).toISOString() : null,
-          endedAt: new Date(started + (answered ? answerSeconds + 120 + Math.floor(h("talk") * 600) : 5 + Math.floor(h("ring") * 90)) * 1000).toISOString(),
-          missedReason: answered ? null : code, lineRef: line.lineRef,
-        });
-      }
+    for (const line of MOCK_INBOUND_LINES.filter((l) => l.isCounted)) out.push(...mockInboundOn(me, date, line, now));
+  }
+  return out;
+}
+
+// ---- Calls overview and calls per agent fixture (addition 0008j, brief B16) ----------------------
+// The same inbound calls, now with the telephony user who took them and their tags, and outbound calls
+// per line and day: unanswered ones, short ones under the threshold (not connected), the NL line's first
+// call of each day at exactly the threshold (connected), and conversations of up to fifteen minutes.
+// Tags from the test connection's catalog: Quote and Courtesy call count, Internal does not; some
+// conversations are untagged and some carry only Internal. Telephony users 900001 to 900004 are linked
+// to people of the fictional team (People, linked accounts), 900009 to nobody. The test line l-3 does not
+// count: its calls are in the fixture and in no figure. Dates are not cut at intake.start_date (the
+// database does not cut them either), so the previous equal period has calls too.
+
+/** The telephony users of the fixture: four linked to a person, 900009 to nobody */
+const MOCK_TEL_USERS = ["900001", "900001", "900002", "900002", "900003", "900003", "900004", "900004", "900009"];
+function mockUserOf(r: number): string {
+  return MOCK_TEL_USERS[Math.floor(r * MOCK_TEL_USERS.length)]!;
+}
+
+/** Twelve more tags of the test connection, each used now and then */
+const MOCK_EXTRA_TAGS = ["Order placed", "Callback planned", "Voicemail", "Wrong number", "Not interested", "Exchange", "Complaint", "Review asked",
+  "Renewal", "Information sent", "Language", "Escalated"];
+
+/** A conversation's tags: none, a counted one, two, only Internal (which does not count), or one of the twelve others */
+function mockTagsOf(r: number): string[] {
+  if (r < 0.25) return [];
+  if (r < 0.42) return ["t-1"];
+  if (r < 0.56) return ["t-2"];
+  if (r < 0.62) return ["t-3"];
+  if (r < 0.7) return ["t-1", "t-3"];
+  if (r < 0.76) return ["t-1", "t-2"];
+  return [`t-${4 + Math.min(11, Math.floor(((r - 0.76) / 0.24) * 12))}`];
+}
+
+/** One business date's outbound calls on a line */
+function mockOutboundOn(me: Principal, date: DateKey, line: InboundLine, now: number): TelephonyCallFixture[] {
+  const out: TelephonyCallFixture[] = [];
+  const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+  const calls = Math.floor(hashOf(`${me.tenantId}:${date}:${line.lineRef}:out`) * (weekend ? 5 : line.market === "NL" ? 26 : 14));
+  for (let i = 0; i < calls; i++) {
+    const h = (k: string) => hashOf(`${me.tenantId}:${date}:${line.lineRef}:out:${i}:${k}`);
+    const atThreshold = i === 0 && line.lineRef === "l-1";
+    const hour = atThreshold ? 9 : 8 + Math.floor(h("hour") * 10);
+    const started = localMs(date, `${String(hour).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, line.zone!);
+    if (started > now - 60_000) continue;
+    const answered = atThreshold || h("answered") < 0.6;
+    const ring = 4 + Math.floor(h("ring") * 20);
+    const r = h("talk");
+    const talk = atThreshold ? mockConnectedMin() : r < 0.18 ? 2 + Math.floor(r * 40) : 20 + Math.floor(h("length") ** 2 * 900);
+    out.push({
+      sourceId: String(700_000_000 + Math.floor(h("id") * 99_000_000)), connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM,
+      direction: "outbound", startedAt: new Date(started).toISOString(),
+      answeredAt: answered ? new Date(started + ring * 1000).toISOString() : null,
+      endedAt: new Date(started + (ring + (answered ? talk : 5)) * 1000).toISOString(),
+      missedReason: null, lineRef: line.lineRef, userRef: mockUserOf(h("user")), tagRefs: answered && talk >= 10 ? mockTagsOf(h("tag")) : [],
+    });
+  }
+  return out;
+}
+
+/** telephony.connected_min_seconds of the fixture's settings */
+function mockConnectedMin(): number {
+  const list = state.config ? state.config.settings : MOCK_SETTINGS;
+  return Number(list.find((x) => x.key === "telephony.connected_min_seconds")?.value ?? 10);
+}
+
+/** Every call of the fixture from a day before `from` to a day after `to` (up to now): both directions, both lines, and the test line that does not count */
+function mockCalls(me: Principal, range: HoursRange): TelephonyCallFixture[] {
+  if (!connectionsOf(me).telephony) return [];
+  const now = Date.now();
+  const last = range.to < mockToday(me) ? addDays(range.to, 1) : mockToday(me);
+  const out: TelephonyCallFixture[] = [];
+  for (let date = addDays(range.from, -1); date <= last; date = addDays(date, 1)) {
+    for (const line of MOCK_INBOUND_LINES.filter((l) => l.isCounted)) out.push(...mockInboundOn(me, date, line, now), ...mockOutboundOn(me, date, line, now));
+    const started = localMs(date, "11:15", "Europe/Amsterdam");
+    if (started < now - 60_000) {
+      out.push({ sourceId: `t3-${date}`, connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM, direction: "outbound",
+        startedAt: new Date(started).toISOString(), answeredAt: new Date(started + 5000).toISOString(), endedAt: new Date(started + 125_000).toISOString(),
+        missedReason: null, lineRef: "l-3", userRef: "900001", tagRefs: ["t-1"] });
     }
   }
   return out;
+}
+
+/** The test connection's tags with their configuration (Configuration, Sources) */
+function mockCallTags(me: Principal): CallTagFixture[] {
+  const c = seedIntakeConfig(me).sources.find((x) => x.connection.id === MOCK_TEL_CONNECTION);
+  return (c?.tags ?? []).map((t) => ({ connectionId: MOCK_TEL_CONNECTION, tagRef: t.tagRef, name: t.name, isCounted: t.isCounted }));
+}
+
+/** Who a telephony user is: the person who holds `<adapter>_user` with that id on People */
+function mockPersonOf(me: Principal): PersonOf {
+  const accounts = seedIntakeConfig(me).accounts;
+  const names = new Map(TEAM.map((p) => [p.userId, p.displayName]));
+  return (system, userRef) => {
+    const a = accounts.find((x) => x.system === `${system}_user` && x.externalId === userRef);
+    return a ? { userId: a.userId, name: names.get(a.userId) ?? a.userId } : null;
+  };
+}
+
+/** The checks of cma.calls_overview and the per-person reads: the permission, the range, the group and the filters */
+function assertCalls(me: Principal, range: HoursRange, filter: CallsFilter, group: CallsGroup | null, permissions: string[]): void {
+  assertAny(me, permissions);
+  assertReportRange(range);
+  if (group !== null && !CALLS_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or line");
+  if (parseCallsFilter(filter.market ?? "", filter.line ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/** The fixture's calls of the range and the previous period, classified and filtered */
+function mockCallRecords(me: Principal, range: HoursRange, filter: CallsFilter): CallRecord[] {
+  return callRecords(mockCalls(me, { from: previousPeriod(range, mockToday(me)).from, to: range.to }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin(), filter);
+}
+
+/** The markets and lines with calls in the period, the lines within the chosen market */
+function mockCallsLists(me: Principal, range: HoursRange, filter: CallsFilter) {
+  const all = callRecords(mockCalls(me, range), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin());
+  return {
+    markets: groupCalls(all, range.from, range.to, "market").rows.map((r) => r.groupKey),
+    lines: groupCalls(all.filter((c) => filter.market === null || c.market === filter.market), range.from, range.to, "line").rows
+      .map((r) => ({ key: r.groupKey, name: r.groupLabel })),
+  };
+}
+
+function mockCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): CallsOverview {
+  const telephony = connectionsOf(me).telephony;
+  const records = mockCallRecords(me, range, filter);
+  // like for like, as the database: a period that reaches today against the same point in the previous one
+  const prev = previousPeriod(range, mockToday(me));
+  const { rows, total } = groupCalls(records, range.from, range.to, group);
+  return {
+    ...range, group, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total,
+    previous: callsFigures(previousCalls(records, prev, new Date().toISOString())),
+    previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+    ...mockCallsLists(me, range, filter),
+  };
 }
 
 /** The fixture's calls relative to now, for the Live board: callers as opaque keys, never shown */
@@ -406,6 +551,8 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "export.csv.duration_format", value: "decimal_hours", isDefault: true },
   { key: "export.csv.separator", value: "semicolon", isDefault: false },
   { key: "export.csv.utf8_bom", value: "true", isDefault: true },
+  // the connected-call threshold (addition 0008j), at its default
+  { key: "telephony.connected_min_seconds", value: "10", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -899,7 +1046,7 @@ function seedConfig(): MockConfig {
 const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
-  "workday.auto_close_grace_minutes": "120",
+  "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1179,7 +1326,9 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
         { lineRef: "l-2", name: "UK sales line (test)", digits: "+442000000002", market: "GB", isCounted: true, isActive: true },
         { lineRef: "l-3", name: "Test line (test)", digits: null, market: null, isCounted: false, isActive: true }],
       tags: [{ tagRef: "t-1", name: "Quote", isCounted: true, isActive: true }, { tagRef: "t-2", name: "Courtesy call", isCounted: true, isActive: true },
-        { tagRef: "t-3", name: "Internal", isCounted: false, isActive: true }],
+        { tagRef: "t-3", name: "Internal", isCounted: false, isActive: true },
+        // twelve more (addition 0008j), so the Calls report shows its top twelve tags and Other
+        ...MOCK_EXTRA_TAGS.map((name, i) => ({ tagRef: `t-${i + 4}`, name, isCounted: true, isActive: true }))],
     }, { record_url_call: "https://phone.example.com/calls/{id}" }));
     sources.push(mockSource(t, 3, "shoptest", "Shop NL (test)", "shop-nl-test.example.com", "commerce", {
       store: { handle: "shop-nl-test", name: "Shop NL (test)", market: "NL", currency: "EUR", timeZone: "Europe/Amsterdam" },
@@ -1209,6 +1358,10 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
     accounts: [
       { userId: "00000000-0000-7000-8000-000000000201", system: "crmtest_owner", externalId: "70000001" },
       { userId: "00000000-0000-7000-8000-000000000201", system: "phonetest_user", externalId: "900001" },
+      // the Calls reports' people (addition 0008j); telephony user 900009 is linked to nobody
+      { userId: "00000000-0000-7000-8000-000000000202", system: "phonetest_user", externalId: "900002" },
+      { userId: "00000000-0000-7000-8000-000000000203", system: "phonetest_user", externalId: "900003" },
+      { userId: "00000000-0000-7000-8000-000000000204", system: "phonetest_user", externalId: "900004" },
       { userId: "00000000-0000-7000-8000-000000000202", system: "crmtest_owner", externalId: "70000002" },
       { userId: MOCK_MANAGER_ID, system: "crmtest_owner", externalId: "70000009" },
     ],
@@ -1292,6 +1445,18 @@ export const mockData: CmaData = {
         organisationName: "Pulse4all",
         roleKey: "analytics",
         permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
+      };
+    }
+    // A reports reader (addition 0008j): reports.view without performance.team, a role a tenant can make (no
+    // default role is one), so the rail shows Calls and leaves Calls per agent out
+    if (identity.provider === MOCK_IDENTITY.provider && identity.subject === "reader") {
+      return {
+        ...MOCK_PRINCIPAL,
+        userId: "00000000-0000-7000-8000-000000000107",
+        displayName: "Test reader",
+        organisationName: "Pulse4all",
+        roleKey: "reader",
+        permissions: ["reports.view"],
       };
     }
     // The second fictional tenant (B11): an analyst whose tenant has no telephony and no shop connected
@@ -2318,6 +2483,30 @@ export const mockData: CmaData = {
   async getInboundNow(me): Promise<InboundNow> {
     assertLive(me);
     return mockInboundNow(me);
+  },
+
+  async getCallsOverview(me, range, group, filter): Promise<CallsOverview> {
+    assertCalls(me, range, filter, group, ["reports.view", "performance.team"]);
+    return mockCallsOverview(me, range, group, filter);
+  },
+
+  async getCallsTagUse(me, range, group, filter): Promise<CallsTagUse> {
+    assertCalls(me, range, filter, group, ["reports.view", "performance.team"]);
+    const telephony = connectionsOf(me).telephony;
+    return { ...range, group, filter, telephony, rows: callsTagUse(mockCallRecords(me, range, filter), range.from, range.to, group, mockCallTags(me)) };
+  },
+
+  async getCallsPerAgent(me, range, filter): Promise<CallsPerAgent> {
+    assertCalls(me, range, filter, null, [PER_AGENT_PERMISSION]);
+    const telephony = connectionsOf(me).telephony;
+    const { rows, total } = callsPerPerson(mockCallRecords(me, range, filter), range.from, range.to, mockPersonOf(me));
+    return { ...range, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total, ...mockCallsLists(me, range, filter) };
+  },
+
+  async getCallsPerAgentTags(me, range, filter): Promise<CallsPerAgentTags> {
+    assertCalls(me, range, filter, null, [PER_AGENT_PERMISSION]);
+    const telephony = connectionsOf(me).telephony;
+    return { ...range, filter, telephony, rows: callsPerPersonTags(mockCallRecords(me, range, filter), range.from, range.to, mockPersonOf(me), mockCallTags(me)) };
   },
 
   async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {

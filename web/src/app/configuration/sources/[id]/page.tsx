@@ -40,10 +40,13 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     );
   }
   const { markets } = await data().getMarkets(me);
+  // the connected-call threshold (addition 0008j), shown in words on a telephony connection
+  const threshold = (await data().listSettings(me)).find((x) => x.key === "telephony.connected_min_seconds")?.value;
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
-      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} copy={copy} locale={me.locale} timeZone={me.timeZone} />
+      <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} copy={copy} locale={me.locale} timeZone={me.timeZone}
+        connectedMinSeconds={threshold === undefined ? null : Number(threshold)} />
     </ConfigurationPage>
   );
 }

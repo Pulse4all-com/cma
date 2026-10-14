@@ -17,12 +17,18 @@
  * keycaps, a hint on its right-most reason column, its table scrolling inside its card and no text on a
  * Light Blue or Soft Rose reason mark, the not-connected state for a tenant without telephony; the
  * Live board for every identity that holds it, with the inbound tiles, the missed calls and a tile's
- * hint inside the viewport, or the not-connected state, and no horizontal scrolling. Saves screenshots under records/ for the release note.
+ * hint inside the viewport, or the not-connected state, and no horizontal scrolling. Calls and Calls per
+ * agent (addition 0008j) for seven identities: the per-agent page only for performance.team (the reader,
+ * with reports.view alone, sees Calls and not Calls per agent), the keycaps K, N and G, the tag table and
+ * the per-agent table with two rows opened inside their cards, Enter opening a row and Down moving to the
+ * next person, the right-most header's hint inside the viewport, the not-connected state. Saves
+ * screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
  *       1279 px and demands the app shell, moves one hint panel over its header, lets the
  *       Intake and Inbound tables spill out of their cards, writes a count on a Light Blue reason mark,
+ *       lets the Calls tag table and the per-agent table spill out of theirs,
  *       widens the missed-reason table past its card on Sources,
  *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
  *       irreversible confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
@@ -50,7 +56,7 @@ async function acknowledgeUrgent(subject) {
     }
   }
 }
-for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two"]) await acknowledgeUrgent(subject);
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two", "reader"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 async function expectShell(width, height) {
@@ -92,14 +98,21 @@ async function expectNavigation() {
     // Since B11 (12 October 2026) the Reports group holds Speed to lead and Intake (reports.view or performance.team)
     // and Data quality (reports.view or tenant.configure): the supervisor holds neither of the latter
     // Since 0008i Inbound follows Intake for the same permissions
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], false],
+    // Since 0008j Calls (reports.view or performance.team) and Calls per agent (performance.team) follow Inbound
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls",
+      "/reports/calls-per-agent", "/reports/data-quality"], false],
+    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
+      "/reports/calls", "/reports/calls-per-agent"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
+      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
+      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -238,12 +251,119 @@ async function expectReports() {
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
-  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"]) {
+  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
   }
   await ctx.close();
+}
+
+// Calls and Calls per agent (addition 0008j, brief B16), per identity at 1280 px: Calls for reports.view or
+// performance.team, Calls per agent for performance.team only, in the rail and on the page (the reader, with
+// reports.view alone, and the agent get the no-permission card and no figures); the page never scrolls
+// sideways; the keycaps K, N and G next to the period bar's; the tag table and the per-agent table end
+// inside their cards (the tag table may scroll inside its card, the per-agent table fits); a row opens with
+// Enter on its name and Down moves to the next person; the opened rows, the not-linked one too, stay inside
+// the card; the right-most header's hint stays inside the viewport; a tenant without telephony says so in
+// words; the four deltas say what they compare with (like for like: this month, still running, with the
+// same point in the previous one; a week that ended with the whole previous week). --provoke lets the tag
+// table spill out of its card, widens the per-agent table past it and expects the labels swapped
+async function expectCalls() {
+  const fits = (p, scrollId, spill) => p.evaluate(([id, spill]) => {
+    const box = document.querySelector(`[data-testid="${id}"]`);
+    if (!box) return null;
+    if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+    const card = box.closest("section");
+    const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+    const main = document.querySelector("main");
+    return { spills: box.getBoundingClientRect().right > edge + 0.5 || [...box.querySelectorAll("tr")].some((r) => r.getBoundingClientRect().right > edge + 0.5 && getComputedStyle(box).overflowX === "visible"),
+      scrolls: box.scrollWidth > box.clientWidth, mainX: main.scrollWidth - main.clientWidth };
+  }, [scrollId, spill]);
+  const hintInside = async (p, selector, where) => {
+    const mark = p.locator(selector);
+    if (await mark.count() !== 1) return problems.push(`${where}: header hint ${selector} missing`);
+    await mark.focus();
+    const ok = await p.evaluate(() => {
+      const m = document.activeElement;
+      const panel = m && document.getElementById(m.getAttribute("aria-describedby") ?? "");
+      if (!panel || panel.hidden) return null;
+      const r = panel.getBoundingClientRect();
+      return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+    });
+    if (ok === null) problems.push(`${where}: the header hint does not show on focus`);
+    else if (!ok) problems.push(`${where}: the header hint leaves the viewport`);
+  };
+  // [subject, sees Calls, sees Calls per agent, telephony connected]
+  const cases = [
+    ["manager", true, true, true], ["supervisor", true, true, true], ["admin", true, true, true], ["analyst", true, true, true],
+    ["reader", true, false, true], ["invest-analyst", true, true, false], ["agent-one", false, false, true],
+  ];
+  for (const [subject, calls, perAgent, telephony] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/calls") !== calls) problems.push(`${subject}: Calls ${calls ? "missing from" : "shown in"} the rail`);
+    if (rail.includes("/reports/calls-per-agent") !== perAgent) problems.push(`${subject}: Calls per agent ${perAgent ? "missing from" : "shown in"} the rail`);
+    for (const [path, may, table] of [["/reports/calls?range=month&group=day", calls, "tag-table"], ["/reports/calls-per-agent?range=month", perAgent, "agents-table"]]) {
+      const where = `${subject} ${path.split("?")[0]}`;
+      await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        notConnected: !!document.querySelector('[data-testid="calls-not-connected"], [data-testid="agents-not-connected"]'),
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        if (m.tables > 0 || m.notConnected) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      if (!telephony) {
+        if (!m.notConnected || m.tables > 0) problems.push(`${where}: a tenant without telephony does not say so in words`);
+        continue;
+      }
+      for (const k of ["T", "W", "M", "C", "K", "N", ...(path.startsWith("/reports/calls?") ? ["G"] : [])]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (path.startsWith("/reports/calls-per-agent")) {
+        // Enter on the first person's name opens the row, Down moves to the next person; the not-linked row opens with a click
+        const first = p.locator('[data-testid="agent-toggle"]').first();
+        await first.focus();
+        await p.keyboard.press("Enter");
+        await p.keyboard.press("ArrowDown");
+        const moved = await p.evaluate(() => document.activeElement?.getAttribute("data-testid") === "agent-toggle"
+          && document.activeElement !== document.querySelector('[data-testid="agent-toggle"]'));
+        await p.locator('[data-testid="agent-not-linked"] td').nth(1).click();
+        const opened = await p.locator('[data-testid="agent-split"]').count();
+        if (await first.getAttribute("aria-expanded") !== "true") problems.push(`${where}: Enter does not open the first row`);
+        if (!moved) problems.push(`${where}: Down does not move to the next person`);
+        if (opened !== 2) problems.push(`${where}: ${opened} rows opened, expected the first and the not-linked one`);
+      }
+      const f = await fits(p, table === "tag-table" ? "tag-table-scroll" : "agents-scroll", provoke && subject === "manager");
+      if (!f) problems.push(`${where}: ${table} missing`);
+      else {
+        if (f.spills) problems.push(`${where}: ${table} does not end inside its card at 1280`);
+        if (f.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${f.mainX}px at 1280`);
+        if (table === "agents-table" && f.scrolls) problems.push(`${where}: the per-agent table needs to scroll inside its card at 1280`);
+      }
+      await hintInside(p, `[data-testid="${table}"] thead th:last-child button[data-header-hint]`, where);
+      await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+      if (subject === "manager" && table === "tag-table") {
+        // a week that ended two days ago in any zone, by UTC dates
+        const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+        for (const [q, want] of [["range=month&group=day", "partial"], [`range=custom&from=${day(-8)}&to=${day(-2)}&group=day`, "whole"]]) {
+          await p.goto(`${BASE}/reports/calls?${q}`);
+          await p.waitForLoadState("networkidle");
+          const said = await p.evaluate(() => [...document.querySelectorAll('[data-testid="delta"]')].map((d) => d.getAttribute("data-compares")));
+          const expected = provoke ? (want === "partial" ? "whole" : "partial") : want;
+          if (said.length !== 4 || said.some((x) => x !== expected)) problems.push(`${where}: the deltas of ${q.split("&")[0]} compare with ${said.join(",") || "nothing"}, expected ${expected} four times`);
+        }
+      }
+    }
+    await ctx.close();
+  }
 }
 
 // The Live board per identity (addition 0008i): at 1280 px the inbound tiles, the missed calls and the
@@ -493,6 +613,7 @@ await expectShell(1920, 1080);
 await expectNavigation();
 await expectReports();
 await expectLiveBoard();
+await expectCalls();
 await expectIntakeConfiguration();
 await expectIrreversibleConfirmations();
 if (provoke) await expectShell(1279, 800);
@@ -500,5 +621,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like), Sources (every table inside its card), Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

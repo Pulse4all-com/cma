@@ -10,9 +10,11 @@ import type {
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
+  CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
 } from "./types";
-import { OUTBOX_LATE_MINUTES, applyConnections, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
+import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
+import { dateKeyInZone } from "@/lib/time";
 
 /**
  * CmaData against Postgres, as cma_app (migration 0002).
@@ -189,6 +191,57 @@ function emptyFigures(): InboundFigures {
 
 function toReason(x: ReasonDbRow): MissedReason {
   return { sourceSystem: x.source_system, code: x.code, label: x.label, countsInServiceLevel: x.counts_in_service_level, needsCallback: x.needs_callback };
+}
+
+// ---- Calls overview and calls per agent (addition 0008j): the rows as the functions answer them ----
+type CallsDbRow = {
+  period: string; group_key: string | null; group_label: string | null; calls: number; inbound: number; outbound: number;
+  answered_inbound: number; connected_outbound: number; connected_pct: string | null; conversations: number;
+  talk_seconds_total: string; talk_seconds_avg: string | null; outbound_talk_seconds: string; outbound_talk_avg: string | null;
+  untagged_conversations: number;
+};
+type PersonDbRow = {
+  row_kind: "person" | "not_linked" | "total"; user_id: string | null; display_name: string | null; unlinked_users: number | null;
+  answered_inbound: number; inbound_talk_seconds: string; inbound_talk_avg: string | null; outbound_calls: number; connected_outbound: number;
+  outbound_talk_seconds: string; outbound_talk_avg: string | null; conversations: number; untagged_conversations: number;
+  first_call_time: string | null; last_call_time: string | null;
+};
+
+function toCallsFigures(x: CallsDbRow | undefined): CallsFigures {
+  return {
+    calls: x?.calls ?? 0, inbound: x?.inbound ?? 0, outbound: x?.outbound ?? 0, answeredInbound: x?.answered_inbound ?? 0,
+    connectedOutbound: x?.connected_outbound ?? 0, connectedPct: num(x?.connected_pct ?? null), conversations: x?.conversations ?? 0,
+    talkSeconds: Number(x?.talk_seconds_total ?? 0), talkAvgSeconds: num(x?.talk_seconds_avg ?? null),
+    outboundTalkSeconds: Number(x?.outbound_talk_seconds ?? 0), outboundTalkAvgSeconds: num(x?.outbound_talk_avg ?? null),
+    untaggedConversations: x?.untagged_conversations ?? 0,
+  };
+}
+
+function toCallsPerson(x: PersonDbRow): CallsPerson {
+  return {
+    kind: x.row_kind === "not_linked" ? "notLinked" : x.row_kind, userId: x.user_id, name: x.display_name, unlinkedUsers: x.unlinked_users,
+    answeredInbound: x.answered_inbound, inboundTalkSeconds: Number(x.inbound_talk_seconds), inboundTalkAvgSeconds: num(x.inbound_talk_avg),
+    outboundCalls: x.outbound_calls, connectedOutbound: x.connected_outbound, outboundTalkSeconds: Number(x.outbound_talk_seconds),
+    outboundTalkAvgSeconds: num(x.outbound_talk_avg), conversations: x.conversations, untaggedConversations: x.untagged_conversations,
+    firstCallTime: x.first_call_time?.slice(0, 5) ?? null, lastCallTime: x.last_call_time?.slice(0, 5) ?? null,
+  };
+}
+
+/**
+ * The markets and lines with calls in the period, for the filters: every market, and the lines within the
+ * chosen market (cma.calls_overview grouped by market and by line, in the same transaction)
+ */
+async function callsFilterLists(q: Querier, range: HoursRange, filter: CallsFilter): Promise<{ markets: string[]; lines: CallsLine[] }> {
+  const m = await q.query<CallsDbRow>(`select * from cma.calls_overview($1::date, $2::date, null, null, 'market') where period = 'current' and group_key is not null`,
+    [range.from, range.to]);
+  const l = await q.query<CallsDbRow>(`select * from cma.calls_overview($1::date, $2::date, $3, null, 'line') where period = 'current' and group_key is not null`,
+    [range.from, range.to, filter.market]);
+  return { markets: m.rows.map((x) => x.group_key!), lines: l.rows.map((x) => ({ key: x.group_key!, name: x.group_label })) };
+}
+
+async function telephonySetting(q: Querier): Promise<number> {
+  const r = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'telephony.connected_min_seconds'`);
+  return Number(r.rows[0]?.value ?? 10);
 }
 
 function ctx(me: Principal): TenantContext {
@@ -1567,6 +1620,73 @@ export const postgresData: CmaData = {
         })) : [],
         anonymousCount: connections.telephony ? sum.anonymous_count : 0,
         lookbackDays: sum.lookback_days,
+      };
+    });
+  },
+
+  async getCallsOverview(me, range, group, filter): Promise<CallsOverview> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission and the filters first; the connection state, the lists and the setting follow
+      const r = await q.query<CallsDbRow>(`select * from cma.calls_overview($1::date, $2::date, $3, $4, $5)`,
+        [range.from, range.to, filter.market, filter.line, group]);
+      const connections = await readConnections(q);
+      const lists = await callsFilterLists(q, range, filter);
+      const current = r.rows.filter((x) => x.period === "current");
+      // the previous period the database compared with (like for like: a period that reaches today
+      // against the same point in the previous one), named for the deltas; today as the page resolves it
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      return {
+        ...range, group, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        rows: connections.telephony ? current.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toCallsFigures(x) })) : [],
+        total: toCallsFigures(current.find((x) => x.group_key === null)),
+        previous: toCallsFigures(r.rows.find((x) => x.period === "previous")),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        ...(connections.telephony ? lists : { markets: [], lines: [] }),
+      };
+    });
+  },
+
+  async getCallsTagUse(me, range, group, filter): Promise<CallsTagUse> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ group_key: string | null; group_label: string | null; tag_key: string | null; tag_name: string | null; is_counted: boolean | null; conversations: number }>(
+        `select * from cma.calls_tag_use($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, group]);
+      const connections = await readConnections(q);
+      return {
+        ...range, group, filter, telephony: connections.telephony,
+        rows: connections.telephony ? r.rows.map((x) => ({ groupKey: x.group_key, groupLabel: x.group_label, tagKey: x.tag_key, tagName: x.tag_name,
+          isCounted: x.is_counted, conversations: x.conversations })) : [],
+      };
+    });
+  },
+
+  async getCallsPerAgent(me, range, filter): Promise<CallsPerAgent> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<PersonDbRow>(`select * from cma.calls_per_person($1::date, $2::date, $3, $4)`, [range.from, range.to, filter.market, filter.line]);
+      const connections = await readConnections(q);
+      const lists = await callsFilterLists(q, range, filter);
+      const rows = r.rows.map(toCallsPerson);
+      return {
+        ...range, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        rows: connections.telephony ? rows.filter((x) => x.kind !== "total") : [],
+        total: rows.find((x) => x.kind === "total")!,
+        ...(connections.telephony ? lists : { markets: [], lines: [] }),
+      };
+    });
+  },
+
+  async getCallsPerAgentTags(me, range, filter): Promise<CallsPerAgentTags> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ row_kind: "person" | "not_linked"; user_id: string | null; tag_key: string | null; tag_name: string | null; conversations: number }>(
+        `select * from cma.calls_per_person_tags($1::date, $2::date, $3, $4)`, [range.from, range.to, filter.market, filter.line]);
+      const connections = await readConnections(q);
+      return {
+        ...range, filter, telephony: connections.telephony,
+        rows: connections.telephony ? r.rows.map((x) => ({ kind: x.row_kind === "not_linked" ? "notLinked" as const : "person" as const, userId: x.user_id,
+          tagKey: x.tag_key, tagName: x.tag_name, conversations: x.conversations })) : [],
       };
     });
   },
