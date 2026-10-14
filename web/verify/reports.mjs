@@ -17,13 +17,25 @@
  * 80th percentile, the total over every call), hours and dates across the DST change of 25 October 2026
  * in each line's zone, a line without a market in the tenant's zone, the unanswered share, the reason
  * columns labelled from the catalog in the neutral series (never a red), the stacked bars, the group
- * labels, the time-to-answer format, the hint values, and no hash, number or name in an answer.
+ * labels, the time-to-answer format, the hint values, and no hash, number or name in an answer. Since
+ * addition 0008j (brief B16) also Calls and Calls per agent, on 63's own dataset so the figures are the
+ * ones 63 proves in the database: the four groups and G, the filters as the database checks them, talk
+ * time without ringing and a call at exactly the threshold, an uncounted line and a deleted call left
+ * out, the overview per market with its computed total and the previous period across the DST change,
+ * days and ISO weeks in each line's zone, the untagged rule, tag use by market, the per-person rows and
+ * the not-linked row, tags per person (counted only), the filters narrowing every figure alike; then the
+ * screens: the deltas, the colours (series order, never a red), the top twelve tags and Other, the groups
+ * by tags, the chart's axis, the per-agent bars and split, the formats, and no hash, number, call id or
+ * telephony user id in an answer.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
   groupInbound, groupSpeedToLead, inboundBar, inboundCalls, inboundFigures, inboundGroupDisplay, intakeMarkets, intakeTotals, isMuted, missedReasonOf,
   nextGroup, nextInboundGroup, openNotCalled, orderChecks, parseGroup, parseInboundGroup, percentileCont, personalDataIn, rangeProblem, REASON_SERIES,
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
+  barShare, callRecords, callsDelta, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
+  fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
+  personSplit, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
 } from "../src/lib/reports.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -268,6 +280,171 @@ const clean = { from: "2026-09-15", to: "2026-09-17", group: "line", telephony: 
 expect("no hash, number or name in an inbound answer; each kind found when there",
   [personalDataIn(clean), personalDataIn({ a: "a1".repeat(32), b: "+31 20 000 0001", c: { counterpartHash: null, displayName: "x", lineName: "ok" } })],
   [[], ["$.a", "$.b", "$.c.counterpartHash", "$.c.displayName"]], [["$.rows"], []]);
+
+// ---- Calls overview and calls per agent (addition 0008j, brief B16) -------------------------------
+// The dataset of 63's tenant one, so the figures below are the ones 63 proves in the database: lines NL,
+// a second NL line, GB and an NL line that does not count; telephony users 1 (Anna) and 2 (Bram) linked,
+// 3 and 4 not; Sale and Info count, Test does not; 26 October to 1 November 2026 and the previous period
+// 19 to 25 October across the DST change, in Europe/Amsterdam
+expect("the four calls groups parse, anything else is refused",
+  ["day", "week", "market", "line", "hour", "", null].map(parseCallsGroup),
+  ["day", "week", "market", "line", null, null, null], ["day", "week", "market", "line", "hour", null, null]);
+expect("G cycles day, week, market, line and back",
+  [nextCallsGroup("day"), nextCallsGroup("week"), nextCallsGroup("market"), nextCallsGroup("line")],
+  ["week", "market", "line", "day"], ["week", "market", "line", "line"]);
+const CONN = "00000000-0000-7000-8000-0000000000c1";
+expect("the filters as cma.calls_filters_check takes them: a code or unknown, a connection:line key, empty for all",
+  [parseCallsFilter("NL", `${CONN}:line-nl`), parseCallsFilter("unknown", ""), parseCallsFilter("", undefined),
+    parseCallsFilter("nl", null).problem, parseCallsFilter("Netherlands", null).problem, parseCallsFilter(null, "line-nl").problem, filterQuery({ market: "GB", line: null })],
+  [{ filter: { market: "NL", line: `${CONN}:line-nl` }, problem: null }, { filter: { market: "unknown", line: null }, problem: null },
+    { filter: { market: null, line: null }, problem: null }, "market", "market", "line", { market: "GB" }],
+  [{ filter: { market: "NL", line: null }, problem: null }, { filter: { market: null, line: null }, problem: "market" },
+    { filter: { market: "", line: "" }, problem: null }, null, null, null, { market: "GB", line: null }]);
+const callLines = [
+  { connectionId: CONN, lineRef: "line-nl", name: "Verify NL line", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
+  { connectionId: CONN, lineRef: "line-nl2", name: "Verify NL line two", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
+  { connectionId: CONN, lineRef: "line-gb", name: "Verify GB line", market: "GB", zone: "Europe/London", isCounted: true },
+  { connectionId: CONN, lineRef: "line-off", name: "Verify line not counted", market: "NL", zone: "Europe/Amsterdam", isCounted: false },
+];
+const callTags = [
+  { connectionId: CONN, tagRef: "tg-sale", name: "Sale", isCounted: true }, { connectionId: CONN, tagRef: "tg-info", name: "Info", isCounted: true },
+  { connectionId: CONN, tagRef: "tg-test", name: "Test", isCounted: false },
+];
+const V = Date.parse("2026-10-26T00:00:00Z");
+const H = 3600e3;
+const ccall = (src, direction, start, answer, end, line, user, tags = [], extra = {}) => ({
+  sourceId: src, connectionId: CONN, sourceSystem: "verifytel", direction, startedAt: at(start),
+  answeredAt: answer === null ? null : at(start + answer * 1000), endedAt: at(start + end * 1000), missedReason: null, lineRef: line,
+  userRef: user, tagRefs: tags, ...extra,
+});
+const calls63 = [
+  ccall("c0", "inbound", V - 0.5 * H, 6, 66, "line-nl", "tel-user-1"),
+  ccall("o1", "outbound", V + 8 * H, 15, 25, "line-nl", "tel-user-1", ["tg-sale"]),
+  ccall("o2", "outbound", V + 8 * H + 600e3, 20, 29, "line-nl", "tel-user-1", ["tg-sale"]),
+  ccall("i1", "inbound", V + 39 * H, 12, 312, "line-nl", "tel-user-1", ["tg-test"]),
+  ccall("o3", "outbound", V + 33 * H, null, 30, "line-nl", "tel-user-2"),
+  ccall("i2", "inbound", V + 58 * H, 8, 68, "line-gb", "tel-user-2"),
+  ccall("o4", "outbound", V + 64.5 * H, 5, 125, "line-gb", "tel-user-2", ["tg-info", "tg-test"]),
+  ccall("i3", "inbound", V + 80 * H, null, 30, "line-nl", null),
+  ccall("i5", "inbound", V + 82 * H, 4, 34, "line-nl2", "tel-user-2", ["tg-sale", "tg-info"]),
+  ccall("i4", "inbound", V + 108 * H, 5, 95, "line-nl", "tel-user-3", ["tg-sale"]),
+  ccall("o5", "outbound", V + 167.5 * H, 3, 43, "line-gb", "tel-user-4"),
+  ccall("o6", "outbound", V + 130 * H, null, 25, "line-gb", "tel-user-4"),
+  ccall("x1", "inbound", V + 167.5 * H, 5, 65, "line-nl", "tel-user-1"),
+  ccall("p1", "inbound", Date.parse("2026-10-25T00:30:00Z"), 5, 65, "line-nl", "tel-user-1"),
+  ccall("p2", "inbound", Date.parse("2026-10-25T01:30:00Z"), 5, 35, "line-nl", "tel-user-1"),
+  ccall("p3", "outbound", Date.parse("2026-10-25T22:30:00Z"), 4, 24, "line-nl", "tel-user-2"),
+  ccall("p6", "inbound", Date.parse("2026-10-25T23:30:00Z"), 5, 15, "line-gb", "tel-user-2"),
+  ccall("p4", "outbound", Date.parse("2026-10-18T22:30:00Z"), null, 20, "line-nl", "tel-user-2"),
+  ccall("p5", "inbound", Date.parse("2026-10-18T21:30:00Z"), 5, 65, "line-nl", "tel-user-1"),
+  ccall("d1", "inbound", V + 37 * H, 5, 65, "line-nl", "tel-user-1", ["tg-sale"], { deleted: true }),
+  ccall("off2", "outbound", V + 35 * H, 5, 55, "line-off", "tel-user-1"),
+];
+const records = (min = 10, filter) => callRecords(calls63, callLines, "Europe/Amsterdam", min, filter);
+const people = { "tel-user-1": { userId: "u-anna", name: "Anna Verify" }, "tel-user-2": { userId: "u-bram", name: "Bram Verify" } };
+const personOf = (system, ref) => (system === "verifytel" && ref ? people[ref] ?? null : null);
+const figs = (f) => `${f.calls}/${f.inbound}/${f.outbound} ${f.answeredInbound}/${f.connectedOutbound} ${f.connectedPct} ${f.conversations} ${f.talkSeconds} ${f.talkAvgSeconds} out ${f.outboundTalkSeconds} ${f.outboundTalkAvgSeconds} ${f.untaggedConversations}`;
+const week = groupCalls(records(), "2026-10-26", "2026-11-01", "market");
+expect("talk time from the answer to the end, no ringing; a call at exactly the threshold connected, as 63 B1",
+  [week.total.talkSeconds, records().find((c) => c.talkSeconds === 300)?.isConversation,
+    [10, 9, 11].map((m) => groupCalls(records(m), "2026-10-26", "2026-11-01", "day").total.connectedOutbound)],
+  [710, true, [3, 4, 2]], [768, true, [3, 3, 3]]);
+expect("a line that does not count and a deleted call are never counted, as 63 B2 and B12",
+  [records().some((c) => c.lineKey === `${CONN}:line-off`), records().length, groupCalls(records(10, { market: null, line: `${CONN}:line-off` }), "2026-10-26", "2026-11-01", "day").total.calls],
+  [false, 19, 0], [true, 21, 1]);
+expect("the overview per market, the computed total and the previous period, as 63 B12",
+  [...week.rows.map((r) => `${r.groupKey}:${figs(r)}`), `current:${figs(week.total)}`,
+    `previous:${figs(groupCalls(records(), previousPeriod({ from: "2026-10-26", to: "2026-11-01" }).from, "2026-10-25", "day").total)}`],
+  ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.8 out 170 56.7 3",
+    "previous:5/3/2 3/1 50 4 120 30 out 20 20 4"],
+  ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.75 out 170 56.7 3",
+    "previous:6/4/2 4/1 50 5 180 36 out 20 20 5"]);
+expect("the previous equal period: as many dates just before, across the DST change, a day and a month",
+  [previousPeriod({ from: "2026-10-26", to: "2026-11-01" }), previousPeriod({ from: "2026-10-14", to: "2026-10-14" }), previousPeriod({ from: "2026-10-01", to: "2026-10-31" })],
+  [{ from: "2026-10-19", to: "2026-10-25" }, { from: "2026-10-13", to: "2026-10-13" }, { from: "2026-08-31", to: "2026-09-30" }],
+  [{ from: "2026-10-19", to: "2026-10-26" }, { from: "2026-10-14", to: "2026-10-14" }, { from: "2026-09-01", to: "2026-09-30" }]);
+expect("days and ISO weeks across the DST change, each call in its line's zone, as 63 B7",
+  [groupCalls(records(), "2026-10-19", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.calls}`),
+    groupCalls(records(), "2026-10-19", "2026-11-01", "week").rows.map((r) => `${r.groupKey}=${r.calls}`)],
+  [["2026-10-19=1", "2026-10-25=4", "2026-10-26=3", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
+    ["2026-10-19=5", "2026-10-26=12"]],
+  [["2026-10-18=1", "2026-10-25=3", "2026-10-26=4", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
+    ["2026-10-19=5", "2026-10-26=12"]]);
+expect("untagged: any current tag counts, counted or not, as 63 B3",
+  groupCalls(records(), "2026-10-26", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.untaggedConversations}`),
+  ["2026-10-26=1", "2026-10-27=0", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"],
+  ["2026-10-26=1", "2026-10-27=1", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"]);
+const tagUse = callsTagUse(records(), "2026-10-26", "2026-11-01", "market", callTags);
+expect("tag use by market, the most used first, untagged last, then the whole period, as 63 B6",
+  tagUse.map((r) => `${r.groupKey ?? "all"}:${r.tagName ?? "-"}=${r.conversations}${r.isCounted === false ? "(not counted)" : ""}`),
+  ["GB:Info=1", "GB:Test=1(not counted)", "GB:-=2", "NL:Sale=3", "NL:Info=1", "NL:Test=1(not counted)", "NL:-=1", "all:Sale=3", "all:Info=2", "all:Test=2(not counted)", "all:-=3"],
+  ["GB:Info=1", "GB:-=2", "NL:Sale=3", "NL:Info=1", "NL:-=1", "all:Sale=3", "all:Info=2", "all:-=3"]);
+const perPerson = callsPerPerson(records(), "2026-10-26", "2026-11-01", personOf);
+const pp = (p) => `${p.kind}:${p.name ?? "-"}${p.unlinkedUsers === null ? "" : `(${p.unlinkedUsers})`} in ${p.answeredInbound} ${p.inboundTalkSeconds} ${p.inboundTalkAvgSeconds} out ${p.outboundCalls}/${p.connectedOutbound} ${p.outboundTalkSeconds} ${p.outboundTalkAvgSeconds} conv ${p.conversations} untagged ${p.untaggedConversations} ${p.firstCallTime}-${p.lastCallTime}`;
+expect("per person by name, the users without a person as one counted row, then the total, as 63 B8",
+  [...perPerson.rows.map(pp), pp(perPerson.total)],
+  ["person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:30-16:00", "person:Bram Verify in 2 90 45 out 2/1 120 120 conv 3 untagged 1 10:00-16:30",
+    "notLinked:-(2) in 1 90 90 out 2/1 40 40 conv 2 untagged 1 10:00-23:30", "total:- in 5 540 108 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30"],
+  ["person:Bram Verify in 2 90 45 out 2/1 120 120 conv 3 untagged 1 10:00-16:30", "person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:30-16:00",
+    "notLinked:-(3) in 1 90 90 out 2/1 40 40 conv 2 untagged 1 10:00-23:30", "total:- in 5 540 108 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30"]);
+const ppTags = callsPerPersonTags(records(), "2026-10-26", "2026-11-01", personOf, callTags);
+expect("tags per person: counted tags only, untagged last; a tag that does not count still makes a call tagged, as 63 B4",
+  ppTags.map((t) => `${t.kind === "person" ? people[Object.keys(people).find((k) => people[k].userId === t.userId)].name : t.kind}:${t.tagName ?? "-"}=${t.conversations}`),
+  ["Anna Verify:Sale=1", "Anna Verify:-=1", "Bram Verify:Info=2", "Bram Verify:Sale=1", "Bram Verify:-=1", "notLinked:Sale=1", "notLinked:-=1"],
+  ["Anna Verify:Sale=1", "Anna Verify:Test=1", "Anna Verify:-=1", "Bram Verify:Info=2", "Bram Verify:Sale=1", "Bram Verify:Test=1", "Bram Verify:-=1", "notLinked:Sale=1", "notLinked:-=1"]);
+const alike = (filter) => {
+  const r = records(10, filter);
+  const o = groupCalls(r, "2026-10-26", "2026-11-01", "market").total;
+  const p = callsPerPerson(r, "2026-10-26", "2026-11-01", personOf);
+  const tu = callsTagUse(r, "2026-10-26", "2026-11-01", "line", callTags).filter((x) => x.groupKey === null && x.tagKey === null).reduce((a, x) => a + x.conversations, 0);
+  const pt = callsPerPersonTags(r, "2026-10-26", "2026-11-01", personOf, callTags).filter((x) => x.tagKey === null).reduce((a, x) => a + x.conversations, 0);
+  return `${o.calls}/${o.conversations}/${o.untaggedConversations} ${p.total.conversations}/${p.total.untaggedConversations}/${p.rows.reduce((a, x) => a + x.conversations, 0)} ${tu} ${pt}`;
+};
+expect("the market and line filters narrow every figure alike, as 63 B5",
+  [alike({ market: null, line: null }), alike({ market: "GB", line: null }), alike({ market: "NL", line: null }), alike({ market: "NL", line: `${CONN}:line-nl` }),
+    alike({ market: null, line: `${CONN}:line-nl2` }), alike({ market: "NL", line: `${CONN}:line-gb` })],
+  ["12/8/3 8/3/8 3 3", "4/3/2 3/2/3 2 2", "8/5/1 5/1/5 1 1", "7/4/1 4/1/4 1 1", "1/1/0 1/0/1 0 0", "0/0/0 0/0/0 0 0"],
+  ["12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3"]);
+expect("the change against the previous period: up, down, the same, new from none, nothing to compare",
+  [callsDelta(395, 335), callsDelta(179, 181), callsDelta(5, 5), callsDelta(4, 0), callsDelta(null, 12)],
+  [{ direction: "up", pct: 17.9 }, { direction: "down", pct: 1.1 }, { direction: "same", pct: 0 }, { direction: "up", pct: null }, { direction: "none", pct: null }],
+  [{ direction: "up", pct: 17.9 }, { direction: "up", pct: 1.1 }, { direction: "same", pct: 0 }, { direction: "up", pct: Infinity }, { direction: "down", pct: null }]);
+expect("the volume colours in the style's series order, never a red or an amber; Light Blue bars carry no text",
+  [INBOUND_CLASS, OUTBOUND_CLASS, [TAG_CLASS, TAG_NOT_COUNTED_CLASS, OTHER_TAGS_CLASS, UNTAGGED_CLASS, CONVERSATION_CLASS, ...Object.values(PER_AGENT_BAR_CLASS)].filter((c) => /error|warning|red/.test(c))],
+  ["bg-p4a-deepblue", "bg-p4a-green", []], ["bg-p4a-green", "bg-p4a-deepblue", ["bg-p4a-error"]]);
+const many = Array.from({ length: 14 }, (_, i) => ({ groupKey: null, groupLabel: null, tagKey: `${CONN}:t${i}`, tagName: `Tag ${String(i).padStart(2, "0")}`, isCounted: i !== 2, conversations: 20 - i }))
+  .concat([{ groupKey: null, groupLabel: null, tagKey: null, tagName: null, isCounted: null, conversations: 9 }]);
+const top = topTags(many, 200);
+expect("tags as bars: the top twelve, largest first, the rest as Other with its count; shares of the conversations",
+  [top.bars.length, top.bars[0].name, top.bars[0].share, top.bars[2].isCounted, top.other && [top.other.count, top.other.tags, top.other.share]],
+  [12, "Tag 00", 0.1, false, [15, 2, 0.075]], [14, "Tag 00", 0.1, true, null]);
+const groupedMany = [...many.map((r) => ({ ...r, groupKey: "NL", groupLabel: "NL" })), ...many];
+const table = tagTable(groupedMany, [{ groupKey: "NL", groupLabel: "NL", ...week.total, conversations: 100 }]);
+expect("the groups by tags: twelve columns and Other, counts and shares of the row's conversations, untagged last",
+  [table.columns.length, table.hasOther, table.lines[0].cells[0], table.lines[0].other, table.lines[0].untagged],
+  [12, true, { count: 20, share: 0.2 }, { count: 15, share: 0.15 }, { count: 9, share: 0.09 }],
+  [14, false, { count: 20, share: 0.2 }, { count: 0, share: 0 }, { count: 9, share: 0.09 }]);
+expect("the untagged share, the chart's axis without gaps up to today, a count axis",
+  [untaggedPct(week.total), untaggedPct({ conversations: 0, untaggedConversations: 0 }),
+    chartGroups(groupCalls(records(10, { market: "GB", line: null }), "2026-10-26", "2026-11-01", "day").rows, "day", "2026-10-26", "2026-11-01", "2026-10-31")
+      .map((r) => `${r.groupKey.slice(8)}=${r.calls}`),
+    chartGroups(groupCalls(records(), "2026-10-19", "2026-11-01", "week").rows, "week", "2026-10-21", "2026-11-01", "2026-11-01").length,
+    [countAxis(0), countAxis(47), countAxis(395)]],
+  [37.5, null, ["26=0", "27=0", "28=2", "29=0", "30=0", "31=1", "01=1"], 2, [{ top: 4, step: 1 }, { top: 50, step: 10 }, { top: 400, step: 100 }]],
+  [37.5, 0, ["28=2", "31=1", "01=1"], 1, [{ top: 0, step: 1 }, { top: 47, step: 10 }, { top: 395, step: 100 }]]);
+const maxima = columnMaxima([...perPerson.rows, perPerson.total]);
+expect("the per-agent bars scaled to each column's largest person (the total row is not one); a person's split by tag",
+  [maxima.answeredInbound, maxima.inboundTalkSeconds, barShare(90, maxima.inboundTalkSeconds), barShare(null, 10),
+    personSplit(ppTags, perPerson.rows[1]).map((s) => `${s.name ?? "-"}:${s.count}:${Math.round(s.share * 100)}`)],
+  [2, 360, 0.25, 0, ["Info:2:67", "Sale:1:33", "-:1:33"]],
+  [5, 540, 0.17, 0, ["Info:2:67", "Sale:1:33"]]);
+expect("talk time: seconds under a minute, minutes and seconds under an hour, hours and minutes from an hour",
+  [fmtTalk(45, "en"), fmtTalk(88.75, "en"), fmtTalk(3725, "nl"), fmtTalk(null, "en"), fmtShare(0.375, "en"), fmtShare(null, "en")],
+  ["45 s", "1m 29s", "1h 02m", "–", "38%", "–"], ["45.0 s", "88 s", "62m 05s", "0 s", "37.5%", "0%"]);
+const answer = { rows: week.rows, total: week.total, people: perPerson.rows.map((p) => ({ ...p })), tags: tagUse };
+expect("no hash, number, call id or telephony user id in a calls answer; an agent's own name is allowed",
+  [personalDataIn(answer, "$", true), personalDataIn({ a: "c1".repeat(32), name: "Anna", callId: "x", userRef: "tel-user-1", tagName: "Sale" }, "$", true)],
+  [[], ["$.a", "$.callId", "$.userRef"]], [["$.people"], []]);
 
 // ---- formats -----------------------------------------------------------------------------------
 expect("business minutes: decimals under an hour, hours from an hour, a dash for none",

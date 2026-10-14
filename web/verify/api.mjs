@@ -25,7 +25,9 @@
  * (migration 0008: the own inbox, since and limit, read and acknowledge on own rows only, sending as
  * messages.send to one named person, the stats; one message per run, dev data), and since addition
  * 0008e (night of 13 October 2026) the Sources, Markets and Alert rules screens and linked accounts on
- * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data).
+ * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data),
+ * since addition 0008i Inbound and the Live board's inbound part, and since addition 0008j Calls and
+ * Calls per agent (reads only).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -47,6 +49,11 @@ const ONLY_SOURCES = process.argv.includes("--sources");
  * local database with reports-fixture.sql or a cma-web in mock data mode alike.
  */
 const ONLY_INBOUND = process.argv.includes("--inbound");
+/**
+ * --calls runs only the checks of Calls and Calls per agent (addition 0008j, brief B16). They read only,
+ * so they run against dev, a local database with reports-fixture.sql or a cma-web in mock data mode alike.
+ */
+const ONLY_CALLS = process.argv.includes("--calls");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -119,8 +126,8 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND) && health.body?.data === "mock"))) {
-  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
+if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS) && health.body?.data === "mock"))) {
+  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
 }
 if (ONLY_REPORTS) {
@@ -129,6 +136,10 @@ if (ONLY_REPORTS) {
 }
 if (ONLY_SOURCES) {
   await sourceChecks();
+  verdict();
+}
+if (ONLY_CALLS) {
+  await callsChecks();
   verdict();
 }
 if (ONLY_INBOUND) {
@@ -822,6 +833,7 @@ expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/me
 
 await reportChecks();
 await inboundChecks();
+await callsChecks();
 verdict();
 
 function verdict() {
@@ -1177,6 +1189,113 @@ async function inboundChecks() {
     expect("inbound: without telephony the report and the board say so, never 0",
       [none?.telephony, none?.rows?.length, board?.telephony, board?.today, board?.callbacks?.length],
       [false, 0, false, null, 0], [true, 0, true, null, 0]);
+  } else {
+    console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
+  }
+}
+
+// ---- calls overview and calls per agent (addition 0008j, brief B16), 13 checks, 15 with the reader and the tenant without telephony ----
+// Calls needs reports.view or performance.team, Calls per agent performance.team, each answered 403 by the
+// route and again by the database. Counts, seconds, line, tag and staff names only: no number, no customer
+// name, no call id, no telephony user id and never the caller's hash in any answer. Reads only.
+async function callsChecks() {
+  const tz = (await get(ANALYST, "/api/v1/me")).body?.data?.timeZone ?? "Europe/Amsterdam";
+  const day = (n) => dateKey(new Date(Date.now() + n * 86_400_000), tz);
+  const range = `from=${day(-27)}&to=${day(0)}`;
+  const overview = (s, q = `${range}&group=day`) => get(s, `/api/v1/reports/calls?${q}`);
+  const tagUse = (s, q = `${range}&group=day`) => get(s, `/api/v1/reports/calls/tag-use?${q}`);
+  const agents = (s, q = range) => get(s, `/api/v1/reports/calls-per-agent?${q}`);
+  const agentTags = (s, q = range) => get(s, `/api/v1/reports/calls-per-agent/tags?${q}`);
+  const all4 = async (s) => [(await overview(s)).status, (await tagUse(s)).status, (await agents(s)).status, (await agentTags(s)).status];
+  expect("calls: an agent is refused on all four routes", await all4(AGENT), [403, 403, 403, 403], [200, 200, 200, 200]);
+  expect("calls: the supervisor and the analyst read all four", [...(await all4(SUPERVISOR)), ...(await all4(ANALYST))],
+    [200, 200, 200, 200, 200, 200, 200, 200], [200, 200, 403, 403, 200, 200, 403, 403]);
+  expect("calls: more than 92 days, a group outside the four, a bad market or line are a 400",
+    [(await overview(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status, (await agents(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status,
+      (await overview(ANALYST, `${range}&group=hour`)).status, (await tagUse(ANALYST, `${range}&group=agent`)).status,
+      (await overview(ANALYST, `${range}&market=nl`)).status, (await agentTags(ANALYST, `${range}&line=line-nl`)).status],
+    [400, 400, 400, 400, 400, 400], [200, 200, 200, 200, 200, 200]);
+  const groups = await Promise.all(["day", "week", "market", "line"].map(async (g) => (await overview(ANALYST, `${range}&group=${g}`)).body?.data));
+  const plain = (await get(ANALYST, `/api/v1/reports/calls?${range}`)).body?.data;
+  expect("calls: each group answers as itself, none means day", [...groups.map((d) => d?.group), plain?.group],
+    ["day", "week", "market", "line", "day"], ["day", "day", "day", "day", "day"]);
+  const tags = (await tagUse(ANALYST, `${range}&group=market`)).body?.data;
+  const per = (await agents(SUPERVISOR)).body?.data;
+  const perTags = (await agentTags(SUPERVISOR)).body?.data;
+  // a key that names a hash, a phone, an email, digits, a caller or a contact, a call id, a source id or a
+  // telephony user id, a name other than a line's, a tag's or a person's own, 64 hex characters or an E.164 number
+  const personal = (v, path = "$") => typeof v === "string"
+    ? (/^[0-9a-f]{64}$/i.test(v) || /^\+[1-9][0-9]{6,14}$/.test(v.replace(/[\s().-]/g, "")) ? [path] : [])
+    : Array.isArray(v) ? v.flatMap((x, i) => personal(x, `${path}[${i}]`))
+    : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [
+      ...(/hash|phone|e164|email|digits|counterpart|caller|contact|callid|sourceid|userref/i.test(k) || (/name/i.test(k) && !["lineName", "tagName", "name"].includes(k)) ? [`${path}.${k}`] : []),
+      ...personal(x, `${path}.${k}`)]) : [];
+  expect("calls: no hash, number, call id or telephony user id in any answer",
+    [...groups.flatMap((d) => personal(d)), ...personal(tags), ...personal(per), ...personal(perTags)], [], ["$.something"]);
+  const d = groups[0] ?? { rows: [], total: {} };
+  const sum = (rows, k) => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
+  const counts = ["calls", "inbound", "outbound", "answeredInbound", "connectedOutbound", "conversations", "talkSeconds", "outboundTalkSeconds", "untaggedConversations"];
+  expect("calls: the days add up to the total (every count and the talk time)",
+    counts.map((k) => sum(d.rows, k) === d.total[k]), counts.map(() => true), counts.map((_, i) => i !== 0));
+  const coherent = (f) => f.inbound + f.outbound === f.calls && f.answeredInbound <= f.inbound && f.connectedOutbound <= f.outbound
+    && f.conversations === f.answeredInbound + f.connectedOutbound && f.untaggedConversations <= f.conversations
+    && (f.connectedPct === null ? f.outbound === 0 : Math.abs(f.connectedPct - Math.round((1000 * f.connectedOutbound) / f.outbound) / 10) < 0.06)
+    && (f.conversations > 0 || (f.talkAvgSeconds === null && f.talkSeconds === 0))
+    && f.outboundTalkSeconds <= f.talkSeconds;
+  expect("calls: every group, the total and the previous period are coherent",
+    [...groups.flatMap((g) => [...(g?.rows ?? []), g?.total, g?.previous])].every((f) => f && coherent(f)), true, false);
+  const days = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000) + 1;
+  expect("calls: the previous period is as long as the period and ends the day before it",
+    [days(d.previousFrom, d.previousTo) === days(d.from, d.to), days(d.previousTo, d.from) === 2], [true, true], [false, true]);
+  const settings = (await get(ANALYST, "/api/v1/settings")).body?.data ?? [];
+  expect("calls: the threshold comes from the settings",
+    [d.connectedMinSeconds, per?.connectedMinSeconds], [Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value), Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value)], [-1, -1]);
+  const market = groups[2]?.rows?.[0];
+  const line = groups[3]?.rows?.[0];
+  const alike = async (q) => {
+    const o = (await overview(ANALYST, `${range}&group=day&${q}`)).body?.data?.total;
+    const t = (await tagUse(ANALYST, `${range}&group=day&${q}`)).body?.data?.rows ?? [];
+    const p = (await agents(SUPERVISOR, `${range}&${q}`)).body?.data;
+    const pt = (await agentTags(SUPERVISOR, `${range}&${q}`)).body?.data?.rows ?? [];
+    return [o?.calls, o?.conversations === p?.total?.conversations && o?.conversations === sum(p?.rows ?? [], "conversations"),
+      o?.untaggedConversations === sum(t.filter((r) => r.groupKey === null && r.tagKey === null), "conversations"),
+      p?.total?.untaggedConversations === sum(pt.filter((r) => r.tagKey === null), "conversations")];
+  };
+  const byMarket = market ? await alike(`market=${encodeURIComponent(market.groupKey)}`) : null;
+  const byLine = line ? await alike(`line=${encodeURIComponent(line.groupKey)}`) : null;
+  expect("calls: a market and a line narrow all four answers alike",
+    [byMarket === null || (byMarket[0] === market.calls && byMarket.slice(1).every(Boolean)), byLine === null || (byLine[0] === line.calls && byLine.slice(1).every(Boolean))],
+    [true, true], [false, false]);
+  const persons = (per?.rows ?? []).filter((r) => r.kind === "person");
+  expect("calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview",
+    [persons.every((r, i, a) => i === 0 || a[i - 1].name.localeCompare(r.name) <= 0),
+      (per?.rows ?? []).findIndex((r) => r.kind === "notLinked") === -1 || (per?.rows ?? []).at(-1)?.kind === "notLinked",
+      (per?.rows ?? []).every((r) => r.kind === "person" ? r.unlinkedUsers === null && r.userId : r.unlinkedUsers >= 1 && r.userId === null && r.name === null),
+      [per?.total?.answeredInbound, per?.total?.outboundCalls, per?.total?.connectedOutbound, per?.total?.conversations].join("/")
+        === [plain?.total?.answeredInbound, plain?.total?.outbound, plain?.total?.connectedOutbound, plain?.total?.conversations].join("/")],
+    [true, true, true, true], [false, true, true, true]);
+  const counted = new Set((tags?.rows ?? []).filter((r) => r.isCounted === true).map((r) => r.tagKey));
+  const notCounted = new Set((tags?.rows ?? []).filter((r) => r.isCounted === false).map((r) => r.tagKey));
+  expect("calls per agent: tags per person are counted tags only, the untagged ones add up to the total",
+    [(perTags?.rows ?? []).every((r) => r.tagKey === null || (counted.has(r.tagKey) && !notCounted.has(r.tagKey))),
+      sum((perTags?.rows ?? []).filter((r) => r.tagKey === null), "conversations") === per?.total?.untaggedConversations],
+    [true, true], [false, true]);
+  const whole = (tags?.rows ?? []).filter((r) => r.groupKey === null);
+  expect("calls: the whole period's tag use equals its groups', tag by tag",
+    whole.every((w) => sum((tags?.rows ?? []).filter((r) => r.groupKey !== null && r.tagKey === w.tagKey), "conversations") === w.conversations), true, false);
+  // A reports reader without performance.team (the mock fixture and the local fixture; absent in dev)
+  if ((await get("reader", "/api/v1/me")).status === 200) {
+    expect("calls: reports.view alone reads Calls, not Calls per agent", await all4("reader"), [200, 200, 403, 403], [200, 200, 200, 200]);
+  } else {
+    console.log("note  reader has no access here: the check of reports.view without performance.team is left out");
+  }
+  // A tenant without telephony (the mock fixture and the local fixture; absent in dev)
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    const none = (await overview(INVEST)).body?.data;
+    const nobody = (await agents(INVEST)).body?.data;
+    expect("calls: without telephony both pages say so, never 0",
+      [none?.telephony, none?.rows?.length, none?.markets?.length, nobody?.telephony, nobody?.rows?.length],
+      [false, 0, 0, false, 0], [true, 0, 0, true, 0]);
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
   }

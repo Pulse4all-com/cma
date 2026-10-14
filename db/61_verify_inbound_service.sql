@@ -121,9 +121,10 @@ begin
   insert into verify_0008i values (2, 'A2 the missed-reason catalog: key, row-level security, audit, no delete, the readers'' view',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
-  -- A3. the three settings with their types and universal defaults
+  -- A3. the three settings with their types and universal defaults (named, since 0008j adds a fourth
+  --     telephony setting, telephony.connected_min_seconds, which 63 checks)
   select string_agg(key || '=' || value_type || ':' || default_value, ', ' order by key) into v_cols
-  from cma.setting where key like 'telephony.%';
+  from cma.setting where key in ('telephony.service_level_seconds', 'telephony.callback_lookback_days', 'telephony.waiting_max_minutes');
   insert into verify_0008i values (3, 'A3 the settings: service level 20 s, lookback 3 days, waiting at most 30 minutes',
     case when v_cols = 'telephony.callback_lookback_days=integer:3, telephony.service_level_seconds=integer:20, telephony.waiting_max_minutes=integer:30'
               and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_cols, 'none'));

@@ -1,0 +1,255 @@
+verify/api.mjs against http://localhost:8081
+
+PASS  identity in two tenants is refused           got 403
+PASS  unknown identity is refused                  got 403
+PASS  tenant comes from the identity only          got 01a13b5f-a7d3-7401-91bd-67b0e7ff293b
+PASS  ?as= is a 303 to the same path, relative     got [303,"/day",true]
+PASS  ?as= keeps the other parameters              got [303,"/day?date=2026-10-01"]
+PASS  an invalid ?as= is a 400                     got [400,"bad-mock-subject"]
+PASS  the cookie from ?as= is honoured             got 200
+PASS  a visit opens no workday                     got null
+PASS  the database keeps no time for someone without a clock got 403
+PASS  start needs the request header               got 400
+PASS  cross-site start is refused                  got 403
+PASS  start opens the own day today                got ["2026-10-14",true]
+PASS  a second start is the same day               got true
+PASS  the own day ends at the window end, 22:00    got 2026-10-14T20:00:00.000Z
+PASS  two users have two different days            got false
+PASS  hours show the caller's own day              got ["2026-10-14T17:14:18.837Z","2026-10-14T17:14:18.970Z"]
+PASS  a user parameter cannot redirect hours       got {"from":"2026-10-01","to":"2026-10-14","days":[{"date":"2026
+PASS  an agent cannot read team hours              got 403
+PASS  an agent cannot list the team                got 403
+PASS  the supervisor lists the people, agent included got [200,true]
+      (closed 1 leftover day(s): 2026-10-12)
+PASS  the supervisor closes open past days         got 0
+PASS  a correction needs the request header        got 400
+PASS  cross-site correction is refused             got 403
+PASS  a correction needs a reason                  got 400
+PASS  nobody corrects their own day                got 403
+PASS  an agent cannot correct                      got 403
+PASS  an unknown person is a 404                   got 404
+PASS  a future date is refused                     got 400
+PASS  add day creates the missing day              got [200,"ended",true,240]
+PASS  an event before the start is refused         got 400
+PASS  a replaced event stays visible               got [true,1,300]
+PASS  correction leaves no past day open or capped got [0,true,true]
+PASS  end needs the request header                 got 400
+PASS  cross-site end is refused                    got 403
+PASS  end ends the own day                         got ended
+PASS  start on an ended day changes nothing        got ["ended","2026-10-14T17:14:19.731Z"]
+PASS  a second end changes nothing                 got true
+PASS  log out on an ended day changes nothing      got [303,true]
+PASS  the other user's day is untouched            got working
+PASS  any person reads the tenant's export settings got [200,5]
+PASS  an agent cannot download hours               got 403
+PASS  workday.team alone cannot download status changes got 403
+PASS  the manager's hours file is a private download got [200,true,"no-store",true]
+PASS  the file follows the tenant's format         got [true,11]
+PASS  one hours row per day, as Team hours         got [3,true]
+PASS  every day has at least one status stretch    got [200,13,true]
+PASS  an export is bounded to 92 days              got 400
+PASS  an agent cannot read time per status         got 403
+PASS  the supervisor reads time per status, never cached got [200,"no-store",true]
+PASS  worked and paid per past day equal Team hours got [0,true]
+PASS  flags follow the tenant's own status list    got true
+PASS  the person filter returns that person only   got [true,true]
+PASS  time per status is bounded to 92 days        got 400
+PASS  a link that needs a permission is hidden from the agent got [true,true,true]
+PASS  every link is https, for anyone with a role  got [200,true]
+PASS  the profile is the caller's own row          got [true,true,true]
+PASS  a query cannot pick another person's profile got 01a13b5f-a839-7f02-9811-cec93ab63fab
+PASS  the profile names the person as /me does     got [true,true,true]
+PASS  the profile says whose time is kept          got [200,false,true,true]
+PASS  an unknown identity gets no profile          got 403
+PASS  an agent cannot read the team now            got 403
+PASS  the supervisor reads the team now, never cached got [200,"no-store",true,true]
+PASS  the agent's own entry equals the own-day read got {"date":"2026-10-14","status":"working","startedAt":"2026-10
+PASS  the entry's status carries the day's status key with its flags got ["available_sales","boolean","boolean"]
+PASS  someone without a day today is listed as not clocked in got [true,true]
+PASS  the analyst reads the board and is not on it got [200,false,true]
+PASS  an agent cannot read the directory           got 403
+PASS  the manager lists the non-managing people and themselves, not the admin got [200,true,true,false]
+PASS  the admin lists everyone and may not edit themselves got [true,true,false,true]
+PASS  the directory's teams and skills come from the tenant's catalogs got [true,true,true,true]
+PASS  the manager may assign non-managing roles only, the admin every role got [false,true,true]
+PASS  employers are listed with the zone a new person follows for any person of the tenant got [200,true,true]
+PASS  a role change needs the request header       got 400
+PASS  cross-site role change is refused            got 403
+PASS  nobody changes their own role                got 403
+PASS  the manager cannot assign a managing role    got 403
+PASS  the manager cannot touch the admin           got 403
+PASS  nobody deactivates themselves                got 403
+PASS  the full team list replaces the memberships  got ["en"]
+PASS  and restoring it gives the original list     got ["nordics"]
+PASS  an unknown team is a 404                     got 404
+PASS  a level outside the scale is refused         got 400
+PASS  the supervisor cannot set skills             got 403
+PASS  adding the same person again answers the same id got [201,201,true]
+PASS  a different login id for an existing person is refused got 409
+PASS  the manager cannot add a person with a managing role got 403
+PASS  deactivating keeps the person listed as inactive got [200,false,false]
+PASS  an agent cannot read the memberships         got 403
+PASS  the supervisor reads the memberships for the board's team filter got [200,true]
+PASS  any person reads the tenant's absence types  got [true,true]
+PASS  an agent cannot read the planner             got 403
+PASS  a week must start on a Monday                got 400
+PASS  the manager reads the week with the agent on the grid got [200,"2026-10-26","nordics",true]
+PASS  a cell write needs the request header        got 400
+PASS  a cross-site cell write is refused           got 403
+PASS  an agent cannot write a cell                 got 403
+PASS  a shift is written and read back with its times got [200,"shift","10:15:00","18:00:00"]
+PASS  the past is refused                          got 400
+PASS  a date outside the week is refused           got 400
+PASS  a person not on this roster is refused       got 400
+PASS  a shift that ends before it starts is refused got 400
+PASS  the same person on another roster that day is a conflict got 409
+PASS  after the publish the agent sees the shift   got [200,"published",true,"shift","10:15:00"]
+PASS  an edit after the publish is flagged and the agent keeps the published shift got [true,"shift","10:15:00"]
+PASS  the second publish raises the version and the agent sees the absence got [true,"absence","off"]
+PASS  copying the week carries the cell into the next one got [200,true]
+PASS  the weeks list shows both weeks with their states got ["published","draft"]
+PASS  the own schedule has one row per day and is bounded to 92 days got [7,400]
+PASS  the analyst holds no roster                  got 403
+PASS  an agent cannot read today's shifts          got 403
+PASS  the supervisor reads today's shifts with one row per person whose time is kept got [200,true,false]
+PASS  hours range is bounded to 92 days            got 400
+PASS  an agent cannot read the status configuration got 403
+PASS  the manager cannot read it either (tenant.configure left the manager row in 0004) got 403
+PASS  the admin reads every status with flags, default and usage got [200,1,true]
+PASS  a status write needs the request header      got 400
+PASS  a cross-site status write is refused         got 403
+PASS  the manager cannot add a status              got 403
+PASS  the admin adds a status and reads it back with its flags got [200,false,0]
+PASS  a bad key is a 400                           got 400
+PASS  flags and name change while no time is recorded in it got ["Verify status renamed",true]
+PASS  the flags of a status with time behind it are frozen (409) got 409
+PASS  the default cannot be retired (409)          got 409
+PASS  the new status becomes the one default       got ["verify_0005a"]
+PASS  retire keeps the status, inactive; the agent's list no longer offers it got [false,false]
+PASS  an unknown status is a 404                   got 404
+PASS  the manager cannot read the link configuration got 403
+PASS  a plain http address is a 400                got 400
+PASS  an unknown permission is a 404               got 404
+PASS  the link reaches the supervisor and not the agent got [true,false]
+PASS  a retired link stays listed inactive and leaves Welcome got [false,false]
+PASS  the permission catalog is read by the admin only got [403,true]
+PASS  an absence type is added and retired; the planner's list drops it got [false,false]
+PASS  a coverage target is set per team, work type and weekday got 9
+PASS  weekday 8 is a 400                           got 400
+PASS  a setting is written and read back by any person got ["tab","tab"]
+PASS  a value outside the catalog is a 400         got 400
+PASS  the agent cannot write a setting             got 403
+PASS  the forgotten clock-out grace exists with its default got ["120",true]
+PASS  sources: an agent cannot read the connections got 403
+PASS  sources: the manager cannot read them either got 403
+PASS  sources: the admin reads every connection with its kind got [200,true,true]
+PASS  sources: no secret value, only names and non-secret settings got true
+PASS  sources: a malformed id is a 400, an unknown one a 404 got [400,404]
+PASS  sources: the admin opens one connection with its catalogs got [200,"01a13b62-98a4-79bb-86cc-46ec247b4c45",true]
+PASS  sources: a settings write needs the request header got 400
+PASS  sources: a cross-site settings write is refused got 403
+PASS  sources: a secret-looking settings key is a 400 and changes nothing got [400,false]
+PASS  sources: the manager cannot write settings   got 403
+PASS  sources: a setting is written, read back and the settings restored got ["api verifier",true]
+PASS  sources: a kind the connection's rows contradict is a 409 got 409
+PASS  sources: a pipeline's counted switch is written and put back got [false,true,false,null]
+PASS  sources: a form change with an unknown market is a 404 and writes nothing got [404,true,[]]
+note  the connection has no call outcome: the outcome check is left out
+PASS  markets: an agent cannot read them           got 403
+PASS  markets: the admin reads markets with aliases, office hours and holidays got [200,true,true,true]
+PASS  markets: UK is not a market code (use GB)    got 400
+PASS  markets: overlapping office hours are a 400  got 400
+PASS  markets: an alias is added, read back and removed; a second removal is a 404 got [true,false,404]
+PASS  markets: a holiday is added and removed again got [true,false]
+PASS  alert rules: the manager cannot read them    got 403
+PASS  alert rules: the admin reads the rules and the pipelines a rule can name got [200,true,true,true]
+PASS  alert rules: an assignment rule is written by name and listed got [200,"record_assigned",["verify-no-such-pipeline"],5]
+PASS  alert rules: the same name for the other trigger is a 409 got 409
+PASS  alert rules: a rule is switched off, never deleted got false
+PASS  linked accounts: an agent cannot read them   got 403
+PASS  linked accounts: the manager reads the systems and the ids held, never a sign-in id got [200,true,true]
+PASS  linked accounts: the manager cannot link the admin (a managing person) got 403
+PASS  linked accounts: nobody links their own id   got 403
+PASS  linked accounts: an id with a space is a 400 got 400
+PASS  linked accounts: the manager links a person; the same id for another person is a 409; put back got [true,409,true,true]
+PASS  status list has exactly one default          got 1
+PASS  the status list shows no pay or billing flags got [true,true]
+PASS  status change needs the request header       got 400
+PASS  cross-site status change is refused          got 403
+PASS  status change is stored on the own day       got available_operations
+PASS  the own day names its current status         got Available - Operations
+PASS  status since moves to the change             got true
+PASS  unknown status key is a 404                  got 404
+PASS  an ended day refuses a status change         got 409
+PASS  the own inbox lists messages with an unread count got [true,"number"]
+PASS  a bad since is a 400                         got 400
+PASS  a limit above 200 is a 400                   got 400
+PASS  marking read needs the request header        got 400
+PASS  cross-site marking read is refused           got 403
+PASS  an agent cannot send                         got 403
+PASS  a target without a group is a 400 before the database got 400
+PASS  an unknown team is a 404                     got 404
+PASS  the supervisor sends an urgent message to one named person got [201,1]
+PASS  the recipient sees it unread, urgent, delivered by this read, title and body only got [true,null,true,"urgent",null]
+PASS  the unread count moved by one                got 1
+PASS  the sender's own inbox does not hold it      got false
+PASS  since lists only newer messages              got false
+PASS  another person cannot read it for the recipient got 0
+PASS  marking read changes one row, then none      got [1,0]
+PASS  acknowledging needs the request header       got 400
+PASS  acknowledging a message that is not yours is a 404 got 404
+PASS  the recipient acknowledges; a second time changes nothing got [200,200]
+PASS  read and acknowledged times are set and the count is back got [true,true,true]
+PASS  stats need messages.send or performance.team got [403,200]
+PASS  the stats count the one recipient: delivered, read, acknowledged, not by a rule got [1,1,1,1,false]
+PASS  a stats range over 92 days is a 400          got 400
+PASS  reports: an agent is refused on every route  got [403,403,403,403]
+PASS  reports: the supervisor reads all but data quality got [200,200,200,403]
+PASS  reports: the analyst reads all four          got [200,200,200,200]
+PASS  reports: the manager reads data quality      got 200
+PASS  reports: more than 92 days is a 400 on every ranged route got [400,400,400]
+PASS  reports: 92 days are answered                got 200
+PASS  reports: a backwards range is a 400          got 400
+PASS  reports: a group outside the four is a 400   got [400,400,400]
+PASS  reports: each group answers as itself, none means day got ["day","market","agent","pipeline","day"]
+PASS  reports: no field named email, phone, name or firstname in the rows got []
+PASS  reports: statuses are called, not called open or closed got true
+PASS  reports: every record link is https or empty got true
+PASS  reports: the summary by day adds up to the rows got [6,4,1]
+PASS  reports: agents not mapped are one group without a label, never an owner id got [true,4,true]
+PASS  reports: intake figures follow the tenant's connections got true
+PASS  reports: data quality lists each check once with a count got [true,true,true]
+PASS  reports: without telephony and a shop those figures are null, never 0 got [{"telephony":false,"commerce":false},true,false]
+PASS  inbound: an agent is refused on the report and the board got [403,403]
+PASS  inbound: the supervisor and the analyst read both got [200,200,200,200]
+PASS  inbound: more than 92 days and a group outside the four are a 400 got [400,400,400,400]
+PASS  inbound: each group answers as itself, none means day got ["day","market","line","hour","day"]
+PASS  inbound: no hash, number or name in the report or the board got []
+PASS  inbound: the groups add up to the total (offered, answered, unanswered, waiting) got [true,true,true,true]
+PASS  inbound: every group and the total are coherent (outcomes, reasons, the service level) got true
+PASS  inbound: the hour groups are 00 to 23 and the service level's seconds come from the settings got [true,true]
+PASS  inbound: the board's today is coherent and its missed calls run oldest first got [true,true,true]
+PASS  inbound: the board's lookback and anonymous count are whole numbers got [true,true]
+PASS  reasons: the request header is required, the manager is refused got [400,403]
+PASS  reasons: the admin saves a label and a switch, read back with the connection got ["API verifier reason",false,true]
+PASS  reasons: the report labels the code from the catalog got API verifier reason
+PASS  reasons: an empty label and a customer-records connection are a 400 got [400,400]
+PASS  reasons: put back as it was                  got ["Unknown",true]
+PASS  inbound: without telephony the report and the board say so, never 0 got [false,0,false,null,0]
+PASS  calls: an agent is refused on all four routes got [403,403,403,403]
+PASS  calls: the supervisor and the analyst read all four got [200,200,200,200,200,200,200,200]
+PASS  calls: more than 92 days, a group outside the four, a bad market or line are a 400 got [400,400,400,400,400,400]
+PASS  calls: each group answers as itself, none means day got ["day","week","market","line","day"]
+PASS  calls: no hash, number, call id or telephony user id in any answer got []
+PASS  calls: the days add up to the total (every count and the talk time) got [true,true,true,true,true,true,true,true,true]
+PASS  calls: every group, the total and the previous period are coherent got true
+PASS  calls: the previous period is as long as the period and ends the day before it got [true,true]
+PASS  calls: the threshold comes from the settings got [10,10]
+PASS  calls: a market and a line narrow all four answers alike got [true,true]
+PASS  calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview got [true,true,true,true]
+PASS  calls per agent: tags per person are counted tags only, the untagged ones add up to the total got [true,true]
+PASS  calls: the whole period's tag use equals its groups', tag by tag got true
+PASS  calls: reports.view alone reads Calls, not Calls per agent got [200,200,403,403]
+PASS  calls: without telephony both pages say so, never 0 got [false,0,0,false,0]
+
+ALL 249 PASS

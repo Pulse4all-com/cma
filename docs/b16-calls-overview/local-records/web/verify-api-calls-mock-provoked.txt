@@ -1,0 +1,19 @@
+verify/api.mjs against http://localhost:8080  (--provoke: every check must FAIL)
+
+FAIL  calls: an agent is refused on all four routes got [403,403,403,403], wanted [200,200,200,200]
+FAIL  calls: the supervisor and the analyst read all four got [200,200,200,200,200,200,200,200], wanted [200,200,403,403,200,200,403,403]
+FAIL  calls: more than 92 days, a group outside the four, a bad market or line are a 400 got [400,400,400,400,400,400], wanted [200,200,200,200,200,200]
+FAIL  calls: each group answers as itself, none means day got ["day","week","market","line","day"], wanted ["day","day","day","day","day"]
+FAIL  calls: no hash, number, call id or telephony user id in any answer got [], wanted ["$.something"]
+FAIL  calls: the days add up to the total (every count and the talk time) got [true,true,true,true,true,true,true,true,true], wanted [false,true,true,true,true,true,true,true,true]
+FAIL  calls: every group, the total and the previous period are coherent got true, wanted false
+FAIL  calls: the previous period is as long as the period and ends the day before it got [true,true], wanted [false,true]
+FAIL  calls: the threshold comes from the settings got [10,10], wanted [-1,-1]
+FAIL  calls: a market and a line narrow all four answers alike got [true,true], wanted [false,false]
+FAIL  calls per agent: people by name, never ranked; the not-linked row last; the total agrees with the overview got [true,true,true,true], wanted [false,true,true,true]
+FAIL  calls per agent: tags per person are counted tags only, the untagged ones add up to the total got [true,true], wanted [false,true]
+FAIL  calls: the whole period's tag use equals its groups', tag by tag got true, wanted false
+FAIL  calls: reports.view alone reads Calls, not Calls per agent got [200,200,403,403], wanted [200,200,200,200]
+FAIL  calls: without telephony both pages say so, never 0 got [false,0,0,false,0], wanted [true,0,0,true,0]
+
+ALL 15 PROVOKED CHECKS FAILED, as they must

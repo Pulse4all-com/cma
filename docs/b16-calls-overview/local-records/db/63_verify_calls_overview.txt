@@ -1,0 +1,42 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/home/user/cma/db/63_verify_calls_overview.sql:57: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+                                                  check_name                                                   | result |                                                                                                                                                                                                                        detail                                                                                                                                                                                                                        
+---------------------------------------------------------------------------------------------------------------+--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008j recorded                                                                                    | PASS   | 
+ A2 the setting: connected from 10 seconds of talk time                                                        | PASS   | telephony.connected_min_seconds=integer:10
+ A3 the functions are the application's only, in the caller's rights                                           | PASS   | 
+ A4 no function returns a hash, number or call id; the reads no telephony user id                              | PASS   | 
+ B1 talk time excludes ringing; a call at exactly the threshold is connected                                   | PASS   | talk 710 avg 88.8; connected 3 | at 9/11: 4/2
+ B2 a call on a line that does not count is never counted                                                      | PASS   | skipped_uncounted_line; stored 0; filtered 0/0; in the table 1; Anna out 2
+ B3 the untagged rule: any current tag counts, counted or not; a removed tag does not                          | PASS   | untagged 3 of 8 | 2026-10-26=1,2026-10-27=0,2026-10-28=1,2026-10-29=0,2026-10-30=0,2026-10-31=0,2026-11-01=1
+ B4 a tag that does not count is left out of the tags per person and still makes a call tagged                 | PASS   | Sale=3,Info=2,Test=2(not counted),-=3 | Anna Verify:Sale=1,Anna Verify:-=1,Bram Verify:Info=2,Bram Verify:Sale=1,Bram Verify:-=1,not_linked:Sale=1,not_linked:-=1
+ B5 the market and line filters narrow every function alike                                                    | PASS   | 12/8/3 8/3/8 3 3 | 4/3/2 3/2/3 2 2 | 8/5/1 5/1/5 1 1 | 7/4/1 4/1/4 1 1 | 1/1/0 1/0/1 0 0 | 0/0/0 0/0/0 0 0
+ B6 tag use grouped by market, then the whole period                                                           | PASS   | GB:Info=1,GB:Test=1,GB:-=2,NL:Sale=3,NL:Info=1,NL:Test=1,NL:-=1,all:Sale=3,all:Info=2,all:Test=2,all:-=3
+ B7 the previous period's totals, days and weeks across the DST change, each call in its line's zone           | PASS   | 5/3/2 3/1 50.0 4 120 30.0 4 | 2026-10-19=1,2026-10-25=4,2026-10-26=3,2026-10-27=2,2026-10-28=2,2026-10-29=2,2026-10-30=1,2026-10-31=1,2026-11-01=1 | 2026-10-19=5,2026-10-26=12,current=17,previous=1
+ B8 the per-person rows through linked accounts, by name; the users without a person as one counted row        | PASS   | person:Anna Verify in 2 360 180.0 out 2/1 10 10.0 conv 3 untagged 1 00:30-16:00 | person:Bram Verify in 2 90 45.0 out 2/1 120 120.0 conv 3 untagged 1 10:00-16:30 | not_linked:-(2) in 1 90 90.0 out 2/1 40 40.0 conv 2 untagged 1 10:00-23:30 | total:- in 5 540 108.0 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30 || person:Anna Verify conv 3 | person:Bram Verify conv 3 | person:Cas Verify conv 1 | not_linked:-(1) conv 1 | total:- conv 8
+ B9 performance.team for both per-person reads, reports.view enough for the overview and the tag use; refusals | PASS   | 18 of 18 refusals; the supervisor read 28 rows of 28
+ B10 tenant isolation with equal refs, also in the owner's rights                                              | PASS   | 12/0/0/0 | 2/2/Dora Verify,total/Sale=1,-=1/0 | Anna Verify,Bram Verify,not_linked,total / Dora Verify,total
+ B11 no hash, number, call id or telephony user id in any answer                                               | PASS   | 0 found in 33937 characters of answers
+ B12 the overview per market, the computed total and the previous period                                       | PASS   | GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80.0 2 | NL:8/5/3 4/1 33.3 5 490 98.0 out 10 10.0 1 | current:12/6/6 5/3 50.0 8 710 88.8 out 170 56.7 3 | previous:5/3/2 3/1 50.0 4 120 30.0 out 20 20.0 4
+ verdict                                                                                                       | PASS   | 16 PASS, 0 FAIL
+(17 rows)
+
+DROP FUNCTION
+RESET

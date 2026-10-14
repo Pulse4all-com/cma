@@ -1,8 +1,8 @@
 -- CMA seed: Pulse4all configuration
 -- Run as yourself (IAM login) after 01_foundation.sql, in dev and in prod. Safe to rerun.
 -- Customer configuration, not schema: the two tenants, their organisations, their channels, the
--- Subscriptions work statuses, the export settings, the app links and (after 0008i) the missed-call
--- reasons and telephony settings.
+-- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
+-- reasons and telephony settings and (after 0008j) the connected-call threshold.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -282,6 +282,31 @@ begin
   cross join cma.tenant t
   where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
   order by t.slug, s.ord
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- The connected-call threshold per tenant (after addition 0008j; brief B16, 14 October 2026): an
+-- outbound call with at least 10 seconds of talk time (answer to end, no ringing) counts as connected.
+-- To confirm with Kira against Aircall's own "x sec" setting for a connected call (README Decision
+-- log, 14 October 2026). Only adds what a tenant does not have yet, so a later change on
+-- Configuration survives a rerun.
+do $$
+begin
+  -- on a fresh database this seed runs before the settings catalog exists (13), so look it up by name first
+  if to_regclass('cma.setting') is null then
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 62_calls_overview.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'telephony.connected_min_seconds') then
+    raise notice 'the connected-call threshold does not exist yet (addition 0008j): rerun this seed after 62_calls_overview.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, 'telephony.connected_min_seconds', '10'
+  from cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug
   on conflict (tenant_id, key) do nothing;
 end
 $$;

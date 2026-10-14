@@ -1,0 +1,31 @@
+Every verify from 04 to 61 on a copy of the fresh database at 61 and on a copy at 63 (62, the seed rerun 02, 63 applied),
+run as martin@pulse4all.com with ON_ERROR_STOP=0, outputs masked (uuids, times, dates). Claude Code, 14 October 2026.
+
+DIFFERENT  04_verify.txt
+DIFFERENT  07_verify_time_model.txt
+DIFFERENT  10_verify_corrections.txt
+identical  12_verify_team_people.txt
+DIFFERENT  14_verify_tenant_settings.txt
+identical  16_verify_team_status_time.txt
+identical  18_verify_clock_in_app_links.txt
+identical  20_verify_team_now.txt
+identical  22_verify_teams_skills.txt
+identical  25_verify_roster.txt
+identical  27_verify_configuration.txt
+identical  29_verify_my_profile.txt
+identical  31_verify_ingest_crm_records.txt
+identical  33_verify_intake_core.txt
+identical  35_verify_telephony.txt
+identical  37_verify_commerce.txt
+identical  39_verify_outbox.txt
+identical  41_verify_lead_metrics.txt
+identical  43_verify_messaging.txt
+identical  45_verify_assignment_alerts.txt
+identical  47_verify_workday_window.txt
+identical  49_verify_alert_time_zone.txt
+identical  51_verify_legacy_time_import.txt
+identical  53_verify_sources_configuration.txt
+identical  55_verify_uncounted_lines.txt
+identical  57_verify_commerce_phone_hash.txt
+identical  59_verify_commerce_contact_link.txt
+identical  61_verify_inbound_service.txt

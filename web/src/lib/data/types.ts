@@ -953,6 +953,150 @@ export interface InboundNow {
   lookbackDays: number;
 }
 
+// ---- Calls overview and calls per agent (addition 0008j; brief B16, 14 October 2026). Counts, seconds,
+// line names, tag names and the names of the organisation's own people only: no number, no customer name,
+// no call id, no telephony user id and never the caller's hash reach these shapes.
+
+/** How cma.calls_overview and cma.calls_tag_use group the calls */
+export type CallsGroup = "day" | "week" | "market" | "line";
+
+/** The market and line filters of both Calls pages: a market code ("unknown" for a line without one) and a connection:line key, each null for all */
+export interface CallsFilter {
+  market: string | null;
+  line: string | null;
+}
+
+/** The figures of a set of calls (one group, the period's total or the previous period's) */
+export interface CallsFigures {
+  /** Calls on counted lines, both directions */
+  calls: number;
+  inbound: number;
+  outbound: number;
+  answeredInbound: number;
+  /** Outbound calls with at least telephony.connected_min_seconds of talk time */
+  connectedOutbound: number;
+  /** 0 to 100 with one decimal; null without an outbound call */
+  connectedPct: number | null;
+  /** Answered inbound and connected outbound calls */
+  conversations: number;
+  /** Talk time (answer to end, no ringing) over the conversations, in seconds */
+  talkSeconds: number;
+  talkAvgSeconds: number | null;
+  /** Talk time over the connected outbound calls */
+  outboundTalkSeconds: number;
+  outboundTalkAvgSeconds: number | null;
+  /** Conversations without a current tag of any kind */
+  untaggedConversations: number;
+}
+
+/** One group of cma.calls_overview */
+export interface CallsRow extends CallsFigures {
+  /** The business date, the ISO week's Monday, the market code ("unknown" without one) or connection:line ref */
+  groupKey: string;
+  /** The date, the Monday, the market or the line's name; null for a call without a line */
+  groupLabel: string | null;
+}
+
+/** A line the filter can choose: its key and its name in the phone system */
+export interface CallsLine {
+  key: string;
+  name: string | null;
+}
+
+export interface CallsOverview {
+  from: DateKey;
+  to: DateKey;
+  group: CallsGroup;
+  filter: CallsFilter;
+  /** False when the tenant has no telephony connected: the screen says so, never 0 */
+  telephony: boolean;
+  /** telephony.connected_min_seconds, for the hints */
+  connectedMinSeconds: number;
+  rows: CallsRow[];
+  /** Over every call of the period (the database's own total, not a sum of the groups) */
+  total: CallsFigures;
+  /** The same totals over the previous equal period, for the deltas */
+  previous: CallsFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  /** The markets and lines with calls in the period, for the filters (the line list within the chosen market) */
+  markets: string[];
+  lines: CallsLine[];
+}
+
+/** Conversations carrying a current tag, or without one (tagKey null), per group or over the whole period (groupKey null) */
+export interface TagUseRow {
+  groupKey: string | null;
+  groupLabel: string | null;
+  /** connection id ':' tag ref; null for the untagged conversations */
+  tagKey: string | null;
+  tagName: string | null;
+  /** Whether the tag counts (configuration); null for the untagged row */
+  isCounted: boolean | null;
+  conversations: number;
+}
+
+export interface CallsTagUse {
+  from: DateKey;
+  to: DateKey;
+  group: CallsGroup;
+  filter: CallsFilter;
+  telephony: boolean;
+  rows: TagUseRow[];
+}
+
+/** One row of cma.calls_per_person: a person, the calls of telephony users without a person, or the total */
+export interface CallsPerson {
+  kind: "person" | "notLinked" | "total";
+  /** The person (kind person); null otherwise */
+  userId: string | null;
+  name: string | null;
+  /** How many telephony users have calls but no person (kind notLinked); never who they are */
+  unlinkedUsers: number | null;
+  answeredInbound: number;
+  inboundTalkSeconds: number;
+  inboundTalkAvgSeconds: number | null;
+  outboundCalls: number;
+  connectedOutbound: number;
+  outboundTalkSeconds: number;
+  outboundTalkAvgSeconds: number | null;
+  conversations: number;
+  untaggedConversations: number;
+  /** The earliest and latest time of day ("HH:MM") of a call of theirs on any day of the period, in the line's market zone */
+  firstCallTime: string | null;
+  lastCallTime: string | null;
+}
+
+export interface CallsPerAgent {
+  from: DateKey;
+  to: DateKey;
+  filter: CallsFilter;
+  telephony: boolean;
+  connectedMinSeconds: number;
+  /** The people by name, then the not-linked row when there is one */
+  rows: CallsPerson[];
+  total: CallsPerson;
+  markets: string[];
+  lines: CallsLine[];
+}
+
+/** A person's (or the not-linked calls') conversations per counted tag; tagKey null for their untagged conversations */
+export interface CallsPersonTag {
+  kind: "person" | "notLinked";
+  userId: string | null;
+  tagKey: string | null;
+  tagName: string | null;
+  conversations: number;
+}
+
+export interface CallsPerAgentTags {
+  from: DateKey;
+  to: DateKey;
+  filter: CallsFilter;
+  telephony: boolean;
+  rows: CallsPersonTag[];
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1478,4 +1622,14 @@ export interface CmaData {
   getInboundService(me: Principal, range: HoursRange, group: InboundGroup): Promise<InboundService>;
   /** Today's inbound and the missed calls not called back, for the Live board. Needs monitoring.live */
   getInboundNow(me: Principal): Promise<InboundNow>;
+
+  // ---- Calls overview and calls per agent (addition 0008j): the database checks the permission on every call (CMA06)
+  /** Calls per group with the total, the previous period's total and the filter lists. Needs reports.view or performance.team; at most 92 days */
+  getCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsOverview>;
+  /** Conversations per group and current tag, and over the whole period. Needs reports.view or performance.team */
+  getCallsTagUse(me: Principal, range: HoursRange, group: CallsGroup, filter: CallsFilter): Promise<CallsTagUse>;
+  /** The same figures per person, the not-linked calls as one row, and the total. Needs performance.team */
+  getCallsPerAgent(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgent>;
+  /** Per person the conversations per counted tag and the untagged ones. Needs performance.team */
+  getCallsPerAgentTags(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgentTags>;
 }

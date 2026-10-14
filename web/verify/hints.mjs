@@ -2,8 +2,9 @@
  * Verifier: every header and tile of the reports explains itself (HeaderHint, 12 October 2026).
  * Every column header with visible text on Speed to lead (the summary in each of the four groups
  * and the open deals), Intake, Inbound (each of its four groups, addition 0008i) and Data quality,
- * every tile on the Dashboard (the Intake row and the time tiles), and the Live board's inbound part
- * (its seven tiles and the missed calls' headers), carries exactly one info mark: a button with a name, described by a
+ * every tile on the Dashboard (the Intake row and the time tiles), the Live board's inbound part
+ * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
+ * of Calls in each grouping and every header of Calls per agent, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -33,7 +34,7 @@ async function acknowledgeUrgent(subject) {
     }
   }
 }
-for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "reader"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 /** Headers and tiles of a page (or of one part of it), and what is wrong with their marks */
@@ -89,6 +90,15 @@ const cases = [
   ["manager", "/reports/inbound?range=month&group=hour", 14, 0],
   // The Live board's inbound part only: its seven tiles and the missed calls' six headers
   ["supervisor", "/live/board", 6, 7, '[data-testid="inbound-live"]'],
+  // Calls (addition 0008j): eight tiles (four with the change, three outbound, the untagged share) and the tag
+  // table's headers: the group, conversations, the top twelve tags, Other and Untagged, in each grouping
+  ["manager", "/reports/calls?range=month&group=day", 16, 8],
+  ["manager", "/reports/calls?range=month&group=week", 16, 8],
+  ["manager", "/reports/calls?range=month&group=market", 16, 8],
+  ["manager", "/reports/calls?range=month&group=line", 16, 8],
+  // Calls per agent: the person, eight figures and the first and last call
+  ["manager", "/reports/calls-per-agent?range=month", 10, 0],
+  ["supervisor", "/reports/calls-per-agent?range=week", 10, 0],
 ];
 let headers = 0;
 let tiles = 0;
