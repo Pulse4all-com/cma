@@ -1,0 +1,32 @@
+Mutations of db/60_inbound_service.sql, each on a fresh copy of the database at 59 (the mutated 60, then 02, then the final 61 unchanged).
+Each line: what the mutation breaks, its name, and the checks of 61 that failed (the verdict then reads FAIL).
+
+a call at exactly N seconds counts as late: sl_strict: caught by: B1 B2
+answered calls left out of the denominator: answered_excluded: caught by: B1 B2
+the catalog flag ignored: reason_flag_ignored: caught by: B1 B2
+every call in the tenant zone: tenant_zone_only: caught by: B3
+hours in UTC: utc_hours: caught by: B3 B4
+a lost call waits for ever: no_waiting_guard: caught by: B6 B7 B10
+a waiting call gets a reason: waiting_counted_unanswered: caught by: B6
+an empty reason kept (equivalent: the ingest write already stores an empty reason as null): null_reason_kept: caught by: NOTHING
+deleted calls counted: deleted_counted: caught by: B1 B2
+outbound calls offered: outbound_offered: caught by: B1 B2 B7 B10 B14
+no total row: no_total_row: caught by: B2
+an answered call does not call back: no_answered_callback: caught by: B7 B8 B10
+an outbound attempt does not call back: no_outbound_callback: caught by: B7 B8 B10
+a later missed call counts as a callback: unanswered_inbound_calls_back: caught by: B7 B10
+an earlier outbound call counts: earlier_outbound_counts: caught by: B7 B8 B10
+needs_callback ignored: needs_callback_ignored: caught by: B7 B9 B10
+missed_count always 1: count_one: caught by: B7
+no lookback: no_lookback: caught by: B7 B9 B10
+anonymous calls listed: anon_listed: caught by: B7 B10
+the hash returned as the source id: hash_returned: caught by: B7 B8 B9 B11 B12
+callbacks matched across tenants (visible in the owner rights): cross_tenant_match: caught by: B11
+a read in the owner rights: security_definer: caught by: A4
+no permission check on today: no_permission_today: caught by: B14
+the catalog open to anyone: configure_open: caught by: B13 B14
+any connection kind accepted: kind_unchecked: caught by: B13
+a connection without a kind accepted whatever it holds: held_kinds_ignored: caught by: B13
+the application may delete reasons: delete_granted: caught by: A2
+the old hash comment: comment_old: caught by: A5
+a default of 40 seconds: default_sl_40: caught by: A3 B1 B2 B6

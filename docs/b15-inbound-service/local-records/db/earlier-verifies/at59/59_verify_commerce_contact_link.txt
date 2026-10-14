@@ -1,0 +1,37 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/59_verify_commerce_contact_link.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+DO
+DO
+                                        check_name                                        | result |              detail               
+------------------------------------------------------------------------------------------+--------+-----------------------------------
+ A1 addition 0008h recorded                                                               | PASS   | 
+ A2 the link columns, their checks, the foreign key and the index                         | PASS   | 
+ A3 the functions are the application's only, in the caller's rights                      | PASS   | 
+ A4 nothing else changed (columns, reporting view, upserts, no deletes)                   | PASS   | 
+ B1 a customer linked to a contact, with the time of the match                            | PASS   | linked
+ B2 the same link again writes nothing                                                    | PASS   | unchanged
+ B3 relinked to another contact and connection; a CRM connection known by its rows        | PASS   | relinked,relinked,linked
+ B4 a null contact clears the link; clearing again or an unknown customer changes nothing | PASS   | cleared,unlinked,unlinked,unknown
+ B5 seven refusals, nothing written                                                       | PASS   | 7 of 7 refusals
+ B6 the table refuses half a link and another tenant's connection                         | PASS   | 3 of 3 refused
+ B7 the upserts of 0007b and 0008g leave the link alone                                   | PASS   | 
+ B8 the privacy forget clears that contact's links only                                   | PASS   | 2 cleared
+ B9 permissions and tenant isolation                                                      | PASS   | 5 of 5 refusals
+ verdict                                                                                  | PASS   | 13 PASS, 0 FAIL
+(14 rows)
+
+RESET

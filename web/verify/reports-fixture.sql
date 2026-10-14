@@ -1,6 +1,7 @@
 -- =============================================================================================
 -- verify/reports-fixture.sql: a small intake fixture for running verify/api.mjs --reports (and the
--- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026)
+-- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026); since
+-- addition 0008i also --inbound, on a database at db/61 (the inbound part needs 0008i)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, and it
 -- refuses a database without the dev seed. All ids are invented; nothing personal is written (ids,
@@ -16,7 +17,13 @@
 --                            connected), markets NL and GB with office hours, lead deals called,
 --                            not called open and closed, one owner mapped to Agent Two and one not,
 --                            a deal of an unknown market, form submissions, telephony calls with a
---                            tag, shop customers and orders, and the record link template
+--                            tag, shop customers and orders, and the record link template; since
+--                            0008i inbound calls on the NL line for Inbound and the Live board: every
+--                            reason of Pulse4all's seed and a code nobody saved, answered calls, a
+--                            caller missed twice and then called back, a caller missed twice and not,
+--                            an anonymous caller, a call older than the lookback, a call waiting now,
+--                            the connection's catalog rows and its record_url_call template (callers
+--                            as invented 64-hex hashes, never made from a number)
 --   pulse4all-invest         a CRM connection only, two deals and a form submission, and the mock
 --                            identity invest-analyst (analytics), so a tenant without telephony or
 --                            a shop can be read
@@ -134,6 +141,49 @@ begin
   perform cma.ingest_upsert_form_submissions(v_crm, (
     select jsonb_agg(jsonb_build_object('sourceId', s.id, 'formId', 'f1', 'submittedAt', to_char(s.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
     from (values ('4100001', (d - 2)::timestamp + time '07:55'), ('4100002', (d - 3)::timestamp + time '09:55')) s(id, at)));
+
+  -- ---- pulse4all-subscriptions, inbound (addition 0008i) ----------------------------------------
+  if to_regclass('cma.telephony_missed_reason') is not null then
+    perform set_config('app.user_id', v_admin::text, true);
+    perform cma.set_connection_settings(v_tel, '{"record_url_call": "https://example.com/fixture/{account}/call/{id}"}');
+    perform cma.set_telephony_missed_reason(v_tel, x.code, x.label, x.sl, true)
+    from (values ('out_of_opening_hours', 'Outside opening hours', false), ('short_abandoned', 'Hung up within 10 s', false),
+                 ('abandoned_in_ivr', 'Hung up in the menu', true), ('no_available_agent', 'No agent available', true),
+                 ('agents_did_not_answer', 'Agents did not answer', true), ('unknown', 'Unknown', true)) x(code, label, sl);
+    perform set_config('app.user_id', v_ing::text, true);
+    perform cma.ingest_upsert_telephony_calls(v_tel, (
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+               'sourceId', c.id, 'direction', c.dir, 'startedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'answeredAt', to_char(c.at + make_interval(secs => c.answer), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+               'endedAt', case when c.ended then to_char(c.at + interval '2 minutes', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') end,
+               'missedReason', c.reason, 'numberRef', 'n-nl', 'counterpartHash', c.hash,
+               'versionAt', to_char(c.at + interval '2 minutes', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))))
+      from (values
+        -- answered after 12, 25 and 8 seconds
+        ('7200001', 'inbound',  (now() - interval '2 days') at time zone 'UTC',               12,   true,  null,                    repeat('e1', 32)),
+        ('7200002', 'inbound',  (now() - interval '2 days 10 minutes') at time zone 'UTC',    25,   true,  null,                    repeat('e2', 32)),
+        ('7200003', 'inbound',  (now() - interval '1 day') at time zone 'UTC',                8,    true,  null,                    repeat('e3', 32)),
+        -- caller a1 missed twice, then called back (an attempt that did not connect)
+        ('7200011', 'inbound',  (now() - interval '1 day 2 hours') at time zone 'UTC',        null, true,  'no_available_agent',    repeat('a1', 32)),
+        ('7200012', 'inbound',  (now() - interval '1 day 1 hour') at time zone 'UTC',         null, true,  'agents_did_not_answer', repeat('a1', 32)),
+        ('7200013', 'outbound', (now() - interval '1 day') at time zone 'UTC',                null, true,  null,                    repeat('a1', 32)),
+        -- caller a2 missed once, caller a3 missed twice: both listed
+        ('7200021', 'inbound',  (now() - interval '2 hours') at time zone 'UTC',              null, true,  'abandoned_in_ivr',      repeat('a2', 32)),
+        ('7200031', 'inbound',  (now() - interval '3 hours') at time zone 'UTC',              null, true,  'short_abandoned',       repeat('a3', 32)),
+        ('7200032', 'inbound',  (now() - interval '1 hour') at time zone 'UTC',               null, true,  'no_available_agent',    repeat('a3', 32)),
+        -- caller a4 missed five days ago: outside the lookback
+        ('7200041', 'inbound',  (now() - interval '5 days') at time zone 'UTC',               null, true,  'no_available_agent',    repeat('a4', 32)),
+        -- caller a5 outside opening hours, caller a6 with a code nobody saved
+        ('7200051', 'inbound',  (now() - interval '14 hours') at time zone 'UTC',             null, true,  'out_of_opening_hours',  repeat('a5', 32)),
+        ('7200061', 'inbound',  (now() - interval '50 minutes') at time zone 'UTC',           null, true,  'abandoned_in_classic',  repeat('a6', 32)),
+        -- an anonymous caller (no hash): counted, never listed
+        ('7200071', 'inbound',  (now() - interval '70 minutes') at time zone 'UTC',           null, true,  'no_available_agent',    null),
+        -- waiting now: not answered, not ended
+        ('7200081', 'inbound',  (now() - interval '2 minutes') at time zone 'UTC',            null, false, null,                    repeat('a8', 32))
+      ) c(id, dir, at, answer, ended, reason, hash)));
+  else
+    raise notice 'addition 0008i is not there: the inbound part of the fixture is left out';
+  end if;
 
   -- ---- pulse4all-invest: a CRM only ------------------------------------------------------------
   perform set_config('app.tenant_id', v_inv::text, true);

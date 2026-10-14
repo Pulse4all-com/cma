@@ -8,7 +8,9 @@
  * My day is checked without a day (the Clock in card) and, as Agent Two after the
  * start route, with the clock and the status buttons; the Live board as the supervisor; People
  * (the Team screen, 0004) as the admin. The intake reports (B11): Speed to lead, Intake and Data quality
- * as the manager, Intake and the Dashboard's Intake row for a tenant without telephony or a shop.
+ * as the manager, Intake and the Dashboard's Intake row for a tenant without telephony or a shop;
+ * since addition 0008i Inbound (by day as the manager, by hour as the analyst) and the Live board of a
+ * tenant without telephony.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026).
@@ -93,6 +95,11 @@ const pages = [
   { path: "/reports/intake?range=month", subject: "invest-analyst" },
   { path: "/reports/data-quality", subject: "manager" },
   { path: "/reports/dashboard?range=month", subject: "invest-analyst" },
+  // Inbound and the Live board's inbound part (addition 0008i): the reasons' series and the bars, and the
+  // board of a tenant without telephony
+  { path: "/reports/inbound?range=month", subject: "manager" },
+  { path: "/reports/inbound?range=month&group=hour", subject: "analyst" },
+  { path: "/live/board", subject: "invest-analyst" },
   { path: "/logout" }, { path: "/no-access" },
 ];
 let hintsChecked = 0;

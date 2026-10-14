@@ -2,7 +2,8 @@ import "server-only";
 import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
-  SourceFormChange, SourceKind, SourceLineInput, SourceOutcomeChange, SourcePipelineInput, SourceSettings, SourceStore, SourceTagInput, TeamInput,
+  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourceSettings, SourceStore,
+  SourceTagInput, TeamInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
 
@@ -188,6 +189,11 @@ export function checkLineInput(b: Record<string, unknown>): SourceLineInput {
 
 export function checkTagInput(b: Record<string, unknown>): SourceTagInput {
   return { tagRef: ref(b.tagRef, "tagRef"), isCounted: flag(b, "isCounted") };
+}
+
+/** { code, label, countsInServiceLevel, needsCallback }: one missed-call reason of a telephony connection (addition 0008i) */
+export function checkMissedReasonInput(b: Record<string, unknown>): SourceMissedReasonInput {
+  return { code: text(b, "code", 60), label: text(b, "label", 100), countsInServiceLevel: flag(b, "countsInServiceLevel"), needsCallback: flag(b, "needsCallback") };
 }
 
 export function checkStoreInput(b: Record<string, unknown>): SourceStore {

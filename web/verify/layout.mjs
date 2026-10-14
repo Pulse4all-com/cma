@@ -13,12 +13,17 @@
  * Enter at open writes nothing, the confirm button is the destructive secondary style without a keycap, and
  * a line's box stays ticked until the switch-off is confirmed; End workday, an ordinary confirmation, opens
  * on its confirm button (agent-two clocks in through the route for it, inside the mock's 07:00 to 22:00
- * workday window). Saves screenshots under records/ for the release note.
+ * workday window). Inbound and the Live board (addition 0008i): the Inbound report at 1280 px with its
+ * keycaps, a hint on its right-most reason column and its table scrolling inside its card, the
+ * not-connected state for a tenant without telephony; the Live board for every identity that holds it,
+ * with the inbound tiles, the missed calls and a tile's hint inside the viewport, or the not-connected
+ * state, and no horizontal scrolling. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
  *       1279 px and demands the app shell, moves one hint panel over its header, lets the
- *       Intake table spill out of its card, focuses the confirm button of each irreversible
+ *       Intake and Inbound tables spill out of their cards, widens the Live board's inbound tiles past
+ *       the main area, focuses the confirm button of each irreversible
  *       confirmation (unticking the line's box) and Cancel on End workday, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
@@ -85,14 +90,15 @@ async function expectNavigation() {
     // Since 0008 Messages is a bare page right after Welcome for everyone, so every key below moves by one
     // Since B11 (12 October 2026) the Reports group holds Speed to lead and Intake (reports.view or performance.team)
     // and Data quality (reports.view or tenant.configure): the supervisor holds neither of the latter
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], false],
+    // Since 0008i Inbound follows Intake for the same permissions
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -152,6 +158,10 @@ async function expectReports() {
     ["manager", "/reports/dashboard?range=month", ["P", "T"], '[data-testid="intake-row"]', '[data-testid="intake-speed"] button[data-header-hint]'],
     ["invest-analyst", "/reports/intake?range=month", ["F"], '[data-testid="not-connected"]', lastIntakeHeader],
     ["invest-analyst", "/reports/dashboard?range=month", [], '[data-testid="not-connected"]', '[data-testid="intake-calls"] button[data-header-hint]'],
+    // Inbound (addition 0008i): the right-most reason column's hint stays inside the viewport; a tenant
+    // without telephony says so in words and has no header to open
+    ["manager", "/reports/inbound?range=month", ["G", "T", "W", "M", "C"], '[data-testid="inbound-table"]', '[data-testid="inbound-table"] thead th:last-child button[data-header-hint]'],
+    ["invest-analyst", "/reports/inbound?range=month", ["G"], '[data-testid="inbound-not-connected"]', null],
   ];
   for (const [subject, path, keys, selector, hintMark] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -166,22 +176,26 @@ async function expectReports() {
     if (m.scrollX) problems.push(`${subject} ${path}: page scrolls horizontally at 1280`);
     // Intake, the widest table: it scrolls inside its own card, so the main area never scrolls
     // sideways (12 October 2026); --provoke lets the table spill out of its card again
-    if (path.startsWith("/reports/intake")) {
-      const w = await p.evaluate((spill) => {
-        const box = document.querySelector('[data-testid="intake-scroll"]');
+    if (path.startsWith("/reports/intake") || (path.startsWith("/reports/inbound") && subject === "manager")) {
+      const w = await p.evaluate(([spill, id]) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
         if (!box) return null;
         if (spill) box.style.overflowX = "visible";
         const main = document.querySelector("main");
         return { main: main.scrollWidth - main.clientWidth };
-      }, provoke && subject === "manager");
-      if (!w) problems.push(`${subject} ${path}: the Intake table has no scroll container`);
+      }, [provoke && subject === "manager", path.startsWith("/reports/inbound") ? "inbound-scroll" : "intake-scroll"]);
+      if (!w) problems.push(`${subject} ${path}: the table has no scroll container`);
       else if (w.main > 0) problems.push(`${subject} ${path}: the main area scrolls sideways by ${w.main}px at 1280`);
     }
     if (Math.round(m.rail) !== 256) problems.push(`${subject} ${path}: rail is ${m.rail}px`);
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${subject} ${path}: keycap ${k} missing`);
     if (await p.locator(selector).count() === 0) problems.push(`${subject} ${path}: ${selector} missing`);
     await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
-    // One header hint, opened by keyboard focus
+    // One header hint, opened by keyboard focus (none on a page that only says a source is not connected)
+    if (hintMark === null) {
+      await ctx.close();
+      continue;
+    }
     const mark = p.locator(hintMark);
     if (await mark.count() !== 1) problems.push(`${subject} ${path}: header hint ${hintMark} missing`);
     else {
@@ -212,12 +226,59 @@ async function expectReports() {
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
-  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/data-quality"]) {
+  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
   }
   await ctx.close();
+}
+
+// The Live board per identity (addition 0008i): at 1280 px the inbound tiles, the missed calls and the
+// people board without horizontal scrolling, a tile's hint inside the viewport; a tenant without telephony
+// says so in words; an agent gets the no-permission card and no inbound figures
+async function expectLiveBoard() {
+  for (const [subject, telephony] of [["supervisor", true], ["manager", true], ["admin", true], ["analyst", true], ["invest-analyst", false], ["agent-one", null]]) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/live/board");
+    await p.waitForLoadState("networkidle");
+    if (telephony === null) {
+      if (await p.locator('[data-testid="inbound-live"]').count() > 0) problems.push(`${subject} /live/board: inbound figures shown to someone without the Live board`);
+      await ctx.close();
+      continue;
+    }
+    if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
+    const m = await p.evaluate(() => {
+      const main = document.querySelector("main");
+      return {
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        mainX: main ? main.scrollWidth - main.clientWidth : -1,
+        tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
+        missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
+        notConnected: !!document.querySelector('[data-testid="inbound-live"] [data-testid="inbound-not-connected"]'),
+      };
+    });
+    if (m.scrollX) problems.push(`${subject} /live/board: page scrolls horizontally at 1280`);
+    if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
+    if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
+    if (!telephony && (!m.notConnected || m.tiles > 0)) problems.push(`${subject} /live/board: a tenant without telephony must say so instead of showing tiles`);
+    if (telephony) {
+      const mark = p.locator('[data-testid="inbound-longestWaiting"] button[data-header-hint]');
+      await mark.focus();
+      const h = await p.evaluate(() => {
+        const m = document.activeElement;
+        const panel = m && document.getElementById(m.getAttribute("aria-describedby") ?? "");
+        if (!panel || panel.hidden || getComputedStyle(panel).visibility !== "visible") return null;
+        const r = panel.getBoundingClientRect();
+        return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+      });
+      if (h === null) problems.push(`${subject} /live/board: the tile's hint does not show on focus`);
+      else if (!h) problems.push(`${subject} /live/board: the tile's hint leaves the viewport`);
+    }
+    await p.screenshot({ path: `${outDir}/${subject}-live-board.png` });
+    await ctx.close();
+  }
 }
 
 async function expectGate(width, height) {
@@ -404,6 +465,7 @@ await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
 await expectReports();
+await expectLiveBoard();
 await expectIntakeConfiguration();
 await expectIrreversibleConfirmations();
 if (provoke) await expectShell(1279, 800);
@@ -411,5 +473,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports and the Intake row with a header hint open, Intake inside its card, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 5 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, the Live board for 6 identities, Sources, Markets and Alert rules, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

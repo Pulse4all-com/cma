@@ -41,6 +41,12 @@ const ONLY_REPORTS = process.argv.includes("--reports");
  * dev, a local database or a cma-web in mock data mode alike.
  */
 const ONLY_SOURCES = process.argv.includes("--sources");
+/**
+ * --inbound runs only the checks of Inbound and the Live board's inbound part (addition 0008i, brief B15).
+ * They read, and write one missed-reason label that is put back at the end, so they run against dev, a
+ * local database with reports-fixture.sql or a cma-web in mock data mode alike.
+ */
+const ONLY_INBOUND = process.argv.includes("--inbound");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -113,8 +119,8 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES) && health.body?.data === "mock"))) {
-  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
+if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || ((ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND) && health.body?.data === "mock"))) {
+  console.error(`Not a mock-auth, ${ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
 }
 if (ONLY_REPORTS) {
@@ -123,6 +129,10 @@ if (ONLY_REPORTS) {
 }
 if (ONLY_SOURCES) {
   await sourceChecks();
+  verdict();
+}
+if (ONLY_INBOUND) {
+  await inboundChecks();
   verdict();
 }
 
@@ -811,6 +821,7 @@ expect("the stats count the one recipient: delivered, read, acknowledged, not by
 expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/messages/stats?from=${shift(new Date(), -100)}&to=${shift(new Date(), 0)}`)).status, 400, 200);
 
 await reportChecks();
+await inboundChecks();
 verdict();
 
 function verdict() {
@@ -1074,5 +1085,99 @@ async function reportChecks() {
       [{ telephony: false, commerce: false }, true, false], [{ telephony: true, commerce: true }, true, false]);
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a tenant without sources is left out`);
+  }
+}
+
+// ---- inbound service and callbacks (addition 0008i, brief B15), 15 checks, 16 with the tenant without telephony ----
+// Inbound needs reports.view or performance.team, the Live board's inbound part monitoring.live, each answered
+// 403 by the route and again by the database. Counts, codes and line names only: no number, no name and never
+// the caller's hash in any answer. One missed-reason label of a telephony connection is written and put back.
+async function inboundChecks() {
+  const tz = (await get(ANALYST, "/api/v1/me")).body?.data?.timeZone ?? "Europe/Amsterdam";
+  const day = (n) => dateKey(new Date(Date.now() + n * 86_400_000), tz);
+  const range = `from=${day(-13)}&to=${day(0)}`;
+  const report = (s, q = `${range}&group=day`) => get(s, `/api/v1/reports/inbound?${q}`);
+  const now = (s) => get(s, "/api/v1/telephony/inbound-now");
+  expect("inbound: an agent is refused on the report and the board", [(await report(AGENT)).status, (await now(AGENT)).status], [403, 403], [200, 200]);
+  expect("inbound: the supervisor and the analyst read both",
+    [(await report(SUPERVISOR)).status, (await now(SUPERVISOR)).status, (await report(ANALYST)).status, (await now(ANALYST)).status],
+    [200, 200, 200, 200], [200, 403, 200, 403]);
+  expect("inbound: more than 92 days and a group outside the four are a 400",
+    [(await report(ANALYST, `from=${day(-92)}&to=${day(0)}&group=day`)).status,
+      ...(await Promise.all(["agent", "week", "DAY"].map(async (g) => (await report(ANALYST, `${range}&group=${g}`)).status)))],
+    [400, 400, 400, 400], [200, 200, 200, 200]);
+  const groups = await Promise.all(["day", "market", "line", "hour"].map(async (g) => (await report(ANALYST, `${range}&group=${g}`)).body?.data));
+  const plain = (await get(ANALYST, `/api/v1/reports/inbound?${range}`)).body?.data;
+  expect("inbound: each group answers as itself, none means day", [...groups.map((d) => d?.group), plain?.group],
+    ["day", "market", "line", "hour", "day"], ["day", "day", "day", "day", "day"]);
+  // a key that names a hash, a phone, an email, digits, a caller or a contact, a name other than a line's,
+  // 64 hex characters or an E.164 number, anywhere in an answer
+  const personal = (v, path = "$") => typeof v === "string"
+    ? (/^[0-9a-f]{64}$/i.test(v) || /^\+[1-9][0-9]{6,14}$/.test(v.replace(/[\s().-]/g, "")) ? [path] : [])
+    : Array.isArray(v) ? v.flatMap((x, i) => personal(x, `${path}[${i}]`))
+    : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [
+      ...(/hash|phone|e164|email|digits|counterpart|caller|contact/i.test(k) || (/name/i.test(k) && k !== "lineName") ? [`${path}.${k}`] : []),
+      ...personal(x, `${path}.${k}`)]) : [];
+  const live = (await now(ANALYST)).body?.data;
+  expect("inbound: no hash, number or name in the report or the board",
+    [...groups.flatMap((d) => personal(d)), ...personal(live)], [], ["$.something"]);
+  const sum = (rows, k) => rows.reduce((n, r) => n + r[k], 0);
+  const d = groups[0] ?? { rows: [], total: {} };
+  expect("inbound: the groups add up to the total (offered, answered, unanswered, waiting)",
+    ["offered", "answered", "unanswered", "waiting"].map((k) => sum(d.rows, k) === d.total[k]), [true, true, true, true], [false, true, true, true]);
+  const coherent = (f) => f.answered + f.unanswered + f.waiting === f.offered
+    && Object.values(f.unansweredByReason).reduce((a, b) => a + b, 0) === f.unanswered
+    && f.answeredWithinTarget <= f.serviceLevelBase
+    && (f.serviceLevelPct === null ? f.serviceLevelBase === 0 : Math.abs(f.serviceLevelPct - Math.round((1000 * f.answeredWithinTarget) / f.serviceLevelBase) / 10) < 0.06);
+  expect("inbound: every group and the total are coherent (outcomes, reasons, the service level)",
+    [...d.rows, d.total].every(coherent), true, false);
+  expect("inbound: the hour groups are 00 to 23 and the service level's seconds come from the settings",
+    [(groups[3]?.rows ?? []).every((r) => /^([01][0-9]|2[0-3])$/.test(r.groupKey)), Number.isInteger(d.serviceLevelSeconds) && d.serviceLevelSeconds >= 0],
+    [true, true], [false, true]);
+  expect("inbound: the board's today is coherent and its missed calls run oldest first",
+    [live?.telephony === false || (coherent(live.today) && live.today.waitingNow >= 0),
+      (live?.callbacks ?? []).every((r, i, a) => i === 0 || Date.parse(a[i - 1].startedAt) <= Date.parse(r.startedAt)),
+      (live?.callbacks ?? []).every((r) => r.missedCount >= 1 && (r.recordUrl === null || /^https:\/\//.test(r.recordUrl)))],
+    [true, true, true], [false, true, true]);
+  expect("inbound: the board's lookback and anonymous count are whole numbers",
+    [Number.isInteger(live?.lookbackDays), Number.isInteger(live?.anonymousCount)], [true, true], [false, true]);
+
+  // The missed-reason catalog on a telephony connection (Configuration > Sources), as the admin
+  const sources = (await get(ADMIN, "/api/v1/configuration/sources")).body?.data ?? [];
+  const tel = sources.find((x) => x.kind === "telephony" || (x.kind === null && (x.heldKinds ?? []).includes("telephony")));
+  const crm = sources.find((x) => x.kind === "crm" || (x.kind === null && (x.heldKinds ?? []).includes("crm") && !(x.heldKinds ?? []).includes("telephony")));
+  if (!tel) {
+    console.log("note  no telephony connection in this tenant: the 5 checks of the missed-reason catalog are left out");
+  } else {
+    const path = `/api/v1/configuration/sources/${tel.id}/missed-reasons`;
+    const before = (await get(ADMIN, `/api/v1/configuration/sources/${tel.id}`)).body?.data?.missedReasons ?? [];
+    const r0 = before.find((x) => x.code === "unknown") ?? before[0] ?? { code: "unknown", label: "unknown", countsInServiceLevel: true, needsCallback: true };
+    const body = (x) => ({ method: "PUT", headers: { "content-type": "application/json", "x-cma-request": "1" }, body: JSON.stringify(x) });
+    const changed = { code: r0.code, label: "API verifier reason", countsInServiceLevel: !r0.countsInServiceLevel, needsCallback: r0.needsCallback };
+    expect("reasons: the request header is required, the manager is refused",
+      [(await call(ADMIN, path, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(changed) })).status,
+        (await call(MANAGER, path, body(changed))).status], [400, 403], [200, 200]);
+    const written = (await call(ADMIN, path, body(changed))).body?.data?.missedReasons?.find((x) => x.code === r0.code);
+    expect("reasons: the admin saves a label and a switch, read back with the connection",
+      [written?.label, written?.countsInServiceLevel, written?.inCatalog], ["API verifier reason", !r0.countsInServiceLevel, true], [r0.label, r0.countsInServiceLevel, false]);
+    const labelled = (await report(ANALYST)).body?.data?.reasons?.find((x) => x.code === r0.code && x.sourceSystem === tel.adapter);
+    expect("reasons: the report labels the code from the catalog", labelled?.label, "API verifier reason", r0.label);
+    expect("reasons: an empty label and a customer-records connection are a 400",
+      [(await call(ADMIN, path, body({ ...changed, label: " " }))).status,
+        crm ? (await call(ADMIN, `/api/v1/configuration/sources/${crm.id}/missed-reasons`, body(changed))).status : 400],
+      [400, 400], [200, 200]);
+    const back = (await call(ADMIN, path, body({ code: r0.code, label: r0.label, countsInServiceLevel: r0.countsInServiceLevel, needsCallback: r0.needsCallback }))).body?.data?.missedReasons?.find((x) => x.code === r0.code);
+    expect("reasons: put back as it was", [back?.label, back?.countsInServiceLevel], [r0.label, r0.countsInServiceLevel], ["API verifier reason", !r0.countsInServiceLevel]);
+  }
+
+  // A tenant without telephony (the mock fixture and the local fixture; absent in dev)
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    const none = (await report(INVEST)).body?.data;
+    const board = (await now(INVEST)).body?.data;
+    expect("inbound: without telephony the report and the board say so, never 0",
+      [none?.telephony, none?.rows?.length, board?.telephony, board?.today, board?.callbacks?.length],
+      [false, 0, false, null, 0], [true, 0, true, null, 0]);
+  } else {
+    console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
   }
 }

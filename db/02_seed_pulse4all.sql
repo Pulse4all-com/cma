@@ -1,7 +1,8 @@
 -- CMA seed: Pulse4all configuration
 -- Run as yourself (IAM login) after 01_foundation.sql, in dev and in prod. Safe to rerun.
 -- Customer configuration, not schema: the two tenants, their organisations, their channels, the
--- Subscriptions work statuses, the export settings and the app links.
+-- Subscriptions work statuses, the export settings, the app links and (after 0008i) the missed-call
+-- reasons and telephony settings.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -238,6 +239,49 @@ begin
   end if;
   insert into cma.work_status (tenant_id, key, name, is_working, is_productive, is_paid, is_billable, is_default, sort_order, status)
   values (v_subs, 'legacy_session', 'Steam session', true, true, true, true, false, 900, 'inactive')
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- Inbound service and callbacks per tenant (after addition 0008i; brief B15, 14 October 2026; the
+-- defaults are to confirm with Kira, README Decision log): Aircall's missed-call reasons with their
+-- labels, whether an unanswered call with the reason counts in the service level and whether it
+-- needs a callback; the service level at 20 seconds, callbacks looked for over 3 days, a call
+-- waiting at most 30 minutes. The source system is the Aircall connections' adapter, a data value.
+-- Both tenants: Invest gets its own Aircall connection on the same company later (README, Open
+-- decisions). Only adds what a tenant does not have yet, so a later change on Configuration >
+-- Sources survives a rerun; every value passes the catalog's check.
+do $$
+begin
+  if to_regclass('cma.telephony_missed_reason') is null then
+    raise notice 'the missed-reason catalog does not exist yet (addition 0008i): rerun this seed after 60_inbound_service.sql';
+    return;
+  end if;
+  insert into cma.telephony_missed_reason (tenant_id, source_system, code, label, counts_in_service_level, needs_callback)
+  select t.id, 'aircall', r.code, r.label, r.counts_in_service_level, true
+  from (values
+    (1, 'out_of_opening_hours',  'Outside opening hours',  false),
+    (2, 'short_abandoned',       'Hung up within 10 s',    false),
+    (3, 'abandoned_in_ivr',      'Hung up in the menu',    true),
+    (4, 'no_available_agent',    'No agent available',     true),
+    (5, 'agents_did_not_answer', 'Agents did not answer',  true),
+    (6, 'unknown',               'Unknown',                true)
+  ) as r(ord, code, label, counts_in_service_level)
+  cross join cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug, r.ord
+  on conflict (tenant_id, source_system, code) do nothing;
+
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, s.key, s.value
+  from (values
+    (1, 'telephony.service_level_seconds',  '20'),
+    (2, 'telephony.callback_lookback_days', '3'),
+    (3, 'telephony.waiting_max_minutes',    '30')
+  ) as s(ord, key, value)
+  cross join cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug, s.ord
   on conflict (tenant_id, key) do nothing;
 end
 $$;

@@ -16,7 +16,7 @@ export function PeriodBar({
   copy,
   keep = {},
 }: {
-  pathname: "/hours" | "/team/hours" | "/reports/dashboard" | "/reports/speed-to-lead" | "/reports/intake";
+  pathname: "/hours" | "/team/hours" | "/reports/dashboard" | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound";
   range: Range;
   period: HoursRange;
   today: string;

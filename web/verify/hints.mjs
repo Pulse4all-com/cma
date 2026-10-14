@@ -1,8 +1,9 @@
 /**
  * Verifier: every header and tile of the reports explains itself (HeaderHint, 12 October 2026).
  * Every column header with visible text on Speed to lead (the summary in each of the four groups
- * and the open deals), Intake and Data quality, and every tile on the Dashboard (the Intake row
- * and the time tiles), carries exactly one info mark: a button with a name, described by a
+ * and the open deals), Intake, Inbound (each of its four groups, addition 0008i) and Data quality,
+ * every tile on the Dashboard (the Intake row and the time tiles), and the Live board's inbound part
+ * (its seven tiles and the missed calls' headers), carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -35,9 +36,9 @@ async function acknowledgeUrgent(subject) {
 for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
-/** Headers and tiles of a page, and what is wrong with their marks */
-async function coverage(p, withHeaders) {
-  return p.evaluate((withHeaders) => {
+/** Headers and tiles of a page (or of one part of it), and what is wrong with their marks */
+async function coverage(p, withHeaders, scope = "main") {
+  return p.evaluate(([withHeaders, scope]) => {
     const out = { headers: 0, tiles: 0, problems: [] };
     const text = (el) => {
       const c = el.cloneNode(true);
@@ -55,18 +56,18 @@ async function coverage(p, withHeaders) {
       if (!t) out.problems.push(`${where}: the hint is empty`);
       if (/[{}]/.test(t)) out.problems.push(`${where}: the hint has an unfilled value: ${t}`);
     };
-    for (const th of withHeaders ? document.querySelectorAll("main th") : []) {
+    for (const th of withHeaders ? document.querySelectorAll(`${scope} th`) : []) {
       const label = text(th);
       if (!label) continue;
       out.headers++;
       checkMark(`header "${label}"`, th);
     }
-    for (const tile of document.querySelectorAll("main [data-tile]")) {
+    for (const tile of document.querySelectorAll(`${scope} [data-tile]`)) {
       out.tiles++;
       checkMark(`tile "${text(tile.querySelector("p") ?? tile)}"`, tile);
     }
     return out;
-  }, withHeaders);
+  }, [withHeaders, scope]);
 }
 
 const cases = [
@@ -81,10 +82,17 @@ const cases = [
   ["manager", "/reports/data-quality", 3, 0],
   ["manager", "/reports/dashboard?range=month", 0, 10],
   ["invest-analyst", "/reports/dashboard?range=month", 0, 6],
+  // Inbound (addition 0008i): eight headers and one per reason that occurs (the fixture has seven)
+  ["manager", "/reports/inbound?range=month&group=day", 14, 0],
+  ["manager", "/reports/inbound?range=month&group=market", 14, 0],
+  ["manager", "/reports/inbound?range=month&group=line", 14, 0],
+  ["manager", "/reports/inbound?range=month&group=hour", 14, 0],
+  // The Live board's inbound part only: its seven tiles and the missed calls' six headers
+  ["supervisor", "/live/board", 6, 7, '[data-testid="inbound-live"]'],
 ];
 let headers = 0;
 let tiles = 0;
-for (const [subject, path, minHeaders, minTiles] of cases) {
+for (const [subject, path, minHeaders, minTiles, scope] of cases) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);
@@ -92,7 +100,7 @@ for (const [subject, path, minHeaders, minTiles] of cases) {
   if (provoke && path.startsWith("/reports/data-quality")) {
     await p.evaluate(() => document.querySelector("main th button[data-header-hint]")?.closest("span")?.remove());
   }
-  const c = await coverage(p, !path.startsWith("/reports/dashboard"));
+  const c = await coverage(p, !path.startsWith("/reports/dashboard"), scope);
   for (const x of c.problems) problems.push(`${subject} ${path}: ${x}`);
   if (c.headers < minHeaders) problems.push(`${subject} ${path}: ${c.headers} headers, expected at least ${minHeaders}`);
   if (c.tiles < minTiles) problems.push(`${subject} ${path}: ${c.tiles} tiles, expected at least ${minTiles}`);

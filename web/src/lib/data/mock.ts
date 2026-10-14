@@ -14,9 +14,14 @@ import type {
   CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus,
   AlertRule, LinkedAccount, MarketConfig, MarketHoliday, OfficeHours, SourceCallOutcome, SourceConnection, SourceDetail, SourceForm, SourceKind,
   SourceLine, SourcePipeline, SourceStore, SourceTag,
+  InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
 } from "./types";
-import { settingsProblem } from "@/lib/sources";
-import { applyConnections, groupSpeedToLead, rangeProblem, type IntakeCounts } from "@/lib/reports";
+import { recordUrlPreview, settingsProblem } from "@/lib/sources";
+import {
+  applyConnections, groupInbound, groupSpeedToLead, inboundCalls, inboundFigures, missedReasonOf, rangeProblem,
+  type InboundLine, type IntakeCounts, type TelephonyCallFixture,
+} from "@/lib/reports";
+import { missedCallbacks, type CallerCall } from "@/lib/live";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -169,6 +174,192 @@ const MOCK_CHECKS: [string, string][] = [
   ["form_without_market", "Counted forms without a market"],
 ];
 
+// ---- Inbound service and callbacks fixture (addition 0008i, brief B15) ----------------------------
+// Fictional calls on the test telephony connection (adapter phonetest): per day of a period, inbound
+// calls on the NL and UK lines, answered after a few seconds or missed for every reason of Pulse4all's
+// seed plus one code nobody configured (the defaults apply); and relative to now, for the Live board,
+// a caller missed twice and then called back, a caller missed twice and not called back, a caller
+// missed four days ago (outside the lookback), an anonymous caller, a call waiting now. Callers are
+// opaque keys standing in for the hash, which the screens never see. The invest-analyst's tenant has
+// no telephony.
+
+const MOCK_TEL_CONNECTION = "00000000-0000-7000-8000-00000000c002";
+const MOCK_TEL_SYSTEM = "phonetest";
+const MOCK_INBOUND_LINES: InboundLine[] = [
+  { connectionId: MOCK_TEL_CONNECTION, lineRef: "l-1", name: "NL sales line (test)", market: "NL", zone: "Europe/Amsterdam", isCounted: true },
+  { connectionId: MOCK_TEL_CONNECTION, lineRef: "l-2", name: "UK sales line (test)", market: "GB", zone: "Europe/London", isCounted: true },
+  { connectionId: MOCK_TEL_CONNECTION, lineRef: "l-3", name: "Test line (test)", market: null, zone: null, isCounted: false },
+];
+/** Pulse4all's seed (02) on the test adapter */
+const MOCK_REASON_SEED: [string, string, boolean][] = [
+  ["out_of_opening_hours", "Outside opening hours", false],
+  ["short_abandoned", "Hung up within 10 s", false],
+  ["abandoned_in_ivr", "Hung up in the menu", true],
+  ["no_available_agent", "No agent available", true],
+  ["agents_did_not_answer", "Agents did not answer", true],
+  ["unknown", "Unknown", true],
+];
+/** The codes the fixture's missed calls carry; abandoned_in_classic has no catalog row */
+const MOCK_MISSED_CODES = ["no_available_agent", "agents_did_not_answer", "abandoned_in_ivr", "short_abandoned", "out_of_opening_hours", "abandoned_in_classic", null];
+const MOCK_SL_SECONDS = 20;
+const MOCK_LOOKBACK_DAYS = 3;
+const MOCK_WAITING_MAX = 30;
+
+function mockReasons(me: Principal): MissedReason[] {
+  const all = (state.missedReasons ??= new Map());
+  let list = all.get(me.tenantId);
+  if (!list) {
+    list = me.tenantId === MOCK_TENANT_2 ? [] : MOCK_REASON_SEED.map(([code, label, sl]) =>
+      ({ sourceSystem: MOCK_TEL_SYSTEM, code, label, countsInServiceLevel: sl, needsCallback: true }));
+    all.set(me.tenantId, list);
+  }
+  return list;
+}
+
+/** The fixture's inbound calls of the business dates in the range (the tenant's start date to today), each in its line's zone */
+function mockPeriodCalls(me: Principal, range: { from: DateKey; to: DateKey }): TelephonyCallFixture[] {
+  const now = Date.now();
+  const out: TelephonyCallFixture[] = [];
+  for (const date of datesOf({ from: addDays(range.from, -1), to: addDays(range.to, 1) }, me)) {
+    for (const line of MOCK_INBOUND_LINES.filter((l) => l.isCounted)) {
+      const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+      const calls = Math.floor(hashOf(`${me.tenantId}:${date}:${line.lineRef}:calls`) * (weekend ? 4 : line.market === "NL" ? 22 : 12));
+      for (let i = 0; i < calls; i++) {
+        const h = (k: string) => hashOf(`${me.tenantId}:${date}:${line.lineRef}:${i}:${k}`);
+        const evening = h("evening") < 0.06;
+        const hour = evening ? 19 + Math.floor(h("hour") * 3) : 8 + Math.floor(h("hour") * 10);
+        const started = localMs(date, `${String(hour).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, line.zone!);
+        if (started > now - 60_000) continue;
+        const answered = !evening && h("answered") < 0.78;
+        const answerSeconds = Math.round(3 + h("speed") ** 2 * 70);
+        const code = evening ? "out_of_opening_hours" : MOCK_MISSED_CODES[Math.floor(h("reason") * MOCK_MISSED_CODES.length)]!;
+        out.push({
+          sourceId: String(800_000_000 + Math.floor(h("id") * 99_000_000)), connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM,
+          direction: "inbound", startedAt: new Date(started).toISOString(),
+          answeredAt: answered ? new Date(started + answerSeconds * 1000).toISOString() : null,
+          endedAt: new Date(started + (answered ? answerSeconds + 120 + Math.floor(h("talk") * 600) : 5 + Math.floor(h("ring") * 90)) * 1000).toISOString(),
+          missedReason: answered ? null : code, lineRef: line.lineRef,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** The fixture's calls relative to now, for the Live board: callers as opaque keys, never shown */
+function mockLiveCalls(now: number): CallerCall[] {
+  const at = (minutesAgo: number) => new Date(now - minutesAgo * 60_000).toISOString();
+  const call = (sourceId: string, direction: "inbound" | "outbound", minutesAgo: number, answerAfter: number | null, ended: boolean,
+    reason: string | null, lineRef: string, caller: string | null): CallerCall => ({
+    sourceId, connectionId: MOCK_TEL_CONNECTION, sourceSystem: MOCK_TEL_SYSTEM, direction, startedAt: at(minutesAgo),
+    answeredAt: answerAfter === null ? null : new Date(now - minutesAgo * 60_000 + answerAfter * 1000).toISOString(),
+    endedAt: ended ? new Date(now - minutesAgo * 60_000 + ((answerAfter ?? 0) + 60) * 1000).toISOString() : null,
+    missedReason: reason, lineRef, caller,
+  });
+  const answered: CallerCall[] = Array.from({ length: 16 }, (_, k) =>
+    call(`9100000${String(k).padStart(2, "0")}`, "inbound", 7 + k * 23, 4 + ((k * 7) % 31), true, null, k % 3 === 0 ? "l-2" : "l-1", `caller-ok-${k}`));
+  return [
+    ...answered,
+    // missed twice, then called back (an outbound attempt that did not connect): not listed
+    call("910000101", "inbound", 180, null, true, "no_available_agent", "l-1", "caller-a"),
+    call("910000102", "inbound", 130, null, true, "agents_did_not_answer", "l-1", "caller-a"),
+    call("910000103", "outbound", 25, null, true, null, "l-1", "caller-a"),
+    // missed once, waiting for a callback
+    call("910000201", "inbound", 95, null, true, "abandoned_in_ivr", "l-2", "caller-b"),
+    // missed twice and not called back: listed once, missed 2 times
+    call("910000301", "inbound", 300, null, true, "short_abandoned", "l-1", "caller-c"),
+    call("910000302", "inbound", 40, null, true, "no_available_agent", "l-1", "caller-c"),
+    // missed four days ago: outside the lookback
+    call("910000401", "inbound", 4 * 24 * 60, null, true, "no_available_agent", "l-1", "caller-d"),
+    // missed outside opening hours last night (Pulse4all calls these back too)
+    call("910000501", "inbound", 14 * 60, null, true, "out_of_opening_hours", "l-1", "caller-e"),
+    // a code nobody configured: the defaults apply
+    call("910000601", "inbound", 120, null, true, "abandoned_in_classic", "l-2", "caller-f"),
+    // missed, then called in again and answered: not listed
+    call("910000701", "inbound", 200, null, true, "no_available_agent", "l-1", "caller-g"),
+    call("910000702", "inbound", 60, 9, true, null, "l-1", "caller-g"),
+    // anonymous: counted, never listed
+    call("910000801", "inbound", 70, null, true, "no_available_agent", "l-1", null),
+    call("910000802", "inbound", 32, null, true, null, "l-2", null),
+    // waiting now
+    call("910000901", "inbound", 2, null, false, null, "l-1", "caller-h"),
+  ];
+}
+
+/** Office seconds between two instants in a fixture market: Monday to Friday 09:00 to 17:00 in the market's zone */
+function mockBusinessSeconds(market: string, from: Instant, toMs: number): number | null {
+  const zone = market === "NL" ? "Europe/Amsterdam" : market === "GB" ? "Europe/London" : market === "DE" ? "Europe/Berlin" : null;
+  if (!zone) return null;
+  let total = 0;
+  for (let d = dateKeyInZone(from, zone); d <= dateKeyInZone(new Date(toMs), zone); d = addDays(d, 1)) {
+    if ([0, 6].includes(new Date(`${d}T12:00:00Z`).getUTCDay())) continue;
+    const opens = Math.max(localMs(d, "09:00", zone), Date.parse(from));
+    const closes = Math.min(localMs(d, "17:00", zone), toMs);
+    if (closes > opens) total += Math.floor((closes - opens) / 1000);
+  }
+  return total;
+}
+
+function mockCallUrl(me: Principal, connectionId: string, sourceId: string): string | null {
+  const c = seedIntakeConfig(me).sources.find((x) => x.connection.id === connectionId)?.connection;
+  const template = c?.settings.record_url_call;
+  return c && typeof template === "string" ? recordUrlPreview(template, c.settings, c.accountId, sourceId) : null;
+}
+
+function mockInboundService(me: Principal, range: { from: DateKey; to: DateKey }, group: InboundGroup): InboundService {
+  const telephony = connectionsOf(me).telephony;
+  const calls = telephony ? inboundCalls(mockPeriodCalls(me, range), MOCK_INBOUND_LINES, mockReasons(me), me.timeZone, MOCK_WAITING_MAX, Date.now()) : [];
+  const { rows, total } = groupInbound(calls, range.from, range.to, group, MOCK_SL_SECONDS);
+  return { ...range, group, telephony, serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX, reasons: mockReasons(me), rows, total };
+}
+
+/** A telephony connection's missed reasons: its catalog rows plus the codes its fixture calls carry, as cma.connection_missed_reasons */
+function mockSourceReasons(me: Principal, nowMs: number): { reasons: SourceMissedReason[]; sampleCallId: string | null } {
+  const today = mockToday(me);
+  const calls = [...mockPeriodCalls(me, { from: addDays(today, -13), to: today }), ...mockLiveCalls(nowMs)];
+  const missed = inboundCalls(calls, MOCK_INBOUND_LINES, [], me.timeZone, MOCK_WAITING_MAX, nowMs).filter((c) => c.reasonCode !== null);
+  const catalog = mockReasons(me).filter((r) => r.sourceSystem === MOCK_TEL_SYSTEM);
+  const codes = [...new Set([...catalog.map((r) => r.code), ...missed.map((c) => c.reasonCode!)])].sort();
+  const reasons = codes.map((code) => {
+    const r = missedReasonOf(MOCK_TEL_SYSTEM, code, catalog);
+    const seen = missed.filter((c) => c.reasonCode === code);
+    return {
+      code, label: r.label, countsInServiceLevel: r.countsInServiceLevel, needsCallback: r.needsCallback,
+      inCatalog: catalog.some((x) => x.code === code), seenCalls: seen.length,
+      lastSeenAt: seen.reduce<string | null>((m, c) => (m === null || c.startedAt > m ? c.startedAt : m), null),
+    };
+  });
+  const newest = calls.reduce<TelephonyCallFixture | null>((m, c) => (m === null || c.startedAt > m.startedAt ? c : m), null);
+  return { reasons, sampleCallId: newest?.sourceId ?? null };
+}
+
+function noFigures(): InboundFigures {
+  return { offered: 0, answered: 0, unanswered: 0, waiting: 0, answeredWithinTarget: 0, serviceLevelBase: 0, serviceLevelPct: null,
+    avgAnswerSeconds: null, p80AnswerSeconds: null, unansweredByReason: {} };
+}
+
+function mockInboundNow(me: Principal): InboundNow {
+  if (!connectionsOf(me).telephony) return { telephony: false, today: null, callbacks: [], anonymousCount: 0, lookbackDays: MOCK_LOOKBACK_DAYS };
+  const now = Date.now();
+  const today = mockToday(me);
+  const midnight = localMs(today, "00:00", me.timeZone);
+  const live = mockLiveCalls(now);
+  const reasons = mockReasons(me);
+  const todays = inboundCalls(live.filter((c) => Date.parse(c.startedAt) >= midnight), MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now);
+  const waiting = inboundCalls(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, now).filter((c) => c.isWaiting);
+  const { rows, anonymousCount } = missedCallbacks(live, MOCK_INBOUND_LINES, reasons, me.timeZone, MOCK_WAITING_MAX, MOCK_LOOKBACK_DAYS, now,
+    mockBusinessSeconds, (connectionId, sourceId) => mockCallUrl(me, connectionId, sourceId));
+  const longest = waiting.reduce<number | null>((m, c) => Math.max(m ?? 0, Math.floor((now - Date.parse(c.startedAt)) / 1000)), null);
+  return {
+    telephony: true,
+    today: { ...(todays.length ? inboundFigures(todays, MOCK_SL_SECONDS) : noFigures()), date: today, waitingNow: waiting.length,
+      longestWaitingSeconds: longest, serviceLevelSeconds: MOCK_SL_SECONDS, waitingMaxMinutes: MOCK_WAITING_MAX },
+    callbacks: rows,
+    anonymousCount,
+    lookbackDays: MOCK_LOOKBACK_DAYS,
+  };
+}
+
 /** Same answer as the database for a caller without workday.team */
 function assertTeam(me: Principal): void {
   if (!me.permissions.includes("workday.team")) throw new CmaDbError("CMA06", "not permitted");
@@ -241,6 +432,8 @@ type MockState = {
   messages: Map<string, MockMessage>; messagesSeeded: Set<string>; lastSyntheticAlertAt: number; messageSeq: number;
   /** Sources, markets, rules and linked accounts per tenant (addition 0008e), seeded on first use */
   intakeConfig?: Map<string, MockIntakeConfig>;
+  /** The missed-reason catalog per tenant (addition 0008i), seeded on first use */
+  missedReasons?: Map<string, MissedReason[]>;
 };
 const g = globalThis as unknown as { __cmaMock?: MockState };
 const state: MockState = (g.__cmaMock ??= {
@@ -943,7 +1136,8 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
     pipelines: 0, forms: 0, callOutcomes: 0, fields: 0, lines: 0, tags: 0, storeHandle: null,
   };
   return {
-    tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {}, ...o,
+    tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
+    missedReasons: [], ...o,
   };
 }
 
@@ -982,7 +1176,7 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
         { lineRef: "l-3", name: "Test line (test)", digits: null, market: null, isCounted: false, isActive: true }],
       tags: [{ tagRef: "t-1", name: "Quote", isCounted: true, isActive: true }, { tagRef: "t-2", name: "Courtesy call", isCounted: true, isActive: true },
         { tagRef: "t-3", name: "Internal", isCounted: false, isActive: true }],
-    }));
+    }, { record_url_call: "https://phone.example.com/calls/{id}" }));
     sources.push(mockSource(t, 3, "shoptest", "Shop NL (test)", "shop-nl-test.example.com", "commerce", {
       store: { handle: "shop-nl-test", name: "Shop NL (test)", market: "NL", currency: "EUR", timeZone: "Europe/Amsterdam" },
     }, { api_version: "2026-10", client_id: "test-client-id" }));
@@ -1865,7 +2059,10 @@ export const mockData: CmaData = {
     const x = sourceOf(me, id);
     const { tenantId: _t, ...detail } = structuredClone(x);
     void _t;
-    return { ...detail, connection: sourceRow(x) };
+    if (x.connection.adapter !== MOCK_TEL_SYSTEM) return { ...detail, connection: sourceRow(x) };
+    // the telephony connection's missed reasons and newest call id (addition 0008i), from the call fixture
+    const { reasons, sampleCallId } = mockSourceReasons(me, Date.now());
+    return { ...detail, connection: sourceRow(x), missedReasons: reasons, sampleIds: { ...detail.sampleIds, ...(sampleCallId ? { call: sampleCallId } : {}) } };
   },
 
   async setSourceConnection(me, id, input) {
@@ -1924,6 +2121,19 @@ export const mockData: CmaData = {
     const t = x.tags.find((y) => y.tagRef === input.tagRef);
     if (t) t.isCounted = input.isCounted;
     else x.tags.push({ tagRef: input.tagRef, name: input.tagRef, isCounted: input.isCounted, isActive: true } satisfies SourceTag);
+  },
+
+  async setSourceMissedReason(me, id, input) {
+    const x = sourceOf(me, id);
+    const kinds = x.connection.kind !== null ? [x.connection.kind] : heldKindsOf(x);
+    if (kinds.length > 0 && !kinds.includes("telephony")) throw new CmaDbError("CMA04", "missed reasons belong to a telephony connection");
+    const code = input.code.trim();
+    const label = input.label.trim();
+    if (code.length < 1 || code.length > 60 || label.length < 1 || label.length > 100) throw new CmaDbError("CMA04", "invalid missed reason");
+    const list = mockReasons(me);
+    const cur = list.find((r) => r.sourceSystem === x.connection.adapter && r.code === code);
+    if (cur) Object.assign(cur, { label, countsInServiceLevel: input.countsInServiceLevel, needsCallback: input.needsCallback });
+    else list.push({ sourceSystem: x.connection.adapter, code, label, countsInServiceLevel: input.countsInServiceLevel, needsCallback: input.needsCallback });
   },
 
   async setSourceStore(me, id, store: SourceStore) {
@@ -2092,6 +2302,18 @@ export const mockData: CmaData = {
     // The main tenant has something to fix in every check; the second tenant has nothing yet
     const main = me.tenantId === MOCK_PRINCIPAL.tenantId;
     return MOCK_CHECKS.map(([key, description], i) => ({ key, description, total: main ? 1 + Math.floor(hashOf(key) * 40) + (i === 3 ? 3 : 0) : 0 }));
+  },
+
+  async getInboundService(me, range, group): Promise<InboundService> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    assertReportRange(range);
+    if (!["day", "market", "line", "hour"].includes(group)) throw new CmaDbError("CMA04", "group by day, market, line or hour");
+    return mockInboundService(me, range, group);
+  },
+
+  async getInboundNow(me): Promise<InboundNow> {
+    assertLive(me);
+    return mockInboundNow(me);
   },
 
   async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {

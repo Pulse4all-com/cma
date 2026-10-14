@@ -11,9 +11,10 @@
  * that is not there.
  */
 import type {
-  DataQualityCheck, IntakeDay, SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow,
+  DataQualityCheck, DateKey, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason, SourceConnections,
+  SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow,
 } from "./data/types";
-import { daysBetween, fmtMinutes } from "./time.ts";
+import { dateKeyInZone, daysBetween, fmtMinutes, hourInZone } from "./time.ts";
 
 /** Every report function answers at most 92 days per request; the app refuses a longer range too */
 export const MAX_REPORT_DAYS = 92;
@@ -56,7 +57,7 @@ export function percentileCont(values: number[], p: number): number | null {
 }
 
 /** round(x, 1) as numeric rounds: half away from zero */
-function round1(x: number): number {
+export function round1(x: number): number {
   return Math.sign(x) * Math.round(Math.abs(x) * 10 + 1e-9) / 10;
 }
 
@@ -269,6 +270,275 @@ export function fmtPct(pct: number | null, locale: string): string {
   return pct > 0 && pct < 0.5 ? `< ${f.format(0.01)}` : f.format(pct / 100);
 }
 
+// ---- Inbound service (addition 0008i, brief B15) -------------------------------------------------
+//
+// The figures come from the database (cma.inbound_service, cma.inbound_today); the functions below
+// mirror its definitions for the mock and for verify/reports.mjs, and arrange the rows for the screen.
+// No call here carries a number, a name or the caller's hash.
+
+export const INBOUND_GROUPS: readonly InboundGroup[] = ["day", "market", "line", "hour"];
+
+/** The group named in a query, or null when it is none of the four */
+export function parseInboundGroup(value: unknown): InboundGroup | null {
+  return typeof value === "string" && (INBOUND_GROUPS as readonly string[]).includes(value) ? (value as InboundGroup) : null;
+}
+
+/** The group G moves to: day, market, line, hour, then day again */
+export function nextInboundGroup(group: InboundGroup): InboundGroup {
+  return INBOUND_GROUPS[(INBOUND_GROUPS.indexOf(group) + 1) % INBOUND_GROUPS.length]!;
+}
+
+/** The code of an unanswered inbound call without a reason */
+export const UNKNOWN_REASON = "unknown";
+
+/**
+ * A reason as the catalog says, or the defaults for a code without a row: the code as label, in the
+ * service level and needing a callback, so a new code of the telephony system never disappears
+ */
+export function missedReasonOf(sourceSystem: string, code: string, catalog: readonly MissedReason[]): MissedReason {
+  return catalog.find((r) => r.sourceSystem === sourceSystem && r.code === code)
+    ?? { sourceSystem, code, label: code, countsInServiceLevel: true, needsCallback: true };
+}
+
+/** One telephony call as the fixture and the verifier hold it: what the database stores, without the hash */
+export interface TelephonyCallFixture {
+  sourceId: string;
+  connectionId: string;
+  sourceSystem: string;
+  direction: "inbound" | "outbound";
+  startedAt: Instant;
+  answeredAt: Instant | null;
+  endedAt: Instant | null;
+  missedReason: string | null;
+  lineRef: string | null;
+  deleted?: boolean;
+}
+
+/** A line of the catalog: its name and market; a line without a row counts and has neither */
+export interface InboundLine {
+  connectionId: string;
+  lineRef: string;
+  name: string;
+  /** A catalog market code, or null */
+  market: string | null;
+  /** The market's zone, or null for a line without a market */
+  zone: string | null;
+  isCounted: boolean;
+}
+
+/** One inbound call as cma.inbound_calls_of gives it */
+export interface InboundCall {
+  sourceId: string;
+  connectionId: string;
+  lineKey: string;
+  lineName: string | null;
+  market: string;
+  date: DateKey;
+  hour: number;
+  isAnswered: boolean;
+  isWaiting: boolean;
+  answerSeconds: number | null;
+  /** For an unanswered call only: its reason ("unknown" without one) */
+  reasonCode: string | null;
+  reasonLabel: string | null;
+  needsCallback: boolean | null;
+  inServiceLevel: boolean;
+  startedAt: Instant;
+}
+
+/**
+ * The inbound calls of a fixture as cma.inbound_calls_of classifies them: inbound, not deleted, with a
+ * start, on a counted line (a line not in the catalog counts); the zone of the line's market, else the
+ * tenant's; waiting while not answered, not ended and younger than waitingMaxMinutes
+ */
+export function inboundCalls(
+  calls: readonly TelephonyCallFixture[], lines: readonly InboundLine[], catalog: readonly MissedReason[],
+  tenantZone: string, waitingMaxMinutes: number, nowMs: number,
+): InboundCall[] {
+  const out: InboundCall[] = [];
+  for (const c of calls) {
+    if (c.direction !== "inbound" || c.deleted || !c.startedAt) continue;
+    const line = lines.find((l) => l.connectionId === c.connectionId && l.lineRef === c.lineRef);
+    if (line && !line.isCounted) continue;
+    const zone = line?.zone ?? tenantZone;
+    const started = Date.parse(c.startedAt);
+    const isAnswered = c.answeredAt !== null;
+    const isWaiting = !isAnswered && c.endedAt === null && started >= nowMs - Math.max(0, waitingMaxMinutes) * 60_000;
+    const unanswered = !isAnswered && !isWaiting;
+    const reason = unanswered ? missedReasonOf(c.sourceSystem, c.missedReason?.trim() || UNKNOWN_REASON, catalog) : null;
+    out.push({
+      sourceId: c.sourceId,
+      connectionId: c.connectionId,
+      lineKey: `${c.connectionId}:${c.lineRef ?? ""}`,
+      lineName: line?.name ?? c.lineRef,
+      market: line?.market ?? "unknown",
+      date: dateKeyInZone(c.startedAt, zone),
+      hour: hourInZone(c.startedAt, zone),
+      isAnswered,
+      isWaiting,
+      answerSeconds: isAnswered ? Math.max(0, (Date.parse(c.answeredAt!) - started) / 1000) : null,
+      reasonCode: reason?.code ?? null,
+      reasonLabel: reason?.label ?? null,
+      needsCallback: reason?.needsCallback ?? null,
+      inServiceLevel: isAnswered || (reason?.countsInServiceLevel ?? false),
+      startedAt: c.startedAt,
+    });
+  }
+  return out;
+}
+
+/** The measures of a set of calls, as the database computes them */
+export function inboundFigures(calls: readonly InboundCall[], serviceLevelSeconds: number): InboundFigures {
+  const n = Math.max(0, serviceLevelSeconds);
+  const answers = calls.filter((c) => c.isAnswered).map((c) => c.answerSeconds!);
+  const within = answers.filter((s) => s <= n).length;
+  const base = calls.filter((c) => c.inServiceLevel).length;
+  const p80 = percentileCont(answers, 0.8);
+  const byReason: Record<string, number> = {};
+  for (const c of calls) if (c.reasonCode !== null) byReason[c.reasonCode] = (byReason[c.reasonCode] ?? 0) + 1;
+  return {
+    offered: calls.length,
+    answered: answers.length,
+    unanswered: calls.filter((c) => !c.isAnswered && !c.isWaiting).length,
+    waiting: calls.filter((c) => c.isWaiting).length,
+    answeredWithinTarget: within,
+    serviceLevelBase: base,
+    serviceLevelPct: base === 0 ? null : round1((100 * within) / base),
+    avgAnswerSeconds: answers.length === 0 ? null : round1(answers.reduce((a, b) => a + b, 0) / answers.length),
+    p80AnswerSeconds: p80 === null ? null : round1(p80),
+    unansweredByReason: byReason,
+  };
+}
+
+/** The key and label of a call's group, as cma.inbound_service_of groups */
+function inboundGroupOf(c: InboundCall, group: InboundGroup): [string, string | null] {
+  switch (group) {
+    case "day": return [c.date, c.date];
+    case "market": return [c.market, c.market];
+    case "line": return [c.lineKey, c.lineName];
+    case "hour": { const h = String(c.hour).padStart(2, "0"); return [h, h]; }
+  }
+}
+
+/** The calls of business dates from..to grouped as cma.inbound_service groups them (lines by name), with the total */
+export function groupInbound(
+  calls: readonly InboundCall[], from: DateKey, to: DateKey, group: InboundGroup, serviceLevelSeconds: number,
+): { rows: InboundServiceRow[]; total: InboundFigures } {
+  const inRange = calls.filter((c) => c.date >= from && c.date <= to);
+  const groups = new Map<string, { label: string | null; calls: InboundCall[] }>();
+  for (const c of inRange) {
+    const [key, label] = inboundGroupOf(c, group);
+    const g = groups.get(key) ?? { label, calls: [] };
+    g.calls.push(c);
+    groups.set(key, g);
+  }
+  const rows = [...groups.entries()].map(([groupKey, g]) => ({ groupKey, groupLabel: g.label, ...inboundFigures(g.calls, serviceLevelSeconds) }));
+  rows.sort((a, b) =>
+    (group === "line" ? (a.groupLabel ?? "\uffff").localeCompare(b.groupLabel ?? "\uffff") : 0) || (a.groupKey < b.groupKey ? -1 : a.groupKey > b.groupKey ? 1 : 0));
+  return { rows, total: inboundFigures(inRange, serviceLevelSeconds) };
+}
+
+/** Unanswered calls as a share of the calls with an outcome (answered or unanswered), 0 to 100; null without one */
+export function unansweredPct(f: Pick<InboundFigures, "answered" | "unanswered">): number | null {
+  const outcome = f.answered + f.unanswered;
+  return outcome === 0 ? null : round1((100 * f.unanswered) / outcome);
+}
+
+/**
+ * The neutral series for missed reasons, in order (palette tokens only, written out so Tailwind finds
+ * them): the blues and greys of the palette, never a red, a rose, the warning amber or the success
+ * green, because a reason is a category, not a verdict. Answered calls are Leaf Green next to them.
+ * Pulse4all-Style.md is not in the repository; this order is the CMA's until Martin confirms the style's.
+ */
+export const REASON_SERIES: readonly string[] = ["bg-p4a-deepblue", "bg-p4a-lightblue", "bg-p4a-inkt", "bg-p4a-grey", "bg-p4a-denim", "bg-p4a-border"];
+export const ANSWERED_CLASS = "bg-p4a-green";
+export const WAITING_CLASS = "bg-p4a-bgblue-dark";
+
+/** A reason as a column of the report: its code, its label from the catalog and its colour */
+export interface ReasonColumn {
+  code: string;
+  label: string;
+  total: number;
+  className: string;
+  countsInServiceLevel: boolean;
+}
+
+/**
+ * One column per reason that occurs in the rows, the most frequent first (then by code), labelled from
+ * the catalog: a code means the same in every telephony system of a tenant, and the first source
+ * system's row gives its label; without a row the code is its own label ("unknown" as `unknownLabel`)
+ */
+export function reasonColumns(rows: readonly Pick<InboundFigures, "unansweredByReason">[], catalog: readonly MissedReason[], unknownLabel: string): ReasonColumn[] {
+  const totals = new Map<string, number>();
+  for (const r of rows) for (const [code, n] of Object.entries(r.unansweredByReason)) if (n > 0) totals.set(code, (totals.get(code) ?? 0) + n);
+  const sorted = [...catalog].sort((a, b) => a.sourceSystem.localeCompare(b.sourceSystem) || a.code.localeCompare(b.code));
+  return [...totals.entries()]
+    .sort(([a, x], [b, y]) => y - x || (a < b ? -1 : a > b ? 1 : 0))
+    .map(([code, total], i) => {
+      const row = sorted.find((r) => r.code === code);
+      return {
+        code, total, className: REASON_SERIES[i % REASON_SERIES.length]!,
+        label: row?.label ?? (code === UNKNOWN_REASON ? unknownLabel : code),
+        countsInServiceLevel: row?.countsInServiceLevel ?? true,
+      };
+    });
+}
+
+/** A row's inline bar: answered, then each reason in the columns' order, then waiting, as shares of the offered calls */
+export function inboundBar(f: InboundFigures, columns: readonly ReasonColumn[]): { key: string; share: number; count: number; className: string }[] {
+  if (f.offered === 0) return [];
+  const parts = [
+    { key: "answered", count: f.answered, className: ANSWERED_CLASS },
+    ...columns.map((c) => ({ key: c.code, count: f.unansweredByReason[c.code] ?? 0, className: c.className })),
+    { key: "waiting", count: f.waiting, className: WAITING_CLASS },
+  ];
+  return parts.filter((p) => p.count > 0).map((p) => ({ ...p, share: p.count / f.offered }));
+}
+
+/** What a group's label means on screen; the page turns it into words */
+export type InboundGroupDisplay =
+  | { kind: "date"; date: DateKey }
+  | { kind: "text"; text: string }
+  | { kind: "hour"; hour: string }
+  | { kind: "unknownMarket" }
+  | { kind: "unknownLine" };
+
+export function inboundGroupDisplay(row: Pick<InboundServiceRow, "groupKey" | "groupLabel">, group: InboundGroup): InboundGroupDisplay {
+  switch (group) {
+    case "day": return { kind: "date", date: row.groupKey };
+    case "market": return row.groupKey === "unknown" ? { kind: "unknownMarket" } : { kind: "text", text: row.groupKey };
+    case "line": return row.groupLabel ? { kind: "text", text: row.groupLabel } : { kind: "unknownLine" };
+    case "hour": return { kind: "hour", hour: row.groupKey };
+  }
+}
+
+/** Seconds to answer: "17 s" under a minute, "1m 05s" from a minute, a dash for none */
+export function fmtAnswerSeconds(seconds: number | null, locale: string): string {
+  if (seconds === null) return "–";
+  if (seconds < 59.5) return `${new Intl.NumberFormat(intlLocale[locale] ?? locale, { maximumFractionDigits: 0 }).format(seconds)} s`;
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
+}
+
+/**
+ * What no inbound answer may hold (brief B15: no number, no name, never the hash): a key that names a
+ * hash, a phone, an email, digits, a caller or a contact, a key with "name" other than a line's, a
+ * string of 64 hex characters (a hash) or an E.164 number. Answers the paths it found.
+ */
+export function personalDataIn(value: unknown, path = "$"): string[] {
+  if (typeof value === "string") {
+    return /^[0-9a-f]{64}$/i.test(value) || /^\+[1-9][0-9]{6,14}$/.test(value.replace(/[\s().-]/g, "")) ? [path] : [];
+  }
+  if (Array.isArray(value)) return value.flatMap((v, i) => personalDataIn(v, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([k, v]) => {
+      const bad = /hash|phone|e164|email|digits|counterpart|caller|contact/i.test(k) || (/name/i.test(k) && k !== "lineName");
+      return [...(bad ? [`${path}.${k}`] : []), ...personalDataIn(v, `${path}.${k}`)];
+    });
+  }
+  return [];
+}
+
 // ---- Header hints ------------------------------------------------------------------------------
 
 /** The speed-to-lead target in whole business minutes, from the rows (the tenant's setting); null without rows */
@@ -279,10 +549,16 @@ export function targetMinutesOf(rows: Pick<SpeedToLeadRow, "targetSeconds">[]): 
 
 /**
  * A header hint's text with its values filled in: {hours} the office hours (per market, tenant
- * configuration) and {target} the speed-to-lead target from the tenant's settings, a dash when the
- * period has no rows to carry it. The copy never holds either value.
+ * configuration), {target} the speed-to-lead target, and since 0008i {seconds} the service level's
+ * seconds, {days} the callback lookback and {minutes} the longest a call counts as waiting, each from
+ * the tenant's settings and a dash when unknown. The copy never holds any of these values.
  */
-export function fillHint(text: string, values: { hours: string; target?: number | null }, locale: string): string {
-  const target = values.target === null || values.target === undefined ? "–" : fmtCount(values.target, locale);
-  return text.replaceAll("{hours}", values.hours).replaceAll("{target}", target);
+export function fillHint(
+  text: string,
+  values: { hours: string; target?: number | null; seconds?: number | null; days?: number | null; minutes?: number | null },
+  locale: string,
+): string {
+  const num = (x: number | null | undefined) => (x === null || x === undefined ? "–" : fmtCount(x, locale));
+  return text.replaceAll("{hours}", values.hours).replaceAll("{target}", num(values.target))
+    .replaceAll("{seconds}", num(values.seconds)).replaceAll("{days}", num(values.days)).replaceAll("{minutes}", num(values.minutes));
 }

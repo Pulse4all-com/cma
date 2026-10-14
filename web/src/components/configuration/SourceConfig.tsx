@@ -4,7 +4,8 @@
  * One connection's page (Sources, addition 0008e): the connection itself (name, vendor, kind, account,
  * status, secret names as names only), its non-secret settings with a live preview of a record link,
  * and the sections its kind has: pipelines, forms, call outcomes and fields for customer records; lines
- * and tags for telephony; the store for a shop. Every write goes to a route that calls the database
+ * and tags for telephony, and since addition 0008i its missed-call reasons (label, in the service level,
+ * needs a callback); the store for a shop. Every write goes to a route that calls the database
  * function owning the value, and every answer re-reads the page, so a table shows the database's state.
  * Nothing here names a vendor, a pipeline, a form, a market or an outcome.
  *
@@ -14,10 +15,11 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceSettings, SourceStore } from "@/lib/data";
+import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore } from "@/lib/data";
 import {
   coerceSettingValue, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
+import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
 import { Badge, Button, Card, Keycap } from "../primitives";
@@ -29,7 +31,9 @@ const EXAMPLE_ID = "123456789";
 
 type Row = { id: number; key: string; text: string; isNew: boolean };
 
-export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale }) {
+export function SourceConfig({ detail, markets, copy, locale, timeZone }: {
+  detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+}) {
   const c = copy.configuration;
   const t = copy.configSources;
   const conn = detail.connection;
@@ -71,6 +75,10 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
   // switching a line off removes its stored calls (addition 0008f), so it asks first, on Cancel (an irreversible
   // confirmation); the box stays ticked until the save is confirmed; switching on does not ask
   const [lineOff, setLineOff] = useState<SourceLine | null>(null);
+  // a missed-call reason's label (addition 0008i); its two switches save at once from the table
+  const [reasonEdit, setReasonEdit] = useState<{ reason: SourceMissedReason; opened: number } | null>(null);
+  const [reasonLabel, setReasonLabel] = useState("");
+  const [reasonProblem, setReasonProblem] = useState<string | null>(null);
 
   async function rename() {
     const v = name.trim();
@@ -107,6 +115,19 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
     if (lead.length > 60) return setFormProblem(t.ruleLeadSourceProblem);
     const body = { forms: [{ formId: formEdit.form.formId, isCounted: formDraft.isCounted, leadSource: lead || null, market: formDraft.market || null }] };
     if (await save(() => send("PUT", `${base}/forms`, body))) setFormEdit(null);
+  }
+
+  /** One reason as it would be saved: the current label and switches, with the change given */
+  function sendReason(r: SourceMissedReason, change: Partial<Pick<SourceMissedReason, "label" | "countsInServiceLevel" | "needsCallback">>) {
+    const body = { code: r.code, label: r.label, countsInServiceLevel: r.countsInServiceLevel, needsCallback: r.needsCallback, ...change };
+    return save(() => send("PUT", `${base}/missed-reasons`, body));
+  }
+
+  async function saveReasonLabel() {
+    if (!reasonEdit) return;
+    const v = reasonLabel.trim();
+    if (v.length === 0 || v.length > 100) return setReasonProblem(t.reasonLabelProblem);
+    if (await sendReason(reasonEdit.reason, { label: v })) setReasonEdit(null);
   }
 
   async function saveStore() {
@@ -184,6 +205,7 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
       {/* ---- settings ---- */}
       <Card title={t.sectionSettings}>
         <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.settingsIntro} {t.settingsNever}</p>
+        {sections.includes("missedReasons") ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="call-link-hint">{t.callLinkHint}</p> : null}
         <table className="w-full border-collapse text-body" data-testid="source-settings">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr><th className={`${th} w-72`}>{t.settingKey}</th><th className={th}>{t.settingValue}</th><th className={th}></th></tr>
@@ -428,6 +450,52 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         </Card>
       ) : null}
 
+      {/* ---- missed-call reasons (addition 0008i) ---- */}
+      {sections.includes("missedReasons") ? (
+        <Card title={t.sectionMissedReasons}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.missedReasonsIntro}</p>
+          {detail.missedReasons.length === 0 ? <p className="text-body text-p4a-muted">{t.missedReasonsEmpty}</p> : (
+            <table className="w-full border-collapse text-body" data-testid="source-missed-reasons">
+              <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                <tr>
+                  <th className={th}>{t.reasonCode}{hint(t.reasonCode, t.hintReasonCode)}</th>
+                  <th className={th}>{t.reasonLabel}{hint(t.reasonLabel, t.hintReasonLabel)}</th>
+                  <th className={th}>{t.reasonInServiceLevel}{hint(t.reasonInServiceLevel, t.hintReasonInServiceLevel)}</th>
+                  <th className={th}>{t.reasonNeedsCallback}{hint(t.reasonNeedsCallback, t.hintReasonNeedsCallback)}</th>
+                  <th className={`${th} text-right`}>{t.reasonSeen}{hint(t.reasonSeen, t.hintReasonSeen)}</th>
+                  <th className={th}>{t.reasonLastSeen}</th>
+                  <th className={th}><span className="sr-only">{t.editReason}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.missedReasons.map((r) => (
+                  <tr key={r.code}>
+                    <td className={td}>
+                      <span className="text-small">{r.code}</span>
+                      {r.inCatalog ? null : <span className="ml-2"><Badge tone="neutral">{t.reasonDefaults}</Badge></span>}
+                    </td>
+                    <td className={`${td} font-semibold`}>{r.label}</td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.reasonInServiceLevel}: ${r.label}`} checked={r.countsInServiceLevel}
+                        onChange={(e) => sendReason(r, { countsInServiceLevel: e.target.checked })} />
+                    </td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4" aria-label={`${t.reasonNeedsCallback}: ${r.label}`} checked={r.needsCallback}
+                        onChange={(e) => sendReason(r, { needsCallback: e.target.checked })} />
+                    </td>
+                    <td className={`${td} tabular-nums text-right`}>{r.seenCalls}</td>
+                    <td className={`${td} whitespace-nowrap tabular-nums text-small`}>{r.lastSeenAt ? fmtDate(dateKeyInZone(r.lastSeenAt, timeZone), locale, "compact") : "–"}</td>
+                    <td className={`${td} text-right`}>
+                      <Button variant="text" size="sm" onClick={() => { setReasonLabel(r.label); setReasonProblem(null); setReasonEdit({ reason: r, opened: tick() }); }}>{c.edit}</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : null}
+
       {/* ---- store ---- */}
       {sections.includes("store") ? (
         <Card title={t.sectionStore}>
@@ -494,6 +562,18 @@ export function SourceConfig({ detail, markets, copy }: { detail: SourceDetail; 
         <OutcomeRuleDialog key={ruleOpen.opened} outcomes={detail.callOutcomes} copy={copy} busy={state.kind === "saving"}
           onClose={() => setRuleOpen(null)}
           onSave={async (changes) => { if (await save(() => send("PUT", `${base}/call-outcomes`, { outcomes: changes }))) setRuleOpen(null); }} />
+      ) : null}
+
+      {reasonEdit ? (
+        <FormDialog key={reasonEdit.opened} title={`${t.editReason}: ${reasonEdit.reason.code}`} onSave={saveReasonLabel} onClose={() => setReasonEdit(null)} busy={state.kind === "saving"} saveLabel={c.save} cancelLabel={c.cancel}>
+          <label className={label}>
+            {t.reasonLabel}
+            <input className={field} value={reasonLabel} maxLength={100} onChange={(e) => setReasonLabel(e.target.value)} />
+            <span className="font-normal text-caption text-p4a-muted">{t.hintReasonLabel}</span>
+          </label>
+          {reasonProblem ? <p className="text-small text-p4a-error">{reasonProblem}</p> : null}
+          <SaveNote state={state} c={c} />
+        </FormDialog>
       ) : null}
 
       {storeEdit !== null ? (

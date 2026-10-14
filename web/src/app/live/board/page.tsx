@@ -1,4 +1,6 @@
+import { InboundLive } from "@/components/InboundLive";
 import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type TeamNowPerson, type TodayShift } from "@/lib/data";
@@ -27,7 +29,9 @@ function shiftLine(
  * manager and analytics in the default ladder); the database checks that permission again on
  * every read (CMA06). Today only, Postgres only (the realtime service comes later): the page
  * reads once and the client re-reads it every 10 seconds while the tab is visible. Staff data,
- * never customer data, and no ranking.
+ * never customer data, and no ranking. Since addition 0008i it opens with today's inbound tiles and
+ * the missed calls not called back (InboundLive): line names, codes and counts, never a number,
+ * a name or the caller's hash.
  */
 export default async function LiveBoardPage() {
   const r = await resolve();
@@ -49,8 +53,8 @@ export default async function LiveBoardPage() {
 
   // Four reads: the team now, the current team memberships (0004), today's published shifts and the
   // adherence tolerance (0005); the flags are derived here from the plan and the clock
-  const [now, memberships, shifts, settings] = await Promise.all([
-    data().getTeamNow(me), data().listTeamMembersNow(me), data().getRosterToday(me), data().listSettings(me),
+  const [now, memberships, shifts, settings, inbound] = await Promise.all([
+    data().getTeamNow(me), data().listTeamMembersNow(me), data().getRosterToday(me), data().listSettings(me), data().getInboundNow(me),
   ]);
   const tolerance = Number(settings.find((x) => x.key === "roster.adherence_tolerance_minutes")?.value ?? 5);
   const shiftOf = new Map(shifts.map((x) => [x.userId, x]));
@@ -87,7 +91,13 @@ export default async function LiveBoardPage() {
         <span className="ml-3 text-small font-normal text-p4a-muted">{fmtDate(dateKeyInZone(new Date(), me.timeZone), me.locale)}</span>
       </PageTitle>
       <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      <LiveRefresh />
 
+      <div className="mb-8">
+        <InboundLive inbound={inbound} copy={copy} locale={me.locale} timeZone={me.timeZone} />
+      </div>
+
+      <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>
       {rows.length === 0 ? (
         <Card>
           <p className="text-body text-p4a-muted">{t.noPeople}</p>
