@@ -134,3 +134,95 @@ The orders without a hash have the phone only in the shipping address, which the
 - The fetched counts of the two backfill sync runs (9.8).
 - The count of the `subscription_contract_checkout_one` line and the other sales channels' lines of
   the source-name lookup (9.6).
+
+## Rollout to 13 stores
+
+The other 13 stores, run by Martin on 14 October 2026 after the NL pilot, several stores at once
+(`docs/ingest/PROD_RUNBOOK.md` 9.6, Several stores at once). Written down by Claude Code from his
+report, as above: ids and counts only, no webhook address key and no customer data.
+
+### The app and the source-name lookup (9.3, 9.6)
+
+- The app installed on 14 stores.
+- Every store uses Juo (`9548333057` and `subscription_contract_checkout_one`). IE, NO, ES, FI, CH
+  and IT had no orders in the 60 days: no sales yet (confirmed).
+
+### Connections and stores (9.6)
+
+| Handle | Market | Currency | Time zone | Connection id |
+|---|---|---|---|---|
+| `pulse4all` | GB | GBP | Europe/London | `01a139b6-8546-7b0d-9f41-f235b19c24af` |
+| `pulse4all-at` | AT | EUR | Europe/Vienna | `01a139b6-8550-7a37-b295-f2d37a7ec1b4` |
+| `pulse4all-be` | BE | EUR | Europe/Brussels | `01a139b6-854c-74be-aa6a-aac4846f2ebd` |
+| `pulse4all-ch` | CH | CHF | Europe/Zurich | `01a139b6-8555-7d94-9caf-e5063559ed64` |
+| `pulse4all-de` | DE | EUR | Europe/Berlin | `01a139b6-8553-7650-8fe8-6e4f77fe5382` |
+| `pulse4all-dk` | DK | DKK | Europe/Copenhagen | `01a139b6-854e-7f48-8d77-7c41aea144e3` |
+| `pulse4all-esp` | ES | EUR | Europe/Madrid | `01a139b6-8554-7b2d-bb3c-e5165817a152` |
+| `pulse4all-fi` | FI | EUR | Europe/Helsinki | `01a139b6-8555-7493-8544-ba0b867bf218` |
+| `pulse4all-fr` | FR | EUR | Europe/Paris | `01a139b6-8552-7cf2-8c4a-2e7caa96a58c` |
+| `pulse4all-ie` | IE | EUR | Europe/Dublin | `01a139b6-854d-7b38-a13c-72ca5cecc1a8` |
+| `pulse4all-ita` | IT | EUR | Europe/Rome | `01a139b6-8556-7659-8897-0f905a28c018` |
+| `pulse4all-no` | NO | NOK | Europe/Oslo | `01a139b6-8554-708b-8c8c-a51a3f68dac7` |
+| `pulse4all-se` | SE | SEK | Europe/Stockholm | `01a139b6-8551-7ef1-84e5-ff16234649ef` |
+
+Store names `Pulse4all <market>`, connection names `Shopify Pulse4all <market>`; every connection
+with the same `client_id` as NL, `api_version` `2026-10` and the same `crm_connection_id` as NL.
+
+### Renewal settings (9.6)
+
+| Setting | Value |
+|---|---|
+| `commerce.renewal_source_names` | `9548333057,subscription_contract_checkout_one` |
+| `commerce.renewal_app_ids` | empty |
+
+Replaces the NL value above (`9548333057` alone): the `subscription_contract_checkout_one` orders are
+Juo renewals paid through Shopify, not checkout orders (README Decision log, 14 October 2026).
+
+### Subscriptions (9.7)
+
+- 7 topics per store, 91 in total; all present on a rerun.
+
+### Backfill (9.8)
+
+- From 1 October 2026: 2 `backfill` runs `succeeded` per store.
+- Events `failed`: 0. Outbox actions: 0.
+
+### Bridge check (9.8)
+
+| Market | Customers | With a contact link | Share |
+|---|---|---|---|
+| GB | 5,741 | 5,644 | 98.3% |
+| NL | 1,875 | 1,831 | 97.7% |
+| DE | 1,608 | 1,571 | 97.7% |
+| FR | 803 | 788 | 98.1% |
+| SE | 633 | 602 | 95.1% |
+| BE | 376 | 370 | 98.4% |
+| AT | 170 | 161 | 94.7% |
+| DK | 27 | 23 | 85.2% |
+| IE | 23 | 23 | |
+| FI | 3 | 3 | |
+| ES | 1 | 1 | |
+| IT | 1 | 1 | |
+| NO | 1 | 1 | |
+| CH | 0 | | |
+
+### Orders per kind after the renewal change (9.8)
+
+| Market | First | Repeat | Renewal |
+|---|---|---|---|
+| GB | 72 | 35 | 1,099 |
+| DE | 33 | 6 | 242 |
+| NL | 11 | 0 | 493 |
+| FR | 12 | 1 | 55 |
+| SE | 9 | 0 | 46 |
+| BE | 2 | 2 | 39 |
+| AT | 2 | 0 | 16 |
+| DK | 1 | 0 | 1 |
+
+IE, NO, ES, FI, CH and IT: no orders (no sales yet).
+
+### Not in the report (rollout)
+
+- The source-name lookup's lines and counts per store (9.6).
+- The sync runs' times and fetched counts (9.8).
+- The orders per kind per day per store (9.8) and the day-one checks (9.9).
