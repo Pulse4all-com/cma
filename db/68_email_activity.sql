@@ -7,7 +7,9 @@
 -- 35_verify_telephony.sql and 53_verify_sources_configuration.sql (dev) again (unchanged).
 --
 -- Brief B17a (README Decision log, 15 October 2026): the data model under the email and inbox
--- reports of B17c. Two email sources, kept apart: the CRM's email engagements (source_kind
+-- reports of B17c. Amended in place on 15 October 2026, before it ran anywhere, with the database half
+-- of brief B17b (contacts' country with fallbacks, contacts held for emails and threads, the market
+-- chain with the form step, a data-quality check). Two email sources, kept apart: the CRM's email engagements (source_kind
 -- crm_email: sent from the CRM, logged by BCC, replies to logged emails) and the inbox
 -- conversations' messages (source_kind inbox_message: a connected shared inbox's threads). No
 -- report adds them into one total. Nothing fills these tables yet: the email poll of brief B17b
@@ -27,7 +29,17 @@
 -- What it adds
 --   settings            email.start_date (empty: intake.start_date), email.reply_target_minutes (240,
 --                       business minutes), email.no_response_days (5), email.market_order
---                       ('record,inbox,contact'); cma.check_tenant_setting() checks the four
+--                       ('contact,form,record,inbox'); cma.check_tenant_setting() checks the four
+--   contacts' country   the canonical field country on contacts takes ordered slots 1..9 in
+--                       connection_field, contiguous per connection, no property twice
+--                       (cma.set_connection_field keeps its signature); the contact upsert takes the
+--                       values per slot (countries) besides its single country, and the database keeps
+--                       the first slot whose value names a catalog market, else the first value as
+--                       written; crm_contact.country_source is the slot that supplied it
+--   held contacts       a contact is also taken in while an email or an inbox thread of the connection
+--                       points to it (0006 held it only for a deal or ticket); nothing releases one
+--   data quality        the check contact_country_fallback: contacts whose country came from a slot
+--                       above 1, with its dq_ view
 --   catalogs            cma.connection_inbox (an inbox of a connection: name from the source; counted,
 --                       market, work type and channel as configuration) and
 --                       cma.connection_inbox_channel (a source channel: name and canonical kind from the
@@ -53,7 +65,9 @@
 --   privacy             cma.ingest_contact_forget() also clears the contact on emails and threads;
 --                       cma.ingest_thread_forget() for a conversation's privacy deletion
 --   reads               cma.email_start_date_of(), cma.email_market_of() (the market by
---                       email.market_order, read at query time), cma.email_category_of() (the rules'
+--                       email.market_order: the contact's country, the market of its latest counted
+--                       form before the email, the record, the inbox; read at query time),
+--                       cma.email_category_of() (the rules'
 --                       definition; the owner's only, never called with a real subject)
 --   reporting views     cma_read.connection_inbox, connection_inbox_channel, connection_email_rule,
 --                       email_thread, email_message, email_thread_event: every column but raw
@@ -92,23 +106,25 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
      'First reply target for an inbox conversation, in business minutes of its market (1 to 10080)'),
   ('email.no_response_days',     'integer', null, '5',
      'Days after an outgoing email without an incoming email, inbox message or connected call before an open lead deal counts as not responding (1 to 90)'),
-  ('email.market_order',         'text',    null, 'record,inbox,contact',
-     'Where an email''s market comes from, in this order: record (its ticket''s, then its deal''s market), inbox (the inbox''s market), contact (the contact''s country); comma-separated, each at most once')
+  ('email.market_order',         'text',    null, 'contact,form,record,inbox',
+     'Where an email''s market comes from, in this order: contact (the contact''s country), form (the market of the contact''s latest counted form submitted before the email), record (its ticket''s, then its deal''s market), inbox (the inbox''s market); lower case, comma-separated without spaces, each at most once')
 on conflict (key) do update
   set value_type = excluded.value_type, allowed_values = excluded.allowed_values,
       default_value = excluded.default_value, description = excluded.description;
 
--- email.market_order: one to three of record, inbox and contact, comma-separated, each once
+-- email.market_order: one to four of contact, form, record and inbox, in lower case, comma-separated
+-- without spaces, each once
 create or replace function cma.is_email_market_order(p_value text)
 returns boolean
 language sql immutable
 as $$
-  select p_value ~ '^(record|inbox|contact)(,(record|inbox|contact)){0,2}$'
-     and (select count(*) = count(distinct x) from unnest(string_to_array(p_value, ',')) x)
+  select coalesce(p_value ~ '^(contact|form|record|inbox)(,(contact|form|record|inbox)){0,3}$'
+                  and (select count(*) = count(distinct x) from unnest(string_to_array(p_value, ',')) x), false)
 $$;
 
 -- As 0008l, plus the four email settings: a start date that is empty or a date, whole minutes from 1
--- to 10080, whole days from 1 to 90, and the market order written in lower case without spaces
+-- to 10080, whole days from 1 to 90, and the market order as cma.is_email_market_order takes it (no
+-- spaces, no upper case)
 create or replace function cma.check_tenant_setting()
 returns trigger
 language plpgsql
@@ -121,7 +137,7 @@ begin
   if not found then
     raise exception 'Unknown setting %', new.key using errcode = 'CMA02';
   end if;
-  if new.key in ('auth.invitation_email_domains', 'email.market_order') then
+  if new.key = 'auth.invitation_email_domains' then
     new.value := lower(regexp_replace(new.value, '[[:space:]]+', '', 'g'));
   end if;
   if new.key = 'email.start_date' then
@@ -175,7 +191,7 @@ begin
         and (case when length(new.value) > 2 then true else new.value::integer not between 1 and 90 end) then
     raise exception 'Setting % takes a whole number of days from 1 to 90', new.key using errcode = 'CMA04';
   elsif new.key = 'email.market_order' and not cma.is_email_market_order(new.value) then
-    raise exception 'Setting % takes record, inbox and contact in the order wanted, each at most once, such as record,inbox,contact', new.key
+    raise exception 'Setting % takes contact, form, record and inbox in the order wanted, lower case, comma-separated without spaces, each at most once, such as contact,form,record,inbox', new.key
       using errcode = 'CMA04';
   end if;
   new.updated_by := cma.current_user_id();
@@ -429,6 +445,24 @@ alter table cma.sync_run drop constraint if exists sync_run_job_check;
 alter table cma.sync_run add constraint sync_run_job_check
   check (job in ('backfill', 'reconcile', 'forms_poll', 'subscriptions_check', 'link_calls', 'email_poll'));
 
+-- Contacts' country with fallbacks (brief B17b): the canonical field country on contacts takes ordered
+-- slots, as refs do; slot 1 is the property mapped until now, a slot above 1 a fallback property read
+-- when the earlier slots give no catalog market. Contiguity and one property per slot are checked by
+-- cma.set_connection_field
+alter table cma.connection_field drop constraint if exists connection_field_slot_check;
+alter table cma.connection_field add constraint connection_field_slot_check
+  check (slot between 1 and 9 and (slot = 1 or field = 'ref' or (entity = 'contact' and field = 'country')));
+
+-- The slot that supplied the stored country, null when the contact has none. A contact stored before
+-- 0008m took its country from slot 1, the only slot there was, so it reads 1
+alter table cma.crm_contact add column if not exists country_source smallint;
+alter table cma.crm_contact drop constraint if exists crm_contact_country_source_check;
+update cma.crm_contact set country_source = 1 where country is not null and country_source is null;
+alter table cma.crm_contact add constraint crm_contact_country_source_check
+  check ((country is not null and country_source between 1 and 9) or (country is null and country_source is null));
+comment on column cma.crm_contact.country_source is
+  'The country slot (connection_field, entity contact, field country) whose value the stored country came from; null without a country (0008m)';
+
 -- ---------------------------------------------------------------------------------------------
 -- 4. Helpers
 -- ---------------------------------------------------------------------------------------------
@@ -513,6 +547,25 @@ as $$
            or exists (select 1 from cma.commerce_customer x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
            or exists (select 1 from cma.commerce_order x where x.tenant_id = p_tenant_id and x.connection_id = p_connection_id)
          then 'commerce' end], null)
+$$;
+
+-- A contact's country from its values per slot (element n is slot n): the first slot whose value names
+-- a catalog market of the current tenant (cma.normalize_market: an alias, else a code), else the first
+-- non-empty value as written (as 0007 stores a country that is no catalog market, so data quality
+-- lists it), else null; with the slot it came from
+create or replace function cma.contact_country_pick(p_values text[], out country text, out source smallint)
+language sql stable
+as $$
+  with v as (
+    select u.ord::smallint as slot, cma.normalize_market(u.x) as norm
+    from unnest(coalesce(p_values, '{}')) with ordinality as u(x, ord)
+    where nullif(btrim(u.x), '') is not null
+  ), pick as (
+    select v.norm, v.slot,
+           exists (select 1 from cma.market m where m.tenant_id = cma.current_tenant_id() and m.code = v.norm) as in_catalog
+    from v
+  )
+  select p.norm, p.slot from pick p order by p.in_catalog desc, p.slot limit 1
 $$;
 
 -- An optional boolean of an item: absent or null is false; anything but a JSON boolean is CMA04
@@ -967,9 +1020,206 @@ exception
 end
 $$;
 
+-- 0007's contact upsert, with the country from its slots and a contact held for emails and threads:
+--   [{sourceId, country | countries, language, currency, store, refs, updatedAt, deletedAt?, raw?}]
+-- country (a single value) is slot 1, as before; countries is the list of values per slot (element n
+-- is slot n, at most 9, each a string or null); an item gives one of the two. The stored country is
+-- cma.contact_country_pick's, and country_source its slot. A contact is taken in while a deal or
+-- ticket, an email or an inbox thread of the same connection points to it (not_held otherwise); the
+-- rest as 0007: stale reads, refs with slots, a deletion that keeps the id and clears the attributes
+create or replace function cma.ingest_upsert_contacts(p_connection_id uuid, p_contacts jsonb)
+returns table (source_id text, outcome text)
+language plpgsql
+as $$
+#variable_conflict use_column
+declare
+  v_tenant   uuid := cma.current_tenant_id();
+  v_system   text;
+  c          jsonb;
+  v_src      text;
+  v_updated  timestamptz;
+  v_deleted  timestamptz;
+  v_old      cma.crm_contact;
+  v_id       uuid;
+  k          text;
+  v          jsonb;
+  v_list     jsonb;
+  v_slot     integer;
+  v_store    text;
+  v_values   text[];
+  v_country  text;
+  v_csource  smallint;
+begin
+  perform cma.assert_permission('ingest.write');
+  v_system := cma.active_connection_adapter(p_connection_id);
+  if p_contacts is null or jsonb_typeof(p_contacts) <> 'array' or jsonb_array_length(p_contacts) > 500 then
+    raise exception 'contacts must be an array of at most 500' using errcode = 'CMA04';
+  end if;
+  for c in select value from jsonb_array_elements(p_contacts) loop
+    v_src := c ->> 'sourceId';
+    if coalesce(v_src, '') = '' then
+      raise exception 'every contact needs a sourceId' using errcode = 'CMA04';
+    end if;
+    if c ? 'refs' and jsonb_typeof(c -> 'refs') <> 'object' then
+      raise exception 'refs must be an object of system to id' using errcode = 'CMA04';
+    end if;
+    if c ? 'countries' then
+      if c ? 'country' then
+        raise exception 'a contact gives country or countries, not both' using errcode = 'CMA04';
+      end if;
+      if jsonb_typeof(c -> 'countries') <> 'array' or jsonb_array_length(c -> 'countries') > 9
+         or exists (select 1 from jsonb_array_elements(c -> 'countries') x where jsonb_typeof(x) not in ('string', 'null')) then
+        raise exception 'countries must be a list of at most 9 values, each a string or null' using errcode = 'CMA04';
+      end if;
+      select coalesce(array_agg(x #>> '{}' order by ord), '{}') into v_values
+      from jsonb_array_elements(c -> 'countries') with ordinality as e(x, ord);
+    else
+      v_values := array[c ->> 'country'];
+    end if;
+    v_updated := cma.json_time(c -> 'updatedAt', 'updatedAt');
+    v_deleted := cma.json_time(c -> 'deletedAt', 'deletedAt');
+    select * into v_old from cma.crm_contact cc
+    where cc.tenant_id = v_tenant and cc.connection_id = p_connection_id and cc.source_id = v_src
+    for update;
+
+    if v_old.id is null
+       and not exists (select 1 from cma.crm_record cr
+                       where cr.tenant_id = v_tenant and cr.connection_id = p_connection_id and cr.contact_source_id = v_src)
+       and not exists (select 1 from cma.email_message em
+                       where em.tenant_id = v_tenant and em.connection_id = p_connection_id and em.contact_source_id = v_src)
+       and not exists (select 1 from cma.email_thread et
+                       where et.tenant_id = v_tenant and et.connection_id = p_connection_id and et.contact_source_id = v_src) then
+      return query select v_src, 'not_held'::text;
+      continue;
+    end if;
+
+    if v_deleted is not null then
+      if v_old.id is null then
+        return query select v_src, 'not_held'::text;
+      else
+        update cma.crm_contact cc
+           set country = null, country_source = null, language = null, currency = null, store = null, raw = '{}'::jsonb,
+               source_deleted_at = v_deleted, synced_at = now()
+         where cc.tenant_id = v_tenant and cc.id = v_old.id;
+        delete from cma.crm_contact_ref cr where cr.tenant_id = v_tenant and cr.contact_id = v_old.id;
+        return query select v_src, 'deleted'::text;
+      end if;
+      continue;
+    end if;
+
+    if v_old.id is not null and v_old.source_updated_at is not null
+       and (v_updated is null or v_updated < v_old.source_updated_at) then
+      return query select v_src, 'stale'::text;
+      continue;
+    end if;
+
+    select p.country, p.source into v_country, v_csource from cma.contact_country_pick(v_values) p;
+    v_store := lower(nullif(btrim(c ->> 'store'), ''));
+    if v_store !~ '^[a-z0-9-]{1,60}$' then
+      v_store := null;
+    end if;
+    if v_old.id is null then
+      insert into cma.crm_contact (tenant_id, connection_id, source_system, source_id, country, country_source, language, currency,
+                                   store, source_updated_at, raw)
+      values (v_tenant, p_connection_id, v_system, v_src, v_country, v_csource, nullif(btrim(c ->> 'language'), ''),
+              cma.json_currency(c ->> 'currency'), v_store, v_updated, coalesce(c -> 'raw', '{}'::jsonb))
+      returning id into v_id;
+    else
+      v_id := v_old.id;
+      update cma.crm_contact cc
+         set country = v_country, country_source = v_csource, language = nullif(btrim(c ->> 'language'), ''),
+             currency = cma.json_currency(c ->> 'currency'), store = v_store,
+             source_updated_at = v_updated, source_deleted_at = null, synced_at = now(),
+             raw = coalesce(c -> 'raw', '{}'::jsonb)
+       where cc.tenant_id = v_tenant and cc.id = v_id;
+    end if;
+
+    for k, v in select key, value from jsonb_each(coalesce(c -> 'refs', '{}'::jsonb)) loop
+      if k !~ '^[a-z0-9_]+$' then
+        raise exception 'ref system % must be lowercase letters, digits or underscores', k using errcode = 'CMA04';
+      end if;
+      v_list := case when jsonb_typeof(v) = 'array' then v else jsonb_build_array(v) end;
+      if jsonb_array_length(v_list) > 9 then
+        raise exception 'at most 9 refs per system' using errcode = 'CMA04';
+      end if;
+      delete from cma.crm_contact_ref cr
+      where cr.tenant_id = v_tenant and cr.contact_id = v_id and cr.system = k and cr.slot > jsonb_array_length(v_list);
+      for v_slot in 1 .. jsonb_array_length(v_list) loop
+        v := v_list -> (v_slot - 1);
+        if jsonb_typeof(v) = 'null' or btrim(v #>> '{}') = '' then
+          delete from cma.crm_contact_ref cr
+          where cr.tenant_id = v_tenant and cr.contact_id = v_id and cr.system = k and cr.slot = v_slot;
+        else
+          insert into cma.crm_contact_ref (tenant_id, contact_id, system, slot, external_id)
+          values (v_tenant, v_id, k, v_slot, btrim(v #>> '{}'))
+          on conflict (tenant_id, contact_id, system, slot)
+            do update set external_id = excluded.external_id, synced_at = now()
+            where cma.crm_contact_ref.external_id is distinct from excluded.external_id;
+        end if;
+      end loop;
+    end loop;
+    return query select v_src, case when v_old.id is null then 'inserted' else 'updated' end;
+  end loop;
+exception
+  when check_violation or invalid_text_representation then
+    raise exception 'invalid contact: %', sqlerrm using errcode = 'CMA04';
+end
+$$;
+
 -- ---------------------------------------------------------------------------------------------
 -- 6. Configuration (tenant.configure)
 -- ---------------------------------------------------------------------------------------------
+-- 0007's field mapping, with ordered country slots on contacts: slot n (above 1) of the country needs
+-- slot n - 1 (CMA04), a slot is removed only from the end (CMA04), and no property feeds two country
+-- slots of a connection (CMA03). Slots above 1 for refs as before; any other field takes slot 1 only.
+-- The 0006 call shape (no slot) stays slot 1
+create or replace function cma.set_connection_field(p_connection_id uuid, p_entity text, p_field text,
+                                                    p_ref_system text, p_source_property text, p_slot smallint)
+returns void
+language plpgsql
+as $$
+declare
+  v_tenant  uuid := cma.current_tenant_id();
+  v_slot    smallint := coalesce(p_slot, 1);
+  v_country boolean := p_entity = 'contact' and p_field = 'country';
+begin
+  perform cma.assert_permission('tenant.configure');
+  perform cma.assert_connection(p_connection_id);
+  if coalesce(btrim(p_source_property), '') = '' then
+    if v_country and exists (select 1 from cma.connection_field f
+                             where f.tenant_id = v_tenant and f.connection_id = p_connection_id
+                               and f.entity = 'contact' and f.field = 'country' and f.slot > v_slot) then
+      raise exception 'country slot % cannot go while a later slot maps a property: remove the last slot first', v_slot
+        using errcode = 'CMA04';
+    end if;
+    delete from cma.connection_field f
+    where f.tenant_id = v_tenant and f.connection_id = p_connection_id
+      and f.entity = p_entity and f.field = p_field and f.ref_system = coalesce(p_ref_system, '')
+      and f.slot = v_slot;
+    return;
+  end if;
+  if v_country and v_slot > 1
+     and not exists (select 1 from cma.connection_field f
+                     where f.tenant_id = v_tenant and f.connection_id = p_connection_id
+                       and f.entity = 'contact' and f.field = 'country' and f.slot = v_slot - 1) then
+    raise exception 'country slot % needs slot % first: the slots are contiguous', v_slot, v_slot - 1 using errcode = 'CMA04';
+  end if;
+  if v_country and exists (select 1 from cma.connection_field f
+                           where f.tenant_id = v_tenant and f.connection_id = p_connection_id
+                             and f.entity = 'contact' and f.field = 'country' and f.slot <> v_slot
+                             and lower(f.source_property) = lower(btrim(p_source_property))) then
+    raise exception 'the property % already feeds another country slot of this connection', btrim(p_source_property)
+      using errcode = 'CMA03';
+  end if;
+  insert into cma.connection_field (tenant_id, connection_id, entity, field, ref_system, slot, source_property)
+  values (v_tenant, p_connection_id, p_entity, p_field, coalesce(p_ref_system, ''), v_slot, btrim(p_source_property))
+  on conflict (tenant_id, connection_id, entity, field, ref_system, slot)
+    do update set source_property = excluded.source_property;
+exception when check_violation or not_null_violation then
+  raise exception 'invalid field mapping (%, %, %, slot %): %', p_entity, p_field, p_ref_system, p_slot, sqlerrm using errcode = 'CMA04';
+end
+$$;
+
 -- One inbox's configuration: counted, market (a catalog market or null), work type (an active work
 -- type skill's key or null) and channel (an active channel's key or null). An inbox the catalog has
 -- not brought yet is added with its id as name.
@@ -1176,7 +1426,7 @@ $$;
 -- 7. Privacy deletions
 -- ---------------------------------------------------------------------------------------------
 -- As 0007a, and the contact is also cleared on the connection's emails and threads (ids, times and
--- the metadata stay for the counts). Answers {contacts, refs, calls, submissions}, plus
+-- the metadata stay for the counts), and the contact's country source with its country. Answers {contacts, refs, calls, submissions}, plus
 -- telephony_calls, emails and threads when one was cleared (the earlier answer shape stays as it
 -- was otherwise).
 create or replace function cma.ingest_contact_forget(p_connection_id uuid, p_contact_source_id text)
@@ -1201,7 +1451,7 @@ begin
     raise exception 'a contact id is needed' using errcode = 'CMA04';
   end if;
   update cma.crm_contact cc
-     set country = null, language = null, currency = null, store = null, raw = '{}'::jsonb,
+     set country = null, country_source = null, language = null, currency = null, store = null, raw = '{}'::jsonb,
          source_deleted_at = coalesce(cc.source_deleted_at, now()), synced_at = now()
    where cc.tenant_id = v_tenant and cc.connection_id = p_connection_id and cc.source_id = p_contact_source_id
   returning cc.id into v_contact;
@@ -1316,15 +1566,17 @@ $$;
 -- The market of an email (p_source_kind crm_email or inbox_message) or of an inbox conversation
 -- (inbox_thread) by email.market_order, read at query time so a later alias or configuration applies
 -- to older emails (as 0007d):
+--   contact  the held contact's stored country (a message's contact, else for an engagement its
+--            earliest current contact association, else for an inbox message its thread's contact)
+--   form     the market of that contact's latest submission (resolved to that contact id) of a counted
+--            form with a market, submitted at or before the email's time (a thread's: its creation)
 --   record   the associated ticket's market, else the associated deal's (an email engagement: its
 --            current associations, the newest record first; an inbox message or thread: the thread's
 --            ticket); deleted records are left out
 --   inbox    the inbox's market (a message's inbox, else its thread's)
---   contact  the contact's country (a message's contact, else for an engagement its earliest current
---            contact association, for an inbox message its thread's contact), held as 0006 holds
---            contacts
--- each through the tenant's market aliases and only when it names a catalog market; 'unknown' when no
--- step finds one (and for an email the tenant does not hold). source says which step gave it.
+-- each through the tenant's market aliases and only when it names a catalog market; a step that finds
+-- none hands over to the next; 'unknown' when no step finds one (and for an email the tenant does not
+-- hold). source says which step gave it.
 create or replace function cma.email_market_of(p_tenant_id uuid, p_connection_id uuid, p_source_kind text, p_source_id text,
                                                out code text, out source text)
 language plpgsql stable
@@ -1336,6 +1588,7 @@ declare
   v_step    text;
   v_value   text;
   v_contact text;
+  v_at      timestamptz;
 begin
   code := 'unknown';
   source := null;
@@ -1345,6 +1598,7 @@ begin
     if v_thread.id is null then
       return;
     end if;
+    v_at := v_thread.source_created_at;
   elsif p_source_kind in ('crm_email', 'inbox_message') then
     select * into v_msg from cma.email_message em
     where em.tenant_id = p_tenant_id and em.connection_id = p_connection_id and em.source_kind = p_source_kind
@@ -1352,6 +1606,7 @@ begin
     if v_msg.id is null then
       return;
     end if;
+    v_at := v_msg.occurred_at;
     if p_source_kind = 'inbox_message' then
       select * into v_thread from cma.email_thread et
       where et.tenant_id = p_tenant_id and et.connection_id = p_connection_id and et.source_id = v_msg.thread_source_id;
@@ -1360,9 +1615,38 @@ begin
     raise exception 'the source kind is crm_email, inbox_message or inbox_thread' using errcode = 'CMA04';
   end if;
 
+  -- the contact of the email or conversation, for the contact and form steps
+  v_contact := coalesce(v_msg.contact_source_id, v_thread.contact_source_id);
+  if v_contact is null and p_source_kind = 'crm_email' then
+    select a.to_id into v_contact
+    from cma.crm_association a
+    where a.tenant_id = p_tenant_id and a.connection_id = p_connection_id
+      and a.from_type = 'crm_email' and a.from_id = p_source_id and a.to_type = 'contact' and a.removed_at is null
+    order by a.first_seen_at, a.to_id
+    limit 1;
+  end if;
+
   foreach v_step in array coalesce(v_order, '{}') loop
     v_value := null;
-    if v_step = 'record' then
+    if v_step = 'contact' then
+      if v_contact is not null then
+        select cma.market_code_of(p_tenant_id, cc.country) into v_value
+        from cma.crm_contact cc
+        where cc.tenant_id = p_tenant_id and cc.connection_id = p_connection_id and cc.source_id = v_contact;
+      end if;
+    elsif v_step = 'form' then
+      if v_contact is not null then
+        select cma.market_code_of(p_tenant_id, f.market) into v_value
+        from cma.form_submission fs
+        join cma.connection_form f
+          on f.tenant_id = fs.tenant_id and f.connection_id = fs.connection_id and f.source_form_id = fs.source_form_id
+        where fs.tenant_id = p_tenant_id and fs.connection_id = p_connection_id
+          and fs.contact_source_id = v_contact and fs.contact_resolution = 'resolved' and fs.submitted_at <= v_at
+          and f.is_counted and cma.market_code_of(p_tenant_id, f.market) is not null
+        order by fs.submitted_at desc, fs.source_id desc
+        limit 1;
+      end if;
+    elsif v_step = 'record' then
       if p_source_kind = 'crm_email' then
         select cma.market_code_of(p_tenant_id, cr.market) into v_value
         from cma.crm_association a
@@ -1384,21 +1668,6 @@ begin
       from cma.connection_inbox b
       where b.tenant_id = p_tenant_id and b.connection_id = p_connection_id
         and b.source_inbox_id = coalesce(v_msg.inbox_source_id, v_thread.inbox_source_id);
-    elsif v_step = 'contact' then
-      v_contact := coalesce(v_msg.contact_source_id, v_thread.contact_source_id);
-      if v_contact is null and p_source_kind = 'crm_email' then
-        select a.to_id into v_contact
-        from cma.crm_association a
-        where a.tenant_id = p_tenant_id and a.connection_id = p_connection_id
-          and a.from_type = 'crm_email' and a.from_id = p_source_id and a.to_type = 'contact' and a.removed_at is null
-        order by a.first_seen_at, a.to_id
-        limit 1;
-      end if;
-      if v_contact is not null then
-        select cma.market_code_of(p_tenant_id, cc.country) into v_value
-        from cma.crm_contact cc
-        where cc.tenant_id = p_tenant_id and cc.connection_id = p_connection_id and cc.source_id = v_contact;
-      end if;
     end if;
     if v_value is not null then
       code := v_value;
@@ -1406,6 +1675,195 @@ begin
       return;
     end if;
   end loop;
+end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 8b. Data quality: contacts whose country comes from a fallback field
+-- ---------------------------------------------------------------------------------------------
+-- The checks added after 0007d, in the order the Data page shows them after 0007d's. 0007d's
+-- cma.data_quality_checks() stays as it is (41_verify_lead_metrics.sql, which has run in prod, pins its
+-- fifteen checks and their totals for a tenant without fallback slots)
+create or replace function cma.data_quality_added_checks()
+returns table (check_key text, sort_order integer, description text)
+language sql immutable
+as $$
+  values
+    ('contact_country_fallback', 160, 'Contacts whose country comes from a fallback field (a country slot above 1)')
+$$;
+
+-- 0007d's findings, plus contact_country_fallback: one row per held contact (not deleted) whose
+-- country came from a slot above 1, the slot as its code
+create or replace function cma.data_quality_of(p_tenant_id uuid)
+returns table (check_key text, connection_id uuid, object_type text, object_id text, value text)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+declare
+  v_start timestamptz;
+begin
+  select cma.setting_of(t.id, 'intake.start_date')::date::timestamp at time zone t.timezone into v_start
+  from cma.tenant t where t.id = p_tenant_id;
+
+  return query
+  -- lead deals without any contact
+  select 'deal_without_contact'::text, d.connection_id, d.record_type, d.source_id, null::text
+  from cma.lead_deals_of(p_tenant_id, null, null) d
+  where cardinality(d.contacts) = 0
+  union all
+  -- primary contacts of lead deals without country or language
+  select 'deal_contact_incomplete', k.connection_id, 'contact', k.source_id, null
+  from cma.crm_contact k
+  where k.tenant_id = p_tenant_id and k.source_deleted_at is null
+    and (k.country is null or k.language is null)
+    and exists (select 1 from cma.lead_deals_of(p_tenant_id, null, null) d
+                where d.connection_id = k.connection_id and d.contact_source_id = k.source_id)
+  union all
+  -- markets and countries written by a source that are no catalog market
+  select 'market_not_in_catalog', cr.connection_id, cr.record_type, cr.source_id, cr.market
+  from cma.crm_record cr
+  where cr.tenant_id = p_tenant_id and cr.source_deleted_at is null and cr.source_created_at >= v_start
+    and nullif(btrim(cr.market), '') is not null and cma.market_code_of(p_tenant_id, cr.market) is null
+  union all
+  select 'market_not_in_catalog', k.connection_id, 'contact', k.source_id, k.country
+  from cma.crm_contact k
+  where k.tenant_id = p_tenant_id and k.source_deleted_at is null
+    and nullif(btrim(k.country), '') is not null and cma.market_code_of(p_tenant_id, k.country) is null
+  union all
+  -- CRM owners (of records since the start and of calls since the start) without a person
+  select 'owner_without_person', o.connection_id, 'owner', o.owner_ref, null
+  from (select cr.connection_id, cr.source_system, cr.owner_ref
+        from cma.crm_record cr
+        where cr.tenant_id = p_tenant_id and cr.source_deleted_at is null and cr.source_created_at >= v_start
+          and cr.owner_ref is not null
+        union
+        select c.connection_id, c.source_system, c.owner_ref
+        from cma.crm_call c
+        where c.tenant_id = p_tenant_id and c.source_deleted_at is null and c.occurred_at >= v_start
+          and c.owner_ref is not null) o
+  where not exists (select 1 from cma.app_user_external_id x
+                    where x.tenant_id = p_tenant_id and x.system = o.source_system || '_owner' and x.external_id = o.owner_ref)
+  union all
+  -- telephony users without a person
+  select 'telephony_user_without_person', u.connection_id, 'telephony_user', u.user_ref, null
+  from (select distinct tc.connection_id, tc.source_system, tc.user_ref
+        from cma.telephony_call tc
+        where tc.tenant_id = p_tenant_id and tc.source_deleted_at is null and tc.started_at >= v_start
+          and tc.user_ref is not null) u
+  where not exists (select 1 from cma.app_user_external_id x
+                    where x.tenant_id = p_tenant_id and x.system = u.source_system || '_user' and x.external_id = u.user_ref)
+  union all
+  -- CRM calls without a current contact association
+  select 'crm_call_without_contact', c.connection_id, 'crm_call', c.source_id, null
+  from cma.crm_call c
+  where c.tenant_id = p_tenant_id and c.source_deleted_at is null and c.occurred_at >= v_start
+    and not exists (select 1 from cma.crm_association a
+                    where a.tenant_id = c.tenant_id and a.connection_id = c.connection_id and a.from_type = 'crm_call'
+                      and a.from_id = c.source_id and a.to_type = 'contact' and a.removed_at is null)
+  union all
+  -- telephony calls older than 24 hours without a current link, once the tenant has CRM calls
+  select 'telephony_call_unlinked', tc.connection_id, 'telephony_call', tc.source_id, null
+  from cma.telephony_call tc
+  where tc.tenant_id = p_tenant_id and tc.source_deleted_at is null
+    and tc.started_at >= v_start and tc.started_at < now() - interval '24 hours'
+    and exists (select 1 from cma.crm_call c where c.tenant_id = p_tenant_id and c.source_deleted_at is null)
+    and not exists (select 1 from cma.call_link l
+                    where l.tenant_id = tc.tenant_id and l.telephony_call_id = tc.id and l.unlinked_at is null)
+  union all
+  -- commerce customers whose id no contact holds, or several contacts hold
+  select case when h.contacts = 0 then 'commerce_unmatched' else 'commerce_ambiguous' end,
+         cu.connection_id, 'commerce_customer', cu.source_id, null
+  from cma.commerce_customer cu
+  cross join lateral (select count(distinct r.contact_id) as contacts
+                      from cma.crm_contact_ref r
+                      where r.tenant_id = cu.tenant_id and r.system = cu.source_system and r.external_id = cu.source_id) h
+  where cu.tenant_id = p_tenant_id and cu.source_deleted_at is null and h.contacts <> 1
+  union all
+  -- contacts with both first slots of a ref system taken
+  select 'contact_slots_full', k.connection_id, 'contact', k.source_id, r.system
+  from cma.crm_contact k
+  join cma.crm_contact_ref r on r.tenant_id = k.tenant_id and r.contact_id = k.id and r.slot in (1, 2)
+  where k.tenant_id = p_tenant_id and k.source_deleted_at is null
+  group by k.connection_id, k.source_id, r.system
+  having count(distinct r.slot) = 2
+  union all
+  -- contacts whose country differs from the market of a store their commerce id belongs to
+  select distinct 'contact_country_differs', k.connection_id, 'contact', k.source_id,
+         cma.market_code_of(p_tenant_id, k.country) || '/' || st.market
+  from cma.crm_contact k
+  join cma.crm_contact_ref r on r.tenant_id = k.tenant_id and r.contact_id = k.id
+  join cma.commerce_customer cu
+    on cu.tenant_id = r.tenant_id and cu.source_system = r.system and cu.source_id = r.external_id and cu.source_deleted_at is null
+  join cma.commerce_store st on st.tenant_id = cu.tenant_id and st.connection_id = cu.connection_id
+  where k.tenant_id = p_tenant_id and k.source_deleted_at is null
+    and cma.market_code_of(p_tenant_id, k.country) is distinct from st.market
+    and nullif(btrim(k.country), '') is not null
+  union all
+  -- one commerce customer id in two or more stores
+  select 'customer_in_two_stores', null::uuid, 'commerce_customer', cu.source_id, cu.source_system
+  from cma.commerce_customer cu
+  where cu.tenant_id = p_tenant_id and cu.source_deleted_at is null
+  group by cu.source_system, cu.source_id
+  having count(distinct cu.connection_id) > 1
+  union all
+  -- active pipelines no person has ever written (only the source's refresh)
+  select 'pipeline_unreviewed', p.connection_id, 'pipeline', p.source_pipeline_id, p.record_type
+  from cma.connection_pipeline p
+  where p.tenant_id = p_tenant_id and p.status = 'active'
+    and not exists (select 1 from cma.audit_log al
+                    join cma.app_user u on u.tenant_id = al.tenant_id and u.id = al.actor_user_id and u.kind = 'person'
+                    where al.tenant_id = p.tenant_id and al.table_name = 'connection_pipeline' and al.row_id = p.id::text)
+  union all
+  -- counted active forms without a market
+  select 'form_without_market', f.connection_id, 'form', f.source_form_id, null
+  from cma.connection_form f
+  where f.tenant_id = p_tenant_id and f.status = 'active' and f.is_counted and f.market is null
+  union all
+  -- held contacts whose country came from a fallback slot (0008m)
+  select 'contact_country_fallback', k.connection_id, 'contact', k.source_id, k.country_source::text
+  from cma.crm_contact k
+  where k.tenant_id = p_tenant_id and k.source_deleted_at is null and k.country_source > 1;
+
+  -- parked write-backs: the outbox arrives with migration 0007c (DESIGN §4.3a); until then the check
+  -- finds nothing. Only the columns every outbox row has by design are read: id, connection, status
+  if to_regclass('cma.outbox_action') is not null then
+    return query execute
+      'select ''writeback_parked''::text, o.connection_id, ''outbox_action''::text, o.id::text, null::text
+       from cma.outbox_action o
+       where o.tenant_id = $1 and o.status = ''needs_review'''
+      using p_tenant_id;
+  end if;
+end
+$$;
+
+-- 0007d's totals per check, plus the added checks: contact_country_fallback is listed once a contact
+-- connection of the tenant maps a country slot above 1, or while it finds a contact (muted at zero on
+-- the Data page); a tenant without fallback slots gets 0007d's fifteen rows exactly
+create or replace function cma.data_quality()
+returns table (check_key text, description text, total integer)
+language plpgsql stable
+as $$
+#variable_conflict use_column
+declare
+  v_tenant uuid := cma.current_tenant_id();
+begin
+  perform cma.assert_any_permission(array['reports.view', 'tenant.configure']);
+  return query
+    with q as materialized (select f.check_key from cma.data_quality_of(v_tenant) f),
+    c as (
+      select dc.check_key, dc.sort_order, dc.description from cma.data_quality_checks() dc
+      union all
+      select ac.check_key, ac.sort_order, ac.description from cma.data_quality_added_checks() ac
+      where ac.check_key <> 'contact_country_fallback'
+         or exists (select 1 from cma.connection_field cf
+                    where cf.tenant_id = v_tenant and cf.entity = 'contact' and cf.field = 'country' and cf.slot > 1)
+         or exists (select 1 from q where q.check_key = 'contact_country_fallback')
+    )
+    select c.check_key, c.description,
+           case when c.check_key = 'writeback_parked' and to_regclass('cma.outbox_action') is null then null
+                else (select count(*) from q where q.check_key = c.check_key)::integer end
+    from c
+    order by c.sort_order;
 end
 $$;
 
@@ -1433,7 +1891,12 @@ begin
     'cma.ingest_thread_forget(uuid,text)',
     'cma.email_start_date_of(uuid)',
     'cma.email_market_of(uuid,uuid,text,text)',
-    'cma.connection_held_kinds_of(uuid,uuid)'
+    'cma.connection_held_kinds_of(uuid,uuid)',
+    'cma.ingest_upsert_contacts(uuid,jsonb)',
+    'cma.set_connection_field(uuid,text,text,text,text,smallint)',
+    'cma.data_quality_of(uuid)',
+    'cma.data_quality()',
+    'cma.data_quality_added_checks()'
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
@@ -1442,7 +1905,7 @@ begin
   foreach f in array array[
     'cma.is_email_market_order(text)', 'cma.email_words(text[])', 'cma.email_words_ok(text[])',
     'cma.email_words_match(text,text[],text[])', 'cma.email_raw(jsonb)', 'cma.assert_email_connection(uuid,boolean)',
-    'cma.json_flag(jsonb,text)'
+    'cma.json_flag(jsonb,text)', 'cma.contact_country_pick(text[])'
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
@@ -1484,6 +1947,18 @@ create or replace view cma_read.email_message as
   from cma.email_message
   where cma_read.reader_sees(tenant_id);
 
+-- 0007's contact view with the country's source at the end (the earlier columns as they were)
+create or replace view cma_read.crm_contact as
+  select id, tenant_id, connection_id, source_system, source_id, country, language,
+         source_updated_at, source_deleted_at, synced_at, currency, store, country_source
+  from cma.crm_contact
+  where cma_read.reader_sees(tenant_id);
+
+-- The added data-quality check's view, as 0007d's dq_ views (ids and codes only)
+create or replace view cma_read.dq_contact_country_fallback as
+  select tenant_id, connection_id, object_type, object_id, value
+  from cma_read.data_quality_rows() where check_key = 'contact_country_fallback';
+
 create or replace view cma_read.email_thread_event as
   select id, tenant_id, connection_id, source_id, thread_source_id, kind, occurred_at, actor_kind, owner_ref, to_actor_kind,
          to_owner_ref, from_inbox_source_id, to_inbox_source_id, synced_at
@@ -1494,7 +1969,7 @@ create or replace view cma_read.email_thread_event as
 -- 11. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008m', 'Email activity, metadata only: inboxes and source channels with counted, market, work type and channel, classification rules, emails of two sources kept apart, inbox conversations and their events, the four email settings, the ingest writes, the market by email.market_order, the privacy deletions, the reporting views')
+values ('0008m', 'Email activity, metadata only: inboxes and source channels with counted, market, work type and channel, classification rules, emails of two sources kept apart, inbox conversations and their events, the four email settings, the ingest writes, the market by email.market_order with the form step, the privacy deletions, the reporting views; contacts'' country with fallback slots and its source, contacts held for emails and threads, the data-quality check contact_country_fallback')
 on conflict (version) do nothing;
 
 commit;

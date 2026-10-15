@@ -1,0 +1,63 @@
+11c11
+< -------------------------+-----------+--------
+---
+> --------------------------+-----------+--------
+26a27
+>  connection_email_rule    | cma_owner | t
+28a30,31
+>  connection_inbox         | cma_owner | t
+>  connection_inbox_channel | cma_owner | t
+36a40,42
+>  email_message            | cma_owner | t
+>  email_thread             | cma_owner | t
+>  email_thread_event       | cma_owner | t
+78c84
+< (66 rows)
+---
+> (72 rows)
+81c87
+< -------------------------+------------+-----------+-----
+---
+> --------------------------+------------+-----------+-----
+96a103
+>  connection_email_rule    | tenant_app | {cma_app} | ALL
+98a106,107
+>  connection_inbox         | tenant_app | {cma_app} | ALL
+>  connection_inbox_channel | tenant_app | {cma_app} | ALL
+106a116,118
+>  email_message            | tenant_app | {cma_app} | ALL
+>  email_thread             | tenant_app | {cma_app} | ALL
+>  email_thread_event       | tenant_app | {cma_app} | ALL
+144c156
+< (62 rows)
+---
+> (68 rows)
+147c159
+< -----------------------------
+---
+> ------------------------------
+209c221,227
+< (61 rows)
+---
+>  cma.connection_inbox
+>  cma.connection_inbox_channel
+>  cma.connection_email_rule
+>  cma.email_thread
+>  cma.email_message
+>  cma.email_thread_event
+> (67 rows)
+227a246
+>  connection_email_rule
+228a248,249
+>  connection_inbox
+>  connection_inbox_channel
+240a262
+>  dq_contact_country_fallback
+252a275,277
+>  email_message
+>  email_thread
+>  email_thread_event
+295c320
+< (82 rows)
+---
+> (89 rows)

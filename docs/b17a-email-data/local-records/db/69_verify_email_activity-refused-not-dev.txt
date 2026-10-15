@@ -10,11 +10,12 @@ SET
  false
 (1 row)
 
-psql:db/69_verify_email_activity.sql:54: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 69 runs in dev only
+psql:db/69_verify_email_activity.sql:61: ERROR:  REFUSED: the connected database is not dev (no active agent.two@example.com); 69 runs in dev only
 CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
-psql:db/69_verify_email_activity.sql:56: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:db/69_verify_email_activity.sql:63: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
+CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION

@@ -1,6 +1,6 @@
-04_verify.sql: DIFFERS (300 lines)
-07_verify_time_model.sql: DIFFERS (11 lines)
-10_verify_corrections.sql: DIFFERS (3 lines)
+04_verify.sql: DIFFERS (301 lines)
+07_verify_time_model.sql: DIFFERS (78 lines)
+10_verify_corrections.sql: DIFFERS (69 lines)
 12_verify_team_people.sql: identical
 14_verify_tenant_settings.sql: DIFFERS (8 lines)
 16_verify_team_status_time.sql: identical

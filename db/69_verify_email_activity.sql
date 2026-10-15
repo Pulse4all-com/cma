@@ -3,7 +3,7 @@
 -- =============================================================================================
 -- Dev only: the script refuses a database that does not hold the dev seed's active test person
 -- (agent.two@example.com, db/03); prod never holds example.com people. Block A checks structure
--- and privileges; block B works on two throwaway tenants inside a subtransaction that is always
+-- and privileges; block B works on three throwaway tenants inside a subtransaction that is always
 -- rolled back. Universal otherwise: nothing of the seed is used; adapters, inboxes, channels,
 -- owners, contacts, records and emails are invented data values, and the text the raw-payload check
 -- sends (a subject, a body, names and addresses) is invented too and must not be stored. Every
@@ -15,17 +15,24 @@
 --      of a thread event, no reader on a base table; the reporting views' exact column lists, without
 --      raw; no column named like subject, body, text, html, header, attachment, email address,
 --      sender or recipient in the new tables and views; the four settings with their defaults; every
---      function the application's only and in the caller's rights, the category rule the owner's only
---   B  behaviour on two tenants (Europe/Amsterdam; markets NL, GB, DE in tenant one, alias uk for
---      GB): the settings' checks and the start date following intake.start_date; inbox and channel
---      refreshes keeping configuration; the stale guard on emails and threads, deletion and return;
---      idempotent thread events; the market by email.market_order, step by step, a removed
---      association, a deleted record, a later alias and unknown; rule ordering, inactive rules,
+--      function the application's only and in the caller's rights, the category rule the owner's only;
+--      the contacts' country slots and country_source, the contact view with country_source last, 0007d's
+--      fifteen checks unchanged and the added check with its reader view
+--   B  behaviour on three tenants (Europe/Amsterdam; markets NL, GB, DE in tenants one and three,
+--      alias uk for GB): the settings' checks and the start date following intake.start_date; inbox
+--      and channel refreshes keeping configuration; the stale guard on emails and threads, deletion
+--      and return; idempotent thread events; the market by email.market_order, step by step (contact,
+--      form, record, inbox), a later submission, an uncounted form and a form without a market left
+--      out, a removed association, a deleted record, a later alias and unknown; rule ordering, inactive rules,
 --      words normalised and nine refusals; the contact's privacy deletion; a conversation's privacy
 --      deletion and a later read; tenant isolation, also against the owner's view; the Ingest user
 --      unable to configure and a configuring person unable to ingest; the raw payload and the refs
 --      keeping nothing personal; the connection's kind; associations of email engagements; the
---      configuration the adapter reads; where each thread's messages stand; the email poll's runs
+--      configuration the adapter reads; where each thread's messages stand; the email poll's runs;
+--      contacts held for an email and a thread and the two privacy deletions; the country slots,
+--      contiguous, no property twice, a slot above 1 only for the country and refs; the country chosen
+--      from its slots with its source (tenant three); a single country exactly as before (tenant three);
+--      the data-quality check firing once and clearing; tenant isolation for contacts, slots and checks
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -86,6 +93,14 @@ language sql immutable
 as $$
   select jsonb_build_object('sourceId', p_src, 'status', p_status, 'createdAt', p_created, 'updatedAt', p_updated)
          || coalesce(p_extra, '{}'::jsonb)
+$$;
+
+-- One form submission resolved to a contact, as the ingest write takes it
+create or replace function pg_temp.v8m_sub(p_src text, p_form text, p_at timestamptz, p_contact text)
+returns jsonb
+language sql immutable
+as $$
+  select jsonb_build_object('sourceId', p_src, 'formId', p_form, 'submittedAt', p_at, 'contactId', p_contact)
 $$;
 
 -- A. Structure and privileges (universal)
@@ -173,7 +188,7 @@ begin
   select string_agg(key || '=' || value_type || ':' || default_value, ' ' order by key) into v_bad
   from cma.setting where key like 'email.%';
   insert into verify_0008m values (5, 'A5 the settings email.start_date, reply_target_minutes, no_response_days, market_order',
-    case when v_bad = 'email.market_order=text:record,inbox,contact email.no_response_days=integer:5 email.reply_target_minutes=integer:240 email.start_date=text:'
+    case when v_bad = 'email.market_order=text:contact,form,record,inbox email.no_response_days=integer:5 email.reply_target_minutes=integer:240 email.start_date=text:'
               and not v_provoke then 'PASS' else 'FAIL' end,
     coalesce(v_bad, 'missing'));
 
@@ -189,7 +204,9 @@ begin
     'cma.ingest_thread_forget(uuid,text)', 'cma.email_start_date_of(uuid)', 'cma.email_market_of(uuid,uuid,text,text)',
     'cma.connection_held_kinds_of(uuid,uuid)', 'cma.assert_email_connection(uuid,boolean)', 'cma.email_raw(jsonb)',
     'cma.email_words(text[])', 'cma.email_words_ok(text[])', 'cma.email_words_match(text,text[],text[])',
-    'cma.is_email_market_order(text)', 'cma.json_flag(jsonb,text)'] loop
+    'cma.is_email_market_order(text)', 'cma.json_flag(jsonb,text)', 'cma.ingest_upsert_contacts(uuid,jsonb)',
+    'cma.set_connection_field(uuid,text,text,text,text,smallint)', 'cma.contact_country_pick(text[])', 'cma.data_quality_of(uuid)',
+    'cma.data_quality()', 'cma.data_quality_added_checks()'] loop
     if to_regprocedure(v_fn) is null then
       v_bad := v_bad || v_fn || ' is missing; ';
     elsif not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
@@ -208,6 +225,41 @@ begin
   end if;
   insert into verify_0008m values (6, 'A6 the functions the application''s only, in the caller''s rights; the category rule the owner''s only',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
+
+  -- A7. contacts and data quality: the slot rule names the contacts' country; crm_contact.country_source
+  --     with its check; the contact view with country_source after its earlier columns; 0007d's fifteen
+  --     checks unchanged; the added check and its reader view (ids and codes only, readers only)
+  v_bad := '';
+  if pg_get_constraintdef((select oid from pg_constraint where conrelid = 'cma.connection_field'::regclass
+                           and conname = 'connection_field_slot_check')) not like '%country%' then
+    v_bad := v_bad || 'the slot rule does not name the country; ';
+  end if;
+  if (select data_type from information_schema.columns where table_schema = 'cma' and table_name = 'crm_contact'
+      and column_name = 'country_source') is distinct from 'smallint'
+     or not exists (select 1 from pg_constraint where conrelid = 'cma.crm_contact'::regclass and conname = 'crm_contact_country_source_check') then
+    v_bad := v_bad || 'crm_contact has no country_source with its check; ';
+  end if;
+  select string_agg(column_name, ',' order by ordinal_position) into v_cols
+  from information_schema.columns where table_schema = 'cma_read' and table_name = 'crm_contact';
+  if v_cols is distinct from 'id,tenant_id,connection_id,source_system,source_id,country,language,source_updated_at,source_deleted_at,synced_at,currency,store,country_source' then
+    v_bad := v_bad || 'cma_read.crm_contact has ' || coalesce(v_cols, 'no columns') || '; ';
+  end if;
+  if (select count(*) from cma.data_quality_checks()) <> 15
+     or exists (select 1 from cma.data_quality_checks() where check_key = 'contact_country_fallback') then
+    v_bad := v_bad || '0007d''s fifteen checks changed; ';
+  end if;
+  if (select string_agg(check_key, ',') from cma.data_quality_added_checks()) is distinct from 'contact_country_fallback' then
+    v_bad := v_bad || 'the added check is missing; ';
+  end if;
+  select string_agg(column_name, ',' order by ordinal_position) into v_cols
+  from information_schema.columns where table_schema = 'cma_read' and table_name = 'dq_contact_country_fallback';
+  if v_cols is distinct from 'tenant_id,connection_id,object_type,object_id,value'
+     or not has_table_privilege('cma_readonly', 'cma_read.dq_contact_country_fallback', 'select')
+     or has_table_privilege('cma_app', 'cma_read.dq_contact_country_fallback', 'select') then
+    v_bad := v_bad || 'the dq view is not ids and codes for readers only; ';
+  end if;
+  insert into verify_0008m values (7, 'A7 the country slots, country_source, the contact view, the added data-quality check',
+    case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
 
@@ -216,9 +268,10 @@ do $$
 declare
   v_provoke  boolean := current_setting('verify.provoke')::boolean;
   v_rows     text[] := '{}';
-  v_t1 uuid; v_t2 uuid;
-  v_admin1 uuid; v_agent1 uuid; v_ing1 uuid; v_admin2 uuid; v_ing2 uuid;
-  v_c1 uuid; v_c2 uuid; v_tel1 uuid; v_x1 uuid;
+  v_t1 uuid; v_t2 uuid; v_t3 uuid;
+  v_admin1 uuid; v_agent1 uuid; v_ing1 uuid; v_admin2 uuid; v_ing2 uuid; v_admin3 uuid; v_ing3 uuid;
+  v_c1 uuid; v_c2 uuid; v_c3 uuid; v_tel1 uuid; v_x1 uuid;
+  v_ok       boolean;
   v_r0 uuid; v_r1 uuid; v_r2 uuid; v_r3 uuid;
   v_run      uuid;
   v_txt      text;
@@ -238,6 +291,8 @@ begin
   begin
     v_t1 := cma.create_tenant('verify-0008m-one', 'Verify 0008m one', 'Europe/Amsterdam');
     v_t2 := cma.create_tenant('verify-0008m-two', 'Verify 0008m two', 'Europe/Amsterdam');
+    v_t3 := cma.create_tenant('verify-0008m-three', 'Verify 0008m three', 'Europe/Amsterdam');
+    insert into cma.app_user (tenant_id, email, display_name) values (v_t3, 'verify-admin3@example.invalid', 'admin3') returning id into v_admin3;
     insert into cma.channel (tenant_id, key, name, is_synchronous)
     values (v_t1, 'email', 'Email', false), (v_t1, 'phone', 'Phone', true), (v_t2, 'email', 'Email', false);
     insert into cma.skill (tenant_id, dimension, key, name) values (v_t1, 'work_type', 'verify-sales', 'Verify sales');
@@ -246,10 +301,11 @@ begin
     insert into cma.app_user (tenant_id, email, display_name) values (v_t2, 'verify-admin2@example.invalid', 'admin2') returning id into v_admin2;
     insert into cma.user_role (tenant_id, user_id, role_id)
     select ar.tenant_id, x.uid, ar.id
-    from (values (v_t1, v_admin1, 'admin'), (v_t1, v_agent1, 'agent'), (v_t2, v_admin2, 'admin')) as x(tid, uid, role_key)
+    from (values (v_t1, v_admin1, 'admin'), (v_t1, v_agent1, 'agent'), (v_t2, v_admin2, 'admin'), (v_t3, v_admin3, 'admin')) as x(tid, uid, role_key)
     join cma.app_role ar on ar.tenant_id = x.tid and ar.key = x.role_key;
     select x.user_id into v_ing1 from cma.app_user_external_id x where x.tenant_id = v_t1 and x.system = 'ingest';
     select x.user_id into v_ing2 from cma.app_user_external_id x where x.tenant_id = v_t2 and x.system = 'ingest';
+    select x.user_id into v_ing3 from cma.app_user_external_id x where x.tenant_id = v_t3 and x.system = 'ingest';
     perform set_config('role', 'cma_app', true);
 
     -- tenant one: markets NL, GB and DE with the alias uk; a CRM connection, a telephony connection and
@@ -273,11 +329,24 @@ begin
     select c.connection_id into v_c2 from cma.upsert_connection('verifycrm', 'Verify CRM two', 'portal-1', null, null) c;
     perform cma.set_connection_kind(v_c2, 'crm');
 
+    -- tenant three, for the country chosen from its slots: markets NL, GB and DE, the aliases uk and
+    -- united kingdom for GB, a CRM connection
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_admin3::text, true);
+    perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+    perform cma.upsert_market('GB', 'United Kingdom', 'Europe/London', 'en', 'GBP');
+    perform cma.upsert_market('DE', 'Germany', 'Europe/Berlin', 'de', 'EUR');
+    perform cma.set_market_alias('uk', 'GB');
+    perform cma.set_market_alias('united kingdom', 'GB');
+    select c.connection_id into v_c3 from cma.upsert_connection('verifycrm', 'Verify CRM three', 'portal-3', null, null) c;
+    perform cma.set_connection_kind(v_c3, 'crm');
+
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin1::text, true);
 
-    -- B1. the settings: the start date follows intake.start_date while empty; the market order written
-    --     in lower case without spaces; ten values refused
+    -- B1. the settings: the start date follows intake.start_date while empty; a market order of the
+    --     four steps taken as written; thirteen values refused (an unknown step, a step twice, spaces,
+    --     upper case, empty, five steps; dates, minutes and days out of range)
     v_txt := cma.email_start_date_of(v_t1)::text;
     perform cma.set_tenant_setting('intake.start_date', '2026-09-15');
     v_txt := v_txt || ' ' || cma.email_start_date_of(v_t1)::text;
@@ -285,10 +354,12 @@ begin
     v_txt := v_txt || ' ' || cma.email_start_date_of(v_t1)::text;
     perform cma.set_tenant_setting('email.start_date', '');
     v_txt := v_txt || ' ' || cma.email_start_date_of(v_t1)::text;
-    perform cma.set_tenant_setting('email.market_order', ' Inbox , RECORD ');
+    perform cma.set_tenant_setting('email.market_order', 'inbox,record');
     v_txt := v_txt || ' ' || (select value from cma.tenant_setting where tenant_id = v_t1 and key = 'email.market_order');
+    v_txt := v_txt || ' ' || cma.setting_of(v_t2, 'email.market_order');
     v_n := 0;
-    foreach v_detail in array array['email.market_order=record,record', 'email.market_order=deal', 'email.market_order=',
+    foreach v_detail in array array['email.market_order=record,record', 'email.market_order=deal', 'email.market_order=contact, form',
+                                    'email.market_order=Contact,form', 'email.market_order=', 'email.market_order=contact,form,record,inbox,form',
                                     'email.start_date=2026-13-01', 'email.start_date=1 Oct', 'email.reply_target_minutes=0',
                                     'email.reply_target_minutes=10081', 'email.reply_target_minutes=x', 'email.no_response_days=0',
                                     'email.no_response_days=91'] loop
@@ -298,9 +369,9 @@ begin
     end loop;
     perform cma.set_tenant_setting('email.market_order', null);
     perform cma.set_tenant_setting('intake.start_date', null);
-    v_rows := v_rows || array['11', 'B1 the settings: the start date, the market order, ten refusals',
-      case when v_txt = '2026-10-01 2026-09-15 2026-08-01 2026-09-15 inbox,record' and v_n = 10 and not v_provoke then 'PASS' else 'FAIL' end,
-      format('%s | %s of 10 refused', v_txt, v_n)];
+    v_rows := v_rows || array['11', 'B1 the settings: the start date, the market order, thirteen refusals',
+      case when v_txt = '2026-10-01 2026-09-15 2026-08-01 2026-09-15 inbox,record contact,form,record,inbox' and v_n = 13 and not v_provoke then 'PASS' else 'FAIL' end,
+      format('%s | %s of 13 refused', v_txt, v_n)];
 
     -- B2. an inbox and channel refresh keeps the configuration: names follow the source, an inbox or a
     --     channel missing from the source is archived, a new inbox counts in the email channel, a new
@@ -425,52 +496,87 @@ begin
                 and not v_provoke then 'PASS' else 'FAIL' end,
       v_txt || ' | ' || v_detail];
 
-    -- B5. the market by email.market_order: records (ticket before deal), inbox, contact, unknown; the
-    --     order changed; a removed association; a deleted record; an alias added later
+    -- B5. the market by email.market_order (default contact, form, record, inbox): the contact's
+    --     country; the latest counted form with a market submitted before the email (a later
+    --     submission, an uncounted form and a form without a market left out); the record (ticket before
+    --     deal); the inbox; unknown; the order changed; a removed association; a deleted record; an alias
+    --     added later
     perform cma.ingest_upsert_records(v_c1, jsonb_build_array(
       jsonb_build_object('recordType', 'ticket', 'sourceId', 't-1', 'market', 'de', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day'),
       jsonb_build_object('recordType', 'deal', 'sourceId', 'd-1', 'market', 'NL', 'contactId', 'c-1', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day'),
-      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-2', 'contactId', 'c-2', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day')));
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-2', 'contactId', 'c-2', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day'),
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-3', 'contactId', 'c-3', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day'),
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-4', 'contactId', 'c-4', 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day')));
     perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
       jsonb_build_object('sourceId', 'c-1', 'country', 'uk', 'updatedAt', t0 - interval '1 day'),
-      jsonb_build_object('sourceId', 'c-2', 'country', 'nederland', 'updatedAt', t0 - interval '1 day')));
+      jsonb_build_object('sourceId', 'c-2', 'country', 'nederland', 'updatedAt', t0 - interval '1 day'),
+      jsonb_build_object('sourceId', 'c-3', 'updatedAt', t0 - interval '1 day'),
+      jsonb_build_object('sourceId', 'c-4', 'updatedAt', t0 - interval '1 day')));
+    perform cma.ingest_upsert_forms(v_c1, '[{"formId": "f-gb", "name": "Verify form GB"}, {"formId": "f-nl", "name": "Verify form NL"},
+      {"formId": "f-de", "name": "Verify form DE, not counted"}, {"formId": "f-none", "name": "Verify form without a market"}]');
+    perform set_config('app.user_id', v_admin1::text, true);
+    perform cma.set_form(v_c1, 'f-gb', true, null, 'GB', '{}');
+    perform cma.set_form(v_c1, 'f-nl', true, null, 'NL', '{}');
+    perform cma.set_form(v_c1, 'f-de', false, null, 'DE', '{}');
+    perform cma.set_form(v_c1, 'f-none', true, null, null, '{}');
+    perform set_config('app.user_id', v_ing1::text, true);
+    perform cma.ingest_upsert_form_submissions(v_c1, jsonb_build_array(
+      pg_temp.v8m_sub('s-1', 'f-gb', t0 - interval '2 days', 'c-3'),
+      pg_temp.v8m_sub('s-2', 'f-nl', t0 + interval '1 hour', 'c-3'),
+      pg_temp.v8m_sub('s-3', 'f-de', t0 - interval '1 day', 'c-3'),
+      pg_temp.v8m_sub('s-4', 'f-none', t0 - interval '1 hour', 'c-3'),
+      pg_temp.v8m_sub('s-5', 'f-none', t0 - interval '1 hour', 'c-4'),
+      pg_temp.v8m_sub('s-6', 'f-de', t0 - interval '1 day', 'c-4')));
     perform cma.ingest_upsert_threads(v_c1, jsonb_build_array(
-      pg_temp.v8m_thread('th-2', 'open', t0, t0, '{"inboxId": "in-3", "contactId": "c-2"}'::jsonb)));
+      pg_temp.v8m_thread('th-2', 'open', t0, t0, '{"inboxId": "in-3", "contactId": "c-2"}'::jsonb),
+      pg_temp.v8m_thread('th-3', 'open', t0, t0, '{"inboxId": "in-1"}'::jsonb)));
     perform cma.ingest_upsert_emails(v_c1, jsonb_build_array(
       pg_temp.v8m_email('crm_email', 'e-m1', 'out', t0, '{"actorKind": "agent", "ownerRef": "own-1"}'::jsonb),
       pg_temp.v8m_email('inbox_message', 'm-1', 'in', t0 - interval '50 minutes', '{"threadId": "th-1", "inboxId": "in-1", "channelId": "ch-1", "actorKind": "customer"}'::jsonb),
       pg_temp.v8m_email('crm_email', 'e-m2', 'in', t0, '{"actorKind": "customer"}'::jsonb),
-      pg_temp.v8m_email('inbox_message', 'm-2', 'in', t0, '{"threadId": "th-2", "actorKind": "customer"}'::jsonb)));
+      pg_temp.v8m_email('inbox_message', 'm-2', 'in', t0, '{"threadId": "th-2", "actorKind": "customer"}'::jsonb),
+      pg_temp.v8m_email('inbox_message', 'm-3', 'in', t0, '{"threadId": "th-3", "inboxId": "in-1", "actorKind": "customer"}'::jsonb),
+      pg_temp.v8m_email('crm_email', 'e-f', 'in', t0, '{"actorKind": "customer", "contactId": "c-3"}'::jsonb),
+      pg_temp.v8m_email('crm_email', 'e-g', 'in', t0, '{"actorKind": "customer", "contactId": "c-4"}'::jsonb)));
     perform cma.ingest_upsert_associations(v_c1, jsonb_build_array(
       jsonb_build_object('fromType', 'ticket', 'fromId', 't-1', 'toType', 'crm_email', 'toId', 'e-m1', 'removed', false, 'changedAt', t0),
       jsonb_build_object('fromType', 'crm_email', 'fromId', 'e-m1', 'toType', 'deal', 'toId', 'd-1', 'removed', false, 'changedAt', t0),
-      jsonb_build_object('fromType', 'contact', 'fromId', 'c-1', 'toType', 'crm_email', 'toId', 'e-m1', 'removed', false, 'changedAt', t0)));
+      jsonb_build_object('fromType', 'contact', 'fromId', 'c-1', 'toType', 'crm_email', 'toId', 'e-m1', 'removed', false, 'changedAt', t0),
+      jsonb_build_object('fromType', 'crm_email', 'fromId', 'e-g', 'toType', 'deal', 'toId', 'd-1', 'removed', false, 'changedAt', t0)));
     v_txt := '';
-    foreach v_detail in array array['crm_email:e-m1', 'inbox_message:m-1', 'crm_email:e-m2', 'inbox_message:m-2'] loop
+    foreach v_detail in array array['crm_email:e-m1', 'inbox_message:m-1', 'crm_email:e-f', 'crm_email:e-g', 'inbox_message:m-3',
+                                    'crm_email:e-m2', 'inbox_message:m-2'] loop
       select v_txt || format('%s=%s/%s ', split_part(v_detail, ':', 2), m.code, coalesce(m.source, '-')) into v_txt
       from cma.email_market_of(v_t1, v_c1, split_part(v_detail, ':', 1), split_part(v_detail, ':', 2)) m;
     end loop;
     perform set_config('app.user_id', v_admin1::text, true);
-    perform cma.set_tenant_setting('email.market_order', 'inbox,record,contact');
-    select v_txt || format('| m-1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'inbox_message', 'm-1') m;
-    select v_txt || format('e-m1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
-    select v_txt || format('th-1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'inbox_thread', 'th-1') m;
-    perform cma.set_tenant_setting('email.market_order', 'contact,inbox,record');
-    select v_txt || format('| m-1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'inbox_message', 'm-1') m;
-    select v_txt || format('e-m1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
-    perform cma.set_tenant_setting('email.market_order', null);
+    perform cma.set_tenant_setting('email.market_order', 'record,inbox,contact,form');
+    v_txt := v_txt || '|';
+    foreach v_detail in array array['crm_email:e-m1', 'inbox_message:m-1', 'inbox_thread:th-1'] loop
+      select v_txt || format(' %s=%s/%s', split_part(v_detail, ':', 2), m.code, coalesce(m.source, '-')) into v_txt
+      from cma.email_market_of(v_t1, v_c1, split_part(v_detail, ':', 1), split_part(v_detail, ':', 2)) m;
+    end loop;
+    perform cma.set_tenant_setting('email.market_order', 'inbox,record');
+    v_txt := v_txt || ' |';
+    foreach v_detail in array array['inbox_message:m-1', 'crm_email:e-m1', 'crm_email:e-f'] loop
+      select v_txt || format(' %s=%s/%s', split_part(v_detail, ':', 2), m.code, coalesce(m.source, '-')) into v_txt
+      from cma.email_market_of(v_t1, v_c1, split_part(v_detail, ':', 1), split_part(v_detail, ':', 2)) m;
+    end loop;
+    perform cma.set_tenant_setting('email.market_order', 'record,inbox,contact');
     perform set_config('app.user_id', v_ing1::text, true);
     perform cma.ingest_upsert_associations(v_c1, jsonb_build_array(
       jsonb_build_object('fromType', 'crm_email', 'fromId', 'e-m1', 'toType', 'ticket', 'toId', 't-1', 'removed', true, 'changedAt', t0 + interval '1 minute')));
-    select v_txt || format('| e-m1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
+    select v_txt || format(' | e-m1=%s/%s', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
     perform cma.ingest_upsert_records(v_c1, jsonb_build_array(
       jsonb_build_object('recordType', 'deal', 'sourceId', 'd-1', 'deletedAt', t0 + interval '2 minutes')));
-    select v_txt || format('e-m1=%s/%s ', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
+    select v_txt || format(' e-m1=%s/%s', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-m1') m;
+    select v_txt || format(' e-g=%s/%s', m.code, coalesce(m.source, '-')) into v_txt from cma.email_market_of(v_t1, v_c1, 'crm_email', 'e-g') m;
     perform set_config('app.user_id', v_admin1::text, true);
+    perform cma.set_tenant_setting('email.market_order', null);
     perform cma.set_market_alias('nederland', 'NL');
-    select v_txt || format('| m-2=%s/%s', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'inbox_message', 'm-2') m;
-    v_rows := v_rows || array['15', 'B5 the market by email.market_order, step by step, at query time',
-      case when v_txt = 'e-m1=DE/record m-1=DE/record e-m2=unknown/- m-2=unknown/- | m-1=NL/inbox e-m1=DE/record th-1=NL/inbox | m-1=GB/contact e-m1=GB/contact | e-m1=NL/record e-m1=GB/contact | m-2=NL/contact'
+    select v_txt || format(' | m-2=%s/%s', m.code, m.source) into v_txt from cma.email_market_of(v_t1, v_c1, 'inbox_message', 'm-2') m;
+    v_rows := v_rows || array['15', 'B5 the market by email.market_order, step by step (contact, form, record, inbox), at query time',
+      case when v_txt = 'e-m1=GB/contact m-1=GB/contact e-f=GB/form e-g=NL/record m-3=NL/inbox e-m2=unknown/- m-2=unknown/- | e-m1=DE/record m-1=DE/record th-1=DE/record | m-1=NL/inbox e-m1=DE/record e-f=unknown/- | e-m1=NL/record e-m1=GB/contact e-g=unknown/- | m-2=NL/contact'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B6. rule ordering: the first active rule by its order whose words the value of its kind contains
@@ -745,6 +851,181 @@ begin
       case when v_txt = 'email_poll succeeded {"stale": 1, "fetched": 3, "upserted": 2} CMA04' and not v_provoke then 'PASS' else 'FAIL' end,
       v_txt];
 
+    -- B17. contacts held for emails and threads: a contact an email points to and one a thread points to
+    --      are taken in, one nothing points to is not; the contact's privacy deletion clears its country,
+    --      source and refs and the email's contact; a conversation's privacy deletion leaves the contact
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_ing1::text, true);
+    perform cma.ingest_upsert_emails(v_c1, jsonb_build_array(pg_temp.v8m_email('crm_email', 'e-h1', 'in', t0, '{"contactId": "c-h1"}'::jsonb)));
+    perform cma.ingest_upsert_threads(v_c1, jsonb_build_array(pg_temp.v8m_thread('th-h2', 'open', t0, t0, '{"inboxId": "in-1", "contactId": "c-h2"}'::jsonb)));
+    select string_agg(o.outcome, ',') into v_txt
+    from cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-h1', 'country', 'NL', 'refs', jsonb_build_object('verifyshop', 'shop-h1'), 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-h2', 'country', 'uk', 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-h3', 'country', 'DE', 'updatedAt', t0))) o;
+    v_res := cma.ingest_contact_forget(v_c1, 'c-h1');
+    select v_txt || format(' | %s %s:%s:%s:%s:%s', v_res, coalesce(k.country, '-'), coalesce(k.country_source::text, '-'), k.source_deleted_at is not null,
+                           (select count(*) from cma.crm_contact_ref r where r.contact_id = k.id),
+                           coalesce((select contact_source_id from cma.email_message where connection_id = v_c1 and source_id = 'e-h1'), '-'))
+    into v_txt from cma.crm_contact k where k.connection_id = v_c1 and k.source_id = 'c-h1';
+    v_res := cma.ingest_thread_forget(v_c1, 'th-h2');
+    select v_txt || format(' | %s %s:%s:%s', v_res, coalesce(k.country, '-'), coalesce(k.country_source::text, '-'),
+                           coalesce((select contact_source_id from cma.email_thread where connection_id = v_c1 and source_id = 'th-h2'), '-'))
+    into v_txt from cma.crm_contact k where k.connection_id = v_c1 and k.source_id = 'c-h2';
+    v_rows := v_rows || array['27', 'B17 contacts held for an email and a thread; the privacy deletion forgets, the thread''s does not',
+      case when v_txt = 'inserted,inserted,not_held | {"refs": 1, "calls": 0, "emails": 1, "contacts": 1, "submissions": 0} -:-:t:0:- | {"threads": 1, "messages": 0} GB:1:-'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B18. the country slots: contiguous slots taken (slot 1 through the 0006 call shape), as the
+    --      adapter reads them; a gap, a property twice (also in another case), a slot above 1 on another
+    --      contact field and on a record field, and a slot removed from the middle refused; a ref's slot
+    --      2 as today; the last slots removed, then slot 2 again
+    perform set_config('app.user_id', v_admin1::text, true);
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'contact_country');
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'country_dropdown', 2::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'country_extra', 3::smallint);
+    select string_agg(format('%s:%s', f ->> 'property', f ->> 'slot'), ' ' order by (f ->> 'slot')::int) into v_txt
+    from jsonb_array_elements(cma.connection_config(v_c1) -> 'fields') f where f ->> 'entity' = 'contact' and f ->> 'field' = 'country';
+    v_txt := v_txt || ' |';
+    foreach v_detail in array array[
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 5::smallint)', v_c1, 'contact', 'country', 'country_five'),
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 4::smallint)', v_c1, 'contact', 'country', 'country_dropdown'),
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 3::smallint)', v_c1, 'contact', 'country', 'Contact_Country'),
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 2::smallint)', v_c1, 'contact', 'language', 'language_two'),
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 2::smallint)', v_c1, 'deal', 'market', 'market_two'),
+      format('select cma.set_connection_field(%L, %L, %L, null, %L, 2::smallint)', v_c1, 'contact', 'country', ''),
+      format('select cma.set_connection_field(%L, %L, %L, %L, %L, 2::smallint)', v_c1, 'contact', 'ref', 'verifyshop', 'shop_id_2')] loop
+      v_txt := v_txt || ' ' || pg_temp.v8m_err(v_detail);
+    end loop;
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, '', 3::smallint);
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, '', 2::smallint);
+    select v_txt || ' | ' || string_agg(format('%s:%s', f ->> 'property', f ->> 'slot'), ' ' order by (f ->> 'slot')::int) into v_txt
+    from jsonb_array_elements(cma.connection_config(v_c1) -> 'fields') f where f ->> 'entity' = 'contact' and f ->> 'field' = 'country';
+    perform cma.set_connection_field(v_c1, 'contact', 'country', null, 'country_dropdown', 2::smallint);
+    select v_txt || ' | ' || string_agg(format('%s:%s', f ->> 'property', f ->> 'slot'), ' ' order by (f ->> 'slot')::int) into v_txt
+    from jsonb_array_elements(cma.connection_config(v_c1) -> 'fields') f where f ->> 'entity' = 'contact' and f ->> 'field' = 'country';
+    v_rows := v_rows || array['28', 'B18 the country slots: contiguous, no property twice, removed from the end; six refusals',
+      case when v_txt = 'contact_country:1 country_dropdown:2 country_extra:3 | CMA04 CMA03 CMA03 CMA04 CMA04 CMA04 ok | contact_country:1 | contact_country:1 country_dropdown:2'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B19. the country chosen from its slots (tenant three): slot 1 when it names a catalog market; slot
+    --      1 empty falls to slot 2; slot 1 not in the catalog falls to slot 2; no slot naming a market
+    --      keeps the first value as written; all empty gives none; with the slot as country_source; four
+    --      malformed items refused
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_ing3::text, true);
+    perform cma.ingest_upsert_records(v_c3, (select jsonb_agg(jsonb_build_object('recordType', 'deal', 'sourceId', 'd-' || x, 'contactId', 'c-' || x,
+                                                                                 'createdAt', t0 - interval '1 day', 'updatedAt', t0 - interval '1 day'))
+                                             from unnest(array['s1', 's2', 's3', 's4', 's5', 's6', 'b1', 'b2', 'b3', 'b4', 'b5']) x));
+    perform cma.ingest_upsert_contacts(v_c3, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-s1', 'countries', '["NL", "Germany"]'::jsonb, 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-s2', 'countries', '[null, "United Kingdom"]'::jsonb, 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-s3', 'countries', '["Atlantis", "de"]'::jsonb, 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-s4', 'countries', '["Atlantis", "Narnia"]'::jsonb, 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-s5', 'countries', '["", " "]'::jsonb, 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-s6', 'countries', '[" ", "Narnia"]'::jsonb, 'updatedAt', t0)));
+    select string_agg(format('%s=%s/%s', source_id, coalesce(country, '-'), coalesce(country_source::text, '-')), ' ' order by source_id) into v_txt
+    from cma.crm_contact where connection_id = v_c3 and source_id like 'c-s%';
+    v_txt := v_txt || ' |';
+    foreach v_detail in array array[
+      jsonb_build_object('sourceId', 'c-s1', 'country', 'NL', 'countries', '["NL"]'::jsonb, 'updatedAt', t0 + interval '1 minute')::text,
+      jsonb_build_object('sourceId', 'c-s1', 'countries', '{"1": "NL"}'::jsonb, 'updatedAt', t0 + interval '1 minute')::text,
+      jsonb_build_object('sourceId', 'c-s1', 'countries', (select jsonb_agg('NL'::text) from generate_series(1, 10)), 'updatedAt', t0 + interval '1 minute')::text,
+      jsonb_build_object('sourceId', 'c-s1', 'countries', '[31]'::jsonb, 'updatedAt', t0 + interval '1 minute')::text] loop
+      v_txt := v_txt || ' ' || pg_temp.v8m_err(format('select cma.ingest_upsert_contacts(%L, %L)', v_c3, jsonb_build_array(v_detail::jsonb)));
+    end loop;
+    v_rows := v_rows || array['29', 'B19 the country chosen from its slots, with its source; four refusals',
+      case when v_txt = 'c-s1=NL/1 c-s2=GB/2 c-s3=DE/2 c-s4=Atlantis/1 c-s5=-/- c-s6=Narnia/2 | CMA04 CMA04 CMA04 CMA04'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B20. a single country behaves as before (tenant three): stored as 0007's cma.normalize_market gives
+    --      it (an alias, a code, else as written), from slot 1; a read without a country clears it; a
+    --      stale read changes nothing; a deletion clears country and source
+    perform cma.ingest_upsert_contacts(v_c3, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-b1', 'country', 'Nederland', 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-b2', 'country', 'nl', 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-b3', 'country', ' uk ', 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-b4', 'updatedAt', t0),
+      jsonb_build_object('sourceId', 'c-b5', 'country', '', 'updatedAt', t0)));
+    select string_agg(format('%s=%s/%s', k.source_id, coalesce(k.country, '-'), coalesce(k.country_source::text, '-')), ' ' order by k.source_id),
+           bool_and(k.country is not distinct from cma.normalize_market(x.input)
+                    and k.country_source is not distinct from case when nullif(btrim(x.input), '') is not null then 1 end)
+    into v_txt, v_ok
+    from cma.crm_contact k
+    join (values ('c-b1', 'Nederland'), ('c-b2', 'nl'), ('c-b3', ' uk '), ('c-b4', null), ('c-b5', '')) x(src, input) on x.src = k.source_id
+    where k.connection_id = v_c3;
+    v_txt := v_txt || ' ' || v_ok::text || ' |';
+    select v_txt || ' ' || string_agg(o.outcome, ',') into v_txt
+    from cma.ingest_upsert_contacts(v_c3, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-b2', 'updatedAt', t0 + interval '1 minute'),
+      jsonb_build_object('sourceId', 'c-b3', 'country', 'DE', 'updatedAt', t0 - interval '1 minute'),
+      jsonb_build_object('sourceId', 'c-b1', 'deletedAt', t0 + interval '2 minutes'))) o;
+    select v_txt || ' ' || string_agg(format('%s=%s/%s', source_id, coalesce(country, '-'), coalesce(country_source::text, '-')), ' ' order by source_id)
+    into v_txt from cma.crm_contact where connection_id = v_c3 and source_id in ('c-b1', 'c-b2', 'c-b3');
+    v_rows := v_rows || array['30', 'B20 a single country behaves exactly as before',
+      case when v_txt = 'c-b1=Nederland/1 c-b2=NL/1 c-b3=GB/1 c-b4=-/- c-b5=-/- true | updated,stale,deleted c-b1=-/- c-b2=-/- c-b3=GB/1'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B21. data quality: contact_country_fallback is listed (at zero) once the connection maps slot 2,
+    --      fires once for a contact whose country came from slot 2 (the slot as its code, in the readers'
+    --      view too) and clears when slot 1 is filled; a tenant without fallback slots keeps 0007d's
+    --      fifteen rows exactly
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_admin1::text, true);
+    v_txt := 'listed:' || coalesce((select q.total::text from cma.data_quality() q where q.check_key = 'contact_country_fallback'), 'no');
+    perform set_config('app.user_id', v_ing1::text, true);
+    perform cma.ingest_upsert_records(v_c1, jsonb_build_array(
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-q1', 'contactId', 'c-q1', 'createdAt', t0, 'updatedAt', t0)));
+    perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-q1', 'countries', '[null, "uk"]'::jsonb, 'updatedAt', t0)));
+    perform set_config('app.user_id', v_admin1::text, true);
+    select v_txt || format(' | %s %s', (select q.total from cma.data_quality() q where q.check_key = 'contact_country_fallback'),
+                           (select string_agg(concat_ws(':', q.object_type, q.object_id, q.value), ' ')
+                            from cma.data_quality_of(v_t1) q where q.check_key = 'contact_country_fallback')) into v_txt;
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || ' view ' || (select count(*) from cma_read.dq_contact_country_fallback where tenant_id = v_t1 and object_id = 'c-q1' and value = '2');
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_ing1::text, true);
+    perform cma.ingest_upsert_contacts(v_c1, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-q1', 'countries', '["GB", "uk"]'::jsonb, 'updatedAt', t0 + interval '1 minute')));
+    perform set_config('app.user_id', v_admin1::text, true);
+    select v_txt || format(' | %s %s', (select q.total from cma.data_quality() q where q.check_key = 'contact_country_fallback'),
+                           coalesce((select string_agg(q.object_id, ' ') from cma.data_quality_of(v_t1) q where q.check_key = 'contact_country_fallback'), '-'))
+    into v_txt;
+    perform set_config('app.tenant_id', v_t2::text, true);
+    perform set_config('app.user_id', v_admin2::text, true);
+    select v_txt || format(' | %s %s', count(*), bool_or(q.check_key = 'contact_country_fallback')) into v_txt from cma.data_quality() q;
+    v_rows := v_rows || array['31', 'B21 the fallback check: listed with slot 2, fires once, clears; fifteen rows without fallback slots',
+      case when v_txt = 'listed:0 | 1 contact:c-q1:2 view 1 | 0 - | 15 f' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B22. tenant isolation for contacts, slots and the check: tenant two holds the same contact id with
+    --      a fallback country and the same slots; tenant one sees its own contact only, none of tenant
+    --      two's slots or findings, and cannot set a slot or write a contact on tenant two's connection;
+    --      the owner sees both
+    perform cma.set_connection_field(v_c2, 'contact', 'country', null, 'contact_country');
+    perform cma.set_connection_field(v_c2, 'contact', 'country', null, 'country_dropdown', 2::smallint);
+    perform set_config('app.user_id', v_ing2::text, true);
+    perform cma.ingest_upsert_records(v_c2, jsonb_build_array(
+      jsonb_build_object('recordType', 'deal', 'sourceId', 'd-q1', 'contactId', 'c-q1', 'createdAt', t0, 'updatedAt', t0)));
+    perform cma.ingest_upsert_contacts(v_c2, jsonb_build_array(
+      jsonb_build_object('sourceId', 'c-q1', 'countries', '[null, "nl"]'::jsonb, 'updatedAt', t0)));
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_admin1::text, true);
+    v_txt := format('%s %s %s %s', (select count(*) from cma.crm_contact where source_id = 'c-q1'),
+                    (select country || '/' || country_source from cma.crm_contact where source_id = 'c-q1'),
+                    (select count(*) from cma.connection_field where connection_id = v_c2),
+                    (select count(*) from cma.data_quality_of(v_t2) q where q.check_key = 'contact_country_fallback'));
+    v_txt := v_txt || ' ' || pg_temp.v8m_err(format('select cma.set_connection_field(%L, %L, %L, null, %L, 3::smallint)', v_c2, 'contact', 'country', 'country_x'));
+    perform set_config('app.user_id', v_ing1::text, true);
+    v_txt := v_txt || ' ' || pg_temp.v8m_err(format('select cma.ingest_upsert_contacts(%L, %L)', v_c2,
+                                                     jsonb_build_array(jsonb_build_object('sourceId', 'c-q1', 'country', 'DE', 'updatedAt', t0 + interval '1 hour'))));
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || format(' | %s %s', (select count(*) from cma.crm_contact where source_id = 'c-q1' and tenant_id in (v_t1, v_t2)),
+                             (select string_agg(q.object_id || ':' || q.value, ' ') from cma.data_quality_of(v_t2) q where q.check_key = 'contact_country_fallback'));
+    perform set_config('role', 'cma_app', true);
+    v_rows := v_rows || array['32', 'B22 tenant isolation for contacts, slots and the fallback check, also against the owner''s view',
+      case when v_txt = '1 GB/1 0 0 CMA02 CMA02 | 2 c-q1:2' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -767,12 +1048,12 @@ from (select ord, check_name, result, detail from verify_0008m
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008m where result = 'PASS') = 22
+                  when (select count(*) from verify_0008m where result = 'PASS') = 29
                        and not exists (select 1 from verify_0008m where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008m where result = 'PASS'),
                                         (select count(*) from verify_0008m where result <> 'PASS'))) x
 order by ord;
 drop function if exists pg_temp.v8m_err(text), pg_temp.v8m_email(text, text, text, timestamptz, jsonb),
-                        pg_temp.v8m_thread(text, text, timestamptz, timestamptz, jsonb);
+                        pg_temp.v8m_thread(text, text, timestamptz, timestamptz, jsonb), pg_temp.v8m_sub(text, text, timestamptz, text);
 reset role;

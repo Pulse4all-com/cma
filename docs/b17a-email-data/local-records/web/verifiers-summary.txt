@@ -1,4 +1,4 @@
-verify:copy exit 0: copy: PASS (1371 keys, en and nl)
+verify:copy exit 0: copy: PASS (1372 keys, en and nl)
 verify:corrections exit 0: ALL 31 PASS
 verify:csv exit 0: ALL 16 PASS
 verify:dashboard exit 0: ALL 17 PASS
@@ -9,7 +9,7 @@ verify:configuration exit 0: ALL 92 PASS
 verify:messages exit 0: ALL 24 PASS
 verify:import exit 0: ALL 23 PASS
 verify:datamap exit 1: datamap: FAIL (7 problems)
-verify:signed-out exit 0: signed-out: PASS (14 checks)
+verify:signed-out exit 0: signed-out: PASS (16 checks)
 verify:invitations exit 0: invitations: PASS (27 checks)
 verify:copy --provoke exit 1: copy: FAIL (5 problems)
 verify:corrections --provoke exit 0: ALL 31 PROVOKED CHECKS FAILED, as they must
@@ -22,5 +22,5 @@ verify:configuration --provoke exit 0: ALL 92 PROVOKED CHECKS FAILED, as they mu
 verify:messages --provoke exit 0: ALL 24 PROVOKED CHECKS FAILED, as they must
 verify:import --provoke exit 0: ALL 23 PROVOKED CHECKS FAILED, as they must
 verify:datamap --provoke exit 1: datamap: FAIL (11 problems)
-verify:signed-out --provoke exit 0: signed-out: ALL 14 PROVOKED CHECKS FAILED, as they must
+verify:signed-out --provoke exit 0: signed-out: ALL 16 PROVOKED CHECKS FAILED, as they must
 verify:invitations --provoke exit 0: invitations: ALL 27 PROVOKED CHECKS FAILED, as they must

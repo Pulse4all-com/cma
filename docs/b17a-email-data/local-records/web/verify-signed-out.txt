@@ -4,7 +4,7 @@ PASS  no external script, stylesheet or font: only the page's own files and Goog
 PASS  the CSP is present, exact, and allows the one inline script by its hash only
 PASS  no tenant or company name before the deploy: the name and the logo are placeholders
 PASS  English and Dutch, word for word copy.ts's signedOut, chosen from the browser's language
-PASS  the three links: Log in to / (focused), another account through Google's AddSession, Google's Logout
+PASS  the three links: Log in to / (focused), Add another account to Google's plain AddSession in a new tab, Google's Logout
 PASS  Log out's Location: unset and legacy /logout/done, signed-out the static page, relative; a typo refused
 PASS  the route, the config and the build use the flag, legacy by default
 PASS  No access yet links to another account only with the flag
@@ -12,5 +12,7 @@ PASS  /signed-out reaching cma-web gets the IAP check: in the matcher, no route,
 PASS  deploy.sh grants allUsers legacyObjectReader (no listing), never objectViewer, and stops on any other role
 PASS  deploy.sh passes no value to --public-access-prevention or --pap; the bucket's create leaves it inherited
 PASS  urlmap.py on the fixture: exactly the three route rules, the default service and the ingest host rule kept, the new tests
+PASS  an unchanged plan is validated, not imported: urlmap.py writes no new map, deploy.sh imports only a new one
+PASS  the import is locked on the map as read (its fingerprint kept, compared, a 412 stops), the restore writes the live one
 
-signed-out: PASS (14 checks)
+signed-out: PASS (16 checks)

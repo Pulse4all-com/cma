@@ -9,76 +9,76 @@ REVOKE
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
-psql:db/68_email_activity.sql:247: NOTICE:  relation "connection_inbox" already exists, skipping
+psql:db/68_email_activity.sql:263: NOTICE:  relation "connection_inbox" already exists, skipping
 CREATE TABLE
 COMMENT
 CREATE TRIGGER
-psql:db/68_email_activity.sql:270: NOTICE:  relation "connection_inbox_channel" already exists, skipping
+psql:db/68_email_activity.sql:286: NOTICE:  relation "connection_inbox_channel" already exists, skipping
 CREATE TABLE
 COMMENT
 CREATE TRIGGER
-psql:db/68_email_activity.sql:292: NOTICE:  relation "connection_email_rule" already exists, skipping
+psql:db/68_email_activity.sql:308: NOTICE:  relation "connection_email_rule" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/68_email_activity.sql:294: NOTICE:  relation "connection_email_rule_order_idx" already exists, skipping
+psql:db/68_email_activity.sql:310: NOTICE:  relation "connection_email_rule_order_idx" already exists, skipping
 CREATE INDEX
 CREATE TRIGGER
-psql:db/68_email_activity.sql:331: NOTICE:  relation "email_thread" already exists, skipping
+psql:db/68_email_activity.sql:347: NOTICE:  relation "email_thread" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/68_email_activity.sql:333: NOTICE:  relation "email_thread_created_idx" already exists, skipping
+psql:db/68_email_activity.sql:349: NOTICE:  relation "email_thread_created_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:334: NOTICE:  relation "email_thread_open_idx" already exists, skipping
+psql:db/68_email_activity.sql:350: NOTICE:  relation "email_thread_open_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:335: NOTICE:  relation "email_thread_contact_idx" already exists, skipping
+psql:db/68_email_activity.sql:351: NOTICE:  relation "email_thread_contact_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:368: NOTICE:  relation "email_message" already exists, skipping
+psql:db/68_email_activity.sql:384: NOTICE:  relation "email_message" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/68_email_activity.sql:370: NOTICE:  relation "email_message_occurred_idx" already exists, skipping
+psql:db/68_email_activity.sql:386: NOTICE:  relation "email_message_occurred_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:372: NOTICE:  relation "email_message_thread_idx" already exists, skipping
+psql:db/68_email_activity.sql:388: NOTICE:  relation "email_message_thread_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:374: NOTICE:  relation "email_message_contact_idx" already exists, skipping
+psql:db/68_email_activity.sql:390: NOTICE:  relation "email_message_contact_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:402: NOTICE:  relation "email_thread_event" already exists, skipping
+psql:db/68_email_activity.sql:418: NOTICE:  relation "email_thread_event" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/68_email_activity.sql:404: NOTICE:  relation "email_thread_event_thread_idx" already exists, skipping
+psql:db/68_email_activity.sql:420: NOTICE:  relation "email_thread_event_thread_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:405: NOTICE:  relation "email_thread_event_occurred_idx" already exists, skipping
+psql:db/68_email_activity.sql:421: NOTICE:  relation "email_thread_event_occurred_idx" already exists, skipping
 CREATE INDEX
-psql:db/68_email_activity.sql:407: NOTICE:  policy "tenant_readonly" for relation "cma.connection_inbox" does not exist, skipping
+psql:db/68_email_activity.sql:423: NOTICE:  policy "tenant_readonly" for relation "cma.connection_inbox" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/68_email_activity.sql:408: NOTICE:  policy "tenant_readonly" for relation "cma.connection_inbox_channel" does not exist, skipping
+psql:db/68_email_activity.sql:424: NOTICE:  policy "tenant_readonly" for relation "cma.connection_inbox_channel" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/68_email_activity.sql:409: NOTICE:  policy "tenant_readonly" for relation "cma.connection_email_rule" does not exist, skipping
+psql:db/68_email_activity.sql:425: NOTICE:  policy "tenant_readonly" for relation "cma.connection_email_rule" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/68_email_activity.sql:410: NOTICE:  policy "tenant_readonly" for relation "cma.email_thread" does not exist, skipping
+psql:db/68_email_activity.sql:426: NOTICE:  policy "tenant_readonly" for relation "cma.email_thread" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/68_email_activity.sql:411: NOTICE:  policy "tenant_readonly" for relation "cma.email_message" does not exist, skipping
+psql:db/68_email_activity.sql:427: NOTICE:  policy "tenant_readonly" for relation "cma.email_message" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/68_email_activity.sql:412: NOTICE:  policy "tenant_readonly" for relation "cma.email_thread_event" does not exist, skipping
+psql:db/68_email_activity.sql:428: NOTICE:  policy "tenant_readonly" for relation "cma.email_thread_event" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -90,6 +90,20 @@ ALTER TABLE
 ALTER TABLE
 ALTER TABLE
 ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/68_email_activity.sql:458: NOTICE:  column "country_source" of relation "crm_contact" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+UPDATE 0
+ALTER TABLE
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
@@ -112,6 +126,8 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 DO
+CREATE VIEW
+CREATE VIEW
 CREATE VIEW
 CREATE VIEW
 CREATE VIEW

@@ -12,8 +12,8 @@
         },
         {
           "name": "crm_contact",
-          "what": "Thin contact: country, language, currency, store",
-          "how": "Read when a deal, call or ticket points to it; re-read every 10 min in its first hour; nightly reconcile"
+          "what": "Thin contact: country with the slot it came from, language, currency, store",
+          "how": "Read when a deal or ticket points to it, and from B17b an email or inbox thread; re-read every 10 min in its first hour; nightly reconcile"
         },
         {
           "name": "crm_contact_ref",
@@ -151,7 +151,7 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field",
+          "what": "Which source property feeds which CMA field; a contact's country and refs in ordered slots",
           "how": "Configuration"
         },
         {
