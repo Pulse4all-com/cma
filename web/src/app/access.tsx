@@ -45,7 +45,8 @@ export function NoAccess({ copy, identity = null, switchHref = null }: { copy: C
         ) : null}
         {switchHref ? (
           // Only with the signed-out page in place (CMA_LOGOUT_TARGET=signed-out): IAP clears its cookie and
-          // the browser lands outside IAP, where Google's account chooser can be reached
+          // the browser lands outside IAP, where Log in shows Google's account chooser and Add another account
+          // opens Google's add-account form in a new tab (it does not return here by itself)
           <a href={switchHref} className="mt-6 inline-flex font-semibold text-p4a-deepblue underline" data-testid="no-access-switch">
             {copy.noAccess.useAnother}
           </a>

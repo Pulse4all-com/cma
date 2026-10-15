@@ -1,6 +1,6 @@
 # The signed-out page outside IAP
 
-Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Nothing of this is applied yet: the page, the script and the flag are in the repository, the bucket and the route are not, and Log out keeps landing on `/logout/done` until Martin switches the flag after the test plan below.
+Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Applied in prod on 15 October 2026 (`deploy.sh prod --apply`, written down from Martin's report): the bucket, the backend bucket and the route exist. Log out keeps landing on `/logout/done` until Martin switches the flag after the test plan below, so nobody is sent to the page yet.
 
 ## Why
 
@@ -8,8 +8,8 @@ Log out ends the workday and sends the browser to IAP's cookie-clearing address 
 
 The signed-out page is a static file served by the load balancer from a public bucket, outside IAP. After Log out the browser lands there, signed out of the Workspace, and stays there until the person chooses:
 
-- **Log in** (`/`): IAP signs in again; with one Google account in the browser this is silent, with several Google shows its chooser.
-- **Use another account**: Google's own add-account page, `https://accounts.google.com/AddSession?continue=https://<host>/`, which adds an account and returns to the Workspace, where IAP then shows the chooser.
+- **Log in** (`/`): IAP signs in again; with one Google account in the browser this is silent, with several Google shows its chooser (which has its own "Use another account").
+- **Add another account**: Google's own add-account form, plain `https://accounts.google.com/AddSession`, in a new tab (`target="_blank"`, `rel="noopener noreferrer"`) and without a return address: Google refuses a `continue` outside Google (Decision log, 15 October 2026). The person adds the account there, closes that tab and chooses Log in on this page, where Google's chooser now lists the new account. A caption under the link says so: "Opens Google in a new tab. Add the account there, close that tab, then Log in here and choose it." (Dutch: "Opent Google in een nieuw tabblad. Voeg daar het account toe, sluit dat tabblad en kies het hier bij Inloggen.")
 - **Log out of Google** (in the shared-computer line): Google's own `https://accounts.google.com/Logout`. The Workspace itself never signs anyone out of Google; that stays the person's choice, and shared-desk security stays the desk's and Workspace's (Decision log).
 
 Both Google addresses are Google's web pages opened by the browser, not an API.
@@ -37,6 +37,8 @@ The bucket is public for reading an object by its name only: `allUsers` holds `r
 
 The font comes from `web/src/fonts/Montserrat-VF.ttf` (the app's own copy; `web/public/brand/` holds only the logos).
 
+A change to the page's script changes its hash, so the page's CSP meta tag changes with it (`verify:signed-out` fails until it does) and so does the backend bucket's CSP header: rerun `deploy.sh prod --apply`, which uploads the page at c and updates the header at d. Between the two, for a few seconds, the old header blocks the new script; the page then shows its English markup without the script.
+
 ## Verified and not verified
 
 Verified in the session's container (`docs/night-2026-10-15/local-records/`):
@@ -58,25 +60,33 @@ The first `deploy.sh prod --apply` (15 October 2026) stopped at b, at the bucket
 - the night's two fake `gcloud`s now refuse a value on `--public-access-prevention` or `--pap` as gcloud does: with `--apply` against the permissive fake, the old script stops at the create with gcloud's message and changes nothing, and the fixed script runs to `== done`;
 - `verify:signed-out` (14 checks): `deploy.sh` passes no value to either flag, and its one bucket create passes `--no-public-access-prevention`.
 
+Seen in prod on 15 October 2026 (written down from Martin's report):
+
+- `https://accounts.google.com/AddSession?continue=https://workspace.pulse4all.app/` answers Google's "400. That's an error … malformed"; plain `https://accounts.google.com/AddSession` and `https://accounts.google.com/AddSession?continue=https://myaccount.google.com/` both show Google's add-account form. Google refuses a `continue` outside Google, so the page's link is plain `AddSession` in a new tab (Decision log, 15 October 2026);
+- Log in (`/`) with several Google accounts in the browser shows Google's account chooser, which has its own "Use another account"; with one account it signs in silently;
+- after the import, the URL map took a few minutes to take effect.
+
+Verified for Add another account (15 October 2026), in that change's container: `verify:signed-out` (14 checks), whose links check wants plain `AddSession` with `target="_blank"` and `rel="noopener noreferrer"`, AddSession named once, no `continue` anywhere in the page or its script and no address set by the script, and whose `--provoke` puts the old continue line back and fails; the page in Chromium at 1280 px in English and 390 px in Dutch: the link and its caption (12 px, Footnote Grey) in the browser's language, the link's address unchanged by the script, Log in focused, no CSP violation.
+
 Not verified (needs prod, and Martin):
 
 - that IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out` (Google's documentation says it redirects to the address without the parameter; `/logout/done` behaves that way today, which is the evidence);
 - that the load balancer evaluates the query-parameter match before IAP sees the request (the route rule decides the backend; IAP is the backend's);
 - the redirect's url-map test: a test names no scheme, and only `httpsRedirect` (not allowed on an HTTPS proxy's map) makes a redirect's expected URL `https`, so the test expects `http://<host>/signed-out`; Google's reference does not say so in as many words. If `validate` answers otherwise, `deploy.sh` stops before the import and prints the actual URL;
 - `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (their flags parse in gcloud 570.0.0, above, but Google's answer to them is unseen), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
-- Google's chooser and add-account flow after Log in and Use another account (test plan b and c).
+- the whole add-account flow with the new link (test plan b): Add another account in a new tab, then Log in and Google's chooser, and where each kind of account ends.
 
 ## Prod test plan (Martin, after `deploy.sh prod --apply`)
 
-Run in this order; stop at the first that does not hold and roll back (below).
+Run in this order; stop at the first that does not hold and roll back (below). Start a few minutes after the import: in prod on 15 October 2026 the URL map took a few minutes to take effect, and until then the old routes answer.
 
 | Step | Do | Expected |
 |---|---|---|
 | a | **Browser**, signed in to the Workspace: open `https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` | The address bar ends on `/signed-out` without the parameter; the page "You're logged out" (or Dutch) with the logo; no sign-in happened. Then open `https://workspace.pulse4all.app/`: IAP asks for a sign-in or signs in again (one account: silently) |
-| b | **Browser** with one Google account: on the page, Log in; then again a, and Use another account | Log in signs in silently and lands on Welcome. Use another account opens Google's add-account page; after adding an account the browser returns to the Workspace and IAP shows the account chooser |
+| b | **Browser** with one Google account: on the page, Log in; then again a, and Add another account; add an account in the new tab, close that tab, then Log in on the page | Log in signs in silently and lands on Welcome. Add another account opens Google's add-account form in a new tab; after adding the account and closing that tab, Log in shows Google's chooser; picking a pulse4all.com account without a person ends on No access yet; an account outside the domain gets IAP's own "You don't have access" |
 | c | **Browser** with two Google accounts signed in: a, then Log in | Google's account chooser |
 | d | **Browser**: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
-| e | **Terminal**: the other paths | `curl -sI https://ingest.pulse4all.app/health` answers as before (200 from cma-ingest); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
+| e | **Terminal**: the other paths | `curl -s -o /dev/null -w "%{http_code}" https://ingest.pulse4all.app/health` prints `200` (cma-ingest), as before (`/health` answers GET only, so `curl -I` gives 404); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
 
 Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page.
 

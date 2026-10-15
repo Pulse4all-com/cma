@@ -8,6 +8,8 @@
 
   Rules (web/verify/signed-out.mjs checks them): no identity, no data, no cookies read or written, no fetch
   or XHR, no external script or stylesheet; the one inline script is allowed by its hash in the CSP below.
+  Google's two addresses stand in the markup as they are and the script never changes them: Add another
+  account opens Google's AddSession in a new tab, with no return address (Decision log, 15 October 2026).
   No tenant or company name: {{DISPLAY_NAME}} and {{LOGO_FILE}} are written in by the deploy script. The
   wording is copy.ts's signedOut keys, English and Dutch, chosen from the browser's language.
 -->
@@ -15,7 +17,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM='; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-6F80Vq39wf2ptdVZ5QOJTX/frFepDKBjLK33tf7T+8g='; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="robots" content="noindex, nofollow">
 <meta name="application-name" content="{{DISPLAY_NAME}}">
@@ -51,6 +53,8 @@
     background: var(--deep-blue); color: var(--white); font-weight: 600; text-decoration: none;
   }
   .button:hover { background: var(--denim); }
+  .add { display: flex; flex-direction: column; gap: 8px; }
+  .hint { margin: 0; font-size: 12px; color: var(--grey); }
   a { color: var(--deep-blue); font-weight: 600; }
   a:focus-visible { outline: 2px solid var(--light-blue); outline-offset: 2px; }
   .shared { margin: 32px 0 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; color: var(--muted); }
@@ -68,7 +72,10 @@
   <p class="subtitle" id="subtitle">Your Workspace session on this browser has ended.</p>
   <div class="actions">
     <a class="button" id="log-in" href="/" autofocus>Log in</a>
-    <a id="use-another" href="https://accounts.google.com/AddSession">Use another account</a>
+    <div class="add">
+      <a id="add-account" href="https://accounts.google.com/AddSession" target="_blank" rel="noopener noreferrer" aria-describedby="add-account-hint">Add another account</a>
+      <p class="hint" id="add-account-hint">Opens Google in a new tab. Add the account there, close that tab, then Log in here and choose it.</p>
+    </div>
   </div>
   <p class="shared" id="shared">On a shared computer? Logging out here does not log you out of Google. When you leave, also <a id="google-logout" href="https://accounts.google.com/Logout">log out of Google</a>.</p>
 </main>
@@ -80,7 +87,8 @@
       title: "You're logged out",
       subtitle: "Your Workspace session on this browser has ended.",
       logIn: "Log in",
-      useAnother: "Use another account",
+      addAccount: "Add another account",
+      addAccountHint: "Opens Google in a new tab. Add the account there, close that tab, then Log in here and choose it.",
       shared: "On a shared computer? Logging out here does not log you out of Google. When you leave, also {logOutOfGoogle}.",
       logOutOfGoogle: "log out of Google"
     },
@@ -88,7 +96,8 @@
       title: "Je bent uitgelogd",
       subtitle: "Je sessie in de Workspace op deze browser is beëindigd.",
       logIn: "Inloggen",
-      useAnother: "Ander account gebruiken",
+      addAccount: "Ander account toevoegen",
+      addAccountHint: "Opent Google in een nieuw tabblad. Voeg daar het account toe, sluit dat tabblad en kies het hier bij Inloggen.",
       shared: "Op een gedeelde computer? Uitloggen hier logt je niet uit bij Google. Log bij vertrek ook {logOutOfGoogle}.",
       logOutOfGoogle: "uit bij Google"
     }
@@ -103,12 +112,13 @@
   document.getElementById("subtitle").textContent = t.subtitle;
   var logIn = document.getElementById("log-in");
   logIn.textContent = t.logIn;
-  // Both addresses are Google's own web pages, opened by the browser, not an API: AddSession adds an
-  // account and returns to this Workspace's start page (its host as the browser sees it); Logout signs the
+  // Both addresses are Google's own web pages, opened by the browser, not an API, and the markup holds them
+  // as they are: AddSession opens Google's add-account form in a new tab. Google answers 400 when it is given
+  // a return address outside Google (seen in prod, 15 October 2026), so the person adds the account there,
+  // closes that tab and chooses it here with Log in, where Google shows its account chooser. Logout signs the
   // browser out of Google. The Workspace itself never signs anyone out of Google.
-  var another = document.getElementById("use-another");
-  another.textContent = t.useAnother;
-  another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/");
+  document.getElementById("add-account").textContent = t.addAccount;
+  document.getElementById("add-account-hint").textContent = t.addAccountHint;
   var shared = document.getElementById("shared");
   var link = document.getElementById("google-logout");
   var parts = t.shared.split("{logOutOfGoogle}");
