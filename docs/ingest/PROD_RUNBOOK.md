@@ -902,6 +902,12 @@ Expected: `rendered prod: hubspot/build/prod`, the upload naming the live portal
 
 Expected: the install active with the two scopes on the Auth tab. The token stays; if HubSpot shows a new one, `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
 
+**Terminal** (the HTTP status only, as in the dev runbook's step 2d)
+```bash
+for p in "/crm/v3/objects/emails?limit=1" "/conversations/v3/conversations/inboxes?limit=1"; do gcloud secrets versions access latest --secret=ingest-hubspot-subs-token --project=p4a-cma-prod | sed 's/^/Authorization: Bearer /' | curl -s -o /dev/null -w "%{http_code}  ${p%%\?*}\n" -H @- "https://api.hubapi.com$p"; done
+```
+Expected: `200  /crm/v3/objects/emails` and `200  /conversations/v3/conversations/inboxes`; a `403` means the update of the install is not accepted yet.
+
 ## 10.2 What the live portal holds
 
 **Terminal**

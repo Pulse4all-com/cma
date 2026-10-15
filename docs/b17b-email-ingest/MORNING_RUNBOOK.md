@@ -66,11 +66,17 @@ Expected: the property listed with four options; the contacts show their value. 
 ```bash
 node hubspot/render.mjs dev --target-url "<URL>/hubspot/<key>" && cd hubspot/build/dev && hs project upload && cd ~/cma
 ```
-Expected: `rendered dev: hubspot/build/dev`, then the upload naming the live portal, and build and deploy of **CMA ingest dev** succeeding with both components. If HubSpot refuses `sales-email-read`, stop and send me its message (the fallback `crm.objects.emails.read` is in `hubspot/README.md`, Scopes).
+Expected: `rendered dev: hubspot/build/dev`, then the upload naming the live portal, and build and deploy of **CMA ingest dev** succeeding with both components. If HubSpot refuses a scope, stop and send me its message (`crm.objects.emails.read` is not available to this app: `hubspot/README.md`, Scopes).
 
 **2c. Accept the new scopes.** **Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → Test installs → the row of `CMA dev` → update or reinstall when HubSpot asks; on the consent screen check that the new scopes are `sales-email-read` and `conversations.read` (read only).
 
 Expected: the test install's row active; the app's Auth tab lists the two scopes. The static token stays the same; if HubSpot shows a new one, store it with `put_secret p4a-cma-dev ingest-hubspot-dev-token` (`hubspot/README.md`).
+
+**2d. Both endpoints answer.** **Terminal** (the HTTP status only; a body is never printed, it can hold email data)
+```bash
+for p in "/crm/v3/objects/emails?limit=1" "/conversations/v3/conversations/inboxes?limit=1"; do gcloud secrets versions access latest --secret=ingest-hubspot-dev-token --project=p4a-cma-dev | sed 's/^/Authorization: Bearer /' | curl -s -o /dev/null -w "%{http_code}  ${p%%\?*}\n" -H @- "https://api.hubapi.com$p"; done
+```
+Expected: `200  /crm/v3/objects/emails` and `200  /conversations/v3/conversations/inboxes`. A `403` means the install does not hold the scope yet (HubSpot answers `MISSING_SCOPES`): update or reinstall the test install (2c) and run it again.
 
 ## 3. Configure dev
 
