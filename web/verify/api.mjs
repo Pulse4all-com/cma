@@ -62,6 +62,13 @@ const ONLY_CALLS = process.argv.includes("--calls");
  * a cma-web in mock data mode alike.
  */
 const ONLY_INVITATIONS = process.argv.includes("--invitations");
+/**
+ * --preview runs only the checks of preview as role (16 October 2026): who may start one, the cookie's shape,
+ * the narrowed answers with the cookie, the ignored cookie of a manager, Exit. Reads and the caller's own
+ * cookie only, so they run against dev, a local database or a cma-web in mock data mode alike; the full run
+ * includes them.
+ */
+const ONLY_PREVIEW = process.argv.includes("--preview");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -134,7 +141,7 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS;
+const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS || ONLY_PREVIEW;
 if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_GROUP && health.body?.data === "mock"))) {
   console.error(`Not a mock-auth, ${ONLY_GROUP ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
@@ -159,6 +166,13 @@ if (ONLY_INVITATIONS) {
   await invitationChecks();
   verdict();
 }
+if (ONLY_PREVIEW) {
+  await previewChecks();
+  verdict();
+}
+
+// ---- preview as role (16 October 2026) -----------------------------------------------------
+await previewChecks();
 
 // ---- identity and tenant -------------------------------------------------------------------
 expect("identity in two tenants is refused", (await get(TWO_TENANTS, "/api/v1/me")).status, 403, 200);
@@ -1441,4 +1455,50 @@ async function invitationChecks() {
 
   // Put back what can be: the person made by this run is deactivated (people are never deleted)
   if (me.body?.data?.userId) await sj(ADMIN, "PUT", `/api/v1/team/directory/${me.body.data.userId}/active`, { active: false });
+}
+
+/**
+ * Preview as role (16 October 2026, src/lib/auth/preview.ts): only a caller whose real permissions hold
+ * users.manage_all starts one, for one of the tenant's roles; the cookie is httpOnly, secure, lax, on /, 12
+ * hours; with it the admin's /me stays their own identity while a report route answers the role's 403; a
+ * manager's cookie is ignored; Exit clears the cookie, also while previewing (the real principal decides).
+ */
+async function previewChecks() {
+  const H = { "x-cma-request": "1", "content-type": "application/json" };
+  const route = "/api/v1/me/preview";
+  const raw = async (subject, body, cookie = null, headers = H) => {
+    const res = await fetch(BASE + route, { method: "POST", redirect: "manual", body: JSON.stringify(body),
+      headers: { "x-cma-mock-subject": subject, ...headers, ...(cookie ? { cookie } : {}) } });
+    return { status: res.status, setCookie: res.headers.get("set-cookie") ?? "" };
+  };
+  const withCookie = async (subject, path, cookie) => {
+    const res = await fetch(BASE + path, { headers: { "x-cma-mock-subject": subject, cookie }, redirect: "manual" });
+    let body = null;
+    try { body = await res.json(); } catch { body = null; }
+    return { status: res.status, body };
+  };
+  const manager = await raw(MANAGER, { roleKey: "agent" });
+  expect("preview: a manager may not preview: 403, nothing set", [manager.status, manager.setCookie], [403, ""], [204, ""]);
+  expect("preview: an agent may not either", (await raw(AGENT, { roleKey: "agent" })).status, 403, 204);
+  const unknown = await raw(ADMIN, { roleKey: "director" });
+  expect("preview: an unknown role is a 403 for the admin too, nothing set", [unknown.status, unknown.setCookie], [403, ""], [204, ""]);
+  expect("preview: an ill-formed key is a 400", (await raw(ADMIN, { roleKey: "Agent; Path=/" })).status, 400, 204);
+  expect("preview: a write needs the request header", (await raw(ADMIN, { roleKey: "agent" }, null, { "content-type": "application/json" })).status, 400, 204);
+  const roles = (await get(ADMIN, "/api/v1/team/roles")).body?.data ?? [];
+  const role = roles.some((r) => r.key === "agent") ? "agent" : roles[0]?.key ?? "agent";
+  const set = await raw(ADMIN, { roleKey: role });
+  expect("preview: the admin starts one: 204, the cookie for 12 hours, httpOnly, secure, lax, on /",
+    [set.status, set.setCookie.includes(`cma-preview-role=${role}`), /max-age=43200/i.test(set.setCookie), /httponly/i.test(set.setCookie),
+      /secure/i.test(set.setCookie), /samesite=lax/i.test(set.setCookie), /path=\//i.test(set.setCookie)],
+    [204, true, true, true, true, true, true], [204, true, false, true, true, true, true]);
+  const cookie = `cma-preview-role=${role}`;
+  const own = (await get(ADMIN, "/api/v1/me")).body?.data ?? {};
+  const me = await withCookie(ADMIN, "/api/v1/me", cookie);
+  expect("preview: /me stays the admin's own identity while previewing", [me.status, me.body?.data?.roleKey, me.body?.data?.userId === own.userId], [200, own.roleKey ?? "admin", true], [200, role, true]);
+  const report = await withCookie(ADMIN, "/api/v1/reports/speed-to-lead?from=2026-10-01&to=2026-10-02", cookie);
+  expect("preview: a report route answers the role's 403 to the previewing admin", report.status, 403, 200);
+  expect("preview: without the cookie the admin reads the report", (await get(ADMIN, "/api/v1/reports/speed-to-lead?from=2026-10-01&to=2026-10-02")).status, 200, 403);
+  expect("preview: a manager's preview cookie is ignored", (await withCookie(MANAGER, "/api/v1/reports/speed-to-lead?from=2026-10-01&to=2026-10-02", cookie)).status, 200, 403);
+  const exit = await raw(ADMIN, { roleKey: null }, cookie);
+  expect("preview: Exit while previewing clears the cookie with a 204", [exit.status, /cma-preview-role=;/.test(exit.setCookie), /max-age=0/i.test(exit.setCookie)], [204, true, true], [204, true, false]);
 }

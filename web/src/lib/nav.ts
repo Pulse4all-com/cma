@@ -10,6 +10,15 @@ import type { Copy } from "@/lib/copy";
 
 /** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
+/** Cookie of the left rail's fold (16 October 2026): "expanded" (the default) or "collapsed" */
+export const RAIL_COOKIE = "cma-rail";
+/** Cookie of the keyboard hints (16 October 2026, backlog CMA-004): "shown" (the default) or "hidden" */
+export const HINTS_COOKIE = "cma-hints";
+
+/** A browser preference written as the nav groups write theirs: path /, one year, no personal data */
+export function prefCookie(name: string, value: string): string {
+  return `${name}=${value}; path=/; max-age=31536000; samesite=lax; secure`;
+}
 
 export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "gear";
 export type ShellPage =
@@ -203,4 +212,38 @@ export function visiblePages(me: Principal, copy: Copy): VisibleItem[] {
 /** The first page this person may see, or null when there is none */
 export function firstPage(me: Principal, copy: Copy): NavHref | null {
   return visiblePages(me, copy)[0]?.href ?? null;
+}
+
+/** One crumb of the trail above the content; the last one is where the person is and has no link */
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
+/**
+ * The breadcrumbs of a page (16 October 2026): Welcome › the group's label (a link to the group's first
+ * page this person may see; no link when they may see none) › the page's label, from the navigation
+ * model; a bare page is Welcome › the page. My account and Send a message are no rail items and get
+ * their own trail; Welcome shows none. A page's own trail (the connection's name on Sources) is appended,
+ * and the page's crumb becomes a link. The last crumb is never a link.
+ */
+export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = []): Crumb[] {
+  if (active === "welcome") return [];
+  let own: Crumb[] = [];
+  if (active === "account") own = [{ label: copy.account.title, href: "/account" }];
+  else if (active === "messages-send") own = [{ label: copy.nav.messages, href: "/messages" }, { label: copy.messages.composeTitle, href: "/messages/send" }];
+  else {
+    for (const entry of navEntries(copy)) {
+      if (entry.kind === "page") {
+        if (entry.item.page === active) own = [{ label: entry.item.label, href: entry.item.href }];
+        continue;
+      }
+      const item = entry.items.find((i) => i.page === active);
+      if (!item) continue;
+      const first = entry.items.find((i) => holdsAny(me, i.permission));
+      own = [{ label: entry.label, href: first?.href }, { label: item.label, href: item.href }];
+    }
+  }
+  const all: Crumb[] = [{ label: copy.nav.welcome, href: "/" }, ...own, ...trail];
+  return all.map((c, i) => (i === all.length - 1 ? { label: c.label } : c));
 }

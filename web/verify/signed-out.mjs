@@ -199,6 +199,8 @@ check("Log out's Location: unset and legacy /logout/done, signed-out the static 
 check("the route, the config and the build use the flag, legacy by default", [
   ...(!/headers: \{ Location: logoutLocation\(config\.logoutTarget\) \}/.test(logoutRoute) ? ["/logout/end does not answer logoutLocation(config.logoutTarget)"] : []),
   ...(/Location: "/.test(logoutRoute) ? ["/logout/end has a fixed Location"] : []),
+  // Preview as role (16 October 2026): Log out clears the preview cookie with the day
+  ...(!/res\.headers\.append\("Set-Cookie", `\$\{PREVIEW_COOKIE\}=; Path=\/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`\)/.test(logoutRoute) ? ["/logout/end does not clear the preview cookie"] : []),
   ...(!/logoutTarget: parseLogoutTarget\(process\.env\.CMA_LOGOUT_TARGET\)/.test(configSrc) ? ["config does not read CMA_LOGOUT_TARGET"] : []),
   ...(!build.includes(",CMA_LOGOUT_TARGET=${_LOGOUT_TARGET}") ? ["the build does not pass CMA_LOGOUT_TARGET"] : []),
   ...(!/\n  _LOGOUT_TARGET: legacy\n/.test(build) ? ["the build's default is not legacy"] : []),

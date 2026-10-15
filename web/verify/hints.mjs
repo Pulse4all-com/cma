@@ -74,20 +74,20 @@ async function coverage(p, withHeaders, scope = "main") {
 const cases = [
   // [subject, path, at least this many headers, at least this many tiles]; on the Dashboard the tiles
   // only: the charts' own tables (time per status, per person) are not report headers
-  ["manager", "/reports/speed-to-lead?range=month&group=day", 13, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=market", 8, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=agent", 8, 0],
-  ["manager", "/reports/speed-to-lead?range=month&group=pipeline", 8, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=day", 12, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=market", 7, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=agent", 7, 0],
+  ["manager", "/reports/speed-to-lead?range=month&group=pipeline", 7, 0],
   ["manager", "/reports/intake?range=month", 18, 0],
   ["invest-analyst", "/reports/intake?range=month", 18, 0],
   ["manager", "/reports/data-quality", 3, 0],
   ["manager", "/reports/dashboard?range=month", 0, 10],
   ["invest-analyst", "/reports/dashboard?range=month", 0, 6],
-  // Inbound (addition 0008i): eight headers and one per reason that occurs (the fixture has seven)
-  ["manager", "/reports/inbound?range=month&group=day", 14, 0],
-  ["manager", "/reports/inbound?range=month&group=market", 14, 0],
-  ["manager", "/reports/inbound?range=month&group=line", 14, 0],
-  ["manager", "/reports/inbound?range=month&group=hour", 14, 0],
+  // Inbound (addition 0008i): seven headers (the 80th percentile left on 15 October 2026) and one per reason that occurs (the fixture has seven)
+  ["manager", "/reports/inbound?range=month&group=day", 13, 0],
+  ["manager", "/reports/inbound?range=month&group=market", 13, 0],
+  ["manager", "/reports/inbound?range=month&group=line", 13, 0],
+  ["manager", "/reports/inbound?range=month&group=hour", 13, 0],
   // The Live board's inbound part only: its seven tiles and the missed calls' six headers
   ["supervisor", "/live/board", 6, 7, '[data-testid="inbound-live"]'],
   // Calls (addition 0008j): eight tiles (four with the change, three outbound, the untagged share) and the tag
@@ -166,6 +166,29 @@ for (const [subject, path, minHeaders, minTiles, scope] of cases) {
   await ctx.close();
 }
 
+// Hidden keyboard hints (16 October 2026, backlog CMA-004): with the cookie no keycap is visible, the header
+// hints still open on focus, and ? shows the keycaps again. --provoke sets the cookie to shown instead
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  await ctx.addCookies([{ name: "cma-hints", value: provoke ? "shown" : "hidden", domain: new URL(BASE).hostname, path: "/" }]);
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/speed-to-lead?range=month");
+  await p.waitForLoadState("networkidle");
+  const visibleKeycaps = () => p.evaluate(() => [...document.querySelectorAll("kbd")].filter((k) => k.getClientRects().length > 0).length);
+  const before = await visibleKeycaps();
+  if (before !== 0) problems.push(`hidden hints: ${before} keycaps still visible`);
+  const mark = p.locator('[data-testid="speed-summary"] th button[data-header-hint]').first();
+  await mark.focus();
+  const panel = p.locator(`[id="${await mark.getAttribute("aria-describedby")}"]`);
+  if (!(await panel.isVisible())) problems.push("hidden hints: the header hint no longer opens on focus");
+  await p.keyboard.press("Escape");
+  await p.locator("main h1").click();
+  await p.keyboard.press("?");
+  await p.waitForTimeout(200);
+  if ((await visibleKeycaps()) === 0) problems.push("hidden hints: ? does not show the keycaps again");
+  await ctx.close();
+}
+
 // The Dashboard: a tile still opens its report, its mark only opens the hint
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
@@ -185,6 +208,6 @@ for (const [subject, path, minHeaders, minTiles, scope] of cases) {
 await b.close();
 for (const x of problems) console.log("  " + x);
 console.log(problems.length === 0
-  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links)`
+  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps)`
   : `hints: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

@@ -2,6 +2,7 @@ import { RosterPlanner } from "@/components/RosterPlanner";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock } from "@/lib/data";
+import { absenceKeywordList } from "@/lib/roster";
 import { addDays, dateKeyInZone, isDateKey, startOfWeek } from "@/lib/time";
 import { resolve } from "../../access";
 
@@ -52,7 +53,9 @@ export default async function RosterPlannerPage({ searchParams }: PageProps<"/ro
   return (
     <Shell copy={copy} me={me} active="roster" wide>
       <PageTitle>{t.title}</PageTitle>
-      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">
+        {t.intro} <span data-testid="absence-keywords">{t.absenceKeywords.replace("{list}", absenceKeywordList(absences.filter((a) => a.isActive)))}</span>
+      </p>
 
       <RosterPlanner
         week={week}

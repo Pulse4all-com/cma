@@ -14,7 +14,7 @@
  * cma.inbound_calls_of classifies them (outbound, deleted and uncounted out, waiting and a lost call, a
  * missing reason as unknown, a new code with the defaults), the figures as 61 proves them in the database
  * (the service level with and without an excluded reason and a call at exactly N seconds, average and
- * 80th percentile, the total over every call), hours and dates across the DST change of 25 October 2026
+ * 80th percentile, which the API returns and the screens no longer show since 15 October 2026, the total over every call), hours and dates across the DST change of 25 October 2026
  * in each line's zone, a line without a market in the tenant's zone, the unanswered share, the reason
  * columns labelled from the catalog in the neutral series (never a red), the stacked bars, the group
  * labels, the time-to-answer format, the hint values, and no hash, number or name in an answer. Since

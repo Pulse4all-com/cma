@@ -10,10 +10,12 @@
  *  - Principal: who may work, from app_user: tenant, user, role, employer. This
  *    is data, so the data layer answers it (mock now, Postgres with the API).
  */
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { cache } from "react";
 import { config } from "@/lib/config";
 import type { Locale } from "@/lib/copy";
 import { data } from "@/lib/data";
+import { applyPreview, isRoleKey, mayPreview, PREVIEW_COOKIE } from "./preview";
 
 export interface Identity {
   /**
@@ -43,11 +45,20 @@ export interface Principal {
   locale: Locale;
   /** IANA zone the user works in; calendar days and week boundaries follow it */
   timeZone: string;
+  /**
+   * Preview as role (16 October 2026, lib/auth/preview): the role an admin is looking through, or null.
+   * While set, `permissions` is the intersection of the real set and the role's set: a preview narrows,
+   * never widens, and never changes who the person is (user, tenant, day, hours, the audit's actor).
+   */
+  preview: { roleKey: string; roleName: string } | null;
+  /** The real permissions hold users.manage_all, computed before the narrowing, so the control stays while previewing */
+  canPreview: boolean;
 }
 
 /** Outcome of the app_user check for a proven identity */
 export type Access =
-  | { kind: "granted"; identity: Identity; principal: Principal }
+  /** principal: as the screens and the API see it (narrowed while previewing); real: as the database sees it */
+  | { kind: "granted"; identity: Identity; principal: Principal; real: Principal }
   | { kind: "no_access"; identity: Identity };
 
 /** Set by proxy.ts only; it strips any incoming copy before setting its own */
@@ -87,6 +98,8 @@ export const MOCK_PRINCIPAL: Principal = {
   permissions: ["workday.own", "roster.view"],
   locale: config.defaultLocale,
   timeZone: "Europe/Madrid",
+  preview: null,
+  canPreview: false,
 };
 
 /** The identity proxy.ts attached to this request, or null if it attached none */
@@ -99,9 +112,30 @@ export async function getIdentity(): Promise<Identity | null> {
   return { provider, subject, email };
 }
 
-export async function getAccess(): Promise<Access | null> {
+/**
+ * Who is here and whether they may work. Memoised per request (React cache), so a page and the Shell
+ * inside it read the principal once. The principal the screens get is narrowed by the preview cookie when
+ * the real principal may preview (lib/auth/preview); `real` is the person as the database sees them.
+ */
+export const getAccess = cache(async (): Promise<Access | null> => {
   const identity = await getIdentity();
   if (!identity) return null;
-  const principal = await data().findPrincipal(identity);
-  return principal ? { kind: "granted", identity, principal } : { kind: "no_access", identity };
+  const found = await data().findPrincipal(identity);
+  if (!found) return { kind: "no_access", identity };
+  const real: Principal = { ...found, canPreview: mayPreview(found.permissions), preview: null };
+  return { kind: "granted", identity, principal: await previewed(real), real };
+});
+
+/** The principal as the pages and the API see it: narrowed when an admin's preview cookie names a known role */
+async function previewed(real: Principal): Promise<Principal> {
+  if (!real.canPreview) return real;
+  const roleKey = (await cookies()).get(PREVIEW_COOKIE)?.value;
+  if (!isRoleKey(roleKey)) return real;
+  try {
+    return applyPreview(real, roleKey, await data().listRoles(real));
+  } catch (e) {
+    // A role list that cannot be read is no preview: the admin keeps their own view
+    console.warn(`[cma-auth] preview ignored: ${e instanceof Error ? e.message : String(e)}`);
+    return real;
+  }
 }

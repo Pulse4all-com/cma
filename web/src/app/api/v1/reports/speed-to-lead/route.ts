@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 /**
  * Speed to lead per group (cma.speed_to_lead_summary, migration 0007d) for ?from&to (at most 92 days)
  * and &group=day|market|agent|pipeline (day when left out; anything else 400): deals, called, median
- * and 80th percentile business minutes over the called deals, % within target and % before the next
+ * and 80th percentile business minutes over the called deals (p80BusinessMinutes is returned, not shown: the screen dropped the column on 15 October 2026), % within target and % before the next
  * noon over the deals whose outcome is known, open not called. Needs reports.view or performance.team,
  * here and again in the database. An agent who is not mapped is the key "unknown" with a null label.
  */

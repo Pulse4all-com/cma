@@ -5,11 +5,14 @@
  * closes its pages. Closed by default; the browser remembers the choice per group in a cookie
  * (no personal data, one year), so every page renders the group as it was left. A closed group
  * that holds the current page is highlighted, so the person still sees where they are. The pages
- * keep their own digit keys whether the group is open or closed.
+ * keep their own digit keys whether the group is open or closed. In the folded rail (16 October 2026)
+ * the button shows its icon only, named by title and aria-label; it then unfolds the rail and opens the
+ * group, writing both cookies, and a folded group that holds the current page keeps its white pill.
  */
 import { useRef, useState, type ReactNode } from "react";
-import { NAV_COOKIE_PREFIX, type NavIcon } from "@/lib/nav";
+import { NAV_COOKIE_PREFIX, prefCookie, type NavIcon } from "@/lib/nav";
 import { Keycap } from "./primitives";
+import { railCollapsed, setRailCollapsed } from "./ShellPrefs";
 
 export function NavGroup({
   id,
@@ -34,12 +37,22 @@ export function NavGroup({
   const list = useRef<HTMLUListElement>(null);
 
   function toggle() {
+    if (railCollapsed()) {
+      // Folded: unfold the rail and open this group (both cookies), never fold a group from here
+      setRailCollapsed(false);
+      if (!open) {
+        setOpen(true);
+        document.cookie = prefCookie(`${NAV_COOKIE_PREFIX}${id}`, "open");
+      }
+      return;
+    }
     const next = !open;
     setOpen(next);
-    document.cookie = `${NAV_COOKIE_PREFIX}${id}=${next ? "open" : "closed"}; path=/; max-age=31536000; samesite=lax; secure`;
+    document.cookie = prefCookie(`${NAV_COOKIE_PREFIX}${id}`, next ? "open" : "closed");
     // Opened by its letter: the first page gets the focus, so Enter opens it and the arrows move
     if (next && shortcut) requestAnimationFrame(() => list.current?.querySelector<HTMLAnchorElement>("a")?.focus());
   }
+  const name = shortcut ? `${label} (${shortcut.toUpperCase()})` : label;
   return (
     <li>
       <button
@@ -48,6 +61,9 @@ export function NavGroup({
         aria-controls={`nav-group-${id}`}
         data-shortcut={shortcut}
         aria-keyshortcuts={shortcut ? shortcut.toUpperCase() : undefined}
+        data-current={current}
+        title={name}
+        aria-label={name}
         onClick={toggle}
         className={[
           "flex h-10 w-full items-center gap-3 rounded-button px-3 text-body font-semibold text-p4a-heading",
@@ -55,10 +71,11 @@ export function NavGroup({
         ].join(" ")}
       >
         <NavIconMark name={icon} />
-        <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+        <span data-rail-text className="min-w-0 flex-1 truncate text-left">{label}</span>
         {/* The letter works open or closed; its keycap shows only while the group is open (Martin, 9 October 2026) */}
-        {shortcut && open ? <Keycap>{shortcut.toUpperCase()}</Keycap> : null}
+        {shortcut && open ? <Keycap data-rail-text>{shortcut.toUpperCase()}</Keycap> : null}
         <svg
+          data-rail-text
           aria-hidden="true"
           viewBox="0 0 16 16"
           className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
@@ -71,7 +88,7 @@ export function NavGroup({
           <path d="M4 6l4 4 4-4" />
         </svg>
       </button>
-      <ul ref={list} id={`nav-group-${id}`} className={open ? "mt-1 flex flex-col gap-1 pl-3" : "hidden"}>
+      <ul ref={list} id={`nav-group-${id}`} data-rail-pages className={open ? "mt-1 flex flex-col gap-1 pl-3" : "hidden"}>
         {children}
       </ul>
     </li>

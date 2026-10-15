@@ -1,4 +1,5 @@
 import { getAccess } from "@/lib/auth/identity";
+import { PREVIEW_COOKIE } from "@/lib/auth/preview";
 import { config } from "@/lib/config";
 import { data } from "@/lib/data";
 import { logoutLocation } from "@/lib/logout";
@@ -28,8 +29,8 @@ export async function POST(request: Request) {
 
   // Relative Location: request.url carries the container's own host behind the
   // load balancer, not the public domain, so an absolute URL would be wrong
-  return new Response(null, {
-    status: 303,
-    headers: { Location: logoutLocation(config.logoutTarget) },
-  });
+  const res = new Response(null, { status: 303, headers: { Location: logoutLocation(config.logoutTarget) } });
+  // A preview as role never outlives the session (16 October 2026): Log out clears its cookie with the day
+  res.headers.append("Set-Cookie", `${PREVIEW_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  return res;
 }

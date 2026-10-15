@@ -1,13 +1,14 @@
 /**
- * Previous week, this week, next week as plain links (P, W, N), with the week number and its
- * dates in the middle, so the week lives in the URL and the back button works. A server
- * component; the planner adds its team choice next to it.
+ * Previous week, this week, next week as plain links (P, W, N), with the week number and its dates
+ * as one range in the person's locale (16 October 2026, backlog CMA-061), so the week lives in the URL
+ * and the back button works. The three links never wrap at 1280 px: the bar wraps its right-hand
+ * controls to a second line instead. A server component; the planner adds its team choice next to it.
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import { isoWeek } from "@/lib/roster";
-import { addDays, fmtDate } from "@/lib/time";
+import { addDays, fmtDateRange } from "@/lib/time";
 import { Keycap } from "./primitives";
 
 export function WeekBar({
@@ -36,7 +37,7 @@ export function WeekBar({
       aria-current={current ? "page" : undefined}
       data-shortcut={key.toLowerCase()}
       className={[
-        "inline-flex h-10 items-center gap-2 rounded-button border px-4 text-body font-semibold",
+        "inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-button border px-4 text-body font-semibold",
         current ? "border-p4a-deepblue bg-p4a-deepblue text-white" : "border-p4a-border text-p4a-deepblue hover:bg-p4a-bgblue",
       ].join(" ")}
     >
@@ -45,16 +46,14 @@ export function WeekBar({
     </Link>
   );
   return (
-    <div className="mb-6 flex items-center justify-between gap-6">
-      <nav aria-label={t.week} className="flex items-center gap-2">
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+      <nav aria-label={t.week} className="flex flex-wrap items-center gap-2">
         {link(addDays(weekStart, -7), t.previousWeek, "P", false)}
         {link(thisWeek, t.thisWeek, "W", weekStart === thisWeek)}
         {link(addDays(weekStart, 7), t.nextWeek, "N", false)}
-        <span className="ml-4 text-body">
+        <span className="ml-4 whitespace-nowrap text-body" data-testid="week-label">
           <span className="font-semibold text-p4a-heading">{t.weekOf.replace("{n}", String(isoWeek(weekStart)))}</span>
-          <span className="ml-2 text-p4a-muted">
-            {fmtDate(weekStart, locale, "short")} – {fmtDate(addDays(weekStart, 6), locale)}
-          </span>
+          <span className="ml-2 text-p4a-muted">{fmtDateRange(weekStart, addDays(weekStart, 6), locale)}</span>
         </span>
       </nav>
       {children}
