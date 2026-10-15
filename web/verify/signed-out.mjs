@@ -8,7 +8,9 @@
  *
  * The page (web/signed-out/index.html): no cookie access, no fetch or XHR, no external script or stylesheet,
  * the CSP with the one inline script's hash, no tenant name before the deploy script writes one in, both
- * languages equal to copy.ts's signedOut keys, the three links. The flag (src/lib/logout.ts and its callers):
+ * languages equal to copy.ts's signedOut keys, the three links: Add another account is Google's plain AddSession
+ * in a new tab, with no continue address anywhere in the page or its script, because Google answers 400 to a
+ * continue outside Google (seen in prod, 15 October 2026). The flag (src/lib/logout.ts and its callers):
  * Log out's Location when CMA_LOGOUT_TARGET is legacy, signed-out or unset, a typo refused, the build passing
  * it; "Use another account" on No access yet only with the flag. The gate: /signed-out has no exception in
  * proxy.ts's matcher and no route or file in the app, so without a valid IAP token it is refused like any page.
@@ -56,6 +58,10 @@ if (PROVOKE) {
   page = page
     .replace("default-src 'none';", "default-src *;")
     .replace("var T = {", "fetch('/x'); document.cookie = 'a=1'; var T = {")
+    // the continue line that Google refused in prod, put back
+    .replace('document.getElementById("add-account").textContent = t.addAccount;',
+      'var another = document.getElementById("add-account");\n  another.textContent = t.addAccount;\n' +
+      '  another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/");')
     .replace("</head>", '<script src="https://cdn.example.com/x.js"></script><link rel="stylesheet" href="https://fonts.example.com/a.css"></head>')
     .replace('alt="{{DISPLAY_NAME}}"', 'alt="Pulse4all"')
     .replace('subtitle: "Je sessie in de Workspace op deze browser is beëindigd."', 'subtitle: "Je sessie is klaar."')
@@ -100,8 +106,8 @@ check("the page makes no request of its own (no fetch, XHR, beacon, socket, impo
 
 const urls = [...page.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/g)].map((m) => m[1]);
 const cssUrls = [...page.matchAll(/url\(\s*"?([^")]+)"?\s*\)/g)].map((m) => m[1]);
-// Google's two web addresses: AddSession (in the markup, and with ?continue= built by the script) and Logout
-const GOOGLE = ["https://accounts.google.com/AddSession", "https://accounts.google.com/AddSession?continue=", "https://accounts.google.com/Logout"];
+// Google's two web addresses, as they stand in the markup: AddSession (no continue: Google refuses one outside Google) and Logout
+const GOOGLE = ["https://accounts.google.com/AddSession", "https://accounts.google.com/Logout"];
 check("no external script, stylesheet or font: only the page's own files and Google's two addresses", [
   ...(scripts.some((m) => /\bsrc\s*=/.test(m[1])) ? ["a script with src"] : []),
   ...(/<link\b/i.test(page) ? ["a link element"] : []),
@@ -142,17 +148,21 @@ const sharedBefore = en.shared.split("{logOutOfGoogle}")[0];
 check("English and Dutch, word for word copy.ts's signedOut, chosen from the browser's language", [
   ...(JSON.stringify(pageBlock("en")) !== JSON.stringify(en) ? ["English differs from copy.ts"] : []),
   ...(JSON.stringify(pageBlock("nl")) !== JSON.stringify(nl) ? ["Dutch differs from copy.ts"] : []),
-  ...(text("title") !== en.title || text("subtitle") !== en.subtitle || text("log-in") !== en.logIn || text("use-another") !== en.useAnother
+  ...(text("title") !== en.title || text("subtitle") !== en.subtitle || text("log-in") !== en.logIn || text("add-account") !== en.addAccount ||
+      text("add-account-hint") !== en.addAccountHint
     ? ["the markup's English defaults differ from copy.ts"] : []),
   ...(!page.includes(`${sharedBefore}<a id="google-logout"`) ? ["the shared-computer line differs"] : []),
   ...(!/navigator\.languages/.test(code) || !/=== "nl" \? "nl" : "en"/.test(code) ? ["the language is not taken from the browser, English by default"] : []),
 ]);
 
-check("the three links: Log in to / (focused), another account through Google's AddSession, Google's Logout", [
+check("the three links: Log in to / (focused), Add another account to Google's plain AddSession in a new tab, Google's Logout", [
   ...(!/<a class="button" id="log-in" href="\/" autofocus>/.test(page) ? ["Log in is not / with autofocus"] : []),
   ...(!/logIn\.focus\(\)/.test(code) ? ["Log in is not focused by the script"] : []),
-  ...(!code.includes('another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/")')
-    ? ["Use another account does not continue to https://<location.host>/"] : []),
+  ...(!page.includes('<a id="add-account" href="https://accounts.google.com/AddSession" target="_blank" rel="noopener noreferrer" aria-describedby="add-account-hint">')
+    ? ["Add another account is not plain AddSession with target=_blank and rel=\"noopener noreferrer\""] : []),
+  ...(page.split("https://accounts.google.com/AddSession").length !== 2 ? ["AddSession is not named exactly once"] : []),
+  ...(/continue/i.test(page) ? ["a continue in the page or its script"] : []),
+  ...(/\.href\s*=|setAttribute\s*\(|\.search\s*=/.test(code) ? ["the script changes a link's address"] : []),
   ...(!page.includes('<a id="google-logout" href="https://accounts.google.com/Logout">') ? ["Log out of Google is not Google's Logout"] : []),
   ...(!/Google's own web pages, opened by the browser, not an API/.test(code) ? ["the comment on the two Google addresses is missing"] : []),
 ]);
