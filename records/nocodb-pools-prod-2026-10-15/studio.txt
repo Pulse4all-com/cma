@@ -1,0 +1,5 @@
+NocoDB pool caps (PR #130), applied 15 October 2026; Studio, pg_stat_activity per cma-nocodb login, right after browsing the read-only base
+dev  revision cma-nocodb-00003-9qd: cma-nocodb@p4a-cma-dev.iam  nocodb 2, cma 0 (closed after 30 s idle)
+prod revision cma-nocodb-00002-rm8: cma-nocodb@p4a-cma-prod.iam nocodb 2, cma 0 (closed after 30 s idle)
+cma-prod-pg max_connections: 100
+cma-prod-pg all logins before the caps, idle: (background) 8, cloudsqladmin 2, cloudsqladmin/cloudsqlagent 2, martin@pulse4all.com/Cloud_SQL_Studio 1; no cma-web, cma-ingest or cma-nocodb connection open
