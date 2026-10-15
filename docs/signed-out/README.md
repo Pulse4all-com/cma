@@ -31,13 +31,13 @@ The bucket is public for reading an object by its name only: `allUsers` holds `r
 |---|---|
 | `web/signed-out/index.html` | The page: one file, inline CSS (the style guide's tokens, Montserrat self-hosted), English and Dutch from the browser's language, word for word `copy.ts`'s `signedOut` keys. Its CSP: `default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-…'; base-uri 'none'; form-action 'none'`; the one inline script is allowed by its hash only. No identity, no data, no cookie, no request of its own. `{{DISPLAY_NAME}}` and `{{LOGO_FILE}}` are written in at upload, so no tenant or company name is in the repository |
 | `docs/signed-out/deploy.sh` | `bash docs/signed-out/deploy.sh <dev\|prod> --logo <path> --name <display name> [--host <host>] [--apply]`: dry run by default (its header lists every step) |
-| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate` |
+| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate`; the new map keeps the map's fingerprint, and with the three rules in place no new map is written (nothing to import) |
 | `web/src/lib/logout.ts` | `CMA_LOGOUT_TARGET` (`legacy`, `signed-out`), Log out's Location, the "Use another account" address |
-| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 14 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
+| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 16 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
 
 The font comes from `web/src/fonts/Montserrat-VF.ttf` (the app's own copy; `web/public/brand/` holds only the logos).
 
-A change to the page's script changes its hash, so the page's CSP meta tag changes with it (`verify:signed-out` fails until it does) and so does the backend bucket's CSP header: rerun `deploy.sh prod --apply`, which uploads the page at c and updates the header at d. Between the two, for a few seconds, the old header blocks the new script; the page then shows its English markup without the script.
+A change to the page's script changes its hash, so the page's CSP meta tag changes with it (`verify:signed-out` fails until it does) and so does the backend bucket's CSP header: rerun `deploy.sh prod --apply`, which uploads the page at c and updates the header at d, validates the map and, with the three route rules in place, does not import it ("e. map unchanged, no import"). Between the two, for a few seconds, the old header blocks the new script; the page then shows its English markup without the script.
 
 ## Verified and not verified
 
@@ -75,6 +75,12 @@ Verified in prod on 15 October 2026 (written down from Martin's report, `records
 - `gcloud compute url-maps validate` and `import` on the real map and `backend-buckets create --custom-response-header` (and `update`); the real map's shape: the Workspace has no host rule (the map's default service serves it), so the plan added the path matcher `cma-web`, and it wrote 9 tests, the number the map the README describes gives (one other host rule, for `ingest.pulse4all.app`, without path rules);
 - the whole add-account flow with the new link (test plan b, after `Pulse4all-com/cma#136`): Add another account opens Google's add-account form in a new tab, then Log in shows Google's chooser; a pulse4all.com account without a person ends on No access yet, an account outside the domain on IAP's own "You don't have access".
 
+The second prod apply (07:43 UTC) re-imported the map although the plan found nothing to change, and gcloud warned about the fingerprint at both imports. Fixed and verified on 15 October 2026, in that change's container:
+
+- gcloud 570.0.0's own code (read, and run offline with its bundled Python): `url-maps import` warns "An up-to-date fingerprint must be provided" whenever the file carries a fingerprint, and then replaces it with the live one, so today a stale fingerprint never reaches the API; `url-maps export` writes the fingerprint as a top-level `fingerprint:` line; the restore copy (`grep -v '^fingerprint:'` plus `fingerprint: '<live>'`) loads in gcloud's importer with the live fingerprint; a 412 from the Compute API reads `ERROR: (gcloud.compute.url-maps.import) HTTPError 412: …`;
+- `deploy.sh` against the night's fake `gcloud`, which now keeps the live map, writes the export as gcloud does and refuses an import with a missing or stale fingerprint with 412, as gcloud warns later versions will (`docs/night-2026-10-15/local-records/signed-out/fake-gcloud/urlmap-state.py`): the first apply on `map1` imports (7 changing calls); the rerun on the map it left validates and prints `e. map unchanged, no import` (no import call; the script before this fix imports it again, as in prod); a map changed by someone else after the plan stops before the import, and one changed between the fingerprint check and the import stops on the import's 412, both with `e. STOP: cma-web-urlmap changed since the export; nothing was imported, rerun`; the printed restore command, run after the first apply, puts the map back as exported, while the plain import of the export gets 412; the dry runs on `map1`, `map2`, `map3` (stopped at the plan), dev, an enforced organisation policy and the applied map make no changing call;
+- `verify:signed-out` (16 checks): a rerun on the planned map writes no new map and `deploy.sh` imports only a new one, after validate; the new map keeps the fingerprint, a map without one stops the plan, `deploy.sh` compares the live fingerprint before the import and stops on a 412, and its restore command imports a copy with the live fingerprint, never the export itself.
+
 ## Prod test plan (Martin, after `deploy.sh prod --apply`)
 
 Run in this order; stop at the first that does not hold and roll back (below). Start a few minutes after the import: in prod on 15 October 2026 the URL map took a few minutes to take effect, and until then the old routes answer.
@@ -92,5 +98,14 @@ Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (R
 ## Rollback
 
 - The flag: `_LOGOUT_TARGET=legacy` (or remove it) on the trigger and rebuild; Log out lands on `/logout/done` again.
-- The route: `gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<the export deploy.sh printed> --quiet`.
+- The route: the restore command `deploy.sh` prints at e (since 15 October 2026; earlier runs printed the plain import of the export), in Cloud Shell. It writes the live fingerprint into a copy of the export and imports the copy, because the export's own fingerprint is stale once the map has changed: gcloud 570.0.0 still imports a stale export (it swaps in the live fingerprint and warns), but it warns that later versions refuse it with 412. In prod the export of the map before the signed-out routes is `~/cma-web-urlmap-20261015T060142Z.yaml` (the first apply, `records/signed-out-prod-2026-10-15`); with it, the command is:
+
+  **Terminal**
+  ```bash
+  fp="$(gcloud compute url-maps describe cma-web-urlmap --project=p4a-cma-prod --global --format='value(fingerprint)')" && [ -n "$fp" ] \
+    && { grep -v '^fingerprint:' $HOME/cma-web-urlmap-20261015T060142Z.yaml; echo "fingerprint: '$fp'"; } > $HOME/cma-web-urlmap-20261015T060142Z-restore.yaml \
+    && gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=$HOME/cma-web-urlmap-20261015T060142Z-restore.yaml --quiet
+  ```
+
+  Expected: gcloud's fingerprint warning, `Updating URL map...done.`; the map without the path matcher `cma-web` and its host rule, after a few minutes in effect.
 - The bucket and the backend bucket may stay (nothing routes to them after the import above), or be deleted by hand: `gcloud compute backend-buckets delete cma-signed-out-backend --project=p4a-cma-prod`, then `gcloud storage rm -r gs://p4a-cma-prod-signed-out`.
