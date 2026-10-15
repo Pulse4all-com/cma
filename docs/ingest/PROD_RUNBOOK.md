@@ -973,3 +973,93 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 - **The nightly reconcile** after 02:30: `reconcile` rows with streams `crm_email` and `inbox_thread`, `succeeded`.
 - **No content anywhere:** `select count(*) from cma.email_message where raw::text like '%@%';` and the same for `cma.email_thread`: 0 (counts only).
 - **Records:** the outputs of 10.2 (blocks 1 to 3), 10.5 and 10.6 into `records/b17b-prod-<date>/` in a separate pull request, written from your report (ids, counts, dates and times only).
+
+---
+
+# 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
+
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod. Order: the migrations in dev with their verifies (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 3 to 7, which also refresh the data map and upload the dev app), then the merged web, then this phase in prod. The web after N16-B reads the functions of 0008n and 0008o on Welcome, the Live board, Reports → Follow-up and Sources, so **70 and 72 run in prod before N16-B is merged**, as 0008l did; until then a merged `main` would show Welcome with an error. Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+
+## 11.1 The two migrations and their verifies
+
+**Studio (cma-prod-pg)**, `70_crm_tasks.sql` as one script, as your own login.
+
+Expected: `INSERT 0 1` near the end and `COMMIT`; a second run ends with `INSERT 0 0` and changes nothing.
+
+**Studio (cma-prod-pg)**, `72_follow_up.sql` the same way, then `02_seed_pulse4all.sql` again (the four follow-up settings as seed values for both tenants).
+
+Expected: `INSERT 0 1`, `COMMIT`; `02` ends without an error and its notices name nothing new but the settings.
+
+`71` and `73` are dev only (they refuse a database without the dev seed), so prod gets the read-only check instead:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select version, description from cma.schema_migration where version in ('0008n', '0008o') order by version;
+select to_regclass('cma.crm_task') is not null as tasks, to_regprocedure('cma.open_tickets_of(uuid)') is not null as follow_up,
+       (select string_agg(check_key, ',' order by sort_order) from cma.data_quality_follow_up_checks()) as checks;
+select t.slug, s.key, s.value from cma.tenant_setting s join cma.tenant t on t.id = s.tenant_id where s.key like 'tickets.%' or s.key like 'leads.%' or s.key like 'tasks.%' order by 1, 2;
+reset role;
+```
+Expected: two rows `0008n`, `0008o`; `true`, `true`, `ticket_no_owner,ticket_no_market,crm_task_owner_unlinked`; eight setting rows, four per tenant (`1,2,5`, `240`, `240`, `75`).
+
+Then write `records/0008n-prod-<date>/` and `records/0008o-prod-<date>/` from what Studio showed (ids, counts, times; nothing else), as the earlier records.
+
+## 11.2 The prod app with the task subscriptions
+
+The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded and the install's update accepted, as in 10.1.
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && node hubspot/verify/render.mjs | tail -1 && cd hubspot/build/prod && hs project upload && cd ~/cma
+```
+Expected: `rendered prod: hubspot/build/prod`, `ALL 33 PASS`, the upload naming the live portal, build and deploy succeeding.
+
+**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the install → accept the update (no new scope is asked; the task subscriptions appear on the webhooks tab).
+
+Expected: 46 subscriptions active, nine of them for `task`. The token stays.
+
+## 11.3 The backfill of tasks
+
+**Terminal** (in `~/cma`, the ingest job as in 9.8, the object `task` alone)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --args="--connection,<key>,--object,task,--since,<intake start date>" --wait
+```
+Expected: the job finishing with the stream `task` counted in its log; nothing about a body or a subject.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select count(*) as tasks, count(*) filter (where source_deleted_at is null) as live, min(source_created_at)::date as first_task, count(distinct owner_ref) as owners from cma.crm_task;
+select status_ref, label, is_done, count(*) over () as statuses from cma.connection_task_status order by 1;
+select type_ref, label, is_callback, is_counted from cma.connection_task_type order by 1;
+select string_agg(k, ', ') as raw_keys from (select distinct jsonb_object_keys(raw) as k from cma.crm_task) x;
+reset role;
+```
+Expected: counts; every status and type the portal uses, each `is_done` false and `is_counted` true until 11.4; `raw_keys` without any body, subject, note or text key (the check on the column refuses them, so a key of that kind cannot be there).
+
+## 11.4 The Sources settings
+
+**Browser:** Workspace → Configuration → Sources → the HubSpot connection:
+1. Task statuses: tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
+2. Task types: tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
+3. Pipelines: a response time for a ticket pipeline that differs from the default of 240 business minutes; leave empty for the default.
+4. Settings: add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
+5. The telephony connection: Unlinked calls check stays at its default (skip outbound calls never connected and never tagged) unless Arno wants every call checked.
+
+**Browser:** Configuration → Exports → Follow-up: the response time, the warning share, the age groups and the callback window as Arno and Kira want them (defaults 240, 75, `1,2,5`, 240).
+
+Expected: Reports → Follow-up shows the tickets with their response time in force, the tasks with their types and the Callback badge, and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
+
+## 11.5 Day one
+
+**Browser:** Welcome as a supervisor (Needs attention with its five lines), as an agent (Waiting for you), the Live board (Follow-up now under the inbound tiles), Reports → Follow-up with the three filters.
+
+**Studio (cma-prod-pg)**, the next morning
+```sql
+set role cma_owner;
+select * from cma.follow_up_summary_of((select id from cma.tenant where slug = 'pulse4all-subscriptions'));
+select check_key, count(*) from cma.data_quality_of((select id from cma.tenant where slug = 'pulse4all-subscriptions')) where check_key in ('ticket_no_owner', 'ticket_no_market', 'crm_task_owner_unlinked', 'telephony_call_unlinked') group by 1 order by 1;
+reset role;
+```
+Expected: the eight counts as the Live board shows them; the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).

@@ -34,7 +34,7 @@ async function acknowledgeUrgent(subject) {
     }
   }
 }
-for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "reader"]) await acknowledgeUrgent(subject);
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "reader", "agent-one"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 /** Headers and tiles of a page (or of one part of it), and what is wrong with their marks */
@@ -99,6 +99,14 @@ const cases = [
   // Calls per agent: the person, eight figures and the first and last call
   ["manager", "/reports/calls-per-agent?range=month", 10, 0],
   ["supervisor", "/reports/calls-per-agent?range=week", 10, 0],
+  // Follow-up (addition 0008o): eight tiles; the leads' nine, the tickets' nine and the tasks' eight named headers
+  // (the link column's header is read out only, so it is not counted here), and the per-person table's seven
+  // for performance.team (the reader, with reports.view alone, has no per-person table); Waiting for you
+  // without the owner columns; the Live board's six follow-up tiles
+  ["manager", "/reports/follow-up", 33, 8],
+  ["reader", "/reports/follow-up", 26, 8],
+  ["agent-one", "/me/follow-up", 23, 0],
+  ["supervisor", "/live/board", 0, 6, '[data-testid="follow-up-live"]'],
 ];
 let headers = 0;
 let tiles = 0;

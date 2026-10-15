@@ -1,0 +1,21 @@
+verify/api.mjs against http://127.0.0.1:8080  (--provoke: every check must FAIL)
+
+FAIL  follow-up: an agent is refused the lists and the summary got [403,403,403,403,403], wanted [200,403,403,403,403]
+FAIL  follow-up: the supervisor (monitoring.live) reads the summary's eight counts got [200,true,true], wanted [403,true,true]
+FAIL  follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures got [200,403,403], wanted [200,200,403]
+FAIL  follow-up: the manager reads the three lists, every row in shape, no customer data got [200,200,200,true,true,true,true], wanted [200,200,403,true,true,true,true]
+FAIL  follow-up: tickets come with the least time left first, no business hours last got true, wanted false
+FAIL  follow-up: the state and market filters are read back and applied got [{"market":"NL","owner":null,"state":"attention"},true], wanted [{"market":"NL","owner":null,"state":null},true]
+FAIL  follow-up: owner=none keeps the leads whose owner maps to nobody got true, wanted false
+FAIL  follow-up: per person for the manager: people by name, the not-linked row last got [200,true,true], wanted [403,true,true]
+FAIL  follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs got [200,true,true], wanted [403,true,true]
+FAIL  follow-up: the analyst (no leads.accept, no workday.own) is refused their own got 403, wanted 200
+FAIL  follow-up: a connection answers its task catalogs and every pipeline's own response time got [true,true,true], wanted [true,true,false]
+FAIL  follow-up: a ticket pipeline's response time is written and put back got [200,90,null], wanted [200,90,90]
+FAIL  follow-up: a response time on a deal pipeline, out of bounds, or on an unknown pipeline is refused got [400,400,404], wanted [200,400,404]
+FAIL  follow-up: the manager cannot write a response time or a task status got [403,403], wanted [200,403]
+FAIL  follow-up: a task status's done switch is written and put back got [true,false], wanted [false,false]
+FAIL  follow-up: an ill-formed task type is a 400  got 400, wanted 200
+
+ALL 16 PROVOKED CHECKS FAILED, as they must
+exit 0

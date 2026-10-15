@@ -17,7 +17,11 @@ import type {
   InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
+  FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
 } from "./types";
+import {
+  byOwner, daysSince, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, ownRows, summarise,
+} from "@/lib/follow-up";
 import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
@@ -567,6 +571,12 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // the invitation settings (addition 0008l), at their defaults
   { key: "auth.invitation_valid_days", value: "7", isDefault: true },
   { key: "auth.invitation_email_domains", value: "", isDefault: true },
+  // the lead target (0007d) and the follow-up settings (addition 0008o), at their defaults; the fixture's rows follow them
+  { key: "speed_to_lead.target_minutes", value: "60", isDefault: true },
+  { key: "tickets.sla_minutes", value: "240", isDefault: true },
+  { key: "tickets.sla_warning_pct", value: "75", isDefault: true },
+  { key: "leads.age_buckets_business_days", value: "1,2,5", isDefault: true },
+  { key: "tasks.callback_window_minutes", value: "240", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1066,6 +1076,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
+  "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1307,15 +1318,20 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
   };
   return {
     tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
-    missedReasons: [], ...o,
+    missedReasons: [], taskStatuses: [], taskTypes: [], ...o,
   };
 }
 
 const form = (formId: string, name: string, isCounted = true, leadSource: string | null = null, market: string | null = null): SourceForm =>
   ({ formId, name, isCounted, leadSource, market, keptFields: [], isActive: true });
 const outcome = (outcomeRef: string, label: string, isConnected: boolean): SourceCallOutcome => ({ outcomeRef, label, isConnected, isActive: true });
-const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean): SourcePipeline =>
-  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true });
+const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null): SourcePipeline =>
+  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes });
+/** The task catalogs of the fixture's CRM connection (addition 0008n), consistent with the follow-up rows below */
+const taskStatus = (statusRef: string, label: string, isDone: boolean, seenTasks: number): SourceTaskStatus =>
+  ({ statusRef, label, isDone, seenTasks, lastSeenAt: seenTasks ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null });
+const taskType = (typeRef: string, label: string, isCallback: boolean, isCounted: boolean, seenTasks: number, openTasks: number): SourceTaskType =>
+  ({ typeRef, label, isCallback, isCounted, seenTasks, openTasks, lastSeenAt: seenTasks ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null });
 
 function seedIntakeConfig(me: Principal): MockIntakeConfig {
   const all = (state.intakeConfig ??= new Map());
@@ -1324,7 +1340,12 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
   const t = me.tenantId;
   const crm = mockSource(t, 1, "crmtest", "Customer records (test)", "100200300", "crm", {
     pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true), pipeline("deal", "p-self-serve", "Web orders (test)", true, false),
-      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true), pipeline("ticket", "p-support", "Support (test)", true, true)],
+      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true), pipeline("ticket", "p-support", "Support (test)", true, true),
+      // Billing keeps its own response time of an hour (addition 0008o); Support follows the tenant default
+      pipeline("ticket", "p-billing", "Billing (test)", true, true, 60)],
+    taskStatuses: [taskStatus("NOT_STARTED", "Not started", false, 5), taskStatus("IN_PROGRESS", "In progress", false, 0), taskStatus("COMPLETED", "Completed", true, 12)],
+    taskTypes: [taskType("CALL", "Call", false, true, 3, 3), taskType("CALLBACK", "Callback", true, true, 1, 1), taskType("EMAIL", "Email", false, true, 1, 1),
+      taskType("INTERNAL", "Internal note", false, false, 2, 0)],
     forms: [form("f-101", "NL - Quote form (test)"), form("f-102", "UK - Contact form (test)"), form("f-103", "DE Info request (test)"),
       form("f-104", "NL - Cancellation form (test)"), form("f-105", "UK - Replacement request (test)"), form("f-106", "Support question (test)"),
       form("f-107", "Newsletter sign-up (test)", false), form("f-108", "BE Quote form (test)", true, "quote", "BE")],
@@ -1336,8 +1357,9 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       { entity: "deal", field: "market", refSystem: null, slot: 1, property: "deal_country" }],
     writeback: [{ field: "commerce_ref", slot: 1, property: "contact_shop_id_1", mode: "slot", enabled: true },
       { field: "country", slot: 1, property: "contact_country", mode: "if_empty", enabled: true }],
-    sampleIds: { deal: "41000123", ticket: "52000456" },
-  }, { app_host: "crm.example.com", record_url_deal: "https://{app_host}/records/{account}/deal/{id}", record_url_ticket: "https://{app_host}/records/{account}/ticket/{id}" });
+    sampleIds: { deal: "41000123", ticket: "52000456", task: "63000789" },
+  }, { app_host: "crm.example.com", record_url_deal: "https://{app_host}/records/{account}/deal/{id}", record_url_ticket: "https://{app_host}/records/{account}/ticket/{id}",
+       record_url_task: "https://{app_host}/records/{account}/task/{id}" });
   const sources: MockSource[] = [crm];
   if (t !== MOCK_TENANT_2) {
     sources.push(mockSource(t, 2, "phonetest", "Phones (test)", "4400", "telephony", {
@@ -1415,6 +1437,119 @@ function sourceOf(me: Principal, id: string): MockSource {
 function assertMockMarket(me: Principal, code: string | null, allowDefault = false): void {
   if (code === null || (allowDefault && code === "*")) return;
   if (!seedIntakeConfig(me).markets.some((m) => m.code === code)) throw new CmaDbError("CMA02", "no such market");
+}
+
+// ---- Follow-up fixture (addition 0008o, night run N16-B) -------------------------------------------------
+// What is waiting right now in the fictional tenant, relative to the clock: leads not called (two past the
+// target, one just in, one without business hours), tickets around the default response time of 240 minutes
+// (74 %, 75 %, 100 %, 125 %, Billing's own hour, one without a market) and tasks around today. Owners are the
+// Team hours people, Agent One and Agent Two (so Waiting for you has rows for a tester), one owner nobody maps
+// to (70000077) and some rows without one. Ids only; the record links come from the connection's templates.
+// The second tenant (no telephony, no shop) gets two leads and nothing else.
+
+/** The names of the fixture's people, for the owner column; the directory's names where it has them */
+function mockOwnerName(userId: string | null): string | null {
+  if (userId === null) return null;
+  if (userId === MOCK_PRINCIPAL.userId) return "Agent One";
+  if (userId === MOCK_SUPERVISOR_ID) return "Agent Two";
+  return TEAM.find((p) => p.userId === userId)?.displayName ?? null;
+}
+
+function mockRecordUrl(me: Principal, connectionId: string, recordType: string, sourceId: string): string | null {
+  const c = seedIntakeConfig(me).sources.find((x) => x.connection.id === connectionId)?.connection;
+  const template = c?.settings[`record_url_${recordType}`];
+  return c && typeof template === "string" ? recordUrlPreview(template, c.settings, c.accountId, sourceId) : null;
+}
+
+/** cma.age_bucket_of against the fixture's edges 1,2,5 */
+function mockBucket(days: number | null): { from: number | null; to: number | null } {
+  if (days === null) return { from: null, to: null };
+  let prev = 0;
+  for (const edge of [1, 2, 5]) {
+    if (days <= edge) return { from: prev, to: edge };
+    prev = edge;
+  }
+  return { from: prev, to: null };
+}
+
+function mockFollowUpRows(me: Principal, nowMs: number): { leads: OpenLead[]; tickets: OpenTicket[]; tasks: OpenTask[] } {
+  const conn = MOCK_CRM_CONNECTION;
+  const today = mockToday(me);
+  const target = Number(mockSetting("speed_to_lead.target_minutes") || 60) * 60;
+  const sla = Number(mockSetting("tickets.sla_minutes") || 240);
+  const warn = Number(mockSetting("tickets.sla_warning_pct") || 75);
+  const at = (minutesAgo: number): Instant => new Date(nowMs - minutesAgo * 60_000).toISOString();
+  const ANA = TEAM[0]!.userId;
+  const JORDI = TEAM[1]!.userId;
+  const SANNE = TEAM[2]!.userId;
+  const AGENT_ONE = MOCK_PRINCIPAL.userId;
+  const AGENT_TWO = MOCK_SUPERVISOR_ID;
+  const UNMAPPED = "70000077";
+  const refOf = (owner: string | null, ref: string | null) => (owner ? `7${owner.slice(-7)}` : ref);
+
+  const lead = (id: string, owner: string | null, ref: string | null, market: string, minutesAgo: number, lastCallMinutesAgo: number | null): OpenLead => {
+    const createdAt = at(minutesAgo);
+    const waiting = market === "unknown" ? null : mockBusinessSeconds(market, createdAt, nowMs);
+    const days = market === "unknown" ? null : daysSince(dateKeyInZone(createdAt, me.timeZone), today);
+    const bucket = mockBucket(days);
+    return {
+      dealId: `00000000-0000-7000-8000-0000000d${id.slice(-4)}`, connectionId: conn, dealSourceId: id, pipelineId: "p-sales", pipelineLabel: "Sales (test)",
+      ownerUserId: owner, ownerName: mockOwnerName(owner), ownerRef: refOf(owner, ref), market, createdAt, waitingBusinessSeconds: waiting, ageBusinessDays: days,
+      bucketFrom: bucket.from, bucketTo: bucket.to, pastTarget: waiting === null ? null : waiting > target,
+      lastCallAt: lastCallMinutesAgo === null ? null : at(lastCallMinutesAgo),
+      lastCallDays: lastCallMinutesAgo === null ? null : Math.floor(lastCallMinutesAgo / 1440), recordUrl: mockRecordUrl(me, conn, "deal", id),
+    };
+  };
+  const ticket = (id: string, owner: string | null, ref: string | null, market: string, minutesAgo: number, pipelineId: string, pipelineLabel: string, own: number | null): OpenTicket => {
+    const createdAt = at(minutesAgo);
+    const open = market === "unknown" ? null : mockBusinessSeconds(market, createdAt, nowMs);
+    const inForce = own ?? sla;
+    const state = open === null ? "no_hours" : open >= inForce * 60 ? "breached" : open * 100 >= inForce * 60 * warn ? "at_risk" : "ok";
+    return {
+      ticketId: `00000000-0000-7000-8000-0000000e${id.slice(-4)}`, connectionId: conn, ticketSourceId: id, pipelineId, pipelineLabel, stageId: "s-new", stageLabel: "New",
+      ownerUserId: owner, ownerName: mockOwnerName(owner), ownerRef: refOf(owner, ref), market, createdAt, openBusinessSeconds: open, slaMinutes: inForce, slaState: state,
+      minutesToBreach: open === null ? null : inForce - Math.floor(open / 60), recordUrl: mockRecordUrl(me, conn, "ticket", id),
+    };
+  };
+  const task = (id: string, owner: string | null, ref: string | null, market: string | null, typeRef: string, typeLabel: string, isCallback: boolean, priority: string | null,
+    dueAt: Instant | null, recordType: "deal" | "ticket" | null, recordSourceId: string | null): OpenTask => {
+    const dueDate = dueAt === null ? null : dateKeyInZone(dueAt, me.timeZone);
+    return {
+      taskId: `00000000-0000-7000-8000-0000000f${id.slice(-4)}`, connectionId: conn, taskSourceId: id, typeRef, typeLabel, isCallback, priorityRef: priority,
+      statusRef: "NOT_STARTED", statusLabel: "Not started", ownerUserId: owner, ownerName: mockOwnerName(owner), ownerRef: refOf(owner, ref), market, dueAt,
+      dueState: dueDate === null ? "none" : dueDate < today ? "overdue" : dueDate === today ? "today" : "later", recordType, recordSourceId,
+      createdAt: at(2 * 1440), recordUrl: mockRecordUrl(me, conn, "task", id),
+    };
+  };
+  const dayAt = (dayOffset: number, time: string): Instant => new Date(localMs(addDays(today, dayOffset), time, me.timeZone)).toISOString();
+
+  const leads = [
+    lead("41001001", ANA, null, "NL", 3 * 1440, 1440),
+    lead("41001002", AGENT_ONE, null, "GB", 26 * 60, null),
+    lead("41001003", null, UNMAPPED, "NL", 50, null),
+    lead("41001004", null, null, "unknown", 20 * 60, null),
+    lead("41001005", JORDI, null, "NL", 2 * 1440, null),
+  ];
+  if (me.tenantId === MOCK_TENANT_2) return { leads: leads.slice(0, 2), tickets: [], tasks: [] };
+  // the minutes of the Support tickets as business minutes of 09:00 to 17:00 days are what the figures show; the
+  // percentages of the response time hold on a working day inside office hours
+  const tickets = [
+    ticket("52002001", ANA, null, "NL", 177, "p-support", "Support (test)", null),
+    ticket("52002002", ANA, null, "GB", 180, "p-support", "Support (test)", null),
+    ticket("52002003", JORDI, null, "NL", 240, "p-support", "Support (test)", null),
+    ticket("52002004", null, null, "NL", 300, "p-support", "Support (test)", null),
+    ticket("52002005", AGENT_ONE, null, "NL", 90, "p-billing", "Billing (test)", 60),
+    ticket("52002006", AGENT_TWO, null, "unknown", 10, "p-support", "Support (test)", null),
+  ].sort((a, b) => (a.minutesToBreach === null ? 1 : b.minutesToBreach === null ? -1 : a.minutesToBreach - b.minutesToBreach));
+  const tasks = [
+    task("63003001", ANA, null, "NL", "CALL", "Call", false, "HIGH", dayAt(-1, "23:30"), "deal", "41001001"),
+    task("63003002", AGENT_ONE, null, "GB", "CALL", "Call", false, "MEDIUM", dayAt(0, "09:30"), "ticket", "52002002"),
+    task("63003003", JORDI, null, "NL", "CALLBACK", "Callback", true, null, dayAt(1, "10:00"), "deal", "41001005"),
+    task("63003004", null, null, null, "EMAIL", "Email", false, null, null, null, null),
+    task("63003005", null, UNMAPPED, null, "CALL", "Call", false, "LOW", dayAt(1, "14:00"), null, null),
+    task("63003006", SANNE, null, "NL", "CALL", "Call", false, null, dayAt(0, "16:00"), "ticket", "52002003"),
+  ];
+  return { leads, tickets, tasks };
 }
 
 // ---- Invitations (addition 0008l): fixture rows per tenant, shaped like cma.invitations() ----------------
@@ -2747,5 +2882,63 @@ export const mockData: CmaData = {
       }
     }
     return out;
+  },
+
+  // ---- Follow-up (addition 0008o): the same permission checks as the database functions, over the fixture
+  async getOpenLeads(me): Promise<OpenLead[]> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    return mockFollowUpRows(me, Date.now()).leads;
+  },
+
+  async getOpenTickets(me): Promise<OpenTicket[]> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    return mockFollowUpRows(me, Date.now()).tickets;
+  },
+
+  async getOpenTasks(me): Promise<OpenTask[]> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    return mockFollowUpRows(me, Date.now()).tasks;
+  },
+
+  async getFollowUpSummary(me): Promise<FollowUpSummary> {
+    assertAny(me, [...FOLLOW_UP_SUMMARY_PERMISSIONS]);
+    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
+    return summarise(leads, tickets, tasks);
+  },
+
+  async getFollowUpByOwner(me): Promise<FollowUpOwner[]> {
+    assertAny(me, [FOLLOW_UP_BY_OWNER_PERMISSION]);
+    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
+    return byOwner(leads, tickets, tasks);
+  },
+
+  async getMyFollowUp(me): Promise<MyFollowUp> {
+    assertAny(me, [...MY_FOLLOW_UP_PERMISSIONS]);
+    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
+    return { leads: ownRows(leads, me.userId), tickets: ownRows(tickets, me.userId), tasks: ownRows(tasks, me.userId) };
+  },
+
+  async setSourcePipelineSla(me, id, input) {
+    const x = sourceOf(me, id);
+    if (input.slaMinutes !== null && (input.slaMinutes < 1 || input.slaMinutes > 100000)) throw new CmaDbError("CMA04", "an SLA is 1 to 100000 business minutes");
+    const p = x.pipelines.find((y) => y.recordType === input.recordType && y.pipelineId === input.pipelineId);
+    if (!p) throw new CmaDbError("CMA02", "no such pipeline on this connection");
+    p.slaMinutes = input.slaMinutes;
+  },
+
+  async setSourceTaskStatus(me, id, input) {
+    const x = sourceOf(me, id);
+    if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "tasks belong to a CRM connection");
+    const s = x.taskStatuses.find((y) => y.statusRef === input.statusRef);
+    if (s) Object.assign(s, { label: input.label, isDone: input.isDone });
+    else x.taskStatuses.push(taskStatus(input.statusRef, input.label, input.isDone, 0));
+  },
+
+  async setSourceTaskType(me, id, input) {
+    const x = sourceOf(me, id);
+    if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "tasks belong to a CRM connection");
+    const y = x.taskTypes.find((z) => z.typeRef === input.typeRef);
+    if (y) Object.assign(y, { label: input.label, isCallback: input.isCallback, isCounted: input.isCounted });
+    else x.taskTypes.push(taskType(input.typeRef, input.label, input.isCallback, input.isCounted, 0, 0));
   },
 };

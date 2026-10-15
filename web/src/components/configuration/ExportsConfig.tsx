@@ -16,9 +16,19 @@ import {
   EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
   type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
 } from "@/lib/configuration";
+import { FOLLOW_UP_SETTING_KEYS, parseFollowUpSetting, type FollowUpSettingKey } from "@/lib/follow-up";
 import { normaliseDomains, parseValidDays } from "@/lib/invitations";
 import { Button } from "../primitives";
 import { SaveNote, field, label, send, useSave } from "./shared";
+
+/** The Follow-up settings (addition 0008o): their labels and hints in copy.configExports */
+const FOLLOW_UP_KEYS: Record<FollowUpSettingKey, keyof Copy["configExports"]> = {
+  "tickets.sla_minutes": "tickets_sla_minutes", "tickets.sla_warning_pct": "tickets_sla_warning_pct",
+  "leads.age_buckets_business_days": "leads_age_buckets_business_days", "tasks.callback_window_minutes": "tasks_callback_window_minutes",
+};
+const FOLLOW_UP_HINTS: Record<FollowUpSettingKey, keyof Copy["configExports"]> = {
+  "tickets.sla_minutes": "slaHint", "tickets.sla_warning_pct": "pctHint", "leads.age_buckets_business_days": "bucketsHint", "tasks.callback_window_minutes": "windowHint",
+};
 
 export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; copy: Copy }) {
   const c = copy.configuration;
@@ -27,6 +37,17 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const [minutes, setMinutes] = useState<Partial<Record<MinuteSettingKey | SecondSettingKey, string>>>({});
   const [days, setDays] = useState<string | undefined>(undefined);
   const [domains, setDomains] = useState<string | undefined>(undefined);
+  // the Follow-up settings (0008o), each saved on blur once it parses, as the minute settings
+  const [followUp, setFollowUp] = useState<Partial<Record<FollowUpSettingKey, string>>>({});
+
+  async function saveFollowUp(key: FollowUpSettingKey) {
+    const text = followUp[key];
+    if (text === undefined) return;
+    const v = parseFollowUpSetting(key, text);
+    if (v === null) return;
+    if (v !== valueOf(key)?.value) await save(() => send("PUT", "/api/v1/configuration/settings", { key, value: v }));
+    setFollowUp((prev) => { const next = { ...prev }; delete next[key]; return next; });
+  }
   const valueOf = (key: string) => settings.find((s) => s.key === key);
   const preview = exportPreview(settings, {
     date: copy.exports.date, person: copy.exports.person, worked: copy.exports.worked, bom: t.values_true, noBom: t.values_false,
@@ -177,6 +198,44 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
               onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
             <span className={`font-normal text-caption ${badDomains ? "text-p4a-error" : "text-p4a-muted"}`}>{badDomains ? t.domainsProblem : t.domainsHint}</span>
           </label>
+        </div>
+      </section>
+
+      <section data-testid="follow-up-settings">
+        <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.followUp}</h2>
+        <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.followUpIntro}</p>
+        <div className="grid grid-cols-2 gap-6">
+          {FOLLOW_UP_SETTING_KEYS.map((key) => {
+            const s = valueOf(key);
+            const text = followUp[key] ?? s?.value ?? "";
+            const bad = followUp[key] !== undefined && parseFollowUpSetting(key, followUp[key] ?? "") === null;
+            const buckets = key === "leads.age_buckets_business_days";
+            return (
+              <label key={key} id={settingAnchor(key)} className={`${label} scroll-mt-24`}>
+                <span>
+                  {t[FOLLOW_UP_KEYS[key]]}
+                  {s?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+                </span>
+                <span className="flex gap-2">
+                  <input
+                    className={`${field} ${buckets ? "w-48" : "w-32"} tabular-nums ${bad ? "border-p4a-error" : ""}`}
+                    inputMode={buckets ? "text" : "numeric"}
+                    maxLength={buckets ? 24 : 6}
+                    value={text}
+                    onChange={(e) => setFollowUp({ ...followUp, [key]: e.target.value })}
+                    onBlur={() => saveFollowUp(key)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  />
+                  {s && !s.isDefault ? (
+                    <Button variant="text" size="md" onClick={() => save(() => send("PUT", "/api/v1/configuration/settings", { key, value: null }))}>
+                      {t.resetToDefault}
+                    </Button>
+                  ) : null}
+                </span>
+                <span className={`font-normal text-caption ${bad ? "text-p4a-error" : "text-p4a-muted"}`}>{bad ? t.followUpProblem : t[FOLLOW_UP_HINTS[key]]}</span>
+              </label>
+            );
+          })}
         </div>
       </section>
     </div>

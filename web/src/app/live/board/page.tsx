@@ -1,3 +1,4 @@
+import { FollowUpLive } from "@/components/FollowUpLive";
 import { InboundLive } from "@/components/InboundLive";
 import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
 import { LiveRefresh } from "@/components/LiveRefresh";
@@ -53,10 +54,16 @@ export default async function LiveBoardPage() {
 
   // Four reads: the team now, the current team memberships (0004), today's published shifts and the
   // adherence tolerance (0005); the flags are derived here from the plan and the clock
-  const [now, memberships, shifts, settings, inbound] = await Promise.all([
+  const [now, memberships, shifts, settings, inbound, followUp] = await Promise.all([
     data().getTeamNow(me), data().listTeamMembersNow(me), data().getRosterToday(me), data().listSettings(me), data().getInboundNow(me),
+    // the follow-up counts (addition 0008o): leads not called, tickets against their response time, tasks
+    data().getFollowUpSummary(me),
   ]);
   const tolerance = Number(settings.find((x) => x.key === "roster.adherence_tolerance_minutes")?.value ?? 5);
+  const numberSetting = (key: string): number | null => {
+    const v = settings.find((x) => x.key === key)?.value;
+    return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
+  };
   const shiftOf = new Map(shifts.map((x) => [x.userId, x]));
   const nowMs = new Date().getTime();
   const rows = liveRows(now.people);
@@ -95,6 +102,11 @@ export default async function LiveBoardPage() {
 
       <div className="mb-8">
         <InboundLive inbound={inbound} copy={copy} locale={me.locale} timeZone={me.timeZone} />
+      </div>
+
+      <div className="mb-8">
+        <FollowUpLive summary={followUp} copy={copy} locale={me.locale}
+          targetMinutes={numberSetting("speed_to_lead.target_minutes")} warningPct={numberSetting("tickets.sla_warning_pct")} />
       </div>
 
       <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>

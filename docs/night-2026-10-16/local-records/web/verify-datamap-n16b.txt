@@ -1,0 +1,12 @@
+  catalog crm_task: not a table in cma in schema.json
+  catalog connection_task_status: not a table in cma in schema.json
+  catalog connection_task_type: not a table in cma in schema.json
+  catalog open_lead: derived, not a view in cma_read in schema.json
+  catalog open_ticket: derived, not a view in cma_read in schema.json
+  catalog open_task: derived, not a view in cma_read in schema.json
+  catalog follow_up_summary: derived, not a view in cma_read in schema.json
+  catalog follow_up_by_owner: derived, not a view in cma_read in schema.json
+  catalog connection_pipeline_sla: derived, not a view in cma_read in schema.json
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (10 problems)
+exit 1

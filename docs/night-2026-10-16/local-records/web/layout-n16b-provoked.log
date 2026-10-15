@@ -1,0 +1,47 @@
+  breadcrumbs: Welcome shows a trail
+  rail: after W it is collapsed at 64px, expected collapsed at 64
+  hints: hidden by cookie gives {"kbd":0,"hint":false,"pressed":"true","state":"hidden"}, expected no keycap, no shortcuts line, the toggle pressed
+  agent-one /messages: crumbs ["Welcome","Messages"], expected ["Welcome"]
+  manager /reports/inbound: crumbs ["Welcome","Reports","Inbound"], expected ["Welcome","Reports"]
+  reader /reports/inbound: crumbs ["Welcome","Reports","Inbound"], expected ["Welcome","Reports"]
+  admin /configuration/sources/00000000-0000-7000-8000-00000000c001: crumbs ["Welcome","Configuration","Sources","Customer records (test)"], expected ["Welcome","Configuration","Sources"]
+  agent-one /account: crumbs ["Welcome","My account"], expected ["Welcome"]
+  supervisor /messages/send: crumbs ["Welcome","Messages","Send a message"], expected ["Welcome","Messages"]
+  manager /reports/follow-up: crumbs ["Welcome","Reports","Follow-up"], expected ["Welcome","Reports"]
+  agent-one /me/follow-up: crumbs ["Welcome","Waiting for you"], expected ["Welcome"]
+  preview: the admin previewing as agent sees ["/","/messages","/day","/hours","/schedule"] and 0 configuration pages
+  preview: manager with a preview cookie gets {"banner":false,"select":false,"rail":17}, expected no control, no banner and 17 pages
+  preview: agent-one with a preview cookie gets {"banner":false,"select":false,"rail":5}, expected no control, no banner and 5 pages
+  manager /reports/intake?range=month: the main area scrolls sideways by 111px at 1280
+  manager /reports/data-quality: the header hint covers the header it explains
+  manager /reports/inbound?range=month: the main area scrolls sideways by 306px at 1280
+  manager /reports/inbound?range=month: 1 Light Blue or Soft Rose reason marks carry text
+  manager /reports/follow-up: page scrolls horizontally at 1280
+  reader /reports/follow-up: the per-person table is shown without performance.team
+  supervisor /live/board: the main area scrolls sideways by 1416px at 1280
+  manager /reports/calls: tag-table does not end inside its card at 1280
+  manager /reports/calls: the main area scrolls sideways by 962px at 1280
+  manager /reports/calls: the deltas of range=week compare with partial,partial,partial,partial, expected whole four times
+  manager /reports/calls: the deltas of range=custom compare with whole,whole,whole,whole, expected none four times
+  manager /reports/calls: the deltas of range=custom (30 days to yesterday) compare with none,none,none,none, expected partial four times
+  manager /reports/calls-per-agent: agents-table does not end inside its card at 1280
+  manager /reports/calls-per-agent: the main area scrolls sideways by 441px at 1280
+  manager /reports/calls-per-agent: the per-agent table needs to scroll inside its card at 1280
+  admin /configuration/sources/00000000-0000-7000-8000-00000000c002: source-missed-reasons does not fit its card at 1280
+  admin /configuration/alert-rules: the main area scrolls sideways by 1041px at 1280
+  admin /team/people: the invitations table does not fit its card at 1280
+  admin /team/people: scrolls sideways at 1280
+  /invite as invitee-one: shows expired, wanted open
+  /invite open: Accept is not focused
+  lines: the confirmation does not open on Cancel
+  lines: the box is unticked while the confirmation is open
+  lines: Enter at open called the lines route with [{"lineRef":"l-1","market":"NL","isCounted":false}]
+  lines: the box is unticked after Enter at open
+  Dissolve on Teams: the confirmation does not open on Cancel
+  Copy previous week on the planner: the confirmation does not open on Cancel
+  End workday: the confirmation does not open on its confirm button
+  1279x800: the desktop-only gate is showing instead of the app
+  1279x800: rail is 0px, token says 256
+  1279x800: top bar is 0px, token says 56
+layout: FAIL (45 problems)
+exit 1

@@ -1,0 +1,28 @@
+FAIL  buckets: 1,2,5 is kept                                           got "1,2,5", wanted null
+FAIL  buckets: spaces are stripped, as the trigger does                got "1,2,5", wanted "1, 2, 5"
+FAIL  buckets: out of order, from 0, six of them, a word, empty are refused got [null,null,null,null,null,null], wanted ["2,1",null,null,null,null,null]
+FAIL  response time: 1 and 100000 pass, 0 and 100001 do not            got ["1","100000",null,null,null], wanted ["0","100000",null,null,null]
+FAIL  warning share: 1 to 100                                          got ["1","100",null,null], wanted ["1","100","0",null]
+FAIL  callback window: 0 to 10080                                      got ["0","10080",null,null], wanted [null,"10080",null,null]
+FAIL  a pipeline's response time: empty is the default, 60 is 60, 0 and a word are refused got [null,60,null,null,null], wanted [null,60,0,null,null]
+FAIL  filter: market, a person's id (lower-cased) and the state are read got {"market":"NL","owner":"00000000-0000-7000-8000-00000000abcd","state":, wanted {"market":"NL","owner":"00000000-0000-7000-8000-00000000AbCd","state":
+FAIL  filter: none for nobody linked; an ill-formed owner, market or state is no filter got {"market":null,"owner":"none","state":null}, wanted {"market":"N L","owner":"none","state":null}
+FAIL  filter: written back without the empty parts                     got {"market":"GB","state":"attention"}, wanted {"market":"GB","owner":"","state":"attention"}
+FAIL  filter by market: NL leads, tickets and tasks (a task without a market counts as unknown) got [["d1","d3"],["x1","x3","x4"],["k3","k4"]], wanted [["d1"],["x1","x3","x4"],["k3","k4"]]
+FAIL  filter by person: Ana's rows; none for rows whose owner maps to nobody or is empty got [["d1"],["d3","d4"],["x4"]], wanted [["d1","d3"],["d3","d4"],["x4"]]
+FAIL  filter by state: attention keeps leads past the target, tickets at risk or breached, tasks overdue got [["d1","d3"],["x2","x3","x4"],["k1"]], wanted [["d1","d3"],["x2","x3","x4"],["k1","k2"]]
+FAIL  the filters' choices: markets with unknown last, people by name, the not-linked choice got [["GB","NL","unknown"],["Ana Ferrer","Jordi Puig","Sanne Visser"],true, wanted [["GB","NL","unknown"],["Ana Ferrer","Jordi Puig","Sanne Visser"],fals
+FAIL  no not-linked choice while every row has a person                got false, wanted true
+FAIL  the summary over the fixture                                     got {"leadsOpenNotCalled":4,"leadsPastTarget":2,"ticketsAtRisk":1,"tickets, wanted {"leadsOpenNotCalled":4,"leadsPastTarget":1,"ticketsAtRisk":1,"tickets
+FAIL  per person: by name, the not-linked row last, nobody with nothing waiting got [["Ana Ferrer",1,1,2,1,1,0],["Jordi Puig",1,0,1,1,0,1],["Sanne Visser", wanted [["Ana Ferrer",1,1,2,1,1,0],["Jordi Puig",1,0,1,1,0,1],[null,2,1,1,1,0
+FAIL  per person: a task with no due state counted nowhere; an empty set gives no rows got [4,0], wanted [4,1]
+FAIL  the person's own rows                                            got [["d1"],["x1","x2"],["k2"]], wanted [["d1"],["x1"],["k2"]]
+FAIL  attention lines: the five in order, each with where to act       got [["daysNotEnded",3,"/team/hours?range=month"],["leadsPastTarget",2,"/r, wanted [["daysNotEnded",3,"/team/hours?range=month"],["leadsPastTarget",2,"/r
+FAIL  attention lines: without Team hours and without telephony, the three figures alone got ["leadsPastTarget","ticketsAtRiskOrBreached","tasksOverdue"], wanted ["daysNotEnded","leadsPastTarget","ticketsAtRiskOrBreached","tasksOver
+FAIL  the Live board's six tiles are summary figures                   got [6,true], wanted [7,true]
+FAIL  the age bucket in words: 0–1, 2–5, 5+ (open), none without business hours got ["0–1","2–5","5+",null], wanted ["0-1","2–5","5+",null]
+FAIL  days since a date: today 0, yesterday 1, never negative          got [0,1,0], wanted [0,1,-1]
+FAIL  the unlinked-calls check: the stored value, else skip for a telephony connection and none for another kind got ["none","outbound_unanswered_untagged","none","outbound_unanswered_unt, wanted ["none","outbound_unanswered_untagged","outbound_unanswered_untagged",
+
+ALL 25 PROVOKED CHECKS FAILED, as they must
+exit 0

@@ -112,20 +112,21 @@ async function expectNavigation() {
     // and Data quality (reports.view or tenant.configure): the supervisor holds neither of the latter
     // Since 0008i Inbound follows Intake for the same permissions
     // Since 0008j Calls (reports.view or performance.team) and Calls per agent (performance.team) follow Inbound
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls",
+    // Since 0008o (16 October 2026) Follow-up follows Speed to lead (reports.view, performance.team or monitoring.live)
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls",
       "/reports/calls-per-agent", "/reports/data-quality"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/data-quality"], false],
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake",
+      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
+      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
+      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -189,6 +190,11 @@ async function expectReports() {
     // without telephony says so in words and has no header to open
     ["manager", "/reports/inbound?range=month", ["G", "T", "W", "M", "C"], '[data-testid="inbound-table"]', '[data-testid="inbound-table"] thead th:last-child button[data-header-hint]'],
     ["invest-analyst", "/reports/inbound?range=month", ["G"], '[data-testid="inbound-not-connected"]', null],
+    // Follow-up (addition 0008o): the three filters' keycaps, the tickets table's right-most header hint stays
+    // inside the viewport; the reader (reports.view alone) gets the lists without the per-person table
+    ["manager", "/reports/follow-up", ["K", "O", "S"], '[data-testid="follow-up-by-owner"]', '[data-testid="follow-up-tickets"] thead th:last-child button[data-header-hint]'],
+    ["reader", "/reports/follow-up?state=attention", ["K", "O", "S"], '[data-testid="follow-up-leads"]', '[data-testid="follow-up-tasks"] thead th:last-child button[data-header-hint]'],
+    ["agent-one", "/me/follow-up", [], '[data-testid="my-leads"]', '[data-testid="my-tickets"] thead th:last-child button[data-header-hint]'],
   ];
   for (const [subject, path, keys, selector, hintMark] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -264,12 +270,21 @@ async function expectReports() {
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
-  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"]) {
+  for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
   }
+  // The reader (reports.view alone) sees no per-person table on Follow-up (performance.team only, 0008o)
+  await p.goto(BASE + "/reports/follow-up");
+  await p.waitForLoadState("networkidle");
   await ctx.close();
+  const reader = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "reader" } });
+  const rp = await reader.newPage();
+  await rp.goto(BASE + "/reports/follow-up");
+  await rp.waitForLoadState("networkidle");
+  if (await rp.locator('[data-testid="follow-up-by-owner"]').count() !== (provoke ? 1 : 0)) problems.push("reader /reports/follow-up: the per-person table is shown without performance.team");
+  await reader.close();
 }
 
 // Calls and Calls per agent (addition 0008j, brief B16), per identity at 1280 px: Calls for reports.view or
@@ -887,6 +902,9 @@ async function expectFrame() {
     ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/statuses", "/configuration/sources", null]],
     ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
     ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
+    // Follow-up and Waiting for you (addition 0008o): a report in its group; the person's own page, no rail item
+    ["manager", "/reports/follow-up", ["Welcome", "Reports", "Follow-up"], ["/", "/reports/dashboard", null]],
+    ["agent-one", "/me/follow-up", ["Welcome", "Waiting for you"], ["/", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -950,7 +968,8 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  for (const [subject, pages] of [["manager", 16], ["agent-one", 5]]) {
+  // the manager's rail holds 17 pages since Follow-up joined the Reports group (0008o)
+  for (const [subject, pages] of [["manager", 17], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");

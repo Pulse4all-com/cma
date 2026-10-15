@@ -1,0 +1,16 @@
+verify/api.mjs against http://127.0.0.1:8081
+
+PASS  follow-up: an agent is refused the lists and the summary got [403,403,403,403,403]
+PASS  follow-up: the supervisor (monitoring.live) reads the summary's eight counts got [200,true,true]
+note  no reader identity in this tenant: the reader's check is left out
+PASS  follow-up: the manager reads the three lists, every row in shape, no customer data got [200,200,200,true,true,true,true]
+PASS  follow-up: tickets come with the least time left first, no business hours last got true
+PASS  follow-up: the state and market filters are read back and applied got [{"market":"NL","owner":null,"state":"attention"},true]
+PASS  follow-up: owner=none keeps the leads whose owner maps to nobody got true
+PASS  follow-up: per person for the manager: people by name, the not-linked row last got [200,true,true]
+PASS  follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs got [200,true,true]
+PASS  follow-up: the analyst (no leads.accept, no workday.own) is refused their own got 403
+note  no CRM connection in this tenant: the 5 Sources checks of the follow-up layer are left out
+
+ALL 9 PASS
+exit 0

@@ -12,6 +12,7 @@ import type {
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
+  DueState, FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -668,9 +669,67 @@ async function readCatalogs(q: Querier, id: string): Promise<CatalogsJson> {
   return one(r.rows, "connection_catalogs").c;
 }
 
-function toPipeline(p: ConfigJson["pipelines"][number]): SourcePipeline {
-  return { recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType, isActive: p.status === "active" };
+function toPipeline(p: ConfigJson["pipelines"][number], slaMinutes: number | null = null): SourcePipeline {
+  return { recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType, isActive: p.status === "active", slaMinutes };
 }
+
+/** cma.connection_task_catalogs (addition 0008n): the task statuses and types a CRM connection has seen, with the configuration in force */
+type TaskCatalogsJson = {
+  statuses: { statusRef: string; label: string; isDone: boolean; seenTasks: number; lastSeenAt: string | null }[];
+  types: { typeRef: string; label: string; isCallback: boolean; isCounted: boolean; seenTasks: number; openTasks: number; lastSeenAt: string | null }[];
+  sampleTaskId: string | null;
+};
+
+// ---- Follow-up (addition 0008o): the rows of cma.open_leads, open_tickets and open_tasks, each joined with the
+// owner's name (app_user, the same tenant) and the record link; the JSON of cma.my_follow_up has the same keys
+// as text. Dates arrive as Date from a query and as text from JSON.
+const isoAny = (v: Date | string | null | undefined): string | null => (v === null || v === undefined ? null : new Date(v).toISOString());
+
+type OpenLeadDb = {
+  deal_id: string; connection_id: string; deal_source_id: string; pipeline_id: string; pipeline_label: string; owner_user_id: string | null; owner_ref: string | null;
+  market: string; created_at: Date | string; waiting_business_seconds: number | null; age_business_days: number | null; bucket_from: number | null; bucket_to: number | null;
+  past_target: boolean | null; last_call_at: Date | string | null; last_call_days: number | null; owner_name?: string | null; record_url: string | null;
+};
+type OpenTicketDb = {
+  ticket_id: string; connection_id: string; ticket_source_id: string; pipeline_id: string; pipeline_label: string; stage_id: string | null; stage_label: string | null;
+  owner_user_id: string | null; owner_ref: string | null; market: string; created_at: Date | string; open_business_seconds: number | null; sla_minutes: number;
+  sla_state: SlaState; minutes_to_breach: number | null; owner_name?: string | null; record_url: string | null;
+};
+type OpenTaskDb = {
+  task_id: string; connection_id: string; task_source_id: string; type_ref: string; type_label: string; is_callback: boolean; priority_ref: string | null;
+  status_ref: string; status_label: string; owner_user_id: string | null; owner_ref: string | null; market: string | null; due_at: Date | string | null;
+  due_state: DueState; record_type: "deal" | "ticket" | null; record_source_id: string | null; created_at: Date | string; owner_name?: string | null; record_url: string | null;
+};
+
+function toOpenLead(r: OpenLeadDb, ownerName: string | null = r.owner_name ?? null): OpenLead {
+  return {
+    dealId: r.deal_id, connectionId: r.connection_id, dealSourceId: r.deal_source_id, pipelineId: r.pipeline_id, pipelineLabel: r.pipeline_label,
+    ownerUserId: r.owner_user_id, ownerName: r.owner_user_id === null ? null : ownerName, ownerRef: r.owner_ref, market: r.market, createdAt: isoAny(r.created_at)!,
+    waitingBusinessSeconds: r.waiting_business_seconds, ageBusinessDays: r.age_business_days, bucketFrom: r.bucket_from, bucketTo: r.bucket_to,
+    pastTarget: r.past_target, lastCallAt: isoAny(r.last_call_at), lastCallDays: r.last_call_days, recordUrl: r.record_url,
+  };
+}
+
+function toOpenTicket(r: OpenTicketDb, ownerName: string | null = r.owner_name ?? null): OpenTicket {
+  return {
+    ticketId: r.ticket_id, connectionId: r.connection_id, ticketSourceId: r.ticket_source_id, pipelineId: r.pipeline_id, pipelineLabel: r.pipeline_label,
+    stageId: r.stage_id, stageLabel: r.stage_label, ownerUserId: r.owner_user_id, ownerName: r.owner_user_id === null ? null : ownerName, ownerRef: r.owner_ref,
+    market: r.market, createdAt: isoAny(r.created_at)!, openBusinessSeconds: r.open_business_seconds, slaMinutes: r.sla_minutes, slaState: r.sla_state,
+    minutesToBreach: r.minutes_to_breach, recordUrl: r.record_url,
+  };
+}
+
+function toOpenTask(r: OpenTaskDb, ownerName: string | null = r.owner_name ?? null): OpenTask {
+  return {
+    taskId: r.task_id, connectionId: r.connection_id, taskSourceId: r.task_source_id, typeRef: r.type_ref, typeLabel: r.type_label, isCallback: r.is_callback,
+    priorityRef: r.priority_ref, statusRef: r.status_ref, statusLabel: r.status_label, ownerUserId: r.owner_user_id,
+    ownerName: r.owner_user_id === null ? null : ownerName, ownerRef: r.owner_ref, market: r.market, dueAt: isoAny(r.due_at), dueState: r.due_state,
+    recordType: r.record_type, recordSourceId: r.record_source_id, createdAt: isoAny(r.created_at)!, recordUrl: r.record_url,
+  };
+}
+
+/** The owner's name joined in: the application reads app_user under row-level security, so only this tenant's people */
+const OWNER_JOIN = `left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id`;
 
 type MarketDbRow = {
   code: string; name: string; time_zone: string; language_code: string; language_skill_key: string | null; min_language_level: number | null;
@@ -1397,9 +1456,17 @@ export const postgresData: CmaData = {
       const reasons = telephony
         ? (await q.query<{ r: { missedReasons: MissedReasonDb[]; sampleCallId: string | null } }>(`select cma.connection_missed_reasons($1::uuid) as r`, [id])).rows[0]!.r
         : { missedReasons: [], sampleCallId: null };
+      // A CRM connection's task catalogs and newest task id (addition 0008n), and every pipeline's own response time (0008o)
+      const crm = connection.kind === "crm" || (connection.kind === null && connection.heldKinds.includes("crm"));
+      const tasks: TaskCatalogsJson = crm
+        ? (await q.query<{ r: TaskCatalogsJson }>(`select cma.connection_task_catalogs($1::uuid) as r`, [id])).rows[0]!.r
+        : { statuses: [], types: [], sampleTaskId: null };
+      const sla = await q.query<{ record_type: string; source_pipeline_id: string; sla_minutes: number | null }>(
+        `select record_type, source_pipeline_id, sla_minutes from cma.connection_pipeline where connection_id = $1::uuid`, [id]);
+      const slaOf = new Map(sla.rows.map((x) => [`${x.record_type}:${x.source_pipeline_id}`, x.sla_minutes]));
       return {
         connection,
-        pipelines: config.pipelines.map(toPipeline),
+        pipelines: config.pipelines.map((p) => toPipeline(p, slaOf.get(`${p.recordType}:${p.pipelineId}`) ?? null)),
         forms: cat.forms.map((f) => ({ formId: f.formId, name: f.name, isCounted: f.isCounted, leadSource: f.leadSource, market: f.market, keptFields: f.keptFields ?? [], isActive: f.status === "active" })),
         callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
         lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
@@ -1407,13 +1474,27 @@ export const postgresData: CmaData = {
         fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property })),
         writeback: config.writeback.map((w) => ({ field: w.field, slot: w.slot, property: w.property, mode: w.mode, enabled: w.enabled })),
         store: config.store,
-        sampleIds: { ...(cat.sampleIds ?? {}), ...(reasons.sampleCallId ? { call: reasons.sampleCallId } : {}) },
+        sampleIds: { ...(cat.sampleIds ?? {}), ...(reasons.sampleCallId ? { call: reasons.sampleCallId } : {}), ...(tasks.sampleTaskId ? { task: tasks.sampleTaskId } : {}) },
         missedReasons: reasons.missedReasons.map((x) => ({
           code: x.code, label: x.label, countsInServiceLevel: x.countsInServiceLevel, needsCallback: x.needsCallback,
           inCatalog: x.inCatalog, seenCalls: x.seenCalls, lastSeenAt: x.lastSeenAt ? new Date(x.lastSeenAt).toISOString() : null,
         })),
+        taskStatuses: tasks.statuses.map((s) => ({ statusRef: s.statusRef, label: s.label, isDone: s.isDone, seenTasks: s.seenTasks, lastSeenAt: isoAny(s.lastSeenAt) })),
+        taskTypes: tasks.types.map((y) => ({ typeRef: y.typeRef, label: y.label, isCallback: y.isCallback, isCounted: y.isCounted, seenTasks: y.seenTasks, openTasks: y.openTasks, lastSeenAt: isoAny(y.lastSeenAt) })),
       };
     });
+  },
+
+  async setSourcePipelineSla(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_pipeline_sla($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.slaMinutes]));
+  },
+
+  async setSourceTaskStatus(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_task_status($1::uuid, $2, $3, $4)`, [id, input.statusRef, input.label, input.isDone]));
+  },
+
+  async setSourceTaskType(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_task_type($1::uuid, $2, $3, $4, $5)`, [id, input.typeRef, input.label, input.isCallback, input.isCounted]));
   },
 
   async setSourceConnection(me, id, input): Promise<void> {
@@ -1765,6 +1846,65 @@ export const postgresData: CmaData = {
         `select * from cma.crm_records_per_day($1::date, $2::date)`, [range.from, range.to]);
       return r.rows.map((x) => ({ date: x.business_date, recordType: x.record_type, market: x.market, pipelineId: x.pipeline_id,
         pipelineLabel: x.pipeline_label, records: x.records, closedNow: x.closed_now }));
+    });
+  },
+
+  // ---- Follow-up (addition 0008o): every function checks its permission and reads the current tenant under row-level security
+  async getOpenLeads(me): Promise<OpenLead[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OpenLeadDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r ${OWNER_JOIN}`);
+      return r.rows.map((x) => toOpenLead(x));
+    });
+  },
+
+  async getOpenTickets(me): Promise<OpenTicket[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OpenTicketDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r ${OWNER_JOIN}`);
+      return r.rows.map((x) => toOpenTicket(x));
+    });
+  },
+
+  async getOpenTasks(me): Promise<OpenTask[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OpenTaskDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'task', r.task_source_id) as record_url from cma.open_tasks() r ${OWNER_JOIN}`);
+      return r.rows.map((x) => toOpenTask(x));
+    });
+  },
+
+  async getFollowUpSummary(me): Promise<FollowUpSummary> {
+    return withTenant(ctx(me), async (q) => {
+      const s = one((await q.query<{ leads_open_not_called: number; leads_past_target: number; tickets_at_risk: number; tickets_breached: number;
+        tickets_without_owner: number; tasks_overdue: number; tasks_due_today: number; tasks_unmapped_owner: number }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
+      return {
+        leadsOpenNotCalled: s.leads_open_not_called, leadsPastTarget: s.leads_past_target, ticketsAtRisk: s.tickets_at_risk, ticketsBreached: s.tickets_breached,
+        ticketsWithoutOwner: s.tickets_without_owner, tasksOverdue: s.tasks_overdue, tasksDueToday: s.tasks_due_today, tasksUnmappedOwner: s.tasks_unmapped_owner,
+      };
+    });
+  },
+
+  async getFollowUpByOwner(me): Promise<FollowUpOwner[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ owner_user_id: string | null; display_name: string | null; open_leads: number; leads_past_target: number; open_tickets: number;
+        tickets_at_risk_or_breached: number; tasks_overdue: number; tasks_due_today: number }>(`select * from cma.follow_up_by_owner()`);
+      return r.rows.map((x) => ({
+        ownerUserId: x.owner_user_id, displayName: x.display_name, openLeads: x.open_leads, leadsPastTarget: x.leads_past_target, openTickets: x.open_tickets,
+        ticketsAtRiskOrBreached: x.tickets_at_risk_or_breached, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today,
+      }));
+    });
+  },
+
+  async getMyFollowUp(me): Promise<MyFollowUp> {
+    return withTenant(ctx(me), async (q) => {
+      // the function answers the caller's own rows as JSON (snake_case keys, the record links filled in); the owner is the caller
+      const j = one((await q.query<{ j: { leads: OpenLeadDb[]; tickets: OpenTicketDb[]; tasks: OpenTaskDb[] } }>(`select cma.my_follow_up() as j`)).rows, "my_follow_up").j;
+      return {
+        leads: j.leads.map((x) => toOpenLead(x, me.displayName)),
+        tickets: j.tickets.map((x) => toOpenTicket(x, me.displayName)),
+        tasks: j.tasks.map((x) => toOpenTask(x, me.displayName)),
+      };
     });
   },
 };
