@@ -2,7 +2,7 @@
 
 Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them).
 
-**What changes:** the ingest service's jobs and the HubSpot app; no migration. A new Cloud Run job `ingest-poll-email` (every minute) fills the tables of addition 0008m (B17a, `Pulse4all-com/cma#135`, run in dev and prod on 15 October 2026): the CRM's email engagements (`crm_email`) and the inbox conversations' messages (`inbox_message`), kept apart, the threads and their assignments, closes, reopens and inbox moves, the inbox and channel catalogs, and the contacts the emails and threads point to, read with every country slot. Metadata only: no subject, body, address, name or raw actor id is stored or logged (README, Data model: email activity; `docs/ingest/README.md`, section Email). The HubSpot app gains two read scopes (`crm.objects.emails.read`, `conversations.read`) and one subscription (`object.propertyChange` on the contact property `country_dropdown`). The nightly reconcile and the backfill learn `crm_email` and `inbox_thread`; `--object contact` reads every country slot.
+**What changes:** the ingest service's jobs and the HubSpot app; no migration. A new Cloud Run job `ingest-poll-email` (every minute) fills the tables of addition 0008m (B17a, `Pulse4all-com/cma#135`, run in dev and prod on 15 October 2026): the CRM's email engagements (`crm_email`) and the inbox conversations' messages (`inbox_message`), kept apart, the threads and their assignments, closes, reopens and inbox moves, the inbox and channel catalogs, and the contacts the emails and threads point to, read with every country slot. Metadata only: no subject, body, address, name or raw actor id is stored or logged (README, Data model: email activity; `docs/ingest/README.md`, section Email). The HubSpot app gains two read scopes (`sales-email-read`, `conversations.read`) and one subscription (`object.propertyChange` on the contact property `country_dropdown`). The nightly reconcile and the backfill learn `crm_email` and `inbox_thread`; `--object contact` reads every country slot.
 
 **Order matters:**
 - The poll serves a connection only while its settings hold `email_poll` true (step 3). Deploying the job before that polls nothing and writes no run row.
@@ -66,19 +66,11 @@ Expected: the property listed with four options; the contacts show their value. 
 ```bash
 node hubspot/render.mjs dev --target-url "<URL>/hubspot/<key>" && cd hubspot/build/dev && hs project upload && cd ~/cma
 ```
-Expected: `rendered dev: hubspot/build/dev`, then the upload naming the live portal, and build and deploy of **CMA ingest dev** succeeding with both components. If HubSpot refuses a scope, stop and send me its message.
+Expected: `rendered dev: hubspot/build/dev`, then the upload naming the live portal, and build and deploy of **CMA ingest dev** succeeding with both components. If HubSpot refuses `sales-email-read`, stop and send me its message (the fallback `crm.objects.emails.read` is in `hubspot/README.md`, Scopes).
 
-**After the scope change of 15 October 2026.** The first upload of this branch requested `sales-email-read`; the app now requests `crm.objects.emails.read` instead (README Decision log). If you uploaded and installed before that change, run 2b again on the updated branch (`git pull` first), then 2c: the test install has to be updated or reinstalled to take the new scope.
-
-**2c. Accept the new scopes.** **Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → Test installs → the row of `CMA dev` → update or reinstall when HubSpot asks; on the consent screen check that the new scopes are `crm.objects.emails.read` and `conversations.read` (read only).
+**2c. Accept the new scopes.** **Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → Test installs → the row of `CMA dev` → update or reinstall when HubSpot asks; on the consent screen check that the new scopes are `sales-email-read` and `conversations.read` (read only).
 
 Expected: the test install's row active; the app's Auth tab lists the two scopes. The static token stays the same; if HubSpot shows a new one, store it with `put_secret p4a-cma-dev ingest-hubspot-dev-token` (`hubspot/README.md`).
-
-**2d. Both endpoints answer.** **Terminal** (the HTTP status only; a body is never printed, it can hold email data)
-```bash
-for p in "/crm/v3/objects/emails?limit=1" "/conversations/v3/conversations/inboxes?limit=1"; do gcloud secrets versions access latest --secret=ingest-hubspot-dev-token --project=p4a-cma-dev | sed 's/^/Authorization: Bearer /' | curl -s -o /dev/null -w "%{http_code}  ${p%%\?*}\n" -H @- "https://api.hubapi.com$p"; done
-```
-Expected: `200  /crm/v3/objects/emails` and `200  /conversations/v3/conversations/inboxes`. A `403` means the install does not hold the scope yet (HubSpot answers `MISSING_SCOPES`): update or reinstall the test install (2c) and run it again.
 
 ## 3. Configure dev
 

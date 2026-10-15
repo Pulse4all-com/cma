@@ -19,7 +19,7 @@
  *      not printed
  *
  * Reads the token from Secret Manager with your own gcloud login (held in memory, never printed).
- * Needs the app's scopes crm.objects.emails.read and conversations.read (a 403 names the call). Writes
+ * Needs the app's scopes sales-email-read and conversations.read (a 403 names the call). Writes
  * nothing anywhere. Output to the terminal only.
  */
 import { execFileSync } from "node:child_process";

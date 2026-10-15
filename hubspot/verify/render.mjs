@@ -6,8 +6,8 @@
  *   node hubspot/verify/render.mjs --provoke   every check must FAIL
  *
  * Covers: dev and prod render; their uids, names and target URLs differ; their scopes are identical,
- * the documented set (since brief B17b with crm.objects.emails.read and conversations.read, both
- * read scopes), and the contact write scope is the only write-capable scope (`tickets` and any other
+ * the documented set (since brief B17b with sales-email-read and conversations.read, both read
+ * scopes), and the contact write scope is the only write-capable scope (`tickets` and any other
  * *.write or *.delete refused); static auth, private distribution, no redirect URLs; the
  * subscription list is the one VENDOR_SETUP.md §1.3 names (since B17b with country_dropdown); the placeholder target URL and other unfit
  * URLs are refused without --draft; the env files hold no ids, tokens or secrets; build/ is
@@ -66,14 +66,12 @@ expect("dev and prod request identical scopes", JSON.stringify(auth(dev).require
 // rollouts) and its project templates (hubspot-project-components 2026.09): see hubspot/README.md.
 // HubSpot refused `tickets` on project apps on 11 October 2026 and named the granular ticket scopes
 // instead; the CMA reads tickets only, so it requests crm.objects.tickets.read. Brief B17b (15 October
-// 2026) adds two read scopes for the email poll: crm.objects.emails.read, the email object's granular
-// read scope (Martin's dev check of 15 October 2026: GET /crm/v3/objects/emails without it answered
-// MISSING_SCOPES with requiredGranularScopes crm.schemas.emails.read, crm.objects.emails.read,
-// sales-email-read, "one or more of"; sales-email-read is the coarse legacy scope HubSpot replaces with
-// granular ones since 8 September 2026), and conversations.read (inboxes, channels, channel accounts,
-// threads, messages, PublicApiSpecs/Conversations/Conversations/Rollouts/54902/v3/conversations.json).
+// 2026) adds two read scopes for the email poll: sales-email-read (with crm.objects.contacts.read, the
+// email engagements' search and batch read, PublicApiSpecs/CRM/Emails/Rollouts/424/2026-09/emails.json)
+// and conversations.read (inboxes, channels, channel accounts, threads, messages, PublicApiSpecs/
+// Conversations/Conversations/Rollouts/54902/v3/conversations.json).
 const SCOPES = ["oauth", "crm.objects.contacts.read", "crm.objects.contacts.write", "crm.objects.deals.read", "crm.objects.tickets.read",
-  "crm.objects.owners.read", "forms", "crm.objects.emails.read", "conversations.read"];
+  "crm.objects.owners.read", "forms", "sales-email-read", "conversations.read"];
 expect("the required scopes are exactly the documented set", [...auth(dev).requiredScopes].sort(), [...SCOPES].sort(), [...SCOPES, "crm.objects.deals.write"].sort());
 expect("no optional or conditional scopes", [auth(dev).optionalScopes, auth(dev).conditionallyRequiredScopes], [[], []], [["forms"], []]);
 expect("crm.objects.contacts.write is the only *.write scope", auth(dev).requiredScopes.filter((s) => /write/.test(s)), ["crm.objects.contacts.write"], []);
@@ -118,7 +116,7 @@ expect("every deal, ticket and call property and country_dropdown is named in §
    "hs_call_status", "hs_call_disposition", "contact.privacyDeletion", "object.associationChange", "object.restore", "country_dropdown"].every((x) => s13.includes(`\`${x}\``)),
   true, false);
 expect("crmObjects equal §1.3 (37 subscriptions)", asText(subs(dev).crmObjects), EXPECTED, EXPECTED.slice(1));
-expect("the email poll's scopes are read scopes", ["crm.objects.emails.read", "conversations.read"].map((x) => auth(dev).requiredScopes.includes(x) && !/write|delete/.test(x)),
+expect("the email poll's scopes are read scopes", ["sales-email-read", "conversations.read"].map((x) => auth(dev).requiredScopes.includes(x) && !/write|delete/.test(x)),
   [true, true], [false, false]);
 expect("prod subscribes to exactly the same", JSON.stringify(subs(prod)) === JSON.stringify(subs(dev)), true, false);
 expect("no legacy subscriptions; hubEvents is the privacy deletion only",
