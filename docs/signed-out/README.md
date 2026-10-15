@@ -18,8 +18,10 @@ Both Google addresses are Google's web pages opened by the browser, not an API.
 
 1. My day → Log out → confirm: `POST /logout/end` ends an open workday and answers `303 Location: /signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` (with `CMA_LOGOUT_TARGET=signed-out`; `legacy`, the default, keeps `/logout/done?…`).
 2. The URL map's route rule priority 1 (prefix `/signed-out` and the query parameter `gcp-iap-mode=CLEAR_LOGIN_COOKIE`) sends that request to `cma-web-backend`, where IAP sees the parameter, clears its cookie and redirects to `/signed-out`.
-3. Route rule priority 2 (prefix `/signed-out`) sends `/signed-out` to the backend bucket `cma-signed-out-backend`, which serves the object `signed-out` of `gs://p4a-cma-prod-signed-out` and the logo and Montserrat under `signed-out/`. No IAP, no cookie, no data.
+3. Route rule priority 3 (exactly `/signed-out`, or the prefix `/signed-out/`) sends `/signed-out` to the backend bucket `cma-signed-out-backend`, which serves the object `signed-out` of `gs://p4a-cma-prod-signed-out` and the logo and Montserrat under `signed-out/`. No IAP, no cookie, no data. Route rule priority 2 (exactly `/signed-out/`) answers a 302 redirect to `/signed-out`, because the bucket has no object `signed-out/` (Gemini audit of #128, finding 2.1). Any other path that starts with `/signed-out`, such as `/signed-outx`, matches none of the three and goes to the default, `cma-web-backend` behind IAP.
 4. No access yet and an invitation for another address show "Use another account" pointing at the same address as step 1, but only with the flag on.
+
+The bucket is public for reading an object by its name only: `allUsers` holds `roles/storage.legacyObjectReader` (`storage.objects.get`), not a role with `storage.objects.list`, so nobody can list what the bucket holds (Gemini audit of #128, finding 1.2). A name the bucket does not hold therefore answers 403 instead of 404, as Cloud Storage does for a caller who cannot list. `deploy.sh` stops when `allUsers` holds any other role on the bucket.
 
 `cma-web` never serves `/signed-out`: there is no route or file for it in the app, and `proxy.ts` gates it like every page, so a request that reaches `cma-web` without IAP's valid token is refused (401) and with one finds nothing (404). `web/verify/signed-out.mjs` proves both from the code.
 
@@ -29,9 +31,9 @@ Both Google addresses are Google's web pages opened by the browser, not an API.
 |---|---|
 | `web/signed-out/index.html` | The page: one file, inline CSS (the style guide's tokens, Montserrat self-hosted), English and Dutch from the browser's language, word for word `copy.ts`'s `signedOut` keys. Its CSP: `default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-…'; base-uri 'none'; form-action 'none'`; the one inline script is allowed by its hash only. No identity, no data, no cookie, no request of its own. `{{DISPLAY_NAME}}` and `{{LOGO_FILE}}` are written in at upload, so no tenant or company name is in the repository |
 | `docs/signed-out/deploy.sh` | `bash docs/signed-out/deploy.sh <dev\|prod> --logo <path> --name <display name> [--host <host>] [--apply]`: dry run by default (its header lists every step) |
-| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the two route rules, a check that nothing else differs, the url-map tests for `validate` |
+| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate` |
 | `web/src/lib/logout.ts` | `CMA_LOGOUT_TARGET` (`legacy`, `signed-out`), Log out's Location, the "Use another account" address |
-| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 11 checks, `--provoke` fails every one |
+| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 13 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
 
 The font comes from `web/src/fonts/Montserrat-VF.ttf` (the app's own copy; `web/public/brand/` holds only the logos).
 
@@ -44,10 +46,17 @@ Verified in the session's container (`docs/night-2026-10-15/local-records/`):
 - `urlmap.py` on three map shapes: no host rule for the Workspace (the map's default service serves it, as the README describes), a host rule whose matcher uses pathRules (converted, tests derived from the old matching), a matcher whose priority 1 is taken (stopped);
 - `/logout/end` with the flag unset, `legacy` and `signed-out` (`verify:signed-out`).
 
+Verified after the Gemini audit of #128 (15 October 2026), in that pull request's container (not kept as records):
+
+- `verify:signed-out`: `deploy.sh` grants `allUsers` `legacyObjectReader` and never names `objectViewer`; `urlmap.py` on the fixture plans exactly the three route rules, keeps the default service and the ingest host rule, writes the tests for `/signed-out/`, `/signed-outx` and `/signed-out/logo-blue.png`, changes nothing on a rerun, stops on a matcher with priority 3 taken and converts pathRules from priority 10;
+- `deploy.sh` against the night's fake `gcloud`, its IAM policy answer varied: no bucket proposes the `legacyObjectReader` binding; an existing `legacyObjectReader` binding is kept; `allUsers` holding `objectViewer`, or `legacyBucketReader` beside `legacyObjectReader`, stops at b with the role named; an unreadable policy stops at b; every dry run made no changing call;
+- `urlmap.py` on the night's three maps and on a map read back with the API's defaults written out (`stripQuery: false`, partial links): the rerun changes nothing; a priority 2 that redirects with 301 stops.
+
 Not verified (needs prod, and Martin):
 
 - that IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out` (Google's documentation says it redirects to the address without the parameter; `/logout/done` behaves that way today, which is the evidence);
 - that the load balancer evaluates the query-parameter match before IAP sees the request (the route rule decides the backend; IAP is the backend's);
+- the redirect's url-map test: a test names no scheme, and only `httpsRedirect` (not allowed on an HTTPS proxy's map) makes a redirect's expected URL `https`, so the test expects `http://<host>/signed-out`; Google's reference does not say so in as many words. If `validate` answers otherwise, `deploy.sh` stops before the import and prints the actual URL;
 - `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (the flags are as documented, not run here), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
 - Google's chooser and add-account flow after Log in and Use another account (test plan b and c).
 
@@ -61,7 +70,7 @@ Run in this order; stop at the first that does not hold and roll back (below).
 | b | **Browser** with one Google account: on the page, Log in; then again a, and Use another account | Log in signs in silently and lands on Welcome. Use another account opens Google's add-account page; after adding an account the browser returns to the Workspace and IAP shows the account chooser |
 | c | **Browser** with two Google accounts signed in: a, then Log in | Google's account chooser |
 | d | **Browser**: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
-| e | **Terminal**: the other paths | `curl -sI https://ingest.pulse4all.app/health` answers as before (200 from cma-ingest); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200 |
+| e | **Terminal**: the other paths | `curl -sI https://ingest.pulse4all.app/health` answers as before (200 from cma-ingest); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
 
 Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page.
 
