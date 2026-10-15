@@ -1,0 +1,48 @@
+M01 an inbox refresh resets counted: caught by B2, B14; FAIL   | 20 PASS, 2 FAIL
+M02 an inbox missing from the source stays active: caught by B2; FAIL   | 21 PASS, 1 FAIL
+M03 a new channel counts whatever its kind: caught by B2, B14; FAIL   | 20 PASS, 2 FAIL
+M04 no stale guard on emails: caught by B3; FAIL   | 21 PASS, 1 FAIL
+M05 no stale guard on threads: caught by B3; FAIL   | 21 PASS, 1 FAIL
+M06 a deletion keeps the raw payload: caught by B3; FAIL   | 21 PASS, 1 FAIL
+M07 a later closed read without a close time moves closed_at: caught by B3; FAIL   | 21 PASS, 1 FAIL
+M08 a known thread event answers inserted: caught by B4; FAIL   | 21 PASS, 1 FAIL
+M09 the deal before the ticket: caught by B5; FAIL   | 21 PASS, 1 FAIL
+M10 a removed association still gives the market: caught by B5; FAIL   | 21 PASS, 1 FAIL
+M11 a deleted record still gives the market: caught by B5; FAIL   | 21 PASS, 1 FAIL
+M12 the contact's country without the aliases: caught by B5; FAIL   | 21 PASS, 1 FAIL
+M13 the market order setting ignored: caught by B5; FAIL   | 21 PASS, 1 FAIL
+M14 no unknown when no step finds a market: caught by B5, B9; FAIL   | 20 PASS, 2 FAIL
+M15 rules by creation, not by their order: caught by B6; FAIL   | 21 PASS, 1 FAIL
+M16 inactive rules applied: caught by B6; FAIL   | 21 PASS, 1 FAIL
+M17 exclude words ignored: caught by B6; FAIL   | 21 PASS, 1 FAIL
+M18 rule words matched with case: caught by B6; FAIL   | 21 PASS, 1 FAIL
+M19 rule words kept in their case: caught by B6; FAIL   | 21 PASS, 1 FAIL
+M20 the contact forget leaves threads: caught by B7; FAIL   | 21 PASS, 1 FAIL
+M21 the contact forget answers the email keys always: caught by B7; FAIL   | 21 PASS, 1 FAIL
+M22 the thread forget does not mark the thread forgotten: caught by B8, B15; FAIL   | 20 PASS, 2 FAIL
+M23 the thread forget clears email engagements too: caught by B8; FAIL   | 21 PASS, 1 FAIL
+M24 a message of a forgotten thread keeps its contact: caught by B8; FAIL   | 21 PASS, 1 FAIL
+M25 a forgotten thread read again: caught by B; FAIL   | 13 PASS, 1 FAIL
+M26 the email write without the permission check: caught by B10; FAIL   | 21 PASS, 1 FAIL
+M27 set_inbox without the permission check: caught by B10, B14; FAIL   | 20 PASS, 2 FAIL
+M28 the raw payload keeps strings with an @: caught by B11; FAIL   | 21 PASS, 1 FAIL
+M29 the raw payload keeps a subject: caught by B11; FAIL   | 21 PASS, 1 FAIL
+M30 an owner ref may hold an @: caught by B11; FAIL   | 21 PASS, 1 FAIL
+M31 an owner ref for a customer: caught by B11, B15; FAIL   | 20 PASS, 2 FAIL
+M32 email activity on any kind of connection: caught by B12; FAIL   | 21 PASS, 1 FAIL
+M33 email rows imply no kind: caught by B12; FAIL   | 21 PASS, 1 FAIL
+M34 an association to an email not turned around: caught by B; FAIL   | 10 PASS, 1 FAIL
+M35 connection_config without the inboxes: caught by B14; FAIL   | 21 PASS, 1 FAIL
+M36 thread marks without the events: caught by B15; FAIL   | 21 PASS, 1 FAIL
+M37 no email_poll job: caught by B; FAIL   | 21 PASS, 1 FAIL
+M38 no row-level security on emails: caught by A2, B; FAIL   | 7 PASS, 2 FAIL
+M39 the application may delete threads: caught by A2; FAIL   | 21 PASS, 1 FAIL
+M40 the application may change thread events: caught by A2; FAIL   | 21 PASS, 1 FAIL
+M41 the message view shows raw: caught by A3; FAIL   | 21 PASS, 1 FAIL
+M42 the category rule executable by the application: caught by A6; FAIL   | 21 PASS, 1 FAIL
+M43 the reply target's default 120: caught by A5; FAIL   | 21 PASS, 1 FAIL
+M44 the market order taken unchecked: caught by B1; FAIL   | 21 PASS, 1 FAIL
+M45 the reply target unbounded: caught by B1; FAIL   | 21 PASS, 1 FAIL
+M46 the start date without intake.start_date: caught by B1; FAIL   | 21 PASS, 1 FAIL
+M47 the actor kind ai refused: caught by B; FAIL   | 9 PASS, 1 FAIL
+M48 no record of the addition: caught by A1; FAIL   | 21 PASS, 1 FAIL

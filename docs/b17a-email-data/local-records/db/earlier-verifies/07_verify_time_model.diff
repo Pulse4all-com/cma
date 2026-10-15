@@ -1,0 +1,18 @@
+52a53
+>  connection_email_rule
+53a55,56
+>  connection_inbox
+>  connection_inbox_channel
+77a81,83
+>  email_message
+>  email_thread
+>  email_thread_event
+120c126
+< (82 rows)
+---
+> (88 rows)
+178c184,185
+< (31 rows)
+---
+>  0008m   | Email activity, metadata only: inboxes and source channels with counted, market, work type and channel, classification rules, emails of two sources kept apart, inbox conversations and their events, the four email settings, the ingest writes, the market by email.market_order, the privacy deletions, the reporting views       | martin@pulse4all.com | <date>
+> (32 rows)

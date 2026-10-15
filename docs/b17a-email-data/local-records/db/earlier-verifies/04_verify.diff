@@ -1,0 +1,313 @@
+10,78c10,84
+<          relname         |   owner   | rls_on 
+< -------------------------+-----------+--------
+<  absence_type            | cma_owner | t
+<  app_link                | cma_owner | t
+<  app_role                | cma_owner | t
+<  app_user                | cma_owner | t
+<  app_user_external_id    | cma_owner | t
+<  audit_log               | cma_owner | t
+<  business_holiday        | cma_owner | t
+<  business_hours          | cma_owner | t
+<  call_link               | cma_owner | t
+<  channel                 | cma_owner | t
+<  commerce_customer       | cma_owner | t
+<  commerce_order          | cma_owner | t
+<  commerce_order_line     | cma_owner | t
+<  commerce_store          | cma_owner | t
+<  connection_call_outcome | cma_owner | t
+<  connection_field        | cma_owner | t
+<  connection_form         | cma_owner | t
+<  connection_pipeline     | cma_owner | t
+<  connection_stage        | cma_owner | t
+<  coverage_target         | cma_owner | t
+<  crm_association         | cma_owner | t
+<  crm_call                | cma_owner | t
+<  crm_contact             | cma_owner | t
+<  crm_contact_ref         | cma_owner | t
+<  crm_record              | cma_owner | t
+<  form_submission         | cma_owner | t
+<  import_batch            | cma_owner | t
+<  import_day              | cma_owner | t
+<  import_person_map       | cma_owner | t
+<  import_session          | cma_owner | t
+<  ingest_event            | cma_owner | t
+<  integration_connection  | cma_owner | t
+<  invitation              | cma_owner | t
+<  market                  | cma_owner | t
+<  market_alias            | cma_owner | t
+<  message                 | cma_owner | t
+<  message_delivery        | cma_owner | t
+<  message_rule            | cma_owner | t
+<  organisation            | cma_owner | t
+<  outbox_action           | cma_owner | t
+<  permission              | cma_owner | f
+<  role_permission         | cma_owner | t
+<  roster_entry            | cma_owner | t
+<  roster_publication      | cma_owner | t
+<  roster_week             | cma_owner | t
+<  schema_migration        | cma_owner | f
+<  setting                 | cma_owner | f
+<  skill                   | cma_owner | t
+<  skill_level             | cma_owner | t
+<  sync_cursor             | cma_owner | t
+<  sync_run                | cma_owner | t
+<  team                    | cma_owner | t
+<  team_member             | cma_owner | t
+<  telephony_call          | cma_owner | t
+<  telephony_call_tag      | cma_owner | t
+<  telephony_missed_reason | cma_owner | t
+<  telephony_number        | cma_owner | t
+<  telephony_tag           | cma_owner | t
+<  tenant                  | cma_owner | f
+<  tenant_setting          | cma_owner | t
+<  time_event              | cma_owner | t
+<  user_role               | cma_owner | t
+<  user_skill              | cma_owner | t
+<  work_status             | cma_owner | t
+<  workday                 | cma_owner | t
+<  writeback_field         | cma_owner | t
+< (66 rows)
+---
+>          relname          |   owner   | rls_on 
+> --------------------------+-----------+--------
+>  absence_type             | cma_owner | t
+>  app_link                 | cma_owner | t
+>  app_role                 | cma_owner | t
+>  app_user                 | cma_owner | t
+>  app_user_external_id     | cma_owner | t
+>  audit_log                | cma_owner | t
+>  business_holiday         | cma_owner | t
+>  business_hours           | cma_owner | t
+>  call_link                | cma_owner | t
+>  channel                  | cma_owner | t
+>  commerce_customer        | cma_owner | t
+>  commerce_order           | cma_owner | t
+>  commerce_order_line      | cma_owner | t
+>  commerce_store           | cma_owner | t
+>  connection_call_outcome  | cma_owner | t
+>  connection_email_rule    | cma_owner | t
+>  connection_field         | cma_owner | t
+>  connection_form          | cma_owner | t
+>  connection_inbox         | cma_owner | t
+>  connection_inbox_channel | cma_owner | t
+>  connection_pipeline      | cma_owner | t
+>  connection_stage         | cma_owner | t
+>  coverage_target          | cma_owner | t
+>  crm_association          | cma_owner | t
+>  crm_call                 | cma_owner | t
+>  crm_contact              | cma_owner | t
+>  crm_contact_ref          | cma_owner | t
+>  crm_record               | cma_owner | t
+>  email_message            | cma_owner | t
+>  email_thread             | cma_owner | t
+>  email_thread_event       | cma_owner | t
+>  form_submission          | cma_owner | t
+>  import_batch             | cma_owner | t
+>  import_day               | cma_owner | t
+>  import_person_map        | cma_owner | t
+>  import_session           | cma_owner | t
+>  ingest_event             | cma_owner | t
+>  integration_connection   | cma_owner | t
+>  invitation               | cma_owner | t
+>  market                   | cma_owner | t
+>  market_alias             | cma_owner | t
+>  message                  | cma_owner | t
+>  message_delivery         | cma_owner | t
+>  message_rule             | cma_owner | t
+>  organisation             | cma_owner | t
+>  outbox_action            | cma_owner | t
+>  permission               | cma_owner | f
+>  role_permission          | cma_owner | t
+>  roster_entry             | cma_owner | t
+>  roster_publication       | cma_owner | t
+>  roster_week              | cma_owner | t
+>  schema_migration         | cma_owner | f
+>  setting                  | cma_owner | f
+>  skill                    | cma_owner | t
+>  skill_level              | cma_owner | t
+>  sync_cursor              | cma_owner | t
+>  sync_run                 | cma_owner | t
+>  team                     | cma_owner | t
+>  team_member              | cma_owner | t
+>  telephony_call           | cma_owner | t
+>  telephony_call_tag       | cma_owner | t
+>  telephony_missed_reason  | cma_owner | t
+>  telephony_number         | cma_owner | t
+>  telephony_tag            | cma_owner | t
+>  tenant                   | cma_owner | f
+>  tenant_setting           | cma_owner | t
+>  time_event               | cma_owner | t
+>  user_role                | cma_owner | t
+>  user_skill               | cma_owner | t
+>  work_status              | cma_owner | t
+>  workday                  | cma_owner | t
+>  writeback_field          | cma_owner | t
+> (72 rows)
+80,144c86,156
+<         tablename        | policyname |   roles   | cmd 
+< -------------------------+------------+-----------+-----
+<  absence_type            | tenant_app | {cma_app} | ALL
+<  app_link                | tenant_app | {cma_app} | ALL
+<  app_role                | tenant_app | {cma_app} | ALL
+<  app_user                | tenant_app | {cma_app} | ALL
+<  app_user_external_id    | tenant_app | {cma_app} | ALL
+<  audit_log               | tenant_app | {cma_app} | ALL
+<  business_holiday        | tenant_app | {cma_app} | ALL
+<  business_hours          | tenant_app | {cma_app} | ALL
+<  call_link               | tenant_app | {cma_app} | ALL
+<  channel                 | tenant_app | {cma_app} | ALL
+<  commerce_customer       | tenant_app | {cma_app} | ALL
+<  commerce_order          | tenant_app | {cma_app} | ALL
+<  commerce_order_line     | tenant_app | {cma_app} | ALL
+<  commerce_store          | tenant_app | {cma_app} | ALL
+<  connection_call_outcome | tenant_app | {cma_app} | ALL
+<  connection_field        | tenant_app | {cma_app} | ALL
+<  connection_form         | tenant_app | {cma_app} | ALL
+<  connection_pipeline     | tenant_app | {cma_app} | ALL
+<  connection_stage        | tenant_app | {cma_app} | ALL
+<  coverage_target         | tenant_app | {cma_app} | ALL
+<  crm_association         | tenant_app | {cma_app} | ALL
+<  crm_call                | tenant_app | {cma_app} | ALL
+<  crm_contact             | tenant_app | {cma_app} | ALL
+<  crm_contact_ref         | tenant_app | {cma_app} | ALL
+<  crm_record              | tenant_app | {cma_app} | ALL
+<  form_submission         | tenant_app | {cma_app} | ALL
+<  import_batch            | tenant_app | {cma_app} | ALL
+<  import_day              | tenant_app | {cma_app} | ALL
+<  import_person_map       | tenant_app | {cma_app} | ALL
+<  import_session          | tenant_app | {cma_app} | ALL
+<  ingest_event            | tenant_app | {cma_app} | ALL
+<  integration_connection  | tenant_app | {cma_app} | ALL
+<  invitation              | tenant_app | {cma_app} | ALL
+<  market                  | tenant_app | {cma_app} | ALL
+<  market_alias            | tenant_app | {cma_app} | ALL
+<  message                 | tenant_app | {cma_app} | ALL
+<  message_delivery        | tenant_app | {cma_app} | ALL
+<  message_rule            | tenant_app | {cma_app} | ALL
+<  organisation            | tenant_app | {cma_app} | ALL
+<  outbox_action           | tenant_app | {cma_app} | ALL
+<  role_permission         | tenant_app | {cma_app} | ALL
+<  roster_entry            | tenant_app | {cma_app} | ALL
+<  roster_publication      | tenant_app | {cma_app} | ALL
+<  roster_week             | tenant_app | {cma_app} | ALL
+<  skill                   | tenant_app | {cma_app} | ALL
+<  skill_level             | tenant_app | {cma_app} | ALL
+<  sync_cursor             | tenant_app | {cma_app} | ALL
+<  sync_run                | tenant_app | {cma_app} | ALL
+<  team                    | tenant_app | {cma_app} | ALL
+<  team_member             | tenant_app | {cma_app} | ALL
+<  telephony_call          | tenant_app | {cma_app} | ALL
+<  telephony_call_tag      | tenant_app | {cma_app} | ALL
+<  telephony_missed_reason | tenant_app | {cma_app} | ALL
+<  telephony_number        | tenant_app | {cma_app} | ALL
+<  telephony_tag           | tenant_app | {cma_app} | ALL
+<  tenant_setting          | tenant_app | {cma_app} | ALL
+<  time_event              | tenant_app | {cma_app} | ALL
+<  user_role               | tenant_app | {cma_app} | ALL
+<  user_skill              | tenant_app | {cma_app} | ALL
+<  work_status             | tenant_app | {cma_app} | ALL
+<  workday                 | tenant_app | {cma_app} | ALL
+<  writeback_field         | tenant_app | {cma_app} | ALL
+< (62 rows)
+---
+>         tablename         | policyname |   roles   | cmd 
+> --------------------------+------------+-----------+-----
+>  absence_type             | tenant_app | {cma_app} | ALL
+>  app_link                 | tenant_app | {cma_app} | ALL
+>  app_role                 | tenant_app | {cma_app} | ALL
+>  app_user                 | tenant_app | {cma_app} | ALL
+>  app_user_external_id     | tenant_app | {cma_app} | ALL
+>  audit_log                | tenant_app | {cma_app} | ALL
+>  business_holiday         | tenant_app | {cma_app} | ALL
+>  business_hours           | tenant_app | {cma_app} | ALL
+>  call_link                | tenant_app | {cma_app} | ALL
+>  channel                  | tenant_app | {cma_app} | ALL
+>  commerce_customer        | tenant_app | {cma_app} | ALL
+>  commerce_order           | tenant_app | {cma_app} | ALL
+>  commerce_order_line      | tenant_app | {cma_app} | ALL
+>  commerce_store           | tenant_app | {cma_app} | ALL
+>  connection_call_outcome  | tenant_app | {cma_app} | ALL
+>  connection_email_rule    | tenant_app | {cma_app} | ALL
+>  connection_field         | tenant_app | {cma_app} | ALL
+>  connection_form          | tenant_app | {cma_app} | ALL
+>  connection_inbox         | tenant_app | {cma_app} | ALL
+>  connection_inbox_channel | tenant_app | {cma_app} | ALL
+>  connection_pipeline      | tenant_app | {cma_app} | ALL
+>  connection_stage         | tenant_app | {cma_app} | ALL
+>  coverage_target          | tenant_app | {cma_app} | ALL
+>  crm_association          | tenant_app | {cma_app} | ALL
+>  crm_call                 | tenant_app | {cma_app} | ALL
+>  crm_contact              | tenant_app | {cma_app} | ALL
+>  crm_contact_ref          | tenant_app | {cma_app} | ALL
+>  crm_record               | tenant_app | {cma_app} | ALL
+>  email_message            | tenant_app | {cma_app} | ALL
+>  email_thread             | tenant_app | {cma_app} | ALL
+>  email_thread_event       | tenant_app | {cma_app} | ALL
+>  form_submission          | tenant_app | {cma_app} | ALL
+>  import_batch             | tenant_app | {cma_app} | ALL
+>  import_day               | tenant_app | {cma_app} | ALL
+>  import_person_map        | tenant_app | {cma_app} | ALL
+>  import_session           | tenant_app | {cma_app} | ALL
+>  ingest_event             | tenant_app | {cma_app} | ALL
+>  integration_connection   | tenant_app | {cma_app} | ALL
+>  invitation               | tenant_app | {cma_app} | ALL
+>  market                   | tenant_app | {cma_app} | ALL
+>  market_alias             | tenant_app | {cma_app} | ALL
+>  message                  | tenant_app | {cma_app} | ALL
+>  message_delivery         | tenant_app | {cma_app} | ALL
+>  message_rule             | tenant_app | {cma_app} | ALL
+>  organisation             | tenant_app | {cma_app} | ALL
+>  outbox_action            | tenant_app | {cma_app} | ALL
+>  role_permission          | tenant_app | {cma_app} | ALL
+>  roster_entry             | tenant_app | {cma_app} | ALL
+>  roster_publication       | tenant_app | {cma_app} | ALL
+>  roster_week              | tenant_app | {cma_app} | ALL
+>  skill                    | tenant_app | {cma_app} | ALL
+>  skill_level              | tenant_app | {cma_app} | ALL
+>  sync_cursor              | tenant_app | {cma_app} | ALL
+>  sync_run                 | tenant_app | {cma_app} | ALL
+>  team                     | tenant_app | {cma_app} | ALL
+>  team_member              | tenant_app | {cma_app} | ALL
+>  telephony_call           | tenant_app | {cma_app} | ALL
+>  telephony_call_tag       | tenant_app | {cma_app} | ALL
+>  telephony_missed_reason  | tenant_app | {cma_app} | ALL
+>  telephony_number         | tenant_app | {cma_app} | ALL
+>  telephony_tag            | tenant_app | {cma_app} | ALL
+>  tenant_setting           | tenant_app | {cma_app} | ALL
+>  time_event               | tenant_app | {cma_app} | ALL
+>  user_role                | tenant_app | {cma_app} | ALL
+>  user_skill               | tenant_app | {cma_app} | ALL
+>  work_status              | tenant_app | {cma_app} | ALL
+>  workday                  | tenant_app | {cma_app} | ALL
+>  writeback_field          | tenant_app | {cma_app} | ALL
+> (68 rows)
+146,147c158,159
+<          table_name          
+< -----------------------------
+---
+>           table_name          
+> ------------------------------
+209c221,227
+< (61 rows)
+---
+>  cma.connection_inbox
+>  cma.connection_inbox_channel
+>  cma.connection_email_rule
+>  cma.email_thread
+>  cma.email_message
+>  cma.email_thread_event
+> (67 rows)
+227a246
+>  connection_email_rule
+228a248,249
+>  connection_inbox
+>  connection_inbox_channel
+252a274,276
+>  email_message
+>  email_thread
+>  email_thread_event
+295c319
+< (82 rows)
+---
+> (88 rows)
