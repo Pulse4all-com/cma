@@ -1,0 +1,34 @@
+FAIL  dev and prod render the three project files                  got [["hsproject.json","src/app/app-hsmeta.json","src/app/webhooks/webhook, wanted [[],[]]
+FAIL  the project: srcDir src, platform version 2026.09            got ["src","2026.09","2026.09"], wanted ["src","2025.2","2025.2"]
+FAIL  types app and webhooks                                       got ["app","webhooks","app","webhooks"], wanted ["private-app","webhook","private-app","webhook"]
+FAIL  four distinct uids, HubSpot's uid rule                       got [4,true], wanted [1,true]
+FAIL  app and project names                                        got ["CMA ingest dev","CMA ingest prod","CMA ingest dev","CMA ingest prod", wanted ["CMA ingest","CMA ingest","CMA ingest","CMA ingest"]
+FAIL  the target URLs differ and are the ones given                got ["https://cma-ingest-verify-dev.example.com/hubspot/devkey000000000000, wanted ["https://cma-ingest-verify-dev.example.com/hubspot/devkey000000000000
+FAIL  maxConcurrentRequests 10 as a number                         got [10,10], wanted ["10","10"]
+FAIL  static auth, private distribution, no redirect URLs          got ["static","private",false,false,"static","private"], wanted ["oauth","marketplace",true,true,"oauth","marketplace"]
+FAIL  dev and prod request identical scopes                        got true, wanted false
+FAIL  the required scopes are exactly the documented set           got ["conversations.read","crm.objects.contacts.read","crm.objects.contact, wanted ["conversations.read","crm.objects.contacts.read","crm.objects.contact
+FAIL  no optional or conditional scopes                            got [[],[]], wanted [["forms"],[]]
+FAIL  crm.objects.contacts.write is the only *.write scope         got ["crm.objects.contacts.write"], wanted []
+FAIL  crm.objects.contacts.write is the only write-capable scope   got [[],[]], wanted [["tickets"],[]]
+FAIL  the write rule refuses `tickets`, other *.write and *.delete scopes got ["crm.objects.contacts.delete","crm.objects.tickets.write","crm.schema, wanted []
+FAIL  §1.1 names nine contact properties, all in §1.3's subscriptions got [9,true], wanted [8,true]
+FAIL  every deal, ticket and call property and country_dropdown is named in §1.3 got true, wanted false
+FAIL  crmObjects equal §1.3 (37 subscriptions)                     got ["call object.associationChange","call object.creation","call object.d, wanted ["call object.creation","call object.deletion","call object.propertyCh
+FAIL  the email poll's scopes are read scopes                      got [true,true], wanted [false,false]
+FAIL  prod subscribes to exactly the same                          got true, wanted false
+FAIL  no legacy subscriptions; hubEvents is the privacy deletion only got [[],["contact.privacyDeletion"]], wanted [[],[]]
+FAIL  every subscription is active                                 got true, wanted false
+FAIL  the env files' target URL is the placeholder                 got ["still the placeholder","still the placeholder"], wanted [null,null]
+FAIL  render refuses the placeholder without --draft               got [true,true], wanted [false,false]
+FAIL  render refuses http, a wrong path, a query and a short key   got [true,true,true,true], wanted [false,false,false,false]
+FAIL  --draft renders with the placeholder and says it is a draft  got [true,"https://cma-ingest.placeholder.invalid/hubspot/CONNECTION-KEY-P, wanted [false,"https://cma-ingest-verify-dev.example.com/hubspot/devkey000000
+FAIL  the command line refuses the placeholder with exit code 2    got [2,true], wanted [0,false]
+FAIL  written: exactly the three files, parseable                  got [["hsproject.json","src/app/app-hsmeta.json","src/app/webhooks/webhook, wanted [[],true]
+FAIL  env files: the four keys only, no ids of five or more digits got [["appName","maxConcurrentRequests","targetUrl","uidSuffix"],false], wanted [["appName","maxConcurrentRequests","portalId","targetUrl","uidSuffix"
+FAIL  no secret-looking key or value in template or env files      got false, wanted true
+FAIL  the template holds placeholders for env values only          got ["appName","appUid","maxConcurrentRequests","projectName","targetUrl",, wanted ["appName"]
+FAIL  hubspot/build/ is git-ignored                                got true, wanted false
+FAIL  nothing under hubspot/build is tracked                       got "", wanted "hubspot/build/dev/hsproject.json"
+
+ALL 32 PROVOKED CHECKS FAILED, as they must

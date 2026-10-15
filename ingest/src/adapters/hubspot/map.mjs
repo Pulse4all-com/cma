@@ -221,31 +221,56 @@ export function recordFromObject(recordType, obj, config, fallback = {}) {
   return r;
 }
 
-/** A contact → ingest_upsert_contacts item, refs as {system: [slot 1, slot 2, …]}. */
+/** The slot of a field (1 when absent), or null when it is not 1 to 9. */
+function slotOf(f) {
+  const slot = Number(f.slot ?? 1);
+  return Number.isInteger(slot) && slot >= 1 && slot <= 9 ? slot : null;
+}
+
+/**
+ * A contact → ingest_upsert_contacts item, refs as {system: [slot 1, slot 2, …]}. The country
+ * (addition 0008m, brief B17b): one mapped slot is sent as `country`, as before; two or more as
+ * `countries`, the value of slot n at element n - 1 (null when empty), and the database keeps the
+ * first that names a catalog market (cma.contact_country_pick).
+ */
 export function contactFromObject(obj, config) {
   const p = obj?.properties ?? {};
   const fields = fieldsOf(config, "contact");
   const c = { sourceId: String(obj.id), updatedAt: iso(obj.updatedAt) ?? iso(p.lastmodifieddate), raw: pick(p, propertiesFor("contact", config)) };
   const refs = {};
+  const countries = [];
   for (const f of fields) {
     if (f.field === "ref" && f.refSystem) {
-      const slot = Number(f.slot ?? 1);
-      if (!Number.isInteger(slot) || slot < 1 || slot > 9) continue;
+      const slot = slotOf(f);
+      if (!slot) continue;
       refs[f.refSystem] ??= [];
       while (refs[f.refSystem].length < slot) refs[f.refSystem].push(null);
       refs[f.refSystem][slot - 1] = text(p[f.property], 100);
+    } else if (f.field === "country") {
+      const slot = slotOf(f);
+      if (!slot) continue;
+      while (countries.length < slot) countries.push(null);
+      countries[slot - 1] = text(p[f.property]);
     } else if (CONTACT_KEYS[f.field]) {
       c[CONTACT_KEYS[f.field]] = text(p[f.property]);
     }
   }
+  if (countries.length > 1) c.countries = countries;
+  else if (countries.length === 1) c.country = countries[0];
   if (Object.keys(refs).length) c.refs = refs;
   return c;
 }
 
-/** The mapped country and language of a contact (for a record's fallback). */
+/**
+ * The mapped country and language of a contact (for a record's fallback). With country slots: the
+ * first non-empty slot, since only the database knows the market catalog; the record's market is
+ * read at query time and falls through to the contact's stored country when it names no catalog
+ * market (0007d's cma.record_market_of).
+ */
 export function contactAttributes(obj, config) {
   const c = contactFromObject(obj, config);
-  return { country: c.country ?? null, language: c.language ?? null };
+  const country = c.countries ? (c.countries.find((v) => v) ?? null) : (c.country ?? null);
+  return { country, language: c.language ?? null };
 }
 
 const DIRECTIONS = { INBOUND: "inbound", OUTBOUND: "outbound" };

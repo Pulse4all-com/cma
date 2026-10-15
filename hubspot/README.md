@@ -39,10 +39,14 @@ Files:
 | `crm.objects.tickets.read` | tickets: batch read, search; their contacts through the associations batch read; the ticket webhook subscriptions | named by HubSpot's refusal of `tickets` (11 October 2026); see below |
 | `crm.objects.contacts.read` | contacts; also **calls**: the calls batch read and search name this scope | Contacts, Calls |
 | `crm.objects.contacts.write` | the contact write-back (DESIGN §4.3a), limited to `writeback_field` in the database and in code | Contacts batch update |
-| `crm.objects.owners.read` | owners, to map HubSpot owners to CMA people once | Owners |
+| `crm.objects.owners.read` | owners, to map HubSpot owners to CMA people once; since brief B17b also the email poll's owner map (an owner's user id → owner id, hourly), because an inbox conversation names its agent by user id | Owners |
 | `forms` | the form catalog and the submissions poll | Forms |
+| `sales-email-read` | email engagements (brief B17b): the search and the batch read, together with `crm.objects.contacts.read` | `PublicApiSpecs/CRM/Emails/Rollouts/424/2026-09/emails.json`: the batch read and the search name `crm.objects.contacts.read` and `sales-email-read` in one requirement, so both are needed. Not `crm.objects.emails.read`: the API accepts it (`GET /crm/v3/objects/emails` without an email scope answered `MISSING_SCOPES` with `requiredGranularScopes` `crm.schemas.emails.read`, `crm.objects.emails.read`, `sales-email-read`, "one or more of"), but it is not available to this app without HubSpot support: build #4 of CMA ingest dev, which requested it, failed to deploy on 15 October 2026 with "The scope crm.objects.emails.read isn't available to this app. If your app needs it, contact HubSpot support to request access." |
+| `conversations.read` | inbox conversations (brief B17b): inboxes, channels, channel accounts, threads, a thread's messages | `PublicApiSpecs/Conversations/Conversations/Rollouts/54902/v3/conversations.json` (and its 2026-09 rollout): every read names `conversations.read` |
 
-Two things to know:
+Things to know:
+
+- **The email poll's two read scopes (brief B17b, 15 October 2026).** `sales-email-read` and `conversations.read` let the app read email content (subjects, bodies, addresses); the ingest asks only for metadata and drops what a conversation message brings at once (`docs/ingest/README.md`, section Email). Yordi agreed to both on 15 October 2026 (README Decision log). HubSpot accepted `sales-email-read` on a 2026.09 project app: build #3 of CMA ingest dev deployed with it, and the dev test install answers 200 on `/crm/v3/objects/emails` and on `/conversations/v3/conversations/inboxes` (15 October 2026). The granular `crm.objects.emails.read`, which the newer emails rollout (`PublicApiSpecs/CRM/Emails/Rollouts/321895/2026-09/emails.json`) lists among 80 alternatives, is not available to this app without HubSpot support (the Scopes table); `sales-email-read` stays until HubSpot grants it. No `conversations.write` and no `crm.objects.emails.write`: the CMA never writes either.
 
 - **Ticket scopes: read only (11 October 2026).** The first upload of `CMA ingest dev` on 11 October 2026 was refused: "The scope tickets has been replaced by more specific scopes and is no longer available. Use the following scope(s) instead: crm.objects.tickets.read, crm.objects.tickets.write, crm.schemas.tickets.read, crm.schemas.tickets.write." The CMA never writes tickets, so the app requests `crm.objects.tickets.read` only, and `crm.objects.contacts.write` is its only write scope. This supersedes the acceptance of `tickets` of 10 October 2026 (README Decision log). The verifier fails on `tickets` and on any `*.write` or `*.delete` scope other than `crm.objects.contacts.write`.
 - **What the spec says about the ticket calls (checked 11 October 2026, `HubSpot-public-api-spec-collection` commit `c7c63ae`).** The published spec lags behind the platform: `crm.objects.tickets.read` occurs in none of its files, and the 2026-09 ticket specs still name `tickets`. In OpenAPI each entry of `security` is an alternative, so one listed scope is enough:
@@ -65,7 +69,7 @@ Two things to know:
 
 ## Subscriptions and their canonical kinds
 
-All 36 are `crmObjects` (`object.*`), active. The one `hubEvents` entry is `contact.privacyDeletion`. No `legacyCrmObjects` are needed. The list is exactly VENDOR_SETUP.md §1.3, and the verifier compares it.
+All 37 are `crmObjects` (`object.*`), active. The one `hubEvents` entry is `contact.privacyDeletion`. No `legacyCrmObjects` are needed. The list is exactly VENDOR_SETUP.md §1.3, and the verifier compares it.
 
 | Object | Subscription | Canonical kind (0006) |
 |---|---|---|
@@ -75,7 +79,7 @@ All 36 are `crmObjects` (`object.*`), active. The one `hubEvents` entry is `cont
 | deal, ticket | `object.restore` | `restored` |
 | deal: `pipeline`, `dealstage`, `hubspot_owner_id`, `closedate`, `amount` | `object.propertyChange` | `changed` |
 | ticket: `hs_pipeline`, `hs_pipeline_stage`, `hubspot_owner_id`, `closed_date` | `object.propertyChange` | `changed` |
-| contact: the nine properties of VENDOR_SETUP §1.1 | `object.propertyChange` | `changed` |
+| contact: the nine properties of VENDOR_SETUP §1.1, and `country_dropdown` (since brief B17b: the contact's country slot 2, a property HubSpot has and the CMA does not create) | `object.propertyChange` | `changed` |
 | call: `hs_call_status`, `hs_call_disposition`, `hubspot_owner_id` | `object.propertyChange` | `changed` |
 | deal, ticket, call | `object.associationChange` | `associated` |
 | contact | `contact.privacyDeletion` (hubEvents) | `deleted`, plus `cma.ingest_contact_forget()` |

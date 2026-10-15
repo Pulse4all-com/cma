@@ -1,0 +1,34 @@
+
+> cma-web@0.1.0 verify:invitations
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/invitations.mjs
+
+PASS  users.manage_all may invite as agent                               got [true,"agent"]
+PASS  users.manage_all may invite as analytics                           got [true,"analytics"]
+PASS  users.manage_all may invite as supervisor                          got [true,"supervisor"]
+PASS  users.manage_all may invite as manager                             got [true,"manager"]
+PASS  users.manage_all may invite as admin                               got [true,"admin"]
+PASS  users.manage_agents is offered only the roles it may grant         got ["agent","analytics","supervisor"]
+PASS  a role the caller may not assign is never offered (the system role among them) got false
+PASS  a complete invitation has no problem                               got []
+PASS  every missing field is named                                       got ["email","name","locale","role","employer"]
+PASS  the payload: trimmed, teams sorted, skills by key with their level got {"email":"ana@example.com","displayName":"Ana","locale":"nl","roleKey"
+PASS  the route refuses each malformed body before the database          got [true,true,true,true,true,true]
+PASS  the route lower-cases the address, trims, drops a repeated team    got {"email":"a@example.com","displayName":"A","locale":"en","roleKey":"ag
+PASS  the link is the page's own https origin, /invite/ and the token    got ["https://workspace.example.com/invite/AbCdEfGhIjKlMnOpQrStUvWxYz01234
+PASS  no link for plain http elsewhere than localhost, or a token of another shape got [null,null,null]
+PASS  en: subject and body from copy with every value, nothing left over got [true,true,true,1]
+PASS  en: a mailto to the invitee, subject and body encoded with CRLF line breaks got [true,true,true,true]
+PASS  nl: subject and body from copy with every value, nothing left over got [true,true,true,1]
+PASS  nl: a mailto to the invitee, subject and body encoded with CRLF line breaks got [true,true,true,true]
+PASS  a list row carries named fields only: no token, no hash            got [false,false,false]
+PASS  GET lists through cma.invitations(), whose answer has no token or hash column got [true,false,true]
+PASS  the page reads the preview only; the preview is stable and writes nothing got [true,false,true,false]
+PASS  each preview answer has its own view; a person of that business line goes home got ["open","invalid","expired","wrong_account","home","other_tenant"]
+PASS  only a same-origin post passes (Sec-Fetch-Site, else the Origin's host) got [true,false,false,true,false,false,false,true]
+PASS  Accept checks the origin before anything else, binds the verified identity, answers relative Locations got [true,true,true,false]
+PASS  valid days: a whole number from 1 to 30                            got [null,1,7,30,null,null,null,12]
+PASS  domains: lower case, no spaces, comma-separated, empty for any     got ["example.org,other.example.org","",null,null,null,null,null]
+PASS  open, expired, accepted, revoked; newest first; actions on open and expired only got [["e","b","d","a","c"],[true,true,true,false,false]]
+
+invitations: PASS (27 checks)
+exit 0

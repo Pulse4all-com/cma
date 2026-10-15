@@ -8,63 +8,27 @@
  * counted as fetched and skipped. Deletions are not found by a search (HubSpot searches live
  * objects only): they arrive by webhook.
  *
+ * Email engagements (crm_email) and inbox conversations (inbox_thread), brief B17b: listed for the
+ * same look-back and written through the email poll's own path, not as synthetic events (email.mjs,
+ * conversations.mjs), so a reconcile writes what the poll would have.
+ *
  * The CRM search answers at most 10,000 results per query; past that a new query starts at the last
  * value seen (an object at the boundary is listed twice and read once: its event key is known).
  */
 import { SourceError } from "../../core/http.mjs";
 import { hubspotClient, tokenOf } from "./read.mjs";
-import { iso } from "./map.mjs";
+import { MODIFIED, searchBody, searchPages } from "./search.mjs";
+import { reconcileEmails } from "./email.mjs";
+import { reconcileThreads } from "./conversations.mjs";
 
-export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact"];
-export const MODIFIED = { deal: "hs_lastmodifieddate", ticket: "hs_lastmodifieddate", crm_call: "hs_lastmodifieddate", contact: "lastmodifieddate" };
-const LIMIT = 100;
-const SEARCH_MAX = 10_000;
-
-const msOf = (v) => {
-  const t = iso(v);
-  return t ? Date.parse(t) : null;
-};
-
-/** The search body of one page: property between from and to (ms), ascending. */
-export function searchBody(type, property, fromMs, toMs, after) {
-  const filters = [{ propertyName: property, operator: "GTE", value: String(fromMs) }];
-  if (toMs !== null && toMs !== undefined) filters.push({ propertyName: property, operator: "LTE", value: String(toMs) });
-  return {
-    filterGroups: [{ filters }],
-    sorts: [{ propertyName: property, direction: "ASCENDING" }],
-    properties: [...new Set([property, MODIFIED[type]])],
-    limit: LIMIT,
-    ...(after ? { after: String(after) } : {}),
-  };
-}
-
-/** Pages of { items: [{ id, version }], last } (last: the page's highest value of property, ms). */
-export async function* searchPages(api, type, property, fromMs, toMs) {
-  let start = fromMs;
-  let after;
-  let seen = 0;
-  for (;;) {
-    const r = await api.search(type, searchBody(type, property, start, toMs, after));
-    const results = (r?.results ?? []).filter((o) => o?.id !== undefined && o?.id !== null);
-    const items = results.map((o) => ({ id: String(o.id), version: iso(o.properties?.[MODIFIED[type]]) ?? iso(o.updatedAt) ?? "unknown" }));
-    const last = results.length ? msOf(results[results.length - 1].properties?.[property]) : null;
-    seen += results.length;
-    yield { items, last };
-    const next = r?.paging?.next?.after;
-    if (!next || !results.length) return;
-    if (seen + LIMIT > SEARCH_MAX) {
-      if (last === null || last <= start) throw new SourceError("search_window_full");
-      start = last;
-      after = undefined;
-      seen = 0;
-    } else {
-      after = next;
-    }
-  }
-}
+export { MODIFIED, searchBody, searchPages };
+export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact", "crm_email", "inbox_thread"];
 
 /** Reconcile of one object type: modified between sinceMs and untilMs → process(items). */
 export async function reconcile({ connection, store, budget, object, sinceMs, untilMs, process, counts }) {
+  // The email objects are written by the email poll's own path (email.mjs, conversations.mjs), not as events
+  if (object === "crm_email") return reconcileEmails({ connection, store, budget, sinceMs, untilMs, counts });
+  if (object === "inbox_thread") return reconcileThreads({ connection, store, budget, sinceMs, untilMs, counts });
   if (!MODIFIED[object]) throw new SourceError("object_not_reconciled");
   const api = hubspotClient(await tokenOf(connection), budget);
   for await (const page of searchPages(api, object, MODIFIED[object], sinceMs, untilMs)) {

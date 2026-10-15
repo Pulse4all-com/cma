@@ -1,0 +1,92 @@
+verify/shopify-flow.mjs
+
+PASS  an unknown key → 404                                             got 404
+PASS  the HubSpot connection's key on /shopify → 404                   got 404
+PASS  the Shopify connection's key on /hubspot → 404                   got 404
+PASS  no HMAC header → 401                                             got 401
+PASS  an HMAC that is not a SHA-256 digest → 401                       got 401
+PASS  an HMAC with another secret → 401                                got 401
+PASS  a body changed after signing → 401                               got 401
+PASS  tenant two's secret on tenant one's key → 401                    got 401
+PASS  refused requests wrote nothing and asked Shopify nothing         got [0,0]
+PASS  …and answered with an empty body                                 got ""
+PASS  another shop's domain and an unhandled topic, correctly signed → 200 got [200,200]
+PASS  …recorded as ignored (portal_mismatch, event_not_handled), nothing read got [["customers/create:portal_mismatch","products/update:event_not_handle
+PASS  customers/create → 200                                           got 200
+PASS  …keyed sh:<X-Shopify-Webhook-Id>, processed, the topic and ids in raw only got ["processed","commerce_customer","created",["apiVersion","eventId","to
+PASS  …the customer: state, locale, count, amount, currency            got ["ENABLED","en-GB",0,"0.00","GBP"]
+PASS  …its phone as HMAC(pepper, E.164), the store's market as default region got "2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb234807cc960"
+PASS  …one token minted for the shop by the client credentials grant, one GraphQL read at 2026-10 got [1,1,"2026-10"]
+PASS  …one HubSpot search, by the email in lower case                  got [1,{"propertyName":"email","operator":"EQ","value":"test1@example.com"
+PASS  …linked in the CMA to contact 5100000001 of the HubSpot connection, with the time of the match got ["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000001",true]
+PASS  …counted match_one and link_linked in the processed log          got [1,1]
+PASS  …no outbox row and nothing asked of HubSpot but the search       got [0,0,0]
+PASS  the same delivery again (a Shopify retry) → 200, no new event, no read got [200,3,0]
+PASS  orders/create (first order of C1, 13 lines) → 200                got 200
+PASS  …first, prior 0 exact                                            got ["first",0,true]
+PASS  …13 lines: the first ten and a page after them                   got [13,1]
+PASS  …a line: sku, product and variant ids, quantity, unit price      got {"line_source_id":"730000000101","sku":"SKU-1","product_ref":"80000000
+PASS  …the landing page as host and path, UTM from the visit, the referrer's host only got ["shop.example.com","/products/aed",{"campaign":"autumn","medium":"cpc
+PASS  …the source name, the app id, tags de-duplicated, amounts        got ["web","580111",["aed"],"120.00"]
+PASS  …the order's own phone hashed first (national, GB default region) got "25f2a34a25cda4790e3ae88de686a87ab0906d2ed38b6cbb7bfda50bab1f7cb0"
+PASS  …the customer upserted with it (count 1) and no second search: its link is reused got [1,1]
+PASS  …the linked contact checked by one batch read of its id only (hs_object_id), the link and its time unchanged got [[[["5100000001"],["hs_object_id"]]],"5100000001","2026-10-15T13:37:38
+PASS  …counted match_known, nothing written to the link                got [1,[]]
+PASS  a second order of C1 → repeat, prior 1, the customer's phone hashed (no order phone) got ["repeat",1,"2029e53d9e97344c817eb210e47c021e703d6b8ac009f1ab18bdb2348
+PASS  …still no second search for C1                                   got 1
+PASS  an order of the renewal source name → renewal                    got "renewal"
+PASS  …its new customer C2 linked by email with the order (contact 5100000002) got ["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000002"]
+PASS  an order the search does not hold yet → unknown, prior null      got ["unknown",null]
+PASS  …its next read (orders/updated) counts again → repeat            got "repeat"
+PASS  a guest order (no customer) → unknown, its phone hashed          got ["unknown",null,"47bfeeee1e2e08482b1dff7ac5e88ec10a998db84643d2d330068
+PASS  orders/cancelled → cancelled at, with its reason                 got [true,"CUSTOMER"]
+PASS  orders/delete → deleted without a read, its hash cleared         got [true,null]
+PASS  a customer whose id a held contact's refs hold → linked to that contact, no search got [["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000007"],0,1]
+PASS  Email and Phone withheld → 200, processed, no hash (nothing fails) got [200,"processed",null]
+PASS  …the match by the contact ref properties of the HubSpot connection instead (one search, both slots) got [1,[{"propertyName":"contact_shopify_id_1","operator":"EQ","value":"71
+PASS  …linked to the contact holding the id                            got ["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000003"]
+PASS  no contact for the email, and two contacts → no link             got [[null,null],[null,null]]
+PASS  …counted as match_none and match_several in the processed log (no ids), nothing to clear (link_unlinked) got [1,1,2]
+PASS  C6 linked by email; C2 still linked after its update             got [["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000006"],["01a13fc8-5b05
+PASS  one token minted for every read of the shop so far               got 1
+PASS  a token within five minutes of its expiry is minted again        got 3
+PASS  a connection without its store row: 200, the event failed store_not_configured for the sweep got [200,"failed","store_not_configured"]
+PASS  C8 linked by email when created, known at its update (one search in all) got [["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000008"],1]
+PASS  C6's contact deleted in HubSpot and two contacts now holding its email → the link cleared at the next read got [null,null]
+PASS  …counted match_contact_gone, match_several and link_cleared      got [1,1,1]
+PASS  C8's contact deleted and no other contact holding its email → the link cleared (match_none) got [[null,null],1,1]
+PASS  C2's contact merged into another, then an order of C2 → relinked to the survivor (by email), a new match time got ["5100000009",true,1,1]
+PASS  customers/delete → the customer marked deleted and its link cleared, nothing read from Shopify or HubSpot got [200,true,null,0,0,1]
+PASS  …a deletion of a customer the CMA never held → processed, nothing to clear (link_unknown) got ["processed",1]
+PASS  the CRM's privacy deletion of contact 5100000003 (the HubSpot adapter's forget) → C3's link cleared, C1's kept got [[null,null],["01a13fc8-5b05-755c-851a-dc1c47ef75b9","5100000001"],1]
+PASS  no outbox row in tenant one and nothing written to HubSpot, with eight write-back fields enabled on its CRM connection got [8,0,[],true]
+      burst: answered in 853 to 1206 ms (median 984); token mints 1; GraphQL throttled 0
+PASS  a burst of 200 orders/create → 200 for every one                 got true
+PASS  …every answer inside Shopify's five seconds                      got true
+PASS  …one token minted for the whole burst                            got 1
+      burst events after the inline read-back: failed 181, processed 19
+PASS  …200 events recorded, each once                                  got 200
+PASS  …after the sweep: every order stored once, all renewals          got [{"order_kind":"renewal","n":200}]
+PASS  …every event processed                                           got 200
+PASS  …Shopify refused for cost at most a handful of calls (the bucket paces the reads) got true
+PASS  reconcile: an order changed without a webhook is read back (its new tag) got ["aed","renewed-by-hand"]
+PASS  …one succeeded run per object type                               got ["commerce_customer:succeeded","commerce_order:succeeded"]
+PASS  …the subscription check recreated ORDERS_UPDATED at the connection's address, run error subscriptions_recreated got ["subscriptions_recreated",["https://ingest.example.com/shopify/ad788d
+PASS  …a second check finds all seven: succeeded                       got ["succeeded",null]
+PASS  …an unchanged order is not read a second time                    got 0
+PASS  …none left for this connection → subscriptions_missing (the script recreates them) got "subscriptions_missing"
+PASS  backfill: the listing failing on its second page → the run fails, the first page kept got ["graphql_error",100,false]
+PASS  …a second run continues from the cursor and finishes             got [null,150]
+PASS  …a third run with the same start does nothing                    got [null,0]
+PASS  …backfill of another object is refused                           got "UsageError"
+PASS  tenant two's shop with its own secret → its row in tenant two, hashed with its own pepper got [200,"01a13fc8-5ac4-7b1c-8e23-42400c8073bb","0a28767e65c265f6787c48f02
+PASS  …no link without a CRM connection on that store (match_not_configured), no outbox row got [null,1,0]
+PASS  tenant one sees none of tenant two's customers or events         got [0,0]
+PASS  no fixture email in any database row of the flow (audit log included) got []
+PASS  no fixture phone number, in any form, in any database row        got []
+PASS  no name, address, note, client secret or token in the database   got false
+PASS  the logs hold no email, number, name, token or secret            got [false,false,false]
+PASS  the logs hold the webhook, processed, sweep, reconcile and backfill lines got true
+PASS  across the whole run: no outbox row in either tenant, no write to HubSpot got [0,0]
+
+ALL 86 PASS

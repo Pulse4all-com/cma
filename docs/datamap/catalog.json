@@ -13,7 +13,7 @@
         {
           "name": "crm_contact",
           "what": "Thin contact: country with the slot it came from, language, currency, store",
-          "how": "Read when a deal or ticket points to it, and from B17b an email or inbox thread; re-read every 10 min in its first hour; nightly reconcile"
+          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot; re-read every 10 min in its first hour; nightly reconcile"
         },
         {
           "name": "crm_contact_ref",
@@ -28,7 +28,7 @@
         {
           "name": "crm_association",
           "what": "Links between CRM objects, such as deal to contact",
-          "how": "With every read-back"
+          "how": "With every read-back, and the email poll's engagements (email to contact, deal, ticket)"
         },
         {
           "name": "form_submission",
@@ -44,17 +44,17 @@
         {
           "name": "email_message",
           "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category",
-          "how": "Planned: the email poll every minute and the nightly reconcile (B17b); empty until then"
+          "how": "Email poll every minute (engagements modified since its cursor; inbox messages of changed threads), the nightly reconcile (last 26 hours) and the backfill; only when the connection's email_poll is on"
         },
         {
           "name": "email_thread",
           "what": "Inbox conversations: inbox, channel, open or closed, the current agent, contact and ticket ids, spam",
-          "how": "Planned: the email poll every minute and the nightly reconcile (B17b); empty until then"
+          "how": "Email poll every minute (threads whose latest message is newer than its cursor; every ten minutes the open check), the nightly reconcile with the trash check, the backfill; only when the connection's email_poll is on"
         },
         {
           "name": "email_thread_event",
           "what": "Assignments, closes, reopens and inbox moves of conversations: actor kind and owner ids only",
-          "how": "Planned: the email poll every minute (B17b); empty until then"
+          "how": "Email poll every minute (with the messages of changed threads), the nightly reconcile and the backfill; only when the connection's email_poll is on"
         }
       ]
     },
@@ -162,12 +162,12 @@
         {
           "name": "connection_inbox",
           "what": "Inboxes of the CRM's conversations: counted, market, work type, channel",
-          "how": "Planned: the email poll's inbox catalog hourly (B17b; empty until then); switches on Configuration"
+          "how": "The email poll's inbox catalog hourly (when the connection's email_poll is on); switches on Configuration"
         },
         {
           "name": "connection_inbox_channel",
           "what": "Channels of the CRM's conversations (email, chat, ...): the CMA channel, counted",
-          "how": "Planned: the email poll's channel catalog hourly (B17b; empty until then); switches on Configuration"
+          "how": "The email poll's channel catalog hourly (when the connection's email_poll is on); switches on Configuration"
         },
         {
           "name": "connection_email_rule",
@@ -408,7 +408,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, reconcile and backfill"
+          "how": "Each sweep, form poll, email poll, reconcile and backfill"
         },
         {
           "name": "sync_cursor",

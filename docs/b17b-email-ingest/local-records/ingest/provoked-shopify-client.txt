@@ -1,0 +1,26 @@
+verify/shopify-client.mjs  (--provoke: every check must FAIL)
+
+FAIL  five callers at once: one token minted, all get it               got [1,1], wanted [5,5]
+FAIL  …sent form-encoded with the client id and secret (the fake refuses otherwise) got "shpat_fixture_1", wanted null
+FAIL  a second call reuses the cached token                            got ["shpat_fixture_1",1], wanted ["shpat_fixture_2",2]
+FAIL  within five minutes of its expiry the token is minted again      got ["shpat_fixture_2",2], wanted ["shpat_fixture_1",1]
+FAIL  …six minutes before, it is still used                            got ["shpat_fixture_2",2], wanted ["shpat_fixture_3",3]
+FAIL  no client id setting → client_id_not_set                         got "client_id_not_set", wanted "ok"
+FAIL  another client id → the token request refused (token_http_400)   got "token_http_400", wanted "ok"
+FAIL  a missing client secret → client_secret_unavailable              got "client_secret_unavailable", wanted "ok"
+FAIL  a shop that is not <handle>.myshopify.com → shop_invalid         got "shop_invalid", wanted "ok"
+FAIL  a query answers its data, at version 2026-10 with the shop's token got [{"ok":true},true,true], wanted [null,false,false]
+FAIL  the bucket learns the shop's restore rate and maximum from throttleStatus got [100,1000], wanted [50,0]
+{"severity":"WARNING","message":"shopify throttled","connection":"c1","code":"rate_limited","available":3,"time":"2026-10-15T13:37:01.225Z"}
+FAIL  a THROTTLED answer → rate_limited, the estimate emptied          got ["rate_limited",0], wanted ["ok",1000]
+FAIL  a withheld protected field (ACCESS_DENIED) → the data with the field null, nothing fails got "ok", wanted "graphql_error"
+FAIL  another error without data → graphql_error                       got "graphql_error", wanted "ok"
+FAIL  a 401 → http_401 and the token dropped (the next call mints)     got ["http_401","ok",1], wanted ["ok","ok",0]
+FAIL  a 429 → rate_limited                                             got "rate_limited", wanted "ok"
+FAIL  waitFor: 300 points at 100 a second from empty → 3 seconds       got 3000, wanted 0
+FAIL  a webhook never waits past its budget: 300 points short → throttled at once got ["throttled",true], wanted ["ok",false]
+FAIL  …a short wait that leaves a second of its budget is waited for   got ["ok",true], wanted ["throttled",false]
+FAIL  a job waits for the refill instead (500 points at 1000 a second: about half a second) got ["ok",true], wanted ["throttled",false]
+FAIL  three callers sharing a bucket of 100 at 1000 a second queue behind each other (reserved before the wait) got true, wanted false
+
+ALL 21 PROVOKED CHECKS FAILED, as they must

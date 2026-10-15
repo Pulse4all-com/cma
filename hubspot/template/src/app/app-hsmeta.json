@@ -3,7 +3,7 @@
   "type": "app",
   "config": {
     "name": "{{appName}}",
-    "description": "Sends CRM changes (deals, tickets, contacts, calls) to the CMA ingest service and reads the changed records back; writes only the contact properties the CMA is configured to keep current.",
+    "description": "Sends CRM changes (deals, tickets, contacts, calls) to the CMA ingest service and reads the changed records back, and lets it read email and inbox conversation metadata; writes only the contact properties the CMA is configured to keep current.",
     "distribution": "private",
     "auth": {
       "type": "static",
@@ -14,7 +14,9 @@
         "crm.objects.deals.read",
         "crm.objects.tickets.read",
         "crm.objects.owners.read",
-        "forms"
+        "forms",
+        "sales-email-read",
+        "conversations.read"
       ],
       "optionalScopes": [],
       "conditionallyRequiredScopes": []

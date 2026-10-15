@@ -1,0 +1,34 @@
+PASS  dev and prod render the three project files                  got [["hsproject.json","src/app/app-hsmeta.json","src/app/webhooks/webhook
+PASS  the project: srcDir src, platform version 2026.09            got ["src","2026.09","2026.09"]
+PASS  types app and webhooks                                       got ["app","webhooks","app","webhooks"]
+PASS  four distinct uids, HubSpot's uid rule                       got [4,true]
+PASS  app and project names                                        got ["CMA ingest dev","CMA ingest prod","CMA ingest dev","CMA ingest prod"
+PASS  the target URLs differ and are the ones given                got ["https://cma-ingest-verify-dev.example.com/hubspot/devkey000000000000
+PASS  maxConcurrentRequests 10 as a number                         got [10,10]
+PASS  static auth, private distribution, no redirect URLs          got ["static","private",false,false,"static","private"]
+PASS  dev and prod request identical scopes                        got true
+PASS  the required scopes are exactly the documented set           got ["conversations.read","crm.objects.contacts.read","crm.objects.contact
+PASS  no optional or conditional scopes                            got [[],[]]
+PASS  crm.objects.contacts.write is the only *.write scope         got ["crm.objects.contacts.write"]
+PASS  crm.objects.contacts.write is the only write-capable scope   got [[],[]]
+PASS  the write rule refuses `tickets`, other *.write and *.delete scopes got ["crm.objects.contacts.delete","crm.objects.tickets.write","crm.schema
+PASS  §1.1 names nine contact properties, all in §1.3's subscriptions got [9,true]
+PASS  every deal, ticket and call property and country_dropdown is named in §1.3 got true
+PASS  crmObjects equal §1.3 (37 subscriptions)                     got ["call object.associationChange","call object.creation","call object.d
+PASS  the email poll's scopes are read scopes                      got [true,true]
+PASS  prod subscribes to exactly the same                          got true
+PASS  no legacy subscriptions; hubEvents is the privacy deletion only got [[],["contact.privacyDeletion"]]
+PASS  every subscription is active                                 got true
+PASS  the env files' target URL is the placeholder                 got ["still the placeholder","still the placeholder"]
+PASS  render refuses the placeholder without --draft               got [true,true]
+PASS  render refuses http, a wrong path, a query and a short key   got [true,true,true,true]
+PASS  --draft renders with the placeholder and says it is a draft  got [true,"https://cma-ingest.placeholder.invalid/hubspot/CONNECTION-KEY-P
+PASS  the command line refuses the placeholder with exit code 2    got [2,true]
+PASS  written: exactly the three files, parseable                  got [["hsproject.json","src/app/app-hsmeta.json","src/app/webhooks/webhook
+PASS  env files: the four keys only, no ids of five or more digits got [["appName","maxConcurrentRequests","targetUrl","uidSuffix"],false]
+PASS  no secret-looking key or value in template or env files      got false
+PASS  the template holds placeholders for env values only          got ["appName","appUid","maxConcurrentRequests","projectName","targetUrl",
+PASS  hubspot/build/ is git-ignored                                got true
+PASS  nothing under hubspot/build is tracked                       got ""
+
+ALL 32 PASS

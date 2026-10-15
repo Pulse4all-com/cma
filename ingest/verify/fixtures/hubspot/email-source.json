@@ -1,0 +1,148 @@
+{
+  "_about": "An invented HubSpot as the email poll reads it (brief B17b): owners, the conversations catalogs, email engagements with their associations, contacts, inbox threads and their messages. Every name, address, subject and text is invented and listed under forbidden: none may reach a row the ingest writes or a log line. Times are 'ago:<minutes>' before the verifier's start. Ids are invented (portal 9000001's ranges).",
+  "forbidden": [
+    "Invented Customer", "Invented", "Agentone", "Agenttwo", "Agentthree", "Fictive", "Former",
+    "customer.invented@example.net", "partner.invented@example.org", "agent.one.invented@example.com", "agent.two.invented@example.com",
+    "left.invented@example.com", "support.invented@example.com", "sales.invented@example.com", "bounce.invented@example.org",
+    "example.net", "example.org", "example.com",
+    "Your invoice INV-INVENTED-77", "Invoice question INVENTED", "Reminder: invoice due", "Question about my order", "Partnership",
+    "WIN A PRIZE", "secret body text", "secret html", "internal note", "+44 20 0000 0199", "0000 0199",
+    "E-customer", "A-7000000001", "A-7000000002", "A-7000000003", "A-7000009999", "V-123456", "X-unknown-prefix", "I-55", "B-1",
+    "hs_email_text", "hs_email_html", "hs_email_headers"
+  ],
+  "owners": {
+    "active": [
+      { "id": "7100000001", "userId": 7000000001, "email": "agent.one.invented@example.com", "firstName": "Invented", "lastName": "Agentone", "archived": false },
+      { "id": "7100000002", "userId": 7000000002, "email": "agent.two.invented@example.com", "firstName": "Fictive", "lastName": "Agenttwo", "archived": false }
+    ],
+    "archived": [
+      { "id": "7100000003", "userIdIncludingInactive": 7000000003, "email": "left.invented@example.com", "firstName": "Former", "lastName": "Agentthree", "archived": true }
+    ]
+  },
+  "inboxes": [
+    { "id": "1500000001", "name": "Support inbox (test)", "type": "INBOX", "archived": false, "createdAt": "ago:9000", "updatedAt": "ago:9000" },
+    { "id": "1500000002", "name": "sales.invented@example.com", "type": "INBOX", "archived": false, "createdAt": "ago:9000", "updatedAt": "ago:9000" },
+    { "id": "1500000009", "name": "Old inbox (test)", "type": "INBOX", "archived": true, "createdAt": "ago:9000", "updatedAt": "ago:9000" }
+  ],
+  "channels": [
+    { "id": "1002", "name": "Email" },
+    { "id": "1000", "name": "Live chat" },
+    { "id": "1007", "name": "WhatsApp" }
+  ],
+  "channelAccounts": [
+    { "id": "1600000001", "channelId": "1002", "inboxId": "1500000001", "name": "support.invented@example.com", "active": true, "archived": false, "authorized": true,
+      "createdAt": "ago:9000", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "support.invented@example.com" } },
+    { "id": "1600000002", "channelId": "1002", "inboxId": "1500000002", "name": "Sales mailbox", "active": true, "archived": false, "authorized": true,
+      "createdAt": "ago:9000", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "sales.invented@example.com" } }
+  ],
+  "engagements": {
+    "4500000001": { "hs_timestamp": "ago:300", "hs_createdate": "ago:300", "hs_lastmodifieddate": "ago:200", "hs_email_direction": "EMAIL", "hs_email_status": "SENT",
+      "hubspot_owner_id": "7100000001", "hs_email_subject": "Your invoice INV-INVENTED-77", "hs_email_from_email": "agent.one.invented@example.com",
+      "hs_email_to_email": "customer.invented@example.net", "hs_email_text": "Dear Invented Customer, secret body text", "hs_email_html": "<p>secret html</p>",
+      "hs_email_headers": "{\"from\":{\"email\":\"agent.one.invented@example.com\"}}", "fixture_thread_id": "th-9000001" },
+    "4500000002": { "hs_timestamp": "ago:290", "hs_createdate": "ago:290", "hs_lastmodifieddate": "ago:190", "hs_email_direction": "INCOMING_EMAIL",
+      "hubspot_owner_id": "7100000001", "hs_email_subject": "Question about my order", "hs_email_from_email": "Invented Customer <customer.invented@example.org>",
+      "hs_email_text": "secret body text", "fixture_thread_id": "th-9000001" },
+    "4500000003": { "hs_timestamp": "ago:280", "hs_createdate": "ago:280", "hs_lastmodifieddate": "ago:180", "hs_email_direction": "FORWARDED_EMAIL", "hs_email_status": "BOUNCED",
+      "hubspot_owner_id": "7100000002", "hs_email_subject": "Fwd: Partnership", "hs_email_from_email": "agent.two.invented@example.com" },
+    "4500000004": { "hs_timestamp": "ago:270", "hs_createdate": "ago:270", "hs_lastmodifieddate": "ago:170", "hs_email_direction": "EMAIL", "hs_email_status": "SENT",
+      "hubspot_owner_id": "7100000002", "fixture_origin": "AUTOMATION_FIXTURE", "hs_email_subject": "Reminder: invoice due",
+      "hs_email_from_email": "agent.two.invented@example.com" },
+    "4500000005": { "hs_timestamp": "ago:260", "hs_createdate": "ago:260", "hs_lastmodifieddate": "ago:160", "hs_email_direction": "NOTE_FIXTURE",
+      "hubspot_owner_id": "7100000001", "hs_email_subject": "WIN A PRIZE" },
+    "4500000006": { "hs_timestamp": "ago:250", "hs_createdate": "ago:250", "hs_lastmodifieddate": "ago:150", "hs_email_direction": "EMAIL", "hs_email_status": "SCHEDULED",
+      "fixture_thread_id": "bad@thread", "hs_email_from_email": "bounce.invented@example.org" }
+  },
+  "emailAssociations": {
+    "contacts": { "4500000001": ["4300000101"], "4500000002": ["4300000102"], "4500000003": ["4300000101"], "4500000004": ["4300000101"] },
+    "deals": { "4500000001": ["4100000101"] },
+    "tickets": { "4500000002": ["4200000101"] }
+  },
+  "contacts": {
+    "4300000101": { "contact_country": "", "country_dropdown": "United Kingdom", "lastmodifieddate": "ago:500", "email": "customer.invented@example.net", "firstname": "Invented" },
+    "4300000102": { "contact_country": "GB", "country_dropdown": "Netherlands", "lastmodifieddate": "ago:500" },
+    "4300000103": { "country_dropdown": "Atlantis", "lastmodifieddate": "ago:500" },
+    "4300000104": { "contact_country": "GB", "lastmodifieddate": "ago:500" },
+    "4300000199": { "contact_country": "GB", "country_dropdown": "United Kingdom", "lastmodifieddate": "ago:500" }
+  },
+  "threads": {
+    "8800000001": { "inboxId": "1500000001", "originalChannelId": "1002", "originalChannelAccountId": "1600000001", "status": "OPEN", "assignedTo": "A-7000000001",
+      "associatedContactId": "4300000103", "threadAssociations": { "associatedTicketId": "4200000101" }, "spam": false, "archived": false,
+      "createdAt": "ago:240", "latestMessageTimestamp": "ago:200", "latestMessageReceivedTimestamp": "ago:240", "latestMessageSentTimestamp": "ago:200" },
+    "8800000002": { "inboxId": "1500000002", "originalChannelId": "1002", "originalChannelAccountId": "1600000002", "status": "CLOSED", "closedAt": "ago:150",
+      "assignedTo": "A-7000000003", "associatedContactId": "4300000102", "spam": false, "archived": false,
+      "createdAt": "ago:190", "latestMessageTimestamp": "ago:190", "latestMessageReceivedTimestamp": "ago:190" },
+    "8800000003": { "inboxId": "1500000001", "originalChannelId": "1002", "originalChannelAccountId": "1600000001", "status": "OPEN", "spam": true, "archived": false,
+      "createdAt": "ago:120", "latestMessageTimestamp": "ago:120", "latestMessageReceivedTimestamp": "ago:120" },
+    "8800000004": { "inboxId": "1500000001", "originalChannelId": "1000", "originalChannelAccountId": "1600000001", "status": "OPEN", "assignedTo": "A-7000009999",
+      "associatedContactId": "4300000104", "spam": false, "archived": false,
+      "createdAt": "ago:100", "latestMessageTimestamp": "ago:80", "latestMessageReceivedTimestamp": "ago:90", "latestMessageSentTimestamp": "ago:80" }
+  },
+  "messages": {
+    "8800000001": [
+      { "type": "MESSAGE", "id": "m1a0000000000000000000000000001", "conversationsThreadId": "8800000001", "createdAt": "ago:240", "createdBy": "E-customer.invented@example.net",
+        "direction": "INCOMING", "channelId": "1002", "channelAccountId": "1600000001", "subject": "Invoice question INVENTED",
+        "text": "Hello, my name is Invented Customer and my phone is +44 20 0000 0199", "richText": "<b>secret html</b>",
+        "senders": [{ "actorId": "E-customer.invented@example.net", "name": "Invented Customer", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "customer.invented@example.net" } }],
+        "recipients": [{ "actorId": "E-support.invented@example.com", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "support.invented@example.com" } }],
+        "attachments": [{ "type": "FILE", "fileId": "77", "name": "Invented Customer invoice.pdf" }], "status": { "statusType": "RECEIVED" },
+        "client": { "clientType": "SYSTEM" }, "truncationStatus": "NOT_TRUNCATED", "archived": false },
+      { "type": "ASSIGNMENT", "id": "m1b0000000000000000000000000002", "conversationsThreadId": "8800000001", "createdAt": "ago:235", "createdBy": "S-hubspot",
+        "assignedTo": "A-7000000001", "senders": [], "recipients": [], "client": { "clientType": "SYSTEM" }, "archived": false },
+      { "type": "COMMENT", "id": "m1c0000000000000000000000000003", "conversationsThreadId": "8800000001", "createdAt": "ago:230", "createdBy": "A-7000000002",
+        "text": "internal note about Invented Customer", "senders": [{ "actorId": "A-7000000002", "name": "Fictive Agenttwo" }], "client": { "clientType": "HUBSPOT" } },
+      { "type": "MESSAGE", "id": "m1d0000000000000000000000000004", "conversationsThreadId": "8800000001", "createdAt": "ago:200", "createdBy": "A-7000000001",
+        "direction": "OUTGOING", "channelId": "1002", "channelAccountId": "1600000001", "subject": "Re: Invoice question INVENTED", "text": "Dear Invented Customer, secret body text",
+        "senders": [{ "actorId": "A-7000000001", "name": "Invented Agentone", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "support.invented@example.com" } }],
+        "recipients": [{ "actorId": "E-customer.invented@example.net", "name": "Invented Customer", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "customer.invented@example.net" } }],
+        "status": { "statusType": "SENT" }, "client": { "clientType": "HUBSPOT" }, "truncationStatus": "NOT_TRUNCATED", "archived": false }
+    ],
+    "8800000002": [
+      { "type": "MESSAGE", "id": "m2a0000000000000000000000000001", "conversationsThreadId": "8800000002", "createdAt": "ago:190", "createdBy": "V-123456",
+        "direction": "INCOMING", "channelId": "1002", "channelAccountId": "1600000002", "subject": "Partnership", "text": "secret body text",
+        "senders": [{ "actorId": "V-123456", "name": "Invented Customer", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "partner.invented@example.org" } }],
+        "recipients": [], "status": { "statusType": "READ" }, "client": { "clientType": "SYSTEM" }, "archived": false },
+      { "type": "THREAD_INBOX_CHANGE", "id": "m2b0000000000000000000000000002", "conversationsThreadId": "8800000002", "createdAt": "ago:185", "createdBy": "A-7000000002",
+        "fromInboxId": "1500000001", "toInboxId": "1500000002", "senders": [], "recipients": [], "client": { "clientType": "HUBSPOT" } },
+      { "type": "ASSIGNMENT", "id": "m2c0000000000000000000000000003", "conversationsThreadId": "8800000002", "createdAt": "ago:180", "createdBy": "A-7000000002",
+        "assignedTo": "A-7000000003", "assignedFrom": "A-7000000002", "senders": [], "recipients": [], "client": { "clientType": "HUBSPOT" } },
+      { "type": "WELCOME_MESSAGE", "id": "m2d0000000000000000000000000004", "conversationsThreadId": "8800000002", "createdAt": "ago:179", "createdBy": "B-1",
+        "text": "Welcome Invented Customer" },
+      { "type": "THREAD_STATUS_CHANGE", "id": "m2e0000000000000000000000000005", "conversationsThreadId": "8800000002", "createdAt": "ago:150", "createdBy": "A-7000000003",
+        "newStatus": "CLOSED", "senders": [], "recipients": [], "client": { "clientType": "HUBSPOT" } }
+    ],
+    "8800000003": [
+      { "type": "MESSAGE", "id": "m3a0000000000000000000000000001", "conversationsThreadId": "8800000003", "createdAt": "ago:120", "createdBy": "X-unknown-prefix",
+        "direction": "INCOMING", "channelId": "1002", "channelAccountId": "1600000001", "subject": "WIN A PRIZE", "text": "secret body text",
+        "senders": [{ "actorId": "X-unknown-prefix", "deliveryIdentifier": { "type": "HS_EMAIL_ADDRESS", "value": "bounce.invented@example.org" } }],
+        "status": { "statusType": "RECEIVED" }, "client": { "clientType": "SYSTEM" } },
+      { "type": "ASSIGNMENT", "id": "m3b0000000000000000000000000002", "conversationsThreadId": "8800000003", "createdAt": "ago:119", "createdBy": "B-1",
+        "senders": [], "recipients": [], "client": { "clientType": "SYSTEM" } }
+    ],
+    "8800000004": [
+      { "type": "MESSAGE", "id": "m4a0000000000000000000000000001", "conversationsThreadId": "8800000004", "createdAt": "ago:90", "createdBy": "I-55",
+        "direction": "INCOMING", "channelId": "1000", "channelAccountId": "1600000001", "text": "secret body text", "senders": [], "recipients": [],
+        "status": { "statusType": "RECEIVED" }, "client": { "clientType": "INTEGRATION", "integrationAppId": 55 } },
+      { "type": "THREAD_STATUS_CHANGE", "id": "m4b0000000000000000000000000002", "conversationsThreadId": "8800000004", "createdAt": "ago:88", "createdBy": "A-7000009999",
+        "newStatus": "CLOSED", "client": { "clientType": "HUBSPOT" } },
+      { "type": "THREAD_STATUS_CHANGE", "id": "m4c0000000000000000000000000003", "conversationsThreadId": "8800000004", "createdAt": "ago:85", "createdBy": "A-7000009999",
+        "newStatus": "OPEN", "client": { "clientType": "HUBSPOT" } },
+      { "type": "MESSAGE", "id": "m4d0000000000000000000000000004", "conversationsThreadId": "8800000004", "createdAt": "ago:80", "createdBy": "A-7000009999",
+        "direction": "OUTGOING", "channelId": "1000", "channelAccountId": "1600000001", "text": "secret body text",
+        "senders": [{ "actorId": "A-7000009999", "name": "Invented Agentone" }], "recipients": [], "status": { "statusType": "FAILED", "failureDetails": { "errorMessageId": "x" } },
+        "client": { "clientType": "HUBSPOT" } }
+    ]
+  },
+  "emailProperties": [
+    {"name": "hs_timestamp", "label": "Activity date", "type": "datetime"},
+    {"name": "hs_email_direction", "label": "Email direction", "type": "enumeration", "options": [{"value": "EMAIL"}, {"value": "INCOMING_EMAIL"}, {"value": "FORWARDED_EMAIL"}]},
+    {"name": "hs_email_status", "label": "Email send status", "type": "enumeration", "options": [{"value": "SENT"}, {"value": "BOUNCED"}, {"value": "FIXTURE_STATUS"}]},
+    {"name": "hubspot_owner_id", "label": "Activity assigned to", "type": "enumeration"},
+    {"name": "hs_createdate", "label": "Created at", "type": "datetime"},
+    {"name": "hs_lastmodifieddate", "label": "Last modified", "type": "datetime"},
+    {"name": "hs_email_subject", "label": "Email subject", "type": "string"},
+    {"name": "fixture_thread_id", "label": "Thread id (fixture)", "type": "string"},
+    {"name": "fixture_origin", "label": "Origin (fixture)", "type": "enumeration", "options": [{"value": "AUTOMATION_FIXTURE"}, {"value": "MANUAL_FIXTURE"}, {"value": "someone.invented@example.com"}]},
+    {"name": "fixture_unrelated", "label": "Unrelated (fixture)", "type": "string"}
+  ]
+}

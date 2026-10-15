@@ -1,0 +1,32 @@
+{
+  "_about": "Shared fixtures of the email classification rules (brief B17b): verify/email-mapping.mjs runs them through the ingest's in-memory match (src/adapters/hubspot/rules.mjs), verify/email-flow.mjs through cma.email_words_match and cma.email_category_of; both must give `match` and `category`. Invented values only.",
+  "words": [
+    { "value": "Your Invoice is ready", "words": ["invoice"], "exclude": [], "match": true },
+    { "value": "Your invoice is ready", "words": ["invoice"], "exclude": ["ready"], "match": false },
+    { "value": "", "words": ["invoice"], "exclude": [], "match": false },
+    { "value": null, "words": ["invoice"], "exclude": [], "match": false },
+    { "value": "newsletter.example.org", "words": ["example.org"], "exclude": ["support"], "match": true },
+    { "value": "support.example.org", "words": ["example.org"], "exclude": ["support"], "match": false },
+    { "value": "réclamation urgente", "words": ["réclamation"], "exclude": [], "match": true },
+    { "value": "Order 123", "words": ["order", "invoice"], "exclude": [], "match": true },
+    { "value": "Order cancelled", "words": ["order"], "exclude": ["cancel", "refund"], "match": false },
+    { "value": "  invoice  ", "words": ["invoice"], "exclude": [], "match": true },
+    { "value": "INVOICE", "words": ["voice"], "exclude": [], "match": true },
+    { "value": "Factuur 2026-10", "words": ["invoice"], "exclude": [], "match": false }
+  ],
+  "rules": [
+    { "appliesTo": "subject", "words": ["order"], "excludeWords": [], "category": "orders", "order": 5, "status": "inactive" },
+    { "appliesTo": "subject", "words": ["invoice", "factuur"], "excludeWords": ["reminder"], "category": "billing", "order": 10, "status": "active" },
+    { "appliesTo": "sender_domain", "words": ["example.org"], "excludeWords": ["support"], "category": "partner", "order": 20, "status": "active" },
+    { "appliesTo": "subject", "words": ["reminder"], "excludeWords": [], "category": "reminder", "order": 30, "status": "active" }
+  ],
+  "categories": [
+    { "subject": "Invoice 77", "senderDomain": "example.org", "category": "billing" },
+    { "subject": "Reminder: invoice due", "senderDomain": "example.net", "category": "reminder" },
+    { "subject": "Question", "senderDomain": "news.example.org", "category": "partner" },
+    { "subject": "Question", "senderDomain": "support.example.org", "category": null },
+    { "subject": "Your order", "senderDomain": null, "category": null },
+    { "subject": null, "senderDomain": null, "category": null },
+    { "subject": "FACTUUR oktober", "senderDomain": "example.com", "category": "billing" }
+  ]
+}

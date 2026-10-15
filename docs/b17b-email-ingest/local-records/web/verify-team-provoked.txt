@@ -1,0 +1,33 @@
+
+> cma-web@0.1.0 verify:team
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/team.mjs --provoke
+
+FAIL  dimensions in order, channel left out when empty         got ["language","work_type"], wanted ["work_type","language"]
+FAIL  skills in catalog order, inactive left out               got ["da","nl"], wanted ["xx","da","nl"]
+FAIL  a scaled skill is labelled with its level                got "Dutch · Fluent", wanted "Dutch"
+FAIL  a held skill is labelled with its name                   got "Sales", wanted "Sales · Yes"
+FAIL  state holds the level, or true for a binary skill        got {"nl":3,"sales":true}, wanted {"nl":true,"sales":3}
+FAIL  payload lists held skills with levels, in key order, catalog only got [{"key":"nl","level":3},{"key":"sales"}], wanted [{"key":"nl","level":3},{"key":"sales"},{"key":"xx","level":2}]
+FAIL  no change means no write                                 got {}, wanted {"teams":["en","nl"]}
+FAIL  a role change writes the role only                       got {"roleKey":"supervisor"}, wanted {"roleKey":"supervisor","teams":["en","nl"]}
+FAIL  a team change writes the sorted list                     got {"teams":["nl"]}, wanted {"teams":["nl","en"]}
+FAIL  a level change writes the full skill list                got [{"key":"nl","level":4},{"key":"sales"}], wanted [{"key":"nl","level":4}]
+FAIL  deactivating writes active false                         got {"active":false}, wanted {"active":true}
+FAIL  hasChanges                                               got [false,true], wanted [true,false]
+FAIL  a manager's options: assignable roles plus the held manager role, disabled got [{"key":"agent","name":"Agent","disabled":false},{"key":"manager","nam, wanted [{"key":"agent","name":"Agent","disabled":false}]
+FAIL  a person without a role: assignable roles only           got ["agent"], wanted ["agent","manager","admin"]
+FAIL  active people of every team by default                   got ["1","3"], wanted ["1","2","3"]
+FAIL  one team, inactive included when asked                   got ["1","2"], wanted ["1"]
+FAIL  a complete form has no problems                          got [], wanted ["login"]
+FAIL  every missing part is named                              got ["name","email","employer","role","login"], wanted ["name","email"]
+FAIL  the editor starts from the person's ids                  got {"crmtest_owner":"700","phonetest_user":"","old_owner":""}, wanted {"crmtest_owner":""}
+FAIL  a changed id links, an emptied one unlinks               got [{"system":"crmtest_owner","externalId":null},{"system":"phonetest_use, wanted []
+FAIL  nothing changed writes nothing                           got [], wanted [{"system":"a","externalId":"1"}]
+FAIL  an id with a space is refused                            got true, wanted false
+FAIL  an empty id is fine (unlinks)                            got false, wanted true
+FAIL  linked systems are counted per person                    got 1, wanted 2
+FAIL  an owner system is labelled by its connection            got "Owner id in Customer records", wanted "crmtest_owner"
+FAIL  a system without a connection is named as stored         got "Id in old_owner", wanted "Owner id in "
+
+team: ALL 26 PROVOKED CHECKS FAILED, as they must
+exit 0

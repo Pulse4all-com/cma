@@ -5,6 +5,8 @@
  * change) is listed by the adapter and read back through the same path as a webhook (synthetic
  * events, stale guard), one sync_run row per object type (job reconcile, stream the object type).
  * Events whose read-back fails are left to the sweep and counted as failed; the run still succeeds.
+ * HubSpot's email objects (crm_email, inbox_thread; brief B17b) are reconciled only for connections
+ * whose email poll is on, through the poll's own writes.
  * An adapter with webhook subscriptions of its own to look after (Shopify) checks them after its
  * streams, one more sync_run row (job subscriptions_check, stream webhooks), unless --object narrows
  * the run.
@@ -31,7 +33,16 @@ export async function runReconcile({ connectionId = null, lookbackMinutes = DEFA
     const budget = new JobBudget(adapter.rates);
     const untilMs = Date.now();
     const sinceMs = untilMs - lookbackMinutes * 60_000;
-    for (const obj of adapter.reconcileObjects.filter((o) => !object || o === object)) {
+    // An adapter may narrow its object types per connection (HubSpot: the email objects only where the email poll is on)
+    let objects;
+    try {
+      objects = adapter.reconcileObjectsOf ? await adapter.reconcileObjectsOf(store) : adapter.reconcileObjects;
+    } catch (err) {
+      total.failed += 1;
+      warn("reconcile: connection not read", { connection: c.connectionId, code: codeOf(err) });
+      continue;
+    }
+    for (const obj of objects.filter((o) => !object || o === object)) {
       try {
         const r = await withRun(store, { job: "reconcile", stream: obj, from: new Date(sinceMs), to: new Date(untilMs) }, async (counts) => {
           const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "reconcile" }));

@@ -12,6 +12,9 @@
  *   privacy         contact.privacyDeletion → cma.ingest_contact_forget(), no read
  *   catalogs        pipelines with stages, and the call outcomes, at most hourly per connection
  *
+ * The client also serves the email poll (brief B17b): email engagements (crm_email, through
+ * JOB_OBJECT, so their webhooks stay ignored), the conversations API and both owner lists.
+ *
  * Every call takes the budget's signal. 429 and timeouts fail the events of that object type with
  * rate_limited or timeout (the sweeper reads them again with backoff).
  */
@@ -23,6 +26,10 @@ import {
 } from "./map.mjs";
 
 const BATCH_READ = 100;
+// Objects the jobs read besides the webhook path's (API_OBJECT): email engagements (brief B17b). Kept
+// out of API_OBJECT, so a webhook event of an email is still ignored (object_not_kept)
+const JOB_OBJECT = { crm_email: "emails" };
+const objectName = (type) => API_OBJECT[type] ?? JOB_OBJECT[type];
 const CATALOG_EVERY_MS = 60 * 60_000;
 const PER_CALL_MS = 2500;
 const catalogsAt = new Map(); // connection id → { pipelines, outcomes } (ms), per instance
@@ -50,7 +57,7 @@ export function hubspotClient(token, budget) {
   return {
     /** One CRM search page: POST /crm/v3/objects/{type}/search. */
     async search(type, body) {
-      return call("POST", `/crm/v3/objects/${API_OBJECT[type]}/search`, body, "search");
+      return call("POST", `/crm/v3/objects/${objectName(type)}/search`, body, "search");
     },
     /** The ids of the contacts whose property equals the value (at most two: one, none or several). */
     async contactIdsWhere(property, value) {
@@ -75,7 +82,7 @@ export function hubspotClient(token, budget) {
       const results = [];
       for (let i = 0; i < ids.length; i += BATCH_READ) {
         const part = ids.slice(i, i + BATCH_READ);
-        const r = await call("POST", `/crm/v3/objects/${API_OBJECT[type]}/batch/read?archived=false`, { properties, inputs: part.map((id) => ({ id })) });
+        const r = await call("POST", `/crm/v3/objects/${objectName(type)}/batch/read?archived=false`, { properties, inputs: part.map((id) => ({ id })) });
         results.push(...(r?.results ?? []));
       }
       return results;
@@ -88,7 +95,7 @@ export function hubspotClient(token, budget) {
       const out = new Map();
       for (let i = 0; i < ids.length; i += BATCH_READ) {
         const part = ids.slice(i, i + BATCH_READ);
-        const r = await call("POST", `/crm/v4/associations/${API_OBJECT[fromType]}/${API_OBJECT[toType]}/batch/read`, { inputs: part.map((id) => ({ id })) });
+        const r = await call("POST", `/crm/v4/associations/${objectName(fromType)}/${objectName(toType)}/batch/read`, { inputs: part.map((id) => ({ id })) });
         for (const x of r?.results ?? []) out.set(String(x.from?.id), x.to ?? []);
       }
       return out;
@@ -100,8 +107,22 @@ export function hubspotClient(token, budget) {
       const r = await call("GET", "/calling/v1/dispositions");
       return Array.isArray(r) ? r : (r?.results ?? []);
     },
-    async owners(after) {
-      return call("GET", `/crm/v3/owners?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`);
+    async owners(after, archived = false) {
+      return call("GET", `/crm/v3/owners?limit=100${archived ? "&archived=true" : ""}${after ? `&after=${encodeURIComponent(after)}` : ""}`);
+    },
+    /**
+     * One GET of the conversations API (conversations.read): path below /conversations/v3/conversations,
+     * query as an object (arrays repeat the key). The answer holds message texts and addresses: the
+     * caller (conversations.mjs) keeps ids, times and kinds and drops the rest at once.
+     */
+    async conversations(path, query = {}) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(query)) {
+        if (v === undefined || v === null) continue;
+        for (const x of Array.isArray(v) ? v : [v]) qs.append(k, String(x));
+      }
+      const q = qs.toString();
+      return call("GET", `/conversations/v3/conversations/${path}${q ? `?${q}` : ""}`);
     },
   };
 }
