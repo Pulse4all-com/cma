@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CMA data map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#FFFDF6; --surface:#FFFFFF; --panel:#EAF4FC; --panel-2:#E3EEFD;
+  --heading:#2E61A6; --brand:#265BA4; --denim:#3B6FB3; --accent:#9ECFF5;
+  --text:#1C2127; --muted:#5B6472; --caption:#666666; --border:#D9E2EC;
+  --green:#27AE6F; --green-s:#E6F6EE; --warn:#C98A1B; --warn-s:#FBF1DC; --rose:#F4D9D0;
+  --line:#B9CDE6; --line-on:#265BA4; --code:#0B133D; --code-text:#E3EEFD;
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0B133D; --surface:#111B4A; --panel:#16225A; --panel-2:#1B2966;
+  --heading:#9ECFF5; --brand:#9ECFF5; --denim:#9ECFF5; --accent:#3B6FB3;
+  --text:#E8EEF8; --muted:#AEB9CC; --caption:#9AA6BA; --border:#26346F;
+  --green:#4CC58C; --green-s:#123A33; --warn:#E3AE4F; --warn-s:#3A3220; --rose:#F4D9D0;
+  --line:#2D3D7E; --line-on:#9ECFF5; --code:#060B26; --code-text:#E3EEFD; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0B133D; --surface:#111B4A; --panel:#16225A; --panel-2:#1B2966;
+  --heading:#9ECFF5; --brand:#9ECFF5; --denim:#9ECFF5; --accent:#3B6FB3;
+  --text:#E8EEF8; --muted:#AEB9CC; --caption:#9AA6BA; --border:#26346F;
+  --green:#4CC58C; --green-s:#123A33; --warn:#E3AE4F; --warn-s:#3A3220; --rose:#F4D9D0;
+  --line:#2D3D7E; --line-on:#9ECFF5; --code:#060B26; --code-text:#E3EEFD; color-scheme:dark;}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font-family:"Montserrat","Segoe UI",Arial,sans-serif;font-size:15px;line-height:1.6}
+.wrap{max-width:1280px;margin:0 auto;padding:40px 24px 64px}
+h1{font-size:36px;line-height:1.25;font-weight:700;color:var(--heading);margin:0}
+h2{font-size:24px;font-weight:700;color:var(--heading);margin:0 0 8px}
+h3{font-size:16px;font-weight:600;color:var(--heading);margin:0}
+.rule{height:2px;width:72px;background:var(--brand);margin:16px 0 16px}
+.lede{max-width:760px;color:var(--text);margin:0}
+.stamp{font-size:12px;color:var(--caption);margin-top:8px}
+section{margin-top:48px}
+.sub{color:var(--muted);max-width:760px;margin:0 0 24px}
+code{font-family:inherit;font-weight:600;font-size:.93em;color:var(--heading);background:var(--panel);padding:1px 6px;border-radius:4px;word-break:break-word}
+
+/* answer band */
+.answers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:32px}
+.ans{background:var(--surface);border:1px solid var(--border);border-radius:15px;padding:20px}
+.ans p{margin:8px 0 0;font-size:14px}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;border-radius:999px;padding:2px 12px}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.ok{color:var(--green);background:var(--green-s)}
+.wait{color:var(--warn);background:var(--warn-s)}
+.info{color:var(--brand);background:var(--panel)}
+
+/* flow map */
+.map{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:15px;padding:24px}
+.map svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.cols{position:relative;display:grid;grid-template-columns:1.15fr 1fr 1.35fr .9fr .9fr;gap:40px}
+.colhead{font-size:13px;font-weight:600;color:var(--muted);margin:0 0 12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.node{position:relative;background:var(--panel);border:1px solid transparent;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.45;transition:opacity .2s,border-color .2s,background .2s}
+.node b{display:block;font-size:14px;font-weight:600;color:var(--heading)}
+.node .meta{color:var(--muted);font-size:12px;margin-top:2px}
+button.node{font:inherit;font-size:13px;line-height:1.45;text-align:left;color:inherit;cursor:pointer;width:100%}
+button.node:focus-visible,.chip:focus-visible,summary:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.node.src{background:var(--surface);border-color:var(--border)}
+.node.dom{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:8px 12px}
+.node.dom b{display:inline;font-size:13px}
+.node.dom span{font-size:12px;color:var(--muted);white-space:nowrap}
+.node.read{background:var(--panel-2)}
+.node.big{padding:16px}
+.node.big .n{font-size:32px;font-weight:300;color:var(--heading);line-height:1.1}
+.map.focus .node{opacity:.32}
+.map.focus .node.on{opacity:1;border-color:var(--line-on)}
+.map path{fill:none;stroke:var(--line);stroke-width:1.5;transition:stroke .2s,opacity .2s}
+.map.focus path{opacity:.18}
+.map.focus path.on{opacity:1;stroke:var(--line-on);stroke-width:2}
+.hint{font-size:12px;color:var(--caption);margin:12px 0 0}
+
+/* explorer */
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+.chip{font:inherit;font-size:13px;font-weight:500;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:4px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:var(--surface)}
+input[type=search]{font:inherit;font-size:14px;border:1px solid var(--border);border-radius:4px;padding:8px 12px;min-width:240px;background:var(--surface);color:var(--text);margin-left:auto}
+.count{font-size:13px;color:var(--muted);margin:0 0 12px}
+.list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+details.t{background:var(--surface);border:1px solid var(--border);border-radius:12px}
+details.t[open]{border-color:var(--denim)}
+details.t summary{list-style:none;cursor:pointer;padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+details.t summary::-webkit-details-marker{display:none}
+.tn{font-weight:600;color:var(--heading);word-break:break-word}
+.tw{grid-column:1/-1;font-size:13px}
+.th{grid-column:1/-1;font-size:12px;color:var(--muted)}
+.bq{font-size:12px;font-weight:600;white-space:nowrap;align-self:start}
+.bq.y{color:var(--green)} .bq.n{color:var(--caption)}
+.colsbox{padding:0 16px 16px;display:flex;flex-wrap:wrap;gap:6px}
+.c{font-size:12px;border-radius:4px;padding:2px 8px;background:var(--panel);color:var(--text)}
+.c i{font-style:normal;color:var(--muted);margin-left:4px}
+.c.h{background:transparent;border:1px dashed var(--border);color:var(--caption);text-decoration:line-through}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:0 0 16px}
+.legend .c{margin-right:6px}
+
+/* derived + bq */
+.two{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:24px}
+.two>*,.cols>*{min-width:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:15px;padding:20px 24px}
+.card ul{margin:8px 0 0;padding-left:18px}
+.card li{margin:6px 0;font-size:14px}
+pre{background:var(--code);color:var(--code-text);border-radius:10px;padding:16px;overflow-x:auto;font-size:13px;line-height:1.5;margin:12px 0 0}
+.gaps li{margin:8px 0}
+.foot{margin-top:48px;font-size:12px;color:var(--caption);border-top:1px solid var(--border);padding-top:16px}
+
+@media (max-width:1000px){
+  .cols{grid-template-columns:1fr 1fr;gap:24px}
+  .map svg{display:none}
+  .answers,.two,.list{grid-template-columns:1fr}
+  input[type=search]{margin-left:0;width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>CMA data map</h1>
+  <div class="rule"></div>
+  <p class="lede">What is in the CMA's Postgres database, where each table gets its data, how often, and what BigQuery can read of it</p>
+  <p class="stamp" id="stamp"></p>
+</header>
+
+<div class="answers">
+  <div class="ans"><span class="pill info">Read-only views</span>
+    <p>BigQuery reads the <code>cma_read</code> schema only: <span data-n="read"></span> views over the tables, never the tables themselves. Every column it sees is a deliberate choice</p></div>
+  <div class="ans"><span class="pill ok">Dev connected</span>
+    <p>Connection <code>cma_dev_read</code> in <code>p4a-cma-dev</code> (europe-west4) works since 11 October. Dev holds test data only, so it is good for building queries, not for real figures</p></div>
+  <div class="ans"><span class="pill wait">Prod not yet</span>
+    <p>No prod connection exists and <code>bq_reader</code> has no password in prod. It waits on Yordi's answer to the heads-up of 10 October</p></div>
+</div>
+
+<section>
+  <h2>From source to BigQuery</h2>
+  <p class="sub">BigQuery keeps no copy: every query reads Postgres live through the connection, so a figure is as fresh as its table. Select a box to follow its path</p>
+  <div class="map" id="map">
+    <svg id="wires" aria-hidden="true"></svg>
+    <div class="cols">
+      <div><p class="colhead">Sources</p><div class="stack" id="c1">
+        <button class="node src" data-id="s-hubspot"><b>HubSpot</b>Deals, tickets, contacts, calls, forms<div class="meta">Prod: Subscriptions portal live since 12 October</div></button>
+        <button class="node src" data-id="s-aircall"><b>Aircall</b>Calls, lines, tags<div class="meta">Prod: live, calls from 1 October</div></button>
+        <button class="node src" data-id="s-shopify"><b>Shopify</b>Stores, customers, orders<div class="meta">Prod: rollout, pilot store first</div></button>
+        <button class="node src" data-id="s-workspace"><b>CMA Workspace</b>Clock, statuses, roster, people, settings, messages<div class="meta">Live in prod</div></button>
+        <button class="node src" data-id="s-legacy"><b>Steam export</b>Agent hours, 2 January to 9 October<div class="meta">One-off, 12 October</div></button>
+      </div></div>
+      <div><p class="colhead">Way in</p><div class="stack">
+        <button class="node" data-id="w-ingest"><b>Ingest service</b>Webhooks, object read back within seconds</button>
+        <button class="node" data-id="w-jobs"><b>Ingest jobs</b>Sweep and form poll every minute, catalogs hourly, reconcile nightly at 02:30, backfill by hand</button>
+        <button class="node" data-id="w-app"><b>Workspace app</b>Writes on every action, immediately</button>
+        <button class="node" data-id="w-sched"><b>Scheduler job</b>Closes forgotten workdays, hourly</button>
+        <button class="node" data-id="w-oneoff"><b>One-off load</b>By hand in Studio</button>
+      </div></div>
+      <div><p class="colhead">Postgres, schema <code>cma</code>: <span data-n="tables"></span> tables</p><div class="stack" id="doms"></div></div>
+      <div><p class="colhead">Schema <code>cma_read</code></p><div class="stack">
+        <button class="node read big" data-id="r-read"><div class="n" data-n="read"></div><b>reporting views</b><span data-n="overTables"></span> over tables, <span data-n="derived"></span> computed, <span data-n="dq"></span> data quality<div class="meta">Hashes, raw payloads and secrets left out</div></button>
+      </div></div>
+      <div><p class="colhead">Readers</p><div class="stack">
+        <button class="node read" data-id="q-bq"><b>BigQuery</b>As <code>bq_reader</code>, live per query<div class="meta">Dev live, prod not yet</div></button>
+        <button class="node read" data-id="q-noco"><b>NocoDB</b>Read-only table browser for the team<div class="meta">Live in dev and prod</div></button>
+      </div></div>
+    </div>
+  </div>
+  <p class="hint">Select the same box again to clear. The Workspace's own screens read the tables directly, not through <code>cma_read</code></p>
+</section>
+
+<section>
+  <h2>Tables and columns</h2>
+  <p class="sub">Every table in <code>cma</code>, grouped by what it holds. Open a table for its columns</p>
+  <div class="tools" id="chips"><input type="search" id="q" placeholder="Search a table or column" aria-label="Search a table or column"></div>
+  <div class="legend"><span><span class="c">column</span>visible in BigQuery</span><span><span class="c h">column</span>not in <code>cma_read</code></span></div>
+  <p class="count" id="count"></p>
+  <div class="list" id="list"></div>
+</section>
+
+<section class="two">
+  <div class="card">
+    <h2>Computed views</h2>
+    <p class="sub" style="margin:0">Only in <code>cma_read</code>, computed at query time from the tables above, with the same definitions the Workspace uses</p>
+    <div class="list" id="derived" style="grid-template-columns:1fr;margin-top:16px"></div>
+    <h3 style="margin-top:24px">Data-quality views</h3>
+    <p style="font-size:14px;margin:4px 0 0">Each lists the objects that fail one check, with the same five columns: tenant, connection, object type, object id, value</p>
+    <div class="colsbox" id="dq" style="padding:12px 0 0"></div>
+  </div>
+  <div class="card">
+    <h2>How Joshua queries it</h2>
+    <ul>
+      <li>He needs BigQuery Connection User on the project that holds the connection, plus the right to run query jobs (BigQuery Job User)</li>
+      <li>Each query is passed to Postgres as plain SQL inside <code>EXTERNAL_QUERY</code>; the result can be joined with BigQuery tables</li>
+      <li>Every running query holds one database connection, five are reserved for BigQuery. For dashboards that refresh often, a scheduled query copying into an EU dataset is lighter</li>
+    </ul>
+    <pre>SELECT *
+FROM EXTERNAL_QUERY(
+  "p4a-cma-dev.europe-west4.cma_dev_read",
+  """select business_date, market,
+            deals_created, calls_in, first_orders
+     from cma_read.intake_per_day_v
+     where business_date >= current_date - 30""");</pre>
+    <h3 style="margin-top:24px">What BigQuery does not see</h3>
+    <ul class="gaps">
+      <li>Raw source payloads, phone and caller hashes, tokens and secret names, the old and new values in the audit log: left out on purpose</li>
+      <li>The inbound service level and the calls overview (Reports, Inbound and Calls) exist only as Workspace functions; recomputing them from <code>telephony_call</code> risks different numbers</li>
+      <li>A Shopify customer's matched HubSpot contact is not in <code>cma_read.commerce_customer</code>; only <code>lead_to_order</code> uses it</li>
+      <li id="noview"></li>
+    </ul>
+  </div>
+</section>
+
+<p class="foot">Source of truth stays with the owning system: HubSpot for leads, deals and tickets, Aircall for call facts, Shopify for orders, the CMA for time, roster, people and messages. Postgres mirrors, it never overrules. Readers see both business lines unless their login is limited to one</p>
+</div>
+<script>
+/* DATA is written by tools/datamap/build.mjs from catalog.json and schema.json:
+   { meta: { built_at, generated_at, latest_migration },   // built_at is the snapshot's generated_at, so a build is reproducible
+     domains: [{ key, label }],
+     flows:   { <key>: { src, ways, doms } },   // src and ways: data-ids below (src null when none), doms: domain keys
+     tables:  [{ name, domain, what, how, inRead, columns: [{ n, t, r }] }],   // r: column visible in cma_read
+     derived: [{ name, what, columns: [{ n, t, r }] }],
+     dq: [view names], readCount } */
+const DATA = {
+"meta": {"built_at":"2026-10-15T03:46:29Z","generated_at":"2026-10-15T03:46:29Z","latest_migration":"0008l"},
+"domains": [
+{"key":"crm","label":"CRM mirror"},
+{"key":"telephony","label":"Telephony"},
+{"key":"commerce","label":"Commerce"},
+{"key":"connections","label":"Source settings and catalogs"},
+{"key":"time","label":"Time and roster"},
+{"key":"import","label":"Legacy time import"},
+{"key":"people","label":"People, roles and skills"},
+{"key":"messaging","label":"Messages and alerts"},
+{"key":"config","label":"Tenant and configuration"},
+{"key":"plumbing","label":"Ingest and audit"}
+],
+"flows": {
+"hubspot": {"src":"s-hubspot","ways":["w-ingest","w-jobs"],"doms":["crm","connections","messaging","plumbing"]},
+"aircall": {"src":"s-aircall","ways":["w-ingest","w-jobs"],"doms":["telephony","connections","plumbing"]},
+"shopify": {"src":"s-shopify","ways":["w-ingest","w-jobs"],"doms":["commerce","connections","plumbing"]},
+"workspace": {"src":"s-workspace","ways":["w-app"],"doms":["time","people","messaging","config","connections","telephony","plumbing"]},
+"sched": {"src":null,"ways":["w-sched"],"doms":["time","plumbing"]},
+"legacy": {"src":"s-legacy","ways":["w-oneoff"],"doms":["import"]}
+},
+"tables": [
+{"name":"crm_record","domain":"crm","what":"Deals and tickets: pipeline, stage, owner, market, closed","how":"HubSpot webhook, read back within seconds; nightly reconcile 02:30","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"record_type","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"pipeline_id","t":"text","r":true},{"n":"stage_id","t":"text","r":true},{"n":"owner_ref","t":"text","r":true},{"n":"contact_source_id","t":"text","r":true},{"n":"market","t":"text","r":true},{"n":"language","t":"text","r":true},{"n":"is_closed","t":"boolean","r":true},{"n":"closed_at","t":"timestamp with time zone","r":true},{"n":"source_created_at","t":"timestamp with time zone","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"amount","t":"numeric","r":false},{"n":"currency","t":"text","r":false},{"n":"source_channel","t":"text","r":false},{"n":"category","t":"text","r":false}]},
+{"name":"crm_contact","domain":"crm","what":"Thin contact: country, language, currency, store","how":"Read when a deal, call or ticket points to it; re-read every 10 min in its first hour; nightly reconcile","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"country","t":"text","r":true},{"n":"language","t":"text","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"currency","t":"text","r":true},{"n":"store","t":"text","r":true}]},
+{"name":"crm_contact_ref","domain":"crm","what":"A contact's ids in other systems, such as its Shopify id","how":"With every contact read","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"contact_id","t":"uuid","r":true},{"n":"system","t":"text","r":true},{"n":"external_id","t":"text","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"slot","t":"smallint","r":true}]},
+{"name":"crm_call","domain":"crm","what":"Call engagements logged on the contact","how":"HubSpot webhook; nightly reconcile","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"occurred_at","t":"timestamp with time zone","r":true},{"n":"direction","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"outcome_ref","t":"text","r":true},{"n":"duration_seconds","t":"integer","r":true},{"n":"owner_ref","t":"text","r":true},{"n":"source_app","t":"text","r":true},{"n":"counterpart_hash","t":"text","r":false},{"n":"source_created_at","t":"timestamp with time zone","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false}]},
+{"name":"crm_association","domain":"crm","what":"Links between CRM objects, such as deal to contact","how":"With every read-back","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"from_type","t":"text","r":true},{"n":"from_id","t":"text","r":true},{"n":"to_type","t":"text","r":true},{"n":"to_id","t":"text","r":true},{"n":"first_seen_at","t":"timestamp with time zone","r":true},{"n":"removed_at","t":"timestamp with time zone","r":true},{"n":"source_changed_at","t":"timestamp with time zone","r":true}]},
+{"name":"form_submission","domain":"crm","what":"Form submissions: form, page, UTM, contact id only","how":"Form poll every minute","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_id","t":"text","r":true},{"n":"source_form_id","t":"text","r":true},{"n":"submitted_at","t":"timestamp with time zone","r":true},{"n":"page_host","t":"text","r":true},{"n":"page_path","t":"text","r":true},{"n":"utm","t":"jsonb","r":true},{"n":"contact_source_id","t":"text","r":true},{"n":"contact_resolution","t":"text","r":true},{"n":"kept_values","t":"jsonb","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true}]},
+{"name":"telephony_call","domain":"telephony","what":"Calls: direction, start, answer, end, talk time, missed reason, line, user","how":"Aircall webhook per call event, call read back within seconds; nightly check; backfill by hand","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"direction","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"missed_reason","t":"text","r":true},{"n":"started_at","t":"timestamp with time zone","r":true},{"n":"answered_at","t":"timestamp with time zone","r":true},{"n":"ended_at","t":"timestamp with time zone","r":true},{"n":"duration_seconds","t":"integer","r":true},{"n":"talk_seconds","t":"integer","r":true},{"n":"user_ref","t":"text","r":true},{"n":"number_ref","t":"text","r":true},{"n":"counterpart_hash","t":"text","r":false},{"n":"is_archived","t":"boolean","r":true},{"n":"source_version_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false}]},
+{"name":"telephony_call_tag","domain":"telephony","what":"Tags on each call","how":"With the call read","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"call_source_id","t":"text","r":true},{"n":"tag_ref","t":"text","r":true},{"n":"tagged_at","t":"timestamp with time zone","r":true},{"n":"untagged_at","t":"timestamp with time zone","r":true}]},
+{"name":"telephony_number","domain":"telephony","what":"Lines, their market and whether they count","how":"Catalog at most hourly; counting set on Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"number_ref","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"digits","t":"text","r":true},{"n":"market","t":"text","r":true},{"n":"is_counted","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":false}]},
+{"name":"telephony_tag","domain":"telephony","what":"Tag catalog and whether a tag counts","how":"Catalog at most hourly; counting set on Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"tag_ref","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_counted","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":false}]},
+{"name":"telephony_missed_reason","domain":"telephony","what":"Missed-reason labels, service level and callback switches","how":"Seed, then Configuration → Sources","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"code","t":"text","r":true},{"n":"label","t":"text","r":true},{"n":"counts_in_service_level","t":"boolean","r":true},{"n":"needs_callback","t":"boolean","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"call_link","domain":"telephony","what":"Aircall call matched to its HubSpot call","how":"Sweep every minute, over the last 2 hours","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"telephony_call_id","t":"uuid","r":true},{"n":"crm_call_id","t":"uuid","r":true},{"n":"method","t":"text","r":true},{"n":"delta_seconds","t":"integer","r":true},{"n":"linked_at","t":"timestamp with time zone","r":true},{"n":"linked_by","t":"uuid","r":false},{"n":"unlinked_at","t":"timestamp with time zone","r":true},{"n":"unlinked_by","t":"uuid","r":false}]},
+{"name":"commerce_store","domain":"commerce","what":"One row per Shopify store: market, currency, zone","how":"Set per store at rollout","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"handle","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"market","t":"text","r":true},{"n":"currency","t":"text","r":true},{"n":"time_zone","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"commerce_customer","domain":"commerce","what":"Customer: state, order count, spend, matched CRM contact","how":"Shopify webhook, read back within seconds; nightly check; backfill per store","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"state","t":"text","r":true},{"n":"locale","t":"text","r":true},{"n":"orders_count","t":"integer","r":true},{"n":"amount_spent","t":"numeric","r":true},{"n":"amount_currency","t":"text","r":true},{"n":"source_created_at","t":"timestamp with time zone","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"phone_hash","t":"text","r":false},{"n":"crm_connection_id","t":"uuid","r":false},{"n":"crm_contact_source_id","t":"text","r":false},{"n":"matched_at","t":"timestamp with time zone","r":false}]},
+{"name":"commerce_order","domain":"commerce","what":"Order: amounts, status, kind (first, repeat, renewal), landing page, UTM","how":"Shopify webhook, read back within seconds; nightly check; backfill per store","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"order_name","t":"text","r":true},{"n":"customer_source_id","t":"text","r":true},{"n":"source_created_at","t":"timestamp with time zone","r":true},{"n":"processed_at","t":"timestamp with time zone","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"cancelled_at","t":"timestamp with time zone","r":true},{"n":"cancel_reason","t":"text","r":true},{"n":"is_test","t":"boolean","r":true},{"n":"currency","t":"text","r":true},{"n":"total_amount","t":"numeric","r":true},{"n":"subtotal_amount","t":"numeric","r":true},{"n":"tax_amount","t":"numeric","r":true},{"n":"discount_amount","t":"numeric","r":true},{"n":"refunded_amount","t":"numeric","r":true},{"n":"financial_status","t":"text","r":true},{"n":"fulfillment_status","t":"text","r":true},{"n":"source_name","t":"text","r":true},{"n":"app_ref","t":"text","r":true},{"n":"landing_host","t":"text","r":true},{"n":"landing_path","t":"text","r":true},{"n":"utm","t":"jsonb","r":true},{"n":"referring_host","t":"text","r":true},{"n":"tags","t":"_text","r":true},{"n":"prior_orders_count","t":"integer","r":true},{"n":"prior_count_exact","t":"boolean","r":true},{"n":"order_kind","t":"text","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"phone_hash","t":"text","r":false}]},
+{"name":"commerce_order_line","domain":"commerce","what":"Order lines: SKU, quantity, price","how":"With the order read","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"order_source_id","t":"text","r":true},{"n":"line_source_id","t":"text","r":true},{"n":"sku","t":"text","r":true},{"n":"product_ref","t":"text","r":true},{"n":"variant_ref","t":"text","r":true},{"n":"quantity","t":"integer","r":true},{"n":"unit_price","t":"numeric","r":true},{"n":"currency","t":"text","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true}]},
+{"name":"integration_connection","domain":"connections","what":"One row per connected account (portal, Aircall account, store)","how":"Configuration → Sources","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":false},{"n":"adapter","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"external_account_id","t":"text","r":true},{"n":"signing_secret_name","t":"text","r":false},{"n":"token_secret_name","t":"text","r":false},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"settings","t":"jsonb","r":false},{"n":"kind","t":"text","r":true}]},
+{"name":"connection_pipeline","domain":"connections","what":"CRM pipelines, counted or routed","how":"Catalog at most hourly; switches on Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"record_type","t":"text","r":true},{"n":"source_pipeline_id","t":"text","r":true},{"n":"label","t":"text","r":true},{"n":"is_counted","t":"boolean","r":true},{"n":"is_routed","t":"boolean","r":true},{"n":"work_type_skill_id","t":"uuid","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true},{"n":"created_at","t":"timestamp with time zone","r":false},{"n":"updated_at","t":"timestamp with time zone","r":false},{"n":"is_lead","t":"boolean","r":true}]},
+{"name":"connection_stage","domain":"connections","what":"CRM pipeline stages, closed or open","how":"Catalog at most hourly","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"record_type","t":"text","r":true},{"n":"source_pipeline_id","t":"text","r":true},{"n":"source_stage_id","t":"text","r":true},{"n":"label","t":"text","r":true},{"n":"display_order","t":"integer","r":true},{"n":"is_closed","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true}]},
+{"name":"connection_call_outcome","domain":"connections","what":"CRM call outcomes, connected or not","how":"Catalog at most hourly","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"outcome_ref","t":"text","r":true},{"n":"label","t":"text","r":true},{"n":"is_connected","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":false}]},
+{"name":"connection_form","domain":"connections","what":"CRM forms, counted, market, kept fields","how":"Form catalog hourly; switches on Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_form_id","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_counted","t":"boolean","r":true},{"n":"lead_source","t":"text","r":true},{"n":"market","t":"text","r":true},{"n":"kept_fields","t":"_text","r":true},{"n":"status","t":"text","r":true},{"n":"refreshed_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":false}]},
+{"name":"connection_field","domain":"connections","what":"Which source property feeds which CMA field","how":"Configuration","inRead":false,"columns":[{"n":"tenant_id","t":"uuid","r":false},{"n":"connection_id","t":"uuid","r":false},{"n":"entity","t":"text","r":false},{"n":"field","t":"text","r":false},{"n":"ref_system","t":"text","r":false},{"n":"source_property","t":"text","r":false},{"n":"updated_at","t":"timestamp with time zone","r":false},{"n":"slot","t":"smallint","r":false}]},
+{"name":"writeback_field","domain":"connections","what":"Fields the CMA may write back to the CRM","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"field","t":"text","r":true},{"n":"slot","t":"smallint","r":true},{"n":"target_property","t":"text","r":true},{"n":"mode","t":"text","r":true},{"n":"enabled","t":"boolean","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"workday","domain":"time","what":"One workday per person and date","how":"Clock in and out in the Workspace, immediately; hourly job closes forgotten days","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"business_date","t":"date","r":true},{"n":"timezone","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"started_at","t":"timestamp with time zone","r":true},{"n":"ended_at","t":"timestamp with time zone","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"time_event","domain":"time","what":"Clock in, status changes, clock out, corrections","how":"Every click in the Workspace, immediately; corrections by supervisors","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"workday_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"kind","t":"text","r":true},{"n":"status_id","t":"uuid","r":true},{"n":"occurred_at","t":"timestamp with time zone","r":true},{"n":"recorded_at","t":"timestamp with time zone","r":true},{"n":"source","t":"text","r":true},{"n":"supersedes_event_id","t":"uuid","r":true},{"n":"reason","t":"text","r":true},{"n":"approved_by","t":"uuid","r":true},{"n":"import_batch_id","t":"uuid","r":true}]},
+{"name":"roster_week","domain":"time","what":"A team's roster week and its version","how":"Roster screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"team_id","t":"uuid","r":true},{"n":"week_start","t":"date","r":true},{"n":"status","t":"text","r":true},{"n":"version","t":"integer","r":true},{"n":"published_at","t":"timestamp with time zone","r":true},{"n":"published_by","t":"uuid","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"created_by","t":"uuid","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"roster_entry","domain":"time","what":"Planned shifts and absences","how":"Roster screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"roster_week_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"business_date","t":"date","r":true},{"n":"kind","t":"text","r":true},{"n":"start_time","t":"time without time zone","r":true},{"n":"end_time","t":"time without time zone","r":true},{"n":"absence_type_id","t":"uuid","r":true},{"n":"note","t":"text","r":true},{"n":"recorded_at","t":"timestamp with time zone","r":true},{"n":"recorded_by","t":"uuid","r":true},{"n":"valid_to","t":"timestamp with time zone","r":true},{"n":"superseded_by","t":"uuid","r":true}]},
+{"name":"roster_publication","domain":"time","what":"Each published version of a week","how":"Publish on the Roster screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"roster_week_id","t":"uuid","r":true},{"n":"version","t":"integer","r":true},{"n":"published_at","t":"timestamp with time zone","r":true},{"n":"published_by","t":"uuid","r":true}]},
+{"name":"import_batch","domain":"import","what":"The import batch steam-2026","how":"One-off, 12 October 2026","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"source_system","t":"text","r":true},{"n":"file_name","t":"text","r":false},{"n":"period_from","t":"date","r":true},{"n":"period_to","t":"date","r":true},{"n":"timezone","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"work_status_key","t":"text","r":true},{"n":"gap_status_key","t":"text","r":true},{"n":"window_start","t":"time without time zone","r":true},{"n":"window_end","t":"time without time zone","r":true},{"n":"open_session_end","t":"time without time zone","r":true},{"n":"loaded_by","t":"uuid","r":true},{"n":"loaded_at","t":"timestamp with time zone","r":true},{"n":"counts","t":"jsonb","r":true},{"n":"voided_by","t":"uuid","r":true},{"n":"voided_at","t":"timestamp with time zone","r":true},{"n":"void_reason","t":"text","r":false},{"n":"created_by","t":"uuid","r":false},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"import_day","domain":"import","what":"Imported days per person","how":"One-off","inRead":false,"columns":[{"n":"id","t":"uuid","r":false},{"n":"tenant_id","t":"uuid","r":false},{"n":"batch_id","t":"uuid","r":false},{"n":"workday_id","t":"uuid","r":false},{"n":"user_id","t":"uuid","r":false},{"n":"business_date","t":"date","r":false},{"n":"end_event_id","t":"uuid","r":false},{"n":"sessions","t":"integer","r":false},{"n":"sessions_merged","t":"integer","r":false},{"n":"seconds","t":"bigint","r":false},{"n":"closed_by_rule","t":"boolean","r":false},{"n":"clipped","t":"boolean","r":false},{"n":"created_at","t":"timestamp with time zone","r":false}]},
+{"name":"import_person_map","domain":"import","what":"Old system's person id to CMA person","how":"One-off","inRead":false,"columns":[{"n":"tenant_id","t":"uuid","r":false},{"n":"batch_id","t":"uuid","r":false},{"n":"external_person_id","t":"text","r":false},{"n":"user_id","t":"uuid","r":false},{"n":"created_at","t":"timestamp with time zone","r":false}]},
+{"name":"import_session","domain":"import","what":"Raw login sessions from the export (2 January to 9 October 2026)","how":"One-off","inRead":false,"columns":[{"n":"id","t":"uuid","r":false},{"n":"tenant_id","t":"uuid","r":false},{"n":"batch_id","t":"uuid","r":false},{"n":"external_person_id","t":"text","r":false},{"n":"external_person_name","t":"text","r":false},{"n":"external_session_id","t":"text","r":false},{"n":"login_local","t":"timestamp without time zone","r":false},{"n":"logout_local","t":"timestamp without time zone","r":false},{"n":"role","t":"text","r":false},{"n":"recorded_at","t":"timestamp with time zone","r":false}]},
+{"name":"app_user","domain":"people","what":"People and system users","how":"People screen, invitations","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"organisation_id","t":"uuid","r":true},{"n":"email","t":"text","r":true},{"n":"display_name","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"timezone","t":"text","r":true},{"n":"kind","t":"text","r":true}]},
+{"name":"app_user_external_id","domain":"people","what":"A person's HubSpot owner id and Aircall user id","how":"People screen","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"system","t":"text","r":true},{"n":"external_id","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true}]},
+{"name":"app_role","domain":"people","what":"Roles per tenant","how":"Seed, Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_system","t":"boolean","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"is_assignable","t":"boolean","r":false}]},
+{"name":"permission","domain":"people","what":"Permission catalog","how":"Defined by migrations","inRead":true,"columns":[{"n":"key","t":"text","r":true},{"n":"description","t":"text","r":true}]},
+{"name":"role_permission","domain":"people","what":"Which role holds which permission","how":"Seed, Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"role_id","t":"uuid","r":true},{"n":"permission_key","t":"text","r":true}]},
+{"name":"user_role","domain":"people","what":"A person's role, optionally scoped","how":"People screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"role_id","t":"uuid","r":true},{"n":"scope_type","t":"text","r":true},{"n":"scope_id","t":"uuid","r":true},{"n":"granted_at","t":"timestamp with time zone","r":true},{"n":"granted_by","t":"uuid","r":true}]},
+{"name":"invitation","domain":"people","what":"Email invitations with role and teams","how":"People screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"email","t":"text","r":true},{"n":"display_name","t":"text","r":true},{"n":"locale","t":"text","r":true},{"n":"role_id","t":"uuid","r":true},{"n":"organisation_id","t":"uuid","r":true},{"n":"team_ids","t":"_uuid","r":true},{"n":"skills","t":"jsonb","r":true},{"n":"token_hash","t":"text","r":false},{"n":"created_by","t":"uuid","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"expires_at","t":"timestamp with time zone","r":true},{"n":"renewed_at","t":"timestamp with time zone","r":true},{"n":"renewed_by","t":"uuid","r":true},{"n":"accepted_at","t":"timestamp with time zone","r":true},{"n":"accepted_user_id","t":"uuid","r":true},{"n":"revoked_at","t":"timestamp with time zone","r":true},{"n":"revoked_by","t":"uuid","r":true}]},
+{"name":"team","domain":"people","what":"Teams and their markets","how":"Teams screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"markets","t":"_text","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"valid_from","t":"timestamp with time zone","r":true},{"n":"valid_to","t":"timestamp with time zone","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"team_member","domain":"people","what":"Team membership over time","how":"Teams screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"team_id","t":"uuid","r":true},{"n":"valid_from","t":"timestamp with time zone","r":true},{"n":"valid_to","t":"timestamp with time zone","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"created_by","t":"uuid","r":true}]},
+{"name":"skill","domain":"people","what":"Skills (language, work type)","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"dimension","t":"text","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"skill_level","domain":"people","what":"Level names per skill dimension","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"dimension","t":"text","r":true},{"n":"level","t":"smallint","r":true},{"n":"name","t":"text","r":true}]},
+{"name":"user_skill","domain":"people","what":"A person's skills and levels over time","how":"People screen","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"skill_id","t":"uuid","r":true},{"n":"level","t":"smallint","r":true},{"n":"valid_from","t":"timestamp with time zone","r":true},{"n":"valid_to","t":"timestamp with time zone","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"created_by","t":"uuid","r":true}]},
+{"name":"coverage_target","domain":"people","what":"Minimum people per team, skill and weekday","how":"Roster screen","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"team_id","t":"uuid","r":true},{"n":"skill_id","t":"uuid","r":true},{"n":"weekday","t":"smallint","r":true},{"n":"min_count","t":"integer","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"updated_by","t":"uuid","r":true}]},
+{"name":"message","domain":"messaging","what":"Messages and alerts, with a link to the record","how":"Messages screen, or a rule when a lead is assigned","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"kind","t":"text","r":true},{"n":"urgency","t":"text","r":true},{"n":"title","t":"text","r":true},{"n":"body","t":"text","r":true},{"n":"ref_system","t":"text","r":true},{"n":"ref_type","t":"text","r":true},{"n":"ref_id","t":"text","r":true},{"n":"ref_url","t":"text","r":true},{"n":"rule_id","t":"uuid","r":true},{"n":"target","t":"jsonb","r":true},{"n":"sender_user_id","t":"uuid","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"expires_at","t":"timestamp with time zone","r":true}]},
+{"name":"message_delivery","domain":"messaging","what":"Per recipient: delivered, read, acknowledged","how":"As the person opens the message","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"message_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"delivered_at","t":"timestamp with time zone","r":true},{"n":"read_at","t":"timestamp with time zone","r":true},{"n":"acknowledged_at","t":"timestamp with time zone","r":true}]},
+{"name":"message_rule","domain":"messaging","what":"Alert rules","how":"Configuration → alert rules","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"name","t":"text","r":true},{"n":"trigger","t":"text","r":true},{"n":"record_type","t":"text","r":true},{"n":"pipeline_ids","t":"_text","r":true},{"n":"audience_permission","t":"text","r":true},{"n":"match_language","t":"boolean","r":true},{"n":"only_clocked_in","t":"boolean","r":true},{"n":"fallback_permission","t":"text","r":true},{"n":"urgency","t":"text","r":true},{"n":"enabled","t":"boolean","r":true},{"n":"max_age_minutes","t":"integer","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"tenant","domain":"config","what":"Business lines (Subscriptions, Invest)","how":"Seed","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"slug","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"timezone","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"tenant_setting","domain":"config","what":"Settings per tenant","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"value","t":"text","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"updated_by","t":"uuid","r":true}]},
+{"name":"setting","domain":"config","what":"Settings catalog with defaults","how":"Defined by migrations","inRead":true,"columns":[{"n":"key","t":"text","r":true},{"n":"value_type","t":"text","r":true},{"n":"allowed_values","t":"_text","r":true},{"n":"default_value","t":"text","r":true},{"n":"description","t":"text","r":true}]},
+{"name":"organisation","domain":"config","what":"Employers (Pulse4all, Newco)","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true},{"n":"timezone","t":"text","r":true}]},
+{"name":"market","domain":"config","what":"Markets: zone, language, currency","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"code","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"time_zone","t":"text","r":true},{"n":"language_code","t":"text","r":true},{"n":"language_skill_key","t":"text","r":true},{"n":"min_language_level","t":"smallint","r":true},{"n":"currency","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"market_alias","domain":"config","what":"Other spellings mapped to a market code","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"alias","t":"text","r":true},{"n":"code","t":"text","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"business_hours","domain":"config","what":"Opening hours per market and weekday","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"market","t":"text","r":true},{"n":"weekday","t":"smallint","r":true},{"n":"opens_at","t":"time without time zone","r":true},{"n":"closes_at","t":"time without time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"business_holiday","domain":"config","what":"Holidays per market","how":"Configuration","inRead":true,"columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"market","t":"text","r":true},{"n":"day","t":"date","r":true},{"n":"name","t":"text","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"channel","domain":"config","what":"Channels: phone, email, chat","how":"Seed","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_synchronous","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"app_link","domain":"config","what":"Links to other apps on the Welcome page","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"label","t":"text","r":true},{"n":"address","t":"text","r":true},{"n":"permission_key","t":"text","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"absence_type","domain":"config","what":"Absence types (paid or not)","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_paid","t":"boolean","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"work_status","domain":"config","what":"Statuses: working, productive, paid, billable","how":"Configuration","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"key","t":"text","r":true},{"n":"name","t":"text","r":true},{"n":"is_working","t":"boolean","r":true},{"n":"is_productive","t":"boolean","r":true},{"n":"is_paid","t":"boolean","r":true},{"n":"is_billable","t":"boolean","r":true},{"n":"is_default","t":"boolean","r":true},{"n":"sort_order","t":"integer","r":true},{"n":"status","t":"text","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"updated_at","t":"timestamp with time zone","r":true}]},
+{"name":"schema_migration","domain":"config","what":"Which migrations ran when","how":"Each migration","inRead":false,"columns":[{"n":"version","t":"text","r":false},{"n":"description","t":"text","r":false},{"n":"applied_at","t":"timestamp with time zone","r":false},{"n":"applied_by","t":"text","r":false}]},
+{"name":"ingest_event","domain":"plumbing","what":"Every incoming event and its processing state","how":"Each webhook or sync event; sweep retries every minute","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"event_key","t":"text","r":false},{"n":"source_type","t":"text","r":true},{"n":"kind","t":"text","r":true},{"n":"object_type","t":"text","r":true},{"n":"object_id","t":"text","r":true},{"n":"property_name","t":"text","r":true},{"n":"occurred_at","t":"timestamp with time zone","r":true},{"n":"recorded_at","t":"timestamp with time zone","r":true},{"n":"delivery_attempt","t":"integer","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"status","t":"text","r":true},{"n":"attempts","t":"integer","r":true},{"n":"next_attempt_at","t":"timestamp with time zone","r":false},{"n":"error","t":"text","r":true},{"n":"processed_at","t":"timestamp with time zone","r":true}]},
+{"name":"sync_run","domain":"plumbing","what":"Every job run with counts","how":"Each sweep, form poll, reconcile and backfill","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"job","t":"text","r":true},{"n":"stream","t":"text","r":true},{"n":"from_at","t":"timestamp with time zone","r":true},{"n":"to_at","t":"timestamp with time zone","r":true},{"n":"started_at","t":"timestamp with time zone","r":true},{"n":"started_by","t":"uuid","r":false},{"n":"finished_at","t":"timestamp with time zone","r":true},{"n":"status","t":"text","r":true},{"n":"counts","t":"jsonb","r":true},{"n":"error","t":"text","r":true}]},
+{"name":"sync_cursor","domain":"plumbing","what":"Where each job resumes","how":"Each job run","inRead":false,"columns":[{"n":"tenant_id","t":"uuid","r":false},{"n":"connection_id","t":"uuid","r":false},{"n":"stream","t":"text","r":false},{"n":"cursor","t":"jsonb","r":false},{"n":"updated_at","t":"timestamp with time zone","r":false}]},
+{"name":"outbox_action","domain":"plumbing","what":"Actions out to the CRM","how":"Worker by hand; unused since 13 October","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"action","t":"text","r":true},{"n":"target_type","t":"text","r":true},{"n":"target_id","t":"text","r":true},{"n":"payload","t":"jsonb","r":true},{"n":"dedupe_key","t":"text","r":false},{"n":"reason","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"attempts","t":"integer","r":true},{"n":"next_attempt_at","t":"timestamp with time zone","r":true},{"n":"claimed_at","t":"timestamp with time zone","r":true},{"n":"sent_at","t":"timestamp with time zone","r":true},{"n":"result","t":"jsonb","r":true},{"n":"error","t":"text","r":true},{"n":"created_by","t":"uuid","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"resolved_by","t":"uuid","r":true},{"n":"resolved_at","t":"timestamp with time zone","r":true}]},
+{"name":"audit_log","domain":"plumbing","what":"Who changed what and when","how":"Database trigger on every change","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"table_name","t":"text","r":true},{"n":"action","t":"text","r":true},{"n":"row_id","t":"text","r":true},{"n":"old_row","t":"jsonb","r":false},{"n":"new_row","t":"jsonb","r":false},{"n":"changed_at","t":"timestamp with time zone","r":true},{"n":"actor_user_id","t":"uuid","r":true},{"n":"actor_label","t":"text","r":true},{"n":"actor_db_role","t":"text","r":true},{"n":"actor_login","t":"text","r":true}]}
+],
+"derived": [
+{"name":"speed_to_lead","what":"Per lead: first call, agent, time to first attempt in business hours, within target","columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"deal_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"deal_source_id","t":"text","r":true},{"n":"pipeline_id","t":"text","r":true},{"n":"pipeline_label","t":"text","r":true},{"n":"business_date","t":"date","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"market","t":"text","r":true},{"n":"market_source","t":"text","r":true},{"n":"is_closed","t":"boolean","r":true},{"n":"status","t":"text","r":true},{"n":"first_call_id","t":"uuid","r":true},{"n":"first_call_source_id","t":"text","r":true},{"n":"first_call_at","t":"timestamp with time zone","r":true},{"n":"first_call_linked","t":"boolean","r":true},{"n":"first_any_call_at","t":"timestamp with time zone","r":true},{"n":"first_any_direction","t":"text","r":true},{"n":"inbound_first","t":"boolean","r":true},{"n":"first_connected_at","t":"timestamp with time zone","r":true},{"n":"agent_user_id","t":"uuid","r":true},{"n":"agent_ref","t":"text","r":true},{"n":"agent_from","t":"text","r":true},{"n":"elapsed_seconds","t":"integer","r":true},{"n":"business_seconds","t":"integer","r":true},{"n":"target_seconds","t":"integer","r":true},{"n":"within_target","t":"boolean","r":true},{"n":"next_business_noon","t":"timestamp with time zone","r":true},{"n":"before_next_noon","t":"boolean","r":true},{"n":"waiting_business_seconds","t":"integer","r":true}]},
+{"name":"lead_to_order","what":"Per lead: the first order it led to and days to order","columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"deal_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"deal_source_id","t":"text","r":true},{"n":"pipeline_id","t":"text","r":true},{"n":"pipeline_label","t":"text","r":true},{"n":"business_date","t":"date","r":true},{"n":"created_at","t":"timestamp with time zone","r":true},{"n":"market","t":"text","r":true},{"n":"customers_linked","t":"integer","r":true},{"n":"order_id","t":"uuid","r":true},{"n":"order_connection_id","t":"uuid","r":true},{"n":"order_source_id","t":"text","r":true},{"n":"store_handle","t":"text","r":true},{"n":"order_created_at","t":"timestamp with time zone","r":true},{"n":"order_kind","t":"text","r":true},{"n":"order_currency","t":"text","r":true},{"n":"order_total","t":"numeric","r":true},{"n":"days_to_order","t":"numeric","r":true}]},
+{"name":"intake_per_day_v","what":"Per day and market: forms, deals, tickets, calls, new customers, orders, renewals","columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"business_date","t":"date","r":true},{"n":"market","t":"text","r":true},{"n":"form_submissions","t":"integer","r":true},{"n":"deals_created","t":"integer","r":true},{"n":"deals_closed","t":"integer","r":true},{"n":"tickets_created","t":"integer","r":true},{"n":"tickets_closed","t":"integer","r":true},{"n":"calls_in","t":"integer","r":true},{"n":"calls_out","t":"integer","r":true},{"n":"tagged_calls","t":"integer","r":true},{"n":"new_customers","t":"integer","r":true},{"n":"first_orders","t":"integer","r":true},{"n":"repeat_orders","t":"integer","r":true},{"n":"renewals","t":"integer","r":true}]},
+{"name":"crm_record_detail","what":"Amount, currency, channel and category of deals and tickets","columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"record_type","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"amount","t":"numeric","r":true},{"n":"currency","t":"text","r":true},{"n":"source_channel","t":"text","r":true},{"n":"category","t":"text","r":true}]},
+{"name":"workday_summary","what":"Per workday: working, productive, paid and billable seconds","columns":[{"n":"workday_id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"business_date","t":"date","r":true},{"n":"timezone","t":"text","r":true},{"n":"status","t":"text","r":true},{"n":"started_at","t":"timestamp with time zone","r":true},{"n":"ended_at","t":"timestamp with time zone","r":true},{"n":"working_seconds","t":"bigint","r":true},{"n":"productive_seconds","t":"bigint","r":true},{"n":"paid_seconds","t":"bigint","r":true},{"n":"billable_seconds","t":"bigint","r":true},{"n":"is_capped","t":"boolean","r":true},{"n":"needs_correction","t":"boolean","r":true},{"n":"has_correction","t":"boolean","r":true},{"n":"current_status_id","t":"uuid","r":true}]},
+{"name":"time_interval","what":"Every status interval with its length","columns":[{"n":"tenant_id","t":"uuid","r":true},{"n":"workday_id","t":"uuid","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"event_id","t":"uuid","r":true},{"n":"status_id","t":"uuid","r":true},{"n":"from_at","t":"timestamp with time zone","r":true},{"n":"to_at","t":"timestamp with time zone","r":true},{"n":"is_open","t":"boolean","r":true},{"n":"is_capped","t":"boolean","r":true},{"n":"seconds","t":"bigint","r":true}]},
+{"name":"roster_published_entry","what":"The published version of every roster entry","columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"roster_week_id","t":"uuid","r":true},{"n":"team_id","t":"uuid","r":true},{"n":"week_start","t":"date","r":true},{"n":"version","t":"integer","r":true},{"n":"published_at","t":"timestamp with time zone","r":true},{"n":"user_id","t":"uuid","r":true},{"n":"business_date","t":"date","r":true},{"n":"kind","t":"text","r":true},{"n":"start_time","t":"time without time zone","r":true},{"n":"end_time","t":"time without time zone","r":true},{"n":"absence_type_id","t":"uuid","r":true},{"n":"note","t":"text","r":true},{"n":"recorded_at","t":"timestamp with time zone","r":true},{"n":"recorded_by","t":"uuid","r":true}]}
+],
+"dq": ["dq_commerce_ambiguous","dq_commerce_unmatched","dq_contact_country_differs","dq_contact_slots_full","dq_crm_call_without_contact","dq_customer_in_two_stores","dq_deal_contact_incomplete","dq_deal_without_contact","dq_form_without_market","dq_market_not_in_catalog","dq_owner_without_person","dq_pipeline_unreviewed","dq_telephony_call_unlinked","dq_telephony_user_without_person","dq_writeback_parked"],
+"readCount": 82
+};
+const fmtDate = s => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' });
+const N = { tables: DATA.tables.length, read: DATA.readCount, overTables: DATA.tables.filter(t => t.inRead).length, derived: DATA.derived.length, dq: DATA.dq.length };
+document.querySelectorAll('[data-n]').forEach(e => e.textContent = N[e.dataset.n]);
+document.getElementById('stamp').textContent = `Schema as of migration ${DATA.meta.latest_migration}, snapshot of ${fmtDate(DATA.meta.generated_at)}, from which this page is built. Both business lines share one database`;
+const nv = DATA.tables.filter(t => !t.inRead).map(t => t.name);
+document.getElementById('noview').innerHTML = nv.length ? `${nv.length} tables have no view: ${nv.map(n => `<code>${n}</code>`).join(', ')}` : 'Every table has a view';
+const doms = DATA.domains;
+const byDom = {};
+DATA.tables.forEach(t => (byDom[t.domain] = byDom[t.domain] || []).push(t));
+
+// domain nodes
+const domWrap = document.getElementById('doms');
+doms.forEach(d => {
+  const b = document.createElement('button');
+  b.className = 'node dom'; b.dataset.id = 'd-' + d.key;
+  b.innerHTML = `<b>${d.label}</b><span>${byDom[d.key].length} tables</span>`;
+  domWrap.appendChild(b);
+});
+
+// flows (catalog.json): each source, its way in and the domains it fills
+const F = DATA.flows;
+const E = [], seenE = new Set();
+const add = (a,b,f) => { const k = a+'>'+b; if (!seenE.has(k)) { seenE.add(k); E.push({a,b,f:new Set()}); } E.find(e => e.a===a && e.b===b).f.add(f); };
+Object.entries(F).forEach(([k,f]) => {
+  f.ways.forEach(w => { if (f.src) add(f.src, w, k); f.doms.forEach(d => add(w, 'd-'+d, k)); });
+});
+doms.forEach(d => E.push({a:'d-'+d.key, b:'r-read', f:null}));
+E.push({a:'r-read', b:'q-bq', f:null}, {a:'r-read', b:'q-noco', f:null});
+const map = document.getElementById('map'), svg = document.getElementById('wires');
+const node = id => map.querySelector(`[data-id="${id}"]`);
+function draw(){
+  const r0 = map.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${r0.width} ${r0.height}`);
+  svg.innerHTML = E.map((e,i) => {
+    const A = node(e.a).getBoundingClientRect(), B = node(e.b).getBoundingClientRect();
+    const x1 = A.right - r0.left, y1 = A.top + A.height/2 - r0.top;
+    const x2 = B.left - r0.left, y2 = B.top + B.height/2 - r0.top, m = (x2 - x1) / 2;
+    return `<path data-i="${i}" d="M${x1},${y1} C${x1+m},${y1} ${x2-m},${y2} ${x2},${y2}"/>`;
+  }).join('');
+  if (sel) highlight(sel);
+}
+let sel = null;
+function flowsOf(id){
+  const all = Object.keys(F);
+  if (id === 'r-read' || id.startsWith('q-')) return all;
+  if (id.startsWith('d-')) return all.filter(k => F[k].doms.includes(id.slice(2)));
+  if (id.startsWith('w-')) return all.filter(k => F[k].ways.includes(id));
+  return all.filter(k => F[k].src === id);
+}
+function highlight(id){
+  const fl = flowsOf(id), on = new Set(['r-read','q-bq','q-noco']);
+  const onlyDom = id.startsWith('d-') ? id : null;
+  fl.forEach(k => { const f = F[k]; if (f.src) on.add(f.src); f.ways.forEach(w => on.add(w));
+    f.doms.forEach(d => { if (!onlyDom || 'd-'+d === onlyDom) on.add('d-'+d); }); });
+  if (id === 'q-noco' || id === 'q-bq') on.delete(id === 'q-bq' ? 'q-noco' : 'q-bq');
+  map.classList.add('focus');
+  map.querySelectorAll('.node').forEach(n => n.classList.toggle('on', on.has(n.dataset.id)));
+  svg.querySelectorAll('path').forEach(p => { const e = E[p.dataset.i];
+    const lit = on.has(e.a) && on.has(e.b) && (!e.f || fl.some(k => e.f.has(k)));
+    p.classList.toggle('on', lit); });
+}
+map.addEventListener('click', e => {
+  const n = e.target.closest('.node'); if (!n) return;
+  const id = n.dataset.id;
+  if (sel === id) { sel = null; map.classList.remove('focus'); map.querySelectorAll('.on').forEach(x => x.classList.remove('on')); return; }
+  sel = id; highlight(id);
+  if (id.startsWith('d-')) setDomain(id.slice(2));
+});
+new ResizeObserver(draw).observe(map);
+document.fonts && document.fonts.ready.then(draw);
+
+// explorer
+let dom = 'all';
+const chips = document.getElementById('chips'), q = document.getElementById('q');
+[['all','All']].concat(doms.map(d => [d.key, d.label])).forEach(([k,l]) => {
+  const c = document.createElement('button'); c.className = 'chip'; c.dataset.k = k; c.textContent = l;
+  c.setAttribute('aria-pressed', k === 'all'); c.onclick = () => setDomain(k);
+  chips.insertBefore(c, q);
+});
+function setDomain(k){ dom = k; chips.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.k === k)); render(); }
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ty = t => ({'timestamp with time zone':'timestamptz','timestamp without time zone':'timestamp','character varying':'varchar','time without time zone':'time','double precision':'float8'}[t] || t);
+const colChips = cols => cols.map(c => `<span class="c${c.r ? '' : ' h'}" title="${c.r ? '' : 'Not in cma_read'}">${esc(c.n)}<i>${esc(ty(c.t))}</i></span>`).join('');
+function card(t, open){
+  const hidden = t.columns.filter(c => !c.r).length;
+  const bq = t.inRead ? `<span class="bq y">In BigQuery${hidden ? `, ${hidden} hidden` : ''}</span>` : `<span class="bq n">Not in BigQuery</span>`;
+  const label = doms.find(d => d.key === t.domain).label;
+  return `<details class="t"${open ? ' open' : ''}><summary><span class="tn">${esc(t.name)}</span>${bq}
+    <span class="tw">${esc(t.what)}</span><span class="th">${esc(label)}: ${esc(t.how)}</span></summary>
+    <div class="colsbox">${colChips(t.columns)}</div></details>`;
+}
+function render(){
+  const term = q.value.trim().toLowerCase();
+  const rows = DATA.tables.filter(t => (dom === 'all' || t.domain === dom) &&
+    (!term || t.name.includes(term) || t.what.toLowerCase().includes(term) || t.columns.some(c => c.n.includes(term))));
+  document.getElementById('list').innerHTML = rows.map(t => card(t, term && !t.name.includes(term))).join('');
+  const cols = rows.reduce((n,t) => n + t.columns.length, 0);
+  document.getElementById('count').textContent = rows.length ? `${rows.length} tables, ${cols} columns` : 'No table or column matches this search';
+}
+q.addEventListener('input', render);
+render();
+
+document.getElementById('derived').innerHTML = DATA.derived.map(t =>
+  `<details class="t"><summary><span class="tn">${esc(t.name)}</span><span class="bq y">In BigQuery</span><span class="tw">${esc(t.what)}</span></summary><div class="colsbox">${colChips(t.columns)}</div></details>`).join('');
+document.getElementById('dq').innerHTML = DATA.dq.map(n => `<span class="c">${esc(n)}</span>`).join('');
+
+</script>
+</body>
+</html>

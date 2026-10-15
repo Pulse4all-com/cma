@@ -1,0 +1,498 @@
+{
+  "_about": "Hand-maintained part of the CMA data map. Every table in schema cma has one entry under a group; every computed view in cma_read (not a table view, not dq_*) has one entry under derived. flows are the paths the page draws: per source its box (src, a data-id in template.html, null when it has none), its ways in (ways, data-ids) and the groups it fills (doms, group keys); every group is in at least one flow. Columns come from schema.json, never from here. Edit, then run node tools/datamap/build.mjs.",
+  "groups": [
+    {
+      "key": "crm",
+      "label": "CRM mirror",
+      "tables": [
+        {
+          "name": "crm_record",
+          "what": "Deals and tickets: pipeline, stage, owner, market, closed",
+          "how": "HubSpot webhook, read back within seconds; nightly reconcile 02:30"
+        },
+        {
+          "name": "crm_contact",
+          "what": "Thin contact: country, language, currency, store",
+          "how": "Read when a deal, call or ticket points to it; re-read every 10 min in its first hour; nightly reconcile"
+        },
+        {
+          "name": "crm_contact_ref",
+          "what": "A contact's ids in other systems, such as its Shopify id",
+          "how": "With every contact read"
+        },
+        {
+          "name": "crm_call",
+          "what": "Call engagements logged on the contact",
+          "how": "HubSpot webhook; nightly reconcile"
+        },
+        {
+          "name": "crm_association",
+          "what": "Links between CRM objects, such as deal to contact",
+          "how": "With every read-back"
+        },
+        {
+          "name": "form_submission",
+          "what": "Form submissions: form, page, UTM, contact id only",
+          "how": "Form poll every minute"
+        }
+      ]
+    },
+    {
+      "key": "telephony",
+      "label": "Telephony",
+      "tables": [
+        {
+          "name": "telephony_call",
+          "what": "Calls: direction, start, answer, end, talk time, missed reason, line, user",
+          "how": "Aircall webhook per call event, call read back within seconds; nightly check; backfill by hand"
+        },
+        {
+          "name": "telephony_call_tag",
+          "what": "Tags on each call",
+          "how": "With the call read"
+        },
+        {
+          "name": "telephony_number",
+          "what": "Lines, their market and whether they count",
+          "how": "Catalog at most hourly; counting set on Configuration"
+        },
+        {
+          "name": "telephony_tag",
+          "what": "Tag catalog and whether a tag counts",
+          "how": "Catalog at most hourly; counting set on Configuration"
+        },
+        {
+          "name": "telephony_missed_reason",
+          "what": "Missed-reason labels, service level and callback switches",
+          "how": "Seed, then Configuration → Sources"
+        },
+        {
+          "name": "call_link",
+          "what": "Aircall call matched to its HubSpot call",
+          "how": "Sweep every minute, over the last 2 hours"
+        }
+      ]
+    },
+    {
+      "key": "commerce",
+      "label": "Commerce",
+      "tables": [
+        {
+          "name": "commerce_store",
+          "what": "One row per Shopify store: market, currency, zone",
+          "how": "Set per store at rollout"
+        },
+        {
+          "name": "commerce_customer",
+          "what": "Customer: state, order count, spend, matched CRM contact",
+          "how": "Shopify webhook, read back within seconds; nightly check; backfill per store"
+        },
+        {
+          "name": "commerce_order",
+          "what": "Order: amounts, status, kind (first, repeat, renewal), landing page, UTM",
+          "how": "Shopify webhook, read back within seconds; nightly check; backfill per store"
+        },
+        {
+          "name": "commerce_order_line",
+          "what": "Order lines: SKU, quantity, price",
+          "how": "With the order read"
+        }
+      ]
+    },
+    {
+      "key": "connections",
+      "label": "Source settings and catalogs",
+      "tables": [
+        {
+          "name": "integration_connection",
+          "what": "One row per connected account (portal, Aircall account, store)",
+          "how": "Configuration → Sources"
+        },
+        {
+          "name": "connection_pipeline",
+          "what": "CRM pipelines, counted or routed",
+          "how": "Catalog at most hourly; switches on Configuration"
+        },
+        {
+          "name": "connection_stage",
+          "what": "CRM pipeline stages, closed or open",
+          "how": "Catalog at most hourly"
+        },
+        {
+          "name": "connection_call_outcome",
+          "what": "CRM call outcomes, connected or not",
+          "how": "Catalog at most hourly"
+        },
+        {
+          "name": "connection_form",
+          "what": "CRM forms, counted, market, kept fields",
+          "how": "Form catalog hourly; switches on Configuration"
+        },
+        {
+          "name": "connection_field",
+          "what": "Which source property feeds which CMA field",
+          "how": "Configuration"
+        },
+        {
+          "name": "writeback_field",
+          "what": "Fields the CMA may write back to the CRM",
+          "how": "Configuration"
+        }
+      ]
+    },
+    {
+      "key": "time",
+      "label": "Time and roster",
+      "tables": [
+        {
+          "name": "workday",
+          "what": "One workday per person and date",
+          "how": "Clock in and out in the Workspace, immediately; hourly job closes forgotten days"
+        },
+        {
+          "name": "time_event",
+          "what": "Clock in, status changes, clock out, corrections",
+          "how": "Every click in the Workspace, immediately; corrections by supervisors"
+        },
+        {
+          "name": "roster_week",
+          "what": "A team's roster week and its version",
+          "how": "Roster screen"
+        },
+        {
+          "name": "roster_entry",
+          "what": "Planned shifts and absences",
+          "how": "Roster screen"
+        },
+        {
+          "name": "roster_publication",
+          "what": "Each published version of a week",
+          "how": "Publish on the Roster screen"
+        }
+      ]
+    },
+    {
+      "key": "import",
+      "label": "Legacy time import",
+      "tables": [
+        {
+          "name": "import_batch",
+          "what": "The import batch steam-2026",
+          "how": "One-off, 12 October 2026"
+        },
+        {
+          "name": "import_day",
+          "what": "Imported days per person",
+          "how": "One-off"
+        },
+        {
+          "name": "import_person_map",
+          "what": "Old system's person id to CMA person",
+          "how": "One-off"
+        },
+        {
+          "name": "import_session",
+          "what": "Raw login sessions from the export (2 January to 9 October 2026)",
+          "how": "One-off"
+        }
+      ]
+    },
+    {
+      "key": "people",
+      "label": "People, roles and skills",
+      "tables": [
+        {
+          "name": "app_user",
+          "what": "People and system users",
+          "how": "People screen, invitations"
+        },
+        {
+          "name": "app_user_external_id",
+          "what": "A person's HubSpot owner id and Aircall user id",
+          "how": "People screen"
+        },
+        {
+          "name": "app_role",
+          "what": "Roles per tenant",
+          "how": "Seed, Configuration"
+        },
+        {
+          "name": "permission",
+          "what": "Permission catalog",
+          "how": "Defined by migrations"
+        },
+        {
+          "name": "role_permission",
+          "what": "Which role holds which permission",
+          "how": "Seed, Configuration"
+        },
+        {
+          "name": "user_role",
+          "what": "A person's role, optionally scoped",
+          "how": "People screen"
+        },
+        {
+          "name": "invitation",
+          "what": "Email invitations with role and teams",
+          "how": "People screen"
+        },
+        {
+          "name": "team",
+          "what": "Teams and their markets",
+          "how": "Teams screen"
+        },
+        {
+          "name": "team_member",
+          "what": "Team membership over time",
+          "how": "Teams screen"
+        },
+        {
+          "name": "skill",
+          "what": "Skills (language, work type)",
+          "how": "Configuration"
+        },
+        {
+          "name": "skill_level",
+          "what": "Level names per skill dimension",
+          "how": "Configuration"
+        },
+        {
+          "name": "user_skill",
+          "what": "A person's skills and levels over time",
+          "how": "People screen"
+        },
+        {
+          "name": "coverage_target",
+          "what": "Minimum people per team, skill and weekday",
+          "how": "Roster screen"
+        }
+      ]
+    },
+    {
+      "key": "messaging",
+      "label": "Messages and alerts",
+      "tables": [
+        {
+          "name": "message",
+          "what": "Messages and alerts, with a link to the record",
+          "how": "Messages screen, or a rule when a lead is assigned"
+        },
+        {
+          "name": "message_delivery",
+          "what": "Per recipient: delivered, read, acknowledged",
+          "how": "As the person opens the message"
+        },
+        {
+          "name": "message_rule",
+          "what": "Alert rules",
+          "how": "Configuration → alert rules"
+        }
+      ]
+    },
+    {
+      "key": "config",
+      "label": "Tenant and configuration",
+      "tables": [
+        {
+          "name": "tenant",
+          "what": "Business lines (Subscriptions, Invest)",
+          "how": "Seed"
+        },
+        {
+          "name": "tenant_setting",
+          "what": "Settings per tenant",
+          "how": "Configuration"
+        },
+        {
+          "name": "setting",
+          "what": "Settings catalog with defaults",
+          "how": "Defined by migrations"
+        },
+        {
+          "name": "organisation",
+          "what": "Employers (Pulse4all, Newco)",
+          "how": "Configuration"
+        },
+        {
+          "name": "market",
+          "what": "Markets: zone, language, currency",
+          "how": "Configuration"
+        },
+        {
+          "name": "market_alias",
+          "what": "Other spellings mapped to a market code",
+          "how": "Configuration"
+        },
+        {
+          "name": "business_hours",
+          "what": "Opening hours per market and weekday",
+          "how": "Configuration"
+        },
+        {
+          "name": "business_holiday",
+          "what": "Holidays per market",
+          "how": "Configuration"
+        },
+        {
+          "name": "channel",
+          "what": "Channels: phone, email, chat",
+          "how": "Seed"
+        },
+        {
+          "name": "app_link",
+          "what": "Links to other apps on the Welcome page",
+          "how": "Configuration"
+        },
+        {
+          "name": "absence_type",
+          "what": "Absence types (paid or not)",
+          "how": "Configuration"
+        },
+        {
+          "name": "work_status",
+          "what": "Statuses: working, productive, paid, billable",
+          "how": "Configuration"
+        },
+        {
+          "name": "schema_migration",
+          "what": "Which migrations ran when",
+          "how": "Each migration"
+        }
+      ]
+    },
+    {
+      "key": "plumbing",
+      "label": "Ingest and audit",
+      "tables": [
+        {
+          "name": "ingest_event",
+          "what": "Every incoming event and its processing state",
+          "how": "Each webhook or sync event; sweep retries every minute"
+        },
+        {
+          "name": "sync_run",
+          "what": "Every job run with counts",
+          "how": "Each sweep, form poll, reconcile and backfill"
+        },
+        {
+          "name": "sync_cursor",
+          "what": "Where each job resumes",
+          "how": "Each job run"
+        },
+        {
+          "name": "outbox_action",
+          "what": "Actions out to the CRM",
+          "how": "Worker by hand; unused since 13 October"
+        },
+        {
+          "name": "audit_log",
+          "what": "Who changed what and when",
+          "how": "Database trigger on every change"
+        }
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "name": "speed_to_lead",
+      "what": "Per lead: first call, agent, time to first attempt in business hours, within target"
+    },
+    {
+      "name": "lead_to_order",
+      "what": "Per lead: the first order it led to and days to order"
+    },
+    {
+      "name": "intake_per_day_v",
+      "what": "Per day and market: forms, deals, tickets, calls, new customers, orders, renewals"
+    },
+    {
+      "name": "crm_record_detail",
+      "what": "Amount, currency, channel and category of deals and tickets"
+    },
+    {
+      "name": "workday_summary",
+      "what": "Per workday: working, productive, paid and billable seconds"
+    },
+    {
+      "name": "time_interval",
+      "what": "Every status interval with its length"
+    },
+    {
+      "name": "roster_published_entry",
+      "what": "The published version of every roster entry"
+    }
+  ],
+  "flows": {
+    "hubspot": {
+      "src": "s-hubspot",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "crm",
+        "connections",
+        "messaging",
+        "plumbing"
+      ]
+    },
+    "aircall": {
+      "src": "s-aircall",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "telephony",
+        "connections",
+        "plumbing"
+      ]
+    },
+    "shopify": {
+      "src": "s-shopify",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "commerce",
+        "connections",
+        "plumbing"
+      ]
+    },
+    "workspace": {
+      "src": "s-workspace",
+      "ways": [
+        "w-app"
+      ],
+      "doms": [
+        "time",
+        "people",
+        "messaging",
+        "config",
+        "connections",
+        "telephony",
+        "plumbing"
+      ]
+    },
+    "sched": {
+      "src": null,
+      "ways": [
+        "w-sched"
+      ],
+      "doms": [
+        "time",
+        "plumbing"
+      ]
+    },
+    "legacy": {
+      "src": "s-legacy",
+      "ways": [
+        "w-oneoff"
+      ],
+      "doms": [
+        "import"
+      ]
+    }
+  }
+}
