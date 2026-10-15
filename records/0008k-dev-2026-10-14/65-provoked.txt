@@ -1,0 +1,37 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/provoke.sql:60: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+                                      check_name                                       |        result        |                              detail                               
+---------------------------------------------------------------------------------------+----------------------+-------------------------------------------------------------------
+ A1 addition 0008k recorded                                                            | FAIL                 | provoked
+ A2 the functions are the application's only, in the caller's rights, returning a date | FAIL                 | 
+ B1 reports.view or performance.team reads the history start; refusals                 | FAIL                 | 2026-10-01 2026-10-01 2026-10-01 | 3 of 3 refusals
+ B2 a tenant without a call that counts has no history start (null)                    | FAIL                 | null null null (3 stored)
+ B3 the earliest business date in its line's zone, not the tenant's                    | FAIL                 | 2026-10-01 | in Amsterdam 2026-10-02 | back 2026-10-01
+ B4 a deleted earliest call is left out                                                | FAIL                 | 2026-09-25 then 2026-10-01 (deleted rows 1)
+ B5 a call on a line that does not count is left out                                   | FAIL                 | skipped_uncounted_line; stored 1; 2026-10-01 | counted 2026-09-20
+ B6 tenant isolation with equal refs, also in the owner's rights                       | FAIL                 | 2026-10-01/null | 2026-09-01/null | 2026-10-01/2026-09-01
+ B7 the Calls overview holds no call before the history start and one on its date      | FAIL                 | 2026-10-01: before 0, on it NL=1,US=1
+ B8 the first call that counts after weeks of calls that do not                        | FAIL                 | 2026-10-10
+ B9 a later call on an earlier date, past the end of the earliest call's window        | FAIL                 | 2026-09-26 | KI 2026-09-27, UM 2026-09-26
+ verdict                                                                               | PROVOKED, NOT A PASS | 0 PASS, 11 FAIL
+(12 rows)
+
+DROP FUNCTION
+RESET
