@@ -1,5 +1,10 @@
 #!/bin/bash
 echo "gcloud $*" >> "$FAKE_LOG"
+# --[no-]public-access-prevention and --[no-]pap are boolean flags: gcloud refuses a value (exit 2)
+for a in "$@"; do case "$a" in
+  --public-access-prevention=*|--pap=*) echo "ERROR: (gcloud.storage.buckets) argument --public-access-prevention/--pap: ignored explicit argument '${a#*=}'" >&2; exit 2 ;;
+  --no-public-access-prevention=*|--no-pap=*) echo "ERROR: (gcloud.storage.buckets) unrecognized arguments: $a" >&2; exit 2 ;;
+esac; done
 args="$*"
 case "$args" in
   *"org-policies describe"*) echo "${FAKE_PAP:-}"; exit 0 ;;

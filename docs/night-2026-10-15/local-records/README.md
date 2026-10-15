@@ -32,7 +32,7 @@ The full `verify/api.mjs` was not run. At 23:00 in Amsterdam it stops on the see
 
 | File | What |
 |---|---|
-| `fake-gcloud/` | Two stand-ins for `gcloud`, each answering reads with canned data. `gcloud-read-only` refuses every change and counts the calls that would change something; `gcloud-permissive` accepts them. Also the three URL maps the dry runs used: `map1.json` has no host rule for the Workspace, `map2.json` a host rule with pathRules, `map3.json` priority 1 taken. |
+| `fake-gcloud/` | Two stand-ins for `gcloud`, each answering reads with canned data. `gcloud-read-only` refuses every change and counts the calls that would change something; `gcloud-permissive` accepts them. Since 15 October 2026, after the first `--apply` in prod stopped on it, both refuse a value on `--public-access-prevention` or `--pap` (exit 2, gcloud's message), as gcloud does; the night's outputs below were made before that. Also the three URL maps the dry runs used: `map1.json` has no host rule for the Workspace, `map2.json` a host rule with pathRules, `map3.json` priority 1 taken. |
 | `deploy-dev-dry-run.txt` | Dev: bucket only, 0 changing calls. |
 | `deploy-prod-dry-run-no-host-rule.txt`, `deploy-prod-dry-run-path-rules.txt` | Prod dry runs on `map1` and `map2`: the plan, the generated validate tests, 0 changing calls. |
 | `deploy-prod-dry-run-priority-taken.txt` | Prod on `map3`: stops at the plan and changes nothing. |

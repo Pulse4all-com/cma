@@ -142,7 +142,7 @@ if gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" --forma
   [ "${loc,,}" = "$REGION" ] || { echo "b. STOP: gs://${BUCKET} is in ${loc}, not ${REGION}"; exit 1; }
 else
   change gcloud storage buckets create "gs://${BUCKET}" --project="$PROJECT" --location="$REGION" \
-    --uniform-bucket-level-access --public-access-prevention=inherited
+    --uniform-bucket-level-access --no-public-access-prevention
 fi
 # Public read means allUsers holds roles/storage.legacyObjectReader: an object read by its name, no listing.
 # Any other role allUsers holds on the bucket stops the script, and so does a policy it cannot read
