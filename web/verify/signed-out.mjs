@@ -17,9 +17,14 @@
  * The bucket and the route (Gemini audit of #128, findings 1.2 and 2.1): docs/signed-out/deploy.sh grants allUsers
  * roles/storage.legacyObjectReader (an object by its name, no listing) and stops on any other role allUsers holds;
  * docs/signed-out/urlmap.py, run with python3 on the fixture verify/signed-out-urlmap.json, plans exactly the three
- * route rules, keeps the default service and the ingest host rule, writes the three new url-map tests, and
- * changes nothing on a rerun. The bucket's create passes --no-public-access-prevention: gcloud takes
- * --[no-]public-access-prevention (--[no-]pap) as a boolean and refuses a value, as the first --apply in prod found.
+ * route rules, keeps the default service and the ingest host rule, and writes the three new url-map tests. The
+ * bucket's create passes --no-public-access-prevention: gcloud takes --[no-]public-access-prevention (--[no-]pap)
+ * as a boolean and refuses a value, as the first --apply in prod found. After the second --apply in prod (15 October
+ * 2026), which re-imported an unchanged map: a rerun on the planned map writes no new map, only the map as it is for
+ * validate, and deploy.sh then validates and does not import; the new map keeps the fingerprint of the map as read,
+ * deploy.sh compares it with the live one before the import and stops on a difference or a 412, and the restore
+ * command it prints writes the live fingerprint into a copy of the export, since the export's own is stale once the
+ * map changes and later gcloud versions refuse a stale one with 412.
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -87,6 +92,17 @@ if (PROVOKE) {
   urlmapSrc = urlmapSrc
     .replace('"matchRules": [{"fullPathMatch": SIGNED_OUT}, {"prefixMatch": SIGNED_OUT + "/"}]', '"matchRules": [{"prefixMatch": SIGNED_OUT}]')
     .replace('"redirectResponseCode": "FOUND"', '"redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT"');
+  // the second prod --apply's re-import of an unchanged map, a new map without the fingerprint, the plain import of
+  // a stale export as the restore command
+  urlmapSrc = urlmapSrc
+    .replace('nothing to change")\n            json.dump(new, open(validate_path, "w"), indent=2)',
+      'nothing to change")\n            json.dump(new, open(new_path, "w"), indent=2)\n            json.dump(new, open(validate_path, "w"), indent=2)')
+    .replace('    json.dump(new, open(new_path, "w"), indent=2)\n    json.dump({**new, "tests": tests}',
+      '    json.dump({k: v for k, v in new.items() if k != "fingerprint"}, open(new_path, "w"), indent=2)\n    json.dump({**new, "tests": tests}');
+  deploySrc = deploySrc
+    .replace('if [ ! -f "${WORK}/urlmap-new.json" ]; then', "if false; then")
+    .replace('[ "$live_fp" = "$planned_fp" ] || changed_since_export', "true")
+    .replace("--source=${RESTORE} --quiet", "--source=${EXPORT} --quiet");
 }
 
 // ---- the page ---------------------------------------------------------------------------------------
@@ -282,8 +298,6 @@ else {
   const tests = (validate.tests ?? []).map(canon);
   for (const t of wantTests) if (!tests.includes(canon(t))) urlmapProblems.push(`no url-map test ${canon(t)}`);
   if ("tests" in after) urlmapProblems.push("the imported map carries the tests");
-  const again = plan("new.json", "rerun");
-  if (again.status !== 0 || !/nothing to change/.test(again.stdout) || canon(readJson("rerun.json")) !== canon(after)) urlmapProblems.push("a rerun on the new map changes something");
 }
 // The Workspace with a path matcher of its own: priorities 1 to 3 are reserved, pathRules convert from 10 on
 const withMatcher = (matcher) => ({ ...urlmapFixture, hostRules: [...urlmapFixture.hostRules, { hosts: [HOST], pathMatcher: "web" }],
@@ -298,8 +312,54 @@ if (!converted || "pathRules" in converted ||
     canon((converted.routeRules ?? []).map(undescribed)) !== canon([...wantRules, { priority: 10, matchRules: [{ prefixMatch: "/api/" }], service: WEB }])) {
   urlmapProblems.push("a matcher's pathRules are not converted behind the three rules from priority 10");
 }
+// A rerun on the planned map: the three rules are in place, so no new map, only the map as it is for validate
+const unchangedProblems = [];
+// The lock: the new map keeps the fingerprint of the map as read; a map without one stops the plan
+const lockProblems = [];
+if (!after) {
+  unchangedProblems.push("no plan to rerun");
+  lockProblems.push("no plan");
+} else {
+  const again = plan("new.json", "rerun");
+  if (again.status !== 0 || !/nothing to change/.test(again.stdout)) unchangedProblems.push("a rerun on the new map does not find the three rules in place");
+  if (existsSync(join(work, "rerun.json"))) unchangedProblems.push("a rerun on the new map writes a new map to import");
+  if (canon(readJson("rerun-validate.json")) !== canon(after)) unchangedProblems.push("a rerun does not write the map as it is for validate");
+  if (after.fingerprint !== urlmapFixture.fingerprint) lockProblems.push(`the new map's fingerprint is ${after.fingerprint ?? "missing"}, not the map's as read`);
+}
+writeFileSync(join(work, "bare.json"), JSON.stringify(Object.fromEntries(Object.entries(urlmapFixture).filter(([k]) => k !== "fingerprint"))));
+const bare = plan("bare.json", "bare-new");
+if (bare.status !== 1 || !/STOP: the map as read has no fingerprint/.test(bare.stdout) || existsSync(join(work, "bare-new.json"))) {
+  lockProblems.push("a map without a fingerprint does not stop the plan");
+}
 rmSync(work, { recursive: true, force: true });
 check("urlmap.py on the fixture: exactly the three route rules, the default service and the ingest host rule kept, the new tests", urlmapProblems);
+
+// deploy.sh: the import only when there is a new map, after validate; an unchanged map says so
+const guard = 'if [ ! -f "${WORK}/urlmap-new.json" ]; then\n  echo "e. map unchanged, no import"\nelse\n';
+const imports = [...deploySrc.matchAll(/url-maps import "\$URLMAP"/g)].map((m) => m.index);
+const guardAt = deploySrc.indexOf(guard);
+const guardEnd = guardAt < 0 ? -1 : deploySrc.indexOf("\nfi\n", guardAt);
+check("an unchanged plan is validated, not imported: urlmap.py writes no new map, deploy.sh imports only a new one", [
+  ...unchangedProblems,
+  ...(guardAt < 0 ? ["deploy.sh does not skip the import without a new map (\"e. map unchanged, no import\")"] : []),
+  ...(imports.length !== 1 ? [`${imports.length} url-maps imports in deploy.sh`] : []),
+  ...imports.filter((i) => guardAt < 0 || i < guardAt || i > guardEnd).map(() => "the import is outside the branch for a new map"),
+  ...(guardAt >= 0 && deploySrc.indexOf("gcloud compute url-maps validate") > guardAt ? ["validate does not come first"] : []),
+]);
+
+// deploy.sh: the live fingerprint against the planned one before the import, a 412 from it, the restore command
+const lockAt = deploySrc.indexOf('[ "$live_fp" = "$planned_fp" ] || changed_since_export');
+check("the import is locked on the map as read (its fingerprint kept, compared, a 412 stops), the restore writes the live one", [
+  ...lockProblems,
+  ...(!deploySrc.includes(`planned_fp="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["fingerprint"])' "\${WORK}/urlmap-new.json")"`) ? ["the planned fingerprint is not read from urlmap-new.json"] : []),
+  ...(!deploySrc.includes(`live_fp="$(gcloud compute url-maps describe "$URLMAP" --project="$PROJECT" --global --format='value(fingerprint)')"`) ? ["the live fingerprint is not read"] : []),
+  ...(lockAt < 0 || lockAt > (imports[0] ?? -1) ? ["the two fingerprints are not compared before the import"] : []),
+  ...(!deploySrc.includes(`|| { grep -Eq '^ERROR: .*(412|conditionNotMet)' "\${WORK}/urlmap-import.txt" && changed_since_export; exit 1; }`) ? ["a 412 from the import does not stop as a changed map"] : []),
+  ...(!deploySrc.includes('echo "e. STOP: ${URLMAP} changed since the export; nothing was imported, rerun"') ? ["the STOP line for a changed map is missing"] : []),
+  ...(!deploySrc.includes(`{ grep -v '^fingerprint:' \${EXPORT}; echo "fingerprint: '\\$fp'"; } > \${RESTORE}`) ? ["the restore does not write the live fingerprint into a copy"] : []),
+  ...(!deploySrc.includes("--global --source=${RESTORE} --quiet") ? ["the restore does not import the copy"] : []),
+  ...(deploySrc.includes("--source=${EXPORT}") ? ["the export itself is imported, with its stale fingerprint"] : []),
+]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

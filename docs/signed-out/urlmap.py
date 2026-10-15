@@ -19,7 +19,10 @@ fullPathMatch, a path ending in /* to prefixMatch (without the *), longer paths 
 prefix of the same length (a path rule's longest match); a path rule with its own routeAction or redirect, or a
 * elsewhere, stops the plan.
 Then the new map, with the change taken out again, must equal the old one: any other difference stops it.
-Rerunning when the three rules are in place changes nothing. Exit 1 with a STOP line on anything unexpected.
+The new map keeps the fingerprint of the map as read (a map without one stops the plan), so deploy.sh can refuse
+to import over a map that changed since. Rerunning when the three rules are in place writes no new map, only the
+map as it is for validate: deploy.sh then validates and does not import. Exit 1 with a STOP line on anything
+unexpected.
 
 check: the JSON of `gcloud compute url-maps validate --format=json`: the map must load and every test pass.
 """
@@ -129,7 +132,6 @@ def plan(before_path, host, web, bucket, new_path, validate_path):
         mine = sorted((r for r in existing if r.get("priority") in MINE), key=lambda r: r["priority"])
         if [r["priority"] for r in mine] == list(MINE) and all(effect(r) == effect(n) for r, n in zip(mine, new_rules)):
             print("e. plan: the three route rules are in place; nothing to change")
-            json.dump(new, open(new_path, "w"), indent=2)
             json.dump(new, open(validate_path, "w"), indent=2)
             return
         if mine:
@@ -202,6 +204,8 @@ def plan(before_path, host, web, bucket, new_path, validate_path):
     tests.append({"host": host, "path": SIGNED_OUT + "/logo-blue.png", "service": bucket})
     tests.append({"host": host, "path": SIGNED_OUT + "x", "service": web})
     tests.append({"host": "cma-urlmap-test.invalid", "path": "/", "service": new["defaultService"]})
+    if not new.get("fingerprint"):
+        stop("the map as read has no fingerprint, so its import could not be refused if the map changed since")
     json.dump(new, open(new_path, "w"), indent=2)
     json.dump({**new, "tests": tests}, open(validate_path, "w"), indent=2)
     print(f"e. plan written: {new_path} (imported), {validate_path} (with {len(tests)} tests, validated only)")

@@ -1,5 +1,8 @@
 #!/bin/bash
 echo "gcloud $*" >> "$FAKE_LOG"
+# The URL map lives in $FAKE_URLMAP (urlmap-state.py); FAKE_URLMAP_CHANGE=after-plan (at validate) or
+# after-check (right after the fingerprint is read) has someone else change it before the import
+STATE="$(dirname "$(readlink -f "$0")")/urlmap-state.py"
 # --[no-]public-access-prevention and --[no-]pap are boolean flags: gcloud refuses a value (exit 2)
 for a in "$@"; do case "$a" in
   --public-access-prevention=*|--pap=*) echo "ERROR: (gcloud.storage.buckets) argument --public-access-prevention/--pap: ignored explicit argument '${a#*=}'" >&2; exit 2 ;;
@@ -14,9 +17,14 @@ case "$args" in
   *"ssl-certificates describe"*) echo "workspace.example.test"; exit 0 ;;
   *"backend-services describe"*"loadBalancingScheme"*) echo EXTERNAL_MANAGED; exit 0 ;;
   *"backend-services describe"*"selfLink"*) echo "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend"; exit 0 ;;
-  *"url-maps export"*) dest="${args##*--destination=}"; dest="${dest%% *}"; echo "# fake export" > "$dest"; exit 0 ;;
+  *"url-maps export"*) dest="${args##*--destination=}"; dest="${dest%% *}"; python3 "$STATE" export "$FAKE_URLMAP" "$dest"; exit 0 ;;
+  *"url-maps describe"*"value(fingerprint)"*) python3 "$STATE" describe "$FAKE_URLMAP" fingerprint
+    [ "${FAKE_URLMAP_CHANGE:-}" = after-check ] && python3 "$STATE" change "$FAKE_URLMAP"; exit 0 ;;
   *"url-maps describe"*) cat "$FAKE_URLMAP"; exit 0 ;;
-  *"url-maps validate"*) echo '{"result":{"loadSucceeded":true,"testPassed":true}}'; exit 0 ;;
+  *"url-maps validate"*) [ "${FAKE_URLMAP_CHANGE:-}" = after-plan ] && python3 "$STATE" change "$FAKE_URLMAP"
+    echo '{"result":{"loadSucceeded":true,"testPassed":true}}'; exit 0 ;;
+  *"url-maps import"*) echo "MUTATION $args" >> "$FAKE_LOG"; src="${args##*--source=}"; src="${src%% *}"
+    python3 "$STATE" import "$FAKE_URLMAP" "$src"; exit $? ;;
   *"storage ls"*) printf "gs://p4a-cma-prod-signed-out/signed-out\ngs://p4a-cma-prod-signed-out/signed-out/logo-blue.png\ngs://p4a-cma-prod-signed-out/signed-out/Montserrat-VF.ttf\n${FAKE_EXTRA:-}"; exit 0 ;;
   *) echo "MUTATION $args" >> "$FAKE_LOG"; exit 0 ;;
 esac

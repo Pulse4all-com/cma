@@ -1,0 +1,61 @@
+== signed-out page, prod (p4a-cma-prod); applying
+   local files in /home/martin/signed-out-prod-20261015T060142Z
+a. storage.publicAccessPrevention is not enforced for p4a-cma-prod (effective policy: False)
+e. cma-web-urlmap exported to /home/martin/cma-web-urlmap-20261015T060142Z.yaml. To put it back as it was:
+   gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=/home/martin/cma-web-urlmap-20261015T060142Z.yaml --quiet
+e. plan: workspace.pulse4all.app has no host rule (the map's default service serves it): add path matcher cma-web (default service as the map's) with the three route rules, and a host rule for workspace.pulse4all.app
+e. check: apart from the three route rules (and a converted path matcher's same matching), the map is as exported
+e. plan written: /home/martin/signed-out-prod-20261015T060142Z/urlmap-new.json (imported), /home/martin/signed-out-prod-20261015T060142Z/urlmap-validate.json (with 9 tests, validated only)
++ gcloud storage buckets create gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --location=europe-west4 --uniform-bucket-level-access --no-public-access-prevention
+Creating gs://p4a-cma-prod-signed-out/...
++ gcloud storage buckets add-iam-policy-binding gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --member=allUsers --role=roles/storage.legacyObjectReader
+bindings:
+- members:
+  - projectEditor:p4a-cma-prod
+  - projectOwner:p4a-cma-prod
+  role: roles/storage.legacyBucketOwner
+- members:
+  - projectViewer:p4a-cma-prod
+  role: roles/storage.legacyBucketReader
+- members:
+  - projectEditor:p4a-cma-prod
+  - projectOwner:p4a-cma-prod
+  role: roles/storage.legacyObjectOwner
+- members:
+  - allUsers
+  - projectViewer:p4a-cma-prod
+  role: roles/storage.legacyObjectReader
+etag: CAI=
+kind: storage#policy
+resourceId: projects/_/buckets/p4a-cma-prod-signed-out
+version: 1
+c. page rendered: /home/martin/signed-out-prod-20261015T060142Z/signed-out.html (script sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM=)
++ gcloud storage cp /home/martin/signed-out-prod-20261015T060142Z/signed-out.html gs://p4a-cma-prod-signed-out/signed-out "--content-type=text/html; charset=utf-8" "--cache-control=public, max-age=300"
+Copying file:///home/martin/signed-out-prod-20261015T060142Z/signed-out.html to gs://p4a-cma-prod-signed-out/signed-out
+  
+
++ gcloud storage cp /home/martin/signed-out-prod-20261015T060142Z/logo-blue.png gs://p4a-cma-prod-signed-out/signed-out/logo-blue.png "--cache-control=public, max-age=300"
+Copying file:///home/martin/signed-out-prod-20261015T060142Z/logo-blue.png to gs://p4a-cma-prod-signed-out/signed-out/logo-blue.png
+  
+
++ gcloud storage cp /home/martin/cma/web/src/fonts/Montserrat-VF.ttf gs://p4a-cma-prod-signed-out/signed-out/Montserrat-VF.ttf --content-type=font/ttf "--cache-control=public, max-age=300"
+Copying file:///home/martin/cma/web/src/fonts/Montserrat-VF.ttf to gs://p4a-cma-prod-signed-out/signed-out/Montserrat-VF.ttf
+  
+.
+c. gs://p4a-cma-prod-signed-out holds exactly: signed-out signed-out/logo-blue.png signed-out/Montserrat-VF.ttf
++ gcloud compute backend-buckets create cma-signed-out-backend --project=p4a-cma-prod --gcs-bucket-name=p4a-cma-prod-signed-out --no-enable-cdn "--custom-response-header=Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM='; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" "--custom-response-header=X-Content-Type-Options: nosniff" "--custom-response-header=Referrer-Policy: no-referrer"
+Created [https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendBuckets/cma-signed-out-backend].
+NAME: cma-signed-out-backend
+GCS_BUCKET_NAME: p4a-cma-prod-signed-out
+ENABLE_CDN: False
+e. validate: the map loads and every test passes
++ gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=/home/martin/signed-out-prod-20261015T060142Z/urlmap-new.json --quiet
+WARNING: An up-to-date fingerprint must be provided to update the Url Map. Future versions of gcloud will fail with an error '412 conditionNotMet'
+Updating URL map...
+...........done.
+== done
+   Then the test plan in docs/signed-out/README.md (a to e), in a browser:
+   https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE should land on https://workspace.pulse4all.app/signed-out, signed out;
+   https://workspace.pulse4all.app/signed-out/ redirects there, and https://workspace.pulse4all.app/signed-outx asks for a sign-in (IAP).
+   Only after a to e: set _LOGOUT_TARGET=signed-out on the trigger and rebuild (README, Build and deploy).
+   To undo the route: the import command above, then _LOGOUT_TARGET=legacy.
