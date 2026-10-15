@@ -1,0 +1,26 @@
+PASS  the fixture converts                                 got 0
+PASS  counts                                               got {"rows_read":"8","sessions_deduplicated":"0","sessions_written":"6","s
+PASS  the staging header                                   got "batch_key,external_person_id,external_person_name,external_session_id
+PASS  ISO local times, an open session without a logout    got ["verify-sample,1001,Test Account A,90001,2026-01-02T08:59:12,2026-01-
+PASS  an unpadded hour and a quoted name                   got "verify-sample,1002,\"Account, B\",90004,2026-01-05T07:45:00,2026-01-0
+PASS  excluded and absent accounts are dropped             got [false,false]
+PASS  map statement: included accounts, emails lowercased  got ["('1001', 'account.a@example.com')","('1002', 'account.b@example.com'
+PASS  the map statement names its batch and no other       got true
+PASS  column names and the date format are options         got [0,"verify-sample,1001,Test Account A,s1,2026-03-02T09:00:00,2026-03-0
+PASS  without the options the columns are missing          got 1
+PASS  refused: the spring gap                              got [1,true,true]
+PASS  refused: a duplicate session                         got [1,true,true]
+PASS  refused: a logout before its login                   got [1,true,true]
+PASS  refused: a time that does not read                   got [1,true,true]
+PASS  refused: a row without a session id                  got [1,true,true]
+PASS  refused: a malformed batch key                       got [2,false]
+PASS  refused: duplicated session ids without the option   got [1,true,true]
+PASS  deduplicated: counts                                 got [0,"7","3","4","1","0"]
+PASS  deduplicated: the latest logout is kept, an open one as latest got ["verify-sample,1001,Test Account A,91001,2026-02-02T09:00:00,2026-02-
+PASS  refused with the option: one id, another login or account got [[1,true],[1,true]]
+PASS  refused: an unknown dedupe rule                      got [2,true]
+PASS  a map template lists every account of the export     got [0,["steam_pid,work_email,include,steam_name,sessions,first_day,last_d
+PASS  the tool prints no name and no email                 got false
+
+ALL 23 PASS
+exit 0

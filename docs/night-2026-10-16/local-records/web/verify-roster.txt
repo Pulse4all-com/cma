@@ -1,0 +1,39 @@
+PASS  9-17 is a nine to five shift                               got {"cell":{"kind":"shift","start":"09:00","end":"17:00"}}
+PASS  9:30-18 with minutes                                       got {"cell":{"kind":"shift","start":"09:30","end":"18:00"}}
+PASS  dots, h and u as separators, en dash between               got {"cell":{"kind":"shift","start":"09:30","end":"17:45"}}
+PASS  four digits without a separator                            got {"cell":{"kind":"shift","start":"08:30","end":"17:00"}}
+PASS  'to' between the times, 24:00 as the end of the day        got {"cell":{"kind":"shift","start":"16:00","end":"24:00"}}
+PASS  an end before the start is refused (no shift crosses midnight) got {"problem":"order"}
+PASS  an impossible time is a format problem                     got {"problem":"format"}
+PASS  off is the day-off absence by key                          got {"cell":{"kind":"absence","key":"off"}}
+PASS  an absence by its name, any case                           got {"cell":{"kind":"absence","key":"public_holiday"}}
+PASS  an unambiguous start of a name                             got {"cell":{"kind":"absence","key":"sick"}}
+PASS  an ambiguous start is refused                              got {"problem":"absence"}
+PASS  an empty cell clears                                       got {"cell":{"kind":"clear"}}
+PASS  a shift is labelled with an en dash                        got "09:00–17:30"
+PASS  an absence is labelled with its name, an empty cell with nothing got ["Leave",""]
+PASS  the week's seven days run across a month end               got ["2026-09-28","2026-09-29","2026-09-30","2026-10-01","2026-10-02",
+PASS  ISO week numbers across a year end                         got [41,53,53,1]
+PASS  minutes of a shift, 24:00 counted as midnight              got [510,480]
+PASS  planned minutes per person, shifts only                    got {"a":870,"b":480}
+PASS  headcount per date, absences left out                      got {"2026-10-05":2,"2026-10-06":1}
+PASS  coverage states                                            got ["none","single","ok","short","ok"]
+PASS  one row per work type in first-seen order, one cell per day, missing days as none got [["sales",["ok","short"]],["debt",["single","none"]]]
+PASS  a planned instant in the zone                              got 1791356400000
+PASS  24:00 is midnight at the end of the day                    got 1791410400000
+PASS  on time within tolerance                                   got "onTime"
+PASS  late past the tolerance                                    got "late"
+PASS  left early                                                 got "leftEarly"
+PASS  expected once the start has passed and nobody clocked in   got "expected"
+PASS  nothing to say before the start                            got null
+PASS  an absence planned, nobody on the clock                    got "absent"
+PASS  on the clock without a plan is unplanned                   got "unplanned"
+PASS  the autumn change: a 02:30 start on 25 October is the earlier of the two got 1792888200000
+PASS  a week inside one month is one range                       got "12–18 October 2026"
+PASS  a week across two months names both                        got "28 September – 4 October 2026"
+PASS  a week across the year end names both years                got "28 December 2026 – 3 January 2027"
+PASS  the same in Dutch                                          got ["12–18 oktober 2026","28 september – 4 oktober 2026"]
+PASS  the absences a cell takes, by name, the key where it differs got "Day off (off), Leave, Sick, Public holiday (public_holiday), Othe
+
+roster: PASS (36 checks)
+exit 0
