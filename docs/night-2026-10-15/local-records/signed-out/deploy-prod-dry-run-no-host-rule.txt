@@ -1,0 +1,23 @@
+== signed-out page, prod (p4a-cma-prod); dry run: nothing in Google Cloud is changed
+   local files in <scratch>/home/signed-out-prod-20261014T211445Z
+a. storage.publicAccessPrevention is not enforced for p4a-cma-prod (effective policy: not set)
+e. cma-web-urlmap exported to <scratch>/home/cma-web-urlmap-20261014T211445Z.yaml. To put it back as it was:
+   gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<scratch>/home/cma-web-urlmap-20261014T211445Z.yaml --quiet
+e. plan: workspace.example.test has no host rule (the map's default service serves it): add path matcher cma-web (default service as the map's) with the two route rules, and a host rule for workspace.example.test
+e. check: apart from the two route rules (and a converted path matcher's same matching), the map is as exported
+e. plan written: <scratch>/home/signed-out-prod-20261014T211445Z/urlmap-new.json (imported), <scratch>/home/signed-out-prod-20261014T211445Z/urlmap-validate.json (with 6 tests, validated only)
++ gcloud storage buckets create gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --location=europe-west4 --uniform-bucket-level-access --public-access-prevention=inherited
++ gcloud storage buckets add-iam-policy-binding gs://p4a-cma-prod-signed-out --project=p4a-cma-prod --member=allUsers --role=roles/storage.objectViewer
+c. page rendered: <scratch>/home/signed-out-prod-20261014T211445Z/signed-out.html (script sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM=)
++ gcloud storage cp <scratch>/home/signed-out-prod-20261014T211445Z/signed-out.html gs://p4a-cma-prod-signed-out/signed-out "--content-type=text/html; charset=utf-8" "--cache-control=public, max-age=300"
++ gcloud storage cp <scratch>/home/signed-out-prod-20261014T211445Z/logo-blue.png gs://p4a-cma-prod-signed-out/signed-out/logo-blue.png "--cache-control=public, max-age=300"
++ gcloud storage cp /home/user/cma/web/src/fonts/Montserrat-VF.ttf gs://p4a-cma-prod-signed-out/signed-out/Montserrat-VF.ttf --content-type=font/ttf "--cache-control=public, max-age=300"
++ gcloud compute backend-buckets create cma-signed-out-backend --project=p4a-cma-prod --gcs-bucket-name=p4a-cma-prod-signed-out --no-enable-cdn "--custom-response-header=Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM='; base-uri 'none'; form-action 'none'; frame-ancestors 'none'" "--custom-response-header=X-Content-Type-Options: nosniff" "--custom-response-header=Referrer-Policy: no-referrer"
+e. validate runs with --apply, once cma-signed-out-backend exists (the new map names it)
++ gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<scratch>/home/signed-out-prod-20261014T211445Z/urlmap-new.json --quiet
+== dry run done: rerun with --apply to make the changes printed with +
+   Then the test plan in docs/signed-out/README.md (a to e), in a browser:
+   https://workspace.example.test/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE should land on https://workspace.example.test/signed-out, signed out.
+   Only after a to e: set _LOGOUT_TARGET=signed-out on the trigger and rebuild (README, Build and deploy).
+   To undo the route: the import command above, then _LOGOUT_TARGET=legacy.
+exit 0 (calls that change something: 0)

@@ -1,0 +1,49 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+psql:/home/user/cma/db/66_invitations.sql:193: NOTICE:  relation "invitation" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+psql:/home/user/cma/db/66_invitations.sql:198: NOTICE:  relation "invitation_token_hash_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/66_invitations.sql:201: NOTICE:  relation "invitation_pending_email_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/66_invitations.sql:202: NOTICE:  relation "invitation_created_idx" already exists, skipping
+CREATE INDEX
+psql:/home/user/cma/db/66_invitations.sql:204: NOTICE:  policy "tenant_readonly" for relation "cma.invitation" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+GRANT
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+ALTER FUNCTION
+ALTER FUNCTION
+DO
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

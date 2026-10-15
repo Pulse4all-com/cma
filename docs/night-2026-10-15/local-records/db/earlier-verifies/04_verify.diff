@@ -1,0 +1,23 @@
+43a44
+>  invitation              | cma_owner | t
+77c78
+< (65 rows)
+---
+> (66 rows)
+112a114
+>  invitation              | tenant_app | {cma_app} | ALL
+142c144
+< (61 rows)
+---
+> (62 rows)
+206c208,209
+< (60 rows)
+---
+>  cma.invitation
+> (61 rows)
+254a258
+>  invitation
+291c295
+< (81 rows)
+---
+> (82 rows)

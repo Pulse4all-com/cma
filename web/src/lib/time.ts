@@ -86,6 +86,11 @@ export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | 
   }).format(d);
 }
 
+/** 21 October 2026, 14:05 / 21 oktober 2026 om 14:05: an instant with its date, for an expiry */
+export function fmtDateTime(instant: Instant, timeZone: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, dateStyle: "long", timeStyle: "short" }).format(new Date(instant));
+}
+
 /** The zone's short name at an instant (CEST, BST), for times shown in someone else's zone */
 export function fmtZoneShort(instant: Instant, timeZone: string, locale: Locale): string {
   return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, timeZoneName: "short" })

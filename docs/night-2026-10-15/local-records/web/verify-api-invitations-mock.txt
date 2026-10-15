@@ -1,0 +1,20 @@
+verify/api.mjs against http://localhost:8080
+
+PASS  invitations: an agent cannot list them       got 403
+PASS  invitations: the manager lists them, never a token or hash got [200,true,true]
+PASS  invitations: a write needs the request header; cross-site is refused got [400,403]
+PASS  invitations: a malformed body is a 400       got [400,400]
+PASS  invitations: the manager may not invite a role above its ceiling got true
+PASS  invitations: the system role and an unknown role are refused got [403,404]
+PASS  invitations: created with a 43-character token, valid for days got [201,true,true]
+PASS  invitations: the same address again is a 409 got 409
+PASS  invitations: listed open, without the token  got ["open",true]
+PASS  invite: the link opens for its address, shows another account to anyone else, and changes nothing got ["open","wrong_account","open"]
+PASS  invitations: a new link replaces the old one got [200,true,"invalid","open"]
+PASS  invitations: the manager cannot renew or revoke an invitation above its ceiling got [403,403]
+PASS  invite: Accept refuses a cross-site post; another account goes back to the link got [403,303,true,403]
+PASS  invite: Accept sets the person up with the invited role and goes home; the link then leads home got [303,"/",200,true,307]
+PASS  invitations: accepted by the person, and an accepted one cannot be revoked got ["accepted",true,409]
+
+ALL 15 PASS
+exit 0

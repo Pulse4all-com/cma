@@ -1,0 +1,84 @@
+{
+  "name": "cma-web-urlmap",
+  "fingerprint": "abc=",
+  "defaultService": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend",
+  "hostRules": [
+    {
+      "hosts": [
+        "ingest.example.test"
+      ],
+      "pathMatcher": "cma-ingest"
+    },
+    {
+      "hosts": [
+        "workspace.example.test"
+      ],
+      "pathMatcher": "web"
+    }
+  ],
+  "pathMatchers": [
+    {
+      "name": "cma-ingest",
+      "defaultService": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-ingest-backend"
+    },
+    {
+      "name": "web",
+      "defaultService": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend",
+      "routeRules": [
+        {
+          "priority": 1,
+          "description": "signed-out: IAP clears its cookie (README, Authentication)",
+          "matchRules": [
+            {
+              "prefixMatch": "/signed-out",
+              "queryParameterMatches": [
+                {
+                  "name": "gcp-iap-mode",
+                  "exactMatch": "CLEAR_LOGIN_COOKIE"
+                }
+              ]
+            }
+          ],
+          "service": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend"
+        },
+        {
+          "priority": 2,
+          "description": "signed-out: the static page outside IAP (docs/signed-out)",
+          "matchRules": [
+            {
+              "prefixMatch": "/signed-out"
+            }
+          ],
+          "service": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendBuckets/cma-signed-out-backend"
+        },
+        {
+          "priority": 10,
+          "matchRules": [
+            {
+              "fullPathMatch": "/api/health"
+            }
+          ],
+          "service": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-ingest-backend"
+        },
+        {
+          "priority": 20,
+          "matchRules": [
+            {
+              "prefixMatch": "/api/"
+            }
+          ],
+          "service": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend"
+        },
+        {
+          "priority": 30,
+          "matchRules": [
+            {
+              "fullPathMatch": "/api"
+            }
+          ],
+          "service": "https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend"
+        }
+      ]
+    }
+  ]
+}

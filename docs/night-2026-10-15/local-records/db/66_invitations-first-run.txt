@@ -1,0 +1,47 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+psql:/home/user/cma/db/66_invitations.sql:204: NOTICE:  policy "tenant_app" for relation "cma.invitation" does not exist, skipping
+psql:/home/user/cma/db/66_invitations.sql:204: NOTICE:  policy "tenant_readonly" for relation "cma.invitation" does not exist, skipping
+psql:/home/user/cma/db/66_invitations.sql:204: NOTICE:  trigger "audit" for relation "cma.invitation" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+GRANT
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+ALTER FUNCTION
+ALTER FUNCTION
+DO
+CREATE VIEW
+INSERT 0 1
+COMMIT
+RESET

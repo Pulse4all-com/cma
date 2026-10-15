@@ -1,0 +1,5 @@
+45c45,46
+< (30 rows)
+---
+>  0008l   | Invitations by email: cma.invitation (the token's hash only, never in the audit), the two invitation settings, create, renew, revoke and list for the people rule, and the invitee's preview and acceptance, which bind the sign-in id when the verified address matches                                                             | martin@pulse4all.com | <date>
+> (31 rows)

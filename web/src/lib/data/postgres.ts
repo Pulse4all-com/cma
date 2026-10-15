@@ -11,7 +11,9 @@ import type {
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
+  Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
 } from "./types";
+import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
 import { workdayStartsAt } from "@/lib/live";
 import { dateKeyInZone } from "@/lib/time";
@@ -1053,6 +1055,65 @@ export const postgresData: CmaData = {
 
   async setPersonSkills(me, userId, skills): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select 1 from cma.set_person_skills($1::uuid, $2::jsonb)`, [userId, JSON.stringify(skills)]));
+  },
+
+  // ---- Invitations (addition 0008l): the people rule and the role ceiling inside every function (CMA06) ----
+
+  async listInvitations(me): Promise<Invitation[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<InvitationDbRow>(`select * from cma.invitations()`);
+      return r.rows.map(invitationFromDb);
+    });
+  },
+
+  async createInvitation(me, input): Promise<InvitationLink> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ invitation_id: string; token: string; expires_at: Date }>(
+        `select * from cma.create_invitation($1, $2, $3, $4, $5, $6::text[], $7::jsonb)`,
+        [input.email, input.displayName, input.locale, input.roleKey, input.organisationKey, input.teamKeys, JSON.stringify(input.skills)],
+      );
+      const row = one(r.rows, "create_invitation");
+      return { invitationId: row.invitation_id, token: row.token, expiresAt: row.expires_at.toISOString() };
+    });
+  },
+
+  async renewInvitation(me, invitationId): Promise<InvitationLink> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ invitation_id: string; token: string; expires_at: Date }>(
+        `select * from cma.renew_invitation($1::uuid)`, [invitationId]);
+      const row = one(r.rows, "renew_invitation");
+      return { invitationId: row.invitation_id, token: row.token, expiresAt: row.expires_at.toISOString() };
+    });
+  },
+
+  async revokeInvitation(me, invitationId): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.revoke_invitation($1::uuid)`, [invitationId]));
+  },
+
+  // The invitee is no person yet: both run without a tenant, through the owner's two functions, which find
+  // the invitation by the token's hash and act on its tenant only (a token of another shape finds nothing)
+  async previewInvitation(identity, token): Promise<InvitationPreview> {
+    if (!INVITE_TOKEN_RE.test(token)) return { result: "invalid", tenantName: null, roleName: null, invitedEmail: null, locale: null, expiresAt: null };
+    const r = await withoutTenant((q) =>
+      q.query<{ result: InvitationPreview["result"]; tenant_name: string | null; role_name: string | null; invited_email: string | null; locale: string | null; expires_at: Date | null }>(
+        `select * from cma.invitation_preview($1, $2, $3, $4)`,
+        [token, identity.provider, identity.subject, identity.email],
+      ));
+    const row = one(r.rows, "invitation_preview");
+    return {
+      result: row.result, tenantName: row.tenant_name, roleName: row.role_name, invitedEmail: row.invited_email,
+      locale: row.locale, expiresAt: iso(row.expires_at),
+    };
+  },
+
+  async acceptInvitation(identity, token): Promise<InvitationAcceptResult> {
+    if (!INVITE_TOKEN_RE.test(token)) return "invalid";
+    const r = await withoutTenant((q) =>
+      q.query<{ result: InvitationAcceptResult }>(
+        `select result from cma.accept_invitation($1, $2, $3, $4)`,
+        [token, identity.provider, identity.subject, identity.email],
+      ));
+    return one(r.rows, "accept_invitation").result;
   },
 
   // ---- Configuration (migration 0005a): every function checks tenant.configure inside (CMA06) ----

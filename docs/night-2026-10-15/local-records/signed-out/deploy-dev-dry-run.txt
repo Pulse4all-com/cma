@@ -1,0 +1,13 @@
+== signed-out page, dev (p4a-cma-dev); dry run: nothing in Google Cloud is changed
+   local files in <scratch>/home/signed-out-dev-20261014T211446Z
+a. storage.publicAccessPrevention is not enforced for p4a-cma-dev (effective policy: not set)
++ gcloud storage buckets create gs://p4a-cma-dev-signed-out --project=p4a-cma-dev --location=europe-west4 --uniform-bucket-level-access --public-access-prevention=inherited
++ gcloud storage buckets add-iam-policy-binding gs://p4a-cma-dev-signed-out --project=p4a-cma-dev --member=allUsers --role=roles/storage.objectViewer
+c. page rendered: <scratch>/home/signed-out-dev-20261014T211446Z/signed-out.html (script sha256-IIap4NjjF1VG9XUHUPd4Z7MShSvgGvN4hgQrksZXbSM=)
++ gcloud storage cp <scratch>/home/signed-out-dev-20261014T211446Z/signed-out.html gs://p4a-cma-dev-signed-out/signed-out "--content-type=text/html; charset=utf-8" "--cache-control=public, max-age=300"
++ gcloud storage cp <scratch>/home/signed-out-dev-20261014T211446Z/logo-blue.png gs://p4a-cma-dev-signed-out/signed-out/logo-blue.png "--cache-control=public, max-age=300"
++ gcloud storage cp /home/user/cma/web/src/fonts/Montserrat-VF.ttf gs://p4a-cma-dev-signed-out/signed-out/Montserrat-VF.ttf --content-type=font/ttf "--cache-control=public, max-age=300"
+== dev has no load balancer and no IAP (README, Infrastructure): only the bucket is set up here. The page
+   can be looked at as https://storage.googleapis.com/p4a-cma-dev-signed-out/signed-out (the logo and font load only on
+   the Workspace's host); the route and the Log out flag exist in prod only.
+exit 0 (calls that change something: 0)

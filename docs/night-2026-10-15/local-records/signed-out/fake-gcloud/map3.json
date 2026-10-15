@@ -1,0 +1,3 @@
+{"name":"cma-web-urlmap","defaultService":"https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend",
+ "hostRules":[{"hosts":["workspace.example.test"],"pathMatcher":"web"}],
+ "pathMatchers":[{"name":"web","defaultService":"https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend","routeRules":[{"priority":1,"matchRules":[{"prefixMatch":"/x"}],"service":"https://www.googleapis.com/compute/v1/projects/p4a-cma-prod/global/backendServices/cma-web-backend"}]}]}
