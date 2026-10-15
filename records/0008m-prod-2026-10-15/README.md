@@ -21,8 +21,8 @@ hash and no personal data. The psql outputs of the run are not in this folder.
 | `35_verify_telephony.sql` | rerun | 2 PASS rows |
 | `41_verify_lead_metrics.sql` | rerun | 2 PASS rows |
 
-`cma.schema_migration`: `0008m` applied at 2026-10-15T12:42:01Z. `69` and `53` refuse prod (they
-write throwaway tenants) and ran in dev only.
+`cma.schema_migration`: `0008m` applied at 2026-10-15T12:42:01Z by `martin@pulse4all.com`. `69` and
+`53` refuse prod (they write throwaway tenants) and ran in dev only.
 
 ## Read-only check (step 5)
 
@@ -33,8 +33,8 @@ Studio on cma-prod-pg, the runbook's read-only queries:
 | The four `email.%` settings | as in dev: `email.market_order` `text` `contact,form,record,inbox`, `email.no_response_days` `integer` `5`, `email.reply_target_minutes` `integer` `240`, `email.start_date` `text` empty |
 | Emails, threads, inboxes | 0, 0, 0 |
 
-Connections of `pulse4all-subscriptions`, unchanged by 0008m, all `active`: `aircall` `telephony`,
-`hubspot` `crm` and 14 `shopify` `commerce`.
+Connections, unchanged by 0008m: all 16 belong to `pulse4all-subscriptions`, all `active`: `aircall`
+`telephony`, `hubspot` `crm` and 14 `shopify` `commerce`. `pulse4all-invest` has no connections.
 
 The email start per tenant (`email.start_date` empty, so it follows `intake.start_date`):
 
@@ -56,8 +56,3 @@ Data-quality check `contact_country_fallback`: 0 findings for `pulse4all-invest`
 
 - PR #135 squash-merged as `4c1520a`.
 - No build: nothing under `web/` or `cloudbuild.yaml` changed.
-
-## Not in the report
-
-- `applied_by` of the `0008m` row in prod.
-- The connections of `pulse4all-invest`.
