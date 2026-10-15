@@ -310,3 +310,28 @@ begin
   on conflict (tenant_id, key) do nothing;
 end
 $$;
+
+-- The follow-up layer per tenant (after addition 0008o; night run N16-B, 16 October 2026): tickets answered within
+-- four business hours of their market (KPI 9), at risk from 75 % of that, open leads bucketed at 1, 2 and 5 business
+-- days, a callback kept within four hours of its due time (KPI 5). Product defaults as values, so a change on
+-- Configuration survives a rerun (only what a tenant does not have yet is added).
+do $$
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'tickets.sla_minutes') then
+    raise notice 'the follow-up settings do not exist yet (addition 0008o): rerun this seed after 72_follow_up.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, s.key, s.value
+  from (values
+    (1, 'tickets.sla_minutes',               '240'),
+    (2, 'tickets.sla_warning_pct',           '75'),
+    (3, 'leads.age_buckets_business_days',   '1,2,5'),
+    (4, 'tasks.callback_window_minutes',     '240')
+  ) as s(ord, key, value)
+  cross join cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug, s.ord
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
