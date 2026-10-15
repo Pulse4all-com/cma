@@ -12,9 +12,17 @@
  * Log out's Location when CMA_LOGOUT_TARGET is legacy, signed-out or unset, a typo refused, the build passing
  * it; "Use another account" on No access yet only with the flag. The gate: /signed-out has no exception in
  * proxy.ts's matcher and no route or file in the app, so without a valid IAP token it is refused like any page.
+ * The bucket and the route (Gemini audit of #128, findings 1.2 and 2.1): docs/signed-out/deploy.sh grants allUsers
+ * roles/storage.legacyObjectReader (an object by its name, no listing) and stops on any other role allUsers holds;
+ * docs/signed-out/urlmap.py, run with python3 on the fixture verify/signed-out-urlmap.json, plans exactly the three
+ * route rules, keeps the default service and the ingest host rule, writes the three new url-map tests, and
+ * changes nothing on a rerun.
  */
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { logoutLocation, parseLogoutTarget, switchAccountHref } from "../src/lib/logout.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -39,6 +47,9 @@ let impl = { parseLogoutTarget, logoutLocation, switchAccountHref };
 const appDir = new URL("../src/app/", import.meta.url);
 let routeFiles = readdirSync(appDir, { recursive: true }).map(String);
 let publicSignedOut = existsSync(new URL("../public/signed-out", import.meta.url));
+let deploySrc = read("../../docs/signed-out/deploy.sh");
+let urlmapSrc = read("../../docs/signed-out/urlmap.py");
+const urlmapFixture = JSON.parse(read("./signed-out-urlmap.json"));
 
 if (PROVOKE) {
   page = page
@@ -61,6 +72,11 @@ if (PROVOKE) {
   };
   routeFiles = [...routeFiles, "signed-out/page.tsx"];
   publicSignedOut = true;
+  // the audit's two findings put back: a role that lists the bucket, one prefix rule with no redirect
+  deploySrc = deploySrc.replace("PUBLIC_ROLE=roles/storage.legacyObjectReader", "PUBLIC_ROLE=roles/storage.objectViewer");
+  urlmapSrc = urlmapSrc
+    .replace('"matchRules": [{"fullPathMatch": SIGNED_OUT}, {"prefixMatch": SIGNED_OUT + "/"}]', '"matchRules": [{"prefixMatch": SIGNED_OUT}]')
+    .replace('"redirectResponseCode": "FOUND"', '"redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT"');
 }
 
 // ---- the page ---------------------------------------------------------------------------------------
@@ -178,6 +194,89 @@ check("/signed-out reaching cma-web gets the IAP check: in the matcher, no route
   ...(!/if \(!token\) return unauthenticated\("missing"\);/.test(proxySrc) ? ["a missing token is not refused"] : []),
   ...(!/return unauthenticated\("invalid"\);/.test(proxySrc) ? ["an invalid token is not refused"] : []),
 ]);
+
+// ---- the bucket and the route ----------------------------------------------------------------------
+const binds = [...deploySrc.matchAll(/add-iam-policy-binding(?:[^\n]*\\\n)*[^\n]*/g)].map((m) => m[0].replace(/\\\n\s*/g, ""));
+check("deploy.sh grants allUsers legacyObjectReader (no listing), never objectViewer, and stops on any other role", [
+  ...(!/^PUBLIC_ROLE=roles\/storage\.legacyObjectReader$/m.test(deploySrc) ? ["the public role is not roles/storage.legacyObjectReader"] : []),
+  ...(binds.length !== 1 ? [`${binds.length} add-iam-policy-binding calls`] : []),
+  ...binds.filter((b) => !b.includes('--member=allUsers --role="$PUBLIC_ROLE"')).map((b) => `a binding other than allUsers to the public role: ${b}`),
+  ...(/objectViewer/.test(deploySrc) ? ["objectViewer is named"] : []),
+  ...(!deploySrc.includes('if "allUsers" in b.get("members", [])') ? ["the check does not read allUsers' roles from the policy"] : []),
+  ...(!deploySrc.includes('if [ "$public_roles" = "$PUBLIC_ROLE" ]; then') ? ["an existing binding is not matched on exactly the public role"] : []),
+  ...(!deploySrc.includes('if [ "$role" != "$PUBLIC_ROLE" ]; then') ||
+      !deploySrc.includes('echo "b. STOP: allUsers holds ${role} on gs://${BUCKET}; remove it by hand"') ? ["another role of allUsers does not stop the script"] : []),
+]);
+
+// Stable JSON: the same value with keys in any order gives the same text
+const canon = (v) => JSON.stringify(v, (_, x) => (x && typeof x === "object" && !Array.isArray(x)
+  ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
+// A route rule without its description, which is free text
+const undescribed = (r) => Object.fromEntries(Object.entries(r).filter(([k]) => k !== "description"));
+const HOST = "workspace.example.test";
+const WEB = urlmapFixture.defaultService;
+const BUCKET = WEB.replace(/backendServices\/[^/]+$/, "backendBuckets/cma-signed-out-backend");
+const wantRules = [
+  { priority: 1, matchRules: [{ prefixMatch: "/signed-out", queryParameterMatches: [{ name: "gcp-iap-mode", exactMatch: "CLEAR_LOGIN_COOKIE" }] }], service: WEB },
+  { priority: 2, matchRules: [{ fullPathMatch: "/signed-out/" }], urlRedirect: { pathRedirect: "/signed-out", redirectResponseCode: "FOUND" } },
+  { priority: 3, matchRules: [{ fullPathMatch: "/signed-out" }, { prefixMatch: "/signed-out/" }], service: BUCKET },
+];
+const wantTests = [
+  { host: HOST, path: "/signed-out", service: BUCKET },
+  { host: HOST, path: "/signed-out/", expectedOutputUrl: `http://${HOST}/signed-out`, expectedRedirectResponseCode: 302 },
+  { host: HOST, path: "/signed-out/logo-blue.png", service: BUCKET },
+  { host: HOST, path: "/signed-outx", service: WEB },
+];
+const work = mkdtempSync(join(tmpdir(), "signed-out-urlmap-"));
+const planner = join(work, "urlmap.py");
+writeFileSync(planner, urlmapSrc);
+writeFileSync(join(work, "before.json"), JSON.stringify(urlmapFixture));
+const plan = (before, out) => spawnSync("python3", [planner, "plan", join(work, before), HOST, WEB, BUCKET, join(work, `${out}.json`), join(work, `${out}-validate.json`)], { encoding: "utf8" });
+const readJson = (f) => { try { return JSON.parse(readFileSync(join(work, f), "utf8")); } catch { return null; } };
+const urlmapProblems = [];
+const first = plan("before.json", "new");
+const after = first.status === 0 ? readJson("new.json") : null;
+const validate = first.status === 0 ? readJson("new-validate.json") : null;
+if (first.error) urlmapProblems.push(`python3 did not run: ${first.error.message}`);
+else if (first.status !== 0 || !after || !validate) urlmapProblems.push(`the plan stopped: ${(first.stdout + first.stderr).trim().split("\n").pop()}`);
+else {
+  const OUTPUT_ONLY = ["kind", "id", "creationTimestamp", "selfLink"];
+  const rest = (m) => Object.fromEntries(Object.entries(m).filter(([k]) => !OUTPUT_ONLY.includes(k) && k !== "hostRules" && k !== "pathMatchers"));
+  const ingestRule = urlmapFixture.hostRules[0];
+  const ingestMatcher = urlmapFixture.pathMatchers[0];
+  if (after.defaultService !== urlmapFixture.defaultService) urlmapProblems.push("the default service changed");
+  if (canon(rest(after)) !== canon(rest(urlmapFixture))) urlmapProblems.push("the map's other fields changed");
+  if (canon(after.hostRules) !== canon([ingestRule, { hosts: [HOST], pathMatcher: "cma-web" }])) urlmapProblems.push(`host rules ${canon(after.hostRules)}`);
+  if (canon((after.pathMatchers ?? []).find((m) => m.name === ingestMatcher.name)) !== canon(ingestMatcher)) urlmapProblems.push("the ingest path matcher changed");
+  const web = (after.pathMatchers ?? []).find((m) => m.name === "cma-web");
+  if ((after.pathMatchers ?? []).length !== 2 || !web) urlmapProblems.push("not exactly the ingest matcher and cma-web");
+  else {
+    if (web.defaultService !== WEB) urlmapProblems.push("cma-web's default is not the web backend");
+    if (Object.keys(web).sort().join() !== "defaultService,name,routeRules") urlmapProblems.push(`cma-web holds ${Object.keys(web).sort().join()}`);
+    const got = (web.routeRules ?? []).map(undescribed);
+    if (canon(got) !== canon(wantRules)) urlmapProblems.push(`route rules ${canon(got)}`);
+  }
+  const tests = (validate.tests ?? []).map(canon);
+  for (const t of wantTests) if (!tests.includes(canon(t))) urlmapProblems.push(`no url-map test ${canon(t)}`);
+  if ("tests" in after) urlmapProblems.push("the imported map carries the tests");
+  const again = plan("new.json", "rerun");
+  if (again.status !== 0 || !/nothing to change/.test(again.stdout) || canon(readJson("rerun.json")) !== canon(after)) urlmapProblems.push("a rerun on the new map changes something");
+}
+// The Workspace with a path matcher of its own: priorities 1 to 3 are reserved, pathRules convert from 10 on
+const withMatcher = (matcher) => ({ ...urlmapFixture, hostRules: [...urlmapFixture.hostRules, { hosts: [HOST], pathMatcher: "web" }],
+  pathMatchers: [...urlmapFixture.pathMatchers, { name: "web", defaultService: WEB, ...matcher }] });
+writeFileSync(join(work, "taken.json"), JSON.stringify(withMatcher({ routeRules: [{ priority: 3, matchRules: [{ prefixMatch: "/x" }], service: WEB }] })));
+const taken = plan("taken.json", "taken-new");
+if (taken.status !== 1 || !/STOP: path matcher web already has a route rule with priority 1, 2 or 3/.test(taken.stdout)) urlmapProblems.push("a matcher with priority 3 taken does not stop the plan");
+writeFileSync(join(work, "paths.json"), JSON.stringify(withMatcher({ pathRules: [{ paths: ["/api/*"], service: WEB }] })));
+const paths = plan("paths.json", "paths-new");
+const converted = paths.status === 0 ? (readJson("paths-new.json")?.pathMatchers ?? []).find((m) => m.name === "web") : null;
+if (!converted || "pathRules" in converted ||
+    canon((converted.routeRules ?? []).map(undescribed)) !== canon([...wantRules, { priority: 10, matchRules: [{ prefixMatch: "/api/" }], service: WEB }])) {
+  urlmapProblems.push("a matcher's pathRules are not converted behind the three rules from priority 10");
+}
+rmSync(work, { recursive: true, force: true });
+check("urlmap.py on the fixture: exactly the three route rules, the default service and the ingest host rule kept, the new tests", urlmapProblems);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

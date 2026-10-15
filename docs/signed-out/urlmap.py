@@ -4,18 +4,22 @@
   python3 urlmap.py plan <before.json> <host> <web backend link> <bucket backend link> <new.json> <validate.json>
   python3 urlmap.py check <validate output.json>
 
-plan: from `gcloud compute url-maps describe --format=json`, the new map with the two route rules for the
+plan: from `gcloud compute url-maps describe --format=json`, the new map with the three route rules for the
 Workspace's host, and a copy with url-map tests for `gcloud compute url-maps validate`:
   priority 1  prefix /signed-out with query gcp-iap-mode=CLEAR_LOGIN_COOKIE -> the web backend (IAP)
-  priority 2  prefix /signed-out -> the backend bucket
-The map's default service and every other host rule and path matcher stay exactly as they are. Without a host
-rule for the host (the map's default service serves it), a path matcher cma-web with the map's default service
-(which must be the web backend) and a host rule for the host are added. A path matcher with pathRules is
-converted to routeRules with the same matching: an exact path to fullPathMatch, a path ending in /* to
-prefixMatch (without the *), longer paths first, an exact path before a prefix of the same length (a path
-rule's longest match); a path rule with its own routeAction or redirect, or a * elsewhere, stops the plan.
+  priority 2  exactly /signed-out/ -> a 302 redirect to /signed-out (the page is the object signed-out)
+  priority 3  exactly /signed-out, or prefix /signed-out/ -> the backend bucket
+Any other path that starts with /signed-out (/signed-outx) matches none of them and stays with the matcher's
+default, the web backend behind IAP. Priorities 1 to 3 are this script's: a matcher that already uses one stops
+the plan. The map's default service and every other host rule and path matcher stay exactly as they are.
+Without a host rule for the host (the map's default service serves it), a path matcher cma-web with the map's
+default service (which must be the web backend) and a host rule for the host are added. A path matcher with
+pathRules is converted to routeRules with the same matching, from priority 10 on: an exact path to
+fullPathMatch, a path ending in /* to prefixMatch (without the *), longer paths first, an exact path before a
+prefix of the same length (a path rule's longest match); a path rule with its own routeAction or redirect, or a
+* elsewhere, stops the plan.
 Then the new map, with the change taken out again, must equal the old one: any other difference stops it.
-Rerunning when both rules are in place changes nothing. Exit 1 with a STOP line on anything unexpected.
+Rerunning when the three rules are in place changes nothing. Exit 1 with a STOP line on anything unexpected.
 
 check: the JSON of `gcloud compute url-maps validate --format=json`: the map must load and every test pass.
 """
@@ -26,6 +30,7 @@ import sys
 OUTPUT_ONLY = ("creationTimestamp", "id", "kind", "selfLink")
 SIGNED_OUT = "/signed-out"
 MATCHER = "cma-web"
+MINE = (1, 2, 3)
 
 
 def stop(msg):
@@ -39,10 +44,33 @@ def rules(web, bucket):
          "matchRules": [{"prefixMatch": SIGNED_OUT,
                          "queryParameterMatches": [{"name": "gcp-iap-mode", "exactMatch": "CLEAR_LOGIN_COOKIE"}]}],
          "service": web},
-        {"priority": 2, "description": "signed-out: the static page outside IAP (docs/signed-out)",
-         "matchRules": [{"prefixMatch": SIGNED_OUT}],
+        {"priority": 2, "description": "signed-out: the trailing slash to the page (the bucket has no object signed-out/)",
+         "matchRules": [{"fullPathMatch": SIGNED_OUT + "/"}],
+         "urlRedirect": {"pathRedirect": SIGNED_OUT, "redirectResponseCode": "FOUND"}},
+        {"priority": 3, "description": "signed-out: the static page and its files outside IAP (docs/signed-out)",
+         "matchRules": [{"fullPathMatch": SIGNED_OUT}, {"prefixMatch": SIGNED_OUT + "/"}],
          "service": bucket},
     ]
+
+
+# What a route rule does, as the API stores it: unset booleans read as false and an unset redirect code as 301,
+# so a map read back after the import compares equal to the planned one
+REDIRECT_DEFAULTS = {"httpsRedirect": False, "stripQuery": False, "redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT"}
+
+
+def effect(rule):
+    def plain(v):
+        if isinstance(v, dict):
+            return {k: plain(x) for k, x in v.items() if x is not False}
+        if isinstance(v, list):
+            return [plain(x) for x in v]
+        return v
+    out = {k: plain(rule[k]) for k in ("matchRules", "service") if k in rule}
+    if "service" in out:
+        out["service"] = "/".join(out["service"].rstrip("/").split("/")[-4:])
+    if "urlRedirect" in rule:
+        out["urlRedirect"] = plain({**REDIRECT_DEFAULTS, **rule["urlRedirect"]})
+    return json.dumps(out, sort_keys=True)
 
 
 def same_link(a, b):
@@ -94,26 +122,24 @@ def plan(before_path, host, web, bucket, new_path, validate_path):
         host_rules.append({"hosts": [host], "pathMatcher": MATCHER})
         added = MATCHER
         print(f"e. plan: {host} has no host rule (the map's default service serves it): add path matcher {MATCHER} "
-              f"(default service as the map's) with the two route rules, and a host rule for {host}")
+              f"(default service as the map's) with the three route rules, and a host rule for {host}")
     else:
         pm = next(m for m in matchers if m["name"] == hr["pathMatcher"])
         existing = pm.get("routeRules", [])
-        mine = [r for r in existing if r.get("priority") in (1, 2)]
-        if len(mine) == 2 and all(json.dumps({k: r[k] for k in ("matchRules", "service")}, sort_keys=True) ==
-                                  json.dumps({k: n[k] for k in ("matchRules", "service")}, sort_keys=True)
-                                  for r, n in zip(sorted(mine, key=lambda r: r["priority"]), new_rules)):
-            print("e. plan: both route rules are in place; nothing to change")
+        mine = sorted((r for r in existing if r.get("priority") in MINE), key=lambda r: r["priority"])
+        if [r["priority"] for r in mine] == list(MINE) and all(effect(r) == effect(n) for r, n in zip(mine, new_rules)):
+            print("e. plan: the three route rules are in place; nothing to change")
             json.dump(new, open(new_path, "w"), indent=2)
             json.dump(new, open(validate_path, "w"), indent=2)
             return
         if mine:
-            stop(f"path matcher {pm['name']} already has a route rule with priority 1 or 2; check the map by hand")
+            stop(f"path matcher {pm['name']} already has a route rule with priority 1, 2 or 3; check the map by hand")
         if pm.get("pathRules"):
             converted = copy.deepcopy(pm["pathRules"])
             existing = convert(pm.pop("pathRules"))
             print(f"e. plan: path matcher {pm['name']} uses pathRules; converted to {len(existing)} route rules, same matching")
         pm["routeRules"] = new_rules + existing
-        print(f"e. plan: the two route rules added to path matcher {pm['name']} (host rule {', '.join(hr['hosts'])})")
+        print(f"e. plan: the three route rules added to path matcher {pm['name']} (host rule {', '.join(hr['hosts'])})")
 
     # The change taken out again must give the map as it was: nothing else may differ
     back = copy.deepcopy(new)
@@ -125,18 +151,19 @@ def plan(before_path, host, web, bucket, new_path, validate_path):
                 del back[key]
     else:
         bpm = next(m for m in back["pathMatchers"] if m["name"] == hr["pathMatcher"])
-        bpm["routeRules"] = [r for r in bpm["routeRules"] if r.get("priority") not in (1, 2)]
+        bpm["routeRules"] = [r for r in bpm["routeRules"] if r.get("priority") not in MINE]
         if converted is not None:
             del bpm["routeRules"]
             bpm["pathRules"] = converted
         elif not bpm["routeRules"] and "routeRules" not in next(m for m in before["pathMatchers"] if m["name"] == hr["pathMatcher"]):
             del bpm["routeRules"]
     if canon(back) != canon(before):
-        stop("the new map differs from the export in more than the two route rules; nothing is imported")
-    print("e. check: apart from the two route rules (and a converted path matcher's same matching), the map is as exported")
+        stop("the new map differs from the export in more than the three route rules; nothing is imported")
+    print("e. check: apart from the three route rules (and a converted path matcher's same matching), the map is as exported")
 
     # Tests for validate: what the map answered before, for every host's start page, a path no rule names
-    # and every path rule; the new route; the map's default. A matcher with route rules of its own is left to
+    # and every path rule; the new routes (the page, the trailing slash's redirect, a file, a longer name that
+    # stays behind IAP); the map's default. A matcher with route rules of its own is left to
     # its own tests (its matching is not computed here)
     def old_service(h, path):
         rule = next((x for x in before.get("hostRules", []) if h in x.get("hosts", [])), None)
@@ -167,6 +194,13 @@ def plan(before_path, host, web, bucket, new_path, validate_path):
             if svc:
                 tests.append({"host": hh, "path": path, "service": svc})
     tests.append({"host": host, "path": SIGNED_OUT, "service": bucket})
+    # A redirect keeps the request's scheme unless httpsRedirect is set (which an HTTPS proxy's map may not
+    # set); a url-map test names no scheme and only an httpsRedirect makes its expected URL https, so it is
+    # http here. Browsers ask over https and get https://<host>/signed-out (test plan e)
+    tests.append({"host": host, "path": SIGNED_OUT + "/", "expectedOutputUrl": f"http://{host}{SIGNED_OUT}",
+                  "expectedRedirectResponseCode": 302})
+    tests.append({"host": host, "path": SIGNED_OUT + "/logo-blue.png", "service": bucket})
+    tests.append({"host": host, "path": SIGNED_OUT + "x", "service": web})
     tests.append({"host": "cma-urlmap-test.invalid", "path": "/", "service": new["defaultService"]})
     json.dump(new, open(new_path, "w"), indent=2)
     json.dump({**new, "tests": tests}, open(validate_path, "w"), indent=2)

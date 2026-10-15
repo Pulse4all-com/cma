@@ -17,7 +17,9 @@
 #   a. org policy: when storage.publicAccessPrevention is enforced for the project, stop before anything is
 #      created (a public bucket is impossible there; nothing else is changed)
 #   b. bucket <project>-signed-out in europe-west4, uniform bucket-level access, public access prevention
-#      inherited, public read (allUsers objectViewer) on this bucket only
+#      inherited, public read on this bucket only: allUsers roles/storage.legacyObjectReader, which reads an
+#      object by its name and cannot list the bucket (Gemini audit of #128, finding 1.2). When allUsers holds
+#      any other role on the bucket the script stops and names it; that binding is removed by hand
 #   c. the page rendered from web/signed-out/index.html (name and logo written in, HTML-escaped; the inline
 #      script's hash checked against the page's CSP) and uploaded as the object signed-out, with the logo and
 #      web/src/fonts/Montserrat-VF.ttf under signed-out/; Cache-Control "public, max-age=300"; then the
@@ -29,17 +31,21 @@
 #   e. URL map cma-web-urlmap, planned before step b (read only, so a map the script does not expect stops it
 #      before anything is created) and imported after d: exported first to a timestamped file (the restore
 #      command is printed); for the
-#      Workspace's host two route rules, the default service and every other host rule (cma-ingest) kept as
+#      Workspace's host three route rules, the default service and every other host rule (cma-ingest) kept as
 #      they are:
 #        priority 1  prefix /signed-out with query gcp-iap-mode=CLEAR_LOGIN_COOKIE -> cma-web-backend (IAP
 #                    clears its cookie and redirects to /signed-out)
-#        priority 2  prefix /signed-out -> cma-signed-out-backend
+#        priority 2  exactly /signed-out/ -> a 302 redirect to /signed-out (Gemini audit of #128, finding 2.1)
+#        priority 3  exactly /signed-out, or prefix /signed-out/ -> cma-signed-out-backend
+#      Any other path starting with /signed-out (/signed-outx) stays with the default, cma-web-backend behind
+#      IAP. Priorities 1 to 3 are the script's: a path matcher that already uses one stops it.
 #      Without a host rule for the Workspace's host (it is served by the map's default service) a path
 #      matcher cma-web is added for it, with cma-web-backend as its default. A path matcher with pathRules
 #      is converted to routeRules with the same matching (an exact path to fullPathMatch, a path ending in
-#      /* to prefixMatch, longer paths first). The new map must differ from the export only there (anything
-#      else stops the script), passes `gcloud compute url-maps validate` with tests for every existing path,
-#      the default and the new route (once the backend bucket exists; in a dry run before d it says so), and
+#      /* to prefixMatch, longer paths first, from priority 10 on). The new map must differ from the export
+#      only there (anything else stops the script), passes `gcloud compute url-maps validate` with tests for
+#      every existing path, the default and the new routes (the page, the trailing slash's redirect, a file,
+#      /signed-outx) (once the backend bucket exists; in a dry run before d it says so), and
 #      only then is imported
 #   f. prints what to check (docs/signed-out/README.md, test plan a to e)
 set -euo pipefail
@@ -138,19 +144,35 @@ else
   change gcloud storage buckets create "gs://${BUCKET}" --project="$PROJECT" --location="$REGION" \
     --uniform-bucket-level-access --public-access-prevention=inherited
 fi
+# Public read means allUsers holds roles/storage.legacyObjectReader: an object read by its name, no listing.
+# Any other role allUsers holds on the bucket stops the script, and so does a policy it cannot read
+PUBLIC_ROLE=roles/storage.legacyObjectReader
+public_roles=""
 if [ "$APPLY" = 1 ] || gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
   pap_bucket="$(gcloud storage buckets describe "gs://${BUCKET}" --project="$PROJECT" --format='value(public_access_prevention)' 2>/dev/null || true)"
   if [ "${pap_bucket,,}" = "enforced" ]; then
     echo "b. STOP: public access prevention is enforced on gs://${BUCKET}; nothing else was changed. Martin decides on an exception."
     exit 1
   fi
+  policy="$(gcloud storage buckets get-iam-policy "gs://${BUCKET}" --project="$PROJECT" --format=json)" \
+    || { echo "b. STOP: cannot read the IAM policy of gs://${BUCKET}"; exit 1; }
+  public_roles="$(python3 -c 'import json, sys
+policy = json.loads(sys.argv[1])
+print("\n".join(sorted({b["role"] for b in policy.get("bindings", []) if "allUsers" in b.get("members", [])})))' "$policy")" \
+    || { echo "b. STOP: cannot read the IAM policy of gs://${BUCKET}"; exit 1; }
 fi
-if gcloud storage buckets get-iam-policy "gs://${BUCKET}" --project="$PROJECT" --format=json 2>/dev/null \
-     | grep -q '"allUsers"'; then
-  echo "b. allUsers can read gs://${BUCKET}"
+for role in $public_roles; do
+  if [ "$role" != "$PUBLIC_ROLE" ]; then
+    echo "b. STOP: allUsers holds ${role} on gs://${BUCKET}; remove it by hand"
+    echo "   gcloud storage buckets remove-iam-policy-binding gs://${BUCKET} --project=${PROJECT} --member=allUsers --role=${role}"
+    exit 1
+  fi
+done
+if [ "$public_roles" = "$PUBLIC_ROLE" ]; then
+  echo "b. allUsers can read objects of gs://${BUCKET} by name (${PUBLIC_ROLE}, no listing)"
 else
   change gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" --project="$PROJECT" \
-    --member=allUsers --role=roles/storage.objectViewer
+    --member=allUsers --role="$PUBLIC_ROLE"
 fi
 
 # c. The page, rendered locally: the name and the logo written in, HTML-escaped; the script hash checked
@@ -231,6 +253,7 @@ change gcloud compute url-maps import "$URLMAP" --project="$PROJECT" --global --
 # f. What to check next
 echo "== $([ "$APPLY" = 1 ] && echo done || echo "dry run done: rerun with --apply to make the changes printed with +")"
 echo "   Then the test plan in docs/signed-out/README.md (a to e), in a browser:"
-echo "   https://${HOST}/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE should land on https://${HOST}/signed-out, signed out."
+echo "   https://${HOST}/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE should land on https://${HOST}/signed-out, signed out;"
+echo "   https://${HOST}/signed-out/ redirects there, and https://${HOST}/signed-outx asks for a sign-in (IAP)."
 echo "   Only after a to e: set _LOGOUT_TARGET=signed-out on the trigger and rebuild (README, Build and deploy)."
 echo "   To undo the route: the import command above, then _LOGOUT_TARGET=legacy."
