@@ -15,7 +15,7 @@
         "crm.objects.tickets.read",
         "crm.objects.owners.read",
         "forms",
-        "sales-email-read",
+        "crm.objects.emails.read",
         "conversations.read"
       ],
       "optionalScopes": [],

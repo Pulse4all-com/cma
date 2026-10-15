@@ -4,7 +4,7 @@
  * read by the nightly reconcile for the last 26 hours, backfilled from cma.email_start_date_of.
  *
  *   list         POST /crm/v3/objects/emails/search by hs_lastmodifieddate, ascending, 100 a page, the
- *                allowed properties only (crm.objects.contacts.read and sales-email-read)
+ *                allowed properties only (crm.objects.contacts.read and crm.objects.emails.read)
  *   map          direction (hs_email_direction EMAIL, INCOMING_EMAIL, FORWARDED_EMAIL → out, in,
  *                forwarded), status (hs_email_status whose value in lower case is sent, bounced,
  *                failed or scheduled; anything else other), time, the owner, the CRM thread id and

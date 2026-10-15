@@ -883,7 +883,7 @@ This bridge check is the only place the link shows today: Reports → Data quali
 
 # Phase 10. The email poll in prod (brief B17b)
 
-The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
+The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata (with the scope `sales-email-read`, since replaced by the narrower `crm.objects.emails.read`, with no change in what is stored), the scope `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
 
 Before you start:
 - `main` holds the merge of B17b, and dev runs it (the same image: `deploy.sh` says `no build`).
@@ -898,9 +898,15 @@ node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/
 ```
 Expected: `rendered prod: hubspot/build/prod`, the upload naming the live portal, build and deploy of **CMA ingest prod** succeeding with both components.
 
-**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the Standard install → accept the update; the consent screen adds `sales-email-read` and `conversations.read`, read only.
+**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the Standard install → accept the update; the consent screen adds `crm.objects.emails.read` and `conversations.read`, read only.
 
 Expected: the install active with the two scopes on the Auth tab. The token stays; if HubSpot shows a new one, `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
+
+**Terminal** (the HTTP status only, as in the dev runbook's step 2d)
+```bash
+for p in "/crm/v3/objects/emails?limit=1" "/conversations/v3/conversations/inboxes?limit=1"; do gcloud secrets versions access latest --secret=ingest-hubspot-subs-token --project=p4a-cma-prod | sed 's/^/Authorization: Bearer /' | curl -s -o /dev/null -w "%{http_code}  ${p%%\?*}\n" -H @- "https://api.hubapi.com$p"; done
+```
+Expected: `200  /crm/v3/objects/emails` and `200  /conversations/v3/conversations/inboxes`; a `403` means the update of the install is not accepted yet.
 
 ## 10.2 What the live portal holds
 
