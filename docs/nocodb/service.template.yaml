@@ -37,8 +37,14 @@ spec:
             periodSeconds: 10
             failureThreshold: 30
           env:
+            # Connection pools (README, Database connection budget; docs/nocodb/README.md, Database connections):
+            # NocoDB's metadata database through "pool" in NC_DB_JSON (passed to knex unchanged; without it
+            # knex's default min 2, max 10), every external source such as cma_read through NC_DB_POOL_MAX
+            # (min 0; default max 10). Both 3 since 15 Oct 2026, so NocoDB holds at most 6 connections.
             - name: NC_DB_JSON
-              value: '{"client":"pg","connection":{"host":"127.0.0.1","port":5432,"user":"cma-nocodb@__PROJECT__.iam","password":"","database":"nocodb"}}'
+              value: '{"client":"pg","connection":{"host":"127.0.0.1","port":5432,"user":"cma-nocodb@__PROJECT__.iam","password":"","database":"nocodb"},"pool":{"min":0,"max":3}}'
+            - name: NC_DB_POOL_MAX
+              value: "3"
             - name: NC_AUTH_JWT_SECRET
               valueFrom:
                 secretKeyRef:

@@ -16,6 +16,8 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 | dev (`p4a-cma-dev`) | complete on 9 Oct 2026: steps 1 to 9 (service account and roles, IAM user, database `nocodb`, grants with a passing verdict, both secrets, deploy, IAP, first admin martin@pulse4all.com, `cma_read` connected read-only) | nothing |
 | prod (`p4a-cma-prod`) | complete on 9 Oct 2026: revision `cma-nocodb-00001`, IAP on, first admin martin@pulse4all.com, data source `cma_read` connected read-only | nothing. NocoDB shows agent hours, which are personal data: decide which `cma_read` columns the team may see before handing out workspace roles |
 
+Since 15 Oct 2026 `service.template.yaml` caps NocoDB's two connection pools at 3 each (Database connections, below). Until "Applying the pool caps" has run in an environment, its running revision still has the old pools.
+
 ## Pinned versions
 
 | Image | Version | Date | Digest |
@@ -25,6 +27,55 @@ Files here: `service.template.yaml` (the Cloud Run service), `deploy.sh` (render
 
 Rule: the newest release that is at least 14 days old, pinned by tag and digest. Newer at the time of
 pinning (9 Oct 2026) and skipped: NocoDB 2026.09.1 (29 Sep), proxy 2.26.0 (28 Sep).
+
+## Database connections
+
+NocoDB opens two connection pools on the instance, both through the proxy sidecar as `cma-nocodb@PROJECT.iam`. Both are capped at 3, so NocoDB holds at most 6 connections (README, Infrastructure, Database connection budget). The settings were checked against the source of the pinned NocoDB 2026.09.0 and its knex 3.1.0. Check them again whenever the image is bumped.
+
+| Pool | Database | Setting in `service.template.yaml` | How NocoDB 2026.09.0 reads it | Without it |
+|---|---|---|---|---|
+| NocoDB's metadata | `nocodb` | `"pool":{"min":0,"max":3}` inside `NC_DB_JSON` | `NC_DB_JSON` is parsed and passed to knex unchanged (`packages/nocodb/src/utils/nc-config/NcConfig.ts`, `src/meta/meta.service.ts`) | knex's default, min 2 and max 10, so 2 stay open while NocoDB runs |
+| Every external source, here `cma_read` | `cma` | `NC_DB_POOL_MAX: "3"` | Each source's pool is `{ min: 0, max: NC_DB_POOL_MAX }` (`src/utils/nc-config/constants.ts`), with the source's own settings spread over it (`src/utils/common/NcConnectionMgrv2.ts`) | max 10 |
+
+- **No `pool` in a source's own settings.** The connection form of setup step 9 stores no pool, so `NC_DB_POOL_MAX` applies. Never put a `pool` key in a connection's Advanced options JSON: it would replace the cap for that source.
+- **One pool per source.** A second external source gets a pool of its own, 3 more connections, and updates the budget first.
+- **Short-lived extras.** NocoDB briefly opens one more connection at startup, to check that its metadata database exists, and for "Test connection" on the Integrations page. Each closes again within seconds.
+- **Idle connections close.** With `min` 0 an idle connection closes after 30 seconds (the default of tarn, knex's pool), and the service scales to 0 when nobody uses it.
+
+## Applying the pool caps (15 October 2026)
+
+After this change is merged, dev first, then prod. Each deploy creates a new revision, which restarts NocoDB with the new settings. Nothing else changes.
+
+1. **Terminal:** check the rendered settings.
+   ```bash
+   cd ~/cma && git switch -q main && git pull -q --ff-only && docs/nocodb/deploy.sh dev --dry-run | grep -E "NC_DB_JSON|NC_DB_POOL_MAX" -A1
+   ```
+   Expected: the `NC_DB_JSON` value ends with `"database":"nocodb"},"pool":{"min":0,"max":3}}'`. `NC_DB_POOL_MAX` is followed by `value: "3"`.
+2. **Terminal:** deploy to dev.
+   ```bash
+   cd ~/cma && docs/nocodb/deploy.sh dev
+   ```
+   Expected: the service URL, then the latest ready revision, a newer one than before the deploy.
+3. **Browser:** the dev service URL. Open the base "CMA dev (read-only)" and click through three or four tables and views of `cma_read`.
+   Expected: the rows appear as before.
+4. **Studio (cma-dev-pg)**, right after step 3:
+   ```sql
+   select usename, datname, count(*) as connections
+   from pg_stat_activity
+   where usename like 'cma-nocodb%'
+   group by 1, 2 order by 2;
+   ```
+   Expected: at most two rows, `cma` with at most 3 and `nocodb` with at most 3. NocoDB holds at most 6 in all. Both counts may already be lower, or the rows gone, once NocoDB has been idle for half a minute.
+5. Steps 1 to 4 for **prod**: `deploy.sh prod`, the base "CMA prod (read-only)", Studio on **cma-prod-pg**.
+   Expected: the same, `cma-nocodb@p4a-cma-prod.iam` at most 3 on `cma` and at most 3 on `nocodb`.
+6. **Studio (cma-prod-pg):** every login, for the budget.
+   ```sql
+   select coalesce(usename, '(background)') as login, coalesce(datname, '') as database, count(*) as connections
+   from pg_stat_activity group by 1, 2 order by 3 desc;
+   ```
+   Expected: `cma-nocodb@p4a-cma-prod.iam` at most 6 over its two rows, `cloudsqladmin` a few (4 on 15 October 2026), `(background)` the server's own processes, your own login, and `cma-web@…` and `cma-ingest@…` only while they are busy. Save the output as `records/nocodb-pools-prod-<date>/studio.txt` with step 4's output for dev and prod: values from your runs only.
+
+If a count is higher than 3 on one database, the revision did not take the settings. Run step 1 again and check that `gcloud run services describe cma-nocodb --region=europe-west4 --project=PROJECT --format=export | grep -A1 NC_DB_POOL_MAX` shows the value 3, then send me the output.
 
 ## Setup order
 
