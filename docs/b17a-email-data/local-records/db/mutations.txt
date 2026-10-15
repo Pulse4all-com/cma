@@ -1,0 +1,68 @@
+M01 an inbox refresh resets counted: caught by B2, B14; FAIL   | 27 PASS, 2 FAIL
+M02 an inbox missing from the source stays active: caught by B2; FAIL   | 28 PASS, 1 FAIL
+M03 a new channel counts whatever its kind: caught by B2, B14; FAIL   | 27 PASS, 2 FAIL
+M04 no stale guard on emails: caught by B3; FAIL   | 28 PASS, 1 FAIL
+M05 no stale guard on threads: caught by B3; FAIL   | 28 PASS, 1 FAIL
+M06 a deletion keeps the raw payload: caught by B3; FAIL   | 28 PASS, 1 FAIL
+M07 a later closed read without a close time moves closed_at: caught by B3; FAIL   | 28 PASS, 1 FAIL
+M08 a known thread event answers inserted: caught by B4; FAIL   | 28 PASS, 1 FAIL
+M09 the deal before the ticket: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M10 a removed association still gives the market: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M11 a deleted record still gives the market: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M12 the contact's country without the aliases: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M13 the market order setting ignored: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M14 no unknown when no step finds a market: caught by B5, B9; FAIL   | 27 PASS, 2 FAIL
+M15 rules by creation, not by their order: caught by B6; FAIL   | 28 PASS, 1 FAIL
+M16 inactive rules applied: caught by B6; FAIL   | 28 PASS, 1 FAIL
+M17 exclude words ignored: caught by B6; FAIL   | 28 PASS, 1 FAIL
+M18 rule words matched with case: caught by B6; FAIL   | 28 PASS, 1 FAIL
+M19 rule words kept in their case: caught by B6; FAIL   | 28 PASS, 1 FAIL
+M20 the contact forget leaves threads: caught by B7; FAIL   | 28 PASS, 1 FAIL
+M21 the contact forget answers the email keys always: caught by B7; FAIL   | 28 PASS, 1 FAIL
+M22 the thread forget does not mark the thread forgotten: caught by B8, B15; FAIL   | 27 PASS, 2 FAIL
+M23 the thread forget clears email engagements too: caught by B8; FAIL   | 28 PASS, 1 FAIL
+M24 a message of a forgotten thread keeps its contact: caught by B8; FAIL   | 28 PASS, 1 FAIL
+M25 a forgotten thread read again: caught by B; FAIL   | 14 PASS, 1 FAIL
+M26 the email write without the permission check: caught by B10; FAIL   | 28 PASS, 1 FAIL
+M27 set_inbox without the permission check: caught by B10, B14; FAIL   | 27 PASS, 2 FAIL
+M28 the raw payload keeps strings with an @: caught by B11; FAIL   | 28 PASS, 1 FAIL
+M29 the raw payload keeps a subject: caught by B11; FAIL   | 28 PASS, 1 FAIL
+M30 an owner ref may hold an @: caught by B11; FAIL   | 28 PASS, 1 FAIL
+M31 an owner ref for a customer: caught by B11, B15; FAIL   | 27 PASS, 2 FAIL
+M32 email activity on any kind of connection: caught by B12; FAIL   | 28 PASS, 1 FAIL
+M33 email rows imply no kind: caught by B12; FAIL   | 28 PASS, 1 FAIL
+M34 an association to an email not turned around: caught by B; FAIL   | 11 PASS, 1 FAIL
+M35 connection_config without the inboxes: caught by B14; FAIL   | 28 PASS, 1 FAIL
+M36 thread marks without the events: caught by B15; FAIL   | 28 PASS, 1 FAIL
+M37 no email_poll job: caught by B; FAIL   | 22 PASS, 1 FAIL
+M38 no row-level security on emails: caught by A2, B; FAIL   | 8 PASS, 2 FAIL
+M39 the application may delete threads: caught by A2; FAIL   | 28 PASS, 1 FAIL
+M40 the application may change thread events: caught by A2; FAIL   | 28 PASS, 1 FAIL
+M41 the message view shows raw: caught by A3; FAIL   | 28 PASS, 1 FAIL
+M42 the category rule executable by the application: caught by A6; FAIL   | 28 PASS, 1 FAIL
+M43 the reply target's default 120: caught by A5; FAIL   | 28 PASS, 1 FAIL
+M44 the market order taken unchecked: caught by B1; FAIL   | 28 PASS, 1 FAIL
+M45 the reply target unbounded: caught by B1; FAIL   | 28 PASS, 1 FAIL
+M46 the start date without intake.start_date: caught by B1; FAIL   | 28 PASS, 1 FAIL
+M47 the actor kind ai refused: caught by B; FAIL   | 10 PASS, 1 FAIL
+M48 country slots without the contiguity check: caught by B; FAIL   | 24 PASS, 1 FAIL
+M49 a property may feed two country slots: caught by B; FAIL   | 24 PASS, 1 FAIL
+M50 a country slot removed from the middle: caught by B18; FAIL   | 28 PASS, 1 FAIL
+M51 slots above 1 on any field: caught by A7, B18; FAIL   | 27 PASS, 2 FAIL
+M52 the first value wins whether or not it names a market: caught by B19; FAIL   | 28 PASS, 1 FAIL
+M53 no value as written when no slot names a market: caught by B5, B19, B20; FAIL   | 26 PASS, 3 FAIL
+M54 country_source always 1: caught by B19, B21, B22; FAIL   | 26 PASS, 3 FAIL
+M55 contacts not held for emails: caught by B17; FAIL   | 28 PASS, 1 FAIL
+M56 contacts not held for threads: caught by B17; FAIL   | 28 PASS, 1 FAIL
+M57 the privacy deletion keeps the country source: caught by B; FAIL   | 23 PASS, 1 FAIL
+M58 a submission after the email counts: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M59 an uncounted form counts: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M60 a form without a market stops the form step: caught by B5; FAIL   | 28 PASS, 1 FAIL
+M61 the old default market order: caught by A5, B1, B5; FAIL   | 26 PASS, 3 FAIL
+M62 the market order written with spaces taken: caught by B1; FAIL   | 28 PASS, 1 FAIL
+M63 no fallback finding in data quality: caught by B21, B22; FAIL   | 27 PASS, 2 FAIL
+M64 the fallback check always listed: caught by B21; FAIL   | 28 PASS, 1 FAIL
+M65 the fallback check never listed: caught by B21; FAIL   | 28 PASS, 1 FAIL
+M66 no reader view for the fallback check: caught by A7, B; FAIL   | 26 PASS, 2 FAIL
+M67 the contact view without country_source: caught by A7; FAIL   | 28 PASS, 1 FAIL
+M68 no record of the addition: caught by A1; FAIL   | 28 PASS, 1 FAIL

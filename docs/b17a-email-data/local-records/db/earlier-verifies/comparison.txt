@@ -1,0 +1,31 @@
+04_verify.sql: DIFFERS (301 lines)
+07_verify_time_model.sql: DIFFERS (78 lines)
+10_verify_corrections.sql: DIFFERS (69 lines)
+12_verify_team_people.sql: identical
+14_verify_tenant_settings.sql: DIFFERS (8 lines)
+16_verify_team_status_time.sql: identical
+18_verify_clock_in_app_links.sql: identical
+20_verify_team_now.sql: identical
+22_verify_teams_skills.sql: identical
+25_verify_roster.sql: identical
+27_verify_configuration.sql: identical
+29_verify_my_profile.sql: identical
+31_verify_ingest_crm_records.sql: identical
+33_verify_intake_core.sql: identical
+35_verify_telephony.sql: identical
+37_verify_commerce.sql: identical
+39_verify_outbox.sql: identical
+41_verify_lead_metrics.sql: identical
+43_verify_messaging.sql: identical
+45_verify_assignment_alerts.sql: identical
+47_verify_workday_window.sql: identical
+49_verify_alert_time_zone.sql: identical
+51_verify_legacy_time_import.sql: identical
+53_verify_sources_configuration.sql: identical
+55_verify_uncounted_lines.sql: identical
+57_verify_commerce_phone_hash.sql: identical
+59_verify_commerce_contact_link.sql: identical
+61_verify_inbound_service.sql: identical
+63_verify_calls_overview.sql: identical
+65_verify_calls_history_start.sql: identical
+67_verify_invitations.sql: identical

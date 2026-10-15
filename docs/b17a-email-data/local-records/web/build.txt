@@ -1,0 +1,151 @@
+
+> cma-web@0.1.0 build
+> next build
+
+▲ Next.js 16.3.8 (Turbopack)
+✓ Running next.config.ts took 35ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 14.5s
+  Running TypeScript ...
+  Finished TypeScript in 9.2s ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/36) ...
+  Generating static pages using 3 workers (9/36) 
+  Generating static pages using 3 workers (18/36) 
+  Generating static pages using 3 workers (27/36) 
+✓ Generating static pages using 3 workers (36/36) in 542ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ƒ /
+├ ○ /_not-found
+├ ƒ /account
+├ ƒ /api/health
+├ ƒ /api/v1/configuration/absence-types
+├ ƒ /api/v1/configuration/absence-types/[key]/retired
+├ ƒ /api/v1/configuration/alert-rules
+├ ƒ /api/v1/configuration/alert-rules/[id]/enabled
+├ ƒ /api/v1/configuration/app-links
+├ ƒ /api/v1/configuration/app-links/[key]/retired
+├ ƒ /api/v1/configuration/coverage-targets
+├ ƒ /api/v1/configuration/markets
+├ ƒ /api/v1/configuration/markets/aliases
+├ ƒ /api/v1/configuration/markets/holidays
+├ ƒ /api/v1/configuration/markets/hours
+├ ƒ /api/v1/configuration/permissions
+├ ƒ /api/v1/configuration/settings
+├ ƒ /api/v1/configuration/skills
+├ ƒ /api/v1/configuration/skills/[dimension]/levels
+├ ƒ /api/v1/configuration/sources
+├ ƒ /api/v1/configuration/sources/[id]
+├ ƒ /api/v1/configuration/sources/[id]/call-outcomes
+├ ƒ /api/v1/configuration/sources/[id]/forms
+├ ƒ /api/v1/configuration/sources/[id]/lines
+├ ƒ /api/v1/configuration/sources/[id]/missed-reasons
+├ ƒ /api/v1/configuration/sources/[id]/pipelines
+├ ƒ /api/v1/configuration/sources/[id]/settings
+├ ƒ /api/v1/configuration/sources/[id]/store
+├ ƒ /api/v1/configuration/sources/[id]/tags
+├ ƒ /api/v1/configuration/statuses
+├ ƒ /api/v1/configuration/statuses/[key]/default
+├ ƒ /api/v1/configuration/statuses/[key]/retired
+├ ƒ /api/v1/configuration/teams
+├ ƒ /api/v1/configuration/teams/[key]/dissolved
+├ ƒ /api/v1/me
+├ ƒ /api/v1/me/app-links
+├ ƒ /api/v1/me/day
+├ ƒ /api/v1/me/day/end
+├ ƒ /api/v1/me/day/start
+├ ƒ /api/v1/me/hours
+├ ƒ /api/v1/me/messages
+├ ƒ /api/v1/me/messages/[id]/ack
+├ ƒ /api/v1/me/messages/read
+├ ƒ /api/v1/me/profile
+├ ƒ /api/v1/me/roster
+├ ƒ /api/v1/me/status
+├ ƒ /api/v1/me/statuses
+├ ƒ /api/v1/messages
+├ ƒ /api/v1/messages/stats
+├ ƒ /api/v1/reports/calls
+├ ƒ /api/v1/reports/calls-per-agent
+├ ƒ /api/v1/reports/calls-per-agent/tags
+├ ƒ /api/v1/reports/calls/tag-use
+├ ƒ /api/v1/reports/data-quality
+├ ƒ /api/v1/reports/inbound
+├ ƒ /api/v1/reports/intake
+├ ƒ /api/v1/reports/speed-to-lead
+├ ƒ /api/v1/reports/speed-to-lead/rows
+├ ƒ /api/v1/roster/absence-types
+├ ƒ /api/v1/roster/weeks
+├ ƒ /api/v1/roster/weeks/[weekStart]
+├ ƒ /api/v1/roster/weeks/[weekStart]/cells
+├ ƒ /api/v1/roster/weeks/[weekStart]/copy
+├ ƒ /api/v1/roster/weeks/[weekStart]/publish
+├ ƒ /api/v1/settings
+├ ƒ /api/v1/team/days/[userId]/[date]
+├ ƒ /api/v1/team/days/[userId]/[date]/corrections
+├ ƒ /api/v1/team/directory
+├ ƒ /api/v1/team/directory/[userId]/active
+├ ƒ /api/v1/team/directory/[userId]/linked-accounts
+├ ƒ /api/v1/team/directory/[userId]/role
+├ ƒ /api/v1/team/directory/[userId]/skills
+├ ƒ /api/v1/team/directory/[userId]/teams
+├ ƒ /api/v1/team/directory/linked-accounts
+├ ƒ /api/v1/team/exports/hours
+├ ƒ /api/v1/team/exports/status-changes
+├ ƒ /api/v1/team/hours
+├ ƒ /api/v1/team/invitations
+├ ƒ /api/v1/team/invitations/[id]/renew
+├ ƒ /api/v1/team/invitations/[id]/revoke
+├ ƒ /api/v1/team/memberships
+├ ƒ /api/v1/team/now
+├ ƒ /api/v1/team/organisations
+├ ƒ /api/v1/team/people
+├ ƒ /api/v1/team/roles
+├ ƒ /api/v1/team/shifts-today
+├ ƒ /api/v1/team/skills
+├ ƒ /api/v1/team/status-time
+├ ƒ /api/v1/team/teams
+├ ƒ /api/v1/telephony/inbound-now
+├ ƒ /configuration/absences
+├ ƒ /configuration/alert-rules
+├ ƒ /configuration/app-links
+├ ƒ /configuration/exports
+├ ƒ /configuration/markets
+├ ƒ /configuration/sources
+├ ƒ /configuration/sources/[id]
+├ ƒ /configuration/statuses
+├ ƒ /configuration/teams
+├ ƒ /day
+├ ƒ /hours
+├ ○ /icon.png
+├ ƒ /invite/[token]
+├ ƒ /invite/accept
+├ ƒ /live/board
+├ ƒ /logout
+├ ƒ /logout/done
+├ ƒ /logout/end
+├ ƒ /messages
+├ ƒ /messages/send
+├ ƒ /no-access
+├ ƒ /reports/calls
+├ ƒ /reports/calls-per-agent
+├ ƒ /reports/dashboard
+├ ƒ /reports/data-quality
+├ ƒ /reports/inbound
+├ ƒ /reports/intake
+├ ƒ /reports/speed-to-lead
+├ ƒ /roster/planner
+├ ƒ /roster/planner/print
+├ ƒ /schedule
+├ ƒ /team/hours
+└ ƒ /team/people
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+build exit 0

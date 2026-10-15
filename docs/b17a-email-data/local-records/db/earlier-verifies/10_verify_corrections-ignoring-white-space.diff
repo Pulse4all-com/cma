@@ -1,0 +1,9 @@
+14c14
+< ---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+---
+> ---------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------
+46c46,47
+< (31 rows)
+---
+>  0008m   | Email activity, metadata only: inboxes and source channels with counted, market, work type and channel, classification rules, emails of two sources kept apart, inbox conversations and their events, the four email settings, the ingest writes, the market by email.market_order with the form step, the privacy deletions, the reporting views; contacts' country with fallback slots and its source, contacts held for emails and threads, the data-quality check contact_country_fallback | martin@pulse4all.com | <date>
+> (32 rows)

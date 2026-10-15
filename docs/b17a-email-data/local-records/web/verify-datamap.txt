@@ -1,0 +1,8 @@
+  catalog email_message: not a table in cma in schema.json
+  catalog email_thread: not a table in cma in schema.json
+  catalog email_thread_event: not a table in cma in schema.json
+  catalog connection_inbox: not a table in cma in schema.json
+  catalog connection_inbox_channel: not a table in cma in schema.json
+  catalog connection_email_rule: not a table in cma in schema.json
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (7 problems)

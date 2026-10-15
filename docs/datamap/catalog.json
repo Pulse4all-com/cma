@@ -12,8 +12,8 @@
         },
         {
           "name": "crm_contact",
-          "what": "Thin contact: country, language, currency, store",
-          "how": "Read when a deal, call or ticket points to it; re-read every 10 min in its first hour; nightly reconcile"
+          "what": "Thin contact: country with the slot it came from, language, currency, store",
+          "how": "Read when a deal or ticket points to it, and from B17b an email or inbox thread; re-read every 10 min in its first hour; nightly reconcile"
         },
         {
           "name": "crm_contact_ref",
@@ -34,6 +34,27 @@
           "name": "form_submission",
           "what": "Form submissions: form, page, UTM, contact id only",
           "how": "Form poll every minute"
+        }
+      ]
+    },
+    {
+      "key": "email",
+      "label": "Email and inbox activity",
+      "tables": [
+        {
+          "name": "email_message",
+          "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category",
+          "how": "Planned: the email poll every minute and the nightly reconcile (B17b); empty until then"
+        },
+        {
+          "name": "email_thread",
+          "what": "Inbox conversations: inbox, channel, open or closed, the current agent, contact and ticket ids, spam",
+          "how": "Planned: the email poll every minute and the nightly reconcile (B17b); empty until then"
+        },
+        {
+          "name": "email_thread_event",
+          "what": "Assignments, closes, reopens and inbox moves of conversations: actor kind and owner ids only",
+          "how": "Planned: the email poll every minute (B17b); empty until then"
         }
       ]
     },
@@ -130,13 +151,28 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field",
+          "what": "Which source property feeds which CMA field; a contact's country and refs in ordered slots",
           "how": "Configuration"
         },
         {
           "name": "writeback_field",
           "what": "Fields the CMA may write back to the CRM",
           "how": "Configuration"
+        },
+        {
+          "name": "connection_inbox",
+          "what": "Inboxes of the CRM's conversations: counted, market, work type, channel",
+          "how": "Planned: the email poll's inbox catalog hourly (B17b; empty until then); switches on Configuration"
+        },
+        {
+          "name": "connection_inbox_channel",
+          "what": "Channels of the CRM's conversations (email, chat, ...): the CMA channel, counted",
+          "how": "Planned: the email poll's channel catalog hourly (B17b; empty until then); switches on Configuration"
+        },
+        {
+          "name": "connection_email_rule",
+          "what": "Email classification rules: words in a sender domain or subject, the category, in order",
+          "how": "Configuration (the functions of 0008m; the screen comes with B17c)"
         }
       ]
     },
@@ -431,6 +467,7 @@
       ],
       "doms": [
         "crm",
+        "email",
         "connections",
         "messaging",
         "plumbing"

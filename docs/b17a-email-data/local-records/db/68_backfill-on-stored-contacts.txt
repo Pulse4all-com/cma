@@ -1,0 +1,22 @@
+== contacts before 68 (0007's upsert)
+ source_id | country  
+-----------+----------
+ k1        | NL
+ k2        | Atlantis
+ k3        | 
+(3 rows)
+
+== 68
+INSERT 0 1
+COMMIT
+RESET
+== contacts after 68
+ source_id | country  | country_source 
+-----------+----------+----------------
+ k1        | NL       |              1
+ k2        | Atlantis |              1
+ k3        |          |               
+(3 rows)
+
+== audit rows of the backfill (crm_contact updates by cma_owner)
+2
