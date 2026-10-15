@@ -7,8 +7,13 @@
  *   deal            CRM search by createdate, then by closedate (deals created earlier, closed since)
  *   ticket          by createdate, then closed_date
  *   crm_call        by hs_timestamp
- *   contact         the contacts the CMA holds (0006: never the contact base), by id
+ *   contact         the contacts the CMA holds (0006: never the contact base; since 0008m also those an
+ *                   email or inbox thread points to), by id, read with every mapped country slot
  *   form_submission every counted form's submissions (forms.mjs)
+ *   crm_email       email engagements by hs_timestamp, written as the email poll writes them (email.mjs)
+ *   inbox_thread    inbox conversations by their latest message, with their messages (conversations.mjs)
+ *                   Both default to cma.email_start_date_of (email.start_date, else intake.start_date)
+ *                   and need the connection's email_poll setting
  *
  * Search streams: backfill:<object>:<property> = { from, value, done } (value: the last page's
  * highest property value, ms). A resumed query starts at that value; the objects at the boundary are
@@ -18,9 +23,17 @@ import { SourceError } from "../../core/http.mjs";
 import { hubspotClient, tokenOf } from "./read.mjs";
 import { searchPages } from "./reconcile.mjs";
 import { backfillForms } from "./forms.mjs";
+import { backfillEmails } from "./email.mjs";
+import { backfillThreads } from "./conversations.mjs";
 
 export const BACKFILL_STREAMS = { deal: ["createdate", "closedate"], ticket: ["createdate", "closed_date"], crm_call: ["hs_timestamp"] };
-export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "form_submission", "contact"];
+export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "form_submission", "contact", "crm_email", "inbox_thread"];
+const EMAIL_OBJECTS = new Set(["crm_email", "inbox_thread"]);
+
+/** The default start of an object's backfill when --from is not given: the email objects' own; null for the rest (intake.start_date). */
+export async function backfillFrom(object, store) {
+  return EMAIL_OBJECTS.has(object) ? store.emailStartOf() : null;
+}
 
 async function backfillSearch({ api, store, object, property, fromMs, untilMs, process }) {
   const stream = `backfill:${object}:${property}`;
@@ -59,6 +72,8 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
     return;
   }
   if (object === "contact") return backfillContacts({ store, fromMs, runAt: untilMs, process });
+  if (object === "crm_email") return backfillEmails({ connection, store, budget, fromMs, untilMs, counts });
+  if (object === "inbox_thread") return backfillThreads({ connection, store, budget, fromMs, untilMs, counts });
   const properties = BACKFILL_STREAMS[object];
   if (!properties) throw new SourceError("object_not_backfilled");
   const api = hubspotClient(await tokenOf(connection), budget);

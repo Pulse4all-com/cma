@@ -43,7 +43,11 @@
 # only:
 #   ingest-sweep       every minute   due events, the second read, telephony catalogs (hourly), link_calls
 #   ingest-poll-forms  every minute   HubSpot forms: catalog hourly, submissions until the cursor
-#   ingest-reconcile   02:30          everything modified in the last 26 hours; Aircall: calls of the last 26 hours and the webhook;
+#   ingest-poll-email  every minute   HubSpot email engagements and inbox conversations (brief B17b), for connections
+#                                     whose settings hold email_poll true: catalogs and owners hourly, threads and
+#                                     messages after their cursors, the open check every ten minutes
+#   ingest-reconcile   02:30          everything modified in the last 26 hours (HubSpot also email engagements and inbox
+#                                     threads, and the inbox trash); Aircall: calls of the last 26 hours and the webhook;
 #                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
 #   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
 #                                     Generic and unused since 0008h (the CMA writes nothing back for commerce), so it is deployed
@@ -223,6 +227,7 @@ if [ "$JOBS" = 1 ]; then
   [ -z "$RECONCILE_LOOKBACK" ] || RECONCILE_ARGS="--lookback-minutes,${RECONCILE_LOOKBACK}"
   deploy_job ingest-sweep sweep.mjs 10m ""
   deploy_job ingest-poll-forms poll-forms.mjs 10m ""
+  deploy_job ingest-poll-email poll-email.mjs 10m ""
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
   deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
@@ -243,6 +248,7 @@ if [ "$JOBS" = 1 ]; then
   }
   schedule ingest-sweep "* * * * *"
   schedule ingest-poll-forms "* * * * *"
+  schedule ingest-poll-email "* * * * *"
   schedule ingest-reconcile "$RECONCILE_EVERY"
   # The outbox has nothing to deliver since 0008h: no schedule, and one left by an earlier deploy is paused
   if gcloud scheduler jobs describe ingest-outbox --project="$PROJECT" --location="$REGION" --format='value(state)' 2>/dev/null | grep -qx ENABLED; then
@@ -256,8 +262,8 @@ if [ "$JOBS" = 1 ]; then
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|telephony_call|commerce_customer|commerce_order>,--from,<YYYY-MM-DD>"
+  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order>,--from,<YYYY-MM-DD>"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0

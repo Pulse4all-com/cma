@@ -1,6 +1,7 @@
 /**
  * The backfill (DESIGN §2, §5; manual, no schedule): one connection, one object type, from a start
- * date (--from, default the tenant's intake.start_date) up to the run's start, through the adapter's
+ * date (--from, default the tenant's intake.start_date, or the adapter's own default for the object:
+ * HubSpot's crm_email and inbox_thread start at cma.email_start_date_of) up to the run's start, through the adapter's
  * listing and the same read-back as a webhook, paced under half of the source's documented limits,
  * resumable (the adapter keeps where it stands in cma.sync_cursor after every page, and a run with
  * the same start continues there). One sync_run row (job backfill, stream the object type).
@@ -25,7 +26,8 @@ export async function runBackfill({ connectionId, object, from = null, adapters 
     throw new UsageError(`the ${c.adapter} adapter backfills ${(adapter?.backfillObjects ?? []).join(", ") || "nothing"}`);
   }
   const store = storeFor(contextOf(c), c.connectionId);
-  const date = from ?? (await store.settings())["intake.start_date"];
+  // An adapter may name an object's own default start (HubSpot's email objects: cma.email_start_date_of)
+  const date = from ?? (await adapter.backfillFrom?.(object, store)) ?? (await store.settings())["intake.start_date"];
   if (!date) throw new UsageError("no --from and no intake.start_date setting");
   const fromAt = await store.tenantStartOf(date);
   const untilMs = Date.now();

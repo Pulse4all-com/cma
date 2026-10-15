@@ -3,8 +3,9 @@
  *
  * Reads (short transactions as the tenant's Ingest user, row-level security applies):
  *   config()                    cma.connection_config(): field mapping, pipelines, settings
- *   heldContacts(ids)           the contacts the CMA holds or a record points to (0006's rule: the
- *                               contact base is never mirrored, so other contacts are not read back)
+ *   heldContacts(ids)           the contacts the CMA holds or a record, an email or an inbox thread points
+ *                               to (0006's rule, widened by 0008m: the contact base is never mirrored, so
+ *                               other contacts are not read back)
  *   recordContacts(type, ids)   the contact each record points to now
  *   currentAssociations(type, ids)   the stored, current associations from these objects
  *   tenantSlug()                for the per-tenant hash pepper's secret name
@@ -18,6 +19,20 @@
  *   recordsWithoutContact(maxAge)   cma.ingest_records_without_contact (the sweeper's second read)
  *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
+ *
+ * For the email poll (addition 0008m, brief B17b), each its own short transaction; writes in parts of
+ * at most 500, answering the outcomes counted (never an id):
+ *   emailStartOf()              cma.email_start_date_of(): email.start_date, else intake.start_date
+ *   upsertInboxes(items), upsertInboxChannels(items)   the conversations' catalogs (counts of active)
+ *   upsertEmails(items), upsertThreads(items), upsertThreadEvents(items)
+ *   upsertAssociations(items), upsertContacts(items)   0007's writes, outside a read-back unit
+ *   threadMarks(ids)            cma.ingest_thread_marks: where each held thread's stored messages stand
+ *   threadForget(id)            cma.ingest_thread_forget: a conversation gone at the source
+ *   storedContacts(ids)         the contacts with a row in crm_contact (read once when an email points to one)
+ *   threadStates(ids)           what the CMA holds of these threads (status, agent, inbox, channel, contact,
+ *                               ticket, spam, archived, forgotten), to leave an unchanged one unwritten
+ *   emailVersions(kind, ids)    the stored version (source_updated_at) of these emails, likewise
+ *   openThreadIds(), archivedThreadIds()   held threads open, or archived (in the source's trash), not forgotten
  *
  * For a commerce source (migrations 0007b, 0008h):
  *   crmConnection(id)           the CRM connection a store's customers are matched to (settings
@@ -71,6 +86,12 @@ export function storeFor(ctx, connectionId) {
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])
            union
            select contact_source_id from cma.crm_record
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
+           union
+           select contact_source_id from cma.email_message
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
+           union
+           select contact_source_id from cma.email_thread
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])`,
           [connectionId, ids]);
         return new Set(r.rows.map((x) => x.source_id));
@@ -158,7 +179,93 @@ export function storeFor(ctx, connectionId) {
            union
            select contact_source_id from cma.crm_record
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null and source_deleted_at is null
+           union
+           select contact_source_id from cma.email_message
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null
+           union
+           select contact_source_id from cma.email_thread
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null
          ) h where $2::text is null or id > $2::text order by id limit $3`, [connectionId, after, limit])).rows.map((r) => r.id));
+    },
+    async emailStartOf() {
+      return withTenant(ctx, async (q) => (await q.query("select cma.email_start_date_of(cma.current_tenant_id()) as d")).rows[0]?.d ?? null);
+    },
+    async upsertInboxes(items) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_inboxes($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
+    },
+    async upsertInboxChannels(items) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_inbox_channels($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
+    },
+    async upsertEmails(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_emails($1, $2::jsonb)", connectionId, items);
+    },
+    async upsertThreads(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_threads($1, $2::jsonb)", connectionId, items);
+    },
+    async upsertThreadEvents(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_thread_events($1, $2::jsonb)", connectionId, items);
+    },
+    async upsertAssociations(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_associations($1, $2::jsonb)", connectionId, items);
+    },
+    async upsertContacts(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_contacts($1, $2::jsonb)", connectionId, items);
+    },
+    async threadMarks(ids) {
+      const marks = new Map();
+      for (const part of chunks([...new Set(ids)])) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query(
+            "select thread_source_id, last_at, messages, events, source_updated_at, is_forgotten from cma.ingest_thread_marks($1, $2::text[])",
+            [connectionId, part]);
+          for (const x of r.rows) {
+            marks.set(x.thread_source_id, { lastAt: x.last_at ? new Date(x.last_at).getTime() : null, messages: x.messages, events: x.events,
+              isForgotten: x.is_forgotten });
+          }
+        });
+      }
+      return marks;
+    },
+    async threadForget(threadId) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_thread_forget($1, $2) as r", [connectionId, threadId])).rows[0].r);
+    },
+    async storedContacts(ids) {
+      if (!ids.length) return new Set();
+      return withTenant(ctx, async (q) => new Set((await q.query(
+        `select source_id from cma.crm_contact
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])`,
+        [connectionId, ids])).rows.map((r) => r.source_id)));
+    },
+    async threadStates(ids) {
+      if (!ids.length) return new Map();
+      return withTenant(ctx, async (q) => new Map((await q.query(
+        `select source_id, status, owner_ref, inbox_source_id, channel_source_id, contact_source_id, ticket_source_id, is_spam,
+                is_archived, forgotten_at is not null as forgotten
+           from cma.email_thread
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])`,
+        [connectionId, ids])).rows.map((r) => [r.source_id, {
+        status: r.status, ownerRef: r.owner_ref, inboxId: r.inbox_source_id, channelId: r.channel_source_id, contactId: r.contact_source_id,
+        ticketId: r.ticket_source_id, isSpam: r.is_spam, isArchived: r.is_archived, forgotten: r.forgotten,
+      }])));
+    },
+    async emailVersions(sourceKind, ids) {
+      if (!ids.length) return new Map();
+      return withTenant(ctx, async (q) => new Map((await q.query(
+        `select source_id, source_updated_at from cma.email_message
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_kind = $2 and source_id = any ($3::text[])`,
+        [connectionId, sourceKind, ids])).rows.map((r) => [r.source_id, r.source_updated_at ? new Date(r.source_updated_at).getTime() : null])));
+    },
+    async openThreadIds(limit = 2000) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select source_id from cma.email_thread
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and status = 'open' and forgotten_at is null
+          order by source_id limit $2`, [connectionId, limit])).rows.map((r) => r.source_id));
+    },
+    async archivedThreadIds(limit = 2000) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select source_id from cma.email_thread
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and is_archived and forgotten_at is null
+          order by source_id limit $2`, [connectionId, limit])).rows.map((r) => r.source_id));
     },
     async linkCalls(since) {
       return withTenant(ctx, async (q) => (await q.query("select cma.link_calls($1) as n", [since])).rows[0].n);
@@ -240,6 +347,17 @@ export function storeFor(ctx, connectionId) {
         "select count(*) as n from cma.telephony_number where tenant_id = cma.current_tenant_id() and connection_id = $1", [connectionId])).rows[0].n));
     },
   };
+}
+
+/** Writes items in parts of at most 500, one transaction each; answers { outcome: count }. */
+async function outcomes(ctx, sql, connectionId, items) {
+  const counts = {};
+  for (const part of chunks(items)) {
+    await withTenant(ctx, async (q) => {
+      for (const row of (await q.query(sql, [connectionId, JSON.stringify(part)])).rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
+    });
+  }
+  return counts;
 }
 
 const ORDER = [

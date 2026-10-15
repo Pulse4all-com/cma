@@ -167,6 +167,12 @@
           "active": true
         },
         {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "contact",
+          "propertyName": "country_dropdown",
+          "active": true
+        },
+        {
           "subscriptionType": "object.deletion",
           "objectType": "contact",
           "active": true
