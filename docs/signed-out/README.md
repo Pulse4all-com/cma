@@ -1,6 +1,6 @@
 # The signed-out page outside IAP
 
-Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Applied in prod on 15 October 2026 (`deploy.sh prod --apply`, written down from Martin's report): the bucket, the backend bucket and the route exist. Log out keeps landing on `/logout/done` until Martin switches the flag after the test plan below, so nobody is sent to the page yet.
+Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Live in prod since 15 October 2026, written down from Martin's report (`records/signed-out-prod-2026-10-15`): `deploy.sh prod --apply` at 06:01 UTC and again at 07:43 UTC for the page of `Pulse4all-com/cma#136`, the test plan below (a to e) passed, and `_LOGOUT_TARGET=signed-out` is set on the trigger `cma-web-main`, so Log out ends on the signed-out page.
 
 ## Why
 
@@ -68,13 +68,12 @@ Seen in prod on 15 October 2026 (written down from Martin's report):
 
 Verified for Add another account (15 October 2026), in that change's container: `verify:signed-out` (14 checks), whose links check wants plain `AddSession` with `target="_blank"` and `rel="noopener noreferrer"`, AddSession named once, no `continue` anywhere in the page or its script and no address set by the script, and whose `--provoke` puts the old continue line back and fails; the page in Chromium at 1280 px in English and 390 px in Dutch: the link and its caption (12 px, Footnote Grey) in the browser's language, the link's address unchanged by the script, Log in focused, no CSP violation.
 
-Not verified (needs prod, and Martin):
+Verified in prod on 15 October 2026 (written down from Martin's report, `records/signed-out-prod-2026-10-15`); until then these were not verified:
 
-- that IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out` (Google's documentation says it redirects to the address without the parameter; `/logout/done` behaves that way today, which is the evidence);
-- that the load balancer evaluates the query-parameter match before IAP sees the request (the route rule decides the backend; IAP is the backend's);
-- the redirect's url-map test: a test names no scheme, and only `httpsRedirect` (not allowed on an HTTPS proxy's map) makes a redirect's expected URL `https`, so the test expects `http://<host>/signed-out`; Google's reference does not say so in as many words. If `validate` answers otherwise, `deploy.sh` stops before the import and prints the actual URL;
-- `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (their flags parse in gcloud 570.0.0, above, but Google's answer to them is unseen), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
-- the whole add-account flow with the new link (test plan b): Add another account in a new tab, then Log in and Google's chooser, and where each kind of account ends.
+- IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out`, and the load balancer's query-parameter match decides the backend before IAP sees the request (test plan a, and Log out after the flag; the address may end on `?__gcp_iap_oauth_prompt=1`);
+- the redirect's url-map test expecting `http://<host>/signed-out` (a test names no scheme, and only `httpsRedirect`, not allowed on an HTTPS proxy's map, makes a redirect's expected URL `https`): `validate` passed with it, at both applies;
+- `gcloud compute url-maps validate` and `import` on the real map and `backend-buckets create --custom-response-header` (and `update`); the real map's shape: the Workspace has no host rule (the map's default service serves it), so the plan added the path matcher `cma-web`, and it wrote 9 tests, the number the map the README describes gives (one other host rule, for `ingest.pulse4all.app`, without path rules);
+- the whole add-account flow with the new link (test plan b, after `Pulse4all-com/cma#136`): Add another account opens Google's add-account form in a new tab, then Log in shows Google's chooser; a pulse4all.com account without a person ends on No access yet, an account outside the domain on IAP's own "You don't have access".
 
 ## Prod test plan (Martin, after `deploy.sh prod --apply`)
 
@@ -82,13 +81,13 @@ Run in this order; stop at the first that does not hold and roll back (below). S
 
 | Step | Do | Expected |
 |---|---|---|
-| a | **Browser**, signed in to the Workspace: open `https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` | The address bar ends on `/signed-out` without the parameter; the page "You're logged out" (or Dutch) with the logo; no sign-in happened. Then open `https://workspace.pulse4all.app/`: IAP asks for a sign-in or signs in again (one account: silently) |
+| a | **Browser**, signed in to the Workspace: open `https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` | The address bar ends on `/signed-out` without `gcp-iap-mode`, possibly with `?__gcp_iap_oauth_prompt=1`, which IAP adds when it clears its cookie (seen in prod, 15 October 2026); the page "You're logged out" (or Dutch) with the logo; no sign-in happened. Then open `https://workspace.pulse4all.app/`: IAP asks for a sign-in or signs in again (one account: silently) |
 | b | **Browser** with one Google account: on the page, Log in; then again a, and Add another account; add an account in the new tab, close that tab, then Log in on the page | Log in signs in silently and lands on Welcome. Add another account opens Google's add-account form in a new tab; after adding the account and closing that tab, Log in shows Google's chooser; picking a pulse4all.com account without a person ends on No access yet; an account outside the domain gets IAP's own "You don't have access" |
 | c | **Browser** with two Google accounts signed in: a, then Log in | Google's account chooser |
-| d | **Browser**: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
+| d | **Browser**, in an Incognito window, because log out of Google signs out every account in the browser: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
 | e | **Terminal**: the other paths | `curl -s -o /dev/null -w "%{http_code}" https://ingest.pulse4all.app/health` prints `200` (cma-ingest), as before (`/health` answers GET only, so `curl -I` gives 404); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
 
-Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page.
+Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page. Done on 15 October 2026: Log out ends on `/signed-out` (with `?__gcp_iap_oauth_prompt=1`), and No access yet offers Use another account.
 
 ## Rollback
 

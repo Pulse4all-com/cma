@@ -169,6 +169,8 @@ You need a second pulse4all.com Google account that is not a person in either bu
 
 ## 7. The Gemini audit
 
+**Done 15 October 2026.** Filed as `GEMINI_AUDIT.md`; findings 1.2 and 2.1 accepted and fixed in `Pulse4all-com/cma#133` (README, Decision log, 15 October 2026).
+
 **Browser:** Gemini (the auditor used for the first six audits) with the repository's public URL and the pull request's number. Paste the prompt below as it stands, the number filled in. File the answer in `docs/night-2026-10-15/` as `GEMINI_AUDIT.md` (a records pull request), and send me the findings before step 8 if any is high or critical.
 
 **File** (the prompt)
@@ -222,6 +224,8 @@ Expected: an answer with numbered findings; none high or critical before step 8.
 
 ## 8. `deploy.sh prod`: dry run, then apply
 
+**Done 15 October 2026** (`records/signed-out-prod-2026-10-15`). The first `--apply` stopped at the bucket's create (gcloud refused `--public-access-prevention=inherited`; nothing was created), fixed in `Pulse4all-com/cma#134`; the apply at 06:01 UTC went through, and a second at 07:43 UTC uploaded the page of `Pulse4all-com/cma#136`.
+
 **Terminal**
 ```bash
 cd ~/cma && bash docs/signed-out/deploy.sh prod --logo web/public/brand/logo-blue.png --name "Pulse4all" 2>&1 | tee ~/signed-out-dry-run.txt | grep -E "^(a|b|c|d|e)\.|^\+|STOP|^=="
@@ -236,11 +240,15 @@ Expected: the same plan; `c. gs://p4a-cma-prod-signed-out holds exactly: signed-
 
 ## 9. The signed-out test plan
 
+**Done 15 October 2026** (`records/signed-out-prod-2026-10-15`): a to e passed, b after `Pulse4all-com/cma#136` (Add another account opens Google's add-account form in a new tab).
+
 **File:** `docs/signed-out/README.md`, Prod test plan, steps a to e, in that order. Stop at the first that does not hold and roll back (same file, Rollback).
 
 Expected: a to e as the table there says; in short: `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` ends on `/signed-out`, signed out; Log in is silent with one account and shows Google's chooser with two; Use another account goes through Google's add-account page; Log out of Google signs the browser out of Google; `ingest.pulse4all.app` and every other path behave as before.
 
 ## 10. `_LOGOUT_TARGET=signed-out`
+
+**Done 15 October 2026** (`records/signed-out-prod-2026-10-15`): `_LOGOUT_TARGET=signed-out` on `cma-web-main`, the build of `dbd3c79` ended `SUCCESS`; Log out ends on `/signed-out`, with `?__gcp_iap_oauth_prompt=1`, which IAP adds when it clears its cookie.
 
 **Terminal** (the trigger's substitutions, as README Build and deploy describes: export, edit, import, run)
 ```bash
@@ -257,7 +265,7 @@ cd ~ && gcloud beta builds triggers import --project=p4a-cma-prod --region=europ
 ```
 Expected: the trigger imported, then a build; its config line ends `logout=signed-out` and it ends `SUCCESS`.
 
-**Browser:** Workspace → My day → Log out → Log out. Expected: the browser ends on `https://workspace.pulse4all.app/signed-out`, "You're logged out", not signed in again. No access yet (an account without a person) now offers "Use another account".
+**Browser:** Workspace → My day → Log out → Log out. Expected: the browser ends on `https://workspace.pulse4all.app/signed-out` (possibly with `?__gcp_iap_oauth_prompt=1`, which IAP adds when it clears its cookie), "You're logged out", not signed in again. No access yet (an account without a person) now offers "Use another account".
 
 ---
 
