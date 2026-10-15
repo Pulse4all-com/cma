@@ -1,6 +1,6 @@
 # The signed-out page outside IAP
 
-Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Nothing of this is applied yet: the page, the script and the flag are in the repository, the bucket and the route are not, and Log out keeps landing on `/logout/done` until Martin switches the flag after the test plan below.
+Since the night of 14 to 15 October 2026 (README, Authentication; Decision log, 15 October 2026). Live in prod since 15 October 2026, written down from Martin's report (`records/signed-out-prod-2026-10-15`): `deploy.sh prod --apply` at 06:01 UTC and again at 07:43 UTC for the page of `Pulse4all-com/cma#136`, the test plan below (a to e) passed, and `_LOGOUT_TARGET=signed-out` is set on the trigger `cma-web-main`, so Log out ends on the signed-out page.
 
 ## Why
 
@@ -8,8 +8,8 @@ Log out ends the workday and sends the browser to IAP's cookie-clearing address 
 
 The signed-out page is a static file served by the load balancer from a public bucket, outside IAP. After Log out the browser lands there, signed out of the Workspace, and stays there until the person chooses:
 
-- **Log in** (`/`): IAP signs in again; with one Google account in the browser this is silent, with several Google shows its chooser.
-- **Use another account**: Google's own add-account page, `https://accounts.google.com/AddSession?continue=https://<host>/`, which adds an account and returns to the Workspace, where IAP then shows the chooser.
+- **Log in** (`/`): IAP signs in again; with one Google account in the browser this is silent, with several Google shows its chooser (which has its own "Use another account").
+- **Add another account**: Google's own add-account form, plain `https://accounts.google.com/AddSession`, in a new tab (`target="_blank"`, `rel="noopener noreferrer"`) and without a return address: Google refuses a `continue` outside Google (Decision log, 15 October 2026). The person adds the account there, closes that tab and chooses Log in on this page, where Google's chooser now lists the new account. A caption under the link says so: "Opens Google in a new tab. Add the account there, close that tab, then Log in here and choose it." (Dutch: "Opent Google in een nieuw tabblad. Voeg daar het account toe, sluit dat tabblad en kies het hier bij Inloggen.")
 - **Log out of Google** (in the shared-computer line): Google's own `https://accounts.google.com/Logout`. The Workspace itself never signs anyone out of Google; that stays the person's choice, and shared-desk security stays the desk's and Workspace's (Decision log).
 
 Both Google addresses are Google's web pages opened by the browser, not an API.
@@ -31,11 +31,13 @@ The bucket is public for reading an object by its name only: `allUsers` holds `r
 |---|---|
 | `web/signed-out/index.html` | The page: one file, inline CSS (the style guide's tokens, Montserrat self-hosted), English and Dutch from the browser's language, word for word `copy.ts`'s `signedOut` keys. Its CSP: `default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-…'; base-uri 'none'; form-action 'none'`; the one inline script is allowed by its hash only. No identity, no data, no cookie, no request of its own. `{{DISPLAY_NAME}}` and `{{LOGO_FILE}}` are written in at upload, so no tenant or company name is in the repository |
 | `docs/signed-out/deploy.sh` | `bash docs/signed-out/deploy.sh <dev\|prod> --logo <path> --name <display name> [--host <host>] [--apply]`: dry run by default (its header lists every step) |
-| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate` |
+| `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate`; the new map keeps the map's fingerprint, and with the three rules in place no new map is written (nothing to import) |
 | `web/src/lib/logout.ts` | `CMA_LOGOUT_TARGET` (`legacy`, `signed-out`), Log out's Location, the "Use another account" address |
-| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 14 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
+| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 16 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
 
 The font comes from `web/src/fonts/Montserrat-VF.ttf` (the app's own copy; `web/public/brand/` holds only the logos).
+
+A change to the page's script changes its hash, so the page's CSP meta tag changes with it (`verify:signed-out` fails until it does) and so does the backend bucket's CSP header: rerun `deploy.sh prod --apply`, which uploads the page at c and updates the header at d, validates the map and, with the three route rules in place, does not import it ("e. map unchanged, no import"). Between the two, for a few seconds, the old header blocks the new script; the page then shows its English markup without the script.
 
 ## Verified and not verified
 
@@ -58,30 +60,52 @@ The first `deploy.sh prod --apply` (15 October 2026) stopped at b, at the bucket
 - the night's two fake `gcloud`s now refuse a value on `--public-access-prevention` or `--pap` as gcloud does: with `--apply` against the permissive fake, the old script stops at the create with gcloud's message and changes nothing, and the fixed script runs to `== done`;
 - `verify:signed-out` (14 checks): `deploy.sh` passes no value to either flag, and its one bucket create passes `--no-public-access-prevention`.
 
-Not verified (needs prod, and Martin):
+Seen in prod on 15 October 2026 (written down from Martin's report):
 
-- that IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out` (Google's documentation says it redirects to the address without the parameter; `/logout/done` behaves that way today, which is the evidence);
-- that the load balancer evaluates the query-parameter match before IAP sees the request (the route rule decides the backend; IAP is the backend's);
-- the redirect's url-map test: a test names no scheme, and only `httpsRedirect` (not allowed on an HTTPS proxy's map) makes a redirect's expected URL `https`, so the test expects `http://<host>/signed-out`; Google's reference does not say so in as many words. If `validate` answers otherwise, `deploy.sh` stops before the import and prints the actual URL;
-- `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (their flags parse in gcloud 570.0.0, above, but Google's answer to them is unseen), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
-- Google's chooser and add-account flow after Log in and Use another account (test plan b and c).
+- `https://accounts.google.com/AddSession?continue=https://workspace.pulse4all.app/` answers Google's "400. That's an error … malformed"; plain `https://accounts.google.com/AddSession` and `https://accounts.google.com/AddSession?continue=https://myaccount.google.com/` both show Google's add-account form. Google refuses a `continue` outside Google, so the page's link is plain `AddSession` in a new tab (Decision log, 15 October 2026);
+- Log in (`/`) with several Google accounts in the browser shows Google's account chooser, which has its own "Use another account"; with one account it signs in silently;
+- after the import, the URL map took a few minutes to take effect.
+
+Verified for Add another account (15 October 2026), in that change's container: `verify:signed-out` (14 checks), whose links check wants plain `AddSession` with `target="_blank"` and `rel="noopener noreferrer"`, AddSession named once, no `continue` anywhere in the page or its script and no address set by the script, and whose `--provoke` puts the old continue line back and fails; the page in Chromium at 1280 px in English and 390 px in Dutch: the link and its caption (12 px, Footnote Grey) in the browser's language, the link's address unchanged by the script, Log in focused, no CSP violation.
+
+Verified in prod on 15 October 2026 (written down from Martin's report, `records/signed-out-prod-2026-10-15`); until then these were not verified:
+
+- IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out`, and the load balancer's query-parameter match decides the backend before IAP sees the request (test plan a, and Log out after the flag; the address may end on `?__gcp_iap_oauth_prompt=1`);
+- the redirect's url-map test expecting `http://<host>/signed-out` (a test names no scheme, and only `httpsRedirect`, not allowed on an HTTPS proxy's map, makes a redirect's expected URL `https`): `validate` passed with it, at both applies;
+- `gcloud compute url-maps validate` and `import` on the real map and `backend-buckets create --custom-response-header` (and `update`); the real map's shape: the Workspace has no host rule (the map's default service serves it), so the plan added the path matcher `cma-web`, and it wrote 9 tests, the number the map the README describes gives (one other host rule, for `ingest.pulse4all.app`, without path rules);
+- the whole add-account flow with the new link (test plan b, after `Pulse4all-com/cma#136`): Add another account opens Google's add-account form in a new tab, then Log in shows Google's chooser; a pulse4all.com account without a person ends on No access yet, an account outside the domain on IAP's own "You don't have access".
+
+The second prod apply (07:43 UTC) re-imported the map although the plan found nothing to change, and gcloud warned about the fingerprint at both imports. Fixed and verified on 15 October 2026, in that change's container:
+
+- gcloud 570.0.0's own code (read, and run offline with its bundled Python): `url-maps import` warns "An up-to-date fingerprint must be provided" whenever the file carries a fingerprint, and then replaces it with the live one, so today a stale fingerprint never reaches the API; `url-maps export` writes the fingerprint as a top-level `fingerprint:` line; the restore copy (`grep -v '^fingerprint:'` plus `fingerprint: '<live>'`) loads in gcloud's importer with the live fingerprint; a 412 from the Compute API reads `ERROR: (gcloud.compute.url-maps.import) HTTPError 412: …`;
+- `deploy.sh` against the night's fake `gcloud`, which now keeps the live map, writes the export as gcloud does and refuses an import with a missing or stale fingerprint with 412, as gcloud warns later versions will (`docs/night-2026-10-15/local-records/signed-out/fake-gcloud/urlmap-state.py`): the first apply on `map1` imports (7 changing calls); the rerun on the map it left validates and prints `e. map unchanged, no import` (no import call; the script before this fix imports it again, as in prod); a map changed by someone else after the plan stops before the import, and one changed between the fingerprint check and the import stops on the import's 412, both with `e. STOP: cma-web-urlmap changed since the export; nothing was imported, rerun`; the printed restore command, run after the first apply, puts the map back as exported, while the plain import of the export gets 412; the dry runs on `map1`, `map2`, `map3` (stopped at the plan), dev, an enforced organisation policy and the applied map make no changing call;
+- `verify:signed-out` (16 checks): a rerun on the planned map writes no new map and `deploy.sh` imports only a new one, after validate; the new map keeps the fingerprint, a map without one stops the plan, `deploy.sh` compares the live fingerprint before the import and stops on a 412, and its restore command imports a copy with the live fingerprint, never the export itself.
 
 ## Prod test plan (Martin, after `deploy.sh prod --apply`)
 
-Run in this order; stop at the first that does not hold and roll back (below).
+Run in this order; stop at the first that does not hold and roll back (below). Start a few minutes after the import: in prod on 15 October 2026 the URL map took a few minutes to take effect, and until then the old routes answer.
 
 | Step | Do | Expected |
 |---|---|---|
-| a | **Browser**, signed in to the Workspace: open `https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` | The address bar ends on `/signed-out` without the parameter; the page "You're logged out" (or Dutch) with the logo; no sign-in happened. Then open `https://workspace.pulse4all.app/`: IAP asks for a sign-in or signs in again (one account: silently) |
-| b | **Browser** with one Google account: on the page, Log in; then again a, and Use another account | Log in signs in silently and lands on Welcome. Use another account opens Google's add-account page; after adding an account the browser returns to the Workspace and IAP shows the account chooser |
+| a | **Browser**, signed in to the Workspace: open `https://workspace.pulse4all.app/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` | The address bar ends on `/signed-out` without `gcp-iap-mode`, possibly with `?__gcp_iap_oauth_prompt=1`, which IAP adds when it clears its cookie (seen in prod, 15 October 2026); the page "You're logged out" (or Dutch) with the logo; no sign-in happened. Then open `https://workspace.pulse4all.app/`: IAP asks for a sign-in or signs in again (one account: silently) |
+| b | **Browser** with one Google account: on the page, Log in; then again a, and Add another account; add an account in the new tab, close that tab, then Log in on the page | Log in signs in silently and lands on Welcome. Add another account opens Google's add-account form in a new tab; after adding the account and closing that tab, Log in shows Google's chooser; picking a pulse4all.com account without a person ends on No access yet; an account outside the domain gets IAP's own "You don't have access" |
 | c | **Browser** with two Google accounts signed in: a, then Log in | Google's account chooser |
-| d | **Browser**: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
-| e | **Terminal**: the other paths | `curl -sI https://ingest.pulse4all.app/health` answers as before (200 from cma-ingest); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
+| d | **Browser**, in an Incognito window, because log out of Google signs out every account in the browser: a, then "log out of Google" | Google's sign-out page; afterwards `https://mail.google.com` asks for a sign-in |
+| e | **Terminal**: the other paths | `curl -s -o /dev/null -w "%{http_code}" https://ingest.pulse4all.app/health` prints `200` (cma-ingest), as before (`/health` answers GET only, so `curl -I` gives 404); `curl -sI https://workspace.pulse4all.app/` answers 302 to IAP's sign-in, as before; `curl -sI https://workspace.pulse4all.app/signed-out` answers 200 with `content-type: text/html; charset=utf-8`, `cache-control: public, max-age=300` and the `content-security-policy` header; `curl -sI https://workspace.pulse4all.app/signed-out/logo-blue.png` 200; `curl -sI https://workspace.pulse4all.app/signed-out/` answers 302 with `location: https://workspace.pulse4all.app/signed-out` (`/signed-out/` redirects to `/signed-out`); `curl -sI https://workspace.pulse4all.app/signed-outx` answers 302 to IAP's sign-in, like `/` (`/signed-outx` asks for sign-in through IAP); `curl -s https://storage.googleapis.com/storage/v1/b/p4a-cma-prod-signed-out/o` answers an error (401 or 403) about `storage.objects.list`, not a list of objects |
 
-Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page.
+Only after a to e: set `_LOGOUT_TARGET=signed-out` on the trigger and rebuild (README, Build and deploy: export, edit, import, run). Then Log out once from My day: the browser lands on the signed-out page. Done on 15 October 2026: Log out ends on `/signed-out` (with `?__gcp_iap_oauth_prompt=1`), and No access yet offers Use another account.
 
 ## Rollback
 
 - The flag: `_LOGOUT_TARGET=legacy` (or remove it) on the trigger and rebuild; Log out lands on `/logout/done` again.
-- The route: `gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=<the export deploy.sh printed> --quiet`.
+- The route: the restore command `deploy.sh` prints at e (since 15 October 2026; earlier runs printed the plain import of the export), in Cloud Shell. It writes the live fingerprint into a copy of the export and imports the copy, because the export's own fingerprint is stale once the map has changed: gcloud 570.0.0 still imports a stale export (it swaps in the live fingerprint and warns), but it warns that later versions refuse it with 412. In prod the export of the map before the signed-out routes is `~/cma-web-urlmap-20261015T060142Z.yaml` (the first apply, `records/signed-out-prod-2026-10-15`); with it, the command is:
+
+  **Terminal**
+  ```bash
+  fp="$(gcloud compute url-maps describe cma-web-urlmap --project=p4a-cma-prod --global --format='value(fingerprint)')" && [ -n "$fp" ] \
+    && { grep -v '^fingerprint:' $HOME/cma-web-urlmap-20261015T060142Z.yaml; echo "fingerprint: '$fp'"; } > $HOME/cma-web-urlmap-20261015T060142Z-restore.yaml \
+    && gcloud compute url-maps import cma-web-urlmap --project=p4a-cma-prod --global --source=$HOME/cma-web-urlmap-20261015T060142Z-restore.yaml --quiet
+  ```
+
+  Expected: gcloud's fingerprint warning, `Updating URL map...done.`; the map without the path matcher `cma-web` and its host rule, after a few minutes in effect.
 - The bucket and the backend bucket may stay (nothing routes to them after the import above), or be deleted by hand: `gcloud compute backend-buckets delete cma-signed-out-backend --project=p4a-cma-prod`, then `gcloud storage rm -r gs://p4a-cma-prod-signed-out`.

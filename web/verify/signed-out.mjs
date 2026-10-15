@@ -8,16 +8,23 @@
  *
  * The page (web/signed-out/index.html): no cookie access, no fetch or XHR, no external script or stylesheet,
  * the CSP with the one inline script's hash, no tenant name before the deploy script writes one in, both
- * languages equal to copy.ts's signedOut keys, the three links. The flag (src/lib/logout.ts and its callers):
+ * languages equal to copy.ts's signedOut keys, the three links: Add another account is Google's plain AddSession
+ * in a new tab, with no continue address anywhere in the page or its script, because Google answers 400 to a
+ * continue outside Google (seen in prod, 15 October 2026). The flag (src/lib/logout.ts and its callers):
  * Log out's Location when CMA_LOGOUT_TARGET is legacy, signed-out or unset, a typo refused, the build passing
  * it; "Use another account" on No access yet only with the flag. The gate: /signed-out has no exception in
  * proxy.ts's matcher and no route or file in the app, so without a valid IAP token it is refused like any page.
  * The bucket and the route (Gemini audit of #128, findings 1.2 and 2.1): docs/signed-out/deploy.sh grants allUsers
  * roles/storage.legacyObjectReader (an object by its name, no listing) and stops on any other role allUsers holds;
  * docs/signed-out/urlmap.py, run with python3 on the fixture verify/signed-out-urlmap.json, plans exactly the three
- * route rules, keeps the default service and the ingest host rule, writes the three new url-map tests, and
- * changes nothing on a rerun. The bucket's create passes --no-public-access-prevention: gcloud takes
- * --[no-]public-access-prevention (--[no-]pap) as a boolean and refuses a value, as the first --apply in prod found.
+ * route rules, keeps the default service and the ingest host rule, and writes the three new url-map tests. The
+ * bucket's create passes --no-public-access-prevention: gcloud takes --[no-]public-access-prevention (--[no-]pap)
+ * as a boolean and refuses a value, as the first --apply in prod found. After the second --apply in prod (15 October
+ * 2026), which re-imported an unchanged map: a rerun on the planned map writes no new map, only the map as it is for
+ * validate, and deploy.sh then validates and does not import; the new map keeps the fingerprint of the map as read,
+ * deploy.sh compares it with the live one before the import and stops on a difference or a 412, and the restore
+ * command it prints writes the live fingerprint into a copy of the export, since the export's own is stale once the
+ * map changes and later gcloud versions refuse a stale one with 412.
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -56,6 +63,10 @@ if (PROVOKE) {
   page = page
     .replace("default-src 'none';", "default-src *;")
     .replace("var T = {", "fetch('/x'); document.cookie = 'a=1'; var T = {")
+    // the continue line that Google refused in prod, put back
+    .replace('document.getElementById("add-account").textContent = t.addAccount;',
+      'var another = document.getElementById("add-account");\n  another.textContent = t.addAccount;\n' +
+      '  another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/");')
     .replace("</head>", '<script src="https://cdn.example.com/x.js"></script><link rel="stylesheet" href="https://fonts.example.com/a.css"></head>')
     .replace('alt="{{DISPLAY_NAME}}"', 'alt="Pulse4all"')
     .replace('subtitle: "Je sessie in de Workspace op deze browser is beëindigd."', 'subtitle: "Je sessie is klaar."')
@@ -81,6 +92,17 @@ if (PROVOKE) {
   urlmapSrc = urlmapSrc
     .replace('"matchRules": [{"fullPathMatch": SIGNED_OUT}, {"prefixMatch": SIGNED_OUT + "/"}]', '"matchRules": [{"prefixMatch": SIGNED_OUT}]')
     .replace('"redirectResponseCode": "FOUND"', '"redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT"');
+  // the second prod --apply's re-import of an unchanged map, a new map without the fingerprint, the plain import of
+  // a stale export as the restore command
+  urlmapSrc = urlmapSrc
+    .replace('nothing to change")\n            json.dump(new, open(validate_path, "w"), indent=2)',
+      'nothing to change")\n            json.dump(new, open(new_path, "w"), indent=2)\n            json.dump(new, open(validate_path, "w"), indent=2)')
+    .replace('    json.dump(new, open(new_path, "w"), indent=2)\n    json.dump({**new, "tests": tests}',
+      '    json.dump({k: v for k, v in new.items() if k != "fingerprint"}, open(new_path, "w"), indent=2)\n    json.dump({**new, "tests": tests}');
+  deploySrc = deploySrc
+    .replace('if [ ! -f "${WORK}/urlmap-new.json" ]; then', "if false; then")
+    .replace('[ "$live_fp" = "$planned_fp" ] || changed_since_export', "true")
+    .replace("--source=${RESTORE} --quiet", "--source=${EXPORT} --quiet");
 }
 
 // ---- the page ---------------------------------------------------------------------------------------
@@ -100,8 +122,8 @@ check("the page makes no request of its own (no fetch, XHR, beacon, socket, impo
 
 const urls = [...page.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/g)].map((m) => m[1]);
 const cssUrls = [...page.matchAll(/url\(\s*"?([^")]+)"?\s*\)/g)].map((m) => m[1]);
-// Google's two web addresses: AddSession (in the markup, and with ?continue= built by the script) and Logout
-const GOOGLE = ["https://accounts.google.com/AddSession", "https://accounts.google.com/AddSession?continue=", "https://accounts.google.com/Logout"];
+// Google's two web addresses, as they stand in the markup: AddSession (no continue: Google refuses one outside Google) and Logout
+const GOOGLE = ["https://accounts.google.com/AddSession", "https://accounts.google.com/Logout"];
 check("no external script, stylesheet or font: only the page's own files and Google's two addresses", [
   ...(scripts.some((m) => /\bsrc\s*=/.test(m[1])) ? ["a script with src"] : []),
   ...(/<link\b/i.test(page) ? ["a link element"] : []),
@@ -142,17 +164,21 @@ const sharedBefore = en.shared.split("{logOutOfGoogle}")[0];
 check("English and Dutch, word for word copy.ts's signedOut, chosen from the browser's language", [
   ...(JSON.stringify(pageBlock("en")) !== JSON.stringify(en) ? ["English differs from copy.ts"] : []),
   ...(JSON.stringify(pageBlock("nl")) !== JSON.stringify(nl) ? ["Dutch differs from copy.ts"] : []),
-  ...(text("title") !== en.title || text("subtitle") !== en.subtitle || text("log-in") !== en.logIn || text("use-another") !== en.useAnother
+  ...(text("title") !== en.title || text("subtitle") !== en.subtitle || text("log-in") !== en.logIn || text("add-account") !== en.addAccount ||
+      text("add-account-hint") !== en.addAccountHint
     ? ["the markup's English defaults differ from copy.ts"] : []),
   ...(!page.includes(`${sharedBefore}<a id="google-logout"`) ? ["the shared-computer line differs"] : []),
   ...(!/navigator\.languages/.test(code) || !/=== "nl" \? "nl" : "en"/.test(code) ? ["the language is not taken from the browser, English by default"] : []),
 ]);
 
-check("the three links: Log in to / (focused), another account through Google's AddSession, Google's Logout", [
+check("the three links: Log in to / (focused), Add another account to Google's plain AddSession in a new tab, Google's Logout", [
   ...(!/<a class="button" id="log-in" href="\/" autofocus>/.test(page) ? ["Log in is not / with autofocus"] : []),
   ...(!/logIn\.focus\(\)/.test(code) ? ["Log in is not focused by the script"] : []),
-  ...(!code.includes('another.href = "https://accounts.google.com/AddSession?continue=" + encodeURIComponent("https://" + location.host + "/")')
-    ? ["Use another account does not continue to https://<location.host>/"] : []),
+  ...(!page.includes('<a id="add-account" href="https://accounts.google.com/AddSession" target="_blank" rel="noopener noreferrer" aria-describedby="add-account-hint">')
+    ? ["Add another account is not plain AddSession with target=_blank and rel=\"noopener noreferrer\""] : []),
+  ...(page.split("https://accounts.google.com/AddSession").length !== 2 ? ["AddSession is not named exactly once"] : []),
+  ...(/continue/i.test(page) ? ["a continue in the page or its script"] : []),
+  ...(/\.href\s*=|setAttribute\s*\(|\.search\s*=/.test(code) ? ["the script changes a link's address"] : []),
   ...(!page.includes('<a id="google-logout" href="https://accounts.google.com/Logout">') ? ["Log out of Google is not Google's Logout"] : []),
   ...(!/Google's own web pages, opened by the browser, not an API/.test(code) ? ["the comment on the two Google addresses is missing"] : []),
 ]);
@@ -272,8 +298,6 @@ else {
   const tests = (validate.tests ?? []).map(canon);
   for (const t of wantTests) if (!tests.includes(canon(t))) urlmapProblems.push(`no url-map test ${canon(t)}`);
   if ("tests" in after) urlmapProblems.push("the imported map carries the tests");
-  const again = plan("new.json", "rerun");
-  if (again.status !== 0 || !/nothing to change/.test(again.stdout) || canon(readJson("rerun.json")) !== canon(after)) urlmapProblems.push("a rerun on the new map changes something");
 }
 // The Workspace with a path matcher of its own: priorities 1 to 3 are reserved, pathRules convert from 10 on
 const withMatcher = (matcher) => ({ ...urlmapFixture, hostRules: [...urlmapFixture.hostRules, { hosts: [HOST], pathMatcher: "web" }],
@@ -288,8 +312,54 @@ if (!converted || "pathRules" in converted ||
     canon((converted.routeRules ?? []).map(undescribed)) !== canon([...wantRules, { priority: 10, matchRules: [{ prefixMatch: "/api/" }], service: WEB }])) {
   urlmapProblems.push("a matcher's pathRules are not converted behind the three rules from priority 10");
 }
+// A rerun on the planned map: the three rules are in place, so no new map, only the map as it is for validate
+const unchangedProblems = [];
+// The lock: the new map keeps the fingerprint of the map as read; a map without one stops the plan
+const lockProblems = [];
+if (!after) {
+  unchangedProblems.push("no plan to rerun");
+  lockProblems.push("no plan");
+} else {
+  const again = plan("new.json", "rerun");
+  if (again.status !== 0 || !/nothing to change/.test(again.stdout)) unchangedProblems.push("a rerun on the new map does not find the three rules in place");
+  if (existsSync(join(work, "rerun.json"))) unchangedProblems.push("a rerun on the new map writes a new map to import");
+  if (canon(readJson("rerun-validate.json")) !== canon(after)) unchangedProblems.push("a rerun does not write the map as it is for validate");
+  if (after.fingerprint !== urlmapFixture.fingerprint) lockProblems.push(`the new map's fingerprint is ${after.fingerprint ?? "missing"}, not the map's as read`);
+}
+writeFileSync(join(work, "bare.json"), JSON.stringify(Object.fromEntries(Object.entries(urlmapFixture).filter(([k]) => k !== "fingerprint"))));
+const bare = plan("bare.json", "bare-new");
+if (bare.status !== 1 || !/STOP: the map as read has no fingerprint/.test(bare.stdout) || existsSync(join(work, "bare-new.json"))) {
+  lockProblems.push("a map without a fingerprint does not stop the plan");
+}
 rmSync(work, { recursive: true, force: true });
 check("urlmap.py on the fixture: exactly the three route rules, the default service and the ingest host rule kept, the new tests", urlmapProblems);
+
+// deploy.sh: the import only when there is a new map, after validate; an unchanged map says so
+const guard = 'if [ ! -f "${WORK}/urlmap-new.json" ]; then\n  echo "e. map unchanged, no import"\nelse\n';
+const imports = [...deploySrc.matchAll(/url-maps import "\$URLMAP"/g)].map((m) => m.index);
+const guardAt = deploySrc.indexOf(guard);
+const guardEnd = guardAt < 0 ? -1 : deploySrc.indexOf("\nfi\n", guardAt);
+check("an unchanged plan is validated, not imported: urlmap.py writes no new map, deploy.sh imports only a new one", [
+  ...unchangedProblems,
+  ...(guardAt < 0 ? ["deploy.sh does not skip the import without a new map (\"e. map unchanged, no import\")"] : []),
+  ...(imports.length !== 1 ? [`${imports.length} url-maps imports in deploy.sh`] : []),
+  ...imports.filter((i) => guardAt < 0 || i < guardAt || i > guardEnd).map(() => "the import is outside the branch for a new map"),
+  ...(guardAt >= 0 && deploySrc.indexOf("gcloud compute url-maps validate") > guardAt ? ["validate does not come first"] : []),
+]);
+
+// deploy.sh: the live fingerprint against the planned one before the import, a 412 from it, the restore command
+const lockAt = deploySrc.indexOf('[ "$live_fp" = "$planned_fp" ] || changed_since_export');
+check("the import is locked on the map as read (its fingerprint kept, compared, a 412 stops), the restore writes the live one", [
+  ...lockProblems,
+  ...(!deploySrc.includes(`planned_fp="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["fingerprint"])' "\${WORK}/urlmap-new.json")"`) ? ["the planned fingerprint is not read from urlmap-new.json"] : []),
+  ...(!deploySrc.includes(`live_fp="$(gcloud compute url-maps describe "$URLMAP" --project="$PROJECT" --global --format='value(fingerprint)')"`) ? ["the live fingerprint is not read"] : []),
+  ...(lockAt < 0 || lockAt > (imports[0] ?? -1) ? ["the two fingerprints are not compared before the import"] : []),
+  ...(!deploySrc.includes(`|| { grep -Eq '^ERROR: .*(412|conditionNotMet)' "\${WORK}/urlmap-import.txt" && changed_since_export; exit 1; }`) ? ["a 412 from the import does not stop as a changed map"] : []),
+  ...(!deploySrc.includes('echo "e. STOP: ${URLMAP} changed since the export; nothing was imported, rerun"') ? ["the STOP line for a changed map is missing"] : []),
+  ...(!deploySrc.includes(`{ grep -v '^fingerprint:' \${EXPORT}; echo "fingerprint: '\\$fp'"; } > \${RESTORE}`) ? ["the restore does not write the live fingerprint into a copy"] : []),
+  ...(!deploySrc.includes("--global --source=${RESTORE} --quiet") ? ["the restore does not import the copy"] : []),
+  ...(deploySrc.includes("--source=${EXPORT}") ? ["the export itself is imported, with its stale fingerprint"] : []),
+]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

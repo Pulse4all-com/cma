@@ -30,9 +30,9 @@
 #      no-referrer
 #   e. URL map cma-web-urlmap, planned before step b (read only, so a map the script does not expect stops it
 #      before anything is created) and imported after d: exported first to a timestamped file (the restore
-#      command is printed); for the
-#      Workspace's host three route rules, the default service and every other host rule (cma-ingest) kept as
-#      they are:
+#      command is printed: it writes the live fingerprint into a copy of the export and imports the copy);
+#      for the Workspace's host three route rules, the default service and every other host rule (cma-ingest)
+#      kept as they are:
 #        priority 1  prefix /signed-out with query gcp-iap-mode=CLEAR_LOGIN_COOKIE -> cma-web-backend (IAP
 #                    clears its cookie and redirects to /signed-out)
 #        priority 2  exactly /signed-out/ -> a 302 redirect to /signed-out (Gemini audit of #128, finding 2.1)
@@ -46,7 +46,10 @@
 #      only there (anything else stops the script), passes `gcloud compute url-maps validate` with tests for
 #      every existing path, the default and the new routes (the page, the trailing slash's redirect, a file,
 #      /signed-outx) (once the backend bucket exists; in a dry run before d it says so), and
-#      only then is imported
+#      only then is imported. When the three route rules are in place already, the map is validated as it is
+#      and not imported ("e. map unchanged, no import"). The import is locked on the map as read for the plan:
+#      the new map carries its fingerprint, and when the live map's differs, before the import or as the
+#      import's 412, the script stops and nothing is imported
 #   f. prints what to check (docs/signed-out/README.md, test plan a to e)
 set -euo pipefail
 
@@ -129,8 +132,15 @@ if [ "$ENV" = prod ]; then
   EXPORT="${HOME}/cma-web-urlmap-${STAMP}.yaml"
   gcloud compute url-maps export "$URLMAP" --project="$PROJECT" --global --destination="$EXPORT" --quiet
   gcloud compute url-maps describe "$URLMAP" --project="$PROJECT" --global --format=json > "${WORK}/urlmap-before.json"
-  echo "e. ${URLMAP} exported to ${EXPORT}. To put it back as it was:"
-  echo "   gcloud compute url-maps import ${URLMAP} --project=${PROJECT} --global --source=${EXPORT} --quiet"
+  # The export's fingerprint is stale once the map changes, and gcloud is to refuse a stale one with 412, so
+  # the restore writes the live fingerprint into a copy of the export and imports the copy
+  RESTORE="${EXPORT%.yaml}-restore.yaml"
+  echo "e. ${URLMAP} exported to ${EXPORT}. To put it back as it was (the live fingerprint written into a copy):"
+  cat <<EOF
+   fp="\$(gcloud compute url-maps describe ${URLMAP} --project=${PROJECT} --global --format='value(fingerprint)')" && [ -n "\$fp" ] \\
+     && { grep -v '^fingerprint:' ${EXPORT}; echo "fingerprint: '\$fp'"; } > ${RESTORE} \\
+     && gcloud compute url-maps import ${URLMAP} --project=${PROJECT} --global --source=${RESTORE} --quiet
+EOF
   python3 "${ROOT}/docs/signed-out/urlmap.py" plan "${WORK}/urlmap-before.json" "$HOST" "$WEB_LINK" "$BUCKET_LINK" \
     "${WORK}/urlmap-new.json" "${WORK}/urlmap-validate.json"
 fi
@@ -239,7 +249,12 @@ else
 fi
 
 # e. The URL map, as planned above: validated with its tests once the backend bucket exists (validate reads
-#    only), then imported
+#    only), then imported, unless the plan found the three route rules in place (it then writes no new map).
+#    The import is locked on the map as read for the plan: urlmap-new.json carries that map's fingerprint.
+#    gcloud 570 replaces a file's fingerprint with the live one before it patches (and warns "An up-to-date
+#    fingerprint must be provided"; later versions send it, and the API refuses a stale one with 412
+#    conditionNotMet), so the live fingerprint is compared here first, and a 412 from the import stops the
+#    same way
 if [ "$APPLY" = 1 ] || gcloud compute backend-buckets describe "$BACKEND_BUCKET" --project="$PROJECT" >/dev/null 2>&1; then
   gcloud compute url-maps validate --project="$PROJECT" --global --load-balancing-scheme="$SCHEME" \
     --source="${WORK}/urlmap-validate.json" --format=json > "${WORK}/urlmap-validate-result.json" \
@@ -248,7 +263,22 @@ if [ "$APPLY" = 1 ] || gcloud compute backend-buckets describe "$BACKEND_BUCKET"
 else
   echo "e. validate runs with --apply, once ${BACKEND_BUCKET} exists (the new map names it)"
 fi
-change gcloud compute url-maps import "$URLMAP" --project="$PROJECT" --global --source="${WORK}/urlmap-new.json" --quiet
+changed_since_export () {
+  echo "e. STOP: ${URLMAP} changed since the export; nothing was imported, rerun"
+  exit 1
+}
+if [ ! -f "${WORK}/urlmap-new.json" ]; then
+  echo "e. map unchanged, no import"
+else
+  if [ "$APPLY" = 1 ]; then
+    planned_fp="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["fingerprint"])' "${WORK}/urlmap-new.json")"
+    live_fp="$(gcloud compute url-maps describe "$URLMAP" --project="$PROJECT" --global --format='value(fingerprint)')"
+    [ "$live_fp" = "$planned_fp" ] || changed_since_export
+  fi
+  change gcloud compute url-maps import "$URLMAP" --project="$PROJECT" --global --source="${WORK}/urlmap-new.json" \
+    --quiet 2>&1 | tee "${WORK}/urlmap-import.txt" \
+    || { grep -Eq '^ERROR: .*(412|conditionNotMet)' "${WORK}/urlmap-import.txt" && changed_since_export; exit 1; }
+fi
 
 # f. What to check next
 echo "== $([ "$APPLY" = 1 ] && echo done || echo "dry run done: rerun with --apply to make the changes printed with +")"
@@ -256,4 +286,4 @@ echo "   Then the test plan in docs/signed-out/README.md (a to e), in a browser:
 echo "   https://${HOST}/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE should land on https://${HOST}/signed-out, signed out;"
 echo "   https://${HOST}/signed-out/ redirects there, and https://${HOST}/signed-outx asks for a sign-in (IAP)."
 echo "   Only after a to e: set _LOGOUT_TARGET=signed-out on the trigger and rebuild (README, Build and deploy)."
-echo "   To undo the route: the import command above, then _LOGOUT_TARGET=legacy."
+echo "   To undo the route: the restore command above (e.), then _LOGOUT_TARGET=legacy."
