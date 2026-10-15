@@ -136,7 +136,9 @@ export async function writeContacts(api, store, config, ids, counts, detail) {
   const stored = await store.storedContacts(unique);
   const need = unique.filter((id) => !stored.has(id));
   if (!need.length) return;
-  const objects = await api.batchRead("contact", need, propertiesFor("contact", config));
+  // An empty property list would bring HubSpot's defaults (email, names): ask for the id alone then
+  const properties = propertiesFor("contact", config);
+  const objects = await api.batchRead("contact", need, properties.length ? properties : ["hs_object_id"]);
   if (objects.length) tally(counts, detail, "contacts", await store.upsertContacts(objects.map((o) => contactFromObject(o, config))));
 }
 

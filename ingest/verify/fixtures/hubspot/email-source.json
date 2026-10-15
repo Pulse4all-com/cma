@@ -132,5 +132,17 @@
         "senders": [{ "actorId": "A-7000009999", "name": "Invented Agentone" }], "recipients": [], "status": { "statusType": "FAILED", "failureDetails": { "errorMessageId": "x" } },
         "client": { "clientType": "HUBSPOT" } }
     ]
-  }
+  },
+  "emailProperties": [
+    {"name": "hs_timestamp", "label": "Activity date", "type": "datetime"},
+    {"name": "hs_email_direction", "label": "Email direction", "type": "enumeration", "options": [{"value": "EMAIL"}, {"value": "INCOMING_EMAIL"}, {"value": "FORWARDED_EMAIL"}]},
+    {"name": "hs_email_status", "label": "Email send status", "type": "enumeration", "options": [{"value": "SENT"}, {"value": "BOUNCED"}, {"value": "FIXTURE_STATUS"}]},
+    {"name": "hubspot_owner_id", "label": "Activity assigned to", "type": "enumeration"},
+    {"name": "hs_createdate", "label": "Created at", "type": "datetime"},
+    {"name": "hs_lastmodifieddate", "label": "Last modified", "type": "datetime"},
+    {"name": "hs_email_subject", "label": "Email subject", "type": "string"},
+    {"name": "fixture_thread_id", "label": "Thread id (fixture)", "type": "string"},
+    {"name": "fixture_origin", "label": "Origin (fixture)", "type": "enumeration", "options": [{"value": "AUTOMATION_FIXTURE"}, {"value": "MANUAL_FIXTURE"}, {"value": "someone.invented@example.com"}]},
+    {"name": "fixture_unrelated", "label": "Unrelated (fixture)", "type": "string"}
+  ]
 }

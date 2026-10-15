@@ -13,15 +13,15 @@ PASS  …and asked Aircall nothing                                       got 0
 PASS  …and answered with an empty body                                 got ""
 PASS  call.created → 200                                               got 200
 PASS  …recorded and processed                                          got "processed"
-PASS  …the call: outbound, initial, started, user and line as ids      got ["outbound","initial","2026-10-15T13:09:34.000Z","9200000001","9300000
+PASS  …the call: outbound, initial, started, user and line as ids      got ["outbound","initial","2026-10-15T13:27:28.000Z","9200000001","9300000
 PASS  …its counterpart as HMAC(pepper, E.164)                          got "0da345bfb583b690ddbdcfbe8e2ea87d862ebfd0fba6a3b3a7ebac6280371ddd"
 PASS  …one read of /v1/calls/{id} with the connection's Basic auth     got [1,true]
 PASS  the first event of a connection without lines read the catalogs  got [2,2]
 PASS  …lines with name and the company's own digits, no market yet, counted got [["9300000001","+442000000900",null,true],["9300000002","+442000000901
-PASS  call.answered → answered at                                      got "2026-10-15T13:09:42.000Z"
+PASS  call.answered → answered at                                      got "2026-10-15T13:27:36.000Z"
 PASS  call.tagged → both tags open                                     got ["9400000001","9400000002"]
 PASS  call.untagged → the removed tag closed, the other open           got [["9400000001"],["9400000002"]]
-PASS  call.ended → done, ended at, duration 71, talk 63 seconds        got ["done","2026-10-15T13:10:45.000Z",71,63]
+PASS  call.ended → done, ended at, duration 71, talk 63 seconds        got ["done","2026-10-15T13:28:39.000Z",71,63]
 PASS  call.archived → archived                                         got true
 PASS  the six events: six rows, all processed                          got [{"status":"processed","n":6}]
 PASS  raw holds the allowlisted keys only                              got ["answered_at","archived","direction","duration","ended_at","started_a
@@ -30,10 +30,10 @@ PASS  …still six events, no second read                                got [6,
 PASS  call.hungup, user.created, contact.created → 200                 got [200,200,200]
 PASS  …recorded as ignored, event_not_handled                          got ["call.hungup:event_not_handled","contact.created:event_not_handled","
 PASS  …and nothing asked of Aircall                                    got 0
-PASS  read-back: call.ended before call.answered still ends done with both times got ["done","2026-10-15T13:09:42.000Z","2026-10-15T13:10:45.000Z"]
+PASS  read-back: call.ended before call.answered still ends done with both times got ["done","2026-10-15T13:27:36.000Z","2026-10-15T13:28:39.000Z"]
 PASS  replay: call.ended on the replay connection → 200                got 200
 PASS  replay: call.answered arriving after it → 200                    got 200
-PASS  …the older event is stale: the call stays done, versioned at the ended event got ["done","2026-10-15T13:10:45.000Z","2026-10-15T13:11:25.000Z"]
+PASS  …the older event is stale: the call stays done, versioned at the ended event got ["done","2026-10-15T13:28:39.000Z","2026-10-15T13:29:19.000Z"]
 PASS  …both events processed                                           got 2
 PASS  …and nothing asked of Aircall (no read, no catalog)              got 0
 PASS  …the hash made from the event's own number                       got "dbb8fab71b028536054856ce6a76c06d92e40c2ac2116a1c0c5bc1eed8625ec7"
@@ -81,7 +81,7 @@ PASS  …backfill of another object is refused                           got "Us
 PASS  …the replay connection (dev) refuses a backfill                  got "replay_connection"
 PASS  tenant one's token on tenant two's key → 401                     got 401
 PASS  tenant two's own token → 200                                     got 200
-PASS  …read with tenant two's key, the row in tenant two, hashed with its pepper got [true,["01a13fb7-d5b6-79b2-9c32-0da91904ccd0"],"9896b95ee3819072f9c19a
+PASS  …read with tenant two's key, the row in tenant two, hashed with its pepper got [true,["01a13fc8-3722-7704-8562-b940acdb170d"],"9896b95ee3819072f9c19a
 PASS  tenant one sees none of tenant two's calls, lines or events      got [0,0,0]
 PASS  no customer number in any form in the telephony rows, events, cursors or runs got []
 PASS  no name, email, comment, recording, voicemail, asset or contact  got false

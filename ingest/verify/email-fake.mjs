@@ -94,6 +94,13 @@ export async function startFakeHubSpot(source, { page = 2 } = {}) {
         });
         return json(res, results.length === body.inputs.length ? 200 : 207, { status: "COMPLETE", results });
       }
+      if (url.pathname === "/crm/v3/properties/emails") return json(res, 200, { results: source.emailProperties ?? [] });
+      if (url.pathname === "/conversations/v3/conversations/actors/batch/read") {
+        const TYPES = { A: "AGENT", V: "VISITOR", E: "EMAIL", S: "SYSTEM", B: "BOT", I: "INTEGRATOR", L: "LLM" };
+        const results = body.inputs.map((id) => [id, TYPES[/^([A-Z])-/.exec(id)?.[1]]]).filter(([, t]) => t)
+          .map(([id, type]) => ({ id, type, name: "Invented Customer", ...(type === "EMAIL" ? { email: id.slice(2) } : {}) }));
+        return json(res, results.length === body.inputs.length ? 200 : 207, { status: "COMPLETE", results });
+      }
       if (url.pathname.startsWith("/conversations/v3/conversations/")) {
         if (state.failConversations) {
           const f = state.failConversations;

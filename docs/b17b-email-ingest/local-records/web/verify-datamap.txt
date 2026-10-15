@@ -1,0 +1,6 @@
+
+> cma-web@0.1.0 verify:datamap
+> node ../tools/datamap/verify.mjs
+
+datamap: PASS (72 tables, 89 views, all described; index.html current)
+exit 0

@@ -304,5 +304,38 @@ expect("open check: a thread closed without a message is read again and stored c
 expect("open check: a thread gone at the source (404, also archived) is forgotten", [store.state.forgotten, since(n0).filter((r) => r.path.endsWith("/threads/8800000003")).map((r) => r.query.archived ?? "")],
   [["8800000003"], ["", "true"]], [[], []]);
 
+// ---- H. The dev check script (docs/ingest/hubspot-email-check.mjs) against the fake, with a fake gcloud --
+const { spawn } = await import("node:child_process");
+const { join } = await import("node:path");
+const { writeFileSync, chmodSync, mkdtempSync } = await import("node:fs");
+const { tmpdir } = await import("node:os");
+const binDir = mkdtempSync(join(tmpdir(), "email-check-bin-"));
+writeFileSync(join(binDir, "gcloud"), "#!/bin/bash\n[ \"$1 $2 $3\" = \"secrets versions access\" ] && { printf 'fixture-check-token-0001'; exit 0; }\nexit 3\n");
+chmodSync(join(binDir, "gcloud"), 0o755);
+const CHECK = new URL("../../docs/ingest/hubspot-email-check.mjs", import.meta.url).pathname;
+// Asynchronous: the fake HubSpot answers from this process's event loop
+const runCheck = (args) => new Promise((resolve) => {
+  const child = spawn(process.execPath, [CHECK, ...args], { env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, INGEST_HUBSPOT_API_BASE: fake.url } });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (c) => { stdout += c; });
+  child.stderr.on("data", (c) => { stderr += c; });
+  child.on("close", (status) => resolve({ status, stdout, stderr }));
+});
+const chk = await runCheck(["--project", "p4a-cma-verify", "--token-secret", "ingest-hubspot-verify-token", "--days", "30"]);
+const line = (re) => chk.stdout.split("\n").find((l) => re.test(l)) ?? "";
+expect("check script: exit 0; the status values and a missing property named", [chk.status, /options: SENT, BOUNCED, FIXTURE_STATUS/.test(line(/^hs_email_status /)),
+  /MISSING/.test(line(/^hs_email_from_email /))], [0, true, true], [1, false, false]);
+expect("check script: the thread and origin candidates, an option holding an address left out", [/fixture_thread_id/.test(chk.stdout), /fixture_origin.*AUTOMATION_FIXTURE, MANUAL_FIXTURE$/m.test(chk.stdout),
+  /fixture_unrelated/.test(chk.stdout)], [true, true, false], [false, false, true]);
+expect("check script: actor prefixes with HubSpot's types, counted", ["A AGENT", "E EMAIL", "V VISITOR", "S SYSTEM", "B BOT", "I INTEGRATOR"]
+  .map((x) => new RegExp(`^${x.split(" ")[0]}\\s+${x.split(" ")[1]}\\s+\\d+$`, "m").test(chk.stdout)), [true, true, true, true, true, true], [false, false, false, false, false, false]);
+expect("check script: no actor id, name, address, subject or the token printed", [forbiddenIn(chk.stdout + chk.stderr), /fixture-check-token/.test(chk.stdout + chk.stderr)],
+  [[], false], [["x"], true]);
+expect("check script: inboxes and channels by id and name, an inbox named by an address not shown", [/^inbox\s+1500000001\s+"Support inbox \(test\)"$/m.test(chk.stdout),
+  /^inbox\s+1500000002\s+\(the name holds an address; not shown\)$/m.test(chk.stdout), /^inbox\s+1500000009 .*archived$/m.test(chk.stdout), /^channel\s+1002\s+"Email"$/m.test(chk.stdout)],
+  [true, true, true, true], [false, false, false, false]);
+expect("check script: refuses without its arguments (exit 2)", (await runCheck([])).status, 2, 0);
+
 await fake.close();
 verdict();

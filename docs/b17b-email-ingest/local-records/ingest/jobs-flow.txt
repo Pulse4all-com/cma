@@ -16,7 +16,7 @@ PASS  sweep: a parked event is never claimed again                     got 3
 PASS  outbox guard: no action → outboxPending 0, no warning            got [0,0]
 PASS  outbox guard: a pending action just enqueued is not overdue yet  got [0,0]
 PASS  outbox guard: due 11 minutes ago and never claimed → outboxPending 1 got 1
-PASS  outbox guard: one warning with the connection and the count, no contact id got [["WARNING","01a13fb7-c7e4-7db2-a17a-69ab2c5ca5ee",1,false]]
+PASS  outbox guard: one warning with the connection and the count, no contact id got [["WARNING","01a13fc8-273c-75cb-8602-d5d455f1dea5",1,false]]
 PASS  outbox guard: it does not fail the sweep                         got 0
 PASS  outbox guard: another tenant's sweep does not count it           got 0
 PASS  outbox guard: a newer action supersedes it and is not overdue yet got [0,["superseded","pending"]]
@@ -65,7 +65,7 @@ PASS  reconcile: a second run lists the same and reads nothing again   got [true
 PASS  reconcile: --lookback-minutes 10 asks the last ten minutes, one object type got [true,9]
 PASS  isolation: an unfiltered sweep serves tenant two's due event     got "processed"
 PASS  isolation: …read with tenant two's token                         got true
-PASS  isolation: tenant two's record and run rows live in tenant two   got [["01a13fb7-c7cd-74aa-a7c2-f5f8751e2f21"],["01a13fb7-c7cd-74aa-a7c2-f5
+PASS  isolation: tenant two's record and run rows live in tenant two   got [["01a13fc8-2715-7389-80a1-43c2c20102a6"],["01a13fc8-2715-7389-80a1-43
 PASS  isolation: tenant one sees none of tenant two's runs or cursors  got [0,0]
 PASS  isolation: the tenant one's requests all carried tenant one's token got true
 PASS  no email in the submissions, cursors, runs, events, contacts or forms got false

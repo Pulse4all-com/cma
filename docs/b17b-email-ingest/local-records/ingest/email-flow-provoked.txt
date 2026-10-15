@@ -29,7 +29,7 @@ FAIL  F1 cma.email_words_match on the 12 shared cases: the expected answers, as 
 FAIL  F2 cma.email_category_of on the 7 shared cases: the expected categories, as the ingest's got [["billing","reminder","partner",null,null,null,"billing"],["billing",, wanted [["x","x","x","x","x","x","x"],["x","x","x","x","x","x","x"]]
 FAIL  G1 a connection without email_poll is never served (no run, no row) got [0,0], wanted [1,1]
 FAIL  G2 tenant two sees none of tenant one's email rows               got [0,0], wanted [6,4]
-FAIL  G3 every email row of the run lives in tenant one                got ["01a13fb7-ad5a-725f-84bb-8990e5af22c5"], wanted ["01a13fb7-ad6f-7f61-90d2-c5cd94ce87e7"]
+FAIL  G3 every email row of the run lives in tenant one                got ["01a13fc8-07ee-7161-80ea-d4d787e66aaa"], wanted ["01a13fc8-0814-709b-b271-ffeb02926f39"]
 FAIL  H1 no row, audit image, cursor or run holds a name, address, subject, text or raw actor id got [], wanted ["x"]
 FAIL  H2 no log line holds them, a token, or an email, thread or contact id got [[],false,false], wanted [["x"],true,true]
 

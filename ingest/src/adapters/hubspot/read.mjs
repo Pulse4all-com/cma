@@ -12,6 +12,9 @@
  *   privacy         contact.privacyDeletion → cma.ingest_contact_forget(), no read
  *   catalogs        pipelines with stages, and the call outcomes, at most hourly per connection
  *
+ * The client also serves the email poll (brief B17b): email engagements (crm_email, through
+ * JOB_OBJECT, so their webhooks stay ignored), the conversations API and both owner lists.
+ *
  * Every call takes the budget's signal. 429 and timeouts fail the events of that object type with
  * rate_limited or timeout (the sweeper reads them again with backoff).
  */

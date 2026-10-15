@@ -1,6 +1,6 @@
 # Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8) and Shopify (phase 9). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9) and the email poll (phase 10, brief B17b, 15 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -878,3 +878,92 @@ This bridge check is the only place the link shows today: Reports → Data quali
 - **Browser:** Reports → Data quality: `Shop customers without a contact` and the ambiguous count. These still read the contacts' Contact-Shopify ID-1/2 refs, not the link of 0008h (README Open decisions): until the HubSpot–Shopify app fills those properties every customer counts as without a contact (NL store, 14 October 2026: 1,874, while the bridge check of 9.8 had 1,830 linked). Once the app fills them, customers without a deal still count as unmatched (the CMA holds a contact only while a record points to it), so a high number is expected; a number that does not fall as deals come in means the app is not filling the ID properties or 7.3's ref fields are not set.
 - **One real match, by hand:** Shopify admin → Customers → a customer with a recent order → the customer id (the number at the end of the address); live portal → the contact with that customer's email → its record id (in the address bar). In Studio, `set role cma_owner; select crm_contact_source_id, matched_at from cma.commerce_customer where connection_id = '<shop conn>' and source_id = '<customer id>'; reset role;`. Expected: the contact's record id. Ids only: nothing else of the customer goes into the records.
 - **Records:** the outputs of 9.2 to 9.8 per store (the source names of 9.6, the orders per kind and the bridge check of 9.8), the check of 9.5 and the renewal values into `records/intake-prod-<date>/`.
+
+---
+
+# Phase 10. The email poll in prod (brief B17b)
+
+The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
+
+Before you start:
+- `main` holds the merge of B17b, and dev runs it (the same image: `deploy.sh` says `no build`).
+- `country_dropdown` exists in the live portal (it is HubSpot's own country dropdown there); nothing to create.
+- **Tell Kira first:** once the contacts are read again with slot 2 (10.5), 0007d's deal market falls back to more primary contacts' countries, so speed to lead and intake per market shift and show fewer unknown markets (README Open decisions).
+
+## 10.1 The prod app: the two read scopes and the subscription
+
+**Terminal** (in `~/cma`, on `main`)
+```bash
+node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && cd hubspot/build/prod && hs project upload && cd ~/cma
+```
+Expected: `rendered prod: hubspot/build/prod`, the upload naming the live portal, build and deploy of **CMA ingest prod** succeeding with both components.
+
+**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the Standard install → accept the update; the consent screen adds `sales-email-read` and `conversations.read`, read only.
+
+Expected: the install active with the two scopes on the Auth tab. The token stays; if HubSpot shows a new one, `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
+
+## 10.2 What the live portal holds
+
+**Terminal**
+```bash
+node docs/ingest/hubspot-email-check.mjs --project p4a-cma-prod --token-secret ingest-hubspot-subs-token --days 30
+```
+Expected: the four blocks as in dev (runbook step 3a): the eight properties present with the `hs_email_status` options, the candidates for the two settings (the same names as dev's when the property is HubSpot's own; otherwise pick again), the actor prefixes, the live inboxes and channels with their ids. Send me blocks 1 to 3; keep block 4 for 10.4.
+
+## 10.3 The settings, country slot 2, the aliases
+
+**Studio (cma-prod-pg)** after the context block (the current settings merged in, as `app_host` stays; leave out a property 10.2 gave none for)
+```sql
+select cma.set_connection_settings('<conn>', (select c.settings from cma.integration_connection c where c.id = '<conn>')
+  || '{"email_poll": true, "email_thread_property": "<thread property>", "email_origin_property": "<origin property>", "email_automated_origins": "<automated values>"}'::jsonb);
+select cma.set_connection_field('<conn>', 'contact', 'country', '', 'country_dropdown', 2::smallint);
+select cma.connection_config('<conn>') -> 'settings';
+reset role;
+```
+Expected: two empty results, then the settings with `app_host`, `email_poll: true` and the properties.
+
+The aliases: the option values as one list (runbook step 3c's Terminal command with `--secret=ingest-hubspot-subs-token --project=p4a-cma-prod`), then the read of step 3c on `cma-prod-pg`, then `cma.set_market_alias('<option value>', '<market code>')` (or Configuration → Markets → Aliases in the Workspace) for every value naming a catalog market that has none.
+
+Expected: every option value of a catalog market's country shows its market; the others stay empty.
+
+## 10.4 Inboxes and channels
+
+With block 4 of 10.2: per inbox whether it counts, its market, work type and channel; per channel its tenant channel and whether it counts (runbook step 3d's statements on `cma-prod-pg`). Defaults when nothing is set: a new inbox counts and takes the channel `email`; a new channel counts only when its kind is `email`. Which inboxes count and which market each serves is Arno's and Kira's call; set the ones they named.
+
+Expected: `cma.connection_config('<conn>') -> 'inboxes'` as configured.
+
+## 10.5 The jobs, then the backfill
+
+**Terminal** (on `main`)
+```bash
+bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `image … exists (sha256:…); no build`, six job deploys, `schedule ingest-poll-email: * * * * * (Europe/Amsterdam)` next to the others. Two minutes later the Studio read of runbook step 4 on `cma-prod-pg`: `email_poll` runs `succeeded`, the `email:` cursors.
+
+**Terminal** (contacts first, then emails and threads; `<conn>` the live portal's connection)
+```bash
+for o in contact crm_email inbox_thread; do gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,$o; done
+```
+Expected: three successful executions. `crm_email` and `inbox_thread` start at `cma.email_start_date_of` (`email.start_date` is empty, so `intake.start_date`, 1 October 2026). A failed execution is run again with the same arguments: it continues where it stopped.
+
+## 10.6 Read-only counts
+
+The Studio reads of runbook step 8 on `cma-prod-pg` (counts only), and the fallback check:
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_owner;
+select country_source, count(*) from cma.crm_contact group by 1 order by 1;
+select t.slug, (select count(*) from cma.data_quality_of(t.id) q where q.check_key = 'contact_country_fallback') as fallback_findings,
+       (select count(*) from cma.data_quality_of(t.id) q where q.check_key = 'market_not_in_catalog' and q.object_type = 'contact') as contact_not_in_catalog
+from cma.tenant t order by 1;
+reset role;
+```
+Expected: most held contacts with `country_source` 2 (Contact-Country is filled on almost none, README KPIs 11); `fallback_findings` the same count for `pulse4all-subscriptions`, 0 for Invest; `contact_not_in_catalog` the values without an alias (add aliases for those that name a market, 10.3).
+
+## 10.7 Day one
+
+- **Runs:** `select status, error, count(*) from cma.sync_run where job = 'email_poll' and started_at > now() - interval '1 day' group by 1, 2;` (after `set role cma_owner;`, then `reset role;`): about 1,440 `succeeded`; a `failed` with `rate_limited` now and then is fine (the next run reads again); a run of `http_403` means a scope.
+- **The nightly reconcile** after 02:30: `reconcile` rows with streams `crm_email` and `inbox_thread`, `succeeded`.
+- **No content anywhere:** `select count(*) from cma.email_message where raw::text like '%@%';` and the same for `cma.email_thread`: 0 (counts only).
+- **Records:** the outputs of 10.2 (blocks 1 to 3), 10.5 and 10.6 into `records/b17b-prod-<date>/` in a separate pull request, written from your report (ids, counts, dates and times only).

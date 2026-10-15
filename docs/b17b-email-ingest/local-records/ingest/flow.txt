@@ -59,10 +59,10 @@ PASS  the same delivery again → no second alert                        got [20
 PASS  a changed event (the shape of reconcile and backfill) → no alert got [200,1]
 PASS  a created event for a deal older than the age limit → no alert   got 1
 PASS  a deal created now with an owner → 200                           got 200
-PASS  …one assignment alert, urgent, to the owner's person only        got [1,"New deal assigned to you","urgent","7100000001",["01a13fb7-c21d-73
+PASS  …one assignment alert, urgent, to the owner's person only        got [1,"New deal assigned to you","urgent","7100000001",["01a13fc8-21a2-74
 PASS  …next to the created alert of the first rule                     got 2
 PASS  the owner changed → 200                                          got 200
-PASS  …one more assignment alert, to the new owner; the same change again adds nothing got [2,"7100000002",["01a13fb7-c27f-7fc1-a1af-0dd08389b9af"],200,2]
+PASS  …one more assignment alert, to the new owner; the same change again adds nothing got [2,"7100000002",["01a13fc8-220d-7acf-a7b5-4b079092ec5e"],200,2]
 PASS  the automation route without a bearer → 401                      got 401
 PASS  …with a wrong bearer → 401                                       got 401
 PASS  …the HubSpot connection's key on /automation → 404               got 404
@@ -72,7 +72,7 @@ PASS  …stored as an urgent announcement with the record link, delivered to tha
 PASS  …one refused (nobody) and one sent in the same request           got [200,[{"index":0,"code":"invalid"}],1]
 PASS  tenant one's secret on tenant two's key → 401                    got 401
 PASS  tenant two's own signed event → 200                              got 200
-PASS  tenant two's record lives in tenant two                          got ["01a13fb7-bb83-77de-a8cb-b25c857f5ecf"]
+PASS  tenant two's record lives in tenant two                          got ["01a13fc8-1ade-7d0c-a8cc-1cbf6fa06792"]
 PASS  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two"
 PASS  tenant one cannot see tenant two's records                       got 0
 PASS  tenant one's records unchanged by tenant two                     got 4
