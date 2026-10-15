@@ -217,7 +217,7 @@ FROM EXTERNAL_QUERY(
 </div>
 <script>
 /* DATA is written by tools/datamap/build.mjs from catalog.json and schema.json:
-   { meta: { built_at, generated_at, latest_migration },
+   { meta: { built_at, generated_at, latest_migration },   // built_at is the snapshot's generated_at, so a build is reproducible
      domains: [{ key, label, sources }],
      tables:  [{ name, domain, what, how, inRead, columns: [{ n, t, r }] }],   // r: column visible in cma_read
      derived: [{ name, what, columns: [{ n, t, r }] }],
@@ -226,7 +226,7 @@ const DATA = __DATA__;
 const fmtDate = s => new Date(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Amsterdam' });
 const N = { tables: DATA.tables.length, read: DATA.readCount, overTables: DATA.tables.filter(t => t.inRead).length, derived: DATA.derived.length, dq: DATA.dq.length };
 document.querySelectorAll('[data-n]').forEach(e => e.textContent = N[e.dataset.n]);
-document.getElementById('stamp').textContent = `Schema as of migration ${DATA.meta.latest_migration} (${fmtDate(DATA.meta.generated_at)}), page built ${fmtDate(DATA.meta.built_at)}. Both business lines share one database`;
+document.getElementById('stamp').textContent = `Schema as of migration ${DATA.meta.latest_migration}, snapshot of ${fmtDate(DATA.meta.generated_at)}, from which this page is built. Both business lines share one database`;
 const nv = DATA.tables.filter(t => !t.inRead).map(t => t.name);
 document.getElementById('noview').innerHTML = nv.length ? `${nv.length} tables have no view: ${nv.map(n => `<code>${n}</code>`).join(', ')}` : 'Every table has a view';
 const doms = DATA.domains;
