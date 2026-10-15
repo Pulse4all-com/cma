@@ -33,7 +33,7 @@ The bucket is public for reading an object by its name only: `allUsers` holds `r
 | `docs/signed-out/deploy.sh` | `bash docs/signed-out/deploy.sh <dev\|prod> --logo <path> --name <display name> [--host <host>] [--apply]`: dry run by default (its header lists every step) |
 | `docs/signed-out/urlmap.py` | The URL map change, computed locally from the map as exported: the three route rules (priorities 1 to 3 reserved; a matcher's converted pathRules from 10 on), a check that nothing else differs, the url-map tests for `validate` |
 | `web/src/lib/logout.ts` | `CMA_LOGOUT_TARGET` (`legacy`, `signed-out`), Log out's Location, the "Use another account" address |
-| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 13 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
+| `web/verify/signed-out.mjs` | `npm run verify:signed-out`, pure, 14 checks, `--provoke` fails every one; runs `urlmap.py` with `python3` on the fixture `web/verify/signed-out-urlmap.json` |
 
 The font comes from `web/src/fonts/Montserrat-VF.ttf` (the app's own copy; `web/public/brand/` holds only the logos).
 
@@ -52,12 +52,18 @@ Verified after the Gemini audit of #128 (15 October 2026), in that pull request'
 - `deploy.sh` against the night's fake `gcloud`, its IAM policy answer varied: no bucket proposes the `legacyObjectReader` binding; an existing `legacyObjectReader` binding is kept; `allUsers` holding `objectViewer`, or `legacyBucketReader` beside `legacyObjectReader`, stops at b with the role named; an unreadable policy stops at b; every dry run made no changing call;
 - `urlmap.py` on the night's three maps and on a map read back with the API's defaults written out (`stripQuery: false`, partial links): the rerun changes nothing; a priority 2 that redirects with 301 stops.
 
+The first `deploy.sh prod --apply` (15 October 2026) stopped at b, at the bucket's create, and created nothing: `gcloud storage buckets create` takes `--public-access-prevention` (`--pap`) as a boolean flag (on means enforced) and refused `--public-access-prevention=inherited` with "ignored explicit argument 'inherited'". The create now passes `--no-public-access-prevention`, which leaves the bucket's public access prevention inherited. Verified in that fix's container:
+
+- gcloud 570.0.0 refuses the old create with the same message (exit 2) and parses the new one. Every kind of `gcloud` command `deploy.sh` runs or prints (nineteen, the remove command of the STOP at b included) was tried with its requests sent to a closed proxy port, so none left the container: each got as far as its API request, and only the old create stopped at its arguments;
+- the night's two fake `gcloud`s now refuse a value on `--public-access-prevention` or `--pap` as gcloud does: with `--apply` against the permissive fake, the old script stops at the create with gcloud's message and changes nothing, and the fixed script runs to `== done`;
+- `verify:signed-out` (14 checks): `deploy.sh` passes no value to either flag, and its one bucket create passes `--no-public-access-prevention`.
+
 Not verified (needs prod, and Martin):
 
 - that IAP, given `/signed-out?gcp-iap-mode=CLEAR_LOGIN_COOKIE` on `cma-web-backend`, clears its cookie and redirects to `/signed-out` (Google's documentation says it redirects to the address without the parameter; `/logout/done` behaves that way today, which is the evidence);
 - that the load balancer evaluates the query-parameter match before IAP sees the request (the route rule decides the backend; IAP is the backend's);
 - the redirect's url-map test: a test names no scheme, and only `httpsRedirect` (not allowed on an HTTPS proxy's map) makes a redirect's expected URL `https`, so the test expects `http://<host>/signed-out`; Google's reference does not say so in as many words. If `validate` answers otherwise, `deploy.sh` stops before the import and prints the actual URL;
-- `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (the flags are as documented, not run here), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
+- `gcloud compute url-maps validate` and `import` on the real map, `backend-buckets create --custom-response-header` (their flags parse in gcloud 570.0.0, above, but Google's answer to them is unseen), and the real map's shape (the README says the Workspace is served by the map's default service, with one host rule for `ingest.pulse4all.app`);
 - Google's chooser and add-account flow after Log in and Use another account (test plan b and c).
 
 ## Prod test plan (Martin, after `deploy.sh prod --apply`)

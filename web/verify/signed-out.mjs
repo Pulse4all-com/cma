@@ -16,7 +16,8 @@
  * roles/storage.legacyObjectReader (an object by its name, no listing) and stops on any other role allUsers holds;
  * docs/signed-out/urlmap.py, run with python3 on the fixture verify/signed-out-urlmap.json, plans exactly the three
  * route rules, keeps the default service and the ingest host rule, writes the three new url-map tests, and
- * changes nothing on a rerun.
+ * changes nothing on a rerun. The bucket's create passes --no-public-access-prevention: gcloud takes
+ * --[no-]public-access-prevention (--[no-]pap) as a boolean and refuses a value, as the first --apply in prod found.
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -72,8 +73,11 @@ if (PROVOKE) {
   };
   routeFiles = [...routeFiles, "signed-out/page.tsx"];
   publicSignedOut = true;
-  // the audit's two findings put back: a role that lists the bucket, one prefix rule with no redirect
-  deploySrc = deploySrc.replace("PUBLIC_ROLE=roles/storage.legacyObjectReader", "PUBLIC_ROLE=roles/storage.objectViewer");
+  // the audit's two findings put back (a role that lists the bucket, one prefix rule with no redirect), and the
+  // value on public access prevention that stopped the first --apply in prod
+  deploySrc = deploySrc
+    .replace("PUBLIC_ROLE=roles/storage.legacyObjectReader", "PUBLIC_ROLE=roles/storage.objectViewer")
+    .replace("--no-public-access-prevention", "--public-access-prevention=inherited");
   urlmapSrc = urlmapSrc
     .replace('"matchRules": [{"fullPathMatch": SIGNED_OUT}, {"prefixMatch": SIGNED_OUT + "/"}]', '"matchRules": [{"prefixMatch": SIGNED_OUT}]')
     .replace('"redirectResponseCode": "FOUND"', '"redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT"');
@@ -206,6 +210,15 @@ check("deploy.sh grants allUsers legacyObjectReader (no listing), never objectVi
   ...(!deploySrc.includes('if [ "$public_roles" = "$PUBLIC_ROLE" ]; then') ? ["an existing binding is not matched on exactly the public role"] : []),
   ...(!deploySrc.includes('if [ "$role" != "$PUBLIC_ROLE" ]; then') ||
       !deploySrc.includes('echo "b. STOP: allUsers holds ${role} on gs://${BUCKET}; remove it by hand"') ? ["another role of allUsers does not stop the script"] : []),
+]);
+
+// gcloud storage buckets create/update take --[no-]public-access-prevention and --[no-]pap as booleans: a value
+// is refused ("ignored explicit argument"), and --no-public-access-prevention leaves the bucket inherited
+const creates = [...deploySrc.matchAll(/storage buckets create(?:[^\n]*\\\n)*[^\n]*/g)].map((m) => m[0].replace(/\\\n\s*/g, ""));
+check("deploy.sh passes no value to --public-access-prevention or --pap; the bucket's create leaves it inherited", [
+  ...[...deploySrc.matchAll(/--(?:no-)?(?:public-access-prevention|pap)=\S*/g)].map((m) => `a value on a boolean flag: ${m[0]}`),
+  ...(creates.length !== 1 ? [`${creates.length} bucket creates`] : []),
+  ...creates.filter((c) => !/ --no-public-access-prevention(?: |$)/.test(c)).map(() => "the bucket's create does not pass --no-public-access-prevention"),
 ]);
 
 // Stable JSON: the same value with keys in any order gives the same text
