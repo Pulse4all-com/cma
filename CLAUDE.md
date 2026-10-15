@@ -31,7 +31,7 @@
 ## Database (db/)
 - Scripts are numbered and run in order; a change is a new script plus its verify script (for example `32_<name>.sql` and `33_verify_<name>.sql`), not an edit to a script that has run in prod. Every new tenant table gets `cma.setup_tenant_table(table)`.
 - Follow the conventions in README (Architecture, Data model sections): error codes, permissions, the provoke switch in verify scripts.
-- A PR that adds or changes a table, view or column in cma or cma_read updates docs/datamap/catalog.json (a `what` and `how` for each new table, an entry for each new computed view) and says in its description that Martin refreshes docs/datamap/schema.json from dev after the migration has run there. A change to how or how often a source fills a table (webhooks, job schedules, catalogs) updates that table's `how` in the same PR.
+- A PR that adds or changes a table, view or column in cma or cma_read updates docs/datamap/catalog.json (a `what` and `how` for each new table, an entry for each new computed view) and says in its description that Martin refreshes docs/datamap/schema.json from dev on this branch after running the migration there, before merging; until then verify:datamap fails on this branch, which is expected. A change to how or how often a source fills a table (webhooks, job schedules, catalogs) updates that table's `how` in the same PR.
 
 ## Ingest (ingest/, docs/ingest/)
 - No ingest route takes personal data in its path or query string: the path holds the adapter and the connection key (an identifier, not a secret), secrets travel in headers or signatures, data in the body. Cloud Run's request log keeps the URL (Decision log, 12 October 2026).

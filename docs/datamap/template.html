@@ -218,7 +218,8 @@ FROM EXTERNAL_QUERY(
 <script>
 /* DATA is written by tools/datamap/build.mjs from catalog.json and schema.json:
    { meta: { built_at, generated_at, latest_migration },   // built_at is the snapshot's generated_at, so a build is reproducible
-     domains: [{ key, label, sources }],
+     domains: [{ key, label }],
+     flows:   { <key>: { src, ways, doms } },   // src and ways: data-ids below (src null when none), doms: domain keys
      tables:  [{ name, domain, what, how, inRead, columns: [{ n, t, r }] }],   // r: column visible in cma_read
      derived: [{ name, what, columns: [{ n, t, r }] }],
      dq: [view names], readCount } */
@@ -242,15 +243,8 @@ doms.forEach(d => {
   domWrap.appendChild(b);
 });
 
-// flows: each source, its way in and the domains it fills
-const F = {
-  hubspot:   {src:'s-hubspot',   ways:['w-ingest','w-jobs'], doms:['crm','connections','messaging','plumbing']},
-  aircall:   {src:'s-aircall',   ways:['w-ingest','w-jobs'], doms:['telephony','connections','plumbing']},
-  shopify:   {src:'s-shopify',   ways:['w-ingest','w-jobs'], doms:['commerce','connections','plumbing']},
-  workspace: {src:'s-workspace', ways:['w-app'],  doms:['time','people','messaging','config','connections','telephony','plumbing']},
-  sched:     {src:null,          ways:['w-sched'], doms:['time','plumbing']},
-  legacy:    {src:'s-legacy',    ways:['w-oneoff'], doms:['import']}
-};
+// flows (catalog.json): each source, its way in and the domains it fills
+const F = DATA.flows;
 const E = [], seenE = new Set();
 const add = (a,b,f) => { const k = a+'>'+b; if (!seenE.has(k)) { seenE.add(k); E.push({a,b,f:new Set()}); } E.find(e => e.a===a && e.b===b).f.add(f); };
 Object.entries(F).forEach(([k,f]) => {

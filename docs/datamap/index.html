@@ -218,24 +218,33 @@ FROM EXTERNAL_QUERY(
 <script>
 /* DATA is written by tools/datamap/build.mjs from catalog.json and schema.json:
    { meta: { built_at, generated_at, latest_migration },   // built_at is the snapshot's generated_at, so a build is reproducible
-     domains: [{ key, label, sources }],
+     domains: [{ key, label }],
+     flows:   { <key>: { src, ways, doms } },   // src and ways: data-ids below (src null when none), doms: domain keys
      tables:  [{ name, domain, what, how, inRead, columns: [{ n, t, r }] }],   // r: column visible in cma_read
      derived: [{ name, what, columns: [{ n, t, r }] }],
      dq: [view names], readCount } */
 const DATA = {
 "meta": {"built_at":"2026-10-15T03:46:29Z","generated_at":"2026-10-15T03:46:29Z","latest_migration":"0008l"},
 "domains": [
-{"key":"crm","label":"CRM mirror","sources":["hubspot"]},
-{"key":"telephony","label":"Telephony","sources":["aircall","jobs"]},
-{"key":"commerce","label":"Commerce","sources":["shopify"]},
-{"key":"connections","label":"Source settings and catalogs","sources":["hubspot","aircall","workspace"]},
-{"key":"time","label":"Time and roster","sources":["workspace","jobs"]},
-{"key":"import","label":"Legacy time import","sources":["legacy"]},
-{"key":"people","label":"People, roles and skills","sources":["workspace"]},
-{"key":"messaging","label":"Messages and alerts","sources":["workspace","hubspot"]},
-{"key":"config","label":"Tenant and configuration","sources":["workspace"]},
-{"key":"plumbing","label":"Ingest and audit","sources":["jobs","workspace"]}
+{"key":"crm","label":"CRM mirror"},
+{"key":"telephony","label":"Telephony"},
+{"key":"commerce","label":"Commerce"},
+{"key":"connections","label":"Source settings and catalogs"},
+{"key":"time","label":"Time and roster"},
+{"key":"import","label":"Legacy time import"},
+{"key":"people","label":"People, roles and skills"},
+{"key":"messaging","label":"Messages and alerts"},
+{"key":"config","label":"Tenant and configuration"},
+{"key":"plumbing","label":"Ingest and audit"}
 ],
+"flows": {
+"hubspot": {"src":"s-hubspot","ways":["w-ingest","w-jobs"],"doms":["crm","connections","messaging","plumbing"]},
+"aircall": {"src":"s-aircall","ways":["w-ingest","w-jobs"],"doms":["telephony","connections","plumbing"]},
+"shopify": {"src":"s-shopify","ways":["w-ingest","w-jobs"],"doms":["commerce","connections","plumbing"]},
+"workspace": {"src":"s-workspace","ways":["w-app"],"doms":["time","people","messaging","config","connections","telephony","plumbing"]},
+"sched": {"src":null,"ways":["w-sched"],"doms":["time","plumbing"]},
+"legacy": {"src":"s-legacy","ways":["w-oneoff"],"doms":["import"]}
+},
 "tables": [
 {"name":"crm_record","domain":"crm","what":"Deals and tickets: pipeline, stage, owner, market, closed","how":"HubSpot webhook, read back within seconds; nightly reconcile 02:30","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"record_type","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"pipeline_id","t":"text","r":true},{"n":"stage_id","t":"text","r":true},{"n":"owner_ref","t":"text","r":true},{"n":"contact_source_id","t":"text","r":true},{"n":"market","t":"text","r":true},{"n":"language","t":"text","r":true},{"n":"is_closed","t":"boolean","r":true},{"n":"closed_at","t":"timestamp with time zone","r":true},{"n":"source_created_at","t":"timestamp with time zone","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"amount","t":"numeric","r":false},{"n":"currency","t":"text","r":false},{"n":"source_channel","t":"text","r":false},{"n":"category","t":"text","r":false}]},
 {"name":"crm_contact","domain":"crm","what":"Thin contact: country, language, currency, store","how":"Read when a deal, call or ticket points to it; re-read every 10 min in its first hour; nightly reconcile","inRead":true,"columns":[{"n":"id","t":"uuid","r":true},{"n":"tenant_id","t":"uuid","r":true},{"n":"connection_id","t":"uuid","r":true},{"n":"source_system","t":"text","r":true},{"n":"source_id","t":"text","r":true},{"n":"country","t":"text","r":true},{"n":"language","t":"text","r":true},{"n":"source_updated_at","t":"timestamp with time zone","r":true},{"n":"source_deleted_at","t":"timestamp with time zone","r":true},{"n":"synced_at","t":"timestamp with time zone","r":true},{"n":"raw","t":"jsonb","r":false},{"n":"currency","t":"text","r":true},{"n":"store","t":"text","r":true}]},
@@ -335,15 +344,8 @@ doms.forEach(d => {
   domWrap.appendChild(b);
 });
 
-// flows: each source, its way in and the domains it fills
-const F = {
-  hubspot:   {src:'s-hubspot',   ways:['w-ingest','w-jobs'], doms:['crm','connections','messaging','plumbing']},
-  aircall:   {src:'s-aircall',   ways:['w-ingest','w-jobs'], doms:['telephony','connections','plumbing']},
-  shopify:   {src:'s-shopify',   ways:['w-ingest','w-jobs'], doms:['commerce','connections','plumbing']},
-  workspace: {src:'s-workspace', ways:['w-app'],  doms:['time','people','messaging','config','connections','telephony','plumbing']},
-  sched:     {src:null,          ways:['w-sched'], doms:['time','plumbing']},
-  legacy:    {src:'s-legacy',    ways:['w-oneoff'], doms:['import']}
-};
+// flows (catalog.json): each source, its way in and the domains it fills
+const F = DATA.flows;
 const E = [], seenE = new Set();
 const add = (a,b,f) => { const k = a+'>'+b; if (!seenE.has(k)) { seenE.add(k); E.push({a,b,f:new Set()}); } E.find(e => e.a===a && e.b===b).f.add(f); };
 Object.entries(F).forEach(([k,f]) => {

@@ -14,6 +14,9 @@
  *   (c) a relation in cma_read is none of: a view over a catalog table, a derived entry, a dq_ view
  *   (d) a name appears twice in the catalog
  *   (e) index.html differs from a fresh build
+ *   (f) a flow names a domain that is not a group key
+ *   (g) a group appears in no flow
+ *   (h) a flow's src or way is not a data-id in template.html
  * and when a catalog entry has no what (a table also no how), or the template has no single
  * `const DATA = __DATA__;`.
  *
@@ -57,7 +60,8 @@ export function buildData(catalog, schema) {
   const base = (name) => { const r = rel.get(`cma.${name}`); return r?.type === "BASE TABLE" ? r.columns : []; };
   return {
     meta: { built_at: schema.generated_at, generated_at: schema.generated_at, latest_migration: schema.latest_migration },
-    domains: catalog.groups.map((g) => ({ key: g.key, label: g.label, sources: g.sources })),
+    domains: catalog.groups.map((g) => ({ key: g.key, label: g.label })),
+    flows: catalog.flows ?? {},
     tables: catalogTables(catalog).map((t) => {
       const r = readCols(t.name);
       return { name: t.name, domain: t.domain, what: t.what, how: t.how, inRead: rel.get(`cma_read.${t.name}`)?.type === "VIEW",
@@ -70,12 +74,13 @@ export function buildData(catalog, schema) {
   };
 }
 
-// One domain, table or derived view per line, so a new column changes one line of index.html.
+// One domain, flow, table or derived view per line, so a new column changes one line of index.html.
 // "<" is escaped so no text in the catalog can close the script element.
 export function serialise(data) {
   const list = (a) => (a.length ? `[\n${a.map((x) => JSON.stringify(x)).join(",\n")}\n]` : "[]");
-  const text = `{\n"meta": ${JSON.stringify(data.meta)},\n"domains": ${list(data.domains)},\n"tables": ${list(data.tables)},` +
-    `\n"derived": ${list(data.derived)},\n"dq": ${JSON.stringify(data.dq)},\n"readCount": ${data.readCount}\n}`;
+  const map = (o) => { const e = Object.entries(o); return e.length ? `{\n${e.map(([k, v]) => `${JSON.stringify(k)}: ${JSON.stringify(v)}`).join(",\n")}\n}` : "{}"; };
+  const text = `{\n"meta": ${JSON.stringify(data.meta)},\n"domains": ${list(data.domains)},\n"flows": ${map(data.flows)},` +
+    `\n"tables": ${list(data.tables)},\n"derived": ${list(data.derived)},\n"dq": ${JSON.stringify(data.dq)},\n"readCount": ${data.readCount}\n}`;
   return text.replace(/</g, "\\u003c");
 }
 
@@ -117,6 +122,18 @@ export function check({ catalog, schema, template, current }, { page = true } = 
     if (rel.get(`cma.${name}`)?.type !== "BASE TABLE") problems.push(`catalog ${name}: not a table in cma in schema.json`);
   for (const name of derivedNames)
     if (rel.get(`cma_read.${name}`)?.type !== "VIEW") problems.push(`catalog ${name}: derived, not a view in cma_read in schema.json`);
+
+  // The flows against the groups and the boxes of the page (data-ids in its markup, before the script).
+  const flows = Object.entries(catalog.flows ?? {});
+  const groupKeys = new Set(catalog.groups.map((g) => g.key));
+  const ids = new Set([...template.split("<script>")[0].matchAll(/data-id="([^"]+)"/g)].map((m) => m[1]));
+  for (const [key, f] of flows) {
+    for (const d of f.doms ?? []) if (!groupKeys.has(d)) problems.push(`flow ${key}: domain ${d} is not a group key`);
+    for (const id of [f.src, ...(f.ways ?? [])])
+      if (id !== null && !ids.has(id)) problems.push(`flow ${key}: ${id} is not a data-id in template.html`);
+  }
+  for (const g of groupKeys)
+    if (!flows.some(([, f]) => (f.doms ?? []).includes(g))) problems.push(`group ${g}: in no flow`);
 
   const html = render(template, buildData(catalog, schema));
   if (html === null) problems.push(`template.html: needs exactly one ${PLACEHOLDER}`);

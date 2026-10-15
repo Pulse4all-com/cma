@@ -1,12 +1,9 @@
 {
-  "_about": "Hand-maintained part of the CMA data map. Every table in schema cma has one entry under a group; every computed view in cma_read (not a table view, not dq_*) has one entry under derived. Columns come from schema.json, never from here. Edit, then run node tools/datamap/build.mjs.",
+  "_about": "Hand-maintained part of the CMA data map. Every table in schema cma has one entry under a group; every computed view in cma_read (not a table view, not dq_*) has one entry under derived. flows are the paths the page draws: per source its box (src, a data-id in template.html, null when it has none), its ways in (ways, data-ids) and the groups it fills (doms, group keys); every group is in at least one flow. Columns come from schema.json, never from here. Edit, then run node tools/datamap/build.mjs.",
   "groups": [
     {
       "key": "crm",
       "label": "CRM mirror",
-      "sources": [
-        "hubspot"
-      ],
       "tables": [
         {
           "name": "crm_record",
@@ -43,10 +40,6 @@
     {
       "key": "telephony",
       "label": "Telephony",
-      "sources": [
-        "aircall",
-        "jobs"
-      ],
       "tables": [
         {
           "name": "telephony_call",
@@ -83,9 +76,6 @@
     {
       "key": "commerce",
       "label": "Commerce",
-      "sources": [
-        "shopify"
-      ],
       "tables": [
         {
           "name": "commerce_store",
@@ -112,11 +102,6 @@
     {
       "key": "connections",
       "label": "Source settings and catalogs",
-      "sources": [
-        "hubspot",
-        "aircall",
-        "workspace"
-      ],
       "tables": [
         {
           "name": "integration_connection",
@@ -158,10 +143,6 @@
     {
       "key": "time",
       "label": "Time and roster",
-      "sources": [
-        "workspace",
-        "jobs"
-      ],
       "tables": [
         {
           "name": "workday",
@@ -193,9 +174,6 @@
     {
       "key": "import",
       "label": "Legacy time import",
-      "sources": [
-        "legacy"
-      ],
       "tables": [
         {
           "name": "import_batch",
@@ -222,9 +200,6 @@
     {
       "key": "people",
       "label": "People, roles and skills",
-      "sources": [
-        "workspace"
-      ],
       "tables": [
         {
           "name": "app_user",
@@ -296,10 +271,6 @@
     {
       "key": "messaging",
       "label": "Messages and alerts",
-      "sources": [
-        "workspace",
-        "hubspot"
-      ],
       "tables": [
         {
           "name": "message",
@@ -321,9 +292,6 @@
     {
       "key": "config",
       "label": "Tenant and configuration",
-      "sources": [
-        "workspace"
-      ],
       "tables": [
         {
           "name": "tenant",
@@ -395,10 +363,6 @@
     {
       "key": "plumbing",
       "label": "Ingest and audit",
-      "sources": [
-        "jobs",
-        "workspace"
-      ],
       "tables": [
         {
           "name": "ingest_event",
@@ -457,5 +421,78 @@
       "name": "roster_published_entry",
       "what": "The published version of every roster entry"
     }
-  ]
+  ],
+  "flows": {
+    "hubspot": {
+      "src": "s-hubspot",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "crm",
+        "connections",
+        "messaging",
+        "plumbing"
+      ]
+    },
+    "aircall": {
+      "src": "s-aircall",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "telephony",
+        "connections",
+        "plumbing"
+      ]
+    },
+    "shopify": {
+      "src": "s-shopify",
+      "ways": [
+        "w-ingest",
+        "w-jobs"
+      ],
+      "doms": [
+        "commerce",
+        "connections",
+        "plumbing"
+      ]
+    },
+    "workspace": {
+      "src": "s-workspace",
+      "ways": [
+        "w-app"
+      ],
+      "doms": [
+        "time",
+        "people",
+        "messaging",
+        "config",
+        "connections",
+        "telephony",
+        "plumbing"
+      ]
+    },
+    "sched": {
+      "src": null,
+      "ways": [
+        "w-sched"
+      ],
+      "doms": [
+        "time",
+        "plumbing"
+      ]
+    },
+    "legacy": {
+      "src": "s-legacy",
+      "ways": [
+        "w-oneoff"
+      ],
+      "doms": [
+        "import"
+      ]
+    }
+  }
 }
