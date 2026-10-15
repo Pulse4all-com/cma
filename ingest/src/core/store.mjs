@@ -3,9 +3,9 @@
  *
  * Reads (short transactions as the tenant's Ingest user, row-level security applies):
  *   config()                    cma.connection_config(): field mapping, pipelines, settings
- *   heldContacts(ids)           the contacts the CMA holds or a record, an email or an inbox thread points
- *                               to (0006's rule, widened by 0008m: the contact base is never mirrored, so
- *                               other contacts are not read back)
+ *   heldContacts(ids)           the contacts the CMA holds or a record, an email, an inbox thread or a task
+ *                               points to (0006's rule, widened by 0008m and 0008n: the contact base is never
+ *                               mirrored, so other contacts are not read back)
  *   recordContacts(type, ids)   the contact each record points to now
  *   currentAssociations(type, ids)   the stored, current associations from these objects
  *   tenantSlug()                for the per-tenant hash pepper's secret name
@@ -56,6 +56,7 @@
  * Writes: a read-back answers units, one per object it read ({ eventIds, status, error?, writes }); a
  * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts;
  * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a);
+ * writes.tasks upserts CRM tasks (cma.ingest_upsert_tasks, addition 0008n; ids and refs, never body or subject),
  * writes.telephonyTags and telephonyNumbers refresh the telephony catalogs (each the whole list),
  * writes.telephonyCalls upserts telephony calls, writes.commerceCustomers and commerceOrders upsert a
  * store's customers and orders (0007b, 0008g), writes.contactLinks sets or clears a customer's CRM
@@ -92,6 +93,9 @@ export function storeFor(ctx, connectionId) {
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
            union
            select contact_source_id from cma.email_thread
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
+           union
+           select contact_source_id from cma.crm_task
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])`,
           [connectionId, ids]);
         return new Set(r.rows.map((x) => x.source_id));
@@ -185,6 +189,9 @@ export function storeFor(ctx, connectionId) {
            union
            select contact_source_id from cma.email_thread
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null
+           union
+           select contact_source_id from cma.crm_task
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null and source_deleted_at is null
          ) h where $2::text is null or id > $2::text order by id limit $3`, [connectionId, after, limit])).rows.map((r) => r.id));
     },
     async emailStartOf() {
@@ -364,6 +371,7 @@ const ORDER = [
   ["pipelines", "select cma.ingest_upsert_pipelines($1, $2::jsonb) as n", false],
   ["callOutcomes", "select cma.ingest_upsert_call_outcomes($1, $2::jsonb) as n", false],
   ["records", "select outcome from cma.ingest_upsert_records($1, $2::jsonb)", true],
+  ["tasks", "select outcome from cma.ingest_upsert_tasks($1, $2::jsonb)", true],
   ["contacts", "select outcome from cma.ingest_upsert_contacts($1, $2::jsonb)", true],
   ["calls", "select outcome from cma.ingest_upsert_calls($1, $2::jsonb)", true],
   ["associations", "select outcome from cma.ingest_upsert_associations($1, $2::jsonb)", true],

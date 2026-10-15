@@ -22,7 +22,8 @@ import { reconcileEmails } from "./email.mjs";
 import { reconcileThreads } from "./conversations.mjs";
 
 export { MODIFIED, searchBody, searchPages };
-export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact", "crm_email", "inbox_thread"];
+// task since addition 0008n: by hs_lastmodifieddate, the existing paging and budget, read back as a webhook's task
+export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact", "task", "crm_email", "inbox_thread"];
 
 /** Reconcile of one object type: modified between sinceMs and untilMs → process(items). */
 export async function reconcile({ connection, store, budget, object, sinceMs, untilMs, process, counts }) {

@@ -34,6 +34,21 @@
           "name": "form_submission",
           "what": "Form submissions: form, page, UTM, contact id only",
           "how": "Form poll every minute"
+        },
+        {
+          "name": "crm_task",
+          "what": "Tasks: owner, status, type, priority, due and completed times, the contact, deal and ticket by id; never body or subject",
+          "how": "HubSpot webhook (task creation, deletion, status, due, owner, completion, type, priority, associations), read back within seconds; nightly reconcile 02:30; backfill by hand (since 0008n)"
+        },
+        {
+          "name": "connection_task_status",
+          "what": "Task statuses seen per connection, with is_done as configuration",
+          "how": "Seeded by the first task read of each status ref; is_done and the label set on Configuration, Sources"
+        },
+        {
+          "name": "connection_task_type",
+          "what": "Task types seen per connection, with is_callback and is_counted as configuration",
+          "how": "Seeded by the first task read of each type ref; is_callback and is_counted set on Configuration, Sources"
         }
       ]
     },
