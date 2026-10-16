@@ -979,11 +979,11 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 
 # 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
 
-Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 9: the migrations with their verifies, the data map, the ingest from the branch, the dev app, the backfill, the hand check); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then 11.2 to 11.5 from `main`. Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 7 and the address of step 9: the migrations with their verifies, the data map, the ingest from the branch, the dev app, the backfill); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook steps 8 and 9) and 11.2 to 11.5 from `main`. The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
 
 ## 11.1 The two migrations and their verifies (before the merge)
 
-**Terminal** (point-in-time recovery on, as before every prod migration)
+**Terminal** (from the Chromebook; point-in-time recovery on, as before every prod migration)
 ```bash
 gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
 ```
@@ -1016,15 +1016,15 @@ Then write `records/0008n-prod-<date>/` and `records/0008o-prod-<date>/` from wh
 
 After the merge and the `cma-web-main` build. The ingest first: the task webhooks and the backfill's `--object task` need an ingest that knows tasks. `--front` stays on every prod service deploy: without it the service's ingress would open the run.app address.
 
-**Terminal** (in `~/cma`, on `main` after the merge)
+**Terminal** (from the Chromebook, in `~/cma`, on `main` after the merge)
 ```bash
 git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
 ```
 Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; the jobs on the same image (`no build`), the schedules unchanged.
 
-The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded; the install is updated or reinstalled only when HubSpot asks or the subscriptions do not arrive.
+The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded; the install is updated or reinstalled only when HubSpot asks or the subscriptions do not arrive. Where the upload runs is open (16 October 2026): CMA ingest prod lives in the live portal's Development area, so `hs project upload` needs a personal access key of the live portal, and README (Access rules, Credentials on the local terminal) never connects the live portal from Martin's own terminal; decide it before this block (the morning runbook, Open before steps 6 and 12). With the test account's login the upload line names the test account: answer `n`.
 
-**Terminal** (in `~/cma`, on `main`)
+**Terminal** (in `~/cma`, on `main`; only where the upload was decided to run)
 ```bash
 node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && node hubspot/verify/render.mjs | tail -1 && cd hubspot/build/prod && hs project upload && cd ~/cma
 ```
@@ -1054,7 +1054,7 @@ select c.id from cma.integration_connection c join cma.tenant t on t.id = c.tena
 ```
 Expected: one uuid, the live portal's connection.
 
-**Terminal** (in `~/cma`, the ingest job as in 9.8, the object `task` alone)
+**Terminal** (from the Chromebook, in `~/cma`, the ingest job as in 9.8, the object `task` alone)
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --args=--connection,<connection id>,--object,task,--from,2026-09-01 --wait
 ```
