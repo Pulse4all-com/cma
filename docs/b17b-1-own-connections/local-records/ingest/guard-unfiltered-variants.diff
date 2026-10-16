@@ -1,0 +1,8 @@
+300c300
+< const off = await runPollEmail({ connectionId: conn2, now: NOW + 14 * 60_000 });
+---
+> const off = await runPollEmail({ now: NOW + 14 * 60_000 });
+437c437
+< await runSweep({ connectionId: conn2 });
+---
+> await runSweep({});

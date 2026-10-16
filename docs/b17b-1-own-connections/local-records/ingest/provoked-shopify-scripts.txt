@@ -1,0 +1,26 @@
+verify/shopify-scripts.mjs  (--provoke: every check must FAIL)
+
+FAIL  a URL that is not https → usage, nothing asked of Shopify        got [2,0], wanted [0,1]
+FAIL  a URL that is not /shopify/<key> → usage                         got 2, wanted 0
+FAIL  a URL with a query → usage (no personal data in the address)     got 2, wanted 0
+FAIL  a shop that is not <handle>.myshopify.com → usage                got 2, wanted 0
+FAIL  an API version that is not a release → usage                     got 2, wanted 0
+FAIL  another client id → the token refused, nothing created           got [1,true,0], wanted [0,false,7]
+FAIL  a secret that cannot be read → stops before Shopify              got [1,true], wanted [0,false]
+FAIL  create: the seven topics at the address, by the client credentials grant got [0,["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_C, wanted [1,[],false]
+FAIL  …the token request form-encoded at /admin/oauth/access_token, GraphQL at 2026-10 got [true,true], wanted [false,false]
+FAIL  …subscribed with uri (not the deprecated callbackUrl)            got true, wanted false
+FAIL  …prints ids and topics only, never the secret or the token       got [true,false], wanted [false,true]
+FAIL  a rerun creates nothing and lists the seven as existing          got [0,7,7], wanted [0,14,0]
+FAIL  a missing topic is created again, the others left                got [0,1,7], wanted [0,0,6]
+FAIL  --list: every subscription, those of --url marked                got [0,7,true,false], wanted [1,0,false,true]
+FAIL  --delete <numeric id> deletes that subscription                  got [0,false,"deleted gid://shopify/WebhookSubscription/7799999999"], wanted [1,true,""]
+FAIL  …a second delete of it fails with Shopify's message              got [1,true], wanted [0,false]
+FAIL  --delete with something that is not an id → usage                got 2, wanted 0
+FAIL  --source-names: counts per source name and app, the most frequent first got [0,"12\tsubscription_contract\t9900001\tInvented Subscriptions","5\twe, wanted [1,"",""]
+FAIL  …asks for the source name and the app only, created in the last --days days got [true,true], wanted [false,false]
+FAIL  --days beyond 60 → usage                                         got 2, wanted 0
+FAIL  two modes at once → usage                                        got 2, wanted 0
+
+ALL 21 PROVOKED CHECKS FAILED, as they must
+exit 0

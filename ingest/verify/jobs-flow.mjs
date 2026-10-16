@@ -7,9 +7,10 @@
  *
  * Logins as in verify/flow.mjs: CMA_DB_USER is the service's (a member of cma_app), the admin login
  * creates two throwaway tenants per run (jobs-<run>-one, jobs-<run>-two) and reads as the owner.
- * The jobs run in this process with their connection filter, so other tenants of the local database
- * are left alone, except one unfiltered sweep (tenant isolation). At the end this run's connections
- * are set inactive, so a later run does not serve them.
+ * The jobs run in this process, each with this run's connection: without one a job serves every
+ * active connection of the database, other tenants' too (B17b.1; the last check proves nothing outside
+ * the two tenants was written). At the end this run's connections are set inactive, so a later run
+ * does not serve them.
  *
  * Proves: the sweep processes due events, respects the backoff, parks an event at
  * ingest.max_attempts and never claims it again, reads a record without a contact again (once per
@@ -23,7 +24,7 @@
  * includes deals created earlier and closed since, and paces its searches; the reconcile picks up a
  * change the webhook missed, leaves a newer row alone, reads only held contacts, honours
  * --lookback-minutes and reads nothing twice; tenant isolation; no email, token or contact id in the
- * logs, no email in the database.
+ * logs, no email in the database; no row of another tenant written by this run (the audit log).
  */
 import http from "node:http";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -31,7 +32,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, PROVOKE } from "./lib.mjs";
+import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -207,6 +208,8 @@ const admin = new pg.Client({ host: process.env.CMA_DB_HOST, port: Number(proces
 await admin.connect();
 const q = async (text, values) => (await admin.query(text, values)).rows;
 await q("set role cma_owner");
+// The run's start on the database's clock, for the last check
+const [{ since: STARTED }] = await q("select clock_timestamp()::text as since");
 const [{ t1 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t1", [SLUG1, "Jobs one"]);
 const [{ t2 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t2", [SLUG2, "Jobs two"]);
 const adminOf = {};
@@ -431,8 +434,8 @@ expect("reconcile: --lookback-minutes 10 asks the last ten minutes, one object t
 // ---- E. Tenant isolation -------------------------------------------------------------------------
 await recordEvents(ctx2, conn2, [created(4140000001, "9000102")]);
 n0 = mark();
-await runSweep({});
-expect("isolation: an unfiltered sweep serves tenant two's due event", (await eventOf(4140000001, conn2))?.status, "processed", "received");
+await runSweep({ connectionId: conn2 });
+expect("isolation: tenant two's sweep serves its due event", (await eventOf(4140000001, conn2))?.status, "processed", "received");
 expect("isolation: …read with tenant two's token", since(n0).filter((r) => r.path === "/crm/v3/objects/deals/batch/read" && r.body.inputs.some((i) => String(i.id) === "4140000001")).every((r) => r.auth === `Bearer ${TOKEN2}`), true, false);
 expect("isolation: tenant two's record and run rows live in tenant two", [(await q("select tenant_id from cma.crm_record where connection_id = $1", [conn2])).map((r) => r.tenant_id),
   [...new Set((await q("select tenant_id from cma.sync_run where connection_id = $1", [conn2])).map((r) => r.tenant_id))]], [[t2], [t2]], [[t1], [t1]]);
@@ -453,9 +456,11 @@ const logText = logs.join("\n");
 expect("the logs hold no email, token or contact id", [/@example\.com/.test(logText), logText.includes("fixture-jobs-token"), logText.includes("4300000001")], [false, false, false], [true, true, true]);
 expect("the logs hold the jobs' counts", logs.some((l) => JSON.parse(l).message === "reconcile") && logs.some((l) => JSON.parse(l).message === "sweep"), true, false);
 
-// This run's connections stop being served (a later run's unfiltered sweep leaves them alone)
+// This run's connections stop being served (no job serves them again)
 await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [conn1]));
 await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [conn2]));
+expect("no row of another tenant written by this run (any audited table)",
+  await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["sync_run:1"]);
 await admin.end();
 await new Promise((r) => fakeServer.close(r));
 await closeDb();

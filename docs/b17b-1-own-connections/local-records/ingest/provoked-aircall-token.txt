@@ -1,0 +1,25 @@
+verify/aircall-token.mjs  (--provoke: every check must FAIL)
+
+FAIL  the right token is accepted                                      got {"ok":true}, wanted {"ok":false,"reason":"bad_token"}
+FAIL  a wrong token of the same length is refused                      got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  a missing token is refused                                       got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  an empty token is refused                                        got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a token that is not a string is refused                          got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a shorter token (a prefix of the right one) is refused           got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  a longer token (the right one plus a character) is refused       got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  the token inside data does not count                             got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a body that is not JSON is refused                               got {"ok":false,"reason":"not_json"}, wanted {"ok":true}
+FAIL  a JSON array is refused                                          got {"ok":false,"reason":"not_json"}, wanted {"ok":true}
+FAIL  an empty secret refuses everything                               got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  sameToken: different lengths are false without a compare         got false, wanted true
+FAIL  sameToken: multi-byte characters compare by bytes                got false, wanted true
+FAIL  the adapter accepts its webhook's token                          got {"ok":true}, wanted {"ok":false}
+FAIL  the adapter refuses another token                                got false, wanted true
+FAIL  an unreadable signing secret throws SecretUnavailable (the server answers 500) got "SecretUnavailable", wanted null
+FAIL  verify.mjs imports timingSafeEqual from node:crypto              got true, wanted false
+FAIL  …calls it on the two buffers                                     got true, wanted false
+FAIL  …after the length check                                          got true, wanted false
+FAIL  …and never compares a token with === or !==                      got false, wanted true
+
+ALL 20 PROVOKED CHECKS FAILED, as they must
+exit 0
