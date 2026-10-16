@@ -1166,11 +1166,12 @@ export function targetMinutesOf(rows: Pick<SpeedToLeadRow, "targetSeconds">[]): 
  */
 export function fillHint(
   text: string,
-  values: { hours: string; target?: number | null; seconds?: number | null; days?: number | null; minutes?: number | null; threshold?: number | null },
+  values: { hours: string; target?: number | null; seconds?: number | null; days?: number | null; minutes?: number | null; threshold?: number | null; warning?: number | null },
   locale: string,
 ): string {
   const num = (x: number | null | undefined) => (x === null || x === undefined ? "–" : fmtCount(x, locale));
+  // {warning}: the share of the response time from which a ticket is at risk (Follow-up, 0008o)
   return text.replaceAll("{hours}", values.hours).replaceAll("{target}", num(values.target))
     .replaceAll("{seconds}", num(values.seconds)).replaceAll("{days}", num(values.days)).replaceAll("{minutes}", num(values.minutes))
-    .replaceAll("{threshold}", num(values.threshold));
+    .replaceAll("{threshold}", num(values.threshold)).replaceAll("{warning}", num(values.warning));
 }

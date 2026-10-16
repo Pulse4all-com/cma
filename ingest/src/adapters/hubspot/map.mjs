@@ -16,18 +16,19 @@
 import { hashNumber } from "../../core/hash.mjs";
 
 // HubSpot object type ids and names → canonical object types
-const TYPE_IDS = { "0-1": "contact", "0-2": "company", "0-3": "deal", "0-5": "ticket", "0-48": "crm_call" };
+const TYPE_IDS = { "0-1": "contact", "0-2": "company", "0-3": "deal", "0-5": "ticket", "0-48": "crm_call", "0-27": "task" };
 const TYPE_NAMES = { contact: "contact", contacts: "contact", company: "company", companies: "company", deal: "deal", deals: "deal",
-  ticket: "ticket", tickets: "ticket", call: "crm_call", calls: "crm_call" };
+  ticket: "ticket", tickets: "ticket", call: "crm_call", calls: "crm_call", task: "task", tasks: "task" };
 const KINDS = { creation: "created", deletion: "deleted", merge: "merged", restore: "restored", propertychange: "changed",
   associationchange: "associated", privacydeletion: "deleted" };
 
 /** The canonical object types the CMA reads back, with HubSpot's API object names. */
-export const API_OBJECT = { deal: "deals", ticket: "tickets", contact: "contacts", crm_call: "calls" };
+export const API_OBJECT = { deal: "deals", ticket: "tickets", contact: "contacts", crm_call: "calls", task: "tasks" };
 
 // Associations kept, in their stored direction (activity or record → contact, activity → record);
-// HubSpot's own README in hubspot/ names the same four.
-const KEPT_PAIRS = new Set(["deal>contact", "ticket>contact", "crm_call>contact", "crm_call>deal"]);
+// HubSpot's own README in hubspot/ names the same four, and since addition 0008n a task's contact, deal
+// and ticket, which live on the task's own row (the task is read back, its associations with it).
+const KEPT_PAIRS = new Set(["deal>contact", "ticket>contact", "crm_call>contact", "crm_call>deal", "task>contact", "task>deal", "task>ticket"]);
 
 function typeOf(value) {
   if (value === undefined || value === null) return null;
@@ -154,6 +155,11 @@ export const RECORD_STANDARD = {
 export const CALL_PROPERTIES = ["hs_timestamp", "hs_call_direction", "hs_call_status", "hs_call_disposition", "hs_call_duration",
   "hubspot_owner_id", "hs_call_source", "hs_createdate", "hs_lastmodifieddate"];
 export const CALL_NUMBER_PROPERTIES = ["hs_call_from_number", "hs_call_to_number"];
+// A task's structural properties (addition 0008n): due (hs_timestamp), status, type, priority, owner, completion,
+// the times. Never hs_task_body or hs_task_subject: the read asks for these eight and nothing else, and the
+// database strips any text key the adapter would send anyway (cma.task_raw)
+export const TASK_PROPERTIES = ["hs_timestamp", "hs_task_status", "hs_task_type", "hs_task_priority", "hubspot_owner_id",
+  "hs_task_completion_date", "hs_createdate", "hs_lastmodifieddate"];
 
 const RECORD_KEYS = { market: "market", language: "language", currency: "currency", amount: "amount", source_channel: "sourceChannel", category: "category" };
 const CONTACT_KEYS = { country: "country", language: "language", currency: "currency", store: "store" };
@@ -168,7 +174,8 @@ export function propertiesFor(entity, config) {
   const set = new Set();
   if (RECORD_STANDARD[entity]) for (const p of Object.values(RECORD_STANDARD[entity])) set.add(p);
   if (entity === "crm_call") for (const p of [...CALL_PROPERTIES, ...CALL_NUMBER_PROPERTIES]) set.add(p);
-  if (entity !== "crm_call") for (const f of fieldsOf(config, entity)) set.add(f.property);
+  if (entity === "task") for (const p of TASK_PROPERTIES) set.add(p);
+  if (entity !== "crm_call" && entity !== "task") for (const f of fieldsOf(config, entity)) set.add(f.property);
   return [...set].sort();
 }
 
@@ -300,6 +307,36 @@ export function callFromObject(obj, { pepper, region = null } = {}) {
     updatedAt: iso(obj.updatedAt) ?? iso(p.hs_lastmodifieddate),
     raw: pick(p, CALL_PROPERTIES),
   };
+}
+
+/**
+ * A task → ingest_upsert_tasks item (addition 0008n): ids, refs and times only. assoc: the first associated
+ * contact, deal and ticket (firstAssociated), set by the caller from the associations batch reads.
+ */
+export function taskFromObject(obj, assoc = {}) {
+  const p = obj?.properties ?? {};
+  return {
+    sourceId: String(obj.id),
+    ownerRef: text(p.hubspot_owner_id, 100),
+    statusRef: text(p.hs_task_status, 100),
+    typeRef: text(p.hs_task_type, 100),
+    priorityRef: text(p.hs_task_priority, 100),
+    dueAt: iso(p.hs_timestamp),
+    completedAt: iso(p.hs_task_completion_date),
+    contactId: assoc.contactId ?? null,
+    dealId: assoc.dealId ?? null,
+    ticketId: assoc.ticketId ?? null,
+    createdAt: iso(p.hs_createdate) ?? iso(obj.createdAt),
+    updatedAt: iso(obj.updatedAt) ?? iso(p.hs_lastmodifieddate),
+    raw: pick(p, TASK_PROPERTIES),
+  };
+}
+
+/** The one associated object of a kind for a task: the lowest id (deterministic), null without one. to: [{ toObjectId }] */
+export function firstAssociated(to) {
+  const ids = (to ?? []).map((t) => idOf(t.toObjectId)).filter(Boolean);
+  if (!ids.length) return null;
+  return [...ids].sort((a, b) => (a.length - b.length) || (a < b ? -1 : a > b ? 1 : 0))[0];
 }
 
 /**

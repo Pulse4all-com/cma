@@ -74,7 +74,8 @@ expect("preview with tabs, hh:mm and no mark", exportPreview(tabs, labels), ["no
 expect("preview in minutes with a decimal comma stays one cell", exportPreview([{ key: "export.csv.duration_format", value: "minutes", isDefault: false }, { key: "export.csv.decimal_mark", value: "comma", isDefault: false }], labels)[2], "2026-10-08,A. Example,450", "2026-10-08,A. Example,\"7,5\"");
 
 // ---- Sources (addition 0008e) ----------------------------------------------------------------------
-expect("a customer-records connection has four sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields"], ["lines", "tags"]);
+// since addition 0008n the task statuses and types follow the fields
+expect("a customer-records connection has six sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"], ["lines", "tags"]);
 expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags", "missedReasons"], ["lines", "tags"]);
 expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
 expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);

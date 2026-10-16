@@ -28,6 +28,8 @@ export type ShellPage =
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
   /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j) */
   | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "data-quality"
+  /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
+  | "follow-up" | "my-follow-up"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
   /** Sources, Markets and Alert rules (addition 0008e, night of 13 October 2026) */
   | "config-sources" | "config-markets" | "config-alert-rules"
@@ -35,7 +37,7 @@ export type ShellPage =
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
-  | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/data-quality"
+  | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules";
 
@@ -136,6 +138,10 @@ export function navEntries(copy: Copy): NavEntry[] {
         // the same lists as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here,
         // because this module has no runtime imports)
         { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
+        // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, after Speed to lead, for the
+        // permissions of cma.open_leads (reports.view, performance.team or monitoring.live); the digit keys of the
+        // pages below move by one for everyone who sees the Reports group (README, Decision log)
+        { page: "follow-up", href: "/reports/follow-up", label: copy.nav.followUp, permission: ["reports.view", "performance.team", "monitoring.live"] },
         { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
         // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, as Intake
         { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
@@ -231,6 +237,7 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
   if (active === "welcome") return [];
   let own: Crumb[] = [];
   if (active === "account") own = [{ label: copy.account.title, href: "/account" }];
+  else if (active === "my-follow-up") own = [{ label: copy.followUp.myTitle, href: "/me/follow-up" }];
   else if (active === "messages-send") own = [{ label: copy.nav.messages, href: "/messages" }, { label: copy.messages.composeTitle, href: "/messages/send" }];
   else {
     for (const entry of navEntries(copy)) {

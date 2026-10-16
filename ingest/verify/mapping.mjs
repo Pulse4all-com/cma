@@ -8,6 +8,7 @@
 import { readFileSync } from "node:fs";
 import {
   mapEvents, propertiesFor, recordFromObject, contactFromObject, primaryContact, associationDiff, keptAssociation,
+  taskFromObject, firstAssociated, TASK_PROPERTIES,
 } from "../src/adapters/hubspot/map.mjs";
 import { expect, verdict, PROVOKE } from "./lib.mjs";
 
@@ -84,5 +85,38 @@ expect("primary contact: else the lowest id", primaryContact([{ toObjectId: 12 }
 const at = "2026-10-10T10:00:00.000Z";
 expect("association diff: new added, gone removed", associationDiff("deal", "1", [{ toType: "contact", toId: "2" }], [{ fromId: "1", toType: "contact", toId: "3" }], ["contact"], at),
   [{ fromType: "deal", fromId: "1", toType: "contact", toId: "2", removed: false, changedAt: at }, { fromType: "deal", fromId: "1", toType: "contact", toId: "3", removed: true, changedAt: at }], []);
+
+// Tasks (addition 0008n): events of object type 0-27, the association from a contact read back on the task,
+// the eight structural properties and never body or subject, the first associated object
+const taskEvents = mapEvents([
+  { eventId: 3000000201, portalId: 9000001, subscriptionType: "object.creation", objectTypeId: "0-27", objectId: 4400000001, occurredAt: 1791622800000 },
+  { eventId: 3000000202, portalId: 9000001, subscriptionType: "object.propertyChange", objectTypeId: "0-27", objectId: 4400000001, propertyName: "hs_task_status", propertyValue: "COMPLETED", occurredAt: 1791622860000 },
+  { eventId: 3000000203, portalId: 9000001, subscriptionType: "object.associationChange", fromObjectTypeId: "0-1", toObjectTypeId: "0-27", fromObjectId: 4300000001, toObjectId: 4400000001, occurredAt: 1791622900000 },
+  { eventId: 3000000204, portalId: 9000001, subscriptionType: "object.deletion", objectTypeId: "0-27", objectId: 4400000002, occurredAt: 1791622960000 },
+], PORTAL);
+expect("task creation → created task", [taskEvents[0].kind, taskEvents[0].objectType, taskEvents[0].objectId, taskEvents[0].ignore ?? null],
+  ["created", "task", "4400000001", null], ["created", "other", "4400000001", "object_not_kept"]);
+expect("a task's status change keeps the property name, never the value", [taskEvents[1].propertyName, JSON.stringify(taskEvents[1].raw).includes("COMPLETED")],
+  ["hs_task_status", false], ["hs_task_status", true]);
+expect("contact→task association: the task is read back", [taskEvents[2].objectType, taskEvents[2].objectId, taskEvents[2].raw.toType, taskEvents[2].ignore ?? null],
+  ["task", "4400000001", "contact", null], ["contact", "4300000001", "task", null]);
+expect("task deletion → deleted task", [taskEvents[3].kind, taskEvents[3].objectType], ["deleted", "task"], ["changed", "task"]);
+expect("task properties: the eight structural ones, never body or subject",
+  [propertiesFor("task", config), propertiesFor("task", config).some((p) => /body|subject|note/.test(p))],
+  [[...TASK_PROPERTIES].sort(), false], [[...TASK_PROPERTIES, "hs_task_body"].sort(), false]);
+const taskObj = { id: "4400000001", createdAt: "2026-10-10T08:00:00.000Z", updatedAt: "2026-10-10T09:05:00.000Z",
+  properties: { hs_timestamp: "2026-10-12T09:00:00.000Z", hs_task_status: "NOT_STARTED", hs_task_type: "CALL", hs_task_priority: "HIGH", hubspot_owner_id: "7100000001",
+    hs_task_body: "never stored", hs_task_subject: "never stored", hs_createdate: "2026-10-10T08:00:00.000Z", hs_lastmodifieddate: "2026-10-10T09:05:00.000Z" } };
+const task = taskFromObject(taskObj, { contactId: "4300000001", dealId: "4100000001", ticketId: null });
+expect("task → ids, refs, due and the associations", [task.sourceId, task.ownerRef, task.statusRef, task.typeRef, task.priorityRef, task.dueAt, task.completedAt, task.contactId, task.dealId, task.ticketId],
+  ["4400000001", "7100000001", "NOT_STARTED", "CALL", "HIGH", "2026-10-12T09:00:00.000Z", null, "4300000001", "4100000001", null],
+  ["4400000001", "7100000001", "NOT_STARTED", "CALL", "HIGH", "2026-10-12T09:00:00.000Z", null, null, null, null]);
+expect("task times from the structural properties", [task.createdAt, task.updatedAt], ["2026-10-10T08:00:00.000Z", "2026-10-10T09:05:00.000Z"], [null, null]);
+expect("task raw holds the structural properties only: no body, no subject", Object.keys(task.raw).sort(),
+  ["hs_createdate", "hs_lastmodifieddate", "hs_task_priority", "hs_task_status", "hs_task_type", "hs_timestamp", "hubspot_owner_id"],
+  ["hs_createdate", "hs_lastmodifieddate", "hs_task_body", "hs_task_priority", "hs_task_status", "hs_task_type", "hs_timestamp", "hubspot_owner_id"]);
+expect("no task text anywhere in the item", JSON.stringify(task).includes("never stored"), false, true);
+expect("the first associated object: the lowest id, none without one", [firstAssociated([{ toObjectId: 12 }, { toObjectId: 9 }]), firstAssociated([])], ["9", null], ["12", null]);
+expect("kept association direction: task → deal", keptAssociation("deal", "1", "task", "2"), { fromType: "task", fromId: "2", toType: "deal", toId: "1" }, null);
 
 verdict();
