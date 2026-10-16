@@ -1,6 +1,6 @@
 # Runbook, B17d: forms reporting (0008p)
 
-Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them).
+Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only `db/` scripts and the data map's schema snapshot, whose output is schema, counts and ids; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see. Claude Code's local outputs are in `local-records/` (its `README.md` lists them).
 
 **What changes:** every form is polled apart from whether it counts in Intake, and Reports → Forms shows every polled form's submissions per form and market. Addition 0008p (`74`, `75`): `connection_form.is_polled` (existing forms polled exactly when they count), the tenant's form categories, each form's fields with their option values, kept answers of choice questions only (checked against the options), a form's market field and lead condition, the reads `cma.forms_report()`, `cma.forms_answers()` and `cma.forms_history_start()` (README, Data model: forms reporting; Decision log, 16 October 2026). The ingest's forms poll and backfill read every polled form, keep choice answers only and count the dropped ones; the backfill fills a stored submission's empty answers once. The web app: Reports → Forms (`/reports/forms`, `reports.view` or `performance.team`) with its file, and on Configuration → Sources a form's polled switch and category, and the form categories.
 
@@ -32,11 +32,36 @@ Labels: **Browser**, **Terminal** (Cloud Shell, in `~/cma` unless stated), **Stu
 
 ---
 
-## Helpers (define in every new Cloud Shell)
+## Helpers (define in every new terminal tab)
 
-The helpers `cma_db` and `run_migration` of `docs/night-2026-10-13/MORNING_RUNBOOK.md`, section Helpers, unchanged: paste that block first. The Studio context block is the one at the top of `docs/ingest/PROD_RUNBOOK.md` (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`, your own user); "after the context block" below means its second part pasted above the statements, in the same Run, with `reset role;` at the end.
+The terminal is set up as `docs/RUNBOOK.md`, Setup (once per machine), describes: gcloud logged in as `martin@pulse4all.com`, Application Default Credentials with quota project `p4a-cma-prod` (the Auth Proxy signs in with them), Node 22 from NodeSource (installed system-wide, nothing to switch on), `psql`, `cloud-sql-proxy` v2 and `gh` as Pulse4all-DEV. A shell function lives only in the tab that defined it: paste this block in every tab that runs `cma_db` or `run_migration` (steps 2 and 5). They are the helpers of `docs/night-2026-10-13/MORNING_RUNBOOK.md`, without their first line, which switched Node 22 on there.
 
-Expected: `type cma_db run_migration` prints both functions; `node -v` prints `v22.…`.
+**Terminal**
+```bash
+cd ~/cma && node -v
+cma_db () {  # usage: cma_db dev|prod  → starts the proxy once and sets PGCONN
+  local env=$1 port; [ "$env" = dev ] && port=5433 || port=5434
+  pgrep -f "cloud-sql-proxy.*cma-$env-pg" >/dev/null || \
+    (cloud-sql-proxy --auto-iam-authn --port $port "p4a-cma-$env:europe-west4:cma-$env-pg" >/tmp/proxy-$env.log 2>&1 &)
+  sleep 3
+  export PGCONN="host=127.0.0.1 port=$port dbname=cma user=$(gcloud config get-value account 2>/dev/null) sslmode=disable"
+  psql "$PGCONN" -Atc "select 'connected to ' || current_database() || ' as ' || current_user"
+}
+run_migration () {  # usage: run_migration <env> <nn_migration.sql> <nn_verify.sql> <records dir> [earlier verify files...]
+  local env=$1 mig=$2 ver=$3 rec=$4; shift 4
+  cd ~/cma && mkdir -p "records/$rec" && cma_db "$env" || return 1
+  psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$mig" > "records/$rec/${mig%%_*}.txt" 2>&1 && tail -3 "records/$rec/${mig%%_*}.txt"
+  psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$ver" > "records/$rec/${ver%%_*}.txt" 2>&1; tail -6 "records/$rec/${ver%%_*}.txt"
+  sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" "db/$ver" > /tmp/provoke.sql
+  psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "records/$rec/${ver%%_*}-provoked.txt" 2>&1
+  grep -cE "FAIL" "records/$rec/${ver%%_*}-provoked.txt" | sed 's/^/provoked FAIL lines: /'; grep -E "PROVOKED" "records/$rec/${ver%%_*}-provoked.txt" | tail -2
+  for f in "$@"; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "records/$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "records/$rec/${f%%_*}-rerun.txt") PASS rows"; done
+}
+```
+
+The Studio context block is the one at the top of `docs/ingest/PROD_RUNBOOK.md` (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`, your own user); "after the context block" below means its second part pasted above the statements, in the same Run, with `reset role;` at the end.
+
+Expected: `v22.…` (from `node -v`), no other output; `type cma_db run_migration` then prints both functions.
 
 ## 1. Review the pull request, build it, run the ingest checks
 
@@ -123,7 +148,7 @@ Expected: the push names this pull request's branch.
 
 ## 5. Addition 0008p in prod
 
-**Terminal** (point-in-time recovery on, as before every prod migration)
+**Terminal** (from the Chromebook; point-in-time recovery on, as before every prod migration)
 ```bash
 gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
 ```
@@ -131,7 +156,7 @@ Expected: `True	7`.
 
 `75`, `53`, `69`, `71` and `73` refuse prod (they write throwaway tenants and run in dev only), so prod runs the migration twice and `33`, `35` and `41`, then a read-only check. `74` adds five columns to `connection_form` (setting `is_polled` on every form as it counts, an audit row each), one to `form_submission` and two tables, and replaces the forms' configuration, catalog, submission, privacy-deletion, run, intake and data-quality functions in one transaction; the ingest's writes wait for it a moment and carry on.
 
-**Terminal**
+**Terminal** (from the Chromebook, in a tab with the helpers; `db/` scripts only, their output is check rows, counts and ids)
 ```bash
 rec=records/0008p-prod-$(date +%F); mkdir -p "$rec" && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/74_forms_reporting.sql > "$rec/74.txt" 2>&1; tail -3 "$rec/74.txt"; psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/74_forms_reporting.sql > "$rec/74-rerun.txt" 2>&1; tail -3 "$rec/74-rerun.txt"
 for f in 33_verify_intake_core.sql 35_verify_telephony.sql 41_verify_lead_metrics.sql; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "$rec/${f%%_*}-rerun.txt") PASS rows"; done
@@ -157,14 +182,14 @@ Expected:
 
 ## 6. Merge, watch the prod build
 
-**Terminal**
+**Terminal** (from the Chromebook: the build runs in `p4a-cma-prod`)
 ```bash
 cd ~/cma && gh pr merge <number> --squash --delete-branch && git switch main -q && git pull -q && git log --oneline -1
 gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
 ```
 Expected: the merge commit; then a build for its short SHA, `QUEUED` or `WORKING`, then `SUCCESS` (RUNBOOK section 3). The build appears 2 to 4 minutes after the merge, so the list may still show the previous build: look again at 4 minutes before you start the trigger by hand (RUNBOOK section 3).
 
-**Terminal** (only when the list still has no build for the merge's short SHA 4 minutes after the merge)
+**Terminal** (from the Chromebook; only when the list still has no build for the merge's short SHA 4 minutes after the merge)
 ```bash
 cd ~/cma && gcloud builds triggers run cma-web-main --project=p4a-cma-prod --region=europe-west4 --sha=$(git rev-parse HEAD)
 ```
@@ -178,7 +203,7 @@ cd ~/cma/web && node verify/api.mjs | tee ../records/0008p-dev-$(date +%F)/verif
 ```
 Expected: the same `note` lines and `ALL n PASS` as your last run of it (the Sources check that a form change with an unknown market writes nothing still passes: a form's polled switch and category are optional in that route), then `ALL n PROVOKED CHECKS FAILED, as they must`. `verify:api` has no Forms checks: the forms routes are proven by `75` in the database and by the local run in api mode (`local-records/web/api-mode-local-db.txt`).
 
-**Terminal** (through the same proxy; counts and names only)
+**Terminal** (through RUNBOOK section 4's service proxy on port 8080, not the database; the report's answer holds form names, codes and counts, no submission or contact, and this prints counts only)
 ```bash
 curl -s "localhost:8080/api/v1/reports/forms?from=2026-10-01&to=$(date +%F)&group=week" -H "x-cma-mock-subject: analyst" | python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; print(d["forms"], d["historyStart"], len(d["totals"]), sum(r["submissions"] for r in d["totals"]))'
 curl -s -o /dev/null -w "%{http_code}\n" "localhost:8080/api/v1/reports/forms?from=2026-10-01&to=$(date +%F)" -H "x-cma-mock-subject: agent-two"
@@ -187,7 +212,7 @@ Expected: `True <date or None> <n> <m>`: the dev tenant's forms exist, its count
 
 ## 8. Dev: the ingest image and jobs, the configuration, a test form, the backfill
 
-**8a. The image and the jobs.** **Terminal** (on the merged `main`)
+**8a. The image and the jobs.** **Terminal** (from the Chromebook: the image is built in `p4a-cma-prod`; on the merged `main`)
 ```bash
 cd ~/cma && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh dev && bash docs/ingest/deploy.sh dev --jobs
 ```
@@ -251,7 +276,7 @@ Expected: `succeeded` with `fetched` and `upserted`; per form its submissions si
 
 ## 9. Prod: the ingest jobs, the forms' fields
 
-**Terminal** (on `main`; the forms poll and the backfill are jobs, the service's code is unchanged)
+**Terminal** (from the Chromebook; on `main`; the forms poll and the backfill are jobs, the service's code is unchanged)
 ```bash
 cd ~/cma && git switch -q main && git pull -q --ff-only && bash docs/ingest/deploy.sh prod --jobs
 ```
@@ -367,7 +392,7 @@ reset role;
 ```
 Expected: empty results; then per category the forms, those keeping answers, `with_market_field` 1 for `cancellation`, `replacement` and `support` and 0 elsewhere, and `deployment_outcome_kept` false on every row.
 
-**10e. The backfill from 1 October:** the support forms' submissions the poll has not read yet, and every stored submission's answers. **Terminal**
+**10e. The backfill from 1 October:** the support forms' submissions the poll has not read yet, and every stored submission's answers. **Terminal** (from the Chromebook)
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,form_submission,--from,2026-10-01
 ```
@@ -445,7 +470,7 @@ Expected: submissions per category and market with the resolution split (`unknow
 
 ## 12. The browser verifiers against a local mock server
 
-**Terminal** (a second Cloud Shell tab for the server, README Code paragraph)
+**Terminal** (a second terminal tab for the server, README Code paragraph; port 8080 must be free: `pkill -f "run services proxy"` first if step 7's service proxy still runs)
 ```bash
 cd ~/cma/web && npm run build >/dev/null && cp -r .next/static .next/standalone/.next/ && (test -d public && cp -r public .next/standalone/ || true) && CMA_AUTH_MODE=mock CMA_DATA_MODE=mock PORT=8080 npm start
 ```
