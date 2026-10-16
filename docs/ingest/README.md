@@ -320,17 +320,17 @@ Expected: four blocks: `== 1.` the eight properties, each `present` (or `MISSING
 
 **Actors (R2).** Only the actor's kind is stored, and for an agent the owner id; never `createdBy`, `assignedTo` or `assignedFrom` as such (an email actor's id holds the address). HubSpot's spec types the actors `AGENT`, `BOT`, `INTEGRATOR`, `SYSTEM`, `VISITOR`, `EMAIL` and `LLM` and does not document their ids' prefixes. The adapter maps by prefix:
 
-| Prefix | HubSpot's type | CMA actor kind | Confirmed in dev |
+| Prefix | HubSpot's type | CMA actor kind | Confirmed |
 |---|---|---|---|
-| `A-<user id>` | `AGENT` | `agent`, owner id through the owner map (none when the user is no owner) | pending: `hubspot-email-check.mjs` block 3 (runbook step 3) |
-| `V-` | `VISITOR` | `customer` | pending |
-| `E-<address>` | `EMAIL` | `customer` | pending |
-| `S-` | `SYSTEM` | `system` | pending |
-| `B-` | `BOT` | `bot` | pending |
-| `I-` | `INTEGRATOR` | `integration` | pending |
-| any other (the `LLM` actor's among them until dev shows it) | | `unknown` | |
+| `A-<user id>` | `AGENT` | `agent`, owner id through the owner map (none when the user is no owner) | yes: the live portal, 16 October 2026 |
+| `V-` | `VISITOR` | `customer` | yes: the live portal, 16 October 2026 |
+| `E-<address>` | `EMAIL` | `customer` | not seen yet |
+| `S-` | `SYSTEM` | `system` | yes: the live portal, 16 October 2026 |
+| `B-` | `BOT` | `bot` | not seen yet |
+| `I-` | `INTEGRATOR` | `integration` | not seen yet |
+| any other (the `LLM` actor's among them until block 3 shows it) | | `unknown` | |
 
-The prefixes are the ones README's Data model: email activity names from HubSpot's guides; this table says "confirmed" once block 3 has shown them in dev (Martin's report). A prefix dev shows for `LLM` becomes the kind `ai` in `ACTOR_PREFIXES` (`conversations.mjs`), one line.
+The prefixes are the ones README's Data model: email activity names from HubSpot's guides. Block 3 of `hubspot-email-check.mjs` showed `A AGENT`, `S SYSTEM` and `V VISITOR` in the live portal's 200 threads of the last 30 days on 16 October 2026 (`PROD_RUNBOOK.md` 10.2, `records/b17b-prod-2026-10-16`); `CMA dev` had no conversation at its step 3a, and its overlap test (step 6) then gave the kinds `customer`, `agent` with an owner and `system` (`records/b17b-dev-2026-10-16`). `E`, `B` and `I` keep the prefixes of the guides until a later block 3 shows them, which marks them here (Martin's report). A prefix block 3 shows for `LLM` becomes the kind `ai` in `ACTOR_PREFIXES` (`conversations.mjs`), one line.
 
 **Rules (R1).** The classification rules (`cma.connection_email_rule`, from `cma.connection_config` in their order) are applied in memory by `rules.mjs` with the words logic of `cma.email_words_match` (contains any word and none of the exclude words, case-insensitive): the subject of an engagement or a message, the domain of the sender's address (an engagement's `hs_email_from_email`, a message's first sender whose delivery identifier is an email address). The value matched lives for that call only; only the category code is written. The database stays the definition: `verify/email-mapping.mjs` and `verify/email-flow.mjs` run the same fixtures (`ingest/verify/fixtures/hubspot/email-rules.json`) through the code and through `cma.email_words_match` and `cma.email_category_of`.
 
