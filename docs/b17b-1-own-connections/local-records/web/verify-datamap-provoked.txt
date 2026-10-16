@@ -1,0 +1,12 @@
+
+> cma-web@0.1.0 verify:datamap
+> node ../tools/datamap/verify.mjs --provoke
+
+datamap: provoked, catalog table crm_record dropped, view cma_read.provoked_unknown_view added and flow hubspot given domain provoked_unknown_domain
+  cma.crm_record: table has no catalog entry
+  cma_read.crm_record: view is not over a catalog table, not a derived entry and not a dq_ view
+  cma_read.provoked_unknown_view: view is not over a catalog table, not a derived entry and not a dq_ view
+  flow hubspot: domain provoked_unknown_domain is not a group key
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (5 problems)
+exit 1

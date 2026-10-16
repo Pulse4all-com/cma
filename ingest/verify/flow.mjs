@@ -11,6 +11,7 @@
  * INGEST_FLOW_ADMIN_USER holds cma_owner and cma_app by SET ROLE (00_roles.sql's team login): it
  * creates two throwaway tenants per run (flow-<run>-one, flow-<run>-two) with their connections, and
  * reads the results as the owner. The tenants stay in the local database; nothing touches dev or prod.
+ * At the end this run's connections are set inactive, so no job serves them again (B17b.1).
  *
  * Proves: /health; unknown key, wrong route and wrong method 404; unsigned, wrongly signed and stale
  * requests 401 with nothing written; a signed batch recorded, read back and upserted (record with its
@@ -20,7 +21,7 @@
  * slow → 200 with the events failed with backoff; another portal ignored without a read-back; a
  * database error before the commit → 500 and nothing written; 600 events in one request; deletion,
  * association removal and privacy deletion; tenant isolation; no number, token or contact id in the
- * logs and no number in the database.
+ * logs and no number in the database; no row of another tenant written by this run (the audit log).
  */
 import http from "node:http";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -28,7 +29,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHmac, randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, PROVOKE } from "./lib.mjs";
+import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -157,6 +158,8 @@ const admin = new pg.Client({ host: process.env.CMA_DB_HOST, port: Number(proces
 await admin.connect();
 const q = async (text, values) => (await admin.query(text, values)).rows;
 await q("set role cma_owner");
+// The run's start on the database's clock, for the last check
+const [{ since: STARTED }] = await q("select clock_timestamp()::text as since");
 const [{ t1 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t1", [SLUG1, "Flow one"]);
 const [{ t2 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t2", [SLUG2, "Flow two"]);
 const adminOf = {};
@@ -189,7 +192,7 @@ const conn1 = await asAdmin(t1, async () => {
     await q("select cma.set_connection_field($1, $2, $3, $4, $5, $6::smallint)", [c.connection_id, entity, field, sys, prop, slot]);
   }
   const [a] = await q("select * from cma.upsert_connection('aircall', 'Aircall flow one', 'flow-aircall', 'ingest-hubspot-flow1-signing', null)");
-  return { id: c.connection_id, key: c.key, aircallKey: a.key };
+  return { id: c.connection_id, key: c.key, aircallId: a.connection_id, aircallKey: a.key };
 });
 const conn2 = await asAdmin(t2, async () => {
   const [c] = await q("select * from cma.upsert_connection('hubspot', 'HubSpot flow two', '9000002', 'ingest-hubspot-flow2-signing', 'ingest-hubspot-flow2-token')");
@@ -437,6 +440,12 @@ const logText = logs.join("\n");
 expect("the logs hold no number, token, secret or contact id", [NUMBERS.test(logText), logText.includes("fixture-token"), logText.includes("fixture-client-secret"), logText.includes("4300000001")], [false, false, false, false], [true, true, true, true]);
 const headerLine = logs.map((l) => JSON.parse(l)).find((l) => l.message === "webhook headers" && l.headerNames.includes("x-hubspot-signature-v3"));
 expect("header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not", [Boolean(headerLine), sentSignatures.some((x) => logText.includes(x))], [true, false], [false, true]);
+
+// This run's connections stop being served (no job serves them again)
+for (const c of [conn1.id, conn1.aircallId, auto1.id]) await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [c]));
+await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [conn2.id]));
+expect("no row of another tenant written by this run (any audited table)",
+  await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["ingest_event:1"]);
 
 await admin.end();
 await new Promise((r) => service.close(r));

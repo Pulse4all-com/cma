@@ -1,0 +1,38 @@
+set role cma_owner;
+SET
+select m.source_kind, m.direction, m.actor_kind, count(*) from cma.email_message m join cma.tenant t on t.id = m.tenant_id
+where t.slug = 'pulse4all-subscriptions' group by 1, 2, 3 order by 1, 2, 3;
+ source_kind | direction | actor_kind | count 
+-------------+-----------+------------+-------
+(0 rows)
+
+select e.status, e.is_spam, e.is_archived, e.forgotten_at is not null as forgotten, count(*) from cma.email_thread e join cma.tenant t on t.id = e.tenant_id
+where t.slug = 'pulse4all-subscriptions' group by 1, 2, 3, 4 order by 1, 2, 3, 4;
+ status | is_spam | is_archived | forgotten | count 
+--------+---------+-------------+-----------+-------
+(0 rows)
+
+select e.kind, count(*) from cma.email_thread_event e join cma.tenant t on t.id = e.tenant_id where t.slug = 'pulse4all-subscriptions' group by 1 order by 1;
+ kind | count 
+------+-------
+(0 rows)
+
+select (select count(*) from cma.connection_inbox i where i.tenant_id = t.id) as inboxes,
+       (select count(*) from cma.connection_inbox_channel c where c.tenant_id = t.id) as channels,
+       (select count(*) from cma.crm_contact k where k.tenant_id = t.id and k.country_source > 1) as contacts_from_fallback
+from cma.tenant t where t.slug = 'pulse4all-subscriptions';
+ inboxes | channels | contacts_from_fallback 
+---------+----------+------------------------
+       0 |        0 |                      0
+(1 row)
+
+select r.status, count(*) from cma.sync_run r join cma.tenant t on t.id = r.tenant_id
+where t.slug = 'pulse4all-subscriptions' and r.job = 'email_poll' and r.started_at > now() - interval '1 hour' group by 1;
+ status | count 
+--------+-------
+ failed |    13
+(1 row)
+
+reset role;
+RESET
+exit 0

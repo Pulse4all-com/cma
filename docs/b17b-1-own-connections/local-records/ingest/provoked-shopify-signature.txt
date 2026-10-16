@@ -1,0 +1,22 @@
+verify/shopify-signature.mjs  (--provoke: every check must FAIL)
+
+FAIL  signBody equals the documented construction                      got "5FP/d615qfTnJzdhweFBNhvZXeu2hSy9zQCtvSweKsg=", wanted "x"
+FAIL  a valid HMAC is accepted                                         got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  the header name is X-Shopify-Hmac-Sha256 (as Node lower-cases it) got "x-shopify-hmac-sha256", wanted "x-shopify-hmac"
+FAIL  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a body changed by one byte is refused                            got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  the raw bytes count: a re-serialised body (spaces) is refused    got "bad_signature", wanted "ok"
+FAIL  a missing header is refused                                      got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a header that is not a base64 SHA-256 digest is refused          got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a hex digest (another encoding) is refused                       got false, wanted true
+FAIL  no secret: refused                                               got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  surrounding whitespace in the header is tolerated                got {"ok":true}, wanted {"ok":false}
+FAIL  an empty body is signed as empty                                 got {"ok":true}, wanted {"ok":false}
+FAIL  sameDigest: equal strings                                        got true, wanted false
+FAIL  sameDigest: another length, no compare                           got false, wanted true
+FAIL  sameDigest: not strings                                          got false, wanted true
+FAIL  the compare uses crypto.timingSafeEqual                          got true, wanted false
+FAIL  …and no plain equality on the digest                             got false, wanted true
+
+ALL 17 PROVOKED CHECKS FAILED, as they must
+exit 0
