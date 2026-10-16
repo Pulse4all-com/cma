@@ -884,7 +884,7 @@ This bridge check is the only place the link shows today: Reports → Data quali
 
 # Phase 10. The email poll in prod (brief B17b)
 
-The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
+The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. Run in prod on 16 October 2026 (`records/b17b-prod-2026-10-16`, written from Martin's report; dev in `records/b17b-dev-2026-10-16`); 10.7, day one, is not in that record. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
 
 Before you start:
 - `main` holds the merge of B17b, and dev runs it (the same image: `deploy.sh` says `no build`).
