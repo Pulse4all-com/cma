@@ -27,7 +27,7 @@ Written by Claude Code while Martin and Joshua were away. Everything was built a
 - The catalogs `connection_task_status` (`is_done`) and `connection_task_type` (`is_callback`, `is_counted`) fill from the rows and are set with `cma.set_task_status()` and `cma.set_task_type()` (tenant.configure); `cma.connection_task_catalogs()` feeds Sources.
 - `cma.ingest_upsert_tasks()` as `ingest_upsert_records` (500 at most, stale guard, outcomes inserted, updated, stale, deleted, unknown); the contact, deal and ticket are columns on the row, taken as the read gives them (a decision, in the README's Decision log).
 - Contacts held for tasks (0008m's rule extended), the privacy deletion clears a task's contact and answers how many; task rows make a connection `crm`.
-- Ingest: the HubSpot adapter reads tasks (eight properties, three associations) from webhooks, the reconcile and the backfill (`--object task`); the store writes tasks after records. The project template gained nine task subscriptions (46 in all), no new scope. **A new app version has to be uploaded and the install's update accepted in both portals** (morning runbook steps 6 and 12; `PROD_RUNBOOK.md` 11.2). Since the afternoon of 16 October 2026 the uploads, the test tasks, the task backfills and `record_url_task` are deferred until the upload route through GitHub Actions exists (backlog CMA-067; README, Decision log).
+- Ingest: the HubSpot adapter reads tasks (eight properties, three associations) from webhooks, the reconcile and the backfill (`--object task`); the store writes tasks after records. The project template gained nine task subscriptions (46 in all), no new scope. **A new app version has to be uploaded and the install's update accepted in both portals** (morning runbook steps 6 and 12; `PROD_RUNBOOK.md` 11.2). Since the afternoon of 16 October 2026 the uploads and their test tasks are deferred until the upload route through GitHub Actions exists (backlog CMA-067; README, Decision log); the task backfills run after the ingest deploys, since they need only the new image and the existing token, and the task figures stay incomplete until the webhooks (README, Open decisions).
 - `71`: 20 PASS, provoked 20 FAIL; `70` run twice (`INSERT 0 1`, then `INSERT 0 0`). `ingest/verify/mapping.mjs` 48 PASS, `hubspot/verify/render.mjs` 33 PASS, each provoked all fail.
 
 ### Part B2, addition 0008o: the follow-up layer (`db/72`, `db/73`)
@@ -63,8 +63,8 @@ Written by Claude Code while Martin and Joshua were away. Everything was built a
 
 ## Questions for the morning
 
-1. HubSpot's task statuses and types in the live portal: which status means done (`COMPLETED` alone, or `DEFERRED` too), which type is the callback. Set on Sources after the backfill (`PROD_RUNBOOK.md` 11.4; deferred with the backfill, CMA-067).
-2. The task's address in HubSpot for `record_url_task`: whether a task opens on its own page or on its record's; the morning runbook step 9 checks it in dev (deferred, CMA-067).
+1. HubSpot's task statuses and types in the live portal: which status means done (`COMPLETED` alone, or `DEFERRED` too), which type is the callback. Set on Sources after the backfill (`PROD_RUNBOOK.md` 11.4).
+2. The task's address in HubSpot for `record_url_task`: whether a task opens on its own page or on its record's; the morning runbook step 9 checks it in dev.
 3. The response time per ticket pipeline: the default 240 business minutes and the warning at 75 % are the brief's; Arno and Kira confirm them on Exports.
 4. The Unlinked calls check: the default skips outbound calls never connected and never tagged; Arno decides whether every call should be checked.
 
@@ -98,5 +98,5 @@ Written by Claude Code while Martin and Joshua were away. Everything was built a
 | New: preview as role | Done (N16-A) |
 | New: ticket response-time configuration (tenant default, per pipeline, warning share) | Done (0008o, Sources and Exports) |
 | New: callbacks kept (KPI 5) | Not done (B4): the catalogs and the window are in place, the figure is not computed |
-| CMA-067 HubSpot project uploads through GitHub Actions (16 October 2026, afternoon) | Not started: HubSpot's official project actions, the live portal's key a GitHub environment secret limited to `main` with a required approval; N16-B's app versions, test tasks, task backfills and `record_url_task` wait for it |
+| CMA-067 HubSpot project uploads through GitHub Actions (16 October 2026, afternoon) | Not started: HubSpot's official project actions, the live portal's key a GitHub environment secret limited to `main` with a required approval; N16-B's app versions and their test tasks wait for it; until then a task change arrives the next morning and a deletion not at all |
 | CMA-068 A dev-only web build path (16 October 2026, afternoon) | Not started: an open decision in README; until then a branch's web image is seen in dev only after its merge |

@@ -979,7 +979,7 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 
 # 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
 
-Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 5: the migrations with their verifies, the data map, the ingest from the branch); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook step 8) and 11.2 to 11.5 from `main`. **Deferred until the upload route exists (backlog CMA-067; README, Decision log, 16 October 2026):** the app versions and their test tasks (morning runbook step 6, the second half of 11.2), the backfills of tasks (step 7, 11.3) and the task items of 11.4 (with step 9). Until then the nightly reconcile of the new ingest reads the tasks created or changed in its look-back, no task webhook arrives and deletions are not seen, so the task lists are incomplete (morning runbook, Task data before CMA-067). The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 5 and 7: the migrations with their verifies, the data map, the ingest from the branch, the backfill of tasks); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook steps 8 and 9) and 11.2 to 11.5 from `main`. **Deferred until the upload route exists (backlog CMA-067; README, Decision log, 16 October 2026):** only the app versions and their test tasks (morning runbook step 6, the second half of 11.2). The backfill of tasks (11.3) needs only the new ingest image and the install's existing token and runs after 11.2's deploy. Until the app version a change to a task appears the next morning (the 02:30 reconcile) and a task deleted in HubSpot never arrives, so the task figures are incomplete; accepted (README, Open decisions: the task webhooks as a data prerequisite). The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
 
 ## 11.1 The two migrations and their verifies (before the merge)
 
@@ -1042,9 +1042,9 @@ reset role;
 ```
 Expected: at least one `task | created` row (`received`, or `processed` once the sweep ran; it runs every minute). If no task event arrives within minutes, the subscriptions did not reach the install: reinstall through the **Reinstall URL** on the Distribution tab, as 15 October showed for the scopes, then create another test task. Check the token afterwards: it stays; if HubSpot shows a new one on the install's row → Show, store it with `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
 
-## 11.3 The backfill of tasks (deferred until the upload route exists, backlog CMA-067)
+## 11.3 The backfill of tasks
 
-**Deferred.** It runs after 11.2's app version: without the task webhooks the backfilled tasks would only change at the nightly reconcile, and a task deleted in HubSpot later would stay (a search sees no deletions).
+After 11.2's ingest deploy, without its app version. The backfill needs only the new ingest image and the install's existing token: the CRM search lists the tasks and the read-back takes them with their first contact, deal and ticket, with the tasks API's `crm.objects.contacts.read` and the read scopes the app already holds (`hubspot/README.md`, no extra scope). Until the app version (CMA-067), a change to a backfilled task arrives with the 02:30 reconcile, the next morning, and a task deleted in HubSpot stays (README, Open decisions).
 
 The backfill takes the connection's id (a uuid), not its key, and `--from` with a date (without it, `intake.start_date`).
 
@@ -1073,18 +1073,18 @@ Expected: counts; every status and type the portal uses, each `is_done` false an
 
 ## 11.4 The Sources settings
 
-Items 1, 2 and 4 need the task rows and wait with 11.3 (deferred, CMA-067); items 3 and 5 and the Exports settings run now.
+Items 1, 2 and 4 need 11.3's task rows: set them after it.
 
 **Browser:** Workspace → Configuration → Sources → the HubSpot connection:
-1. Task statuses (deferred with 11.3): tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
-2. Task types (deferred with 11.3): tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
+1. Task statuses (after 11.3): tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
+2. Task types (after 11.3): tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
 3. Pipelines: a response time for a ticket pipeline that differs from the default of 240 business minutes; leave empty for the default.
-4. Settings (deferred with 11.3 and the morning runbook's step 9): add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
+4. Settings (after 11.3): add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
 5. The telephony connection: Unlinked calls check stays at its default (skip outbound calls never connected and never tagged) unless Arno wants every call checked.
 
 **Browser:** Configuration → Exports → Follow-up: the response time, the warning share, the age groups and the callback window as Arno and Kira want them (defaults 240, 75, `1,2,5`, 240).
 
-Expected: Reports → Follow-up shows the tickets with their response time in force (and, after 11.3, the tasks with their types and the Callback badge), and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
+Expected: Reports → Follow-up shows the tickets with their response time in force, the tasks with their types and the Callback badge, and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
 
 ## 11.5 Day one
 
@@ -1097,4 +1097,4 @@ select * from cma.follow_up_summary_of((select id from cma.tenant where slug = '
 select check_key, count(*) from cma.data_quality_of((select id from cma.tenant where slug = 'pulse4all-subscriptions')) where check_key in ('ticket_no_owner', 'ticket_no_market', 'crm_task_owner_unlinked', 'telephony_call_unlinked') group by 1 order by 1;
 reset role;
 ```
-Expected: the eight counts as the Live board shows them, the task counts 0 or only the tasks the nightly reconcile read since 11.2's deploy (until 11.3); the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).
+Expected: the eight counts as the Live board shows them (the task counts include a task deleted in HubSpot until the task webhooks, CMA-067); the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).
