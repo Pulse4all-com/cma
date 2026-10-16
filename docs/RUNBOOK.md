@@ -37,7 +37,9 @@ On a new machine, one step at a time:
    ```
 
    Sign in as `martin@pulse4all.com` in the tab it opens. Expected last line: `martin@pulse4all.com`
-   and `p4a-cma-dev`.
+   and `p4a-cma-dev`. Once Application Default Credentials exist (step 4, or when you repeat this step
+   later), `gcloud config set project` warns that the active project does not match the quota project
+   in the ADC file (`p4a-cma-prod`, step 4): expected and harmless.
 
 4. **Terminal**: Application Default Credentials, which `cloud-sql-proxy --auto-iam-authn` signs in with.
 
@@ -50,7 +52,29 @@ On a new machine, one step at a time:
    [/home/datadriversdev/.config/gcloud/application_default_credentials.json]` and
    `Quota project "p4a-cma-prod" was added to ADC …`.
 
-5. **Terminal**: GitHub as Pulse4all-DEV, also for `git`.
+5. **Terminal**: the rest of the toolset. Node 22 from NodeSource's apt repository (source
+   `/etc/apt/sources.list.d/nodesource.sources`):
+
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs
+   ```
+
+   The GitHub CLI (`gh`) from GitHub's apt repository (source `/etc/apt/sources.list.d/github-cli.list`):
+   follow the apt instructions at https://github.com/cli/cli/blob/trunk/docs/install_linux.md.
+   The PostgreSQL client from PGDG (source `/etc/apt/sources.list.d/pgdg.list`): follow the apt
+   instructions at https://www.postgresql.org/download/linux/debian/ and install the package
+   `postgresql-client`. `cloud-sql-proxy` v2 and the HubSpot CLI `hs`: install source to be confirmed
+   by Martin; the check below only. Then check all five:
+
+   ```bash
+   node -v; gh --version | head -1; psql --version; cloud-sql-proxy --version; hs accounts list
+   ```
+
+   Expected: `v22.x` (as the Docker image), `gh version <version>`, `psql (PostgreSQL) <version>`,
+   `cloud-sql-proxy version 2.x`, and one HubSpot account, the test account `149511908`. The production
+   portal is never added to `hs` on this device.
+
+6. **Terminal**: GitHub as Pulse4all-DEV, also for `git`.
 
    ```bash
    gh auth login --hostname github.com --git-protocol https --web
@@ -64,23 +88,13 @@ On a new machine, one step at a time:
    has no keyring, so the token sits in that file in plain text (README, Access rules, Credentials on the
    local terminal).
 
-6. **Terminal**: the repository.
+7. **Terminal**: the repository.
 
    ```bash
    gh repo clone Pulse4all-com/cma ~/cma && cd ~/cma && git log --oneline -1
    ```
 
    Expected: the latest commit on `main`.
-
-7. **Terminal**: the rest of the toolset (Node 22, `psql` from PGDG, `cloud-sql-proxy` v2, `hs`).
-
-   ```bash
-   node -v; psql --version; cloud-sql-proxy --version; hs accounts list
-   ```
-
-   Expected: `v22.x` (as the Docker image), `psql (PostgreSQL) <version>`, `cloud-sql-proxy version 2.x`,
-   and one HubSpot account, the test account `149511908`. The production portal is never added to `hs`
-   on this device.
 
 ## 0. Start of every session
 
@@ -89,7 +103,7 @@ cd ~/cma && git switch main -q && git pull -q && git log --oneline -3
 ```
 
 The logins stay until they expire or are revoked. If gcloud asks you to reauthenticate, repeat setup
-step 3; if `cloud-sql-proxy` fails on its credentials, step 4; if `gh` says you are not logged in, step 5.
+step 3; if `cloud-sql-proxy` fails on its credentials, step 4; if `gh` says you are not logged in, step 6.
 
 ## 1. Make a change (code, SQL, docs)
 
