@@ -18,6 +18,7 @@ put_secret () {  # usage: put_secret <project> <name>   → hidden prompt, never
 ```
 Expected: no output. `type put_secret` prints the function.
 - `~/cma` on a clean, current `main`. `deploy.sh` tags the image with the last commit that touched `ingest/` (`git log -1 --format=%h -- ingest/`), not HEAD, so a `main` that moved on with docs or README only deploys the image dev tested (`no build`); when the two differ the script prints `image tag <sha>: the last commit under ingest/; HEAD is <sha>`.
+- Every prod service deploy carries `--front ingest.pulse4all.app` (7.1, 7.4, 8.4, 9.3; `--jobs` takes none): `deploy.sh` refuses a prod service deploy without it since 16 October 2026 (`prod service deploy needs --front <host> …`, exit 2, before any gcloud call), because without it the ingress goes to `all` and every HubSpot signature fails (`records/ingest-front-incident-2026-10-16`). A change to `cma-ingest` in the Console is an emergency fix only, and sets exactly what `deploy.sh` sets (README, Decision log, 16 October 2026).
 - The tenant is `pulse4all-subscriptions` (seed `db/02_seed_pulse4all.sql`).
 
 **The Studio context block** (every Studio session below that calls a configuration function; prod uses you):
@@ -78,7 +79,7 @@ Expected: `ACTIVE	ingest.pulse4all.app=ACTIVE` (before that `PROVISIONING` with 
 curl -sS -o /dev/null -w "%{http_code}\n" https://ingest.pulse4all.app/health
 curl -sS -o /dev/null -w "%{http_code}\n" "$(gcloud run services describe cma-ingest --project=p4a-cma-prod --region=europe-west4 --format='value(status.url)')/health"
 ```
-Expected: `200`, then `404` (the `run.app` address refused by the ingress setting; seen in prod on 12 October, `deploy.sh` prints `run.app: 404 (refused)`). A `200` on the second line means the service was deployed without `--front` (`deploy.sh` prints a `FAIL run.app: 200` line): rerun the first block.
+Expected: `200`, then `404` (the `run.app` address refused by the ingress setting; seen in prod on 12 October, `deploy.sh` prints `run.app: 404 (refused)`). A `200` on the second line means the ingress is `all`, from a Console change or a deploy without `--front` before 16 October 2026 (`deploy.sh` refuses one since then, and prints a `FAIL run.app: 200` line when it finds the address open): rerun the first block.
 
 ## 7.2 The jobs
 
@@ -177,7 +178,7 @@ gcloud secrets versions access latest --secret=ingest-hubspot-subs-token --proje
 ```
 Expected: `147946837`, the live portal's account type and `eu1`. A test account's id or `DEVELOPER_TEST` means the wrong install's token.
 
-**Terminal** (the accessor grants, when the secrets were created after 7.1; always with `--front`, or the ingress goes back to `all`)
+**Terminal** (the accessor grants, when the secrets were created after 7.1; always with `--front`, without which `deploy.sh` refuses)
 ```bash
 bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-hubspot-subs-signing --secret ingest-hubspot-subs-token
 ```
@@ -444,7 +445,7 @@ gcloud secrets create ingest-aircall-subs-signing --project=p4a-cma-prod --repli
 ```
 Expected: `Created secret [ingest-aircall-subs-signing].` (on a rerun: `already exists`, which is fine).
 
-**Terminal** (the accessor grants; always with `--front`, or the ingress goes back to `all`)
+**Terminal** (the accessor grants; always with `--front`, without which `deploy.sh` refuses)
 ```bash
 bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-aircall-subs-token --secret ingest-aircall-subs-signing
 ```
@@ -883,7 +884,7 @@ This bridge check is the only place the link shows today: Reports → Data quali
 
 # Phase 10. The email poll in prod (brief B17b)
 
-The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
+The CRM's email engagements and the inbox conversations of the live portal into the tables of addition 0008m (run in prod on 15 October 2026, `records/0008m-prod-2026-10-15`), metadata only (`docs/ingest/README.md`, section Email). Written to run after dev passed `docs/b17b-email-ingest/MORNING_RUNBOOK.md` steps 1 to 8; Yordi agreed to the email metadata, the scopes `sales-email-read` and `conversations.read` and the held contacts on 15 October 2026 (README Decision log), so there is no other gate. The same steps as in dev, against prod. Run in prod on 16 October 2026 (`records/b17b-prod-2026-10-16`, written from Martin's report; dev in `records/b17b-dev-2026-10-16`); 10.7, day one, is not in that record. `<conn>` is the live portal's HubSpot connection (7.3), `<tenant_id>` and `<user_id>` the context block's.
 
 Before you start:
 - `main` holds the merge of B17b, and dev runs it (the same image: `deploy.sh` says `no build`).

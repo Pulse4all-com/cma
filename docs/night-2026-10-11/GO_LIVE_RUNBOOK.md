@@ -42,9 +42,9 @@ Expected: a build for the merge's short SHA, `SUCCESS` after a few minutes; then
 **Terminal** (`~/cma`, the ingest with the alert hook, dev then prod):
 ```bash
 bash docs/ingest/deploy.sh dev
-bash docs/ingest/deploy.sh prod
+bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-hubspot-subs-signing --secret ingest-hubspot-subs-token
 ```
-Expected: the image built in prod as `cma-build`, deployed to both; `/health` answers the new short SHA.
+Expected: the image built in prod as `cma-build`, deployed to both; `/health` answers the new short SHA. The prod line is superseded by `docs/ingest/PROD_RUNBOOK.md` 7.1 and carries its flags since 16 October 2026: a bare `deploy.sh prod` put the ingress on `all` and left `https://ingest.pulse4all.app` out of `INGEST_PUBLIC_URLS`, so every HubSpot signature failed (`records/ingest-front-incident-2026-10-16`), and `deploy.sh` now refuses a prod service deploy without `--front` (exit 2, before any gcloud call).
 
 ## 2. Prod configuration: the alert rule and the record links
 

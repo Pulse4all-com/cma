@@ -2,7 +2,7 @@
 # The ingest service cma-ingest (DESIGN §5; README Architecture, Ingest API) in one project.
 #
 #   bash docs/ingest/deploy.sh dev  [--tenant <slug>]... [--secret <name>]...
-#   bash docs/ingest/deploy.sh prod [--tenant <slug>]... [--secret <name>]... [--front <host>]
+#   bash docs/ingest/deploy.sh prod --front <host> [--tenant <slug>]... [--secret <name>]...
 #   bash docs/ingest/deploy.sh dev|prod --jobs [--reconcile-every "<cron>"] [--reconcile-lookback <minutes>]
 #
 #   --tenant <slug>   the tenant's hash pepper ingest-hash-pepper-<slug>: created with 32 random bytes
@@ -14,7 +14,11 @@
 #                     as https://<host> (docs/ingest/front.sh builds that front): ingress
 #                     internal-and-cloud-load-balancing instead of all, so the run.app address refuses
 #                     everyone, and INGEST_PUBLIC_URLS starts with https://<host>, so the URI HubSpot
-#                     signs is the public host (the first deploy too). Without it nothing changes (dev)
+#                     signs is the public host (the first deploy too). Prod requires it: since 16 October
+#                     2026 a prod service deploy without --front stops (exit 2) before any gcloud call,
+#                     because the ingress would go to all and HubSpot's signatures over the public host
+#                     would fail (revision cma-ingest-00008; records/ingest-front-incident-2026-10-16).
+#                     Dev needs none and keeps its run.app address
 #   --jobs            the jobs and their schedules instead of the service (below)
 #   --reconcile-every "<cron>"       with --jobs: the reconcile schedule (default "30 2 * * *", Europe/Amsterdam)
 #   --reconcile-lookback <minutes>   with --jobs: the reconcile's look-back (default the job's 26 hours).
@@ -120,6 +124,9 @@ for s in "${SECRETS[@]}"; do [[ "$s" =~ ^[A-Za-z0-9_-]{1,255}$ ]] || { echo "sec
 [ -z "$FRONT" ] || [[ "$FRONT" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ ]] || { echo "--front $FRONT is not a host name"; exit 2; }
 if [ "$JOBS" = 1 ] && [ -n "$FRONT" ]; then
   echo "--front goes with the service deploy, not --jobs"; exit 2
+fi
+if [ "$ENV" = prod ] && [ "$JOBS" = 0 ] && [ -z "$FRONT" ]; then
+  echo "prod service deploy needs --front <host> (ingest.pulse4all.app); without it ingress goes to all and HubSpot signatures fail"; exit 2
 fi
 if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "30 2 * * *" ] || [ -n "$RECONCILE_LOOKBACK" ]; }; then
   echo "--reconcile-every and --reconcile-lookback go with --jobs"; exit 2
