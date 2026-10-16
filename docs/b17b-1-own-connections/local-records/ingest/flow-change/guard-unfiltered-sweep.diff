@@ -1,0 +1,11 @@
+--- flow.mjs	2026-10-16 04:02:58.093068426 +0000
++++ flow-guard-variant.mjs	2026-10-16 04:05:44.832685267 +0000
+@@ -441,6 +441,8 @@
+ const headerLine = logs.map((l) => JSON.parse(l)).find((l) => l.message === "webhook headers" && l.headerNames.includes("x-hubspot-signature-v3"));
+ expect("header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not", [Boolean(headerLine), sentSignatures.some((x) => logText.includes(x))], [true, false], [false, true]);
+ 
++const { runSweep } = await import("../src/jobs/sweep.mjs");
++await runSweep({});
+ // This run's connections stop being served (no job serves them again)
+ for (const c of [conn1.id, conn1.aircallId, auto1.id]) await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [c]));
+ await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [conn2.id]));
