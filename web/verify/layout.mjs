@@ -69,7 +69,7 @@ async function acknowledgeUrgent(subject) {
     }
   }
 }
-for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two", "reader"]) await acknowledgeUrgent(subject);
+for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two", "reader", "agent-one"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
 
 async function expectShell(width, height) {
