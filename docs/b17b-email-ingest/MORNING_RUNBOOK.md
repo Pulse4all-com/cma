@@ -220,30 +220,33 @@ Expected: an `inbox_message` `in` (customer), an `inbox_message` `out` (agent, w
 
 ## 7. `verify:email-flow` against dev
 
-It creates two throwaway tenants (`email-<run>-one`, `email-<run>-two`), polls a fake HubSpot on localhost into them, checks, and sets their connections inactive; their invented rows stay. It refuses a database without the dev seed.
+It creates two throwaway tenants (`email-<run>-one`, `email-<run>-two`), polls a fake HubSpot on localhost into them, checks, and sets their connections inactive; their invented rows stay. Every job it runs names its own connection, and its last check (I1) proves that your login wrote no row of another tenant meanwhile (B17b.1; the scheduled jobs' writes, under their own login, are left out). It refuses a database without the dev seed.
 
 **Terminal** (in `~/cma/ingest`, after `npm ci`; `cma_db dev` runs the proxy on 5433)
 ```bash
 cma_db dev && cd ~/cma/ingest && CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=$(gcloud config get-value account) CMA_DB_SET_ROLE=cma_app INGEST_FLOW_ADMIN_USER=$(gcloud config get-value account) node verify/email-flow.mjs | tail -3; cd ~/cma
 ```
-Expected: `connected to cma as martin@pulse4all.com`, then the last checks and `ALL 32 PASS`. With `--provoke` at the end of the `node` command: `ALL 32 PROVOKED CHECKS FAILED, as they must`. A `FAIL` on F1 or F2 means the database's words logic differs from the ingest's on a shared fixture (its line names the case): send it to me.
+Expected: `connected to cma as martin@pulse4all.com`, then the last checks and `ALL 33 PASS` (32 before B17b.1). With `--provoke` at the end of the `node` command: `ALL 33 PROVOKED CHECKS FAILED, as they must`. A `FAIL` on I1 names the tables written outside the run's tenants (`sync_run:2`, …): send it to me. A `FAIL` on F1 or F2 means the database's words logic differs from the ingest's on a shared fixture (its line names the case): send it to me.
 
 ## 8. Read-only counts
 
-**Studio (cma-dev-pg)** (counts only)
+**Studio (cma-dev-pg)** (counts only; every query reads `pulse4all-subscriptions` alone, so `verify:email-flow`'s throwaway tenants are left out, and every column names its table, since `cma.tenant` has a `status` too)
 ```sql
 set role cma_owner;
-select source_kind, direction, actor_kind, count(*) from cma.email_message m join cma.tenant t on t.id = m.tenant_id
+select m.source_kind, m.direction, m.actor_kind, count(*) from cma.email_message m join cma.tenant t on t.id = m.tenant_id
 where t.slug = 'pulse4all-subscriptions' group by 1, 2, 3 order by 1, 2, 3;
-select status, is_spam, is_archived, forgotten_at is not null as forgotten, count(*) from cma.email_thread e join cma.tenant t on t.id = e.tenant_id
+select e.status, e.is_spam, e.is_archived, e.forgotten_at is not null as forgotten, count(*) from cma.email_thread e join cma.tenant t on t.id = e.tenant_id
 where t.slug = 'pulse4all-subscriptions' group by 1, 2, 3, 4 order by 1, 2, 3, 4;
-select kind, count(*) from cma.email_thread_event e join cma.tenant t on t.id = e.tenant_id where t.slug = 'pulse4all-subscriptions' group by 1 order by 1;
-select (select count(*) from cma.connection_inbox) as inboxes, (select count(*) from cma.connection_inbox_channel) as channels,
-       (select count(*) from cma.crm_contact where country_source > 1) as contacts_from_fallback;
-select status, count(*) from cma.sync_run where job = 'email_poll' and started_at > now() - interval '1 hour' group by 1;
+select e.kind, count(*) from cma.email_thread_event e join cma.tenant t on t.id = e.tenant_id where t.slug = 'pulse4all-subscriptions' group by 1 order by 1;
+select (select count(*) from cma.connection_inbox i where i.tenant_id = t.id) as inboxes,
+       (select count(*) from cma.connection_inbox_channel c where c.tenant_id = t.id) as channels,
+       (select count(*) from cma.crm_contact k where k.tenant_id = t.id and k.country_source > 1) as contacts_from_fallback
+from cma.tenant t where t.slug = 'pulse4all-subscriptions';
+select r.status, count(*) from cma.sync_run r join cma.tenant t on t.id = r.tenant_id
+where t.slug = 'pulse4all-subscriptions' and r.job = 'email_poll' and r.started_at > now() - interval '1 hour' group by 1;
 reset role;
 ```
-Expected: counts per source kind, direction and actor kind (no `crm_email` row is added to an `inbox_message` row anywhere); threads by status; events by kind; the catalogs' sizes; runs of the last hour, all `succeeded` (about 60). Send me the outputs of steps 3a, 4, 5, 6 and 8 (ids, counts, dates and times only); records go in a separate pull request, written from your report.
+Expected: counts per source kind, direction and actor kind (no `crm_email` row is added to an `inbox_message` row anywhere); threads by status; events by kind; the tenant's catalog sizes and its contacts from a fallback slot; its runs of the last hour, all `succeeded` (about 60). Send me the outputs of steps 3a, 4, 5, 6 and 8 (ids, counts, dates and times only); records go in a separate pull request, written from your report.
 
 ## 9. Prod
 

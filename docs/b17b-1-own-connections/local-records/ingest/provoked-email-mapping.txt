@@ -1,0 +1,81 @@
+verify/email-mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  settings: email_poll true, thread and origin properties, automated origins lower case got [true,"fixture_thread_id","fixture_origin",["automation_fixture","othe, wanted [false,null,null,[]]
+FAIL  settings: email_poll must be the boolean true (a string is off)  got false, wanted true
+FAIL  settings: a property name that is not a plain name is ignored    got null, wanted "hs thread; drop"
+FAIL  active rules only, in their order                                got ["billing","partner","reminder"], wanted ["orders","billing","partner","reminder"]
+FAIL  no rule: structural properties, thread and origin only           got ["fixture_origin","fixture_thread_id","hs_createdate","hs_email_direct, wanted ["fixture_origin","fixture_thread_id","hs_createdate","hs_email_direct
+FAIL  a subject and a sender domain rule: the subject and the sender's address asked for too got true, wanted false
+FAIL  only a subject rule: the sender's address is not asked for       got false, wanted true
+FAIL  never text, html, headers, recipients or names                   got [], wanted ["hs_email_text"]
+FAIL  EMAIL → out, sent, the owner's agent, billing, the CRM thread id got ["out","sent","agent","7100000001","billing","th-9000001"], wanted ["out","sent","agent",null,null,null]
+FAIL  INCOMING_EMAIL → in, other, customer without an owner, partner by the sender's domain got ["in","other","customer",null,"partner","th-9000001"], wanted ["in","other","agent","7100000001",null,"th-9000001"]
+FAIL  FORWARDED_EMAIL → forwarded, bounced, agent, no category         got ["forwarded","bounced","agent","7100000002",null,null], wanted ["out","other","agent","7100000002",null,null]
+FAIL  an automated origin → system, no owner; the reminder rule (billing excluded by its word) got ["out","sent","system",null,"reminder",null], wanted ["out","sent","agent","7100000002","billing",null]
+FAIL  an unknown direction is skipped (null)                           got null, wanted {"direction":"out"}
+FAIL  no owner → unknown; a thread id with @ dropped; scheduled        got ["out","scheduled","unknown",null,"partner",null], wanted ["out","scheduled","agent",null,"partner","bad@thread"]
+FAIL  statuses: the CMA's four in any case, else other                 got ["sent","bounced","failed","scheduled","other","other","other"], wanted ["sent","bounced","failed","scheduled","sending","other","other"]
+FAIL  an engagement item holds no subject, text, html, header, address or name got [], wanted ["something"]
+FAIL  raw holds direction, status and origin codes only                got {"direction":"EMAIL","status":"SENT","origin":"AUTOMATION_FIXTURE"}, wanted {}
+FAIL  without rules no category is computed                            got null, wanted "billing"
+FAIL  words: the 12 shared cases as cma.email_words_match answers them got [true,false,false,false,true,false,true,true,false,true,true,false], wanted [false,true,true,true,false,true,false,false,true,false,false,true]
+FAIL  categories: the 7 shared cases as cma.email_category_of answers them got ["billing","reminder","partner",null,null,null,"billing"], wanted ["billing","billing","billing","billing","billing","billing","billing"
+FAIL  the sender's domain: lower case, from a display address, never the local part got ["example.org",null,null,null], wanted ["customer.invented@example.org","y",null,null]
+FAIL  the owner map: user id → owner id, archived owners too           got ["7100000001","7100000003"], wanted ["7000000001",null]
+FAIL  actor prefixes: A agent, V and E customer, S system, B bot, I integration, others unknown got ["agent","customer","customer","system","bot","integration","unknown",, wanted ["agent","visitor","email","system","bot","integrator","ai","unknown",
+FAIL  an agent's owner id through its user id; an unmapped agent has none got [{"kind":"agent","ownerRef":"7100000002"},{"kind":"agent","ownerRef":n, wanted [{"kind":"agent","ownerRef":"7000000002"},{"kind":"agent","ownerRef":"
+FAIL  no actor result holds the actor id                               got false, wanted true
+FAIL  channel kinds from names                                         got ["email","chat","whatsapp","messenger","form","phone","other"], wanted ["email","email","email","email","email","email","email"]
+FAIL  inboxes: archived left out, a name holding an address replaced by the id got [{"inboxId":"1500000001","name":"Support inbox (test)"},{"inboxId":"15, wanted [{"id":"1500000001","name":"Support inbox (test)","type":"INBOX","arch
+FAIL  channels with their kind                                         got ["email","chat","whatsapp"], wanted ["other","other","other"]
+FAIL  channel accounts: ids only (no name, no delivery identifier)     got [["1600000001","1500000001"],["1600000002","1500000002"]], wanted [["1600000001","support.invented@example.com"]]
+FAIL  the map in parts under the cursor's 2 kB, read back whole        got [true,true,300], wanted [false,true,299]
+FAIL  owner pairs hold ids only (no email, no name)                    got "[[\"7000000001\",\"7100000001\"],[\"7000000002\",\"7100000002\"]]", wanted "[{\"id\":\"7100000001\",\"userId\":7000000001,\"email\":\"agent.one.i
+FAIL  an open thread: agent's owner id, contact, ticket                got ["open","7100000001","4300000103","4200000101",false,"1500000001","100, wanted ["open","A-7000000001","4300000103",null,false,"1500000001","1002",fal
+FAIL  a closed thread: its close time; the assignee an archived owner  got ["closed","7100000003","4300000102",null,false,"1500000002","1002",tru, wanted ["closed",null,"4300000102",null,false,"1500000002","1002",false]
+FAIL  a spam thread stored with is_spam, no agent                      got ["open",null,null,null,true,"1500000001","1002",false], wanted ["open",null,null,null,false,"1500000001","1002",false]
+FAIL  an agent without an owner leaves the thread's agent empty        got null, wanted "7000009999"
+FAIL  a thread held exactly so is not written again                    got true, wanted false
+FAIL  …and a change of agent is                                        got false, wanted true
+FAIL  thread 1: two messages (in from the customer, out by the agent), one assignment, the comment ignored got [[["in","customer",null,"other"],["out","agent","7100000001","sent"]],, wanted [[["in","customer",null,"other"]],[],0]
+FAIL  thread 1: the first message's category billing (its subject), the contact and inbox of the thread got ["billing","4300000103","1500000001"], wanted [null,null,null]
+FAIL  thread 2: moved inbox, assigned (agent to agent), closed; the welcome message ignored got [[["moved_inbox","agent","7100000002",null,"1500000001","1500000002"],, wanted [[],0]
+FAIL  thread 2: a visitor's message is the customer's, partner by its sender's domain got ["customer","partner"], wanted ["visitor",null]
+FAIL  thread 3: an unknown prefix → unknown; an assignment without assignee → no target got ["unknown","assigned",null,"bot"], wanted ["customer","assigned","agent","unknown"]
+FAIL  thread 4: closed then reopened; a failed outgoing message; an integration's incoming one got [["closed","reopened"],[["in","integration","other"],["out","agent","f, wanted [["closed","closed"],[]]
+FAIL  after the thread's mark only the later messages and events       got ["m1d0000000000000000000000000004","m1b0000000000000000000000000002"], wanted ["m1a0000000000000000000000000001"]
+FAIL  no message row or thread item holds a name, address, subject, text or raw actor id got [], wanted ["x"]
+FAIL  the cursor: the newest latest-message time and the threads at it got {"at":1792120262409,"ids":["2","3"]}, wanted {"at":1792119962409,"ids":["1"]}
+FAIL  …which the next page leaves out, a newer thread at that time kept got ["4"], wanted ["2","4"]
+FAIL  two country slots: countries per slot (slot 1 empty, slot 2 the dropdown), no single country got [[null,"United Kingdom"],null], wanted [null,"United Kingdom"]
+FAIL  one country slot keeps sending country                           got "GB", wanted null
+FAIL  a record's fallback country: the first non-empty slot            got "United Kingdom", wanted null
+FAIL  a contact item holds only the configured properties (no email, no name) got [], wanted ["x"]
+FAIL  poll 1: succeeded without an error                               got null, wanted "rate_limited"
+FAIL  poll 1: five engagements written (the unknown direction skipped) got ["4500000001","4500000002","4500000003","4500000004","4500000006"], wanted ["4500000001"]
+FAIL  poll 1: four threads, six inbox messages, seven events           got [4,6,7], wanted [4,0,0]
+FAIL  poll 1: the email's contact read once, after the emails; the one nothing points to never got [["4300000101","4300000102","4300000103","4300000104"],true,false], wanted [["4300000199"],false,true]
+FAIL  poll 1: contacts asked for the configured properties only        got ["contact_country","contact_language","country_dropdown"], wanted ["email","firstname"]
+FAIL  poll 1: the contact sent with its slots                          got [null,"United Kingdom"], wanted null
+FAIL  poll 1: associations email → contact, deal, ticket               got ["4500000001>contact:4300000101","4500000001>deal:4100000101","4500000, wanted []
+FAIL  poll 1: the search asked for no text, html, header or recipient  got [], wanted ["hs_email_text"]
+FAIL  poll 1: threads listed by latest message with the required filter, tickets included got true, wanted false
+FAIL  poll 1: catalogs written (two inboxes, three channels) and the owner map read once each way got [2,3,2], wanted [3,3,0]
+FAIL  poll 1: nothing written, kept in a cursor or logged holds a name, address, subject, text or raw actor id got [], wanted ["x"]
+FAIL  poll 1: the run's counts and outcomes are counts only            got true, wanted false
+FAIL  poll 2 (nothing changed): no message read again, nothing written got [0,0,null], wanted [4,3,null]
+FAIL  poll 2: the catalogs and the owner map not read again within the hour got 0, wanted 2
+FAIL  poll 3: a 429 on the search → the run's error rate_limited, the engagements' cursor unchanged got ["rate_limited",true], wanted [null,false]
+FAIL  poll 3: …and the conversations still ran: only thread 1's messages read, the new message stored got [["8800000001"],true], wanted [[],false]
+FAIL  poll 3: the warning carries the part and the code only           got true, wanted false
+FAIL  open check: a thread closed without a message is read again and stored closed got "closed", wanted "open"
+FAIL  open check: a thread gone at the source (404, also archived) is forgotten got [["8800000003"],["","true"]], wanted [[],[]]
+FAIL  check script: exit 0; the status values and a missing property named got [0,true,true], wanted [1,false,false]
+FAIL  check script: the thread and origin candidates, an option holding an address left out got [true,true,false], wanted [false,false,true]
+FAIL  check script: actor prefixes with HubSpot's types, counted       got [true,true,true,true,true,true], wanted [false,false,false,false,false,false]
+FAIL  check script: no actor id, name, address, subject or the token printed got [[],false], wanted [["x"],true]
+FAIL  check script: inboxes and channels by id and name, an inbox named by an address not shown got [true,true,true,true], wanted [false,false,false,false]
+FAIL  check script: refuses without its arguments (exit 2)             got 2, wanted 0
+
+ALL 76 PROVOKED CHECKS FAILED, as they must
+exit 0
