@@ -1,0 +1,21 @@
+FAIL  the narrowing is exactly the intersection, in the real order, each key once got 300, wanted 299
+FAIL  a role's permission the person lacks never appears               got ["workday.own"], wanted ["workday.own","quality.manage"]
+FAIL  a key named twice in the real set is kept once                   got ["reports.view"], wanted ["reports.view","reports.view"]
+FAIL  the admin previewing as agent sees the intersection              got ["workday.own","roster.view"], wanted ["workday.own","roster.view","leads.accept","performance.own"]
+FAIL  the preview names the role                                       got {"roleKey":"agent","roleName":"Agent"}, wanted null
+FAIL  canPreview is true while previewing                              got true, wanted false
+FAIL  canPreview is true for the admin without a preview               got true, wanted false
+FAIL  no cookie: the admin keeps every permission                      got ["workday.own","workday.team","workday.export","performance.team","mon, wanted ["workday.own"]
+FAIL  an unknown role key is ignored                                   got [null,13], wanted [{"roleKey":"director","roleName":"director"},0]
+FAIL  a non-admin's cookie is ignored: permissions unchanged, no preview got [null,["workday.own","workday.team","performance.team","users.manage_a, wanted [{"roleKey":"agent","roleName":"Agent"},["workday.own"]]
+FAIL  a non-admin cannot preview                                       got [false,false], wanted [true,true]
+FAIL  an empty intersection is allowed                                 got [[],"coach"], wanted [["quality.manage"],"coach"]
+FAIL  with no permission left the person still lands on Welcome, like everyone with a role got ["/",["/","/messages"]], wanted [null,[]]
+FAIL  the real principal is not changed by the narrowing               got 13, wanted 2
+FAIL  the user and the tenant stay the person's own                    got ["u","t","admin"], wanted ["agent","t","agent"]
+FAIL  the cookie's name and 12 hours                                   got ["cma-preview-role",43200], wanted ["cma-preview",86400]
+FAIL  role keys are lower-case slugs                                   got [true,true,true], wanted [true,true,false]
+FAIL  anything else is refused                                         got [false,false,false,false,false,false,false], wanted [true,false,false,false,false,false,false]
+
+preview: ALL 18 PROVOKED CHECKS FAILED, as they must
+exit 0

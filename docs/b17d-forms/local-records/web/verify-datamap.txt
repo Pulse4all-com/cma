@@ -1,0 +1,5 @@
+  catalog connection_form_field: not a table in cma in schema.json
+  catalog form_category: not a table in cma in schema.json
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (3 problems)
+exit 1

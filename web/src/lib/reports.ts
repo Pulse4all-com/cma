@@ -8,11 +8,13 @@
  *
  * Not connected: a telephony or commerce figure is null when the tenant has no such source, and a
  * screen says so ("No telephony connected", "No shop connected"); it never shows 0 for a source
- * that is not there. Since addition 0008i Inbound, since 0008j Calls and Calls per agent (brief B16).
+ * that is not there. Since addition 0008i Inbound, since 0008j Calls and Calls per agent (brief B16),
+ * since 0008p Forms (brief B17d).
  */
 import type {
-  CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, HoursRange, InboundFigures, InboundGroup,
-  InboundServiceRow, Instant, IntakeDay, MissedReason, SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow, TagUseRow,
+  CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
+  FormsGroup, FormsResolution, FormsRow, HoursRange, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason,
+  SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow, TagUseRow,
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { isoWeek } from "./roster.ts";
@@ -1173,4 +1175,298 @@ export function fillHint(
   return text.replaceAll("{hours}", values.hours).replaceAll("{target}", num(values.target))
     .replaceAll("{seconds}", num(values.seconds)).replaceAll("{days}", num(values.days)).replaceAll("{minutes}", num(values.minutes))
     .replaceAll("{threshold}", num(values.threshold));
+}
+
+// ---- Forms (addition 0008p; brief B17d, 16 October 2026) -------------------------------------------
+
+export const FORMS_GROUPS: readonly FormsGroup[] = ["day", "week"];
+
+export function parseFormsGroup(value: unknown): FormsGroup | null {
+  return typeof value === "string" && (FORMS_GROUPS as readonly string[]).includes(value) ? (value as FormsGroup) : null;
+}
+
+export function nextFormsGroup(group: FormsGroup): FormsGroup {
+  return FORMS_GROUPS[(FORMS_GROUPS.indexOf(group) + 1) % FORMS_GROUPS.length]!;
+}
+
+const FORM_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:.{1,100}$/;
+const CATEGORY_CODE = /^[a-z][a-z0-9_]{0,39}$/;
+const FIELD_NAME = /^[A-Za-z0-9_.-]{1,100}$/;
+
+/**
+ * The report's filters from a query, as cma.forms_filters_check takes them: a market is a two-letter code
+ * or "unknown", a category a category code or "none" (forms without one), a form a connection id ':' form
+ * id; empty means all. `problem` names a value the database would refuse; that filter is then left out.
+ */
+export function parseFormsFilter(market: unknown, category: unknown, form: unknown): { filter: FormsFilter; problem: null | "market" | "category" | "form" } {
+  const text = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
+  const m = text(market);
+  const c = text(category);
+  const f = text(form);
+  const badMarket = m !== null && !/^([A-Z]{2}|unknown)$/.test(m);
+  const badCategory = c !== null && !CATEGORY_CODE.test(c);
+  const badForm = f !== null && !FORM_KEY.test(f);
+  return {
+    filter: { market: badMarket ? null : m, category: badCategory ? null : c, form: badForm ? null : f },
+    problem: badMarket ? "market" : badCategory ? "category" : badForm ? "form" : null,
+  };
+}
+
+/** The answers' field and value filters from a query: a field name and a value of 1 to 200 characters; a malformed one left out */
+export function parseAnswerFilter(field: unknown, value: unknown): { field: string | null; value: string | null; problem: boolean } {
+  const f = typeof field === "string" && field !== "" ? field : null;
+  const v = typeof value === "string" && value !== "" ? value : null;
+  const badField = f !== null && !FIELD_NAME.test(f);
+  const badValue = v !== null && v.length > 200;
+  return { field: badField ? null : f, value: badField || badValue ? null : v, problem: badField || badValue };
+}
+
+/** The query values of the forms filter, only the ones set */
+export function formsFilterQuery(filter: FormsFilter): Record<string, string> {
+  return {
+    ...(filter.market ? { market: filter.market } : {}),
+    ...(filter.category ? { category: filter.category } : {}),
+    ...(filter.form ? { form: filter.form } : {}),
+  };
+}
+
+/**
+ * A stored submission as cma.form_submissions_of gives it (the mock's fixture, the verifier): its form,
+ * category, market (the form's, else the market field's answer, else the contact's country, else unknown),
+ * zone, business date, ISO week and time of day there, the contact resolution and the kept answers
+ * (option values; a multiple-checkboxes answer as a list)
+ */
+export interface FormSubmissionRecord {
+  formKey: string;
+  formName: string;
+  category: string | null;
+  market: string;
+  zone: string;
+  date: DateKey;
+  localTime: string;
+  resolution: "resolved" | "not_found" | "ambiguous" | "no_email" | "pending";
+  answers: Record<string, string | string[]>;
+}
+
+const NO_SUBMISSIONS: FormsResolution & { submissions: number } = { submissions: 0, resolved: 0, notFound: 0, ambiguous: 0, noEmail: 0, pending: 0 };
+
+function addSubmission(acc: FormsResolution & { submissions: number }, r: Pick<FormSubmissionRecord, "resolution">): void {
+  acc.submissions += 1;
+  if (r.resolution === "resolved") acc.resolved += 1;
+  else if (r.resolution === "not_found") acc.notFound += 1;
+  else if (r.resolution === "ambiguous") acc.ambiguous += 1;
+  else if (r.resolution === "no_email") acc.noEmail += 1;
+  else acc.pending += 1;
+}
+
+/** Whether a record passes the filters, as cma.forms_figures_of narrows before counting */
+function formsFilterPasses(r: FormSubmissionRecord, filter: FormsFilter): boolean {
+  return (filter.market === null || r.market === filter.market)
+    && (filter.category === null || (r.category ?? "none") === filter.category)
+    && (filter.form === null || r.formKey === filter.form);
+}
+
+/**
+ * The submissions of the business dates [from, to] per day or ISO week, form and market, then the period's
+ * totals per form and market (groupKey null), as cma.forms_figures_of. With `until` (the previous span of a
+ * period that reaches today) the submissions of `to` count only up to its time of day in each one's zone
+ */
+export function formsFigures(records: readonly FormSubmissionRecord[], from: DateKey, to: DateKey, group: FormsGroup, filter: FormsFilter,
+  until: Instant | null = null): FormsRow[] {
+  const groups = new Map<string, FormsRow>();
+  const totals = new Map<string, FormsRow>();
+  const rowOf = (map: Map<string, FormsRow>, key: string, groupKey: DateKey | null, r: FormSubmissionRecord) => {
+    let row = map.get(key);
+    if (!row) map.set(key, row = { groupKey, formKey: r.formKey, formName: r.formName, category: r.category, market: r.market, ...NO_SUBMISSIONS });
+    return row;
+  };
+  for (const r of records) {
+    if (r.date < from || r.date > to || !formsFilterPasses(r, filter)) continue;
+    if (until !== null && r.date === to && r.localTime > timeInZone(until, r.zone)) continue;
+    const g = group === "week" ? startOfWeek(r.date) : r.date;
+    addSubmission(rowOf(groups, `${g}|${r.formKey}|${r.market}`, g, r), r);
+    addSubmission(rowOf(totals, `${r.formKey}|${r.market}`, null, r), r);
+  }
+  const order = (a: FormsRow, b: FormsRow) => byCode(a.groupKey ?? "", b.groupKey ?? "") || byCode(a.formName, b.formName)
+    || byCode(a.formKey, b.formKey) || byCode(a.market, b.market);
+  return [...[...groups.values()].sort(order), ...[...totals.values()].sort(order)];
+}
+
+/** The previous period's totals per form and market, like for like (previousPeriod), as cma.forms_report_of */
+export function previousForms(records: readonly FormSubmissionRecord[], prev: PreviousPeriod, filter: FormsFilter, now: Instant): FormsRow[] {
+  return formsFigures(records, prev.from, prev.to, "day", filter, prev.partial ? now : null).filter((r) => r.groupKey === null);
+}
+
+/** The answers per form, market, field and value over the dates (and a cut last date, as previousForms), as cma.forms_answers_of */
+export function formsAnswersOf(records: readonly FormSubmissionRecord[], from: DateKey, to: DateKey, filter: FormsFilter, field: string | null,
+  value: string | null, period: FormAnswerRow["period"], until: Instant | null = null): FormAnswerRow[] {
+  const out = new Map<string, FormAnswerRow>();
+  for (const r of records) {
+    if (r.date < from || r.date > to || !formsFilterPasses(r, filter)) continue;
+    if (until !== null && r.date === to && r.localTime > timeInZone(until, r.zone)) continue;
+    for (const [f, answer] of Object.entries(r.answers)) {
+      if (field !== null && f !== field) continue;
+      for (const v of Array.isArray(answer) ? answer : [answer]) {
+        if (value !== null && v !== value) continue;
+        const key = `${r.formKey}|${r.market}|${f}|${v}`;
+        const row = out.get(key) ?? { period, formKey: r.formKey, formName: r.formName, category: r.category, market: r.market, field: f, value: v, submissions: 0 };
+        row.submissions += 1;
+        out.set(key, row);
+      }
+    }
+  }
+  return [...out.values()].sort((a, b) => byCode(a.formName, b.formName) || byCode(a.formKey, b.formKey) || byCode(a.market, b.market)
+    || byCode(a.field, b.field) || b.submissions - a.submissions || byCode(a.value, b.value));
+}
+
+/** The earliest business date of the records, as cma.forms_history_start (tenant-wide, no filter); null without one */
+export function formsHistoryStart(records: readonly FormSubmissionRecord[]): DateKey | null {
+  return records.reduce<DateKey | null>((first, r) => (first === null || r.date < first ? r.date : first), null);
+}
+
+/** The submissions and their resolution summed over rows (counts add up, unlike shares) */
+export function formsSum(rows: readonly (FormsResolution & { submissions: number })[]): FormsResolution & { submissions: number } {
+  const acc = { ...NO_SUBMISSIONS };
+  for (const r of rows) {
+    acc.submissions += r.submissions;
+    acc.resolved += r.resolved;
+    acc.notFound += r.notFound;
+    acc.ambiguous += r.ambiguous;
+    acc.noEmail += r.noEmail;
+    acc.pending += r.pending;
+  }
+  return acc;
+}
+
+/** The share of the submissions whose contact was found (0 to 1), null without a submission */
+export function resolvedShare(sum: FormsResolution & { submissions: number }): number | null {
+  return sum.submissions === 0 ? null : sum.resolved / sum.submissions;
+}
+
+/** A form in a market with the period's and the previous period's submissions, for the table and the file */
+export interface FormsLine extends FormsResolution {
+  formKey: string;
+  formName: string;
+  category: string | null;
+  market: string;
+  submissions: number;
+  previous: number;
+}
+
+/**
+ * The table's lines: every form and market with submissions in the period or the previous one, the period's
+ * figures and the previous period's submissions, by form name, then market (unknown last)
+ */
+export function formsLines(totals: readonly FormsRow[], previous: readonly FormsRow[]): FormsLine[] {
+  const lines = new Map<string, FormsLine>();
+  for (const r of totals) {
+    lines.set(`${r.formKey}|${r.market}`, { formKey: r.formKey, formName: r.formName, category: r.category, market: r.market, submissions: r.submissions,
+      resolved: r.resolved, notFound: r.notFound, ambiguous: r.ambiguous, noEmail: r.noEmail, pending: r.pending, previous: 0 });
+  }
+  for (const r of previous) {
+    const key = `${r.formKey}|${r.market}`;
+    const line = lines.get(key) ?? { formKey: r.formKey, formName: r.formName, category: r.category, market: r.market, ...NO_SUBMISSIONS, previous: 0 };
+    line.previous += r.submissions;
+    lines.set(key, line);
+  }
+  return [...lines.values()].sort((a, b) => byCode(a.formName, b.formName) || byCode(a.formKey, b.formKey) || byMarket(a.market, b.market));
+}
+
+/** Market codes in order, "unknown" last */
+function byMarket(a: string, b: string): number {
+  return a === b ? 0 : a === "unknown" ? 1 : b === "unknown" ? -1 : byCode(a, b);
+}
+
+/** Totals per category: in the catalog's order, a code the catalog lacks after them, forms without a category last */
+export function formsByCategory(lines: readonly FormsLine[], categories: readonly FormCategory[]):
+  { code: string | null; name: string | null; submissions: number; previous: number }[] {
+  const out = new Map<string | null, { code: string | null; name: string | null; submissions: number; previous: number }>();
+  for (const l of lines) {
+    const t = out.get(l.category) ?? { code: l.category, name: categories.find((c) => c.code === l.category)?.name ?? null, submissions: 0, previous: 0 };
+    t.submissions += l.submissions;
+    t.previous += l.previous;
+    out.set(l.category, t);
+  }
+  const rank = (code: string | null) => (code === null ? Number.MAX_SAFE_INTEGER : categories.find((c) => c.code === code)?.sortOrder ?? Number.MAX_SAFE_INTEGER - 1);
+  return [...out.values()].sort((a, b) => rank(a.code) - rank(b.code) || byCode(a.code ?? "", b.code ?? ""));
+}
+
+/** Totals per market, by code, unknown last */
+export function formsByMarket(lines: readonly FormsLine[]): { market: string; submissions: number; previous: number }[] {
+  const out = new Map<string, { market: string; submissions: number; previous: number }>();
+  for (const l of lines) {
+    const t = out.get(l.market) ?? { market: l.market, submissions: 0, previous: 0 };
+    t.submissions += l.submissions;
+    t.previous += l.previous;
+    out.set(l.market, t);
+  }
+  return [...out.values()].sort((a, b) => byMarket(a.market, b.market));
+}
+
+/**
+ * The chart's columns: the submissions per day (every date of the period up to `last`, today) or per ISO
+ * week (every week's Monday), a column without submissions at 0, so the axis has no gaps
+ */
+export function formsSeries(rows: readonly FormsRow[], group: FormsGroup, from: DateKey, to: DateKey, last: DateKey): { key: DateKey; submissions: number }[] {
+  const end = to < last ? to : last;
+  const sums = new Map<string, number>();
+  for (const r of rows) if (r.groupKey !== null) sums.set(r.groupKey, (sums.get(r.groupKey) ?? 0) + r.submissions);
+  const keys: DateKey[] = [];
+  for (let d = group === "day" ? from : startOfWeek(from); d <= end; d = addDays(d, group === "day" ? 1 : 7)) keys.push(d);
+  for (const k of sums.keys()) if (!keys.includes(k)) keys.push(k);
+  return keys.sort(byCode).map((key) => ({ key, submissions: sums.get(key) ?? 0 }));
+}
+
+/**
+ * The table's forms: each form with its period's and previous period's submissions over its markets, then
+ * its lines per market as formsLines orders them
+ */
+export function formsTableGroups(lines: readonly FormsLine[]): {
+  formKey: string; formName: string; category: string | null; total: FormsLine; markets: FormsLine[];
+}[] {
+  const out = new Map<string, { formKey: string; formName: string; category: string | null; total: FormsLine; markets: FormsLine[] }>();
+  for (const l of lines) {
+    const g = out.get(l.formKey) ?? { formKey: l.formKey, formName: l.formName, category: l.category,
+      total: { ...l, market: "", ...NO_SUBMISSIONS, previous: 0 }, markets: [] };
+    g.markets.push(l);
+    g.total.submissions += l.submissions;
+    g.total.previous += l.previous;
+    g.total.resolved += l.resolved;
+    g.total.notFound += l.notFound;
+    g.total.ambiguous += l.ambiguous;
+    g.total.noEmail += l.noEmail;
+    g.total.pending += l.pending;
+    out.set(l.formKey, g);
+  }
+  return [...out.values()];
+}
+
+/**
+ * The answers arranged per form (its markets summed; the market filter narrows them), then per field, each
+ * value with the period's and the previous period's submissions, most answered first
+ */
+export function answerGroups(rows: readonly FormAnswerRow[]): {
+  formKey: string; formName: string;
+  fields: { field: string; values: { value: string; submissions: number; previous: number }[] }[];
+}[] {
+  const forms = new Map<string, { formKey: string; formName: string; fields: Map<string, Map<string, { value: string; submissions: number; previous: number }>> }>();
+  for (const r of rows) {
+    const f = forms.get(r.formKey) ?? { formKey: r.formKey, formName: r.formName, fields: new Map() };
+    const values = f.fields.get(r.field) ?? new Map();
+    const v = values.get(r.value) ?? { value: r.value, submissions: 0, previous: 0 };
+    if (r.period === "current") v.submissions += r.submissions;
+    else v.previous += r.submissions;
+    values.set(r.value, v);
+    f.fields.set(r.field, values);
+    forms.set(r.formKey, f);
+  }
+  return [...forms.values()]
+    .sort((a, b) => byCode(a.formName, b.formName) || byCode(a.formKey, b.formKey))
+    .map((f) => ({
+      formKey: f.formKey, formName: f.formName,
+      fields: [...f.fields.entries()].sort(([a], [b]) => byCode(a, b)).map(([field, values]) => ({
+        field,
+        values: [...values.values()].sort((a, b) => b.submissions - a.submissions || b.previous - a.previous || byCode(a.value, b.value)),
+      })),
+    }));
 }

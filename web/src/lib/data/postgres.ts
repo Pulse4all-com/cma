@@ -11,6 +11,7 @@ import type {
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
+  FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
@@ -239,6 +240,19 @@ async function callsFilterLists(q: Querier, range: HoursRange, filter: CallsFilt
   const l = await q.query<CallsDbRow>(`select * from cma.calls_overview($1::date, $2::date, $3, null, 'line') where period = 'current' and group_key is not null`,
     [range.from, range.to, filter.market]);
   return { markets: m.rows.map((x) => x.group_key!), lines: l.rows.map((x) => ({ key: x.group_key!, name: x.group_label })) };
+}
+
+// ---- Forms reporting (addition 0008p): the rows as cma.forms_report answers them -----------------------
+type FormsDbRow = {
+  period: string; group_key: string | null; connection_id: string; form_id: string; form_name: string; category: string | null; market: string;
+  submissions: number; resolved: number; not_found: number; ambiguous: number; no_email: number; pending: number;
+};
+
+function toFormsRow(x: FormsDbRow): FormsRow {
+  return {
+    groupKey: x.group_key, formKey: `${x.connection_id}:${x.form_id}`, formName: x.form_name, category: x.category, market: x.market,
+    submissions: x.submissions, resolved: x.resolved, notFound: x.not_found, ambiguous: x.ambiguous, noEmail: x.no_email, pending: x.pending,
+  };
 }
 
 async function telephonySetting(q: Querier): Promise<number> {
@@ -651,7 +665,12 @@ type ConfigJson = {
 };
 
 type CatalogsJson = {
-  forms: { formId: string; name: string; isCounted: boolean; leadSource: string | null; market: string | null; keptFields: string[]; status: string }[];
+  forms: {
+    formId: string; name: string; isCounted: boolean; leadSource: string | null; market: string | null; keptFields: string[]; status: string;
+    // addition 0008p
+    isPolled: boolean; category: string | null; marketField: string | null; leadCondition: { field: string; values: string[] } | null;
+    fields: SourceFormField[];
+  }[];
   callOutcomes: { outcomeRef: string; label: string; isConnected: boolean; status: string }[];
   lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
   tags: { tagRef: string; name: string; isCounted: boolean; status: string }[];
@@ -1400,7 +1419,10 @@ export const postgresData: CmaData = {
       return {
         connection,
         pipelines: config.pipelines.map(toPipeline),
-        forms: cat.forms.map((f) => ({ formId: f.formId, name: f.name, isCounted: f.isCounted, leadSource: f.leadSource, market: f.market, keptFields: f.keptFields ?? [], isActive: f.status === "active" })),
+        forms: cat.forms.map((f) => ({
+          formId: f.formId, name: f.name, isCounted: f.isCounted, isPolled: f.isPolled, category: f.category, leadSource: f.leadSource, market: f.market,
+          keptFields: f.keptFields ?? [], marketField: f.marketField, leadCondition: f.leadCondition, fields: f.fields ?? [], isActive: f.status === "active",
+        })),
         callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
         lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
         tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, isActive: t.status === "active" })),
@@ -1453,9 +1475,26 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), async (q) => {
       const forms = (await readCatalogs(q, id)).forms;
       for (const c of changes) {
-        const kept = forms.find((f) => f.formId === c.formId)?.keptFields ?? [];
-        await q.query(`select cma.set_form($1::uuid, $2, $3, $4, $5, $6::text[])`, [id, c.formId, c.isCounted, c.leadSource, c.market, kept]);
+        const f = forms.find((x) => x.formId === c.formId);
+        await q.query(`select cma.set_form($1::uuid, $2, $3, $4, $5, $6::text[])`, [id, c.formId, c.isCounted, c.leadSource, c.market, f?.keptFields ?? []]);
+        // polled and the category (addition 0008p), when given; set_form made a counted form polled already
+        if (c.isPolled !== undefined || c.category !== undefined) {
+          await q.query(`select cma.set_form_reporting($1::uuid, $2, $3, $4, $5)`,
+            [id, c.formId, c.isPolled ?? (c.isCounted || (f?.isPolled ?? false)), c.category === undefined ? (f?.category ?? null) : c.category, c.market]);
+        }
       }
+    });
+  },
+
+  async getFormCategories(me): Promise<FormCategory[]> {
+    return withTenant(ctx(me), async (q) => (await q.query<{ code: string; name: string; sort_order: number; status: string; forms: number }>(
+      `select * from cma.form_categories()`)).rows.map((r) => ({ code: r.code, name: r.name, sortOrder: r.sort_order, isActive: r.status === "active", forms: r.forms })));
+  },
+
+  async setFormCategory(me, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.set_form_category($1, $2, $3)`, [input.code, input.name, input.sortOrder]);
+      await q.query(`select cma.set_form_category_status($1, $2)`, [input.code, input.isActive ? "active" : "inactive"]);
     });
   },
 
@@ -1710,6 +1749,52 @@ export const postgresData: CmaData = {
         previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
         historyStart: history.rows[0]?.history_start ?? null,
         ...(connections.telephony ? lists : { markets: [], lines: [] }),
+      };
+    });
+  },
+
+  async getFormsReport(me, range, group, filter): Promise<FormsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the group and the filters first; the lists and the history start follow
+      const r = await q.query<FormsDbRow>(`select * from cma.forms_report($1::date, $2::date, $3, $4, $5, $6)`,
+        [range.from, range.to, group, filter.market, filter.category, filter.form]);
+      const whole = await q.query<FormsDbRow>(`select * from cma.forms_report($1::date, $2::date, 'week', null, null, null) where period = 'current' and group_key is null`,
+        [range.from, range.to]);
+      const has = await q.query<{ forms: boolean }>(`select exists (select 1 from cma.connection_form) as forms`);
+      const history = await q.query<{ history_start: string | null }>(`select cma.forms_history_start() as history_start`);
+      const categories = (await q.query<{ code: string; name: string; sort_order: number; status: string; forms: number }>(`select * from cma.form_categories()`)).rows
+        .map((x) => ({ code: x.code, name: x.name, sortOrder: x.sort_order, isActive: x.status === "active", forms: x.forms }));
+      // the previous period the database compared with (like for like), named for the deltas; today as the page resolves it
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      const current = r.rows.filter((x) => x.period === "current");
+      const forms = new Map(whole.rows.map((x) => [`${x.connection_id}:${x.form_id}`, x.form_name]));
+      return {
+        ...range, group, filter, forms: has.rows[0]?.forms ?? false,
+        rows: current.filter((x) => x.group_key !== null).map(toFormsRow),
+        totals: current.filter((x) => x.group_key === null).map(toFormsRow),
+        previous: r.rows.filter((x) => x.period === "previous").map(toFormsRow),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        historyStart: history.rows[0]?.history_start ?? null,
+        categories,
+        formList: [...forms.entries()].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name)),
+        markets: [...new Set(whole.rows.map((x) => x.market))].sort((a, b) => (a === "unknown" ? 1 : b === "unknown" ? -1 : a.localeCompare(b))),
+      };
+    });
+  },
+
+  async getFormsAnswers(me, range, filter, field, value): Promise<FormsAnswers> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ period: string; connection_id: string; form_id: string; form_name: string; category: string | null; market: string;
+        field: string; value: string; submissions: number }>(`select * from cma.forms_answers($1::date, $2::date, $3, $4, $5, $6, $7)`,
+        [range.from, range.to, filter.market, filter.category, filter.form, field, value]);
+      return {
+        ...range, filter, field, value,
+        rows: r.rows.map((x): FormAnswerRow => ({
+          period: x.period === "previous" ? "previous" : "current", formKey: `${x.connection_id}:${x.form_id}`, formName: x.form_name,
+          category: x.category, market: x.market, field: x.field, value: x.value, submissions: x.submissions,
+        })),
       };
     });
   },

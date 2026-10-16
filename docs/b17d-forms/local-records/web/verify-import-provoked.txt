@@ -1,0 +1,26 @@
+FAIL  the fixture converts                                 got 0, wanted 1
+FAIL  counts                                               got {"rows_read":"8","sessions_deduplicated":"0","sessions_written":"6","s, wanted {"rows_read":"8","sessions_written":"8"}
+FAIL  the staging header                                   got "batch_key,external_person_id,external_person_name,external_session_id, wanted "PersoneelsPID;Personeel"
+FAIL  ISO local times, an open session without a logout    got ["verify-sample,1001,Test Account A,90001,2026-01-02T08:59:12,2026-01-, wanted ["verify-sample,1001,Test Account A,90001,2-1-2026 08:59:12,2-1-2026 1
+FAIL  an unpadded hour and a quoted name                   got "verify-sample,1002,\"Account, B\",90004,2026-01-05T07:45:00,2026-01-0, wanted "verify-sample,1002,Account, B,90004,2026-01-05T7:45:00,2026-01-05T16:
+FAIL  excluded and absent accounts are dropped             got [false,false], wanted [true,true]
+FAIL  map statement: included accounts, emails lowercased  got ["('1001', 'account.a@example.com')","('1002', 'account.b@example.com', wanted ["('1001', 'account.a@example.com')","('1002', 'Account.B@example.com'
+FAIL  the map statement names its batch and no other       got true, wanted false
+FAIL  column names and the date format are options         got [0,"verify-sample,1001,Test Account A,s1,2026-03-02T09:00:00,2026-03-0, wanted [1,null]
+FAIL  without the options the columns are missing          got 1, wanted 0
+FAIL  refused: the spring gap                              got [1,true,true], wanted [0,false,false]
+FAIL  refused: a duplicate session                         got [1,true,true], wanted [0,false,false]
+FAIL  refused: a logout before its login                   got [1,true,true], wanted [0,false,false]
+FAIL  refused: a time that does not read                   got [1,true,true], wanted [0,false,false]
+FAIL  refused: a row without a session id                  got [1,true,true], wanted [0,false,false]
+FAIL  refused: a malformed batch key                       got [2,false], wanted [0,true]
+FAIL  refused: duplicated session ids without the option   got [1,true,true], wanted [0,false,false]
+FAIL  deduplicated: counts                                 got [0,"7","3","4","1","0"], wanted [1,"7","0","7","0","0"]
+FAIL  deduplicated: the latest logout is kept, an open one as latest got ["verify-sample,1001,Test Account A,91001,2026-02-02T09:00:00,2026-02-, wanted ["verify-sample,1001,Test Account A,91001,2026-02-02T09:00:00,2026-02-
+FAIL  refused with the option: one id, another login or account got [[1,true],[1,true]], wanted [[0,false],[0,false]]
+FAIL  refused: an unknown dedupe rule                      got [2,true], wanted [0,false]
+FAIL  a map template lists every account of the export     got [0,["steam_pid,work_email,include,steam_name,sessions,first_day,last_d, wanted [1,null]
+FAIL  the tool prints no name and no email                 got false, wanted true
+
+ALL 23 PROVOKED CHECKS FAILED, as they must
+exit 0

@@ -14,7 +14,8 @@
  * table per docs/style/Pulse4all-Style.md 7.6 and 3.3 (header row, 14px cells at line-height 1.4, rows
  * of at least 40px, zebra rows). Since addition 0008j Calls (by day as the manager, by market as the
  * analyst, and for a tenant without telephony) and Calls per agent with a person's row and the not-linked
- * row opened, their tables per 7.6 and 3.3 as well.
+ * row opened, their tables per 7.6 and 3.3 as well. Since addition 0008p Forms (by day as the manager, by week as
+ * the analyst), the Sources list with its form categories and the CRM connection's page, their tables too.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
@@ -114,6 +115,13 @@ const pages = [
   { path: "/reports/calls-per-agent?range=month", subject: "manager", tables: true, expand: true },
   // a tenant without telephony: the page says so in words and has no header to explain
   { path: "/reports/calls?range=month", subject: "invest-analyst", noHint: true },
+  // Forms (addition 0008p): the tiles, the columns, the grouped tables, the resolution bars in the series order,
+  // by day as the manager and by week as the analyst; Sources with the form categories and the CRM connection's
+  // forms with their polled and category columns
+  { path: "/reports/forms?range=month", subject: "manager", tables: true },
+  { path: "/reports/forms?range=month&group=week", subject: "analyst", tables: true },
+  { path: "/configuration/sources", subject: "admin", tables: true },
+  { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },
   // The folded rail and the hidden hints (16 October 2026), the admin previewing as agent (the banner, the select)
   { path: "/", cookies: { "cma-rail": "collapsed" } },

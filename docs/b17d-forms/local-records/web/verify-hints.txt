@@ -1,0 +1,3 @@
+$ BASE=http://127.0.0.1:8080 node verify/hints.mjs    (local: Playwright launched with this container's Chromium by path, see README)
+hints: PASS (267 headers and 67 tiles on 22 pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps)
+exit 0

@@ -1,0 +1,29 @@
+PASS  dimensions in order, channel left out when empty         got ["language","work_type"]
+PASS  skills in catalog order, inactive left out               got ["da","nl"]
+PASS  a scaled skill is labelled with its level                got "Dutch · Fluent"
+PASS  a held skill is labelled with its name                   got "Sales"
+PASS  state holds the level, or true for a binary skill        got {"nl":3,"sales":true}
+PASS  payload lists held skills with levels, in key order, catalog only got [{"key":"nl","level":3},{"key":"sales"}]
+PASS  no change means no write                                 got {}
+PASS  a role change writes the role only                       got {"roleKey":"supervisor"}
+PASS  a team change writes the sorted list                     got {"teams":["nl"]}
+PASS  a level change writes the full skill list                got [{"key":"nl","level":4},{"key":"sales"}]
+PASS  deactivating writes active false                         got {"active":false}
+PASS  hasChanges                                               got [false,true]
+PASS  a manager's options: assignable roles plus the held manager role, disabled got [{"key":"agent","name":"Agent","disabled":false},{"key":"manager","nam
+PASS  a person without a role: assignable roles only           got ["agent"]
+PASS  active people of every team by default                   got ["1","3"]
+PASS  one team, inactive included when asked                   got ["1","2"]
+PASS  a complete form has no problems                          got []
+PASS  every missing part is named                              got ["name","email","employer","role","login"]
+PASS  the editor starts from the person's ids                  got {"crmtest_owner":"700","phonetest_user":"","old_owner":""}
+PASS  a changed id links, an emptied one unlinks               got [{"system":"crmtest_owner","externalId":null},{"system":"phonetest_use
+PASS  nothing changed writes nothing                           got []
+PASS  an id with a space is refused                            got true
+PASS  an empty id is fine (unlinks)                            got false
+PASS  linked systems are counted per person                    got 1
+PASS  an owner system is labelled by its connection            got "Owner id in Customer records"
+PASS  a system without a connection is named as stored         got "Id in old_owner"
+
+team: PASS (26 checks)
+exit 0

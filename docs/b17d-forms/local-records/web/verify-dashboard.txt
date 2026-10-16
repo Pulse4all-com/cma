@@ -1,0 +1,20 @@
+PASS  four flag combinations give the four groups              got ["productive","otherWork","paidPause","unpaidPause"]
+PASS  a key or name never decides the group                    got ["productive","unpaidPause"]
+PASS  agents see one pause colour, not the pay flag            got ["pause","pause","otherWork"]
+PASS  worked minutes are whole minutes per person per day, added got [122,7381]
+PASS  paid minutes are whole minutes per person per day, added got 147
+PASS  groups add up to the clocked time                        got [9181,9181,300]
+PASS  people, person-days and days not clocked out             got [2,3,1]
+PASS  productive share of worked time                          got 0.992
+PASS  nothing to divide by is no share                         got null
+PASS  statuses in sort order, then key; inactive kept          got [["available",true,61],["lunch",true,7320],["aa_break",true,300],["zz_
+PASS  every day of the period, empty ones included             got [["2026-10-30",9122],["2026-10-31",0],["2026-11-01",0],["2026-11-02",5
+PASS  rows outside the period are left out                     got 0
+PASS  people by name with their own whole minutes              got [["Ana",120,135,8100],["Zoë",2,12,1081]]
+PASS  the person filter lists the people with time             got ["b","a"]
+PASS  a readable hours axis                                    got [{"top":8,"step":2},{"top":1,"step":1},{"top":10,"step":2},{"top":48,"
+PASS  every group colour is a palette token                    got []
+PASS  four groups, each with a fill and a background           got [true,true,true,true]
+
+ALL 17 PASS
+exit 0

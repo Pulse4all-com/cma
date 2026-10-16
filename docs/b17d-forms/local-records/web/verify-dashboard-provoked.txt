@@ -1,0 +1,20 @@
+FAIL  four flag combinations give the four groups              got ["productive","otherWork","paidPause","unpaidPause"], wanted ["productive","otherWork","unpaidPause","paidPause"]
+FAIL  a key or name never decides the group                    got ["productive","unpaidPause"], wanted ["paidPause","productive"]
+FAIL  agents see one pause colour, not the pay flag            got ["pause","pause","otherWork"], wanted ["paidPause","unpaidPause","otherWork"]
+FAIL  worked minutes are whole minutes per person per day, added got [122,7381], wanted [123,7381]
+FAIL  paid minutes are whole minutes per person per day, added got 147, wanted 148
+FAIL  groups add up to the clocked time                        got [9181,9181,300], wanted [9181,9180,0]
+FAIL  people, person-days and days not clocked out             got [2,3,1], wanted [3,3,0]
+FAIL  productive share of worked time                          got 0.992, wanted 1
+FAIL  nothing to divide by is no share                         got null, wanted 0
+FAIL  statuses in sort order, then key; inactive kept          got [["available",true,61],["lunch",true,7320],["aa_break",true,300],["zz_, wanted [["lunch",true,7320],["available",true,61],["zz_break",false,1500],["a
+FAIL  every day of the period, empty ones included             got [["2026-10-30",9122],["2026-10-31",0],["2026-11-01",0],["2026-11-02",5, wanted [["2026-10-30",9122],["2026-11-02",59]]
+FAIL  rows outside the period are left out                     got 0, wanted 59
+FAIL  people by name with their own whole minutes              got [["Ana",120,135,8100],["Zoë",2,12,1081]], wanted [["Zoë",3,12,1081],["Ana",120,135,8100]]
+FAIL  the person filter lists the people with time             got ["b","a"], wanted ["a"]
+FAIL  a readable hours axis                                    got [{"top":8,"step":2},{"top":1,"step":1},{"top":10,"step":2},{"top":48,", wanted [{"top":8,"step":2},{"top":1,"step":1},{"top":9,"step":1},{"top":45,"s
+FAIL  every group colour is a palette token                    got [], wanted ["p4a-red"]
+FAIL  four groups, each with a fill and a background           got [true,true,true,true], wanted [true,true,true]
+
+ALL 17 PROVOKED CHECKS FAILED, as they must
+exit 0

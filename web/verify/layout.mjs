@@ -32,7 +32,10 @@
  * message, preview as role for the admin (banner, select, the agent's rail, the role's 403 on a report
  * route, the narrowed My account, Exit) and the ignored cookie of a manager and an agent, and the roster's
  * week bar at 1280 px (three links on one line, one range label, the absence keywords, the placeholder).
- * Saves screenshots under records/ for the release note.
+ * Forms (addition 0008p) for seven identities: in the rail for reports.view or performance.team, the keycaps
+ * K, Y, F, G and X, four tiles, the forms table and the answers inside their cards, the right-most header's hint
+ * inside the viewport, the deltas like for like and "No history to compare yet" before the forms history;
+ * Sources with its form categories. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -44,7 +47,8 @@
  *       irreversible confirmation (unticking the line's box) and Cancel on End workday, lets the invitations
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
- *       agent rail for the previewing admin and one page fewer for the ignored cookies, expect FAIL, exit 1
+ *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
+ *       spill out of its card, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -112,20 +116,21 @@ async function expectNavigation() {
     // and Data quality (reports.view or tenant.configure): the supervisor holds neither of the latter
     // Since 0008i Inbound follows Intake for the same permissions
     // Since 0008j Calls (reports.view or performance.team) and Calls per agent (performance.team) follow Inbound
+    // Since 0008p Forms (reports.view or performance.team) follows Calls per agent, so Data quality moves by one
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/data-quality"], false],
-    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/data-quality"], false],
+      "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], false],
+    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent"], true],
+      "/reports/calls", "/reports/calls-per-agent", "/reports/forms"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
+      "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/intake", "/reports/inbound",
-      "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"], true],
+      "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -264,7 +269,7 @@ async function expectReports() {
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
-  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/data-quality"]) {
+  for (const path of ["/reports/speed-to-lead", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -394,6 +399,91 @@ async function expectCalls() {
   }
 }
 
+// Forms (addition 0008p, brief B17d), per identity at 1280 px: in the rail and on the page for reports.view or
+// performance.team (the agent gets the no-permission card and no figures); the page never scrolls sideways;
+// the keycaps K, Y, F, G and X next to the period bar's; four tiles; the forms table and the answers end inside
+// their cards (they may scroll inside them); the right-most header's hint stays inside the viewport; the
+// deltas say what they compare with, and before the fixture's forms history (six weeks back) "No history to
+// compare yet" with the forms history's first date in the title. --provoke lets the forms table spill out of
+// its card
+async function expectForms() {
+  const cases = [["manager", true], ["supervisor", true], ["admin", true], ["analyst", true], ["reader", true], ["invest-analyst", true], ["agent-one", false]];
+  for (const [subject, may] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/forms") !== may) problems.push(`${subject}: Forms ${may ? "missing from" : "shown in"} the rail`);
+    const where = `${subject} /reports/forms`;
+    await p.goto(BASE + "/reports/forms?range=month&group=day");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate((spill) => {
+      const main = document.querySelector("main");
+      const box = document.querySelector('[data-testid="forms-table-scroll"]');
+      if (spill && box) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+      const inside = (id) => {
+        const b = document.querySelector(`[data-testid="${id}"]`);
+        if (!b) return null;
+        const card = b.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        return b.getBoundingClientRect().right <= edge + 0.5 && (getComputedStyle(b).overflowX !== "visible" || b.scrollWidth <= b.clientWidth);
+      };
+      return {
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        mainX: main ? main.scrollWidth - main.clientWidth : -1,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        tiles: document.querySelectorAll('[data-testid="forms-tiles"] [data-tile]').length,
+        table: inside("forms-table-scroll"),
+        answers: inside("forms-answers-scroll"),
+      };
+    }, provoke && subject === "manager");
+    if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+    if (!may) {
+      if (m.tables > 0 || m.tiles > 0) problems.push(`${where}: figures shown to someone without the permission`);
+      await ctx.close();
+      continue;
+    }
+    if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px at 1280`);
+    for (const k of ["T", "W", "M", "C", "K", "Y", "F", "G", "X"]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+    if (m.tiles !== 4) problems.push(`${where}: ${m.tiles} tiles, expected 4`);
+    if (m.table !== true) problems.push(`${where}: the forms table ${m.table === null ? "is missing" : "does not end inside its card at 1280"}`);
+    if (m.answers !== true) problems.push(`${where}: the answers ${m.answers === null ? "are missing" : "do not end inside their card at 1280"}`);
+    const mark = p.locator('[data-testid="forms-table"] thead th:last-child button[data-header-hint]');
+    if (await mark.count() !== 1) problems.push(`${where}: header hint of the last column missing`);
+    else {
+      await mark.focus();
+      const ok = await p.evaluate(() => {
+        const el = document.activeElement;
+        const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+        if (!panel || panel.hidden) return null;
+        const r = panel.getBoundingClientRect();
+        return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+      });
+      if (ok === null) problems.push(`${where}: the header hint does not show on focus`);
+      else if (!ok) problems.push(`${where}: the header hint leaves the viewport`);
+    }
+    await p.screenshot({ path: `${outDir}/${subject}-forms.png`, fullPage: true });
+    if (subject === "manager") {
+      // this week, still running, against the same point in the previous one; 30 days to yesterday, whose
+      // previous span starts before the fixture's forms history (42 days back), against nothing
+      const day = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
+      for (const [q, want] of [["range=week", "partial"], [`range=custom&from=${day(-30)}&to=${day(-1)}`, "none"]]) {
+        await p.goto(`${BASE}/reports/forms?${q}`);
+        await p.waitForLoadState("networkidle");
+        const deltas = await p.evaluate(() => [...document.querySelectorAll('[data-testid="forms-tiles"] [data-testid="delta"]')].map((d) => ({
+          compares: d.getAttribute("data-compares"), text: d.textContent?.trim() ?? "", title: d.getAttribute("title") ?? "" })));
+        if (deltas.length !== 2 || deltas.some((d) => d.compares !== want)) problems.push(`${where}: the deltas of ${q.split("&")[0]} compare with ${deltas.map((d) => d.compares).join(",") || "nothing"}, expected ${want} twice`);
+        if (want === "none" && deltas.some((d) => d.text !== "No history to compare yet" || !d.title.startsWith("The forms history starts on "))) {
+          problems.push(`${where}: before the forms history the deltas do not say "No history to compare yet" with the forms history's first date`);
+        }
+      }
+    }
+    await ctx.close();
+  }
+}
+
 // The Live board per identity (addition 0008i): at 1280 px the inbound tiles, the missed calls and the
 // people board without horizontal scrolling, a tile's hint inside the viewport; a tenant without telephony
 // says so in words; an agent gets the no-permission card and no inbound figures
@@ -456,7 +546,8 @@ async function expectGate(width, height) {
 // page every table inside its card (addition 0008i)
 async function expectIntakeConfiguration() {
   const cases = [
-    ["/configuration/sources", [], '[data-testid="sources"]'],
+    // since addition 0008p the form categories follow the connections, with Add category (A)
+    ["/configuration/sources", ["A"], ['[data-testid="sources"]', '[data-testid="form-categories"]']],
     ["/configuration/sources/00000000-0000-7000-8000-00000000c001", ["B", "N", "S", "F", "O"], '[data-testid="source-forms"]'],
     ["/configuration/sources/00000000-0000-7000-8000-00000000c002", ["B", "N", "S"], '[data-testid="source-lines"]'],
     ["/configuration/sources/00000000-0000-7000-8000-00000000c003", ["B", "N", "S", "A"], '[data-testid="source-store"]'],
@@ -482,7 +573,7 @@ async function expectIntakeConfiguration() {
     if (m.mainX > 0) problems.push(`admin ${path}: the main area scrolls sideways by ${m.mainX}px at 1280`);
     if (Math.round(m.rail) !== 256) problems.push(`admin ${path}: rail is ${m.rail}px`);
     for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`admin ${path}: keycap ${k} missing`);
-    if (await p.locator(selector).count() === 0) problems.push(`admin ${path}: ${selector} missing`);
+    for (const one of [selector].flat()) if (await p.locator(one).count() === 0) problems.push(`admin ${path}: ${one} missing`);
     // A connection's page (docs/style/Pulse4all-Style.md 7.3 and 7.6): every table ends inside its card's
     // padding and none needs to scroll at 1280; --provoke widens the missed-reason table
     if (path.startsWith("/configuration/sources/")) {
@@ -950,7 +1041,8 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  for (const [subject, pages] of [["manager", 16], ["agent-one", 5]]) {
+  // the manager's rail: 17 pages since Forms (addition 0008p) joined the Reports group
+  for (const [subject, pages] of [["manager", 17], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -972,6 +1064,7 @@ await expectFrame();
 await expectReports();
 await expectLiveBoard();
 await expectCalls();
+await expectForms();
 await expectIntakeConfiguration();
 await expectInvitations();
 await expectIrreversibleConfirmations();
@@ -980,5 +1073,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Sources (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

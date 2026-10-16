@@ -31,7 +31,16 @@
  * telephony user id in an answer. Since addition 0008k (brief B16.1) also the telephony history start on
  * 65's own dataset (the earliest business date in its line's zone; deleted calls, calls without a start
  * and calls on a line that does not count left out; a later call on an earlier date) and what a tile
- * says: no change against a previous span that starts before it, the change as before from it on.
+ * says: no change against a previous span that starts before it, the change as before from it on. Since
+ * addition 0008p (brief B17d) also Forms, on 75's own dataset (its tenant one's submissions as
+ * cma.form_submissions_of gives them, written down from a run of 75) so the figures are the ones 75 proves
+ * in the database: business dates in each submission's market zone, days and ISO weeks, the resolution
+ * split, the previous period like for like (running, ended, not started), the answers per field and value
+ * with a multiple-checkboxes answer under each value and the field and value filters, the filters by
+ * market, category, none and form and the malformed ones refused, the history start; then the screen's
+ * arrangement: the lines per form and market, the forms with their markets, the totals per category (the
+ * catalog's order, none last) and per market (unknown last), the chart's columns without gaps, the
+ * answers per form, the share of contacts found, and no submission, contact or email in an answer.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -41,6 +50,8 @@ import {
   barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
   historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
+  answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
+  formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
 import { dateKeyInZone } from "../src/lib/time.ts";
 
@@ -517,6 +528,127 @@ const answer = { rows: week.rows, total: week.total, people: perPerson.rows.map(
 expect("no hash, number, call id or telephony user id in a calls answer; an agent's own name is allowed",
   [personalDataIn(answer, "$", true), personalDataIn({ a: "c1".repeat(32), name: "Anna", callId: "x", userRef: "tel-user-1", tagName: "Sale" }, "$", true)],
   [[], ["$.a", "$.callId", "$.userRef"]], [["$.people"], []]);
+
+// ---- Forms (addition 0008p) ----------------------------------------------------------------------
+// 75's tenant one after B10 (written down from a run of 75 on a fresh database): every stored submission as
+// cma.form_submissions_of gives it; "c" stands for the connection id, which only joins the form key
+const FC = "00000000-0000-7000-8000-0000000000aa";
+const YES = "Yes, I'm an existing Customer";
+const NO = "No, I'm not a customer yet";
+const fsub = (form, market, zone, date, localTime, resolution, answers) => ({
+  formKey: `${FC}:${form}`, formName: { "f-contact": "NL Contact", "f-cancel": "Cancellation", "f-legacy": "Legacy form", "f-support": "General support" }[form],
+  category: { "f-contact": "contact", "f-cancel": "cancellation", "f-legacy": null, "f-support": "support" }[form], market, zone, date, localTime, resolution, answers,
+});
+const AMS = "Europe/Amsterdam";
+const SUBS = [
+  fsub("f-contact", "NL", AMS, "2026-09-21", "00:10:00", "not_found", { are_you_already_a_customer: NO }),
+  fsub("f-cancel", "GB", "Europe/London", "2026-09-20", "23:30:00", "not_found", { country_dropdown: "United Kingdom", cancellation_reason: "Other" }),
+  fsub("f-contact", "NL", AMS, "2026-09-28", "11:00:00", "not_found", { are_you_already_a_customer: NO }),
+  fsub("f-contact", "NL", AMS, "2026-09-30", "15:00:00", "not_found", { are_you_already_a_customer: NO }),
+  fsub("f-contact", "NL", AMS, "2026-09-30", "18:00:00", "not_found", { are_you_already_a_customer: YES }),
+  fsub("f-cancel", "GB", "Europe/London", "2026-10-01", "23:30:00", "not_found", { country_dropdown: "United Kingdom", cancellation_reason: "Moving" }),
+  fsub("f-contact", "NL", AMS, "2026-10-02", "00:30:00", "not_found", {}),
+  fsub("f-legacy", "unknown", AMS, "2026-10-02", "12:00:00", "not_found", { product: "aed plus" }),
+  fsub("f-contact", "NL", AMS, "2026-10-05", "11:00:00", "not_found", { are_you_already_a_customer: NO }),
+  fsub("f-support", "unknown", AMS, "2026-10-05", "12:00:00", "not_found", { hs_ticket_category: ["Billing", "Device"] }),
+  fsub("f-support", "unknown", AMS, "2026-10-05", "13:00:00", "not_found", { hs_ticket_category: ["Delivery"] }),
+  fsub("f-cancel", "DE", "Europe/Berlin", "2026-10-05", "14:00:00", "resolved", { country_dropdown: "Atlantis", cancellation_reason: "Price" }),
+  fsub("f-support", "unknown", AMS, "2026-10-05", "14:00:00", "resolved", {}),
+  fsub("f-support", "unknown", AMS, "2026-10-05", "14:30:00", "resolved", {}),
+  fsub("f-cancel", "unknown", AMS, "2026-10-05", "15:00:00", "not_found", { country_dropdown: "Atlantis", cancellation_reason: "Price" }),
+  fsub("f-contact", "NL", AMS, "2026-10-06", "12:00:00", "not_found", { are_you_already_a_customer: YES }),
+  fsub("f-support", "unknown", AMS, "2026-10-06", "12:00:00", "not_found", { hs_ticket_category: ["Device"] }),
+  fsub("f-support", "unknown", AMS, "2026-10-06", "13:00:00", "not_found", {}),
+  fsub("f-cancel", "NL", AMS, "2026-10-06", "15:00:00", "not_found", { country_dropdown: "Netherlands" }),
+  fsub("f-contact", "NL", AMS, "2026-10-07", "16:00:00", "not_found", {}),
+];
+const ALL_FORMS = { market: null, category: null, form: null };
+const short = (k) => k.replace(`${FC}:`, "");
+const formsToday = (instant) => dateKeyInZone(new Date(instant), AMS);
+
+expect("forms: day or week, G cycles, anything else refused",
+  [parseFormsGroup("day"), parseFormsGroup("week"), parseFormsGroup("month"), nextFormsGroup("day"), nextFormsGroup("week")],
+  ["day", "week", null, "week", "day"], ["day", "week", "month", "day", "week"]);
+expect("forms: filters as the database checks them (75 B14's refusals: uk, a form without its connection, a bad field)",
+  [parseFormsFilter("uk", null, null).problem, parseFormsFilter(null, null, "f-cancel").problem, parseFormsFilter(null, "Support", null).problem,
+    parseFormsFilter("unknown", "none", `${FC}:f-cancel`).problem, parseAnswerFilter("bad field", null).problem, parseAnswerFilter("hs_ticket_category", "Device").problem],
+  ["market", "form", "category", null, true, false], [null, null, null, "market", false, true]);
+expect("forms: only the filters that are set go into the address",
+  formsFilterQuery({ market: "NL", category: null, form: `${FC}:f-contact` }), { market: "NL", form: `${FC}:f-contact` }, { market: "NL", category: "", form: "" });
+
+// 75 B11: 22:30 UTC on 1 October is 1 October in London and 2 October in Amsterdam; the weeks with the resolution split
+const b11day = formsFigures(SUBS, "2026-10-01", "2026-10-02", "day", ALL_FORMS).filter((r) => r.groupKey !== null)
+  .map((r) => `${r.groupKey}:${short(r.formKey)}:${r.market}=${r.submissions}`).sort().join(" ");
+const b11week = formsFigures(SUBS, "2026-10-05", "2026-10-11", "week", ALL_FORMS).filter((r) => r.groupKey !== null && ["NL", "DE"].includes(r.market))
+  .map((r) => `${r.groupKey}:${short(r.formKey)}=${r.submissions}/${r.resolved}/${r.notFound}`).join(" ");
+expect("forms: business dates in each market's zone, days and ISO weeks, the resolution split (75 B11)", `${b11day} | ${b11week}`,
+  "2026-10-01:f-cancel:GB=1 2026-10-02:f-contact:NL=1 2026-10-02:f-legacy:unknown=1 | 2026-10-05:f-cancel=1/1/0 2026-10-05:f-cancel=1/0/1 2026-10-05:f-contact=3/0/3",
+  "2026-10-02:f-cancel:GB=1 2026-10-02:f-contact:NL=1 2026-10-02:f-legacy:unknown=1 | 2026-10-05:f-cancel=2/1/1 2026-10-05:f-contact=3/0/3");
+
+// 75 B12: 5 to 11 October seen on Wednesday 7 October at 16:30 in Amsterdam, after it ended, before it started
+const contactNL = { market: "NL", category: null, form: `${FC}:f-contact` };
+const b12 = (now) => {
+  const prev = previousPeriod({ from: "2026-10-05", to: "2026-10-11" }, formsToday(now));
+  return formsSum(previousForms(SUBS, prev, contactNL, now)).submissions;
+};
+expect("forms: the previous period like for like (75 B12: running 2, ended 4, not started 0; current 3)",
+  [b12("2026-10-07T14:30:00Z"), b12("2026-10-20T09:00:00Z"), b12("2026-10-01T09:00:00Z"),
+    formsSum(formsFigures(SUBS, "2026-10-05", "2026-10-11", "day", contactNL).filter((r) => r.groupKey === null)).submissions],
+  [2, 4, 0, 3], [3, 4, 0, 3]);
+
+// 75 B13: the answers per form, field and value with the previous period; a multiple-checkboxes answer under each value
+const prevAfter = previousPeriod({ from: "2026-10-05", to: "2026-10-11" }, formsToday("2026-10-20T09:00:00Z"));
+const b13rows = [...formsAnswersOf(SUBS, "2026-10-05", "2026-10-11", ALL_FORMS, null, null, "current"),
+  ...formsAnswersOf(SUBS, prevAfter.from, prevAfter.to, ALL_FORMS, null, null, "previous")];
+const b13 = b13rows.filter((a) => ["f-support", "f-contact"].includes(short(a.formKey)))
+  .map((a) => `${a.period}:${short(a.formKey)}.${a.field}/${a.value}=${a.submissions}`).sort().join(" ");
+const device = formsAnswersOf(SUBS, "2026-10-05", "2026-10-11", ALL_FORMS, "hs_ticket_category", "Device", "current").map((a) => `${a.value}=${a.submissions}`).join(" ");
+expect("forms: answers per field and value with the previous period; field and value filters (75 B13)", `${b13} | ${device}`,
+  `current:f-contact.are_you_already_a_customer/${NO}=1 current:f-contact.are_you_already_a_customer/${YES}=1 `
+  + "current:f-support.hs_ticket_category/Billing=1 current:f-support.hs_ticket_category/Delivery=1 current:f-support.hs_ticket_category/Device=2 "
+  + `previous:f-contact.are_you_already_a_customer/${NO}=2 previous:f-contact.are_you_already_a_customer/${YES}=1 | Device=2`,
+  `current:f-support.hs_ticket_category/Billing,Device=1 | Device=1`);
+
+// 75 B14 and B15: the filters narrow every figure alike; the history start is the earliest business date in its zone
+const b14 = (filter) => formsSum(formsFigures(SUBS, "2026-10-01", "2026-10-11", "day", { ...ALL_FORMS, ...filter }).filter((r) => r.groupKey === null)).submissions;
+expect("forms: filters by market, category, none and form (75 B14)",
+  [b14({ market: "unknown" }), b14({ category: "support" }), b14({ category: "none" }), b14({ form: `${FC}:f-cancel` })], [8, 6, 1, 4], [8, 6, 0, 3]);
+expect("forms: the history start is the earliest business date in its zone; none without submissions (75 B15)",
+  [formsHistoryStart(SUBS), formsHistoryStart([])], ["2026-09-20", null], ["2026-09-21", null]);
+
+// the screen: formLines per form and market with the previous period, the forms with their markets, the totals
+const totals = formsFigures(SUBS, "2026-10-05", "2026-10-11", "day", ALL_FORMS).filter((r) => r.groupKey === null);
+const formLines = formsLines(totals, previousForms(SUBS, prevAfter, ALL_FORMS, "2026-10-20T09:00:00Z"));
+expect("forms: the table's rows by form name, then market with unknown last, the previous period beside them",
+  formLines.map((l) => `${l.formName}/${l.market}=${l.submissions}/${l.previous}`),
+  ["Cancellation/DE=1/0", "Cancellation/GB=0/1", "Cancellation/NL=1/0", "Cancellation/unknown=1/0", "General support/unknown=6/0", "Legacy form/unknown=0/1", "NL Contact/NL=3/4"],
+  ["Cancellation/DE=1/0", "Cancellation/NL=1/0", "Cancellation/unknown=1/0", "General support/unknown=6/0", "NL Contact/NL=3/4"]);
+expect("forms: each form with its total over its markets, then its markets",
+  formsTableGroups(formLines).map((g) => `${g.formName}:${g.total.submissions}/${g.total.previous}[${g.markets.map((m) => m.market).join(",")}]`),
+  ["Cancellation:3/1[DE,GB,NL,unknown]", "General support:6/0[unknown]", "Legacy form:0/1[unknown]", "NL Contact:3/4[NL]"],
+  ["Cancellation:3/0[DE,NL,unknown]", "General support:6/0[unknown]", "NL Contact:3/3[NL]"]);
+const formCatalog = [{ code: "support", name: "Support", sortOrder: 5, isActive: true, forms: 1 }, { code: "contact", name: "Contact", sortOrder: 10, isActive: true, forms: 1 },
+  { code: "cancellation", name: "Cancellation", sortOrder: 20, isActive: false, forms: 1 }];
+expect("forms: totals per category in the catalog's order, forms without one last",
+  formsByCategory(formLines, formCatalog).map((c) => `${c.code ?? "none"}:${c.name ?? "-"}=${c.submissions}/${c.previous}`),
+  ["support:Support=6/0", "contact:Contact=3/4", "cancellation:Cancellation=3/1", "none:-=0/1"],
+  ["cancellation:Cancellation=3/1", "contact:Contact=3/4", "none:-=0/1", "support:Support=6/0"]);
+expect("forms: totals per market by code, unknown last",
+  formsByMarket(formLines).map((m) => `${m.market}=${m.submissions}/${m.previous}`), ["DE=1/0", "GB=0/1", "NL=4/4", "unknown=7/1"], ["unknown=7/1", "DE=1/0", "GB=0/1", "NL=4/4"]);
+const week5 = formsFigures(SUBS, "2026-10-05", "2026-10-11", "day", ALL_FORMS);
+expect("forms: the chart's days up to today without gaps; weeks by their Monday",
+  [formsSeries(week5, "day", "2026-10-05", "2026-10-11", "2026-10-08").map((c) => `${c.key.slice(8)}=${c.submissions}`).join(" "),
+    formsSeries(formsFigures(SUBS, "2026-09-28", "2026-10-11", "week", ALL_FORMS), "week", "2026-09-28", "2026-10-11", "2026-10-20").map((c) => `${c.key}=${c.submissions}`).join(" ")],
+  ["05=7 06=4 07=1 08=0", "2026-09-28=6 2026-10-05=12"], ["05=7 06=4 07=1", "2026-10-05=12"]);
+expect("forms: the answers per form (markets summed), each question's values most answered first",
+  answerGroups(b13rows).map((g) => `${g.formName}:${g.fields.map((f) => `${f.field}=${f.values.map((v) => `${v.value.slice(0, 3)}${v.submissions}/${v.previous}`).join(",")}`).join(";")}`),
+  ["Cancellation:cancellation_reason=Pri2/0,Mov0/1;country_dropdown=Atl2/0,Net1/0,Uni0/1", "General support:hs_ticket_category=Dev2/0,Bil1/0,Del1/0",
+    "Legacy form:product=aed0/1", `NL Contact:are_you_already_a_customer=${NO.slice(0, 3)}1/2,${YES.slice(0, 3)}1/1`],
+  ["Cancellation:cancellation_reason=Mov0/1,Pri2/0", "General support:hs_ticket_category=Bil1/0,Del1/0,Dev2/0"]);
+expect("forms: the share of contacts found, none without a submission", [resolvedShare(formsSum(totals)), resolvedShare(formsSum([]))], [0.25, null], [3 / 13, 0]);
+const formsAnswer = { totals, previous: formLines, answers: b13rows };
+const leaks = JSON.stringify(formsAnswer).match(/"(email|contact\w*|submissionId|sourceId|source_id|contactId)"\s*:/gi) ?? [];
+expect("forms: no submission, contact or email address in an answer", leaks, [], ["\"email\":"]);
 
 // ---- formats -----------------------------------------------------------------------------------
 expect("business minutes: decimals under an hour, hours from an hour, a dash for none",

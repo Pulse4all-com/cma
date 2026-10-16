@@ -1,0 +1,335 @@
+# Rehearsal of MORNING_RUNBOOK.md steps 10 and 11 on a local throwaway database at 0008p (00 to 69, #142's 70 to 73, 74), Claude Code, 16 October 2026.
+# The catalog is invented and shaped like brief B17d's prod data (50 forms: 9 Contact, 9 Info, 10 Quote, 10 Cancellation, 10 Replacement,
+# General support, DE change IBAN; the form rule of 12 October applied first); every statement is the runbook's, <conn> filled in.
+# The context block runs as the dev seed's admin@example.com. Steps 9 and 10e (the ingest jobs) are not part of it: the submissions come from
+# the ingest write directly. Ids are invented; no value comes from dev or prod.
+
+=== 10a
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+ set_form_category 
+-------------------
+ 
+(1 row)
+
+     code     |     name     | sort_order | status | forms 
+--------------+--------------+------------+--------+-------
+ contact      | Contact      |         10 | active |     0
+ info         | Info         |         20 | active |     0
+ quote        | Quote        |         30 | active |     0
+ cancellation | Cancellation |         40 | active |     0
+ replacement  | Replacement  |         50 | active |     0
+ iban_change  | IBAN change  |         60 | active |     0
+ support      | Support      |         70 | active |     0
+(7 rows)
+
+=== 10b, the catalog
+ is_counted | lead_source | forms | with_market 
+------------+-------------+-------+-------------
+ t          | contact     |     9 |           9
+ t          | info        |     9 |           9
+ t          | quote       |    10 |           9
+ f          |             |    22 |          19
+(4 rows)
+
+=== 10b, the counted forms
+     name     | set_form_reporting 
+--------------+--------------------
+ AT - Contact | 
+ AT - Info    | 
+ AT - Quote   | 
+ BE - Contact | 
+ BE - Info    | 
+ BE - Quote   | 
+ DE - Contact | 
+ DE - Info    | 
+ DE - Quote   | 
+ DK - Contact | 
+ DK - Info    | 
+ DK - Quote   | 
+ ES - Contact | 
+ ES - Info    | 
+ ES - Quote   | 
+ FR - Contact | 
+ FR - Info    | 
+ FR - Quote   | 
+ NL - Contact | 
+ NL - Info    | 
+ NL - Quote   | 
+ SE - Contact | 
+ SE - Info    | 
+ SE - Quote   | 
+ UK - Contact | 
+ UK - Info    | 
+ UK - Quote   | 
+ UK2 - Quote  | 
+(28 rows)
+
+=== 10c, the statements
+                                                                      statement                                                                       
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-AT', true, 'cancellation', 'AT');  -- AT - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-AT', true, 'replacement', 'AT');  -- AT - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-BE', true, 'cancellation', 'BE');  -- BE - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-BE', true, 'replacement', 'BE');  -- BE - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-', true, 'cancellation', null);  -- Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-DE', true, 'cancellation', 'DE');  -- DE - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'd-iban', true, 'iban_change', 'DE');  -- DE - change IBAN
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-DE', true, 'replacement', 'DE');  -- DE - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-DK', true, 'cancellation', 'DK');  -- DK - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-DK', true, 'replacement', 'DK');  -- DK - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-ES', true, 'cancellation', 'ES');  -- ES - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-ES', true, 'replacement', 'ES');  -- ES - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-FR', true, 'cancellation', 'FR');  -- FR - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-FR', true, 'replacement', 'FR');  -- FR - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'g-support', true, 'support', null);  -- General support form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-NL', true, 'cancellation', 'NL');  -- NL - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-NL', true, 'replacement', 'NL');  -- NL - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-', true, 'replacement', null);  -- Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-SE', true, 'cancellation', 'SE');  -- SE - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-SE', true, 'replacement', 'SE');  -- SE - Request a Replacement Device Form
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-UK', true, 'cancellation', 'GB');  -- UK - Cancellation Form Helpdesk
+ select cma.set_form_reporting('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-UK', true, 'replacement', 'GB');  -- UK - Request a Replacement Device Form
+(22 rows)
+
+=== 10c, the 22 statements run, then the check
+   category   | market | is_counted | is_polled | forms 
+--------------+--------+------------+-----------+-------
+ cancellation | AT     | f          | t         |     1
+ cancellation | BE     | f          | t         |     1
+ cancellation | DE     | f          | t         |     1
+ cancellation | DK     | f          | t         |     1
+ cancellation | ES     | f          | t         |     1
+ cancellation | FR     | f          | t         |     1
+ cancellation | GB     | f          | t         |     1
+ cancellation | NL     | f          | t         |     1
+ cancellation | SE     | f          | t         |     1
+ cancellation |        | f          | t         |     1
+ contact      | AT     | t          | t         |     1
+ contact      | BE     | t          | t         |     1
+ contact      | DE     | t          | t         |     1
+ contact      | DK     | t          | t         |     1
+ contact      | ES     | t          | t         |     1
+ contact      | FR     | t          | t         |     1
+ contact      | GB     | t          | t         |     1
+ contact      | NL     | t          | t         |     1
+ contact      | SE     | t          | t         |     1
+ iban_change  | DE     | f          | t         |     1
+ info         | AT     | t          | t         |     1
+ info         | BE     | t          | t         |     1
+ info         | DE     | t          | t         |     1
+ info         | DK     | t          | t         |     1
+ info         | ES     | t          | t         |     1
+ info         | FR     | t          | t         |     1
+ info         | GB     | t          | t         |     1
+ info         | NL     | t          | t         |     1
+ info         | SE     | t          | t         |     1
+ quote        | AT     | t          | t         |     1
+ quote        | BE     | t          | t         |     1
+ quote        | DE     | t          | t         |     1
+ quote        | DK     | t          | t         |     1
+ quote        | ES     | t          | t         |     1
+ quote        | FR     | t          | t         |     1
+ quote        | GB     | t          | t         |     1
+ quote        | NL     | t          | t         |     1
+ quote        | SE     | t          | t         |     1
+ quote        |        | t          | t         |     1
+ replacement  | AT     | f          | t         |     1
+ replacement  | BE     | f          | t         |     1
+ replacement  | DE     | f          | t         |     1
+ replacement  | DK     | f          | t         |     1
+ replacement  | ES     | f          | t         |     1
+ replacement  | FR     | f          | t         |     1
+ replacement  | GB     | f          | t         |     1
+ replacement  | NL     | f          | t         |     1
+ replacement  | SE     | f          | t         |     1
+ replacement  |        | f          | t         |     1
+ support      |        | f          | t         |     1
+(50 rows)
+=== 10d, the statements
+                                                                                                                                             statement                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-AT', 'f', NULL, 'AT', '{cancellation_reason,source_type}');  -- AT - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-BE', 'f', NULL, 'BE', '{cancellation_reason,source_type}');  -- BE - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-', 'f', NULL, NULL, '{cancellation_reason,country_dropdown,source_type}'); select cma.set_form_market_field('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-', 'country_dropdown');  -- Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-DE', 'f', NULL, 'DE', '{cancellation_reason,source_type}');  -- DE - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-DK', 'f', NULL, 'DK', '{cancellation_reason,source_type}');  -- DK - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-ES', 'f', NULL, 'ES', '{cancellation_reason,source_type}');  -- ES - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-FR', 'f', NULL, 'FR', '{cancellation_reason,source_type}');  -- FR - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-NL', 'f', NULL, 'NL', '{cancellation_reason,source_type}');  -- NL - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-SE', 'f', NULL, 'SE', '{cancellation_reason,source_type}');  -- SE - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'x-UK', 'f', NULL, 'GB', '{cancellation_reason,source_type}');  -- UK - Cancellation Form Helpdesk
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-AT', 't', 'contact', 'AT', '{are_you_already_a_customer}');  -- AT - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-BE', 't', 'contact', 'BE', '{are_you_already_a_customer}');  -- BE - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-DE', 't', 'contact', 'DE', '{are_you_already_a_customer,customer_sector}');  -- DE - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-DK', 't', 'contact', 'DK', '{are_you_already_a_customer}');  -- DK - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-ES', 't', 'contact', 'ES', '{are_you_already_a_customer}');  -- ES - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-FR', 't', 'contact', 'FR', '{are_you_already_a_customer}');  -- FR - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-NL', 't', 'contact', 'NL', '{are_you_already_a_customer}');  -- NL - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-SE', 't', 'contact', 'SE', '{are_you_already_a_customer}');  -- SE - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'c-UK', 't', 'contact', 'GB', '{are_you_already_a_customer}');  -- UK - Contact
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'd-iban', 'f', NULL, 'DE', '{}');  -- DE - change IBAN
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-AT', 't', 'info', 'AT', '{use_case}');  -- AT - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-BE', 't', 'info', 'BE', '{use_case}');  -- BE - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-DE', 't', 'info', 'DE', '{use_case}');  -- DE - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-DK', 't', 'info', 'DK', '{use_case}');  -- DK - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-ES', 't', 'info', 'ES', '{use_case}');  -- ES - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-FR', 't', 'info', 'FR', '{use_case}');  -- FR - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-NL', 't', 'info', 'NL', '{use_case}');  -- NL - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-SE', 't', 'info', 'SE', '{use_case}');  -- SE - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'i-UK', 't', 'info', 'GB', '{use_case}');  -- UK - Info
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-AT', 't', 'quote', 'AT', '{}');  -- AT - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-BE', 't', 'quote', 'BE', '{}');  -- BE - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-DE', 't', 'quote', 'DE', '{}');  -- DE - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-DK', 't', 'quote', 'DK', '{}');  -- DK - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-ES', 't', 'quote', 'ES', '{}');  -- ES - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-FR', 't', 'quote', 'FR', '{}');  -- FR - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-NL', 't', 'quote', 'NL', '{}');  -- NL - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-SE', 't', 'quote', 'SE', '{}');  -- SE - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-UK', 't', 'quote', 'GB', '{}');  -- UK - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'q-UK2', 't', 'quote', NULL, '{}');  -- UK2 - Quote
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-AT', 'f', NULL, 'AT', '{exchange_reason,exchange_type}');  -- AT - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-BE', 'f', NULL, 'BE', '{exchange_reason,exchange_type}');  -- BE - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-DE', 'f', NULL, 'DE', '{exchange_reason,exchange_type}');  -- DE - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-DK', 'f', NULL, 'DK', '{exchange_reason,exchange_type}');  -- DK - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-ES', 'f', NULL, 'ES', '{exchange_reason,exchange_type}');  -- ES - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-FR', 'f', NULL, 'FR', '{exchange_reason,exchange_type}');  -- FR - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-NL', 'f', NULL, 'NL', '{exchange_reason,exchange_type}');  -- NL - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-', 'f', NULL, NULL, '{country_dropdown,exchange_reason,exchange_type,request_channel}'); select cma.set_form_market_field('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-', 'country_dropdown');  -- Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-SE', 'f', NULL, 'SE', '{exchange_reason,exchange_type}');  -- SE - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'r-UK', 'f', NULL, 'GB', '{exchange_reason,exchange_type}');  -- UK - Request a Replacement Device Form
+ select cma.set_form('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'g-support', 'f', NULL, NULL, '{hs_ticket_category,ticket_country}'); select cma.set_form_market_field('01a14325-aa41-752b-ae6d-b9b4d6e88631', 'g-support', 'ticket_country');  -- General support form Helpdesk
+(50 rows)
+
+=== 10d, the 50 lines run, then the check
+   category   | forms | keeping | with_market_field | deployment_outcome_kept 
+--------------+-------+---------+-------------------+-------------------------
+ cancellation |    10 |      10 |                 1 | f
+ contact      |     9 |       9 |                 0 | f
+ iban_change  |     1 |       0 |                 0 | f
+ info         |     9 |       9 |                 0 | f
+ quote        |    10 |       0 |                 0 | f
+ replacement  |    10 |      10 |                 1 | f
+ support      |     1 |       1 |                 1 | f
+(7 rows)
+=== submissions written as the ingest would (instead of 10e)
+ outcome  | count 
+----------+-------
+ inserted |    50
+(1 row)
+
+=== 10f, Intake B
+ market | forms 
+--------+-------
+ GB     |    10
+ NL     |    20
+        |    30
+(3 rows)
+
+=== 10g
+     name     | set_form_lead_condition 
+--------------+-------------------------
+ AT - Contact | 
+ BE - Contact | 
+ DE - Contact | 
+ DK - Contact | 
+ ES - Contact | 
+ FR - Contact | 
+ NL - Contact | 
+ SE - Contact | 
+ UK - Contact | 
+(9 rows)
+
+     name     |                                  lead_condition                                   
+--------------+-----------------------------------------------------------------------------------
+ AT - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ BE - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ DE - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ DK - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ ES - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ FR - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ NL - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ SE - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+ UK - Contact | {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}
+(9 rows)
+
+=== 10h, Intake C and the Contact answers
+ market | forms 
+--------+-------
+ GB     |    10
+ NL     |    13
+        |    23
+(3 rows)
+
+ market |            answer             | submissions 
+--------+-------------------------------+-------------
+ GB     | No, I'm not a customer yet    |          10
+ NL     | (no answer)                   |           4
+ NL     | No, I'm not a customer yet    |           3
+ NL     | Yes, I'm an existing Customer |           3
+(4 rows)
+
+=== 11
+   category   | market  | submissions | resolved | not_found | ambiguous | no_email | pending 
+--------------+---------+-------------+----------+-----------+-----------+----------+---------
+ cancellation | GB      |          10 |        0 |        10 |         0 |        0 |       0
+ contact      | GB      |          10 |        0 |        10 |         0 |        0 |       0
+ contact      | NL      |          10 |        0 |        10 |         0 |        0 |       0
+ info         | NL      |          10 |        0 |        10 |         0 |        0 |       0
+ support      | unknown |          10 |        0 |        10 |         0 |        0 |       0
+(5 rows)
+
+           field            | values_seen | answers 
+----------------------------+-------------+---------
+ are_you_already_a_customer |           2 |      16
+ cancellation_reason        |           1 |      10
+ country_dropdown           |           1 |      10
+ hs_ticket_category         |           1 |      10
+ source_type                |           1 |      10
+ ticket_country             |           1 |      10
+ use_case                   |           1 |      10
+(7 rows)
+
+ history_start 
+---------------
+ 2026-10-02
+(1 row)
+
+          slug           | answers_not_in_options 
+-------------------------+------------------------
+ pulse4all-invest        |                      0
+ pulse4all-subscriptions |                      0
+(2 rows)
+
+ status | count | dropped 
+--------+-------+---------
+(0 rows)
+

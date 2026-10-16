@@ -11,7 +11,8 @@
  * (src/lib/sources.ts, src/lib/alertRules.ts): sections per kind, the settings rules of
  * cma.connection_settings_ok, the record link preview as cma.record_url builds it, the rules by name for
  * forms and call outcomes (12 October 2026's rules reproduced on fixture names), office hours, the
- * market form, and the alert rules' checks and effect in plain words.
+ * market form, and the alert rules' checks and effect in plain words. Since addition 0008p a form's polled and
+ * counted switches, the categories a form may get and the form category catalog's checks.
  */
 import {
   exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, retireProblem, statusFormProblem, targetAt, visibleStatuses,
@@ -19,6 +20,7 @@ import {
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   planOutcomeRule, formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
+  formCategoryChoices, formCategoryProblem, formEditProblem,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -163,6 +165,21 @@ expect("the effect of a created-record rule", ruleEffect({ ...newRule("record_cr
   ["A new deal in any counted pipeline alerts the holders of leads.accept, clocked in, with the language.", "Else leads.manage.", "At most 60 minutes old (default).", "One tone."], []);
 expect("the effect of an assignment rule, switched off", ruleEffect({ ...newRule("record_assigned", "deal"), pipelineIds: ["p1"], maxAgeMinutes: 30, enabled: false }, choices, 60, words),
   ["Off.", "When a deal in Sales gets an owner, that owner's person is alerted.", "At most 30 minutes old.", "A chime."], ["Off."]);
+
+// Forms reporting (addition 0008p): polled and counted, the category choices and the category catalog
+expect("a counted form that is not polled is refused", formEditProblem({ isCounted: true, isPolled: false, leadSource: "" }), "polled", null);
+expect("a polled form that does not count is fine", formEditProblem({ isCounted: false, isPolled: true, leadSource: "quote" }), null, "polled");
+expect("a lead source over 60 characters comes first", formEditProblem({ isCounted: true, isPolled: false, leadSource: "x".repeat(61) }), "leadSource", "polled");
+const cats = [{ code: "quote", isActive: true }, { code: "legacy", isActive: false }, { code: "info", isActive: true }];
+expect("a switched-off category is not offered to another form", formCategoryChoices(cats, "quote").map((k) => k.code), ["quote", "info"], ["quote", "legacy", "info"]);
+expect("a form keeps its own switched-off category", formCategoryChoices(cats, "legacy").map((k) => k.code), ["quote", "legacy", "info"], ["quote", "info"]);
+expect("category codes as the database takes them",
+  ["iban_change", "Quote", "1st", "none", "a".repeat(41), "x"].map((code) => formCategoryProblem({ code, name: "Name", sortOrder: "10" })),
+  [null, "code", "code", "code", "code", null], [null, null, null, null, null, null]);
+expect("a category needs a name and an order from 0 to 9999",
+  [formCategoryProblem({ code: "info", name: "  ", sortOrder: "10" }), formCategoryProblem({ code: "info", name: "Info", sortOrder: "10000" }),
+    formCategoryProblem({ code: "info", name: "Info", sortOrder: "" }), formCategoryProblem({ code: "info", name: "Info", sortOrder: "0" })],
+  ["name", "order", "order", null], [null, null, null, "order"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

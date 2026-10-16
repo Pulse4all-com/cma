@@ -9,7 +9,7 @@
  *   crm_call        by hs_timestamp
  *   contact         the contacts the CMA holds (0006: never the contact base; since 0008m also those an
  *                   email or inbox thread points to), by id, read with every mapped country slot
- *   form_submission every counted form's submissions (forms.mjs)
+ *   form_submission every polled form's submissions, filling the answers of stored ones without them (forms.mjs)
  *   crm_email       email engagements by hs_timestamp, written as the email poll writes them (email.mjs)
  *   inbox_thread    inbox conversations by their latest message, with their messages (conversations.mjs)
  *                   Both default to cma.email_start_date_of (email.start_date, else intake.start_date)

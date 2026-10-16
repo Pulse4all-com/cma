@@ -75,16 +75,18 @@ export function previousLabel(from: string, to: string, partial: boolean, copy: 
  * `historyStart`, callsChange) no change at all: "No history to compare yet", the history's first date in
  * the title
  */
-export function DeltaLine({ current, previous, compared, previousFrom, historyStart, copy, locale }: {
+export function DeltaLine({ current, previous, compared, previousFrom, historyStart, copy, locale, historyText }: {
   current: number | null; previous: number | null; compared: { text: string; dates: string | null; partial: boolean };
   previousFrom: string; historyStart: string | null; copy: Copy; locale: Locale;
+  /** The title naming where the history starts, {date} filled in; the telephony history's when left out (Forms gives its own, addition 0008p) */
+  historyText?: string;
 }) {
   const t = copy.calls;
   const d = callsChange(current, previous, previousFrom, historyStart);
   if (d.direction === "noHistory") {
     return (
       <p className="mt-1 text-small text-p4a-muted" data-testid="delta" data-direction="none" data-compares="none" data-history-start={historyStart ?? undefined}
-        title={historyStart ? t.historyStarts.replace("{date}", fmtDate(historyStart, locale)) : undefined}>
+        title={historyStart ? (historyText ?? t.historyStarts).replace("{date}", fmtDate(historyStart, locale)) : undefined}>
         {t.deltaNoHistory}
       </p>
     );

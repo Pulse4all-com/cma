@@ -146,11 +146,21 @@ export function storeFor(ctx, connectionId) {
     async runFinish(id, status, counts, error = null) {
       await withTenant(ctx, (q) => q.query("select cma.ingest_sync_run_finish($1, $2, $3::jsonb, $4)", [id, status, JSON.stringify(counts), error]));
     },
+    /**
+     * The connection's forms with their configuration and the fields the catalog described (active
+     * fields only: name, kind, options; addition 0008p). A form not described yet has no fields
+     */
     async forms() {
       return withTenant(ctx, async (q) => (await q.query(
-        `select source_form_id, name, is_counted, kept_fields, status from cma.connection_form
-          where tenant_id = cma.current_tenant_id() and connection_id = $1 order by source_form_id`, [connectionId])).rows.map((r) => ({
-        formId: r.source_form_id, name: r.name, isCounted: r.is_counted, keptFields: r.kept_fields ?? [], status: r.status,
+        `select f.source_form_id, f.name, f.is_counted, f.is_polled, f.kept_fields, f.status, f.fields_refreshed_at,
+                coalesce((select jsonb_agg(jsonb_build_object('name', ff.name, 'kind', ff.kind, 'options', to_jsonb(ff.options)) order by ff.sort_order, ff.name)
+                          from cma.connection_form_field ff
+                          where ff.tenant_id = f.tenant_id and ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id
+                            and ff.status = 'active'), '[]'::jsonb) as fields
+           from cma.connection_form f
+          where f.tenant_id = cma.current_tenant_id() and f.connection_id = $1 order by f.source_form_id`, [connectionId])).rows.map((r) => ({
+        formId: r.source_form_id, name: r.name, isCounted: r.is_counted, isPolled: r.is_polled, keptFields: r.kept_fields ?? [], status: r.status,
+        described: r.fields_refreshed_at !== null, fields: r.fields ?? [],
       })));
     },
     async upsertForms(items) {

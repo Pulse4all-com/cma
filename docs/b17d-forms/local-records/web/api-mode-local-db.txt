@@ -1,0 +1,54 @@
+# The web app's build of this branch in api mode (CMA_DATA_MODE=api, mock identities) against a local throwaway database at 0008p
+# with invented forms and submissions in the dev seed's tenant (three forms, 120 submissions, 11 September to 15 October 2026).
+# Run on 16 October 2026; counts and names only.
+== GET /api/v1/reports/forms (analyst, 1 to 16 October, by week)
+forms True historyStart 2026-09-11 previous 2026-09-15 2026-09-30 partial True week rows 15
+total Cancellation form (test) cancellation GB 6 resolved/not found/ambiguous/no email/pending 0 2 3 1 0
+total Cancellation form (test) cancellation NL 6 resolved/not found/ambiguous/no email/pending 0 2 2 2 0
+total Cancellation form (test) cancellation unknown 6 resolved/not found/ambiguous/no email/pending 0 1 3 2 0
+total General support form (test) support unknown 17 resolved/not found/ambiguous/no email/pending 0 4 9 4 0
+total NL - Contact form (test) contact NL 17 resolved/not found/ambiguous/no email/pending 0 4 9 4 0
+previous Cancellation form (test) GB 6
+previous Cancellation form (test) NL 6
+previous Cancellation form (test) unknown 6
+previous General support form (test) unknown 18
+previous NL - Contact form (test) NL 17
+categories [('contact', True, 1), ('cancellation', True, 1), ('support', True, 1), ('old', False, 0)]
+markets ['GB', 'NL', 'unknown'] forms list ['Cancellation form (test)', 'General support form (test)', 'NL - Contact form (test)']
+== the filters (sum of the totals)
+category=support: 17
+market=unknown: 23
+category=none: 0
+market=GB&category=cancellation: 6
+== GET /api/v1/reports/forms/answers?field=hs_ticket_category
+current General support form (test) unknown hs_ticket_category Billing (test) 17
+current General support form (test) unknown hs_ticket_category Device (test) 17
+previous General support form (test) unknown hs_ticket_category Billing (test) 18
+previous General support form (test) unknown hs_ticket_category Device (test) 18
+== refusals and permissions (status)
+market=uk: 400
+group=month: 400
+category=Bad: 400
+form=f-cancel: 400
+93 days: 400
+agent-two: 403
+== GET /api/v1/reports/forms/export (manager)
+﻿From;To;Form;Category;Market;Submissions;Previous period;Contact found;No contact;Several contacts;No email address;Not looked up yet
+01-10-2026;16-10-2026;Cancellation form (test);Cancellation;GB;6;6;0;2;3;1;0
+01-10-2026;16-10-2026;Cancellation form (test);Cancellation;NL;6;6;0;2;2;2;0
+01-10-2026;16-10-2026;Cancellation form (test);Cancellation;Unknown market;6;6;0;1;3;2;0
+01-10-2026;16-10-2026;General support form (test);Support;Unknown market;17;18;0;4;9;4;0
+01-10-2026;16-10-2026;NL - Contact form (test);Contact;NL;17;17;0;4;9;4;0
+== GET and PUT /api/v1/configuration/form-categories (admin)
+{"data":[{"code":"contact","name":"Contact","sortOrder":10,"isActive":true,"forms":1},{"code":"cancellation","name":"Cancellation","sortOrder":40,"isActive":true,"forms":1},{"code":"support","name":"Support","sortOrder":70,"isActive":true,"forms":1},{"code":"old","name":"Old","sortOrder":90,"isActive":false,"forms":0}]}
+add replacement: 200
+code none: 400
+analyst writes: 403
+== the connection's forms (admin)
+f-cancel counted False polled True cancellation None ['cancellation_reason', 'country_dropdown'] country_dropdown None [('cancellation_reason', 'dropdown', 3), ('country_dropdown', 'dropdown', 3)]
+f-support counted False polled True support None ['hs_ticket_category'] None None [('hs_ticket_category', 'multiple_checkboxes', 2)]
+f-contact counted True polled True contact NL ['are_you_already_a_customer'] None {'field': 'are_you_already_a_customer', 'values': ['No, new (test)']} [('email', 'other', 0), ('are_you_already_a_customer', 'radio', 2)]
+set: [('f-support', True, 'replacement', 'NL')]
+a switched-off category: 400
+counted and not polled: 400
+restored: 200
