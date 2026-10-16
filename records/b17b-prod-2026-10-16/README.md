@@ -14,6 +14,11 @@ and no personal data. The terminal and psql outputs of the run are not in this f
 ## The service, the jobs and the app (10.1, 10.5)
 
 - The service and the jobs deployed at `1146ee3`: no build, health ok, `ingest-poll-email` created.
+- That service deploy ran without `--front` and became revision `cma-ingest-00008`: ingress `all`, and
+  `INGEST_PUBLIC_URLS` without `https://ingest.pulse4all.app`, so HubSpot's webhooks failed with 401
+  until 08:15 CEST. Fixed by hand in the Console: the ingress at about 08:08 CEST, revision
+  `cma-ingest-00009` at 08:15 CEST
+  ([`records/ingest-front-incident-2026-10-16`](../ingest-front-incident-2026-10-16/README.md)).
 - 10.1: build #2 of **CMA ingest prod** deployed; the install reinstalled through the Reinstall URL; the
   token unchanged; both endpoints answer `200`.
 
