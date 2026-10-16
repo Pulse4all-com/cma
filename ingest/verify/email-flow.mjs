@@ -13,7 +13,9 @@
  * the owner. Locally CMA_DB_USER may be a login that inherits cma_app (cma-ingest@local.iam). It
  * refuses a database without the dev seed (no active agent.two@example.com: exit 2), so it never runs
  * in prod. At the end this run's connections are set inactive, so no job serves them again; the two
- * tenants and their invented rows stay, as other verifiers' do.
+ * tenants and their invented rows stay, as other verifiers' do. Every job runs with this run's
+ * connection: without one it serves every active connection of the database, in dev the real
+ * tenant's (B17b.1; I1 proves nothing outside the two tenants was written).
  *
  * Proves: the poll writes engagements (direction, status, actor kinds, the owner, the CRM thread id
  * and the automation origin by configuration, the category), their associations, inbox threads,
@@ -27,7 +29,8 @@
  * slot again; the shared rule fixtures give the same answers in cma.email_words_match and
  * cma.email_category_of as in the ingest's memory; a connection without email_poll is not served;
  * tenant isolation; no row, audit image, cursor or log line holds a name, address, subject, text or
- * raw actor id, and no log line an email, thread or contact id.
+ * raw actor id, and no log line an email, thread or contact id; no row of another tenant was written
+ * by this run (the audit log).
  */
 import { readFileSync } from "node:fs";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -35,7 +38,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, PROVOKE } from "./lib.mjs";
+import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
 import { loadSource, startFakeHubSpot } from "./email-fake.mjs";
 
 console.log(`verify/email-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
@@ -95,6 +98,8 @@ if (!dev) {
   await fake.close();
   process.exit(2);
 }
+// The run's start on the database's clock, for the guard (I1)
+const [{ since: STARTED }] = await q("select clock_timestamp()::text as since");
 const [{ t1 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t1", [SLUG1, "Email one"]);
 const [{ t2 }] = await q("select cma.create_tenant($1, $2, 'Europe/Amsterdam') as t2", [SLUG2, "Email two"]);
 const adminOf = {};
@@ -291,9 +296,12 @@ expect(`F2 cma.email_category_of on the ${RULES.categories.length} shared cases:
   [RULES.categories.map((c) => c.category), RULES.categories.map((c) => c.category)], [RULES.categories.map(() => "x"), RULES.categories.map(() => "x")]);
 
 // ---- G. Opt-in and isolation -------------------------------------------------------------------------------
-await runPollEmail({ now: NOW + 14 * 60_000 });
-expect("G1 a connection without email_poll is never served (no run, no row)", [Number((await q("select count(*) as n from cma.sync_run where connection_id = $1 and job = 'email_poll'", [conn2]))[0].n),
-  Number((await q("select count(*) as n from cma.email_message where connection_id = $1", [conn2]))[0].n)], [0, 0], [1, 1]);
+// Each poll names its connection: one without would serve every connection of the database with email_poll on (B17b.1)
+const off = await runPollEmail({ connectionId: conn2, now: NOW + 14 * 60_000 });
+const on = await runPollEmail({ connectionId: conn1, now: NOW + 14 * 60_000 });
+expect("G1 a connection without email_poll is never served (no run, no row); one with it is", [off.connections,
+  Number((await q("select count(*) as n from cma.sync_run where connection_id = $1 and job = 'email_poll'", [conn2]))[0].n),
+  Number((await q("select count(*) as n from cma.email_message where connection_id = $1", [conn2]))[0].n), on.connections], [0, 0, 0, 1], [1, 1, 1, 0]);
 expect("G2 tenant two sees none of tenant one's email rows", await asAdmin(t2, async () => [
   Number((await q("select count(*) as n from cma.email_message"))[0].n), Number((await q("select count(*) as n from cma.email_thread"))[0].n)]), [0, 0], [6, 4]);
 expect("G3 every email row of the run lives in tenant one", [...new Set((await q("select tenant_id from cma.email_message where connection_id = $1 union select tenant_id from cma.email_thread where connection_id = $1", [conn1])).map((r) => r.tenant_id))],
@@ -319,6 +327,10 @@ expect("H2 no log line holds them, a token, or an email, thread or contact id",
 // This run's connections stop being served
 await asAdmin(t1, () => q("select cma.set_connection_status($1, 'inactive')", [conn1]));
 await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [conn2]));
+
+// ---- I. Nothing outside this run's tenants -----------------------------------------------------------------
+expect("I1 no row of another tenant written by this run (sync_run, email_*, crm_contact, sync_cursor, any audited table)",
+  await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["sync_run:2"]);
 await admin.end();
 await fake.close();
 await closeDb();

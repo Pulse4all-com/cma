@@ -1,0 +1,23 @@
+
+> cma-web@0.1.0 verify:signed-out
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/signed-out.mjs --provoke
+
+FAIL  the page reads and writes no cookie: touches cookies
+FAIL  the page makes no request of its own (no fetch, XHR, beacon, socket, import): requests in the script
+FAIL  no external script, stylesheet or font: only the page's own files and Google's two addresses: a script with src; a link element; external address https://cdn.example.com/x.js; external address https://fonts.example.com/a.css; external address https://accounts.google.com/logout?x=1; external address https://accounts.google.com/AddSession?continue=
+FAIL  the CSP is present, exact, and allows the one inline script by its hash only: CSP is "default-src *; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'sha256-6F80Vq39wf2ptdVZ5QOJTX/frFepDKBjLK33tf7T+8g='; base-uri 'none'; form-action 'none'"
+FAIL  no tenant or company name before the deploy: the name and the logo are placeholders: a tenant or company name in the markup
+FAIL  English and Dutch, word for word copy.ts's signedOut, chosen from the browser's language: Dutch differs from copy.ts
+FAIL  the three links: Log in to / (focused), Add another account to Google's plain AddSession in a new tab, Google's Logout: AddSession is not named exactly once; a continue in the page or its script; the script changes a link's address; Log out of Google is not Google's Logout
+FAIL  Log out's Location: unset and legacy /logout/done, signed-out the static page, relative; a typo refused: unset is not legacy; empty is not legacy; legacy moved; signed-out is not the static page; a typo is accepted
+FAIL  the route, the config and the build use the flag, legacy by default: /logout/end does not answer logoutLocation(config.logoutTarget); /logout/end has a fixed Location; config does not read CMA_LOGOUT_TARGET; the build does not pass CMA_LOGOUT_TARGET; the build's default is not legacy
+FAIL  No access yet links to another account only with the flag: a link without the flag; the link is not the signed-out page; the page does not follow the flag; the link is shown without a switch address
+FAIL  /signed-out reaching cma-web gets the IAP check: in the matcher, no route, no public file: /signed-out is not gated; /signed-out/logo.png is not gated; app route src/app/signed-out/page.tsx; a public file named signed-out
+FAIL  deploy.sh grants allUsers legacyObjectReader (no listing), never objectViewer, and stops on any other role: the public role is not roles/storage.legacyObjectReader; objectViewer is named
+FAIL  deploy.sh passes no value to --public-access-prevention or --pap; the bucket's create leaves it inherited: a value on a boolean flag: --public-access-prevention=inherited; the bucket's create does not pass --no-public-access-prevention
+FAIL  urlmap.py on the fixture: exactly the three route rules, the default service and the ingest host rule kept, the new tests: the map's other fields changed; route rules [{"matchRules":[{"prefixMatch":"/signed-out","queryParameterMatches":[{"exactMatch":"CLEAR_LOGIN_COOKIE","name":"gcp-iap-mode"}]}],"priority":1,"service":"https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/cma-web-backend"},{"matchRules":[{"fullPathMatch":"/signed-out/"}],"priority":2,"urlRedirect":{"pathRedirect":"/signed-out","redirectResponseCode":"MOVED_PERMANENTLY_DEFAULT"}},{"matchRules":[{"prefixMatch":"/signed-out"}],"priority":3,"service":"https://www.googleapis.com/compute/v1/projects/example-project/global/backendBuckets/cma-signed-out-backend"}]; a matcher's pathRules are not converted behind the three rules from priority 10
+FAIL  an unchanged plan is validated, not imported: urlmap.py writes no new map, deploy.sh imports only a new one: a rerun on the new map writes a new map to import; deploy.sh does not skip the import without a new map ("e. map unchanged, no import"); the import is outside the branch for a new map
+FAIL  the import is locked on the map as read (its fingerprint kept, compared, a 412 stops), the restore writes the live one: the new map's fingerprint is missing, not the map's as read; the two fingerprints are not compared before the import; the restore does not import the copy; the export itself is imported, with its stale fingerprint
+
+signed-out: ALL 16 PROVOKED CHECKS FAILED, as they must
+exit 0

@@ -1,0 +1,57 @@
+-- the fixed queries with the slug of the last email-flow run's tenant one (email-cd5f678e-one) in place of pulse4all-subscriptions
+set role cma_owner;
+SET
+select m.source_kind, m.direction, m.actor_kind, count(*) from cma.email_message m join cma.tenant t on t.id = m.tenant_id
+where t.slug = 'email-cd5f678e-one' group by 1, 2, 3 order by 1, 2, 3;
+  source_kind  | direction | actor_kind  | count 
+---------------+-----------+-------------+-------
+ crm_email     | forwarded | agent       |     1
+ crm_email     | in        | customer    |     1
+ crm_email     | out       | agent       |     2
+ crm_email     | out       | system      |     1
+ crm_email     | out       | unknown     |     1
+ inbox_message | in        | customer    |     3
+ inbox_message | in        | integration |     1
+ inbox_message | in        | unknown     |     1
+ inbox_message | out       | agent       |     3
+(9 rows)
+
+select e.status, e.is_spam, e.is_archived, e.forgotten_at is not null as forgotten, count(*) from cma.email_thread e join cma.tenant t on t.id = e.tenant_id
+where t.slug = 'email-cd5f678e-one' group by 1, 2, 3, 4 order by 1, 2, 3, 4;
+ status | is_spam | is_archived | forgotten | count 
+--------+---------+-------------+-----------+-------
+ closed | f       | f           | f         |     2
+ closed | f       | t           | t         |     1
+ open   | f       | f           | t         |     1
+ open   | t       | f           | f         |     1
+(4 rows)
+
+select e.kind, count(*) from cma.email_thread_event e join cma.tenant t on t.id = e.tenant_id where t.slug = 'email-cd5f678e-one' group by 1 order by 1;
+    kind     | count 
+-------------+-------
+ assigned    |     4
+ closed      |     2
+ moved_inbox |     1
+ reopened    |     1
+(4 rows)
+
+select (select count(*) from cma.connection_inbox i where i.tenant_id = t.id) as inboxes,
+       (select count(*) from cma.connection_inbox_channel c where c.tenant_id = t.id) as channels,
+       (select count(*) from cma.crm_contact k where k.tenant_id = t.id and k.country_source > 1) as contacts_from_fallback
+from cma.tenant t where t.slug = 'email-cd5f678e-one';
+ inboxes | channels | contacts_from_fallback 
+---------+----------+------------------------
+       2 |        3 |                      1
+(1 row)
+
+select r.status, count(*) from cma.sync_run r join cma.tenant t on t.id = r.tenant_id
+where t.slug = 'email-cd5f678e-one' and r.job = 'email_poll' and r.started_at > now() - interval '1 hour' group by 1;
+  status   | count 
+-----------+-------
+ succeeded |     6
+ failed    |     1
+(2 rows)
+
+reset role;
+RESET
+exit 0

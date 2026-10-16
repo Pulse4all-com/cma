@@ -2,7 +2,8 @@
 -- Run as yourself (IAM login) after 01_foundation.sql, in dev and in prod. Safe to rerun.
 -- Customer configuration, not schema: the two tenants, their organisations, their channels, the
 -- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
--- reasons and telephony settings and (after 0008j) the connected-call threshold.
+-- reasons and telephony settings, (after 0008j) the connected-call threshold and (after 0008l) the
+-- invitation email domain.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -304,6 +305,33 @@ begin
   end if;
   insert into cma.tenant_setting (tenant_id, key, value)
   select t.id, 'telephony.connected_min_seconds', '10'
+  from cma.tenant t
+  where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
+  order by t.slug
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- The invitation email domain per tenant (after addition 0008l; Martin, 15 October 2026): Pulse4all
+-- invites pulse4all.com addresses only. IAP admits only pulse4all.com accounts (README:
+-- Authentication), so an invitation to another domain could never be accepted; with the setting it
+-- is refused when it is created instead of giving a link that expires unexplained. Only adds what a
+-- tenant does not have yet, so a later change on Configuration > Exports (section Invitations)
+-- survives a rerun; a reset there to the default (any domain) removes the row, so a rerun sets
+-- pulse4all.com again. The value passes the catalog's check (cma.is_domain_list).
+do $$
+begin
+  -- on a fresh database this seed runs before the settings catalog exists (13), so look it up by name first
+  if to_regclass('cma.setting') is null then
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 66_invitations.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'auth.invitation_email_domains') then
+    raise notice 'the invitation settings do not exist yet (addition 0008l): rerun this seed after 66_invitations.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, 'auth.invitation_email_domains', 'pulse4all.com'
   from cma.tenant t
   where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
   order by t.slug
