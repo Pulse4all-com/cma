@@ -345,7 +345,12 @@ $$;
 -- Configuration survives a rerun (only what a tenant does not have yet is added).
 do $$
 begin
-  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'tickets.sla_minutes') then
+  -- on a fresh database this seed runs before the settings catalog exists (13), so look it up by name first
+  if to_regclass('cma.setting') is null then
+    raise notice 'the settings catalog does not exist yet (migration 0003b): rerun this seed after 72_follow_up.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'tickets.sla_minutes') then
     raise notice 'the follow-up settings do not exist yet (addition 0008o): rerun this seed after 72_follow_up.sql';
     return;
   end if;
