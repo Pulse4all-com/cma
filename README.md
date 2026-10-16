@@ -319,6 +319,7 @@ Team members default to the reader view (the same surface BigQuery and NocoDB ge
   - `~/.config/gh/hosts.yml`: the GitHub token of Pulse4all-DEV, in plain text, because the ChromeOS Linux environment (Crostini) has no keyring.
   - `~/.hscli/config.yml`: the HubSpot personal access key of the test account `149511908` only; the production portal is never connected from this device.
   - Protection: the device lock and ChromeOS's encryption of the Linux environment. If the device is lost, revoke all three: the Google logins (Google Account → Security, the access of Google Cloud SDK and Google Auth Library; `gcloud auth revoke --all` on the device itself when it is retired), GitHub → Settings → Applications (GitHub CLI) as Pulse4all-DEV, and HubSpot → Personal access key in the test account.
+  - The Linux machine is not used for prod work (Martin, 16 October 2026): terminal work against prod (`p4a-cma-prod`, `cma-prod-pg`) runs from the Chromebook only.
   - No service-account keys and no secrets in local files: a secret comes from Secret Manager at run time (`gcloud secrets versions access`, or `put_secret` for a new value) and is never written to disk.
 - The web app is reachable only through the load balancer and IAP; the Cloud Run address refuses direct traffic. Team access during the build through `cma@pulse4all.com`, agents through their pulse4all.com account plus an active `app_user` row
 - A budget alert per project emails the billing admins (dev: €75 per month, prod: €150 per month).
