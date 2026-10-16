@@ -978,9 +978,15 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 
 # 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
 
-Written in the night of 15 to 16 October 2026, before anything ran in dev or prod. Order: the migrations in dev with their verifies (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 3 to 7, which also refresh the data map and upload the dev app), then the merged web, then this phase in prod. The web after N16-B reads the functions of 0008n and 0008o on Welcome, the Live board, Reports → Follow-up and Sources, so **70 and 72 run in prod before N16-B is merged**, as 0008l did; until then a merged `main` would show Welcome with an error. Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 9: the migrations with their verifies, the data map, the ingest from the branch, the dev app, the backfill, the hand check); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then 11.2 to 11.5 from `main`. Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
 
-## 11.1 The two migrations and their verifies
+## 11.1 The two migrations and their verifies (before the merge)
+
+**Terminal** (point-in-time recovery on, as before every prod migration)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
 
 **Studio (cma-prod-pg)**, `70_crm_tasks.sql` as one script, as your own login.
 
@@ -1005,25 +1011,51 @@ Expected: two rows `0008n`, `0008o`; `true`, `true`, `ticket_no_owner,ticket_no_
 
 Then write `records/0008n-prod-<date>/` and `records/0008o-prod-<date>/` from what Studio showed (ids, counts, times; nothing else), as the earlier records.
 
-## 11.2 The prod app with the task subscriptions
+## 11.2 The prod ingest from `main`, then the app with the task subscriptions
 
-The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded and the install's update accepted, as in 10.1.
+After the merge and the `cma-web-main` build. The ingest first: the task webhooks and the backfill's `--object task` need an ingest that knows tasks. `--front` stays on every prod service deploy: without it the service's ingress would open the run.app address.
 
 **Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; the jobs on the same image (`no build`), the schedules unchanged.
+
+The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded; the install is updated or reinstalled only when HubSpot asks or the subscriptions do not arrive.
+
+**Terminal** (in `~/cma`, on `main`)
 ```bash
 node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && node hubspot/verify/render.mjs | tail -1 && cd hubspot/build/prod && hs project upload && cd ~/cma
 ```
 Expected: `rendered prod: hubspot/build/prod`, `ALL 33 PASS`, the upload naming the live portal, build and deploy succeeding.
 
-**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the install → accept the update (no new scope is asked; the task subscriptions appear on the webhooks tab).
+**Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the Standard install. If HubSpot offers an update, accept it (no new scope is asked; the task subscriptions appear on the webhooks tab). If it offers no update or reinstall for this webhooks-only change, the upload is enough.
 
-Expected: 46 subscriptions active, nine of them for `task`. The token stays.
+Expected: 46 subscriptions on the webhooks tab, nine of them for `task`.
+
+**Browser:** in the live portal, create a test task on a test contact (a title only, no body); complete or delete it afterwards.
+
+**Studio (cma-prod-pg)**, a few minutes later
+```sql
+set role cma_owner;
+select object_type, kind, status, count(*) from cma.ingest_event where object_type = 'task' and recorded_at > now() - interval '15 minutes' group by 1, 2, 3 order by 1, 2, 3;
+reset role;
+```
+Expected: at least one `task | created` row (`received`, or `processed` once the sweep ran; it runs every minute). If no task event arrives within minutes, the subscriptions did not reach the install: reinstall through the **Reinstall URL** on the Distribution tab, as 15 October showed for the scopes, then create another test task. Check the token afterwards: it stays; if HubSpot shows a new one on the install's row → Show, store it with `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
 
 ## 11.3 The backfill of tasks
 
+The backfill takes the connection's id (a uuid), not its key, and `--from` with a date (without it, `intake.start_date`).
+
+**Studio (cma-prod-pg)**
+```sql
+select c.id from cma.integration_connection c join cma.tenant t on t.id = c.tenant_id where t.slug = 'pulse4all-subscriptions' and c.adapter = 'hubspot' and c.status = 'active';
+```
+Expected: one uuid, the live portal's connection.
+
 **Terminal** (in `~/cma`, the ingest job as in 9.8, the object `task` alone)
 ```bash
-gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --args="--connection,<key>,--object,task,--since,<intake start date>" --wait
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --args=--connection,<connection id>,--object,task,--from,2026-09-01 --wait
 ```
 Expected: the job finishing with the stream `task` counted in its log; nothing about a body or a subject.
 

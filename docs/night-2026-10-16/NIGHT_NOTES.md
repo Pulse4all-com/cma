@@ -59,7 +59,7 @@ Written by Claude Code while Martin and Joshua were away. Everything was built a
 
 - **A8** (the line switch-off dialog with the calls removed) and **B4** (callbacks kept): time went to the three slices and their verifiers; both are in the backlog rows below.
 - **`verify:api` in full** was not run (it needs the workday window and the reports fixture); the groups `--follow-up`, `--sources` and `--preview` were.
-- **The data map index** (`docs/datamap/index.html`) is not rebuilt: the build refuses while the catalog and the snapshot disagree, by design; it is rebuilt after your `schema.json` refresh (morning runbook step 5).
+- **The data map index** (`docs/datamap/index.html`) is not rebuilt: the build refuses while the catalog and the snapshot disagree, by design; it is rebuilt after your `schema.json` refresh (morning runbook step 4).
 
 ## Questions for the morning
 
