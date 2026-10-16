@@ -1,0 +1,101 @@
+$ verify/flow.mjs --provoke
+verify/flow.mjs  (--provoke: every check must FAIL)
+
+FAIL  GET /health answers ok and the version                           got {"ok":true,"version":"dev"}, wanted {"ok":false}
+FAIL  an unknown key → 404                                             got 404, wanted 401
+FAIL  a malformed key → 404                                            got 404, wanted 401
+FAIL  a connection of another adapter on /hubspot → 404                got 404, wanted 401
+FAIL  a route without an adapter → 404                                 got 404, wanted 200
+FAIL  GET on a webhook route → 404                                     got 404, wanted 405
+FAIL  unsigned → 401                                                   got 401, wanted 200
+FAIL  signed with another secret → 401                                 got 401, wanted 200
+FAIL  a timestamp 6 minutes old → 401                                  got 401, wanted 200
+FAIL  a signature for another URI → 401                                got 401, wanted 200
+FAIL  refused requests wrote nothing                                   got 0, wanted 4
+FAIL  refused requests read nothing from HubSpot                       got 0, wanted 1
+FAIL  a signed batch → 200                                             got 200, wanted 401
+FAIL  four events recorded, all processed                              got [{"status":"processed","n":4}], wanted [{"status":"received","n":4}]
+FAIL  the deal with its contact, market GB through the alias uk        got ["4300000001","GB","en"], wanted ["4300000001","uk","en"]
+FAIL  the deal's amount, currency, pipeline, stage, owner              got ["1200.50","EUR","p-sales","s-new","7100000001"], wanted []
+FAIL  the deal is open by its stage (pipelines refreshed)              got false, wanted null
+FAIL  the deal's raw holds no deal name                                got false, wanted true
+FAIL  the contact with country, language, currency                     got ["GB","en","GBP"], wanted ["uk","en","gbp"]
+FAIL  the contact's two Shopify ref slots                              got [[1,"6000000001"],[2,"6000000002"]], wanted [[1,"6000000001"]]
+FAIL  the contact's email was never read                               got false, wanted true
+FAIL  the call: outbound, 61 s, outcome, owner, source app             got ["outbound",61,"f240bbac-0000-0000-0000-000000000001","7100000001","in, wanted []
+FAIL  the call's counterpart hash is HMAC(pepper, E.164)               got "6bda30c73c8fea25652f9ffaa6cae7956ab640ea38760f82b7e88c387f88d3e7", wanted null
+FAIL  the call's raw holds no number and no body                       got false, wanted true
+FAIL  associations deal→contact, call→contact, call→deal               got ["crm_call>contact:4300000001","crm_call>deal:4100000001","deal>contac, wanted []
+FAIL  the call outcome catalog                                         got 2, wanted 0
+FAIL  the pipelines and stages                                         got ["s-new","s-won","t-closed"], wanted []
+FAIL  deals were read with structural and configured properties only   got true, wanted false
+FAIL  contacts were read with configured properties only               got true, wanted false
+FAIL  every HubSpot call carried the connection's token                got true, wanted false
+FAIL  the same delivery again → 200                                    got 200, wanted 500
+FAIL  …written once: still four events                                 got 4, wanted 8
+FAIL  …and no second read-back                                         got 9, wanted 10
+FAIL  …one deal row                                                    got 1, wanted 2
+FAIL  HubSpot down → still 200                                         got 200, wanted 500
+FAIL  …the event failed with http_503, one attempt, retried later      got ["failed","http_503",1,true], wanted ["processed",null,1,false]
+FAIL  HubSpot rate limit → still 200                                   got 200, wanted 500
+FAIL  …the event failed with rate_limited                              got "rate_limited", wanted null
+FAIL  HubSpot slower than the budget → 200 within about the budget     got [200,true], wanted [200,false]
+FAIL  …the event failed with timeout                                   got "timeout", wanted null
+FAIL  an event of another portal → 200                                 got 200, wanted 401
+FAIL  …recorded as ignored portal_mismatch                             got ["ignored","portal_mismatch"], wanted ["processed",null]
+FAIL  …and never read back                                             got 12, wanted 13
+FAIL  a database error before the commit → 500                         got 500, wanted 200
+FAIL  …and nothing of the request was written                          got 8, wanted 9
+FAIL  600 events in one request → 200                                  got 200, wanted 500
+FAIL  …all 600 recorded (two batches of at most 500)                   got 600, wanted 500
+FAIL  …contacts the CMA does not hold are ignored without a read       got [600,0], wanted [0,0]
+FAIL  an association removal: deal→contact removed                     got true, wanted false
+FAIL  privacy deletion: the contact cleared, refs gone                 got [null,true,0], wanted ["GB",false,2]
+FAIL  privacy deletion: the call's hash cleared                        got null, wanted "6bda30c73c8fea25652f9ffaa6cae7956ab640ea38760f82b7e88c387f88d3e7"
+FAIL  a deal deletion marks the record deleted                         got true, wanted false
+FAIL  a deal created now → 200                                         got 200, wanted 500
+FAIL  …one alert written, delivered to the two holders of leads.accept, with the record link got [1,"alert","deal","4100000007",2,1,"https://app.example.com/contacts/9, wanted [0,"alert","deal","4100000007",1,0,null]
+FAIL  …the alert's title and body hold the configured words, never a deal name got ["New deal",false], wanted ["must not be read",true]
+FAIL  the same delivery again → no second alert                        got [200,1], wanted [200,2]
+FAIL  a changed event (the shape of reconcile and backfill) → no alert got [200,1], wanted [200,2]
+FAIL  a created event for a deal older than the age limit → no alert   got 1, wanted 2
+FAIL  a deal created now with an owner → 200                           got 200, wanted 500
+FAIL  …one assignment alert, urgent, to the owner's person only        got [1,"New deal assigned to you","urgent","7100000001",["01a142e2-be86-75, wanted [0,"New deal assigned to you","urgent","7100000001",["01a142e2-be86-75
+FAIL  …next to the created alert of the first rule                     got 2, wanted 1
+FAIL  the owner changed → 200                                          got 200, wanted 500
+FAIL  …one more assignment alert, to the new owner; the same change again adds nothing got [2,"7100000002",["01a142e2-bee8-76e7-b152-6872b56a32ac"],200,2], wanted [1,"7100000002",["01a142e2-bee8-76e7-b152-6872b56a32ac"],200,3]
+FAIL  the automation route without a bearer → 401                      got 401, wanted 200
+FAIL  …with a wrong bearer → 401                                       got 401, wanted 200
+FAIL  …the HubSpot connection's key on /automation → 404               got 404, wanted 200
+FAIL  …a body without messages → 400 with a code                       got "messages_1_to_50", wanted undefined
+FAIL  …a message to the person behind a CRM owner id → 200, one recipient got [200,1,0], wanted [200,2,0]
+FAIL  …stored as an urgent announcement with the record link, delivered to that person got ["announcement","urgent","https://app.example.com/contacts/9000001/rec, wanted ["alert","urgent",null,["01a142e2-be86-75ac-8c20-fec4449390f2"]]
+FAIL  …one refused (nobody) and one sent in the same request           got [200,[{"index":0,"code":"invalid"}],1], wanted [200,[],2]
+FAIL  tenant one's secret on tenant two's key → 401                    got 401, wanted 200
+FAIL  tenant two's own signed event → 200                              got 200, wanted 401
+FAIL  tenant two's record lives in tenant two                          got ["01a142e2-b82b-7cb0-b0ee-ed0e9fca5c5b"], wanted ["01a142e2-b813-7c67-b9d5-9449aa801a2b"]
+FAIL  tenant two's read-back used tenant two's token                   got "Bearer fixture-token-two", wanted "Bearer fixture-token-one"
+FAIL  tenant one cannot see tenant two's records                       got 0, wanted 1
+FAIL  tenant one's records unchanged by tenant two                     got 4, wanted 5
+FAIL  no phone number anywhere in the event, call or record rows       got false, wanted true
+FAIL  the logs hold no number, token, secret or contact id             got [false,false,false,false], wanted [true,true,true,true]
+FAIL  header names are logged (INGEST_LOG_HEADER_NAMES=1), values are not got [true,false], wanted [false,true]
+FAIL  no row of another tenant written by this run (any audited table) got [], wanted ["ingest_event:1"]
+
+ALL 80 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+-- audited changes since the run started, in tenants that existed before it (by login and table):
+ slug | actor_login | table_name | action | count 
+------+-------------+------------+--------+-------
+(0 rows)
+
+-- this run's connections (its two tenants were created after the start):
+       slug        |  adapter   |  status  
+-------------------+------------+----------
+ flow-b23e5d60-one | aircall    | inactive
+ flow-b23e5d60-one | automation | inactive
+ flow-b23e5d60-one | hubspot    | inactive
+ flow-b23e5d60-two | hubspot    | inactive
+(4 rows)
+

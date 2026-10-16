@@ -226,7 +226,7 @@ It creates two throwaway tenants (`email-<run>-one`, `email-<run>-two`), polls a
 ```bash
 cma_db dev && cd ~/cma/ingest && CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=$(gcloud config get-value account) CMA_DB_SET_ROLE=cma_app INGEST_FLOW_ADMIN_USER=$(gcloud config get-value account) node verify/email-flow.mjs | tail -3; cd ~/cma
 ```
-Expected: `connected to cma as martin@pulse4all.com`, then the last checks and `ALL 33 PASS` (32 before B17b.1). With `--provoke` at the end of the `node` command: `ALL 33 PROVOKED CHECKS FAILED, as they must`. A `FAIL` on I1 names the tables written outside the run's tenants (`sync_run:2`, …): send it to me. A `FAIL` on F1 or F2 means the database's words logic differs from the ingest's on a shared fixture (its line names the case): send it to me.
+Expected: `connected to cma as martin@pulse4all.com`, then the last checks and `ALL 33 PASS` (32 before B17b.1). With `--provoke` at the end of the `node` command: `ALL 33 PROVOKED CHECKS FAILED, as they must`. A `FAIL` on I1 names the tables written outside the run's tenants (`sync_run:2`, …): send it to me. A `FAIL` on A1 or B3 alone, with every other check passing, can be dev's scheduled poll serving the run's own test connection mid-run (README, Open decisions): run it again. A `FAIL` on F1 or F2 means the database's words logic differs from the ingest's on a shared fixture (its line names the case): send it to me.
 
 ## 8. Read-only counts
 

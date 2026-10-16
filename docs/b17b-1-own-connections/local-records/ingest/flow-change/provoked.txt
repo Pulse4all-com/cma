@@ -1,0 +1,516 @@
+$ node verify/signature.mjs --provoke
+verify/signature.mjs  (--provoke: every check must FAIL)
+
+FAIL  signV3 equals the documented construction                        got "3A3HP6wNx19p9aIlUtrpGv7a7ukK/KMwD3qBXAMsoIE=", wanted "x"
+FAIL  a valid v3 signature is accepted                                 got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  the method is part of the signature                              got "bad_signature", wanted "ok"
+FAIL  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a timestamp 6 minutes old is refused                             got {"ok":false,"reason":"stale_timestamp"}, wanted {"ok":true}
+FAIL  a timestamp 6 minutes ahead is refused                           got {"ok":false,"reason":"stale_timestamp"}, wanted {"ok":true}
+FAIL  a timestamp 4 minutes old is accepted                            got {"ok":true}, wanted {"ok":false,"reason":"stale_timestamp"}
+FAIL  a tampered body is refused                                       got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a wrong URI is refused                                           got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a query string is part of the URI                                got false, wanted true
+FAIL  one matching URI among the candidates is enough                  got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  a missing signature header is refused                            got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a missing timestamp header is refused                            got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a non-numeric timestamp is refused                               got {"ok":false,"reason":"bad_timestamp"}, wanted {"ok":true}
+FAIL  an empty secret is refused                                       got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a v1-style signature (hex SHA-256) is refused                    got false, wanted true
+FAIL  HubSpot's decoded characters in the URI                          got "https://ingest.example.com/hubspot/key:a/b@c?q=,;", wanted "https://ingest.example.com/hubspot/key%3Aa%2Fb%40c?q=%2C%3B"
+FAIL  a signature over the decoded URI is accepted                     got true, wanted false
+
+ALL 18 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/mapping.mjs --provoke
+verify/mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  one canonical event per webhook event                            got 10, wanted 9
+FAIL  event key is hs:<eventId>                                        got "hs:3000000101", wanted "3000000101"
+FAIL  deal creation → created deal                                     got ["created","deal","4100000001"], wanted ["created","deal","0"]
+FAIL  occurredAt in ISO 8601                                           got "2026-10-10T09:00:00.000Z", wanted 1760086800000
+FAIL  attempt is attemptNumber + 1                                     got 2, wanted 1
+FAIL  property change → changed with the property name                 got ["changed","dealstage"], wanted ["changed",null]
+FAIL  call creation → created crm_call                                 got ["created","crm_call"], wanted ["created","call"]
+FAIL  contact→call association: the call is read back                  got ["associated","crm_call","4200000001",null], wanted ["associated","contact","4300000001",null]
+FAIL  deal→company association is not kept                             got "association_not_kept", wanted undefined
+FAIL  merge → merged on the surviving id, merged ids kept              got ["merged","4300000001",["4300000002"]], wanted ["merged","4300000002",[]]
+FAIL  deletion → deleted ticket                                        got ["deleted","ticket"], wanted ["changed","ticket"]
+FAIL  restore → restored deal                                          got "restored", wanted "created"
+FAIL  another portal → ignored portal_mismatch                         got "portal_mismatch", wanted undefined
+FAIL  events of this portal are not ignored                            got 8, wanted 10
+FAIL  no property value is kept (ids only)                             got false, wanted true
+FAIL  no acting user is kept                                           got false, wanted true
+FAIL  raw keeps the event id and subscription                          got ["3000000101","object.creation"], wanted [null,null]
+FAIL  contact.privacyDeletion → deleted contact, privacy flag          got ["deleted","contact","4300000001",true], wanted ["deleted","contact","4300000001",null]
+FAIL  deal.creation (object-named) → created deal                      got ["created","deal",3], wanted ["created","other",1]
+FAIL  DEAL_TO_CONTACT removal → associated deal, removal noted         got ["deal","4100000004",true,"4300000003"], wanted ["contact","4300000003",false,null]
+FAIL  an object (not an array) body is one event                       got 1, wanted 0
+FAIL  an event without an id or object is kept as malformed            got "malformed", wanted undefined
+FAIL  a company event is not kept                                      got "object_not_kept", wanted undefined
+FAIL  kept association direction: deal → contact                       got {"fromType":"deal","fromId":"2","toType":"contact","toId":"1"}, wanted null
+FAIL  deal properties: structural plus configured only                 got ["amount","closedate","createdate","deal_currency_code","dealstage","h, wanted ["dealname"]
+FAIL  contact properties: configured only                              got ["contact_country","contact_language","contact_shopify_id_1","contact_, wanted ["email"]
+FAIL  deal → record ids, pipeline, stage, owner                        got ["4100000001","p-sales","s-new","7100000001"], wanted ["4100000001",null,null,null]
+FAIL  record amount and currency from the mapping                      got ["1200.50","eur"], wanted [null,null]
+FAIL  no market property mapped: the contact's country                 got ["uk","en"], wanted [null,null]
+FAIL  record raw holds requested properties only                       got false, wanted true
+FAIL  record times                                                     got ["2026-10-10T09:00:00.000Z","2026-10-10T09:01:00.000Z"], wanted [null,null]
+FAIL  a mapped market property wins over the contact                   got null, wanted "GB"
+FAIL  contact → country, language and two ref slots                    got ["NL","nl",{"shopify":[null,"6000000002"]}], wanted ["NL","nl",{"shopify":["6000000002"]}]
+FAIL  primary contact: the labelled one                                got "12", wanted "9"
+FAIL  primary contact: the held one when still associated              got "12", wanted "9"
+FAIL  primary contact: else the lowest id                              got "9", wanted "12"
+FAIL  association diff: new added, gone removed                        got [{"fromType":"deal","fromId":"1","toType":"contact","toId":"2","remove, wanted []
+
+ALL 37 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/hash.mjs --provoke
+verify/hash.mjs  (--provoke: every check must FAIL)
+
+FAIL  international format → E.164                                     got "+442000000001", wanted "+44 20 0000 0001"
+FAIL  national format with region GB → E.164                           got "+442000000001", wanted null
+FAIL  00 prefix with region GB → E.164                                 got "+442000000001", wanted null
+FAIL  national format with region NL → E.164                           got "+31200000001", wanted "+442000000001"
+FAIL  the hash is HMAC-SHA256(pepper, E.164) in hex                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted "x"
+FAIL  national and international formats hash the same                 got true, wanted false
+FAIL  spaces, dashes and brackets do not change the hash               got true, wanted false
+FAIL  another region reads a national number differently               got false, wanted true
+FAIL  a different pepper gives a different hash                        got false, wanted true
+FAIL  another number gives another hash                                got false, wanted true
+FAIL  a national number without a region gives no hash                 got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  too short to be a number gives no hash                           got null, wanted "x"
+FAIL  text gives no hash                                               got null, wanted "x"
+FAIL  no pepper gives no hash                                          got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  a lower-case region is not used                                  got null, wanted "+442000000001"
+FAIL  the hash is 64 lower-case hex characters                         got true, wanted false
+FAIL  an outbound call hashes the number it called                     got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  no digits of either number remain in the call                    got false, wanted true
+FAIL  an inbound call hashes the number that called                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  a call of unknown direction gets no hash                         got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  an order's own phone (national, the store's market GB) hashes like the call got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  an order without a phone takes its customer's                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  the order's phone comes before its customer's                    got "ef4e925fc1bf61e9d3a21c749481f0f35411901b8457c442409fec506fadc8ce", wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  a customer's phone hashes like the call                          got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00", wanted null
+FAIL  Phone withheld by the store → no hash, nothing fails             got null, wanted "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+FAIL  no form of the number remains in the order or the customer       got [], wanted ["+442000000001"]
+
+ALL 26 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/forms.mjs --provoke
+verify/forms.mjs  (--provoke: every check must FAIL)
+
+FAIL  host lower-cased, path without query or fragment                 got ["www.example.com","/nl/aed-kopen"], wanted ["WWW.Example.com","/nl/aed-kopen?utm_source=google"]
+FAIL  the five UTM parameters parsed                                   got {"source":"google","medium":"cpc","campaign":"autumn","term":"aed","co, wanted {}
+FAIL  other query parameters (click id, email) dropped                 got false, wanted true
+FAIL  no email anywhere in the parsed page                             got false, wanted true
+FAIL  a UTM value cut at 200 characters                                got 200, wanted 300
+FAIL  an address without UTM: an empty utm and path /                  got {}, wanted {"source":null}
+FAIL  not a URL → nothing                                              got {"host":null,"path":null,"utm":{}}, wanted {"host":"not a url","path":null,"utm":{}}
+FAIL  a javascript: address → nothing                                  got null, wanted "alert(1)"
+FAIL  the email field is the field of type email                       got "work_email", wanted "email"
+FAIL  …else a contact field named email                                got "email", wanted null
+FAIL  …else none                                                       got null, wanted "email"
+FAIL  the catalog item holds id and name only                          got {"formId":"11111111-0000-0000-0000-000000000001","name":"Request a quo, wanted {"formId":"11111111-0000-0000-0000-000000000001"}
+FAIL  the submitted email, trimmed, for the search                     got "someone.invented@example.com", wanted null
+FAIL  no email field → no email                                        got null, wanted "someone.invented@example.com"
+FAIL  a value that is not an email → no email                          got null, wanted "nope"
+FAIL  kept values: only the configured kept fields                     got {"product_interest":"AED Plus"}, wanted {"product_interest":"AED Plus","firstname":"Invented"}
+FAIL  kept values never hold the email field, even when configured     got {"product_interest":"AED Plus"}, wanted {"product_interest":"AED Plus","work_email":"someone.invented@example.
+FAIL  no kept fields → no kept values                                  got {}, wanted {"firstname":"Invented"}
+FAIL  the item: ids, time, host, path, UTM, contact, kept values       got {"sourceId":"c0000000-0000-0000-0000-000000000001","formId":"11111111-, wanted {}
+FAIL  the item holds no email, no name, no phone number                got [false,false,false,false], wanted [false,true,true,true]
+FAIL  an unresolved contact carries its resolution, no id              got "ambiguous", wanted "resolved"
+FAIL  stops at the cursor (time and conversion id)                     got ["c5","c4","c3b"], wanted ["c5","c4","c3b","c3"]
+FAIL  …and says it reached it                                          got true, wanted false
+FAIL  a submission in the cursor's millisecond with another id is new  got ["c5","c4"], wanted ["c5","c4","c3"]
+FAIL  an older submission than the cursor stops too                    got ["c5","c4","c3b","c3"], wanted ["c5"]
+FAIL  the first poll stops at the start date                           got ["c5","c4","c3b","c3","c2"], wanted ["c5","c4","c3b","c3","c2","c1"]
+FAIL  a page entirely newer than the cursor is not reached             got false, wanted true
+FAIL  entries without an id or a time are skipped                      got ["c9"], wanted ["x","c9"]
+FAIL  the new cursor is the newest submission read                     got {"at":1791623100000,"id":"c5"}, wanted {"at":1791622980000,"id":"c3"}
+FAIL  nothing new keeps the old cursor                                 got {"at":1791622980000,"id":"c3"}, wanted null
+FAIL  the search body: modified time between from and to, ascending, ids only got {"filterGroups":[{"filters":[{"propertyName":"hs_lastmodifieddate","op, wanted {}
+FAIL  a backfill body asks the created time and the version (modified time) only got ["createdate","hs_lastmodifieddate"], wanted ["createdate","dealname"]
+FAIL  10,100 results all listed across the 10,000-result window        got 10100, wanted 10000
+FAIL  …by starting a new query at the last value                       got 2, wanted 1
+FAIL  …never asking past result 10,000 in one query                    got true, wanted false
+FAIL  a synthetic event: key by object, id and version; kind changed   got ["sync:deal:4100000001:2026-10-10T09:00:00.000Z","changed","cma.reconc, wanted []
+FAIL  the same object and version give the same key (read once)        got "sync:deal:4100000001:2026-10-10T09:00:00.000Z", wanted "other"
+FAIL  arguments: --connection must be a uuid                           got true, wanted false
+FAIL  arguments: --from must be a date                                 got true, wanted false
+FAIL  arguments: an unknown argument is refused                        got true, wanted false
+FAIL  arguments: --lookback-minutes is a number                        got {"lookback-minutes":10}, wanted {"lookback-minutes":"10"}
+
+ALL 41 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/aircall-token.mjs --provoke
+verify/aircall-token.mjs  (--provoke: every check must FAIL)
+
+FAIL  the right token is accepted                                      got {"ok":true}, wanted {"ok":false,"reason":"bad_token"}
+FAIL  a wrong token of the same length is refused                      got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  a missing token is refused                                       got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  an empty token is refused                                        got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a token that is not a string is refused                          got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a shorter token (a prefix of the right one) is refused           got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  a longer token (the right one plus a character) is refused       got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  the token inside data does not count                             got {"ok":false,"reason":"missing_token"}, wanted {"ok":true}
+FAIL  a body that is not JSON is refused                               got {"ok":false,"reason":"not_json"}, wanted {"ok":true}
+FAIL  a JSON array is refused                                          got {"ok":false,"reason":"not_json"}, wanted {"ok":true}
+FAIL  an empty secret refuses everything                               got {"ok":false,"reason":"bad_token"}, wanted {"ok":true}
+FAIL  sameToken: different lengths are false without a compare         got false, wanted true
+FAIL  sameToken: multi-byte characters compare by bytes                got false, wanted true
+FAIL  the adapter accepts its webhook's token                          got {"ok":true}, wanted {"ok":false}
+FAIL  the adapter refuses another token                                got false, wanted true
+FAIL  an unreadable signing secret throws SecretUnavailable (the server answers 500) got "SecretUnavailable", wanted null
+FAIL  verify.mjs imports timingSafeEqual from node:crypto              got true, wanted false
+FAIL  …calls it on the two buffers                                     got true, wanted false
+FAIL  …after the length check                                          got true, wanted false
+FAIL  …and never compares a token with === or !==                      got false, wanted true
+
+ALL 20 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/aircall-mapping.mjs --provoke
+verify/aircall-mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  the six events are the six of the subscription                   got ["call.created","call.answered","call.ended","call.tagged","call.untag, wanted []
+FAIL  each of the six → its key ac:<event>:<call id>:<timestamp>       got ["ac:call.created:9100000001:1791622801","ac:call.answered:9100000001:, wanted []
+FAIL  …kinds: created, then changed for the other five                 got ["created","changed","changed","changed","changed","changed"], wanted ["created","changed","changed","changed","changed","deleted"]
+FAIL  …object telephony_call with the call's id, the event as source type got "telephony_call:9100000001:call.ended", wanted "telephony_call:9100000001:call.created"
+FAIL  …occurred at the event's timestamp (UNIX seconds)                got "2026-10-10T09:00:01.000Z", wanted "1970-01-21T17:40:22.801Z"
+FAIL  …none ignored                                                    got 0, wanted 6
+FAIL  …raw holds the event, resource and timestamp only                got {"event":"call.tagged","resource":"call","timestamp":1791622902}, wanted {"event":"call.tagged"}
+FAIL  …no token, number, name, email, comment or link in the events    got false, wanted true
+FAIL  …and no object in memory without the replay allowance            got false, wanted true
+FAIL  the same delivery again gives the same key (Aircall's retries are absorbed) got "ac:call.answered:9100000001:1791622809", wanted "ac:call.answered:9100000001:1791622809x"
+FAIL  another call event (call.hungup) → recorded as ignored, event_not_handled got ["telephony_call","event_not_handled"], wanted ["telephony_call",null]
+FAIL  another resource (user, contact) → ignored, event_not_handled, under its own type got ["user:event_not_handled","contact:event_not_handled"], wanted ["user:undefined","contact:undefined"]
+FAIL  …and the contact's name, number and email are not in the event   got false, wanted true
+FAIL  a call event without a call id → ignored, malformed              got "malformed", wanted undefined
+FAIL  a call event without a timestamp keeps a stable key              got "ac:call.ended:5:none", wanted "ac:call.ended:5:"
+FAIL  a body that is not one object is refused (the server answers 400) got "refused", wanted "mapped"
+FAIL  with the replay allowance the event holds its own call in memory got ["replay",9100000001,"2026-10-10T09:01:41.000Z"], wanted [null,null,null]
+FAIL  the adapter attaches it only when INGEST_ALLOW_REPLAY=1          got [false,true], wanted [true,true]
+FAIL  replay is on only with INGEST_ALLOW_REPLAY=1 and the setting     got [true,true,false,false], wanted [false,false,false,false]
+FAIL  without the variable the setting does nothing (a prod-configured service) got false, wanted true
+FAIL  a call → direction, status, times (UNIX → ISO), duration         got ["outbound","done","2026-10-10T09:00:00.000Z","2026-10-10T09:00:08.000, wanted []
+FAIL  …the user and the line as ids only, archived, the version        got ["9200000001","9300000001",false,"2026-10-10T09:02:00.000Z"], wanted []
+FAIL  …the other party's number as HMAC(pepper, E.164)                 got "52f0dbac3bc223fcd7e1c5a538e3ed1f9cbfd18dfe48271308bae6a737846fce", wanted null
+FAIL  …its whole current tag set                                       got [{"tagRef":"9400000001","name":"Interested"}], wanted []
+FAIL  …raw holds the allowlisted keys only                             got ["answered_at","archived","direction","duration","ended_at","started_a, wanted ["archived","cost","direction"]
+FAIL  …no number, name, email, comment, recording or link anywhere in the item got false, wanted true
+FAIL  …the line's number neither                                       got false, wanted true
+FAIL  a national number takes the region given (the line's market)     got "729c1f1db7dc49a1cbdcc944a82bebe9753d1080beac371235d8fefe1707ab98", wanted null
+FAIL  …another region reads it differently                             got [true,false], wanted [true,true]
+FAIL  an anonymous caller gets no hash                                 got null, wanted "x"
+FAIL  an unanswered inbound call: missed reason, no answer time        got ["inbound","agents_did_not_answer",null], wanted ["inbound",null,null]
+FAIL  a call without tags in the object leaves the tag set out (tags kept as they are) got false, wanted true
+FAIL  an empty tag list is the empty set (closes every tag)            got [], wanted null
+FAIL  tags: ids as refs, names, duplicates once, tagged_by left out    got [{"tagRef":"1","name":"A"}], wanted []
+FAIL  an object without a direction is not a call                      got null, wanted {}
+FAIL  rawOf drops nested objects and long strings                      got {"status":"done","duration":3}, wanted {"status":"done"}
+FAIL  unixIso: 0 and empty are no time                                 got [null,null,null], wanted ["1970-01-01T00:00:00.000Z",null,null]
+FAIL  the fingerprint ignores the number                               got true, wanted false
+FAIL  …and changes when a tag, the status or the archive changes       got [true,true,true], wanted [false,false,false]
+FAIL  a line → ref, name, digits (the company's own number)            got {"numberRef":"9300000001","name":"Test line GB","digits":"+44 20 0000 , wanted null
+FAIL  a tag → ref and name (colour left out)                           got {"tagRef":"9400000002","name":"Call back"}, wanted null
+FAIL  aircall_max_per_minute: default 60, numbers and digit strings 1 to 120 got [60,30,20,60,60], wanted [60,60,60,500,60]
+FAIL  …a pace of 30 per minute lets one call through every 2 seconds   got 2000, wanted 1000
+FAIL  …the same connection keeps its pace                              got true, wanted false
+FAIL  after a 429: until X-AircallApi-Reset (UNIX seconds)             got 30000, wanted 0
+FAIL  …in milliseconds too                                             got 20000, wanted 0
+FAIL  …60 seconds without the header, never more than 70               got [60000,70000], wanted [0,600000]
+FAIL  26 hours → two day windows, the second of 2 hours                got [24,2], wanted [26]
+FAIL  a backfill of 12 days → 12 windows                               got 12, wanted 1
+
+ALL 49 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/aircall-scripts.mjs --provoke
+verify/aircall-scripts.mjs  (--provoke: every check must FAIL)
+
+FAIL  webhook: another company's key → refused, nothing created        got [1,true,0,false], wanted [0,false,1,true]
+FAIL  webhook: a URL that is not https → usage, no API call            got [2,1], wanted [0,2]
+FAIL  webhook: a URL that is not /aircall/<key> → usage                got 2, wanted 0
+FAIL  webhook: the signing secret does not exist yet → refused, nothing created got [1,true,0], wanted [0,false,1]
+FAIL  webhook: created with the six events and the URL                 got [0,"https://ingest.example.com/aircall/key00000000000000000000000001",, wanted [1,null,[]]
+FAIL  …the token went to gcloud secrets versions add on standard input, exactly got "fixture-new-webhook-token-0001", wanted null
+FAIL  …the output names the webhook id, the events and the setting to add got [true,true,true], wanted [false,false,false]
+FAIL  …and never the token or the API key                              got false, wanted true
+FAIL  webhook: a second run for the same URL → refused, prints the existing id, nothing created got [1,true,1,true], wanted [0,false,2,false]
+FAIL  …nothing stored a second time                                    got "fixture-new-webhook-token-0001", wanted "fixture-new-webhook-token-0001fixture-new-webhook-token-0001"
+FAIL  webhook --list: the webhook with active and events, marked for --url, no token got [0,true,false], wanted [1,false,true]
+FAIL  webhook: another connection's URL is its own webhook             got [0,2,true], wanted [1,1,false]
+FAIL  …(a third, for the next check)                                   got 0, wanted 1
+FAIL  webhook --delete <id>: deleted                                   got [0,"deleted bbbbbbbb-0000-4000-8000-000000000003",false], wanted [1,"",true]
+FAIL  webhook: the token cannot be stored → exit 1 with the id to delete, the token not shown got [1,true,false], wanted [0,false,true]
+FAIL  users: one email statement per Aircall user with an email        got [0,3,"select cma.set_user_external_id(u.id, 'aircall_user', '920000000, wanted [1,4,""]
+FAIL  …the user without an email listed as not matched, by id          got true, wanted false
+FAIL  users --also-domain: the other domain's address matches too      got true, wanted false
+FAIL  users --via-owners: per match the statement through the HubSpot owner id, no email got [0,["select cma.set_user_external_id(x.user_id, 'aircall_user', '92000, wanted [1,[],true]
+FAIL  …on stderr the count matched and the ids not matched, no emails  got [true,true,false], wanted [false,false,true]
+FAIL  users --via-owners --also-domain: the partner address matches the owner on the other domain got true, wanted false
+FAIL  …the HubSpot owners read with the HubSpot token, the users with the Aircall key got [true,true], wanted [false,false]
+FAIL  …and no secret printed by any run                                got false, wanted true
+FAIL  replay --adapter aircall: one request per event, each 200        got [0,6,true], wanted [1,1,false]
+FAIL  …the token in the body, as Aircall sends it, and never printed   got [true,false], wanted [false,true]
+FAIL  …without --fresh the fixture's times as they are                 got 1791622801, wanted 1791622802
+FAIL  …with --fresh every time moved by the same amount, the first call starting now got [true,true,true], wanted [false,false,false]
+
+ALL 27 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/shopify-signature.mjs --provoke
+verify/shopify-signature.mjs  (--provoke: every check must FAIL)
+
+FAIL  signBody equals the documented construction                      got "5FP/d615qfTnJzdhweFBNhvZXeu2hSy9zQCtvSweKsg=", wanted "x"
+FAIL  a valid HMAC is accepted                                         got {"ok":true}, wanted {"ok":false,"reason":"bad_signature"}
+FAIL  the header name is X-Shopify-Hmac-Sha256 (as Node lower-cases it) got "x-shopify-hmac-sha256", wanted "x-shopify-hmac"
+FAIL  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  a body changed by one byte is refused                            got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  the raw bytes count: a re-serialised body (spaces) is refused    got "bad_signature", wanted "ok"
+FAIL  a missing header is refused                                      got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a header that is not a base64 SHA-256 digest is refused          got {"ok":false,"reason":"missing_header"}, wanted {"ok":true}
+FAIL  a hex digest (another encoding) is refused                       got false, wanted true
+FAIL  no secret: refused                                               got {"ok":false,"reason":"bad_signature"}, wanted {"ok":true}
+FAIL  surrounding whitespace in the header is tolerated                got {"ok":true}, wanted {"ok":false}
+FAIL  an empty body is signed as empty                                 got {"ok":true}, wanted {"ok":false}
+FAIL  sameDigest: equal strings                                        got true, wanted false
+FAIL  sameDigest: another length, no compare                           got false, wanted true
+FAIL  sameDigest: not strings                                          got false, wanted true
+FAIL  the compare uses crypto.timingSafeEqual                          got true, wanted false
+FAIL  …and no plain equality on the digest                             got false, wanted true
+
+ALL 17 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/shopify-mapping.mjs --provoke
+verify/shopify-mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  orders/create → commerce_order, created, the order id            got ["commerce_order","created","7300000001"], wanted ["commerce_order","changed","7300000001"]
+FAIL  the key is sh:<X-Shopify-Webhook-Id> (Shopify's duplicate key)   got "sh:b54557e4-bdd9-4b37-8a5f-bf7d70bcd043", wanted "sh:98880550-7158-44d4-b7cd-2c97c8a091b5"
+FAIL  occurred at X-Shopify-Triggered-At                               got "2026-10-13T08:00:01.123Z", wanted "2026-10-13T08:00:00.000Z"
+FAIL  raw holds the topic, the delivery's ids, its time and version only got {"topic":"orders/create","eventId":"98880550-7158-44d4-b7cd-2c97c8a091, wanted {}
+FAIL  nothing of the body beyond the id reaches the event              got false, wanted true
+FAIL  the seven topics and their kinds                                 got {"customers/create":"commerce_customer:created","customers/update":"co, wanted {}
+FAIL  the same seven as subscription topics                            got ["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_CREA, wanted []
+FAIL  another shop's domain → ignored portal_mismatch                  got "portal_mismatch", wanted undefined
+FAIL  the shop domain compared without case                            got undefined, wanted "portal_mismatch"
+FAIL  no shop domain → ignored portal_mismatch                         got "portal_mismatch", wanted undefined
+FAIL  another topic → ignored event_not_handled                        got "event_not_handled", wanted undefined
+FAIL  no id → ignored malformed                                        got "malformed", wanted undefined
+FAIL  the id from admin_graphql_api_id when id is missing              got "7100000009", wanted "unknown"
+FAIL  no webhook id → the event id with the topic                      got "sh:orders/create:98880550-7158-44d4-b7cd-2c97c8a091b5", wanted "sh:undefined"
+FAIL  neither → a digest of the body (a retry of the same body keys the same) got [true,true], wanted [false,false]
+FAIL  no Triggered-At → the body's updated_at                          got "2026-10-13T08:00:00.000Z", wanted "x"
+FAIL  a body that is not one JSON object → SyntaxError                 got ["SyntaxError","SyntaxError"], wanted ["ok","ok"]
+FAIL  ids: a number, a digit string and a gid                          got ["7300000001","7300000001","7300000001"], wanted []
+FAIL  ids: nothing else                                                got [null,null,null,null,null,null], wanted []
+FAIL  gid of an order and a customer                                   got ["gid://shopify/Order/1","gid://shopify/Customer/2"], wanted []
+FAIL  a first order: lifetime 1, one at or after → 0, exact            got {"prior":0,"exact":true}, wanted {"prior":1,"exact":true}
+FAIL  a customer with three older orders: lifetime 4, one at or after → 3 got {"prior":3,"exact":true}, wanted {"prior":0,"exact":true}
+FAIL  an older order read later: lifetime 5, three at or after → 2     got {"prior":2,"exact":true}, wanted {"prior":5,"exact":true}
+FAIL  a count that is a lower bound (AT_LEAST) → not exact             got {"prior":2,"exact":false}, wanted {"prior":2,"exact":true}
+FAIL  the search does not hold the order yet (0) → unknown             got {"prior":null,"exact":false}, wanted {"prior":1,"exact":true}
+FAIL  more at or after than the lifetime → 0, not exact                got {"prior":0,"exact":false}, wanted {"prior":0,"exact":true}
+FAIL  no lifetime count → unknown                                      got {"prior":null,"exact":false}, wanted {"prior":0,"exact":true}
+FAIL  the count's search: customer and creation at or after            got "customer_id:7100000001 AND created_at:>='2026-10-12T10:00:00Z'", wanted "customer_id:7100000001"
+FAIL  one count query, one alias per order                             got "query CmaPriorCounts($q0: String!, $q1: String!) { c0: ordersCount(qu, wanted ""
+FAIL  a customer: id, state, locale, count, amount, currency, times    got ["7100000001","ENABLED","nb-NO",4,"480.5","NOK","2026-01-02T03:04:05.0, wanted []
+FAIL  …its keys: no email, name or address, the phone as a hash        got ["amountSpent","createdAt","currency","locale","ordersCount","phoneHas, wanted ["email"]
+FAIL  …no email, number, name or address anywhere in it                got false, wanted true
+FAIL  an order: ids, name, times, test, currency, amounts (a missing tax amount is null) got ["7300000001","#1001","7100000001","2026-10-12T10:00:00.000Z",false,"G, wanted []
+FAIL  …the source name and the app id (the renewal lists' values)      got ["subscription_contract","580111"], wanted ["web",null]
+FAIL  …the landing page as host (lower case) and path, never its query or fragment got ["shop.example.com","/products/aed"], wanted ["Shop.Example.com","/products/aed?utm_source=news"]
+FAIL  …UTM from the visit's own tags, else the landing page's          got {"source":"news","medium":"email","campaign":"autumn"}, wanted {"campaign":"autumn"}
+FAIL  …the referrer's host only                                        got "www.google.com", wanted "https://www.google.com/search?q=aed"
+FAIL  …tags as text only, the prior count and its exactness            got [["aed","pads"],3,true], wanted [["aed","pads",7],null,false]
+FAIL  …its lines: id, sku, product and variant ids, quantity, unit price, currency got [{"lineId":"1","sku":"AED-1","productRef":"8000000001","variantRef":"8, wanted []
+FAIL  …no email, number, name, address or note anywhere in it          got false, wanted true
+FAIL  …lines that could not all be read → no lines key (the stored lines stay) got false, wanted true
+FAIL  …the last visit when there is no first one                       got "/b", wanted "/products/aed"
+FAIL  …a guest order: no customer id                                   got null, wanted "7100000001"
+FAIL  a line without an id is left out                                 got null, wanted {}
+FAIL  UTM: empty without a visit                                       got {}, wanted {"source":"x"}
+FAIL  the order query asks for no name, email, address or note (the order phone and the customer's phone and email are read, hashed or used in memory) got false, wanted true
+FAIL  the customer query reads the email and the phone only through their default fields got [true,true,false], wanted [false,false,true]
+FAIL  listings ask for ids and times only                              got true, wanted false
+FAIL  subscriptions are created with uri (callbackUrl is deprecated in 2026-10) got true, wanted false
+FAIL  the API version: the setting, else 2026-10                       got ["2027-01","2026-10","2026-10","2026-10"], wanted []
+FAIL  the route's budget: default 1500, the setting from 100 to 4000   got [1500,800,1500,1500,1500], wanted [3000,800,99,5000,3000]
+
+ALL 51 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/shopify-client.mjs --provoke
+verify/shopify-client.mjs  (--provoke: every check must FAIL)
+
+FAIL  five callers at once: one token minted, all get it               got [1,1], wanted [5,5]
+FAIL  …sent form-encoded with the client id and secret (the fake refuses otherwise) got "shpat_fixture_1", wanted null
+FAIL  a second call reuses the cached token                            got ["shpat_fixture_1",1], wanted ["shpat_fixture_2",2]
+FAIL  within five minutes of its expiry the token is minted again      got ["shpat_fixture_2",2], wanted ["shpat_fixture_1",1]
+FAIL  …six minutes before, it is still used                            got ["shpat_fixture_2",2], wanted ["shpat_fixture_3",3]
+FAIL  no client id setting → client_id_not_set                         got "client_id_not_set", wanted "ok"
+FAIL  another client id → the token request refused (token_http_400)   got "token_http_400", wanted "ok"
+FAIL  a missing client secret → client_secret_unavailable              got "client_secret_unavailable", wanted "ok"
+FAIL  a shop that is not <handle>.myshopify.com → shop_invalid         got "shop_invalid", wanted "ok"
+FAIL  a query answers its data, at version 2026-10 with the shop's token got [{"ok":true},true,true], wanted [null,false,false]
+FAIL  the bucket learns the shop's restore rate and maximum from throttleStatus got [100,1000], wanted [50,0]
+{"severity":"WARNING","message":"shopify throttled","connection":"c1","code":"rate_limited","available":3,"time":"2026-10-16T04:05:59.993Z"}
+FAIL  a THROTTLED answer → rate_limited, the estimate emptied          got ["rate_limited",0], wanted ["ok",1000]
+FAIL  a withheld protected field (ACCESS_DENIED) → the data with the field null, nothing fails got "ok", wanted "graphql_error"
+FAIL  another error without data → graphql_error                       got "graphql_error", wanted "ok"
+FAIL  a 401 → http_401 and the token dropped (the next call mints)     got ["http_401","ok",1], wanted ["ok","ok",0]
+FAIL  a 429 → rate_limited                                             got "rate_limited", wanted "ok"
+FAIL  waitFor: 300 points at 100 a second from empty → 3 seconds       got 3000, wanted 0
+FAIL  a webhook never waits past its budget: 300 points short → throttled at once got ["throttled",true], wanted ["ok",false]
+FAIL  …a short wait that leaves a second of its budget is waited for   got ["ok",true], wanted ["throttled",false]
+FAIL  a job waits for the refill instead (500 points at 1000 a second: about half a second) got ["ok",true], wanted ["throttled",false]
+FAIL  three callers sharing a bucket of 100 at 1000 a second queue behind each other (reserved before the wait) got true, wanted false
+
+ALL 21 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/shopify-scripts.mjs --provoke
+verify/shopify-scripts.mjs  (--provoke: every check must FAIL)
+
+FAIL  a URL that is not https → usage, nothing asked of Shopify        got [2,0], wanted [0,1]
+FAIL  a URL that is not /shopify/<key> → usage                         got 2, wanted 0
+FAIL  a URL with a query → usage (no personal data in the address)     got 2, wanted 0
+FAIL  a shop that is not <handle>.myshopify.com → usage                got 2, wanted 0
+FAIL  an API version that is not a release → usage                     got 2, wanted 0
+FAIL  another client id → the token refused, nothing created           got [1,true,0], wanted [0,false,7]
+FAIL  a secret that cannot be read → stops before Shopify              got [1,true], wanted [0,false]
+FAIL  create: the seven topics at the address, by the client credentials grant got [0,["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_C, wanted [1,[],false]
+FAIL  …the token request form-encoded at /admin/oauth/access_token, GraphQL at 2026-10 got [true,true], wanted [false,false]
+FAIL  …subscribed with uri (not the deprecated callbackUrl)            got true, wanted false
+FAIL  …prints ids and topics only, never the secret or the token       got [true,false], wanted [false,true]
+FAIL  a rerun creates nothing and lists the seven as existing          got [0,7,7], wanted [0,14,0]
+FAIL  a missing topic is created again, the others left                got [0,1,7], wanted [0,0,6]
+FAIL  --list: every subscription, those of --url marked                got [0,7,true,false], wanted [1,0,false,true]
+FAIL  --delete <numeric id> deletes that subscription                  got [0,false,"deleted gid://shopify/WebhookSubscription/7799999999"], wanted [1,true,""]
+FAIL  …a second delete of it fails with Shopify's message              got [1,true], wanted [0,false]
+FAIL  --delete with something that is not an id → usage                got 2, wanted 0
+FAIL  --source-names: counts per source name and app, the most frequent first got [0,"12\tsubscription_contract\t9900001\tInvented Subscriptions","5\twe, wanted [1,"",""]
+FAIL  …asks for the source name and the app only, created in the last --days days got [true,true], wanted [false,false]
+FAIL  --days beyond 60 → usage                                         got 2, wanted 0
+FAIL  two modes at once → usage                                        got 2, wanted 0
+
+ALL 21 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/outbox.mjs --provoke
+verify/outbox.mjs  (--provoke: every check must FAIL)
+
+FAIL  only enabled fields are planned with (currency disabled)         got ["id_1","id_2","store","orders","spent","country","language"], wanted ["id_1","id_2","store","orders","spent","country","currency","language
+FAIL  an empty contact: slot 1, store, totals, country and language written got {"id_1":"7100000001","store":"shop-gb","orders":"2","spent":"240","cou, wanted {}
+FAIL  …the result: ref written in slot 1                               got ["written",1], wanted ["written",2]
+FAIL  if_empty keeps an agent's country and language                   got [null,null,"not_empty","not_empty"], wanted ["GB","en",null,null]
+FAIL  if_empty: the same value is unchanged, not written               got "unchanged", wanted "not_empty"
+FAIL  slot 1 held by another id → slot 2                               got [null,"7100000001",2], wanted ["7100000001",null,1]
+FAIL  …and then no store or totals (they describe the customer in slot 1) got [null,null,null,"not_slot_one"], wanted ["shop-gb","2","240",null]
+FAIL  both slots held by other ids → nothing of the ref, slots_full    got [null,null,"slots_full","slot_taken","slot_taken"], wanted ["7100000001",null,"written",null,null]
+FAIL  the id already in slot 2 → present, nothing written for the ref, no totals got ["present",2,[]], wanted ["written",1,["id_1"]]
+FAIL  everything current → nothing to write (240 equals 240.00)        got [[],"present"], wanted [["spent"],"written"]
+FAIL  always writes only the difference                                got {"orders":"2","spent":"240"}, wanted {"store":"shop-gb","orders":"2","spent":"240"}
+FAIL  always overwrites a different store                              got "shop-gb", wanted undefined
+FAIL  no customer id → no store or totals, the codes by their mode     got [null,{"country":"GB"}], wanted ["written",{}]
+FAIL  a planned property is always one of the enabled fields           got true, wanted false
+FAIL  assertConfigured: a configured property passes                   got "accepted", wanted "property_not_configured"
+FAIL  assertConfigured: a property not in the fields is refused        got "property_not_configured", wanted "accepted"
+FAIL  assertConfigured: a disabled field's property is refused         got "property_not_configured", wanted "accepted"
+FAIL  assertConfigured: email is refused                               got "property_not_configured", wanted "accepted"
+FAIL  no enabled write-back field → the action fails writeback_not_configured got [{"ids":["a1"],"outcome":"failed","result":null,"error":"writeback_not, wanted []
+FAIL  an action this writer does not handle → action_not_supported     got ["action_not_supported"], wanted []
+
+ALL 20 PROVOKED CHECKS FAILED, as they must
+exit 0
+
+$ node verify/email-mapping.mjs --provoke
+verify/email-mapping.mjs  (--provoke: every check must FAIL)
+
+FAIL  settings: email_poll true, thread and origin properties, automated origins lower case got [true,"fixture_thread_id","fixture_origin",["automation_fixture","othe, wanted [false,null,null,[]]
+FAIL  settings: email_poll must be the boolean true (a string is off)  got false, wanted true
+FAIL  settings: a property name that is not a plain name is ignored    got null, wanted "hs thread; drop"
+FAIL  active rules only, in their order                                got ["billing","partner","reminder"], wanted ["orders","billing","partner","reminder"]
+FAIL  no rule: structural properties, thread and origin only           got ["fixture_origin","fixture_thread_id","hs_createdate","hs_email_direct, wanted ["fixture_origin","fixture_thread_id","hs_createdate","hs_email_direct
+FAIL  a subject and a sender domain rule: the subject and the sender's address asked for too got true, wanted false
+FAIL  only a subject rule: the sender's address is not asked for       got false, wanted true
+FAIL  never text, html, headers, recipients or names                   got [], wanted ["hs_email_text"]
+FAIL  EMAIL → out, sent, the owner's agent, billing, the CRM thread id got ["out","sent","agent","7100000001","billing","th-9000001"], wanted ["out","sent","agent",null,null,null]
+FAIL  INCOMING_EMAIL → in, other, customer without an owner, partner by the sender's domain got ["in","other","customer",null,"partner","th-9000001"], wanted ["in","other","agent","7100000001",null,"th-9000001"]
+FAIL  FORWARDED_EMAIL → forwarded, bounced, agent, no category         got ["forwarded","bounced","agent","7100000002",null,null], wanted ["out","other","agent","7100000002",null,null]
+FAIL  an automated origin → system, no owner; the reminder rule (billing excluded by its word) got ["out","sent","system",null,"reminder",null], wanted ["out","sent","agent","7100000002","billing",null]
+FAIL  an unknown direction is skipped (null)                           got null, wanted {"direction":"out"}
+FAIL  no owner → unknown; a thread id with @ dropped; scheduled        got ["out","scheduled","unknown",null,"partner",null], wanted ["out","scheduled","agent",null,"partner","bad@thread"]
+FAIL  statuses: the CMA's four in any case, else other                 got ["sent","bounced","failed","scheduled","other","other","other"], wanted ["sent","bounced","failed","scheduled","sending","other","other"]
+FAIL  an engagement item holds no subject, text, html, header, address or name got [], wanted ["something"]
+FAIL  raw holds direction, status and origin codes only                got {"direction":"EMAIL","status":"SENT","origin":"AUTOMATION_FIXTURE"}, wanted {}
+FAIL  without rules no category is computed                            got null, wanted "billing"
+FAIL  words: the 12 shared cases as cma.email_words_match answers them got [true,false,false,false,true,false,true,true,false,true,true,false], wanted [false,true,true,true,false,true,false,false,true,false,false,true]
+FAIL  categories: the 7 shared cases as cma.email_category_of answers them got ["billing","reminder","partner",null,null,null,"billing"], wanted ["billing","billing","billing","billing","billing","billing","billing"
+FAIL  the sender's domain: lower case, from a display address, never the local part got ["example.org",null,null,null], wanted ["customer.invented@example.org","y",null,null]
+FAIL  the owner map: user id → owner id, archived owners too           got ["7100000001","7100000003"], wanted ["7000000001",null]
+FAIL  actor prefixes: A agent, V and E customer, S system, B bot, I integration, others unknown got ["agent","customer","customer","system","bot","integration","unknown",, wanted ["agent","visitor","email","system","bot","integrator","ai","unknown",
+FAIL  an agent's owner id through its user id; an unmapped agent has none got [{"kind":"agent","ownerRef":"7100000002"},{"kind":"agent","ownerRef":n, wanted [{"kind":"agent","ownerRef":"7000000002"},{"kind":"agent","ownerRef":"
+FAIL  no actor result holds the actor id                               got false, wanted true
+FAIL  channel kinds from names                                         got ["email","chat","whatsapp","messenger","form","phone","other"], wanted ["email","email","email","email","email","email","email"]
+FAIL  inboxes: archived left out, a name holding an address replaced by the id got [{"inboxId":"1500000001","name":"Support inbox (test)"},{"inboxId":"15, wanted [{"id":"1500000001","name":"Support inbox (test)","type":"INBOX","arch
+FAIL  channels with their kind                                         got ["email","chat","whatsapp"], wanted ["other","other","other"]
+FAIL  channel accounts: ids only (no name, no delivery identifier)     got [["1600000001","1500000001"],["1600000002","1500000002"]], wanted [["1600000001","support.invented@example.com"]]
+FAIL  the map in parts under the cursor's 2 kB, read back whole        got [true,true,300], wanted [false,true,299]
+FAIL  owner pairs hold ids only (no email, no name)                    got "[[\"7000000001\",\"7100000001\"],[\"7000000002\",\"7100000002\"]]", wanted "[{\"id\":\"7100000001\",\"userId\":7000000001,\"email\":\"agent.one.i
+FAIL  an open thread: agent's owner id, contact, ticket                got ["open","7100000001","4300000103","4200000101",false,"1500000001","100, wanted ["open","A-7000000001","4300000103",null,false,"1500000001","1002",fal
+FAIL  a closed thread: its close time; the assignee an archived owner  got ["closed","7100000003","4300000102",null,false,"1500000002","1002",tru, wanted ["closed",null,"4300000102",null,false,"1500000002","1002",false]
+FAIL  a spam thread stored with is_spam, no agent                      got ["open",null,null,null,true,"1500000001","1002",false], wanted ["open",null,null,null,false,"1500000001","1002",false]
+FAIL  an agent without an owner leaves the thread's agent empty        got null, wanted "7000009999"
+FAIL  a thread held exactly so is not written again                    got true, wanted false
+FAIL  …and a change of agent is                                        got false, wanted true
+FAIL  thread 1: two messages (in from the customer, out by the agent), one assignment, the comment ignored got [[["in","customer",null,"other"],["out","agent","7100000001","sent"]],, wanted [[["in","customer",null,"other"]],[],0]
+FAIL  thread 1: the first message's category billing (its subject), the contact and inbox of the thread got ["billing","4300000103","1500000001"], wanted [null,null,null]
+FAIL  thread 2: moved inbox, assigned (agent to agent), closed; the welcome message ignored got [[["moved_inbox","agent","7100000002",null,"1500000001","1500000002"],, wanted [[],0]
+FAIL  thread 2: a visitor's message is the customer's, partner by its sender's domain got ["customer","partner"], wanted ["visitor",null]
+FAIL  thread 3: an unknown prefix → unknown; an assignment without assignee → no target got ["unknown","assigned",null,"bot"], wanted ["customer","assigned","agent","unknown"]
+FAIL  thread 4: closed then reopened; a failed outgoing message; an integration's incoming one got [["closed","reopened"],[["in","integration","other"],["out","agent","f, wanted [["closed","closed"],[]]
+FAIL  after the thread's mark only the later messages and events       got ["m1d0000000000000000000000000004","m1b0000000000000000000000000002"], wanted ["m1a0000000000000000000000000001"]
+FAIL  no message row or thread item holds a name, address, subject, text or raw actor id got [], wanted ["x"]
+FAIL  the cursor: the newest latest-message time and the threads at it got {"at":1792123263720,"ids":["2","3"]}, wanted {"at":1792122963720,"ids":["1"]}
+FAIL  …which the next page leaves out, a newer thread at that time kept got ["4"], wanted ["2","4"]
+FAIL  two country slots: countries per slot (slot 1 empty, slot 2 the dropdown), no single country got [[null,"United Kingdom"],null], wanted [null,"United Kingdom"]
+FAIL  one country slot keeps sending country                           got "GB", wanted null
+FAIL  a record's fallback country: the first non-empty slot            got "United Kingdom", wanted null
+FAIL  a contact item holds only the configured properties (no email, no name) got [], wanted ["x"]
+FAIL  poll 1: succeeded without an error                               got null, wanted "rate_limited"
+FAIL  poll 1: five engagements written (the unknown direction skipped) got ["4500000001","4500000002","4500000003","4500000004","4500000006"], wanted ["4500000001"]
+FAIL  poll 1: four threads, six inbox messages, seven events           got [4,6,7], wanted [4,0,0]
+FAIL  poll 1: the email's contact read once, after the emails; the one nothing points to never got [["4300000101","4300000102","4300000103","4300000104"],true,false], wanted [["4300000199"],false,true]
+FAIL  poll 1: contacts asked for the configured properties only        got ["contact_country","contact_language","country_dropdown"], wanted ["email","firstname"]
+FAIL  poll 1: the contact sent with its slots                          got [null,"United Kingdom"], wanted null
+FAIL  poll 1: associations email → contact, deal, ticket               got ["4500000001>contact:4300000101","4500000001>deal:4100000101","4500000, wanted []
+FAIL  poll 1: the search asked for no text, html, header or recipient  got [], wanted ["hs_email_text"]
+FAIL  poll 1: threads listed by latest message with the required filter, tickets included got true, wanted false
+FAIL  poll 1: catalogs written (two inboxes, three channels) and the owner map read once each way got [2,3,2], wanted [3,3,0]
+FAIL  poll 1: nothing written, kept in a cursor or logged holds a name, address, subject, text or raw actor id got [], wanted ["x"]
+FAIL  poll 1: the run's counts and outcomes are counts only            got true, wanted false
+FAIL  poll 2 (nothing changed): no message read again, nothing written got [0,0,null], wanted [4,3,null]
+FAIL  poll 2: the catalogs and the owner map not read again within the hour got 0, wanted 2
+FAIL  poll 3: a 429 on the search → the run's error rate_limited, the engagements' cursor unchanged got ["rate_limited",true], wanted [null,false]
+FAIL  poll 3: …and the conversations still ran: only thread 1's messages read, the new message stored got [["8800000001"],true], wanted [[],false]
+FAIL  poll 3: the warning carries the part and the code only           got true, wanted false
+FAIL  open check: a thread closed without a message is read again and stored closed got "closed", wanted "open"
+FAIL  open check: a thread gone at the source (404, also archived) is forgotten got [["8800000003"],["","true"]], wanted [[],[]]
+FAIL  check script: exit 0; the status values and a missing property named got [0,true,true], wanted [1,false,false]
+FAIL  check script: the thread and origin candidates, an option holding an address left out got [true,true,false], wanted [false,false,true]
+FAIL  check script: actor prefixes with HubSpot's types, counted       got [true,true,true,true,true,true], wanted [false,false,false,false,false,false]
+FAIL  check script: no actor id, name, address, subject or the token printed got [[],false], wanted [["x"],true]
+FAIL  check script: inboxes and channels by id and name, an inbox named by an address not shown got [true,true,true,true], wanted [false,false,false,false]
+FAIL  check script: refuses without its arguments (exit 2)             got 2, wanted 0
+
+ALL 76 PROVOKED CHECKS FAILED, as they must
+exit 0
+

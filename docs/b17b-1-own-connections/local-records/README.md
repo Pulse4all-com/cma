@@ -23,6 +23,19 @@ Each run's file ends with the audit rows it left in tenants that existed before 
 | `ingest/npm-test.txt` | `npm test` (the thirteen pure verifiers; `verify/lib.mjs` gained an export) | thirteen `ALL n PASS` (18, 37, 26, 41, 20, 49, 27, 17, 51, 21, 21, 20, 76), exit 0 |
 | `ingest/provoked-<name>.txt` | each of the thirteen with `--provoke` | every one `ALL n PROVOKED CHECKS FAILED, as they must` |
 
+## ingest, second run: `flow.mjs` sets its connections inactive and ends with the guard
+
+Claude Code's local runs later on 16 October 2026, at Martin's request, on a database built fresh as above (`69` `29 PASS, 0 FAIL`), without the bystander: these runs need no unfiltered job to prove their point. Files in `ingest/flow-change/`. Each `flow` run's file ends with the audited changes in tenants that existed before it started and with the status of its own connections.
+
+| File | What | Result |
+|---|---|---|
+| `flow-main-unchanged.txt` | `main`'s `verify/flow.mjs`, in a temporary copy deleted afterwards | `ALL 79 PASS`, and its four connections (HubSpot, Aircall and automation in tenant one, HubSpot in tenant two) stay `active` |
+| `flow.txt`, `flow-provoked.txt` | the fixed `verify/flow.mjs` | `ALL 80 PASS` (the guard is the 80th check), nothing in another tenant, its four connections `inactive`; `ALL 80 PROVOKED CHECKS FAILED, as they must` |
+| `guard-unfiltered-sweep.diff`, `guard-unfiltered-sweep.txt` | the fixed `verify/flow.mjs` with `runSweep({})` put in before the end, in a temporary copy deleted afterwards, run after `flow-main-unchanged.txt` left its tenants active | the guard fails as it must: `1 of 80 FAILED`. The sweep served the leftover tenants and read the fake HubSpot into tenant one (`crm_record`, `connection_pipeline` and `connection_stage` updated, events and runs written), because every run names its token secret the same. The leftover connections were set inactive afterwards |
+| `lint.txt` | `npx eslint` in `ingest/` | exit 0, no findings |
+| `npm-test.txt` | `npm test` | thirteen `ALL n PASS` (18, 37, 26, 41, 20, 49, 27, 17, 51, 21, 21, 20, 76), exit 0 |
+| `provoked.txt` | each of the thirteen with `--provoke` | every one `ALL n PROVOKED CHECKS FAILED, as they must` |
+
 ## docs
 
 | File | What | Result |
