@@ -979,7 +979,7 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 
 # 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
 
-Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 7 and the address of step 9: the migrations with their verifies, the data map, the ingest from the branch, the dev app, the backfill); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook steps 8 and 9) and 11.2 to 11.5 from `main`. The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 5: the migrations with their verifies, the data map, the ingest from the branch); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook step 8) and 11.2 to 11.5 from `main`. **Deferred until the upload route exists (backlog CMA-067; README, Decision log, 16 October 2026):** the app versions and their test tasks (morning runbook step 6, the second half of 11.2), the backfills of tasks (step 7, 11.3) and the task items of 11.4 (with step 9). Until then the nightly reconcile of the new ingest reads the tasks created or changed in its look-back, no task webhook arrives and deletions are not seen, so the task lists are incomplete (morning runbook, Task data before CMA-067). The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
 
 ## 11.1 The two migrations and their verifies (before the merge)
 
@@ -1012,9 +1012,9 @@ Expected: two rows `0008n`, `0008o`; `true`, `true`, `ticket_no_owner,ticket_no_
 
 Then write `records/0008n-prod-<date>/` and `records/0008o-prod-<date>/` from what Studio showed (ids, counts, times; nothing else), as the earlier records.
 
-## 11.2 The prod ingest from `main`, then the app with the task subscriptions
+## 11.2 The prod ingest from `main`, then the app with the task subscriptions (the app deferred, backlog CMA-067)
 
-After the merge and the `cma-web-main` build. The ingest first: the task webhooks and the backfill's `--object task` need an ingest that knows tasks. `--front` stays on every prod service deploy: without it the service's ingress would open the run.app address.
+After the merge and the `cma-web-main` build. The ingest first: the task webhooks and the backfill's `--object task` need an ingest that knows tasks. `--front` stays on every prod service deploy and never goes with `--jobs`: since 16 October 2026 `deploy.sh` refuses a prod service deploy without it (exit 2, before any gcloud call), because without it the ingress would go to `all`.
 
 **Terminal** (from the Chromebook, in `~/cma`, on `main` after the merge)
 ```bash
@@ -1022,13 +1022,11 @@ git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/
 ```
 Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; the jobs on the same image (`no build`), the schedules unchanged.
 
-The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded; the install is updated or reinstalled only when HubSpot asks or the subscriptions do not arrive. Where the upload runs is open (16 October 2026): CMA ingest prod lives in the live portal's Development area, so `hs project upload` needs a personal access key of the live portal, and README (Access rules, Credentials on the local terminal) never connects the live portal from Martin's own terminal; decide it before this block (the morning runbook, Open before steps 6 and 12). With the test account's login the upload line names the test account: answer `n`.
+**Deferred until the upload route exists (backlog CMA-067): the rest of 11.2.** The ingest deploy above runs now; the app version, its install and the test task below wait for CMA-067's workflow, which uploads the app (README, Decision log, 16 October 2026). Its own runbook then replaces the upload; the install and the test task stay as written.
 
-**Terminal** (in `~/cma`, on `main`; only where the upload was decided to run)
-```bash
-node hubspot/render.mjs prod --target-url "https://ingest.pulse4all.app/hubspot/<key>" && node hubspot/verify/render.mjs | tail -1 && cd hubspot/build/prod && hs project upload && cd ~/cma
-```
-Expected: `rendered prod: hubspot/build/prod`, `ALL 33 PASS`, the upload naming the live portal, build and deploy succeeding.
+The project template gained nine task subscriptions (creation, deletion, `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority`, association changes; 46 in all) and no new scope. A new app version is uploaded; the install is updated or reinstalled only when HubSpot asks or the subscriptions do not arrive. The upload runs through CMA-067's workflow from `main`, never with `hs project upload` on Martin's own terminal, whose `hs` holds the test account only (README, Access rules, Credentials on the local terminal).
+
+Expected of the upload: build and deploy of **CMA ingest prod** succeeding, its render checked (`hubspot/verify/render.mjs`, `ALL 33 PASS`).
 
 **Browser:** live portal → Development → Projects → CMA ingest prod → the app → Distribution → the Standard install. If HubSpot offers an update, accept it (no new scope is asked; the task subscriptions appear on the webhooks tab). If it offers no update or reinstall for this webhooks-only change, the upload is enough.
 
@@ -1044,7 +1042,9 @@ reset role;
 ```
 Expected: at least one `task | created` row (`received`, or `processed` once the sweep ran; it runs every minute). If no task event arrives within minutes, the subscriptions did not reach the install: reinstall through the **Reinstall URL** on the Distribution tab, as 15 October showed for the scopes, then create another test task. Check the token afterwards: it stays; if HubSpot shows a new one on the install's row → Show, store it with `put_secret p4a-cma-prod ingest-hubspot-subs-token` (on its own line).
 
-## 11.3 The backfill of tasks
+## 11.3 The backfill of tasks (deferred until the upload route exists, backlog CMA-067)
+
+**Deferred.** It runs after 11.2's app version: without the task webhooks the backfilled tasks would only change at the nightly reconcile, and a task deleted in HubSpot later would stay (a search sees no deletions).
 
 The backfill takes the connection's id (a uuid), not its key, and `--from` with a date (without it, `intake.start_date`).
 
@@ -1073,16 +1073,18 @@ Expected: counts; every status and type the portal uses, each `is_done` false an
 
 ## 11.4 The Sources settings
 
+Items 1, 2 and 4 need the task rows and wait with 11.3 (deferred, CMA-067); items 3 and 5 and the Exports settings run now.
+
 **Browser:** Workspace → Configuration → Sources → the HubSpot connection:
-1. Task statuses: tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
-2. Task types: tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
+1. Task statuses (deferred with 11.3): tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
+2. Task types (deferred with 11.3): tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
 3. Pipelines: a response time for a ticket pipeline that differs from the default of 240 business minutes; leave empty for the default.
-4. Settings: add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
+4. Settings (deferred with 11.3 and the morning runbook's step 9): add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
 5. The telephony connection: Unlinked calls check stays at its default (skip outbound calls never connected and never tagged) unless Arno wants every call checked.
 
 **Browser:** Configuration → Exports → Follow-up: the response time, the warning share, the age groups and the callback window as Arno and Kira want them (defaults 240, 75, `1,2,5`, 240).
 
-Expected: Reports → Follow-up shows the tickets with their response time in force, the tasks with their types and the Callback badge, and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
+Expected: Reports → Follow-up shows the tickets with their response time in force (and, after 11.3, the tasks with their types and the Callback badge), and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
 
 ## 11.5 Day one
 
@@ -1095,4 +1097,4 @@ select * from cma.follow_up_summary_of((select id from cma.tenant where slug = '
 select check_key, count(*) from cma.data_quality_of((select id from cma.tenant where slug = 'pulse4all-subscriptions')) where check_key in ('ticket_no_owner', 'ticket_no_market', 'crm_task_owner_unlinked', 'telephony_call_unlinked') group by 1 order by 1;
 reset role;
 ```
-Expected: the eight counts as the Live board shows them; the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).
+Expected: the eight counts as the Live board shows them, the task counts 0 or only the tasks the nightly reconcile read since 11.2's deploy (until 11.3); the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).

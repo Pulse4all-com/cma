@@ -2,9 +2,11 @@
 
 Read `NIGHT_NOTES.md` first (ten minutes: what was built, the one change from the brief's letter, the questions). N16-A (PR #141) is merged as 23fe766, and `main` is merged into this branch twice: in the morning at 23fe766 (N16-A, #140, #143) and in the afternoon at f516aee (#146: `deploy.sh prod` refuses a service deploy without `--front`; #147: your own Linux terminal for CMA work; #144: the B17b records), so this runbook is N16-B alone. Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux or his Linux machine, in `~/cma` unless stated; a step against prod, `p4a-cma-prod` or `cma-prod-pg`, from the Chromebook only, and so is a build, which runs in `p4a-cma-prod`), **Studio** (the instance named), **File** (a repository path). SQL and shell never share a block. Through the Auth Proxy the terminal runs only the data map's schema snapshot (step 4), whose output is schema; every query that reads rows runs in Studio (README, Where a command runs). Every step ends with what you should see.
 
-**Order matters.** Merging N16-B deploys `cma-web` to prod (trigger `cma-web-main`) and Welcome calls 0008o's functions on every load, so prod's `70` and `72` (then `02`) run **before** the merge (step 10, then 11); in dev the same, before the dev check. The ingest is deployed before the app version and the backfill in each environment (dev from this branch in step 5, prod from `main` in step 12): the task webhooks and the backfill's `--object task` need an ingest that knows tasks. The hand check on N16-B's web image (step 8) and the `record_url_task` setting (step 9's second part) follow the merge (step 11): the branch's web image has no build of its own (step 8).
+**Order matters.** Merging N16-B deploys `cma-web` to prod (trigger `cma-web-main`) and Welcome calls 0008o's functions on every load, so prod's `70` and `72` (then `02`) run **before** the merge (step 10, then 11); in dev the same, before the dev check. The ingest is deployed before the app version and the backfill in each environment (dev from this branch in step 5, prod from `main` in step 12): the task webhooks and the backfill's `--object task` need an ingest that knows tasks. The hand check on N16-B's web image (step 8) follows the merge (step 11): the branch's web image has no build of its own (step 8; README, Open decisions: a dev-only web build path, CMA-068).
 
-**Open before steps 6 and 12: where the HubSpot app is uploaded.** Both projects, CMA ingest dev and CMA ingest prod, live in the live portal's Development area, so `hs project upload` needs `hs` signed in with a personal access key of the live portal (`hubspot/README.md`, Render, upload, install, step 1). Since #147, README (Access rules, Credentials on the local terminal) keeps `hs` on your own terminal to the test account `149511908` and never connects the live portal from it. With that login the upload line names the test account: answer `n` (`hubspot/README.md`, step 3). Decide where the two uploads run before step 6 (README, Open decisions); this runbook does not change that rule.
+**Deferred until the upload route exists (backlog CMA-067; Martin, 16 October 2026).** HubSpot project uploads go through GitHub Actions with HubSpot's official project actions, the live portal's key a GitHub environment secret limited to `main` with a required approval (README, Decision log, 16 October 2026); that is not built in this pull request. Until it exists these steps wait, each marked below: step 6 (the dev app version and its test task), step 7 (the dev backfill of tasks), step 9 (the task address and `record_url_task`), and in step 12 the app version and test task of `PROD_RUNBOOK.md` 11.2, the backfill of 11.3 and the task items of 11.4. Everything else runs without them, in this order: steps 1 to 5, 10, 11, 8, 12 and 13. The follow-up pages need no task data: the leads and the tickets are complete, and the task table, the task tiles and Welcome's tasks overdue line show none or 0.
+
+**Task data before CMA-067.** Right after the merge prod has no task rows. The new ingest's nightly reconcile (02:30) reads tasks too, and the app's token reads them already (`hubspot/README.md`, no extra scope), so from the first reconcile after step 5 in dev and step 12 in prod the tasks created or changed in its 26-hour look-back arrive. Without the new app version no task webhook arrives, and a search sees no deletions, so until the app version and the backfill the task lists hold only the tasks changed since the deploy, a change shows the next morning, and a task deleted in HubSpot stays. Until then the task figures are incomplete (Data first).
 
 | Step | What | Elapsed |
 |---|---|---|
@@ -13,13 +15,13 @@ Read `NIGHT_NOTES.md` first (ten minutes: what was built, the one change from th
 | 3 | Dev: `72`, `02`, `73` normal and provoked; `41`, `53`, `69`, `71` again | 10 min |
 | 4 | Refresh `docs/datamap/schema.json` from dev on this branch, rebuild the index | 10 min |
 | 5 | The ingest in dev from this branch: service and jobs; health shows the branch's tag | 10 min |
-| 6 | Dev HubSpot app: render, upload; a test task reaches the ingest, else reinstall | 10 min |
-| 7 | Dev backfill of tasks; the counts | 10 min |
+| 6 | Deferred (CMA-067): the dev HubSpot app version; a test task reaches the ingest | 10 min |
+| 7 | Deferred (CMA-067): the dev backfill of tasks; the counts | 10 min |
 | 8 | After step 11: dev on the merge's image, a hand check of Follow-up, Welcome, the Live board, Sources, Exports | 20 min |
-| 9 | The task address for `record_url_task` in dev; set it after step 11 | 5 min |
+| 9 | Deferred (CMA-067): the task address for `record_url_task` in dev; set it | 5 min |
 | 10 | Prod, before the merge: point-in-time recovery on; `70` twice, `72`, `02`, the read-only check of 11.1; records | 20 min |
 | 11 | Merge N16-B; watch the `cma-web-main` build; Welcome in prod | 10 min |
-| 12 | Prod ingest from `main` (service with its front, jobs); app version (11.2); backfill (11.3); Sources and Exports settings (11.4); day one (11.5) | 40 min |
+| 12 | Prod ingest from `main` (service with its front, jobs); Sources and Exports settings without the task items (11.4); day one (11.5); the app version (11.2) and the backfill (11.3) deferred (CMA-067) | 25 min |
 | 13 | README to the project, the Gem's README, the backlog | 15 min |
 
 ---
@@ -52,7 +54,7 @@ run_migration () {  # usage: run_migration <env> <nn_migration.sql> <nn_verify.s
 ```
 Expected: `v22.…` (from `node -v`), no other output; `type cma_db run_migration` then prints both functions.
 
-`put_secret` (step 6, only when HubSpot shows a new token) is the function at the top of `docs/ingest/PROD_RUNBOOK.md` (Before you start): define it in the same tab and run each `put_secret` on its own line (`hubspot/README.md`).
+`put_secret` (step 6 once it runs, only when HubSpot shows a new token) is the function at the top of `docs/ingest/PROD_RUNBOOK.md` (Before you start): define it in the same tab and run each `put_secret` on its own line (`hubspot/README.md`).
 
 ## 1. N16-B: review and build
 
@@ -60,7 +62,7 @@ Expected: `v22.…` (from `node -v`), no other output; `type cma_db run_migratio
 ```bash
 cd ~/cma && gh pr checkout 142 && git log --oneline -10 && cd web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | tail -3 && npm run typecheck && npm run lint && npm run verify:copy && npm run verify:follow-up && npm run verify:configuration && npm run verify:reports; npm run verify:datamap; cd ~/cma && cd ingest && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run lint && node verify/mapping.mjs | tail -1 && node verify/deploy-script.mjs | tail -1; cd ~/cma && node hubspot/verify/render.mjs | tail -1
 ```
-Expected: the log starts with the afternoon's commits (this runbook for your own terminal, the layout verifier's fix, README's open decision on the HubSpot uploads), then the afternoon's merge of `main` (f1fc212, of f516aee, with #144, #147 and #146 under it) and the morning's runbook and fixes (e3b4047, 8f729a7); `copy: PASS (1601 keys, en and nl)`, `follow-up: PASS (25 checks)`, `ALL 92 PASS`, `ALL 75 PASS`; **`datamap: FAIL (10 problems)`** naming the three 0008n tables, the six 0008o views and the index (expected until step 4); `ALL 48 PASS` for the mapping, `ALL 10 PASS` for `deploy-script.mjs` (#146's guard, step 12), `ALL 33 PASS` for the render.
+Expected: the log starts with the afternoon's commits on the runbooks, README and `verify/layout.mjs` (the newest: the HubSpot uploads deferred, CMA-067), then the afternoon's merge of `main` (f1fc212, of f516aee, with #144, #147 and #146 under it); `copy: PASS (1601 keys, en and nl)`, `follow-up: PASS (25 checks)`, `ALL 92 PASS`, `ALL 75 PASS`; **`datamap: FAIL (10 problems)`** naming the three 0008n tables, the six 0008o views and the index (expected until step 4); `ALL 48 PASS` for the mapping, `ALL 10 PASS` for `deploy-script.mjs` (#146's guard, step 12), `ALL 33 PASS` for the render.
 
 ## 2. Dev: 0008n
 
@@ -104,7 +106,9 @@ cd ~/cma && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh dev 
 ```
 Expected: the tag first (today `f1fc212`, the afternoon's merge of `main`, which brought `ingest/verify/deploy-script.mjs` and its line in `ingest/package.json`; the code under `ingest/src/` is the night's, tested at `8f729a7`); the first deploy builds the image once (`gcloud builds submit …`) and ends with `health: {"ok":true,"version":"f1fc212"}` (the same tag); the second deploys the jobs on that image (`no build`) with the schedules unchanged.
 
-## 6. The dev HubSpot app
+## 6. The dev HubSpot app (deferred until the upload route exists, backlog CMA-067)
+
+**Deferred.** Skip this step until CMA-067's workflow exists: it uploads the app version, and its own runbook then replaces the upload below. The render, the install, the test task and the token check stay as written. Without this step no task webhook reaches dev; no other step that runs now needs it.
 
 **Terminal**
 ```bash
@@ -112,11 +116,7 @@ cd ~/cma && node hubspot/render.mjs dev --target-url "https://<dev ingest host>/
 ```
 Expected: `rendered dev: hubspot/build/dev`, `ALL 33 PASS`.
 
-**Terminal** (only where you decided the upload runs: see Open before steps 6 and 12 at the top; not with your own terminal's `hs` login of the test account)
-```bash
-cd ~/cma/hubspot/build/dev && hs project upload && cd ~/cma
-```
-Expected: the upload naming the live portal (if it names the test account, answer `n`), then the build and deploy of **CMA ingest dev** succeeding with both components.
+**The upload** runs through CMA-067's workflow, never with `hs project upload` on your own terminal, whose `hs` holds the test account only (README, Decision log, 16 October 2026). Expected, as `hubspot/README.md` step 3 says: the build and deploy of **CMA ingest dev** succeeding with both components.
 
 **Browser:** live portal → Development → Projects → CMA ingest dev → the app → Distribution → Test installs → the row of `CMA dev`. If HubSpot offers an update, accept it (no new scope; the webhooks tab lists nine `task` subscriptions among 46). If it offers no update or reinstall for this webhooks-only change, the upload is enough.
 
@@ -130,7 +130,9 @@ reset role;
 ```
 Expected: at least one `task | created` row (`received`, or `processed` once the sweep ran; it runs every minute). If no task event arrives within minutes, the subscriptions did not reach the install: reinstall through Distribution → Test installs → **Add test install(s)** → tick `CMA dev`, as 15 October showed for the scopes, then create another test task. Check the token afterwards: it stays; if HubSpot shows a new one on the install's row → Show, store it with `put_secret p4a-cma-dev ingest-hubspot-dev-token` (`hubspot/README.md`).
 
-## 7. The dev backfill of tasks
+## 7. The dev backfill of tasks (deferred until the upload route exists, backlog CMA-067)
+
+**Deferred.** Run it after step 6: without the task webhooks the backfilled tasks would only change at the nightly reconcile, and a task deleted in HubSpot later would stay (a search sees no deletions).
 
 The backfill takes the connection's id (a uuid), not its key, and `--from` with a date.
 
@@ -159,7 +161,7 @@ Expected: the dev portal's tasks counted, the statuses and types it uses, and `r
 
 ## 8. Dev on N16-B's web image: the hand check (after step 11)
 
-The branch's web image has no build of its own. The night's command for it (`gcloud builds submit --config cloudbuild.yaml --project=p4a-cma-prod --substitutions=_DEPLOY=false .`) is not to be run, in that form or another: `cloudbuild.yaml` has no `_DEPLOY` substitution, so Cloud Build refuses the build, and every run of that file ends in its `deploy` step, which rolls `cma-web` in the project it runs in, so the same command without the substitution would deploy prod's `cma-web` with the file's defaults (`_DATA_MODE=mock`, an empty `_IAP_AUDIENCE`) instead of the trigger's. Dev runs the image prod's build made (`docs/RUNBOOK.md` section 4), so this step follows step 11, with the merge's short SHA.
+The branch's web image has no build of its own. The night's command for it (`gcloud builds submit --config cloudbuild.yaml --project=p4a-cma-prod --substitutions=_DEPLOY=false .`) is not to be run, in that form or another: `cloudbuild.yaml` has no `_DEPLOY` substitution, so Cloud Build refuses the build, and every run of that file ends in its `deploy` step, which rolls `cma-web` in the project it runs in, so the same command without the substitution would deploy prod's `cma-web` with the file's defaults (`_DATA_MODE=mock`, an empty `_IAP_AUDIENCE`) instead of the trigger's. Dev runs the image prod's build made (`docs/RUNBOOK.md` section 4), so this step follows step 11, with the merge's short SHA (README, Open decisions: a dev-only web build path, CMA-068).
 
 **Terminal** (`docs/RUNBOOK.md` section 4, after step 11's build is green; the service proxy on port 8080 reaches the web app, not the database)
 ```bash
@@ -173,19 +175,21 @@ curl -s localhost:8080/api/health; echo
 Expected: the new revision serving 100 percent of traffic; then the health answer with `version` the merge's short SHA, auth `mock`, data `api`.
 
 **Browser** (Chrome at `http://localhost:8080/?as=manager`; ChromeOS forwards the Linux environment's localhost):
-1. Welcome: Needs attention with its lines (days not clocked out, leads past the target, tickets at risk or over, tasks overdue, missed callers); Waiting for you with a count.
+1. Welcome: Needs attention with its lines (days not clocked out, leads past the target, tickets at risk or over, tasks overdue, missed callers; tasks overdue 0 or only tasks the reconcile read, see Task data before CMA-067); Waiting for you with a count.
 2. The Live board: Follow-up now under the inbound tiles.
 3. Reports → Follow-up: the tiles, the three tables with the links, Per person; K, O and S filter; the page refreshes every 10 seconds.
 4. `?as=agent-two` → Welcome's Waiting for you → `/me/follow-up`.
-5. `?as=admin` → Configuration → Sources → the HubSpot connection: Task statuses and Task types with the counts from step 7; the Response time column on the ticket pipelines; Configuration → Exports → Follow-up.
+5. `?as=admin` → Configuration → Sources → the HubSpot connection: Task statuses and Task types empty, or only those of the tasks the nightly reconcile read since step 5 (step 7 is deferred); the Response time column on the ticket pipelines; Configuration → Exports → Follow-up.
 
-Expected: no error page; the counts on Welcome equal the tiles on Follow-up; an agent sees their own rows only.
+Expected: no error page; the counts on Welcome equal the tiles on Follow-up; an agent sees their own rows only; the task table empty or holding only tasks changed since step 5.
 
-## 9. The task address for `record_url_task`
+## 9. The task address for `record_url_task` (deferred until the upload route exists, backlog CMA-067)
+
+**Deferred.** The setting's preview and Follow-up's task links need task rows, which arrive in full with steps 6 and 7; run this step after them, on the merge's image (step 8).
 
 **Browser:** in `CMA dev`, open any task and copy its address. If it reads `https://app-eu1.hubspot.com/contacts/<portal id>/record/0-27/<task id>`, the template is `https://{app_host}/contacts/{account}/record/0-27/{id}` (with `app_host` set as for deals); if a task opens on its record's page instead, note the form and tell me (Open decisions).
 
-**Browser** (after step 11, on the merge's image of step 8): Sources → the connection → Settings → add `record_url_task` with that template → the preview shows a link for the newest task → Save settings.
+**Browser** (on the merge's image of step 8): Sources → the connection → Settings → add `record_url_task` with that template → the preview shows a link for the newest task → Save settings.
 
 Expected: Reports → Follow-up's task rows carry a link that opens the task.
 
@@ -207,9 +211,9 @@ Then `records/0008n-prod-<date>/` and `records/0008o-prod-<date>/` (and the dev 
 
 ## 11. Merge N16-B, watch the build
 
-**Browser:** merge PR #142 (squash) once steps 1 to 7, the address of step 9 and step 10 are green; watch the `cma-web-main` build; then workspace.pulse4all.app. Steps 8 and 9's setting follow, on dev with the merge's image.
+**Browser:** merge PR #142 (squash) once steps 1 to 5 and 10 are green (6, 7 and 9 are deferred, 8 follows the merge); watch the `cma-web-main` build; then workspace.pulse4all.app. Step 8 follows, on dev with the merge's image.
 
-Expected: the build green; Welcome loads with Needs attention and Waiting for you (counts or zero lines, no error); Reports → Follow-up in the rail after Speed to lead, its task table empty until step 12's backfill.
+Expected: the build green; Welcome loads with Needs attention and Waiting for you (counts or zero lines, no error); Reports → Follow-up in the rail after Speed to lead with its leads and tickets, its task table empty (prod has no task rows yet: Task data before CMA-067).
 
 **Terminal**
 ```bash
@@ -217,9 +221,9 @@ cd ~/cma && git switch -q main && git pull -q --ff-only && git log -1 --format=%
 ```
 Expected: `main`'s ingest tag, the squash commit's short sha (the same code as the branch's `f1fc212`).
 
-## 12. Prod: ingest from `main`, app version, backfill, settings, day one
+## 12. Prod: ingest from `main`, settings, day one (the app version and the backfill deferred)
 
-Before the app version and the backfill, as in dev. `--front` stays on every prod service deploy and never goes with `--jobs`, as `deploy.sh` requires since #146: a prod service deploy without `--front` stops before any gcloud call (exit 2), because without it the service's ingress would go to `all` and HubSpot's signatures over the public host would fail (`records/ingest-front-incident-2026-10-16`).
+The ingest first, as in dev; the app version and the backfill it comes before are deferred (CMA-067). `--front` stays on every prod service deploy and never goes with `--jobs`, as `deploy.sh` requires since #146: a prod service deploy without `--front` stops before any gcloud call (exit 2), because without it the service's ingress would go to `all` and HubSpot's signatures over the public host would fail (`records/ingest-front-incident-2026-10-16`).
 
 **Terminal** (from the Chromebook; on `main`)
 ```bash
@@ -227,7 +231,10 @@ bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-
 ```
 Expected: the image built once under `main`'s tag; `ingress: internal-and-cloud-load-balancing (front https://ingest.pulse4all.app: …)`, `health: {"ok":true,"version":"<main's tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; the jobs on the same image (`no build`), the schedules unchanged. A line `prod service deploy needs --front <host> (ingest.pulse4all.app); …` means `--front` was left out, and `--front goes with the service deploy, not --jobs` that it went on the jobs: nothing was deployed, run the line as it stands.
 
-Then `docs/ingest/PROD_RUNBOOK.md` 11.2 from its second block (its first block is this deploy; the app version, whose upload waits for the decision at the top; a reinstall only if a test task does not reach the ingest), 11.3 (the backfill by connection id and its counts), 11.4 (Sources: the done statuses, the callback type, the response time per pipeline, `record_url_task`, the Unlinked calls check; Exports: the four settings with Arno and Kira), 11.5 (day one).
+Then `docs/ingest/PROD_RUNBOOK.md`:
+- 11.2 after its first block (this deploy) and 11.3: deferred (CMA-067: the app version, the test task, the backfill of tasks).
+- 11.4 without its task items: on Sources the response time per ticket pipeline and the Unlinked calls check; on Exports the four settings with Arno and Kira. The done statuses, the callback type and `record_url_task` wait for the task rows.
+- 11.5 (day one), with the task counts 0 or only the tasks changed since this deploy.
 
 Expected: as each section says.
 
@@ -235,4 +242,4 @@ Expected: as each section says.
 
 **File:** `README.md` of `main` after the merge is the project's README: replace the project README and re-upload it to the Gem.
 
-**Backlog:** the rows of `NIGHT_NOTES.md` (CMA-004, -007, -015, -019, -036, -045, -046, -050, -052, -061 and the new rows; CMA-020 not started, CMA-017 Later).
+**Backlog:** the rows of `NIGHT_NOTES.md` (CMA-004, -007, -015, -019, -036, -045, -046, -050, -052, -061 and the new rows; CMA-020 not started, CMA-017 Later; CMA-067, the HubSpot uploads through GitHub Actions, and CMA-068, a dev-only web build path, not started).

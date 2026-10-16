@@ -93,6 +93,8 @@ Association changes can't be narrowed to one associated type in the configuratio
 
 ## Render, upload, install (Martin, in Cloud Shell)
 
+**Since 16 October 2026 an upload goes through GitHub Actions** with HubSpot's official project actions, the live portal's personal access key a GitHub environment secret limited to `main` with a required approval (README, Decision log, 16 October 2026; backlog CMA-067, not built yet). The HubSpot CLI on Martin's own terminal holds the test account only and never the live portal (README, Access rules, Credentials on the local terminal), so the upload of step 3 below does not run there; until CMA-067 exists no app version is uploaded. The steps below are how it was done in Cloud Shell until then; the render, the client secret and the install stay valid.
+
 The full sequence, with the connection and the secrets, is in `docs/night-2026-10-10/MORNING_RUNBOOK.md` §2.2 to §2.5 for dev and in its prod phase for prod. The steps below were corrected to what happened in dev on 11 October 2026 (`records/hubspot-dev-2026-10-11`).
 
 **1. Install the HubSpot CLI and sign in.** Install it under the home directory, so it survives a Cloud Shell restart without changing npm's global prefix: Cloud Shell's Node is managed by `nvm`, which refuses a global prefix.
