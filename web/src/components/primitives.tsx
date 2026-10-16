@@ -2,7 +2,7 @@
  * Building blocks per Pulse4all-Style.md section 7. Server components unless a
  * file says otherwise; they carry no state.
  */
-import type { AnchorHTMLAttributes, ReactNode, ButtonHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode, ButtonHTMLAttributes } from "react";
 
 type ButtonVariant = "primary" | "positive" | "outlined" | "text" | "destructive";
 type ButtonSize = "lg" | "md" | "sm";
@@ -84,10 +84,14 @@ export function LinkButton({
   );
 }
 
-/** Small keycap: the keyboard-first signpost, informative rather than decorative */
-export function Keycap({ children }: { children: ReactNode }) {
+/**
+ * Small keycap: the keyboard-first signpost, informative rather than decorative. Every keycap hides
+ * under the frame's data-hints="hidden" (globals.css); the keys keep working. Attributes pass through
+ * (data-rail-text in the folding rail).
+ */
+export function Keycap({ children, ...rest }: { children: ReactNode } & HTMLAttributes<HTMLElement>) {
   return (
-    <kbd className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-button border border-current/30 px-1 font-sans text-caption font-semibold leading-none opacity-80">
+    <kbd {...rest} className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-button border border-current/30 px-1 font-sans text-caption font-semibold leading-none opacity-80">
       {children}
     </kbd>
   );

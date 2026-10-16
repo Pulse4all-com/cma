@@ -17,7 +17,9 @@
  * row opened, their tables per 7.6 and 3.3 as well.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
- * body text (12 October 2026).
+ * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
+ * Welcome and Inbound, the hidden keycaps (cma-hints), the breadcrumbs, and the admin previewing as agent
+ * (cma-preview-role: the banner and the select) on Welcome and My account.
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
@@ -113,6 +115,11 @@ const pages = [
   // a tenant without telephony: the page says so in words and has no header to explain
   { path: "/reports/calls?range=month", subject: "invest-analyst", noHint: true },
   { path: "/logout" }, { path: "/no-access" },
+  // The folded rail and the hidden hints (16 October 2026), the admin previewing as agent (the banner, the select)
+  { path: "/", cookies: { "cma-rail": "collapsed" } },
+  { path: "/reports/inbound?range=month", subject: "manager", cookies: { "cma-rail": "collapsed", "cma-hints": "hidden" }, tables: true },
+  { path: "/", subject: "admin", cookies: { "cma-preview-role": "agent" } },
+  { path: "/account", subject: "admin", cookies: { "cma-preview-role": "agent" } },
   // Invitations (addition 0008l): the link for an account that is no person yet, open and for another account
   { path: `/invite/${"mock-open-invitation".padEnd(43, "0")}`, subject: "invitee-one" },
   { path: `/invite/${"mock-open-invitation".padEnd(43, "0")}`, subject: "invitee-other" },
@@ -120,13 +127,15 @@ const pages = [
 let hintsChecked = 0;
 let tablesChecked = 0;
 const hintsSkipped = [];
-for (const { path, subject, start, tables, expand, noHint } of pages) {
+for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
   // Clock in is an action: open the day through the route, so the page shows the clock
   if (start) await fetch(BASE + "/api/v1/me/day/start", { method: "POST", headers: { "x-cma-mock-subject": subject, "x-cma-request": "1" } });
   const ctx = await b.newContext({
     viewport: { width: 1440, height: 900 },
     extraHTTPHeaders: subject ? { "x-cma-mock-subject": subject } : {},
   });
+  // The frame's preferences and the preview are cookies (16 October 2026)
+  if (cookies) await ctx.addCookies(Object.entries(cookies).map(([name, value]) => ({ name, value, domain: new URL(BASE).hostname, path: "/" })));
   const p = await ctx.newPage();
   await p.goto(BASE + path);
   await p.waitForLoadState("networkidle");
@@ -163,7 +172,9 @@ for (const { path, subject, start, tables, expand, noHint } of pages) {
       }
     }
   }
-  if (provoke && path === "/") {
+  if (path === "/" && cookies?.["cma-preview-role"] && await p.locator('[data-testid="preview-banner"]').count() !== 1) problems.push(`${path}: the preview banner is missing for the previewing admin`);
+  if (cookies?.["cma-rail"] === "collapsed" && Math.round(await p.locator("nav[data-rail-nav]").evaluate((n) => n.getBoundingClientRect().width)) !== 64) problems.push(`${path}: the folded rail is not 64px`);
+  if (provoke && path === "/" && !cookies) {
     await p.evaluate(() => {
       const el = document.createElement("p");
       el.textContent = "provoked";

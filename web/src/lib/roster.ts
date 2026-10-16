@@ -76,6 +76,15 @@ export function cellLabel(e: EntryLike | null): string {
   return e.absenceName ?? "";
 }
 
+/**
+ * The absences a cell takes, for the page's hint and the parser's refusal (16 October 2026, backlog
+ * CMA-061): each of the tenant's types by name, with its key where the key is not the name. Never a
+ * fixed list: another tenant has other types.
+ */
+export function absenceKeywordList(absences: AbsenceOption[]): string {
+  return absences.map((a) => (a.key.toLowerCase() === a.name.toLowerCase() ? a.name : `${a.name} (${a.key})`)).join(", ");
+}
+
 /** The seven dates of the week that starts on `weekStart` (a Monday) */
 export function weekDays(weekStart: DateKey): DateKey[] {
   const [y, m, d] = weekStart.split("-").map(Number) as [number, number, number];

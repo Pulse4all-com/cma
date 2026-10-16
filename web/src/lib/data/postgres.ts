@@ -767,6 +767,9 @@ export const postgresData: CmaData = {
         permissions: row.permissions,
         locale: config.defaultLocale,
         timeZone: row.time_zone,
+        // getAccess() computes both from the real permissions and the preview cookie
+        preview: null,
+        canPreview: false,
       };
     });
   },

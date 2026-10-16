@@ -3,20 +3,30 @@
  * area Sand with white cards (Pulse4all-Style.md 2 and 7.3, decided 7 October 2026). Welcome is
  * a page of its own at the top of the rail; the other pages sit in groups (Live, Time, Reports; the
  * model lives in lib/nav). Shortcut keys are shown as keycaps and wired through data-shortcut
- * (see hooks/useKeyboardShortcuts).
+ * (see hooks/useKeyboardShortcuts), and named for assistive tech in aria-keyshortcuts.
+ *
+ * Since 16 October 2026 the rail folds to icons (cookie cma-rail, the toggle at its foot, W), the
+ * content area carries breadcrumbs (lib/nav breadcrumbs()), the keyboard hints can be hidden (cookie
+ * cma-hints, ?) and an admin can preview the Workspace as a role (the select in the top bar, the
+ * banner above the breadcrumbs; lib/auth/preview). The fold and the hints are data attributes on the
+ * frame that globals.css styles, read from the cookies here on the server, so a page renders in its
+ * state without a flicker and a click changes it at once (ShellPrefs).
  */
 import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
-import type { Principal } from "@/lib/auth/identity";
+import { getAccess, type Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
-import { Keycap } from "./primitives";
-import { NAV_COOKIE_PREFIX, visibleNav, type ShellPage } from "@/lib/nav";
+import { data } from "@/lib/data";
+import { Keycap, Notice } from "./primitives";
+import { breadcrumbs, HINTS_COOKIE, NAV_COOKIE_PREFIX, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
 import { NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 import { MessageCenter } from "./MessageCenter";
+import { HintsToggle, RailToggle } from "./ShellPrefs";
+import { ExitPreview, PreviewSelect } from "./PreviewControls";
 
 export type { ShellPage };
 
@@ -25,6 +35,7 @@ export async function Shell({
   me,
   active,
   wide = false,
+  trail = [],
   children,
 }: {
   copy: Copy;
@@ -32,17 +43,32 @@ export async function Shell({
   active: ShellPage;
   /** Report screens with wide tables; operational screens keep the narrow column */
   wide?: boolean;
+  /** Crumbs a page appends after the derived ones (the connection's name on Sources) */
+  trail?: Crumb[];
   children: ReactNode;
 }) {
   // Screens check a permission, never a role key; the database checks again on every call.
   // Keys follow the visible order across all groups (lib/nav).
   const nav = visibleNav(me, copy);
   // Groups start closed; each browser remembers per group whether it was left open (a cookie,
-  // so the page renders in that state without a flicker)
+  // so the page renders in that state without a flicker); the rail's fold and the hints alike
   const jar = await cookies();
+  const collapsed = jar.get(RAIL_COOKIE)?.value === "collapsed";
+  const hintsHidden = jar.get(HINTS_COOKIE)?.value === "hidden";
+  const crumbs = breadcrumbs(me, copy, active, trail);
+  const t = copy.shell;
+  // Preview as role: the tenant's roles for the select, listed with the real principal (the mock checks
+  // the caller's own permissions, which a preview narrows; the database checks the real user either way)
+  const access = me.canPreview ? await getAccess() : null;
+  const roles = access?.kind === "granted" ? await data().listRoles(access.real).catch(() => []) : [];
+  const ownRoleName = roles.find((r) => r.key === me.roleKey)?.name ?? me.roleKey;
 
   return (
-    <div className="grid h-full grid-cols-[var(--spacing-rail)_1fr] grid-rows-[var(--spacing-topbar)_1fr]">
+    <div
+      data-rail={collapsed ? "collapsed" : "expanded"}
+      data-hints={hintsHidden ? "hidden" : "shown"}
+      className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_1fr]"
+    >
       <Shortcuts />
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
         <div className="flex items-center gap-4">
@@ -58,14 +84,19 @@ export async function Shell({
             {copy.app.name}
           </span>
         </div>
-        <div className="flex items-center gap-6 text-small">
+        <div className="flex items-center gap-5 text-small">
+          {/* Show or hide the keyboard hints (backlog CMA-004), left of the inbox */}
+          <HintsToggle hidden={hintsHidden} copy={t} />
           {/* The inbox with its unread count, the toasts and the urgent pop-up (migration 0008) */}
           <MessageCenter copy={copy.messages} active={active === "messages" || active === "messages-send"} />
+          {me.canPreview ? (
+            <PreviewSelect roles={roles.filter((r) => r.key !== me.roleKey).map((r) => ({ key: r.key, name: r.name }))} current={me.preview?.roleKey ?? null} ownRoleName={ownRoleName} copy={t} />
+          ) : null}
           <span className="text-p4a-muted">
-            {copy.shell.signedInAs}{" "}
+            {t.signedInAs}{" "}
             <Link
               href="/account"
-              title={copy.shell.openAccount}
+              title={t.openAccount}
               aria-current={active === "account" ? "page" : undefined}
               className="font-semibold text-p4a-body underline-offset-2 hover:text-p4a-deepblue hover:underline"
             >
@@ -76,6 +107,7 @@ export async function Shell({
           <Link
             href="/logout"
             data-shortcut="l"
+            aria-keyshortcuts="L"
             className="inline-flex h-8 items-center gap-2 rounded-button border border-p4a-deepblue px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue"
           >
             {copy.nav.logOut}
@@ -84,25 +116,30 @@ export async function Shell({
         </div>
       </header>
 
-      <nav aria-label={copy.app.name} className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
+      <nav aria-label={copy.app.name} data-rail-nav className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
         <ul className="flex flex-col gap-2">
           {nav.map((entry) => {
             if (entry.kind === "page") {
               const current = entry.item.page === active;
+              // The label with its key is the name in the folded rail (title and aria-label); the keycap is hidden there
+              const name = `${entry.item.label} (${entry.item.key})`;
               return (
                 <li key={entry.item.page}>
                   <Link
                     href={entry.item.href}
                     aria-current={current ? "page" : undefined}
                     data-shortcut={entry.item.key}
+                    aria-keyshortcuts={entry.item.key ?? undefined}
+                    title={name}
+                    aria-label={name}
                     className={[
                       "flex h-10 items-center gap-3 rounded-button px-3 text-body font-semibold",
                       current ? "bg-white text-p4a-deepblue" : "text-p4a-heading hover:bg-white/60",
                     ].join(" ")}
                   >
                     <NavIconMark name={entry.icon} />
-                    <span className="min-w-0 flex-1 truncate">{entry.item.label}</span>
-                    <Keycap>{entry.item.key}</Keycap>
+                    <span data-rail-text className="min-w-0 flex-1 truncate">{entry.item.label}</span>
+                    <Keycap data-rail-text>{entry.item.key}</Keycap>
                   </Link>
                 </li>
               );
@@ -125,6 +162,7 @@ export async function Shell({
                         href={item.href}
                         aria-current={current ? "page" : undefined}
                         data-shortcut={item.key ?? undefined}
+                        aria-keyshortcuts={item.key ?? undefined}
                         className={[
                           "flex h-10 items-center justify-between rounded-button px-3 text-body",
                           current
@@ -143,16 +181,64 @@ export async function Shell({
           })}
         </ul>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
-          <p>{copy.shell.shortcutsHint}</p>
-          <p className="tabular">
-            {copy.shell.version} {config.version}
-          </p>
+          {/* The shortcuts line and the version hide with the fold; the shortcuts line also with the hints */}
+          <div data-rail-text className="flex flex-col gap-2">
+            <p data-shortcuts-hint>{t.shortcutsHint}</p>
+            <p className="tabular">
+              {t.version} {config.version}
+            </p>
+          </div>
+          <RailToggle collapsed={collapsed} copy={t} />
         </div>
       </nav>
 
       <main className="overflow-y-auto bg-p4a-sand px-10 py-8">
+        {me.preview ? (
+          // Previewing: the person sees what the role sees; their own data and permissions are unchanged
+          <div className="mb-6" data-testid="preview-banner">
+            <Notice tone="info">
+              <div className="flex items-center justify-between gap-4">
+                <span>{t.previewBanner.replace("{role}", me.preview.roleName)}</span>
+                <ExitPreview copy={t} />
+              </div>
+            </Notice>
+          </div>
+        ) : null}
+        {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} /> : null}
         <div className={wide ? "max-w-6xl" : "max-w-4xl"}>{children}</div>
       </main>
     </div>
+  );
+}
+
+/**
+ * Where the person is (16 October 2026): caption size in Footnote Grey, a 16 px chevron between the
+ * crumbs, the last crumb Inkt semi-bold with aria-current and never a link. Welcome shows none.
+ */
+function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
+  return (
+    <nav aria-label={label} data-testid="breadcrumbs" className="mb-4">
+      <ol className="flex flex-wrap items-center gap-1 text-caption text-p4a-grey">
+        {crumbs.map((c, i) => {
+          const last = i === crumbs.length - 1;
+          return (
+            <li key={`${i}-${c.label}`} className="flex items-center gap-1">
+              {i > 0 ? (
+                <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 4l4 4-4 4" />
+                </svg>
+              ) : null}
+              {last ? (
+                <span aria-current="page" className="font-semibold text-p4a-inkt">{c.label}</span>
+              ) : c.href ? (
+                <Link href={c.href} className="hover:text-p4a-deepblue hover:underline">{c.label}</Link>
+              ) : (
+                <span>{c.label}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }

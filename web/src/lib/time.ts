@@ -86,6 +86,15 @@ export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | 
   }).format(d);
 }
 
+/**
+ * One range in the locale's own shape (16 October 2026, backlog CMA-061): 12–18 October 2026,
+ * 28 September – 4 October 2026 across months, 28 December 2026 – 3 January 2027 across years
+ */
+export function fmtDateRange(from: DateKey, to: DateKey, locale: Locale): string {
+  return new Intl.DateTimeFormat(intlLocale[locale], { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" })
+    .formatRange(toUtcDate(from), toUtcDate(to));
+}
+
 /** 21 October 2026, 14:05 / 21 oktober 2026 om 14:05: an instant with its date, for an expiry */
 export function fmtDateTime(instant: Instant, timeZone: string, locale: Locale): string {
   return new Intl.DateTimeFormat(intlLocale[locale], { timeZone, dateStyle: "long", timeStyle: "short" }).format(new Date(instant));

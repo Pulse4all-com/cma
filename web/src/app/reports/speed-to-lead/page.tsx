@@ -29,7 +29,9 @@ function groupLabel(row: SpeedToLeadSummaryRow, group: SpeedToLeadGroup, copy: C
  * Speed to lead (Report, B11): how fast new lead deals got their first outbound call, in office time of
  * the deal's market (cma.speed_to_lead_summary and cma.speed_to_lead_rows, migration 0007d), grouped
  * by day, market, agent or pipeline (G cycles), then the open deals not called with a link to the
- * record. Shown to people holding reports.view or performance.team; the database checks again on
+ * record. The 80th percentile left the table on 15 October 2026 (Martin): the API still returns
+ * p80BusinessMinutes; the screen shows the median, % within target, % before next noon and the open
+ * deals. Shown to people holding reports.view or performance.team; the database checks again on
  * every read. Deal ids, codes and counts only: no customer name, email or phone number. An agent
  * whose owner is not mapped shows as Not mapped, never as an owner id. Every header explains itself in
  * a hint (copy.hints), the target and office hours filled in from the tenant's settings.
@@ -107,7 +109,6 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                     <th className={`${th} text-right`}>{t.deals}{hint(t.deals, h.deals)}</th>
                     <th className={`${th} text-right`}>{t.called}{hint(t.called, h.called)}</th>
                     <th className={`${th} text-right`}>{t.median}{hint(t.median, h.median)}</th>
-                    <th className={`${th} text-right`}>{t.p80}{hint(t.p80, h.p80)}</th>
                     <th className={`${th} text-right`}>{t.withinTarget}{hint(t.withinTarget, h.withinTarget)}</th>
                     <th className={`${th} text-right`}>{t.beforeNoon}{hint(t.beforeNoon, h.beforeNoon)}</th>
                     <th className={`${th} text-right`}>{t.openNotCalled}{hint(t.openNotCalled, h.openNotCalled)}</th>
@@ -120,7 +121,6 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                       <td className={`${td} tabular text-right`}>{n(x.deals)}</td>
                       <td className={`${td} tabular text-right`}>{n(x.called)}</td>
                       <td className={`${td} tabular text-right`}>{fmtBusinessMinutes(x.medianBusinessMinutes, me.locale)}</td>
-                      <td className={`${td} tabular text-right`}>{fmtBusinessMinutes(x.p80BusinessMinutes, me.locale)}</td>
                       <td className={`${td} tabular text-right`}>{fmtPct(x.withinTargetPct, me.locale)}</td>
                       <td className={`${td} tabular text-right`}>{fmtPct(x.beforeNextNoonPct, me.locale)}</td>
                       <td className={`${td} tabular text-right`}>{n(x.openNotCalled)}</td>
@@ -132,7 +132,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                     <td className={td}>{copy.reports.total}</td>
                     <td className={`${td} tabular text-right`}>{n(totals.deals)}</td>
                     <td className={`${td} tabular text-right`}>{n(totals.called)}</td>
-                    <td className={`${td} text-right text-p4a-muted`} colSpan={4}>
+                    <td className={`${td} text-right text-p4a-muted`} colSpan={3}>
                       <span className="sr-only">{t.totalNote}</span>
                     </td>
                     <td className={`${td} tabular text-right`}>{n(totals.openNotCalled)}</td>

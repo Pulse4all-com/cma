@@ -41,7 +41,8 @@ function Bar({ f, columns, copy }: { f: InboundFigures; columns: ReasonColumn[];
 /**
  * Inbound (Report, addition 0008i, brief B15): the inbound calls on counted lines per day, market, line
  * or hour (G cycles), with the calls offered and answered, the unanswered share, the service level, the
- * average and 80th percentile time to answer and one column per missed reason that occurs, labelled from
+ * average time to answer (the 80th percentile left the table on 15 October 2026, Martin; the API still
+ * returns p80AnswerSeconds) and one column per missed reason that occurs, labelled from
  * the tenant's catalog, a total row computed by the database over every call, and a small stacked bar per
  * row (answered, then the reasons in the style's series, never a red). Tables, cards and charts follow
  * docs/style/Pulse4all-Style.md 7.3 to 7.8 (body 14px with a 13px header row, zebra rows, a hover row, the
@@ -95,7 +96,6 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
         <td className={cls}>{fmtPct(unansweredPct(f), me.locale)}</td>
         <td className={cls}>{fmtPct(f.serviceLevelPct, me.locale)}</td>
         <td className={cls}>{fmtAnswerSeconds(f.avgAnswerSeconds, me.locale)}</td>
-        <td className={cls}>{fmtAnswerSeconds(f.p80AnswerSeconds, me.locale)}</td>
         {showWaiting ? <td className={cls}>{n(f.waiting)}</td> : null}
         {columns.map((c, i) => <td key={c.code} className={`${cls} ${i === 0 ? sep : ""}`}>{n(f.unansweredByReason[c.code] ?? 0)}</td>)}
       </>
@@ -151,7 +151,6 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
                     <th className={`${th} text-right`}>{t.unansweredPct}{hint(t.unansweredPct, h.unansweredPct)}</th>
                     <th className={`${th} text-right`}>{t.serviceLevel}{hint(t.serviceLevel, h.serviceLevel)}</th>
                     <th className={`${th} text-right`}>{t.avgAnswer}{hint(t.avgAnswer, h.avgAnswer)}</th>
-                    <th className={`${th} text-right`}>{t.p80Answer}{hint(t.p80Answer, h.p80Answer)}</th>
                     {showWaiting ? <th className={`${th} text-right`}>{t.waiting}{hint(t.waiting, h.inboundWaiting)}</th> : null}
                     {columns.map((c, i) => (
                       <th key={c.code} className={`${th} text-right ${i === 0 ? sep : ""}`} data-reason={c.code}>

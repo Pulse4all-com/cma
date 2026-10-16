@@ -7,11 +7,14 @@
  * Covers the quick-typing parser (shifts in the many ways people type times, absences by key, name
  * or unambiguous start, empty clears, the midnight rule), the cell labels, the week's days across a
  * month end, planned minutes and headcount, the coverage states and grid, and the adherence flags
- * from a planned shift against the actual clock in a zone, around the autumn clock change too.
+ * from a planned shift against the actual clock in a zone, around the autumn clock change too; since
+ * 16 October 2026 (backlog CMA-061) the week's one-range label in both locales and the absence keywords
+ * built from the tenant's types.
  */
 import {
-  adherence, cellLabel, coverageGrid, coverageState, headcountByDate, isoWeek, parseCell, plannedInstant, plannedMinutesByUser, shiftMinutes, weekDays,
+  absenceKeywordList, adherence, cellLabel, coverageGrid, coverageState, headcountByDate, isoWeek, parseCell, plannedInstant, plannedMinutesByUser, shiftMinutes, weekDays,
 } from "../src/lib/roster.ts";
+import { fmtDateRange } from "../src/lib/time.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -88,6 +91,17 @@ expect("an absence planned, nobody on the clock", adherence({ kind: "absence", s
 expect("on the clock without a plan is unplanned", adherence(null, { startedAt: "2026-10-07T07:00:00Z", endedAt: null }, "2026-10-07", Z, at("2026-10-07T10:00:00Z"), 5), "unplanned", null);
 expect("the autumn change: a 02:30 start on 25 October is the earlier of the two",
   plannedInstant("2026-10-25", "02:30", Z), at("2026-10-25T00:30:00Z"), at("2026-10-25T01:30:00Z"));
+
+// ---- the week's label and the absences a cell takes (16 October 2026, backlog CMA-061) -----------------
+// ICU writes the range's dash with thin spaces (U+2009) when the two sides differ in more than the day
+const dash = "\u2009\u2013\u2009";
+expect("a week inside one month is one range", fmtDateRange("2026-10-12", "2026-10-18", "en"), "12\u201318 October 2026", "12 - 18 October 2026");
+expect("a week across two months names both", fmtDateRange("2026-09-28", "2026-10-04", "en"), `28 September${dash}4 October 2026`, `28 September${dash}4 October`);
+expect("a week across the year end names both years", fmtDateRange("2026-12-28", "2027-01-03", "en"), `28 December 2026${dash}3 January 2027`, `28 December${dash}3 January 2027`);
+expect("the same in Dutch", [fmtDateRange("2026-10-12", "2026-10-18", "nl"), fmtDateRange("2026-09-28", "2026-10-04", "nl")],
+  ["12\u201318 oktober 2026", `28 september${dash}4 oktober 2026`], ["12-18 oktober 2026", "28 september - 4 oktober 2026"]);
+expect("the absences a cell takes, by name, the key where it differs", absenceKeywordList(absences),
+  "Day off (off), Leave, Sick, Public holiday (public_holiday), Other", "off, leave, sick, public_holiday, other");
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

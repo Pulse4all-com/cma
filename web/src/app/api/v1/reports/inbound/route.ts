@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * Inbound service per group (cma.inbound_service, addition 0008i) for ?from&to (at most 92 days) and
  * &group=day|market|line|hour (day when left out; anything else 400): offered, answered, unanswered and
  * waiting calls, answered within the service level and its denominator, the service level, the average
- * and 80th percentile time to answer and the unanswered calls per reason code; the total over every call
+ * and 80th percentile time to answer (p80AnswerSeconds is returned, not shown: the screen dropped the column on 15 October 2026) and the unanswered calls per reason code; the total over every call
  * (the database's, not a sum), the tenant's missed-reason catalog for the labels, the service level's
  * seconds and `telephony` (false: no telephony connected, and no rows, never 0). Needs reports.view or
  * performance.team, here and again in the database. No number, no name, never the caller's hash.

@@ -24,7 +24,15 @@
  * next person, the right-most header's hint inside the viewport, the not-connected state. Invitations
  * (addition 0008l): People with the Invitations section and the Invite dialog for the admin and the
  * manager (only the roles each may give), and /invite/<token> in its four states for an account that is no
- * person yet, plus a sign-in of another business line. Saves screenshots under records/ for the release note.
+ * person yet, plus a sign-in of another business line. Since 16 October 2026 the frame's preferences: the rail
+ * folded to icons by cookie and by W (64 px, icons only, the foot hidden, the keys still working, a group's
+ * click unfolding it and opening the group with both cookies, the current page's pill kept), the keyboard
+ * hints hidden by cookie and shown again by ? (the keys still working), aria-keyshortcuts on the rail and
+ * the top bar, the breadcrumbs on a bare page, a grouped page, Sources' detail, My account and Send a
+ * message, preview as role for the admin (banner, select, the agent's rail, the role's 403 on a report
+ * route, the narrowed My account, Exit) and the ignored cookie of a manager and an agent, and the roster's
+ * week bar at 1280 px (three links on one line, one range label, the absence keywords, the placeholder).
+ * Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -34,7 +42,9 @@
  *       widens the missed-reason table past its card on Sources,
  *       widens the Live board's inbound tiles past the main area, focuses the confirm button of each
  *       irreversible confirmation (unticking the line's box) and Cancel on End workday, lets the invitations
- *       table spill out of its card and expects the expired invitation open, expect FAIL, exit 1
+ *       table spill out of its card and expects the expired invitation open, expects the folded rail at
+ *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
+ *       agent rail for the previewing admin and one page fewer for the ignored cookies, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -718,9 +728,247 @@ async function expectIrreversibleConfirmations() {
   }
 }
 
+// The frame's preferences, the breadcrumbs, preview as role and the roster's week bar (16 October 2026)
+async function expectFrame() {
+  const host = new URL(BASE).hostname;
+  const withCookies = async (subject, cookies) => {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    await ctx.addCookies(Object.entries(cookies).map(([name, value]) => ({ name, value, domain: host, path: "/" })));
+    return ctx;
+  };
+  const jarOf = async (ctx) => Object.fromEntries((await ctx.cookies()).map((c) => [c.name, c.value]));
+  const railOf = (p) => p.evaluate(() => {
+    const nav = document.querySelector("nav[data-rail-nav]");
+    const vis = (el) => el.getClientRects().length > 0;
+    const links = [...nav.querySelectorAll("a[data-shortcut]")];
+    // the bare pages and the group buttons: what the folded rail shows (a group's pages are hidden then)
+    const shown = [...nav.querySelectorAll(":scope > ul > li > a[data-shortcut], :scope > ul > li > button")];
+    const toggle = document.querySelector('[data-testid="rail-toggle"]');
+    return {
+      width: Math.round(nav.getBoundingClientRect().width),
+      state: document.querySelector("[data-rail]")?.getAttribute("data-rail"),
+      labelsVisible: links.filter((a) => [...a.querySelectorAll("[data-rail-text]")].some(vis)).length,
+      keycapsVisible: [...nav.querySelectorAll("kbd")].filter(vis).length,
+      named: shown.every((el) => /\S/.test(el.getAttribute("aria-label") ?? "") && el.getAttribute("title") === el.getAttribute("aria-label"))
+        && shown.filter((el) => el.tagName === "A").every((a) => /\(\d+\)$/.test(a.getAttribute("aria-label") ?? "")),
+      keyshortcuts: links.every((a) => a.getAttribute("aria-keyshortcuts") === a.getAttribute("data-shortcut")),
+      footVisible: [...nav.querySelectorAll("[data-shortcuts-hint]")].some(vis),
+      toggle: { expanded: toggle?.getAttribute("aria-expanded"), key: toggle?.getAttribute("aria-keyshortcuts"), shortcut: toggle?.getAttribute("data-shortcut") },
+      heights: [...new Set(shown.filter(vis).map((el) => Math.round(el.getBoundingClientRect().height)))],
+      currentPill: !!nav.querySelector('a[aria-current="page"].bg-white, button[data-current="true"]'),
+    };
+  });
+
+  // 1. The default: unfolded, named for assistive tech; W folds it; the keys still work; a group unfolds it
+  {
+    const ctx = await withCookies("manager", {});
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const r = await railOf(p);
+    if (r.width !== 256 || r.state !== "expanded") problems.push(`rail: the default is ${r.state} at ${r.width}px, expected expanded at 256`);
+    if (r.labelsVisible === 0 || r.keycapsVisible === 0) problems.push("rail: labels or keycaps missing from the unfolded rail");
+    if (!r.keyshortcuts || !r.named) problems.push("rail: a link lacks aria-keyshortcuts, or a title and aria-label naming its key");
+    if (r.toggle.expanded !== "true" || r.toggle.key !== "W" || r.toggle.shortcut !== "w") problems.push(`rail toggle: ${JSON.stringify(r.toggle)}, expected aria-expanded true and W`);
+    const top = await p.evaluate(() => ({
+      logout: document.querySelector('header a[href="/logout"]')?.getAttribute("aria-keyshortcuts"),
+      hints: document.querySelector('[data-testid="hints-toggle"]')?.getAttribute("aria-keyshortcuts"),
+      pressed: document.querySelector('[data-testid="hints-toggle"]')?.getAttribute("aria-pressed"),
+    }));
+    if (top.logout !== "L" || top.hints !== "?" || top.pressed !== "false") problems.push(`top bar: ${JSON.stringify(top)}, expected L, ? and the hints shown`);
+    if ((await p.locator('[data-testid="breadcrumbs"]').count()) !== (provoke ? 1 : 0)) problems.push("breadcrumbs: Welcome shows a trail");
+    await p.keyboard.press("w");
+    await p.waitForTimeout(200);
+    const folded = await railOf(p);
+    if (folded.width !== (provoke ? 256 : 64) || folded.state !== "collapsed") problems.push(`rail: after W it is ${folded.state} at ${folded.width}px, expected collapsed at 64`);
+    if (folded.labelsVisible > 0 || folded.keycapsVisible > 0 || folded.footVisible) problems.push("rail: labels, keycaps or the foot still visible when folded");
+    if (folded.heights.some((h) => h !== 40)) problems.push(`rail: folded items are ${folded.heights.join(",")}px tall, expected 40`);
+    if (folded.toggle.expanded !== "false") problems.push("rail toggle: aria-expanded stays true when folded");
+    const cookie = (await ctx.cookies()).find((c) => c.name === "cma-rail");
+    if (cookie?.value !== "collapsed" || cookie.path !== "/") problems.push(`rail: the cookie is ${JSON.stringify(cookie)}, expected cma-rail=collapsed on /`);
+    await p.keyboard.press("2");
+    await p.waitForURL("**/messages").catch(() => undefined);
+    if (new URL(p.url()).pathname !== "/messages") problems.push("rail: key 2 does not open Messages while folded");
+    await p.waitForLoadState("networkidle");
+    const next = await railOf(p);
+    if (next.width !== 64) problems.push(`rail: the next page renders at ${next.width}px; the cookie was not read on the server`);
+    if (!next.currentPill) problems.push("rail: the current page lost its white pill when folded");
+    await p.screenshot({ path: `${outDir}/manager-rail-folded.png` });
+    await p.locator('nav[data-rail-nav] button[aria-controls="nav-group-reports"]').click();
+    await p.waitForTimeout(200);
+    const open = await p.evaluate(() => ({
+      width: Math.round(document.querySelector("nav[data-rail-nav]").getBoundingClientRect().width),
+      expanded: document.querySelector('button[aria-controls="nav-group-reports"]')?.getAttribute("aria-expanded"),
+    }));
+    const jar = await jarOf(ctx);
+    if (open.width !== 256 || open.expanded !== "true" || jar["cma-rail"] !== "expanded" || jar["cma-nav-reports"] !== "open") {
+      problems.push(`rail: a group's click gave ${JSON.stringify({ ...open, rail: jar["cma-rail"], group: jar["cma-nav-reports"] })}, expected the rail unfolded and the group open, both cookies written`);
+    }
+    await ctx.close();
+  }
+
+  // 2. Folded by cookie at first paint, on a report page: 64 px, no wider content, no horizontal scrolling
+  {
+    const ctx = await withCookies("manager", { "cma-rail": "collapsed" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/inbound?range=month");
+    await p.waitForLoadState("networkidle");
+    const r = await railOf(p);
+    if (r.width !== 64 || r.labelsVisible > 0) problems.push(`rail: with the cookie Inbound renders at ${r.width}px with ${r.labelsVisible} labels, expected 64 and none`);
+    const c = await p.evaluate(() => ({ scrollX: document.documentElement.scrollWidth > window.innerWidth, column: Math.round(document.querySelector("main > div:last-child")?.getBoundingClientRect().width ?? 0) }));
+    if (c.scrollX) problems.push("rail: folded, Inbound scrolls horizontally at 1280");
+    if (c.column <= 0 || c.column > 1152) problems.push(`rail: folded, the content column is ${c.column}px (max-w-6xl is 1152)`);
+    await p.screenshot({ path: `${outDir}/manager-inbound-rail-folded.png` });
+    await ctx.close();
+  }
+
+  // 3. Hints hidden by cookie: no keycap, no shortcuts line, the keys still work, ? shows them again; and the
+  // roster's week bar (backlog CMA-061): three links on one line, one range label, the keywords, the placeholder
+  {
+    const ctx = await withCookies("manager", { "cma-hints": "hidden" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/roster/planner");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate(() => {
+      const vis = (el) => el.getClientRects().length > 0;
+      return {
+        kbd: [...document.querySelectorAll("kbd")].filter(vis).length,
+        hint: [...document.querySelectorAll("[data-shortcuts-hint]")].some(vis),
+        pressed: document.querySelector('[data-testid="hints-toggle"]')?.getAttribute("aria-pressed"),
+        state: document.querySelector("[data-hints]")?.getAttribute("data-hints"),
+      };
+    });
+    if (m.kbd !== (provoke ? 1 : 0) || m.hint || m.pressed !== "true" || m.state !== "hidden") problems.push(`hints: hidden by cookie gives ${JSON.stringify(m)}, expected no keycap, no shortcuts line, the toggle pressed`);
+    await p.keyboard.press("n");
+    await p.waitForURL("**/roster/planner?**").catch(() => undefined);
+    if (!new URL(p.url()).searchParams.get("week")) problems.push("hints: N no longer moves to the next week while the keycaps are hidden");
+    await p.waitForLoadState("networkidle");
+    await p.keyboard.press("?");
+    await p.waitForTimeout(200);
+    const after = await p.evaluate(() => ({ kbd: [...document.querySelectorAll("kbd")].filter((el) => el.getClientRects().length > 0).length, pressed: document.querySelector('[data-testid="hints-toggle"]')?.getAttribute("aria-pressed") }));
+    const jar = await jarOf(ctx);
+    if (after.kbd === 0 || after.pressed !== "false" || jar["cma-hints"] !== "shown") problems.push(`hints: ? gives ${JSON.stringify({ ...after, cookie: jar["cma-hints"] })}, expected the keycaps back and cma-hints=shown`);
+    const bar = await p.evaluate(() => {
+      const links = [...document.querySelectorAll('main nav a[data-shortcut="p"], main nav a[data-shortcut="w"], main nav a[data-shortcut="n"]')];
+      return {
+        n: links.length,
+        lines: new Set(links.map((a) => Math.round(a.getBoundingClientRect().top))).size,
+        label: document.querySelector('[data-testid="week-label"]')?.textContent ?? "",
+        keywords: document.querySelector('[data-testid="absence-keywords"]')?.textContent ?? "",
+        placeholder: document.querySelector("main input[data-cell]")?.getAttribute("placeholder") ?? "",
+      };
+    });
+    if (bar.n !== 3 || bar.lines !== 1) problems.push(`roster: the week links are ${bar.n} on ${bar.lines} lines at 1280, expected 3 on one line`);
+    if (!/\d{4}$/.test(bar.label) || (bar.label.match(/\d{4}/g) ?? []).length > 2 || bar.label.includes("Mon")) problems.push(`roster: the week label is "${bar.label}", expected one range in the locale ending in the year`);
+    if (!bar.keywords.includes("Day off (off)") || !bar.keywords.includes("Public holiday (public_holiday)") || bar.placeholder !== "9-17:30 or off") problems.push(`roster: keywords "${bar.keywords}", placeholder "${bar.placeholder}"`);
+    await p.screenshot({ path: `${outDir}/manager-roster-1280.png` });
+    await ctx.close();
+  }
+
+  // 4. Breadcrumbs: Welcome › group › page, the group linking to the person's first page of it; a bare page;
+  // Sources' detail with the connection's name; My account; Send a message. The last crumb is current and no link.
+  const crumbsOf = (p) => p.evaluate(() => {
+    const nav = document.querySelector('[data-testid="breadcrumbs"]');
+    if (!nav) return null;
+    const items = [...nav.querySelectorAll("li")];
+    return {
+      labels: items.map((li) => li.textContent.trim()),
+      hrefs: items.map((li) => li.querySelector("a")?.getAttribute("href") ?? null),
+      current: items.map((li) => li.querySelector('[aria-current="page"]') !== null),
+      separators: nav.querySelectorAll("svg[aria-hidden]").length,
+      label: nav.getAttribute("aria-label"),
+      lastIsLink: !!items.at(-1)?.querySelector("a"),
+    };
+  });
+  for (const [subject, path, labels, hrefs] of [
+    ["agent-one", "/messages", ["Welcome", "Messages"], ["/", null]],
+    ["manager", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/dashboard", null]],
+    ["reader", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/speed-to-lead", null]],
+    ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/statuses", "/configuration/sources", null]],
+    ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
+    ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
+  ]) {
+    const ctx = await withCookies(subject, {});
+    const p = await ctx.newPage();
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    const where = `${subject} ${path.split("?")[0]}`;
+    const c = await crumbsOf(p);
+    if (!c) {
+      problems.push(`${where}: no breadcrumbs`);
+      await ctx.close();
+      continue;
+    }
+    const want = provoke ? labels.slice(0, -1) : labels;
+    if (c.labels.length !== want.length || !want.every((l, i) => l === null || l === c.labels[i])) problems.push(`${where}: crumbs ${JSON.stringify(c.labels)}, expected ${JSON.stringify(want)}`);
+    if (JSON.stringify(c.hrefs) !== JSON.stringify(hrefs)) problems.push(`${where}: crumb links ${JSON.stringify(c.hrefs)}, expected ${JSON.stringify(hrefs)}`);
+    if (c.current.filter(Boolean).length !== 1 || !c.current.at(-1) || c.lastIsLink) problems.push(`${where}: the last crumb is not the one current, link-free crumb`);
+    if (c.separators !== c.labels.length - 1) problems.push(`${where}: ${c.separators} separators for ${c.labels.length} crumbs`);
+    if (c.label !== "You are here") problems.push(`${where}: the trail is named ${JSON.stringify(c.label)}`);
+    if (path.startsWith("/configuration/sources/")) await p.screenshot({ path: `${outDir}/admin-sources-detail-breadcrumbs.png` });
+    await ctx.close();
+  }
+
+  // 5. Preview as role: the admin with the cookie sees the agent's rail and the banner, keeps their name, gets the
+  // role's 403 on a report route and the narrowed My account; Exit clears the cookie. A manager's and an agent's
+  // cookie is ignored: no control, no banner, their own rail.
+  {
+    const ctx = await withCookies("admin", { "cma-preview-role": "agent" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate(() => ({
+      banner: document.querySelector('[data-testid="preview-banner"]')?.textContent?.trim() ?? null,
+      select: document.querySelector('[data-testid="preview-select"]')?.value ?? null,
+      options: [...document.querySelectorAll('[data-testid="preview-select"] option')].map((o) => o.value),
+      rail: [...document.querySelectorAll("nav[data-rail-nav] a[data-shortcut]")].map((a) => a.getAttribute("href")),
+      config: document.querySelectorAll('nav[data-rail-nav] a[href^="/configuration/"]').length,
+      name: document.querySelector('header a[href="/account"]')?.textContent?.trim(),
+    }));
+    const agentRail = ["/", "/messages", "/day", "/hours", "/schedule"];
+    if (!(m.banner ?? "").startsWith("Previewing as Agent")) problems.push(`preview: the banner says ${JSON.stringify(m.banner)}`);
+    if (m.select !== "agent") problems.push(`preview: the select shows ${JSON.stringify(m.select)}, expected agent`);
+    if (m.options[0] !== "" || m.options.includes("admin") || !m.options.includes("agent")) problems.push(`preview: options ${JSON.stringify(m.options)}, expected the own view first and every role but the admin's own`);
+    if (JSON.stringify(m.rail) !== JSON.stringify(provoke ? agentRail.slice(0, 4) : agentRail) || m.config > 0) problems.push(`preview: the admin previewing as agent sees ${JSON.stringify(m.rail)} and ${m.config} configuration pages`);
+    if (m.name !== "Test admin") problems.push(`preview: the signed-in name became ${JSON.stringify(m.name)}; a preview changes visibility, never identity`);
+    const report = await p.request.get(BASE + "/api/v1/reports/speed-to-lead?from=2026-10-01&to=2026-10-02");
+    if (report.status() !== 403) problems.push(`preview: a report route answered ${report.status()} to the admin previewing as agent, expected the role's 403`);
+    await p.screenshot({ path: `${outDir}/admin-preview-agent.png` });
+    await p.goto(BASE + "/account");
+    await p.waitForLoadState("networkidle");
+    const allows = await p.locator('[data-testid="permissions-list"] li').count();
+    if (allows !== 2) problems.push(`preview: My account lists ${allows} permissions while previewing as agent, expected the narrowed 2`);
+    await p.locator('[data-testid="exit-preview"]').click();
+    await p.locator('[data-testid="preview-banner"]').waitFor({ state: "detached", timeout: 5000 }).catch(() => undefined);
+    await p.waitForLoadState("networkidle");
+    const after = await p.evaluate(() => ({
+      banner: !!document.querySelector('[data-testid="preview-banner"]'),
+      config: document.querySelectorAll('nav[data-rail-nav] a[href^="/configuration/"]').length,
+      allows: document.querySelectorAll('[data-testid="permissions-list"] li').length,
+    }));
+    const jar = await jarOf(ctx);
+    if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
+    await ctx.close();
+  }
+  for (const [subject, pages] of [["manager", 16], ["agent-one", 5]]) {
+    const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate(() => ({
+      banner: !!document.querySelector('[data-testid="preview-banner"]'),
+      select: !!document.querySelector('[data-testid="preview-select"]'),
+      rail: document.querySelectorAll("nav[data-rail-nav] a[data-shortcut]").length,
+    }));
+    if (m.banner || m.select || m.rail !== (provoke ? pages - 1 : pages)) problems.push(`preview: ${subject} with a preview cookie gets ${JSON.stringify(m)}, expected no control, no banner and ${pages} pages`);
+    await ctx.close();
+  }
+}
+
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
+await expectFrame();
 await expectReports();
 await expectLiveBoard();
 await expectCalls();
@@ -732,5 +980,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Sources (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Sources (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

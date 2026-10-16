@@ -11,7 +11,10 @@ const DIMENSIONS: SkillDimension[] = ["language", "work_type", "channel"];
  * read only. Opened from the name in the top bar, for everyone with access; the database answers
  * the caller's own row only (cma.my_profile takes no user id). The clock and the hours stay on My
  * day and My hours; this page links there and states the forgotten clock-out rule as the scheduler
- * applies it (migration 0005a). No ids in other systems: the sign-in id is never shown again.
+ * applies it (migration 0005a). No ids in other systems: the sign-in id is never shown again. Since
+ * 16 October 2026 (backlog CMA-019) a card says in plain words what the role allows: the person's
+ * permission keys through a copy map, an unknown key as the key; while an admin previews a role it is
+ * the narrowed set, and the banner above says why.
  */
 export default async function MyAccountPage() {
   const r = await resolve();
@@ -22,6 +25,9 @@ export default async function MyAccountPage() {
   const hasClock = me.permissions.includes("workday.own");
   const dimensionLabel: Record<SkillDimension, string> = { language: t.languages, work_type: t.workTypes, channel: t.channels };
   const byDimension = DIMENSIONS.map((d) => ({ dimension: d, skills: p.skills.filter((s) => s.dimension === d) })).filter((g) => g.skills.length > 0);
+  // "allow.<permission key>" in the copy; an unknown key is shown as the key
+  const names: Record<string, string> = t;
+  const allows = [...new Set(me.permissions)].sort();
 
   return (
     <Shell copy={copy} me={me} active="account">
@@ -73,6 +79,22 @@ export default async function MyAccountPage() {
               <Link href="/hours" className="font-semibold text-p4a-deepblue hover:underline">{t.openMyHours}</Link>
             </div>
           ) : null}
+        </Card>
+
+        <Card title={t.allows} className="col-span-2">
+          <p className="-mt-2 mb-4 text-caption text-p4a-grey">{t.allowsIntro}</p>
+          {allows.length === 0 ? (
+            <p className="text-body text-p4a-muted">{t.allowsNone}</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-x-6 gap-y-2 text-body" data-testid="permissions-list">
+              {allows.map((key) => (
+                <li key={key} className="flex items-start gap-3">
+                  <span aria-hidden="true" className="mt-2 h-2 w-2 shrink-0 rounded-full bg-p4a-deepblue" />
+                  <span>{names[`allow.${key}`] ?? key}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       </div>
 

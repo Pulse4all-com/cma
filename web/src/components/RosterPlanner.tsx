@@ -19,7 +19,7 @@ import { useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKe
 import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
-import { cellLabel, coverageGrid, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, weekDays, type Cell, type CellProblem, type CoverageState } from "@/lib/roster";
+import { absenceKeywordList, cellLabel, coverageGrid, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, weekDays, type Cell, type CellProblem, type CoverageState } from "@/lib/roster";
 import { addDays, fmtDate, fmtMinutes } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Keycap, LinkButton, Notice } from "./primitives";
@@ -71,6 +71,9 @@ export function RosterPlanner({
 
   // A retired absence type (configuration, 0005a) keeps its history but cannot be typed
   const absenceOptions = absences.filter((a) => a.isActive).map((a) => ({ key: a.key, name: a.name }));
+  // The placeholder names the first absence type's key; the refusal lists them all (never a fixed list)
+  const cellHint = t.cellHint.replace("{absence}", absenceOptions[0]?.key ?? "");
+  const absenceList = absenceKeywordList(absenceOptions);
   const key = (userId: string, date: string) => `${userId}:${date}`;
   const setState = (k: string, s: CellState) => setStates((m) => new Map(m).set(k, s));
 
@@ -156,7 +159,7 @@ export function RosterPlanner({
   const headcount = headcountByDate(liveEntries);
   const coverage = coverageGrid(week.coverage, days);
   const problemText: Record<string, string> = {
-    format: t.problemFormat, order: t.problemOrder, absence: t.problemAbsence, past: t.problemPast,
+    format: t.problemFormat, order: t.problemOrder, absence: t.problemAbsence.replace("{list}", absenceList), past: t.problemPast,
     conflict: t.problemConflict, scope: t.problemScope, failed: t.problemSaveFailed,
   };
   const coverageTone: Record<CoverageState, "success" | "warning" | "error" | "neutral"> = { ok: "success", single: "warning", short: "error", none: "neutral" };
@@ -271,9 +274,9 @@ export function RosterPlanner({
                               data-cell={k}
                               value={value}
                               maxLength={24}
-                              placeholder={t.cellHint}
+                              placeholder={cellHint}
                               aria-label={`${p.displayName} ${fmtDate(d, locale, "compact")}`}
-                              title={entry?.note ? `${t.legendNote}: ${entry.note}` : t.cellHint}
+                              title={entry?.note ? `${t.legendNote}: ${entry.note}` : cellHint}
                               onChange={(e) => setDrafts((m) => new Map(m).set(k, e.target.value))}
                               onBlur={(e) => save(p.userId, d, e.target.value)}
                               onKeyDown={(e) => onKey(e, p.userId, d)}

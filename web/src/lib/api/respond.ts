@@ -47,13 +47,15 @@ const DB_STATUS: Record<CmaDbError["sqlState"], [number, string]> = {
 /**
  * Runs a handler for the signed-in principal and turns every outcome into JSON.
  * No identity: 401 (proxy.ts normally answers first). Identity without access: 403.
+ * The handler gets the principal as the screens see it (narrowed while an admin previews a role, so the
+ * API answers 403 where the role may not call); `real: true` gives the real one, for the preview route only.
  */
-export async function forPrincipal(handler: (me: Principal) => Promise<NextResponse>): Promise<NextResponse> {
+export async function forPrincipal(handler: (me: Principal) => Promise<NextResponse>, opts: { real?: boolean } = {}): Promise<NextResponse> {
   try {
     const access = await getAccess();
     if (!access) return fail(401, "not_authenticated", "Not authenticated");
     if (access.kind !== "granted") return fail(403, "no_access", "No access yet");
-    return await handler(access.principal);
+    return await handler(opts.real ? access.real : access.principal);
   } catch (e) {
     if (e instanceof ApiError) return fail(e.status, e.code, e.message);
     if (e instanceof CmaDbError) {
