@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# System health documents: copied in by the build (cloudbuild.yaml), listed by scripts/documents-manifest.mjs
+/documents/

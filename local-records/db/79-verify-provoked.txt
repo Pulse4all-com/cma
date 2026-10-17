@@ -8,7 +8,7 @@
  true
 (1 row)
 
-psql:/var/tmp/provoke79.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:/var/tmp/provoke79.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
                                       check_name                                      |        result        |                                                                                     detail                                                                                      
 --------------------------------------------------------------------------------------+----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  A1 addition 0008r recorded                                                           | FAIL                 | provoked
@@ -23,6 +23,7 @@ psql:/var/tmp/provoke79.sql:50: NOTICE:  schema "pg_temp" does not exist, skippi
  B6 tenant isolation                                                                  | FAIL                 | 0 then 1: close_forgotten_workdays/1
  B7 the heartbeat settings: defaults, bounds, fresh below late, a change kept         | FAIL                 | health.heartbeat_fresh_seconds=120 (default), health.heartbeat_late_seconds=900 (default) | health.heartbeat_fresh_seconds=180, health.heartbeat_late_seconds=1200 | 4 refusals
  B8 the read covers the last 30 days only                                             | FAIL                 | 0 then 1 (24h 0)
- verdict                                                                              | PROVOKED, NOT A PASS | 0 PASS, 12 FAIL
-(13 rows)
+ B9 the two link settings take an https address or nothing                            | FAIL                 | health.link_datamap=empty, health.link_gemini_doc=empty | health.link_datamap=https://example.invalid/map, health.link_gemini_doc=empty | 3 refusals
+ verdict                                                                              | PROVOKED, NOT A PASS | 0 PASS, 13 FAIL
+(14 rows)
 

@@ -98,7 +98,11 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 | 16:57 | standalone server, api mode against the local database (`CMA_DB_HOST`), port 8081; `log_statement=all` for one request per page | `round-trips-api.txt`: Welcome 8 (agent) to 12 (admin) transactions, 20 to 34 statements; every page ≥ 3 transactions |
 | 16:59 | `measure-ttfb.sh` against the api server | `ttfb-api-localdb.txt`: p95 ≤ 77 ms on every page (sandbox, dev-seed volume, loopback) |
 | 17:05 | `tc`/netem for an emulated round-trip delay | not available in the sandbox; round-trip cost is estimated from the statement counts instead |
-| 17:06 | Playwright screenshots of every page per mock subject at 1280 and 1600 px (`/var/tmp/screenshots.mjs`, Chromium 1194 via `executablePath`) | `local-records/ux/before/` |
+| 17:06 | Playwright screenshots of every page per mock subject at 1280 and 1600 px (`/var/tmp/screenshots.mjs`, Chromium 1194 via `executablePath`) | `local-records/ux/before/`: 82 pages, no horizontal scroll; React error #418 (hydration text mismatch) on /messages, /roster/planner, /configuration/alert-rules |
+| 17:10 | `next dev` on 8082, unminified hydration errors captured | cause: `Intl.DateTimeFormat` with `weekday` renders "Sat 17 Oct" in Node's ICU and "Sat, 17 Oct" in the browser's; `fmtDate` compact/long and `Inbox.tsx:35` |
+| 17:20 | 0008r written: `db/78_system_health.sql`, `db/79_verify_system_health.sql`; run locally | 78 applied and rerun (exit 0); 79 13 PASS normal, 13 FAIL provoked; `33` and `73` rerun unchanged |
+| 17:40 | System health web half: `lib/health.ts` + `verify/health.mjs` (39 checks, provoked), data reads, page, route, manifest script, job run row | typecheck exit 0, lint 0 errors; `verify:copy` 1824 keys PASS; the job run locally wrote one run row per tenant |
+| 17:50 | documents route probed on the dev server | traversal, manifest.json, a name outside the list, a NUL byte: 404; a manager: 403; a document in the build: 200 as an attachment, bytes identical |
 
 ## 5. Assumptions made explicit
 
@@ -114,6 +118,8 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 
 ## 7. Where I stopped / next step
 
-- 17:06 UTC: wave 1 subagents running; sandbox speed baseline measured (mock and api mode); screenshots
-  running; drafts for 5.13 (OPERATIONS, Plan B, dated items, gates) and 7.4 (README cockpit edits) being
-  prepared by two more subagents. Next: collect findings, consolidate and self-review, then fixes.
+- 17:50 UTC: nine of twelve area reports in (5.1, 5.2, 5.6 static, 5.7, 5.8-5.10, 5.11, 5.12, 5.13 drafts,
+  7.4 drafts); 5.3, 5.4/5.5 and 5.14 still running. 0008r database half done and verified locally; the
+  System health web half typechecks and is being built. Next: consolidate findings (severity, dedupe,
+  README check), then the fix PRs in order (b) security, (c) reliability, (e) speed, (g) UX, (a) hygiene,
+  (f) ops scripts, (d) 0008q; then the report set.

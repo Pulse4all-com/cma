@@ -1,0 +1,353 @@
+SET
+BEGIN
+
+=== A. PostgreSQL zone facts for Europe/Amsterdam (session TimeZone is UTC, so +00 is shown) ===
+ session_tz |                                                                    pg                                                                    
+------------+------------------------------------------------------------------------------------------------------------------------------------------
+ Etc/UTC    | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit
+
+ ambiguous_2026_resolves_to |    back_to_local    | ambiguous_2025_resolves_to | nonexistent_spring_resolves_to | spring_back_to_local 
+----------------------------+---------------------+----------------------------+--------------------------------+----------------------
+ 2026-10-25 01:30:00+00     | 2026-10-25 02:30:00 | 2025-10-26 01:30:00+00     | 2026-03-29 01:30:00+00         | 2026-03-29 03:30:00
+
+  last_cest_second   |  first_cet_second   | last_cest_second_2025 | first_cet_second_2025 
+---------------------+---------------------+-----------------------+-----------------------
+ 2026-10-25 02:59:59 | 2026-10-25 02:00:00 | 2025-10-26 02:59:59   | 2025-10-26 02:00:00
+
+         at_utc         | business_date_ams 
+------------------------+-------------------
+ 2026-10-24 21:59:59+00 | 2026-10-24
+ 2026-10-24 22:00:00+00 | 2026-10-25
+ 2026-10-25 22:59:59+00 | 2026-10-25
+ 2026-10-25 23:00:00+00 | 2026-10-26
+
+
+=== Setup: two throwaway tenants (defaults; 07:00-22:00 / 17:00 / grace 60) and synthetic people ===
+CREATE TABLE
+GRANT
+DO
+   k    |    id     
+--------+-----------
+ a1a    | 01a14ad4…
+ a1b    | 01a14ad4…
+ a1c    | 01a14ad4…
+ a1d    | 01a14ad4…
+ a1e    | 01a14ad4…
+ a1f    | 01a14ad4…
+ a1g    | 01a14ad4…
+ a2a    | 01a14ad4…
+ a2b    | 01a14ad4…
+ a2c    | 01a14ad4…
+ a2d    | 01a14ad4…
+ a2e    | 01a14ad4…
+ admin1 | 01a14ad4…
+ admin2 | 01a14ad4…
+ mgr1   | 01a14ad4…
+ mgr2   | 01a14ad4…
+ sched1 | 01a14ad4…
+ sched2 | 01a14ad4…
+ t1     | 01a14ad4…
+ t2     | 01a14ad4…
+
+SET
+
+=== Check 1. Business-day bounds for 2026-10-25 Europe/Amsterdam (tenant 1, universal defaults 00:00-24:00) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9b0d-75c3-a0d1-46687ba0bb2c
+
+ business_date |       start_utc        |        end_utc         |     length     |     start_local     |      end_local      
+---------------+------------------------+------------------------+----------------+---------------------+---------------------
+ 2026-10-24    | 2026-10-23 22:00:00+00 | 2026-10-24 22:00:00+00 | 1 day          | 2026-10-24 00:00:00 | 2026-10-25 00:00:00
+ 2026-10-25    | 2026-10-24 22:00:00+00 | 2026-10-25 23:00:00+00 | 1 day 01:00:00 | 2026-10-25 00:00:00 | 2026-10-26 00:00:00
+ 2026-10-26    | 2026-10-25 23:00:00+00 | 2026-10-26 23:00:00+00 | 1 day          | 2026-10-26 00:00:00 | 2026-10-27 00:00:00
+ 2026-03-29    | 2026-03-28 23:00:00+00 | 2026-03-29 22:00:00+00 | 23:00:00       | 2026-03-29 00:00:00 | 2026-03-30 00:00:00
+
+Expected: 2026-10-25 runs 2026-10-24 22:00Z to 2026-10-25 23:00Z = 25:00:00; 2026-03-29 = 23:00:00; the others 24:00:00.
+
+=== Check 2. The workday window 07:00-22:00 on 2026-10-25 (tenant 2) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9af6-78a0-a0e0-094da4ee0381 | 01a14ad4-9b14-7ef7-94a8-99bbc050b91a
+
+ business_date |    window_start_utc    |     window_end_utc     | window_start_local  |  window_end_local   | counted_span 
+---------------+------------------------+------------------------+---------------------+---------------------+--------------
+ 2026-10-24    | 2026-10-24 05:00:00+00 | 2026-10-24 20:00:00+00 | 2026-10-24 07:00:00 | 2026-10-24 22:00:00 | 15:00:00
+ 2026-10-25    | 2026-10-25 06:00:00+00 | 2026-10-25 21:00:00+00 | 2026-10-25 07:00:00 | 2026-10-25 22:00:00 | 15:00:00
+ 2026-10-26    | 2026-10-26 06:00:00+00 | 2026-10-26 21:00:00+00 | 2026-10-26 07:00:00 | 2026-10-26 22:00:00 | 15:00:00
+
+Expected: 2026-10-25 window 06:00Z (07:00 CET) to 21:00Z (22:00 CET), 15:00:00; the 24th 05:00Z to 20:00Z (CEST).
+-- 2a. clock-in at 06:59 CET on 2026-10-25 (05:59Z) is refused; at 07:00 CET (06:00Z) accepted (open_workday has no future check)
+psql:01_dst_proof.sql:110: NOTICE:  2a refusal as expected: CMA04 the workday starts at 07:00
+psql:01_dst_proof.sql:110: NOTICE:  2a accepted: business_date 2026-10-25 started_at 2026-10-25 06:00:00+00 (= 2026-10-25 07:00:00 local)
+DO
+-- 2b. a clock-in at 01:30 CEST on 2026-10-25 (the night, 2026-10-24 23:30Z) is outside the window: refused (a2b, who has no day on that date yet)
+              set_config              
+--------------------------------------
+ 01a14ad4-9b14-7fba-a21a-05f094b1e211
+
+psql:01_dst_proof.sql:120: NOTICE:  2b refusal as expected: CMA04 the workday starts at 07:00
+DO
+-- 2c. the count stops at 22:00 local on both sides of the change (2025 dates: the write path refuses the future; a2a again)
+              set_config              
+--------------------------------------
+ 01a14ad4-9b14-7ef7-94a8-99bbc050b91a
+
+DO
+ business_date |       started_at       |        ended_at        | working_seconds |        hours        | is_capped | needs_correction 
+---------------+------------------------+------------------------+-----------------+---------------------+-----------+------------------
+ 2025-10-25    | 2025-10-25 05:00:00+00 | 2025-10-25 20:40:00+00 |           54000 | 15.0000000000000000 | f         | f
+ 2025-10-26    | 2025-10-26 06:00:00+00 | 2025-10-26 21:40:00+00 |           54000 | 15.0000000000000000 | f         | f
+
+Expected: both days 54000 s (15.0 h): 07:00 to 22:00 local, the 22:00-22:40 part not counted, on either side of the change.
+
+=== Check 3. Intervals are computed on instants (tenant 1, defaults) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9b0d-75c3-a0d1-46687ba0bb2c
+
+-- 3a. a day opened 23:30 CEST on Sat 2025-10-25 and ended 03:30 CET on Sun 2025-10-26 (5 real hours across the change)
+DO
+ business_date |       started_at       |        ended_at        | real_elapsed | working_seconds | is_capped | needs_correction 
+---------------+------------------------+------------------------+--------------+-----------------+-----------+------------------
+ 2025-10-25    | 2025-10-25 21:30:00+00 | 2025-10-26 02:30:00+00 | 05:00:00     |            1800 | f         | f
+
+Expected: business_date 2025-10-25, real_elapsed 05:00:00, working_seconds 1800: the count stops at the window end (24:00 = 2025-10-25 22:00Z) by design (0008b), the clock-out after it is accepted.
+-- 3b. a day on the 25-hour Sunday 2025-10-26: 01:30 CEST, status at 02:30 CEST, status at 02:30 CET, end 03:30 CET
+              set_config              
+--------------------------------------
+ 01a14ad4-9b0e-70ea-9b41-efef1723c64f
+
+DO
+ business_date |       started_at       |        ended_at        | working_seconds |       hours        
+---------------+------------------------+------------------------+-----------------+--------------------
+ 2025-10-26    | 2025-10-25 23:30:00+00 | 2025-10-26 02:30:00+00 |           10800 | 3.0000000000000000
+
+        from_at         |         to_at          |     from_local      |      to_local       | seconds 
+------------------------+------------------------+---------------------+---------------------+---------
+ 2025-10-25 23:30:00+00 | 2025-10-26 00:30:00+00 | 2025-10-26 01:30:00 | 2025-10-26 02:30:00 |    3600
+ 2025-10-26 00:30:00+00 | 2025-10-26 01:30:00+00 | 2025-10-26 02:30:00 | 2025-10-26 02:30:00 |    3600
+ 2025-10-26 01:30:00+00 | 2025-10-26 02:30:00+00 | 2025-10-26 02:30:00 | 2025-10-26 03:30:00 |    3600
+
+Expected: 10800 s (3.0 h), three stretches of 3600 s; the two 02:30 local times are one hour apart. A local-time subtraction would give 7200.
+-- 3c. the same on the real date, 2026-10-25, rows written by the owner straight into the tables (the write path refuses the future)
+SET
+DO
+     from_local      |      to_local       | seconds | is_capped 
+---------------------+---------------------+---------+-----------
+ 2026-10-25 01:30:00 | 2026-10-25 02:30:00 |    3600 | f
+ 2026-10-25 02:30:00 | 2026-10-25 02:30:00 |    3600 | f
+ 2026-10-25 02:30:00 | 2026-10-25 03:30:00 |    3600 | f
+
+ business_date | working_seconds | is_capped | needs_correction 
+---------------+-----------------+-----------+------------------
+ 2026-10-25    |           10800 | f         | f
+
+Expected: three stretches of 3600 s, 10800 s on 2026-10-25, not capped.
+SET
+-- 3d. corrections: the Day editor must send an offset; both instants of 02:45 are accepted and land an hour apart (mgr1 corrects a1b's 2025-10-26)
+              set_config              
+--------------------------------------
+ 01a14ad4-9b0c-7677-8df1-dba754433bbd
+
+psql:01_dst_proof.sql:209: NOTICE:  3d refusal as expected: CMA04 change 1: the time needs an offset (Z or +hh:mm)
+DO
+  kind  |      occurred_at       |     local_time      |   source   
+--------+------------------------+---------------------+------------
+ start  | 2025-10-25 23:30:00+00 | 2025-10-26 01:30:00 | user
+ status | 2025-10-26 00:30:00+00 | 2025-10-26 02:30:00 | user
+ status | 2025-10-26 00:45:00+00 | 2025-10-26 02:45:00 | correction
+ status | 2025-10-26 01:30:00+00 | 2025-10-26 02:30:00 | user
+ status | 2025-10-26 01:45:00+00 | 2025-10-26 02:45:00 | correction
+ end    | 2025-10-26 02:30:00+00 | 2025-10-26 03:30:00 | user
+
+ business_date | working_seconds | paid_seconds | has_correction 
+---------------+-----------------+--------------+----------------
+ 2025-10-26    |           10800 |        10800 | t
+
+Expected: six effective events; two "02:45" at 00:45Z and 01:45Z; team_hours still 10800 working seconds (training is working).
+
+=== Check 4. The forgotten-day close across the change, run twice ===
+-- when would the hourly UTC runs on the night of 24/25 Oct 2026 pick up a forgotten day of Sat 24 Oct? (pure arithmetic, both tenants)
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9af6-78a0-a0e0-094da4ee0381 | 01a14ad4-9b05-7da1-a526-80fc83616fc4
+
+          tenant           |      day_end_utc       |   closable_from_utc    |                                           hourly_runs                                            
+---------------------------+------------------------+------------------------+--------------------------------------------------------------------------------------------------
+ tenant 2 (22:00 + 60 min) | 2026-10-24 20:00:00+00 | 2026-10-24 21:00:00+00 | 20:00Z=waits 21:00Z=closes 22:00Z=closes 23:00Z=closes 00:00Z=closes 01:00Z=closes 02:00Z=closes
+
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9aed-749f-a65b-3257e826a9f0
+
+           tenant           |      day_end_utc       |   closable_from_utc    |                                          hourly_runs                                          
+----------------------------+------------------------+------------------------+-----------------------------------------------------------------------------------------------
+ tenant 1 (24:00 + 120 min) | 2026-10-24 22:00:00+00 | 2026-10-25 00:00:00+00 | 20:00Z=waits 21:00Z=waits 22:00Z=waits 23:00Z=waits 00:00Z=closes 01:00Z=closes 02:00Z=closes
+
+Expected: tenant 2 closes at the 21:00Z run (23:00 CEST); tenant 1 at the 00:00Z run (02:00 CEST, the first 02:00). The repeated local hour plays no role: the condition is on instants.
+-- 4a. forgotten days (2025 dates): t2: a2b Sat 25 Oct 08:00 CEST no shift; a2c Sun 26 Oct 08:00 CET with a 09:00-16:30 shift; a2d Sun 26 Oct 08:00 CET, last event 19:12 CET. t1: a1g Sat 25 Oct 23:00 CEST, no window
+              set_config              | set_config 
+--------------------------------------+------------
+ 01a14ad4-9af6-78a0-a0e0-094da4ee0381 | 
+
+DO
+              set_config              
+--------------------------------------
+ 01a14ad4-9b05-7da1-a526-80fc83616fc4
+
+ who | business_date |        ended_at        |     ended_local     |  end_rule  
+-----+---------------+------------------------+---------------------+------------
+ a2b | 2025-10-25    | 2025-10-25 15:00:00+00 | 2025-10-25 17:00:00 | default
+ a2c | 2025-10-26    | 2025-10-26 15:30:00+00 | 2025-10-26 16:30:00 | shift
+ a2d | 2025-10-26    | 2025-10-26 18:12:00+00 | 2025-10-26 19:12:00 | last_event
+
+Expected: a2b 2025-10-25 15:00Z = 17:00 CEST default; a2c 2025-10-26 15:30Z = 16:30 CET shift; a2d 2025-10-26 18:12Z = 19:12 CET last_event. Never an hour off.
+ second_run_closes 
+-------------------
+                 0
+
+             title             | messages 
+-------------------------------+----------
+ Workday closed automatically  |        3
+ Workdays closed automatically |        1
+
+Expected: second run 0; messages: 3 x "Workday closed automatically", 1 x "Workdays closed automatically".
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9b12-7674-9f1f-e52cf44e7e05
+
+DO
+              set_config              
+--------------------------------------
+ 01a14ad4-9aed-749f-a65b-3257e826a9f0
+
+ business_date |        ended_at        |     ended_local     | end_rule 
+---------------+------------------------+---------------------+----------
+ 2025-10-25    | 2025-10-25 22:00:00+00 | 2025-10-26 00:00:00 | default
+
+ second_run_closes 
+-------------------
+                 0
+
+Expected: a1g 2025-10-25 ended 2025-10-25 22:00Z = 2025-10-26 00:00 CEST (the default 24:00 of the 25th, in CEST, not 23:00 Z); second run 0.
+
+=== Check 5. Legacy import: local times on a DST day (tenant 1, defaults, so nothing is clipped) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9b0a-7830-83b4-b8b7da8de745
+
+ upsert_work_status 
+--------------------
+ 
+
+ upsert_work_status 
+--------------------
+ 
+
+   key    | is_working | is_default | status 
+----------+------------+------------+--------
+ legacy_a | t          | f          | active
+ legacy_b | t          | f          | active
+
+-- 5a. autumn 2025: A1 01:30-02:30 (ambiguous logout), A2 02:30-03:30 (ambiguous login), A3 01:00-04:00 (spans the change)
+       key       | status | period_from | period_to  |     timezone     
+-----------------+--------+-------------+------------+------------------
+ dst-autumn-2025 | staged | 2025-10-25  | 2025-10-26 | Europe/Amsterdam
+
+INSERT 0 3
+INSERT 0 3
+ status |                                                                                                                                        counts                                                                                                                                         
+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ loaded | {"sessions_in": 3, "days_clipped": 0, "days_dropped": 0, "days_written": 3, "events_written": 6, "sessions_merged": 0, "accounts_skipped": 0, "sessions_unmapped": 0, "days_closed_by_rule": 0, "days_skipped_existing": 0, "sessions_open_dropped": 0, "sessions_outside_window": 0}
+
+ acct | business_date | seconds |         hours          |               events                
+------+---------------+---------+------------------------+-------------------------------------
+ A1   | 2025-10-26    |    7200 |     2.0000000000000000 | 23:30Z=01:30local 01:30Z=02:30local
+ A2   | 2025-10-26    |    3600 | 1.00000000000000000000 | 01:30Z=02:30local 02:30Z=03:30local
+ A3   | 2025-10-26    |   14400 |     4.0000000000000000 | 23:00Z=01:00local 03:00Z=04:00local
+
+Expected (PostgreSQL reads an ambiguous local time as standard time, CET, the later instant): A1 7200 s (02:30 -> CET = 01:30Z), A2 3600 s, A3 14400 s (4 real hours; the wall clock says 3). A Steam logout really at 02:30 CEST would count one hour too long: documented behaviour (README 0008d), outside Pulse4all's imported period.
+-- 5b. spring 2026: a session in the skipped hour is refused as a whole; one spanning the gap counts real time
+      key       | status 
+----------------+--------
+ dst-spring-gap | staged
+
+INSERT 0 1
+INSERT 0 1
+psql:01_dst_proof.sql:294: NOTICE:  5b refusal as expected: CMA04 1 session(s) fall in the spring clock change gap of Europe/Amsterdam, first session g1
+DO
+       key       | status 
+-----------------+--------
+ dst-spring-span | staged
+
+INSERT 0 1
+INSERT 0 1
+ status | days_written | events_written 
+--------+--------------+----------------
+ loaded | 1            | 2
+
+ business_date | seconds |               events                
+---------------+---------+-------------------------------------
+ 2026-03-29    |    3600 | 00:30Z=01:30local 01:30Z=03:30local
+
+Expected: the gap batch refused with CMA04 "fall in the spring clock change gap"; the spanning session 3600 s (01:30 CET = 00:30Z to 03:30 CEST = 01:30Z), not 7200.
+
+=== Check 6. Roster: local times, the shift line of 2026-10-25 (tenant 2) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9af6-78a0-a0e0-094da4ee0381 | 01a14ad4-9b13-7d82-861d-9b095aa5e25e
+
+ kind  | start_time | end_time 
+-------+------------+----------
+ shift | 07:00:00   | 22:00:00
+
+  status   | version 
+-----------+---------
+ published |       1
+
+              set_config              
+--------------------------------------
+ 01a14ad4-9b16-7af5-93a0-18a6a35612bc
+
+ business_date | is_published | kind  | start_time | end_time 
+---------------+--------------+-------+------------+----------
+ 2026-10-25    | t            | shift | 07:00:00   | 22:00:00
+
+   planned_start_utc    |    planned_end_utc     | planned_span |     end_of_day_utc     | ambiguous_window_time_utc 
+------------------------+------------------------+--------------+------------------------+---------------------------
+ 2026-10-25 06:00:00+00 | 2026-10-25 21:00:00+00 | 15:00:00     | 2026-10-25 23:00:00+00 | 2026-10-25 01:30:00+00
+
+Expected: my_roster gives 07:00/22:00 as local times (no instants); the close's shift end for the 25th is 21:00Z = 22:00 CET; span 15:00:00; 24:00 is 23:00Z; a 02:30 window time would be read as CET (01:30Z).
+
+=== Check 7. Exports group on the day's business date; stretches carry instants (tenant 1, mgr1 holds workday.export) ===
+              set_config              |              set_config              
+--------------------------------------+--------------------------------------
+ 01a14ad4-9ace-7de9-b7c8-fb66d8d4de9c | 01a14ad4-9b0c-7677-8df1-dba754433bbd
+
+ display_name | business_date |     timezone     | status_key |        from_at         |         to_at          | seconds |   source   
+--------------+---------------+------------------+------------+------------------------+------------------------+---------+------------
+ a1b          | 2025-10-26    | Europe/Amsterdam | available  | 2025-10-25 23:30:00+00 | 2025-10-26 00:30:00+00 |    3600 | user
+ a1b          | 2025-10-26    | Europe/Amsterdam | training   | 2025-10-26 00:30:00+00 | 2025-10-26 00:45:00+00 |     900 | user
+ a1b          | 2025-10-26    | Europe/Amsterdam | training   | 2025-10-26 00:45:00+00 | 2025-10-26 01:30:00+00 |    2700 | correction
+ a1b          | 2025-10-26    | Europe/Amsterdam | available  | 2025-10-26 01:30:00+00 | 2025-10-26 01:45:00+00 |     900 | user
+ a1b          | 2025-10-26    | Europe/Amsterdam | training   | 2025-10-26 01:45:00+00 | 2025-10-26 02:30:00+00 |    2700 | correction
+
+ display_name | business_date |       started_at       |        ended_at        | working_seconds | is_capped | needs_correction 
+--------------+---------------+------------------------+------------------------+-----------------+-----------+------------------
+ a1a          | 2025-10-25    | 2025-10-25 21:30:00+00 | 2025-10-26 02:30:00+00 |            1800 | f         | f
+ a1g          | 2025-10-25    | 2025-10-25 21:00:00+00 | 2025-10-25 22:00:00+00 |            3600 | f         | t
+ a1b          | 2025-10-26    | 2025-10-25 23:30:00+00 | 2025-10-26 02:30:00+00 |           10800 | f         | f
+ a1c          | 2025-10-26    | 2025-10-25 23:30:00+00 | 2025-10-26 01:30:00+00 |            7200 | f         | f
+ a1d          | 2025-10-26    | 2025-10-26 01:30:00+00 | 2025-10-26 02:30:00+00 |            3600 | f         | f
+ a1e          | 2025-10-26    | 2025-10-25 23:00:00+00 | 2025-10-26 03:00:00+00 |           14400 | f         | f
+
+Expected: every row dated by the workday's business_date (set at open from the instant in the zone), from/to as instants, seconds as the view counts them.
+
+=== Rollback: nothing of this stays ===
+ROLLBACK
+SET
+ dst_tenants_left 
+------------------
+                0
+

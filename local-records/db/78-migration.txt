@@ -1,1 +1,1 @@
-psql:db/78_system_health.sql:200: NOTICE:  relation "sync_run_tenant_started_idx" already exists, skipping
+psql:db/78_system_health.sql:212: NOTICE:  relation "sync_run_tenant_started_idx" already exists, skipping

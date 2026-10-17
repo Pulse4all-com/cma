@@ -8,7 +8,7 @@
  true
 (1 row)
 
-psql:db/79_verify_system_health.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:db/79_verify_system_health.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
                                       check_name                                      | result |                                                                                     detail                                                                                      
 --------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  A1 addition 0008r recorded                                                           | PASS   | 
@@ -23,6 +23,7 @@ psql:db/79_verify_system_health.sql:50: NOTICE:  schema "pg_temp" does not exist
  B6 tenant isolation                                                                  | PASS   | 0 then 1: close_forgotten_workdays/1
  B7 the heartbeat settings: defaults, bounds, fresh below late, a change kept         | PASS   | health.heartbeat_fresh_seconds=120 (default), health.heartbeat_late_seconds=900 (default) | health.heartbeat_fresh_seconds=180, health.heartbeat_late_seconds=1200 | 4 refusals
  B8 the read covers the last 30 days only                                             | PASS   | 0 then 1 (24h 0)
- verdict                                                                              | PASS   | 12 PASS, 0 FAIL
-(13 rows)
+ B9 the two link settings take an https address or nothing                            | PASS   | health.link_datamap=empty, health.link_gemini_doc=empty | health.link_datamap=https://example.invalid/map, health.link_gemini_doc=empty | 3 refusals
+ verdict                                                                              | PASS   | 13 PASS, 0 FAIL
+(14 rows)
 

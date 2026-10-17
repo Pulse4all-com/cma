@@ -19,7 +19,8 @@
 --      scheduler's row without one; an agent and the Ingest user cannot read it (CMA06), nor can a read
 --      without an acting user (CMA01); tenant two sees nothing of tenant one; the settings' defaults, a
 --      fresh threshold at or above the late one refused and the other way round, a non-integer refused,
---      a valid change kept
+--      a valid change kept; the two link settings empty by default, an https address kept, http, a space and
+--      a stranger refused
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -229,7 +230,7 @@ begin
     -- B7. the settings: the defaults, fresh at or above late refused, late at or below fresh refused, a
     --     non-integer refused, a valid change kept
     select string_agg(s.key || '=' || s.value || case when s.is_default then ' (default)' else '' end, ', ' order by s.key) into v_txt
-    from cma.tenant_settings() s where s.key like 'health.%';
+    from cma.tenant_settings() s where s.key like 'health.heartbeat_%';
     v_n := 0;
     begin perform cma.set_tenant_setting('health.heartbeat_fresh_seconds', '900'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
     begin perform cma.set_tenant_setting('health.heartbeat_late_seconds', '120'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
@@ -238,9 +239,23 @@ begin
     perform cma.set_tenant_setting('health.heartbeat_fresh_seconds', '180');
     perform cma.set_tenant_setting('health.heartbeat_late_seconds', '1200');
     select v_txt || ' | ' || string_agg(s.key || '=' || s.value, ', ' order by s.key) || format(' | %s refusals', v_n) into v_txt
-    from cma.tenant_settings() s where s.key like 'health.%';
+    from cma.tenant_settings() s where s.key like 'health.heartbeat_%';
     v_rows := v_rows || array['17', 'B7 the heartbeat settings: defaults, bounds, fresh below late, a change kept',
       case when v_txt = 'health.heartbeat_fresh_seconds=120 (default), health.heartbeat_late_seconds=900 (default) | health.heartbeat_fresh_seconds=180, health.heartbeat_late_seconds=1200 | 4 refusals'
+                and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+
+    -- B9. the link settings: empty by default, an https address kept (trimmed), http, a space and a stranger refused
+    select string_agg(s.key || '=' || coalesce(nullif(s.value, ''), 'empty'), ', ' order by s.key) into v_txt
+    from cma.tenant_settings() s where s.key like 'health.link_%';
+    v_n := 0;
+    begin perform cma.set_tenant_setting('health.link_datamap', 'http://example.invalid/map'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
+    begin perform cma.set_tenant_setting('health.link_datamap', 'https://example.invalid/a map'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
+    begin perform cma.set_tenant_setting('health.link_gemini_doc', 'javascript:alert(1)'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
+    perform cma.set_tenant_setting('health.link_datamap', '  https://example.invalid/map  ');
+    select v_txt || ' | ' || string_agg(s.key || '=' || coalesce(nullif(s.value, ''), 'empty'), ', ' order by s.key) || format(' | %s refusals', v_n) into v_txt
+    from cma.tenant_settings() s where s.key like 'health.link_%';
+    v_rows := v_rows || array['19', 'B9 the two link settings take an https address or nothing',
+      case when v_txt = 'health.link_datamap=empty, health.link_gemini_doc=empty | health.link_datamap=https://example.invalid/map, health.link_gemini_doc=empty | 3 refusals'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B8. a run older than 30 days is outside the read's window (the index's range), a younger one inside:
@@ -282,7 +297,7 @@ from (select ord, check_name, result, detail from verify_0008r
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008r where result = 'PASS') = 12
+                  when (select count(*) from verify_0008r where result = 'PASS') = 13
                        and not exists (select 1 from verify_0008r where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
              format('%s PASS, %s FAIL', (select count(*) from verify_0008r where result = 'PASS'),

@@ -20,8 +20,10 @@
 -- What it adds
 --   settings              health.heartbeat_fresh_seconds (120) and health.heartbeat_late_seconds (900):
 --                         the heartbeat is fresh below the first, silent from the second, late in between;
---                         cma.check_tenant_setting() checks both (whole seconds within bounds, fresh below
---                         late), 0008o's branches unchanged
+--                         health.link_gemini_doc and health.link_datamap (empty): the two addresses the
+--                         page links to, set by the tenant (https or empty); cma.check_tenant_setting()
+--                         checks the four (whole seconds within bounds, fresh below late; an https
+--                         address of at most 500 characters), 0008o's branches unchanged
 --   sync_run              the job close_forgotten_workdays joins the list (check constraint replaced, as
 --                         0008m did for email_poll); connection_id nullable, for that job alone (a check);
 --                         an index on (tenant_id, started_at desc) so the page's window over the last 30
@@ -71,7 +73,11 @@ insert into cma.setting (key, value_type, allowed_values, default_value, descrip
   ('health.heartbeat_fresh_seconds', 'integer', null, '120',
      'The ingest heartbeat (the sweep''s link_calls run, every minute) counts as fresh while its latest run is younger than this many seconds'),
   ('health.heartbeat_late_seconds',  'integer', null, '900',
-     'The ingest heartbeat counts as silent once its latest run is older than this many seconds; between the two it is late')
+     'The ingest heartbeat counts as silent once its latest run is older than this many seconds; between the two it is late'),
+  ('health.link_gemini_doc', 'text', null, '',
+     'The address of the Google Doc with the Gemini audit findings, linked from System health (https, or empty for no link)'),
+  ('health.link_datamap', 'text', null, '',
+     'The address of the published data map, linked from System health (https, or empty for no link)')
 on conflict (key) do update
   set value_type = excluded.value_type, allowed_values = excluded.allowed_values,
       default_value = excluded.default_value, description = excluded.description;
@@ -177,6 +183,12 @@ begin
     if new.value::integer <= cma.setting_of(new.tenant_id, 'health.heartbeat_fresh_seconds')::integer then
       raise exception 'The heartbeat counts as silent after more seconds than it counts as fresh (%)',
         cma.setting_of(new.tenant_id, 'health.heartbeat_fresh_seconds') using errcode = 'CMA04';
+    end if;
+  -- the two links System health shows: an https address of at most 500 characters without spaces, or empty
+  elsif new.key in ('health.link_gemini_doc', 'health.link_datamap') then
+    new.value := btrim(new.value);
+    if new.value <> '' and (length(new.value) > 500 or new.value !~ '^https://[^[:space:]"''<>]+$') then
+      raise exception 'Setting % takes an https address, or nothing', new.key using errcode = 'CMA04';
     end if;
   end if;
   new.updated_by := cma.current_user_id();
@@ -317,7 +329,7 @@ $$;
 -- 6. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008r', 'System health: the heartbeat thresholds as tenant settings, the scheduler''s close on the sync_run list with its own start and finish, sync_run summed per job and connection for Configuration → System health, an index on the tenant''s runs by time')
+values ('0008r', 'System health: the heartbeat thresholds and the two document links as tenant settings, the scheduler''s close on the sync_run list with its own start and finish, sync_run summed per job and connection for Configuration → System health, an index on the tenant''s runs by time')
 on conflict (version) do nothing;
 
 commit;

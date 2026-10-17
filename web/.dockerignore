@@ -5,3 +5,4 @@ verify
 records
 *.md
 .env*
+!documents/**
