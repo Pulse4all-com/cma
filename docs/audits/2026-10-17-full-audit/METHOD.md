@@ -112,6 +112,13 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 | 18:18 | Cloud Build config worktree: check-config guards and three deploy flags; the check script run locally with nine substitution sets after applying Cloud Build's `$$` and `${_X}` rules by hand | good set exit 0; eight bad sets exit 1 with their message; `#155` opened |
 | 18:14 | speed worktree: per-request database accounting keyed by the trace id, `instrumentation.ts` span processor (request log line), `x-cma-db` and `cma-db` meta under `CMA_DB_TRACE=1`, `verify/round-trips.mjs`; standalone build, api mode against the local database on 8085 | header and meta carry the counts (`/api/v1/me` tx=1 rt=5; Live board manager tx=7 rt=33); the log line reports tx=0: the trace id at query time differs from the request span's; debugging the span tree |
 | 18:15 | subagents started for the UX fix PR (worktree `fix-ux`) and the ingest reliability and ops PRs (`fix-ingest-reliability`, `fix-ops`) | running |
+| 18:24 | speed: the request log line reported tx=0 while the header carried counts; span tree logged under a debug switch | two `BaseServer.handleRequest` spans per request (an outer one without a route, the inner one with it); the queries run under the inner trace; the record was not found because Next bundles the instrumentation file apart from the server chunks (two module instances, two maps): the map moved to `globalThis`, debug switch removed; the line then read `/live/board tx=7 rt=33` |
+| 18:30 | `#156` opened (README cockpit, the eight edits applied bottom-up by anchor; 2143 → 2150 lines) | — |
+| 18:33 | speed, after: `measure-ttfb.sh` (50 requests per route) and the statement-log count against the build of the speed branch | `ttfb-api-localdb-after.txt`, `round-trips-api-after.txt`: every one of 44 requests one transaction and two statements lower; time to first byte unchanged within noise on loopback |
+| 18:40 | the ingest subagent's cross-PR note: a checked-out pg client without an error listener ends the process on the server's FATAL (idle-in-transaction timeout); reproduced with a 10-line script against the local database (`idle-tx-check.txt`) | bare: `UNCAUGHT 25P03`, exit 3; with the listener the transaction fails and the pool serves the next query; the listener added to the web `transaction()` before the PR |
+| 18:44 | `verify/round-trips.mjs` with the 44-request budget observed after the change; normal and provoked against a fresh standalone server; the 15 pure verifiers | PASS (44); provoke FAIL (88 problems); all pure verifiers PASS |
+| 18:46 | PRs opened: `#157` (ingest reliability: lock, timeouts, redirects, cap, replay guard), `#158` (ops: deploy.sh main guard, reconcile 03:30, Dependabot), `#159` (speed) | — |
+| 18:50 | report worktree: PERFORMANCE.md written; subagents writing FINDINGS.csv, BACKLOG_CANDIDATES.md, GEMINI_PROMPT.md, READINESS.md, OPERATIONS.md, PLAN_B.md and the README drift fixes | running |
 
 ## 5. Assumptions made explicit
 
@@ -127,9 +134,9 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 
 ## 7. Where I stopped / next step
 
-- 18:20 UTC: PRs #150 to #155 open (ingest security, 0008q, 0008r db, 0008r web, web security, Cloud Build
-  config). In progress: the speed PR (the request log line's trace-id join), the UX PR and the ingest
-  reliability and ops PRs (subagents). Then: the README cockpit PR (7.4), the report set (REPORT.md,
-  FINDINGS.csv, PERFORMANCE.md, UX_REVIEW.md, READINESS.md, GEMINI_PROMPT.md, BACKLOG_CANDIDATES.md,
-  docs/OPERATIONS.md, docs/PLAN_B.md, README drift and Decision log rows), the self-review and red-team
-  passes (section 6), the acceptance greps, the final session message.
+- 18:50 UTC: PRs #150 to #159 open (ingest security, 0008q, 0008r db and web, web security, Cloud Build
+  config, README cockpit, ingest reliability, ops, speed). In progress: the UX PR (subagent), the report set
+  (two subagents on the CSV, backlog, Gemini prompt, readiness, operations, Plan B and README drift; the
+  lead on REPORT.md, UX_REVIEW.md and this file). Then: the self-review and red-team passes (section 6),
+  the acceptance greps (no secret, no records/ change, no db/00 to db/75 change, no model name), the README
+  Decision log rows and Last updated line in the report PR, the final session message.

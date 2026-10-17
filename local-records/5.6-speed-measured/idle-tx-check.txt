@@ -1,0 +1,12 @@
+# Sandbox check, 17 October 2026: a pg client checked out of the pool when the server ends the session (idle_in_transaction_session_timeout 1 s)
+# bare = no error listener on the checked-out client (pg-pool removes its idle one on acquire); listened = the pattern of web/src/lib/db/client.ts transaction()
+== bare
+UNCAUGHT: 25P03 -> the process would exit
+exit 3
+== listened
+heard on the checked-out client: 25P03
+heard on the checked-out client: undefined
+transaction failed as expected: Client has encountered a connection error and is not queryable
+pool serves the next query: 3 | total clients 1
+done listened
+exit 0
