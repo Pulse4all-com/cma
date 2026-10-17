@@ -1,7 +1,7 @@
 #!/bin/bash
 # The ingest service cma-ingest (DESIGN §5; README Architecture, Ingest API) in one project.
 #
-#   bash docs/ingest/deploy.sh dev  [--tenant <slug>]... [--secret <name>]...
+#   bash docs/ingest/deploy.sh dev  [--tenant <slug>]... [--secret <name>]... [--allow-branch]
 #   bash docs/ingest/deploy.sh prod --front <host> [--tenant <slug>]... [--secret <name>]...
 #   bash docs/ingest/deploy.sh dev|prod --jobs [--reconcile-every "<cron>"] [--reconcile-lookback <minutes>]
 #
@@ -19,8 +19,14 @@
 #                     because the ingress would go to all and HubSpot's signatures over the public host
 #                     would fail (revision cma-ingest-00008; records/ingest-front-incident-2026-10-16).
 #                     Dev needs none and keeps its run.app address
+#   --allow-branch    dev only: deploy from a branch other than main, with a warning naming the branch and
+#                     the image tag (a branch commit no review merged). Without it, and always in prod, a
+#                     checkout that is not on main stops the script (exit 2) before any gcloud call, as does
+#                     an uncommitted change under ingest/ or to this script (audit 17 October 2026, 5.2-05)
 #   --jobs            the jobs and their schedules instead of the service (below)
-#   --reconcile-every "<cron>"       with --jobs: the reconcile schedule (default "30 2 * * *", Europe/Amsterdam)
+#   --reconcile-every "<cron>"       with --jobs: the reconcile schedule (default "30 3 * * *", Europe/Amsterdam:
+#                     03:30 lies outside the 02:00 to 03:00 hour that the autumn change repeats and the spring
+#                     change skips, so the nightly run happens once every night; audit 17 October 2026, DST-01)
 #   --reconcile-lookback <minutes>   with --jobs: the reconcile's look-back (default the job's 26 hours).
 #                     The polling fallback of NIGHT_NOTES D3 (no v3 signature on the project app) is
 #                     --reconcile-every "*/2 * * * *" --reconcile-lookback 10, a schedule change only
@@ -30,7 +36,8 @@
 # --adapter aircall; there is no Aircall sandbox). Prod never sets it: --set-env-vars replaces every
 # variable on each deploy, so a prod service or job never carries it and ignores the setting.
 #
-# Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main. Rerunnable.
+# Runs from Cloud Shell in ~/cma under your own account, on a clean checkout of main (checked: the branch
+# must be main and ingest/ and this script committed; dev may insist with --allow-branch). Rerunnable.
 # Steps: the APIs; the service account cma-ingest@<project> with Cloud SQL client and instance user;
 # its IAM database user; the accessor per named secret; the image; the Cloud Run service with the
 # settings of DESIGN §5; its public URLs as INGEST_PUBLIC_URLS (the URI HubSpot signs; with --front the
@@ -50,7 +57,7 @@
 #   ingest-poll-email  every minute   HubSpot email engagements and inbox conversations (brief B17b), for connections
 #                                     whose settings hold email_poll true: catalogs and owners hourly, threads and
 #                                     messages after their cursors, the open check every ten minutes
-#   ingest-reconcile   02:30          everything modified in the last 26 hours (HubSpot also email engagements and inbox
+#   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also email engagements and inbox
 #                                     threads, and the inbox trash); Aircall: calls of the last 26 hours and the webhook;
 #                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
 #   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
@@ -78,14 +85,19 @@ shift
 TENANTS=()
 SECRETS=()
 JOBS=0
-RECONCILE_EVERY="30 2 * * *"
+# 03:30 Europe/Amsterdam: outside the 02:00 to 03:00 hour that the autumn change repeats and the spring change
+# skips (Cloud Scheduler runs a local-time schedule in that hour twice or not at all; DST-01, 17 October 2026)
+RECONCILE_DEFAULT="30 3 * * *"
+RECONCILE_EVERY="$RECONCILE_DEFAULT"
 RECONCILE_LOOKBACK=""
 FRONT=""
+ALLOW_BRANCH=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --tenant) TENANTS+=("${2:?--tenant needs a slug}"); shift 2 ;;
     --secret) SECRETS+=("${2:?--secret needs a name}"); shift 2 ;;
     --jobs) JOBS=1; shift ;;
+    --allow-branch) ALLOW_BRANCH=1; shift ;;
     --front) FRONT="${2:?--front needs a host}"; shift 2 ;;
     --reconcile-every) RECONCILE_EVERY="${2:?--reconcile-every needs a cron expression}"; shift 2 ;;
     --reconcile-lookback) RECONCILE_LOOKBACK="${2:?--reconcile-lookback needs minutes}"; shift 2 ;;
@@ -112,8 +124,8 @@ REPO="${REGION}-docker.pkg.dev/${BUILD_PROJECT}/cma"
 cd "$(git rev-parse --show-toplevel)"
 HEAD_SHA="$(git rev-parse --short HEAD)"
 SHA="$(git log -1 --format=%h -- ingest/)"   # the image tag: the last commit that touched ingest/
-if [ -n "$(git status --porcelain -- ingest)" ]; then
-  echo "ingest/ has uncommitted changes; deploy from a clean checkout of main"; exit 2
+if [ -n "$(git status --porcelain -- ingest docs/ingest/deploy.sh)" ]; then
+  echo "ingest/ or docs/ingest/deploy.sh has uncommitted changes; deploy from a clean checkout of main"; exit 2
 fi
 [ -n "$SHA" ] || { echo "no commit touches ingest/"; exit 2; }
 IMAGE="${REPO}/ingest:${SHA}"
@@ -128,8 +140,23 @@ fi
 if [ "$ENV" = prod ] && [ "$JOBS" = 0 ] && [ -z "$FRONT" ]; then
   echo "prod service deploy needs --front <host> (ingest.pulse4all.app); without it ingress goes to all and HubSpot signatures fail"; exit 2
 fi
-if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "30 2 * * *" ] || [ -n "$RECONCILE_LOOKBACK" ]; }; then
+if [ "$JOBS" = 0 ] && { [ "$RECONCILE_EVERY" != "$RECONCILE_DEFAULT" ] || [ -n "$RECONCILE_LOOKBACK" ]; }; then
   echo "--reconcile-every and --reconcile-lookback go with --jobs"; exit 2
+fi
+if [ "$ENV" = prod ] && [ "$ALLOW_BRANCH" = 1 ]; then
+  echo "--allow-branch is for dev; prod deploys from main only"; exit 2
+fi
+# Main only (audit 17 October 2026, 5.2-05): main accepts pull requests only, so a deploy from another branch would
+# ship bytes no review merged, tagged with a branch commit; dev may insist for a branch test
+BRANCH="$(git symbolic-ref -q --short HEAD || echo detached)"
+if [ "$BRANCH" != main ]; then
+  if [ "$ENV" = dev ] && [ "$ALLOW_BRANCH" = 1 ]; then
+    echo "WARNING: deploying dev from branch ${BRANCH}, not main (--allow-branch): image tag ${SHA} is a branch commit no review merged"
+  elif [ "$ENV" = dev ]; then
+    echo "deploy from main only (this checkout is on ${BRANCH}): git switch main && git pull --ff-only, then rerun; dev --allow-branch insists, with a warning"; exit 2
+  else
+    echo "prod deploys from main only (this checkout is on ${BRANCH}): git switch main && git pull --ff-only, then rerun"; exit 2
+  fi
 fi
 
 if [ "$JOBS" = 1 ]; then echo "== ingest jobs ${SHA} → ${PROJECT}"; else echo "== ${SERVICE} ${SHA} → ${PROJECT}"; fi

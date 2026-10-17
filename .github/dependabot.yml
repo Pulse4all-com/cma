@@ -1,0 +1,34 @@
+# Dependabot (audit 17 October 2026, finding WEB-10): a monthly look at the npm dependencies of web/ and
+# ingest/. Minor and patch updates of a project arrive grouped in one pull request; a major is never
+# proposed (a major moves by hand, in its own pull request, with the README's Open decision on npm audit).
+# Nothing here merges anything: every pull request is reviewed and squash-merged by hand (CLAUDE.md, Git
+# and release), and a merge touching web/** deploys prod. A security update is not held to the schedule.
+# No github-actions entry: the repository has no workflows; no docker entry: the images are built by Cloud Build.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: monthly
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      web-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: npm
+    directory: /ingest
+    schedule:
+      interval: monthly
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      ingest-minor-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
