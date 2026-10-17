@@ -26,8 +26,8 @@ export type ShellPage =
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
   | "messages" | "messages-send"
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
-  /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j) */
-  | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "data-quality"
+  /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j), Forms (addition 0008p) */
+  | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "forms" | "data-quality"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
   | "follow-up" | "my-follow-up"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
@@ -37,7 +37,8 @@ export type ShellPage =
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
-  | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/data-quality"
+  | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
+  | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules";
 
@@ -149,6 +150,8 @@ export function navEntries(copy: Copy): NavEntry[] {
         // same per person, for performance.team only (README Decision log, 14 October 2026)
         { page: "calls", href: "/reports/calls", label: copy.nav.calls, permission: ["reports.view", "performance.team"] },
         { page: "calls-per-agent", href: "/reports/calls-per-agent", label: copy.nav.callsPerAgent, permission: "performance.team" },
+        // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
+        { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },

@@ -16,6 +16,7 @@ import type {
   SourceLine, SourcePipeline, SourceStore, SourceTag,
   InboundFigures, InboundGroup, InboundNow, InboundService, MissedReason, SourceMissedReason,
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
+  FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
 } from "./types";
@@ -28,6 +29,7 @@ import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
   applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
+  FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
   type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
@@ -59,6 +61,14 @@ function hashOf(text: string): number {
   let h = 2166136261;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
   return (h >>> 0) / 4294967296;
+}
+
+/** hashOf with a final mix (murmur3's fmix32), so keys that differ only in their last character spread evenly (the forms fixture) */
+function mixedHashOf(text: string): number {
+  let h = Math.round(hashOf(text) * 4294967296) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 /** Same answer as the database for a caller holding none of the permissions */
@@ -373,6 +383,68 @@ function assertCalls(me: Principal, range: HoursRange, filter: CallsFilter, grou
   assertReportRange(range);
   if (group !== null && !CALLS_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or line");
   if (parseCallsFilter(filter.market ?? "", filter.line ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+function assertForms(me: Principal, range: HoursRange, group: FormsGroup, filter: FormsFilter): void {
+  assertAny(me, ["reports.view", "performance.team"]);
+  assertReportRange(range);
+  if (!FORMS_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day or week");
+  if (parseFormsFilter(filter.market ?? "", filter.category ?? "", filter.form ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/** The form categories with how many fixture forms carry each, in their order */
+function mockFormCategories(me: Principal): FormCategory[] {
+  const cfg = seedIntakeConfig(me);
+  const forms = cfg.sources.flatMap((x) => x.forms);
+  return [...cfg.categories].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((k) => ({ ...k, forms: forms.filter((f) => f.category === k.code).length }));
+}
+
+const MOCK_FORM_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", BE: "Europe/Brussels", GB: "Europe/London", DE: "Europe/Berlin" };
+
+/**
+ * The fixture's stored submissions (addition 0008p), as cma.form_submissions_of gives them: every polled form
+ * of the tenant's sources, from the start date up to today, a few a day (fewer at the weekend); the market
+ * the form's, else the market field's answer through the aliases, else the contact's country (a share of the
+ * contacts found), else unknown; times between 08:00 and 21:00 in the market's zone; answers drawn from the
+ * kept choice fields' options. Everything invented and stable across reads
+ */
+function mockFormRecords(me: Principal): FormSubmissionRecord[] {
+  const cfg = seedIntakeConfig(me);
+  const aliasOf = (v: string) => cfg.markets.find((m) => m.code === v.toUpperCase() || m.aliases.includes(v.toLowerCase()) || m.name.toLowerCase() === v.toLowerCase())?.code ?? null;
+  const out: FormSubmissionRecord[] = [];
+  const resolutions: FormSubmissionRecord["resolution"][] = ["resolved", "resolved", "resolved", "not_found", "ambiguous", "no_email"];
+  for (const x of cfg.sources) {
+    for (const f of x.forms.filter((y) => y.isPolled)) {
+      const formKey = `${x.connection.id}:${f.formId}`;
+      for (let date = mockStartDate(me); date <= mockToday(me); date = addDays(date, 1)) {
+        const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+        const n = Math.floor(mixedHashOf(`${me.tenantId}:${formKey}:${date}`) * (f.isCounted ? 6 : 4) * (weekend ? 0.4 : 1));
+        for (let i = 0; i < n; i++) {
+          const h = (k: string) => mixedHashOf(`${me.tenantId}:${formKey}:${date}:${i}:${k}`);
+          const answers: Record<string, string | string[]> = {};
+          for (const name of f.keptFields) {
+            const field = f.fields.find((y) => y.name === name);
+            if (!field || field.options.length === 0 || h(`skip-${name}`) < 0.1) continue;
+            const pick = field.options[Math.floor(h(name) * field.options.length)]!;
+            answers[name] = field.kind === "multiple_checkboxes"
+              ? [...new Set([pick, field.options[Math.floor(h(`${name}-2`) * field.options.length)]!])].sort()
+              : pick;
+          }
+          const resolution = resolutions[Math.floor(h("resolution") * resolutions.length)]!;
+          const answerMarket = f.marketField && typeof answers[f.marketField] === "string" ? aliasOf(answers[f.marketField] as string) : null;
+          const contactMarket = resolution === "resolved" && h("contact") < 0.8 ? (["NL", "GB", "DE"] as const)[Math.floor(h("country") * 3)]! : null;
+          const market = f.market ?? answerMarket ?? contactMarket ?? "unknown";
+          const minutes = 8 * 60 + Math.floor(h("time") * 13 * 60);
+          out.push({
+            formKey, formName: f.name, category: f.category, market, zone: MOCK_FORM_ZONES[market] ?? me.timeZone, date,
+            localTime: `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}:00`, resolution, answers,
+          });
+        }
+      }
+    }
+  }
+  return out;
 }
 
 /** The fixture's calls of the range and the previous period, classified and filtered */
@@ -1301,6 +1373,8 @@ function resolveTarget(me: Principal, target: MessageTarget, now: Instant): { ev
 type MockSource = SourceDetail & { tenantId: string };
 type MockIntakeConfig = {
   sources: MockSource[];
+  /** The tenant's form categories (addition 0008p); forms counted from the sources */
+  categories: Omit<FormCategory, "forms">[];
   markets: MarketConfig[];
   hours: OfficeHours[];
   holidays: MarketHoliday[];
@@ -1322,8 +1396,20 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
   };
 }
 
-const form = (formId: string, name: string, isCounted = true, leadSource: string | null = null, market: string | null = null): SourceForm =>
-  ({ formId, name, isCounted, leadSource, market, keptFields: [], isActive: true });
+const form = (formId: string, name: string, isCounted = true, leadSource: string | null = null, market: string | null = null, o: Partial<SourceForm> = {}): SourceForm =>
+  ({ formId, name, isCounted, isPolled: isCounted, category: null, leadSource, market, keptFields: [], marketField: null, leadCondition: null, fields: [], isActive: true, ...o });
+// The fixture forms' fields (addition 0008p): names and option values only, invented
+const choice = (name: string, kind: SourceFormField["kind"], options: string[]): SourceFormField => ({ name, kind, options });
+const MOCK_CUSTOMER = choice("are_you_already_a_customer", "radio", ["Yes, I'm an existing customer (test)", "No, I'm not a customer yet (test)"]);
+const MOCK_COUNTRY = choice("country_dropdown", "dropdown", ["United Kingdom", "Netherlands", "Germany", "Atlantis (test)"]);
+const MOCK_FORM_FIELDS = {
+  quote: [choice("email", "other", []), choice("product_interest", "dropdown", ["AED Plus (test)", "AED 3 (test)"]), choice("message", "other", [])],
+  contact: [choice("email", "other", []), MOCK_CUSTOMER, choice("message", "other", [])],
+  info: [choice("email", "other", []), choice("use_case", "dropdown", ["Office (test)", "Sports club (test)", "Home (test)"])],
+  cancellation: [choice("email", "other", []), choice("cancellation_reason", "dropdown", ["Moving (test)", "Price (test)", "Other (test)"]), MOCK_COUNTRY],
+  replacement: [choice("email", "other", []), choice("exchange_reason", "dropdown", ["Battery (test)", "Pads (test)"]), choice("serial_number", "other", [])],
+  support: [choice("email", "other", []), choice("hs_ticket_category", "multiple_checkboxes", ["Billing (test)", "Device (test)", "Delivery (test)"]), MOCK_COUNTRY],
+};
 const outcome = (outcomeRef: string, label: string, isConnected: boolean): SourceCallOutcome => ({ outcomeRef, label, isConnected, isActive: true });
 const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null): SourcePipeline =>
   ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes });
@@ -1346,9 +1432,17 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
     taskStatuses: [taskStatus("NOT_STARTED", "Not started", false, 5), taskStatus("IN_PROGRESS", "In progress", false, 0), taskStatus("COMPLETED", "Completed", true, 12)],
     taskTypes: [taskType("CALL", "Call", false, true, 3, 3), taskType("CALLBACK", "Callback", true, true, 1, 1), taskType("EMAIL", "Email", false, true, 1, 1),
       taskType("INTERNAL", "Internal note", false, false, 2, 0)],
-    forms: [form("f-101", "NL - Quote form (test)"), form("f-102", "UK - Contact form (test)"), form("f-103", "DE Info request (test)"),
-      form("f-104", "NL - Cancellation form (test)"), form("f-105", "UK - Replacement request (test)"), form("f-106", "Support question (test)"),
-      form("f-107", "Newsletter sign-up (test)", false), form("f-108", "BE Quote form (test)", true, "quote", "BE")],
+    // since addition 0008p: lead forms counted and polled, support forms polled and not counted, a newsletter neither
+    forms: [form("f-101", "NL - Quote form (test)", true, null, null, { category: "quote", keptFields: ["product_interest"], fields: MOCK_FORM_FIELDS.quote }),
+      form("f-102", "UK - Contact form (test)", true, null, null, { category: "contact", keptFields: ["are_you_already_a_customer"], fields: MOCK_FORM_FIELDS.contact,
+        leadCondition: { field: "are_you_already_a_customer", values: ["No, I'm not a customer yet (test)"] } }),
+      form("f-103", "DE Info request (test)", true, null, null, { category: "info", keptFields: ["use_case"], fields: MOCK_FORM_FIELDS.info }),
+      form("f-104", "NL - Cancellation form (test)", false, null, "NL", { isPolled: true, category: "cancellation", keptFields: ["cancellation_reason"], fields: MOCK_FORM_FIELDS.cancellation }),
+      form("f-105", "UK - Replacement request (test)", false, null, "GB", { isPolled: true, category: "replacement", keptFields: ["exchange_reason"], fields: MOCK_FORM_FIELDS.replacement }),
+      form("f-106", "Support question (test)", false, null, null, { isPolled: true, category: "support", keptFields: ["hs_ticket_category", "country_dropdown"],
+        marketField: "country_dropdown", fields: MOCK_FORM_FIELDS.support }),
+      form("f-107", "Newsletter sign-up (test)", false),
+      form("f-108", "BE Quote form (test)", true, "quote", "BE", { category: "quote", keptFields: ["product_interest"], fields: MOCK_FORM_FIELDS.quote })],
     callOutcomes: [outcome("o-1", "Connected", true), outcome("o-2", "Not reached", true), outcome("o-3", "Voicemail", true), outcome("o-4", "Busy", false),
       outcome("o-5", "Wrong number", false), outcome("o-6", "Left live message", true), outcome("o-7", "Do not call or email", false)],
     fields: [{ entity: "contact", field: "country", refSystem: null, slot: 1, property: "contact_country" },
@@ -1378,8 +1472,12 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
   }
   const market = (code: string, name: string, timeZone: string, languageCode: string, currency: string, sortOrder: number, aliases: string[], active = true): MarketConfig =>
     ({ code, name, timeZone, languageCode, languageSkillKey: active ? languageCode : null, minLanguageLevel: active ? 3 : null, currency, isActive: active, sortOrder, aliases });
+  const category = (code: string, name: string, sortOrder: number, isActive = true) => ({ code, name, sortOrder, isActive });
   const cfg: MockIntakeConfig = {
     sources,
+    categories: [category("contact", "Contact (test)", 10), category("info", "Info (test)", 20), category("quote", "Quote (test)", 30),
+      category("cancellation", "Cancellation (test)", 40), category("replacement", "Replacement (test)", 50), category("support", "Support (test)", 60),
+      category("legacy", "Legacy (test)", 90, false)],
     markets: [market("NL", "Netherlands", "Europe/Amsterdam", "nl", "EUR", 10, ["holland", "nederland", "the netherlands"]),
       market("BE", "Belgium", "Europe/Brussels", "nl", "EUR", 20, ["belgie", "belgique"]),
       market("GB", "United Kingdom", "Europe/London", "en", "GBP", 30, ["england", "great britain", "uk", "united kingdom"]),
@@ -2618,12 +2716,39 @@ export const mockData: CmaData = {
 
   async setSourceForms(me, id, changes) {
     const x = sourceOf(me, id);
-    for (const c of changes) assertMockMarket(me, c.market);   // all or nothing, as one transaction
+    const categories = seedIntakeConfig(me).categories;
+    for (const c of changes) {   // all or nothing, as one transaction
+      assertMockMarket(me, c.market);
+      const f = x.forms.find((y) => y.formId === c.formId);
+      if (c.isCounted && c.isPolled === false) throw new CmaDbError("CMA03", "a counted form is always polled; set it not counted first");
+      if (c.category !== undefined && c.category !== null) {
+        const k = categories.find((y) => y.code === c.category);
+        if (!k) throw new CmaDbError("CMA02", `no form category ${c.category}`);
+        if (!k.isActive && f?.category !== c.category) throw new CmaDbError("CMA04", `form category ${c.category} is switched off`);
+      }
+    }
     for (const c of changes) {
       const f = x.forms.find((y) => y.formId === c.formId);
-      if (f) Object.assign(f, { isCounted: c.isCounted, leadSource: c.leadSource, market: c.market });
-      else x.forms.push(form(c.formId, c.formId, c.isCounted, c.leadSource, c.market));
+      const isPolled = c.isCounted || (c.isPolled ?? f?.isPolled ?? c.isCounted);
+      const category = c.category === undefined ? (f?.category ?? null) : c.category;
+      if (f) Object.assign(f, { isCounted: c.isCounted, isPolled, category, leadSource: c.leadSource, market: c.market });
+      else x.forms.push(form(c.formId, c.formId, c.isCounted, c.leadSource, c.market, { isPolled, category }));
     }
+  },
+
+  async getFormCategories(me): Promise<FormCategory[]> {
+    assertAny(me, ["tenant.configure", "reports.view", "performance.team"]);
+    return mockFormCategories(me);
+  },
+
+  async setFormCategory(me, input) {
+    assertConfigure(me);
+    if (!/^[a-z][a-z0-9_]{0,39}$/.test(input.code) || input.code === "none") throw new CmaDbError("CMA04", "a category code is lower-case letters, digits and _");
+    if (input.name.trim().length < 1 || input.name.trim().length > 60) throw new CmaDbError("CMA04", "a category name has 1 to 60 characters");
+    const list = seedIntakeConfig(me).categories;
+    const k = list.find((y) => y.code === input.code);
+    if (k) Object.assign(k, { name: input.name.trim(), sortOrder: input.sortOrder, isActive: input.isActive });
+    else list.push({ code: input.code, name: input.name.trim(), sortOrder: input.sortOrder, isActive: input.isActive });
   },
 
   async setSourceCallOutcomes(me, id, changes) {
@@ -2865,6 +2990,37 @@ export const mockData: CmaData = {
     assertCalls(me, range, filter, null, [PER_AGENT_PERMISSION]);
     const telephony = connectionsOf(me).telephony;
     return { ...range, filter, telephony, rows: callsPerPersonTags(mockCallRecords(me, range, filter), range.from, range.to, mockPersonOf(me), mockCallTags(me)) };
+  },
+
+  async getFormsReport(me, range, group, filter): Promise<FormsReport> {
+    assertForms(me, range, group, filter);
+    const records = mockFormRecords(me);
+    const all = formsFigures(records, range.from, range.to, group, filter);
+    // the lists: the forms and markets with submissions in the period, without the filters
+    const whole = formsFigures(records, range.from, range.to, "week", { market: null, category: null, form: null }).filter((r) => r.groupKey === null);
+    // like for like, as the database: a period that reaches today against the same point in the previous one
+    const prev = previousPeriod(range, mockToday(me));
+    return {
+      ...range, group, filter, forms: seedIntakeConfig(me).sources.some((x) => x.forms.length > 0),
+      rows: all.filter((r) => r.groupKey !== null), totals: all.filter((r) => r.groupKey === null),
+      previous: previousForms(records, prev, filter, new Date().toISOString()),
+      previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial, historyStart: formsHistoryStart(records),
+      categories: mockFormCategories(me),
+      formList: [...new Map(whole.map((r) => [r.formKey, r.formName])).entries()].map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name)),
+      markets: [...new Set(whole.map((r) => r.market))].sort((a, b) => (a === "unknown" ? 1 : b === "unknown" ? -1 : a.localeCompare(b))),
+    };
+  },
+
+  async getFormsAnswers(me, range, filter, field, value): Promise<FormsAnswers> {
+    assertForms(me, range, "day", filter);
+    if (parseAnswerFilter(field ?? "", value ?? "").problem) throw new CmaDbError("CMA04", "invalid field or value");
+    const records = mockFormRecords(me);
+    const prev = previousPeriod(range, mockToday(me));
+    return {
+      ...range, filter, field, value,
+      rows: [...formsAnswersOf(records, range.from, range.to, filter, field, value, "current"),
+        ...formsAnswersOf(records, prev.from, prev.to, filter, field, value, "previous", prev.partial ? new Date().toISOString() : null)],
+    };
   },
 
   async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {

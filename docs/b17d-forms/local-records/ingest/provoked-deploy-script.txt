@@ -1,0 +1,15 @@
+verify/deploy-script.mjs  (--provoke: every check must FAIL)
+
+FAIL  prod without --front or --jobs → exit 2 with the refusal         got [2,"prod service deploy needs --front <host> (ingest.pulse4all.app); w, wanted [0,""]
+FAIL  …before any gcloud call                                          got 0, wanted 12
+FAIL  prod with --tenant and --secret but no --front → refused, no call got [2,"prod service deploy needs --front <host> (ingest.pulse4all.app); w, wanted [0,"",12]
+FAIL  prod --jobs --front → refused as before (--front is the service's) got [2,"--front goes with the service deploy, not --jobs",0], wanted [0,"",23]
+FAIL  prod --jobs → exit 0: the six jobs, no service deploy            got [0,6,0], wanted [2,0,1]
+FAIL  dev → exit 0: ingress all, the run.app addresses, replay on      got [0,"all","https://cma-ingest-100000000001.europe-west4.run.app,https:/, wanted [2,"internal-and-cloud-load-balancing","https://ingest.pulse4all.app,h
+FAIL  prod --front → exit 0 on the image of the last commit under ingest/ got [0,"87d168d","p4a-cma-prod"], wanted [2,null,null]
+FAIL  …--ingress=internal-and-cloud-load-balancing                     got "internal-and-cloud-load-balancing", wanted "all"
+FAIL  …INGEST_PUBLIC_URLS starts with https://ingest.pulse4all.app     got [true,"https://ingest.pulse4all.app,https://cma-ingest-100000000001.eu, wanted [false,"https://cma-ingest-100000000001.europe-west4.run.app,https://c
+FAIL  …no replay variable in prod, the run.app address refused         got [false,true], wanted [true,false]
+
+ALL 10 PROVOKED CHECKS FAILED, as they must
+exit 0

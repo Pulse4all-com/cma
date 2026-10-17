@@ -17,10 +17,10 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore, SourceTaskStatus, SourceTaskType } from "@/lib/data";
+import type { FormCategory, MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore, SourceTaskStatus, SourceTaskType } from "@/lib/data";
 import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, parsePipelineSla, unlinkedSkipOf } from "@/lib/follow-up";
 import {
-  coerceSettingValue, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
+  coerceSettingValue, formCategoryChoices, formEditProblem, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
@@ -35,8 +35,10 @@ const EXAMPLE_ID = "123456789";
 
 type Row = { id: number; key: string; text: string; isNew: boolean };
 
-export function SourceConfig({ detail, markets, copy, locale, timeZone, connectedMinSeconds = null }: {
+export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+  /** The tenant's form categories (addition 0008p), for a form's category */
+  categories?: FormCategory[];
   /** telephony.connected_min_seconds (addition 0008j), shown in words on a telephony connection */
   connectedMinSeconds?: number | null;
 }) {
@@ -74,7 +76,8 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
 
   // ---- dialogs
   const [formEdit, setFormEdit] = useState<{ form: SourceForm; opened: number } | null>(null);
-  const [formDraft, setFormDraft] = useState<{ isCounted: boolean; leadSource: string; market: string }>({ isCounted: true, leadSource: "", market: "" });
+  const [formDraft, setFormDraft] = useState<{ isCounted: boolean; isPolled: boolean; category: string; leadSource: string; market: string }>(
+    { isCounted: true, isPolled: true, category: "", leadSource: "", market: "" });
   const [formProblem, setFormProblem] = useState<string | null>(null);
   const [ruleOpen, setRuleOpen] = useState<{ kind: "forms" | "outcomes"; opened: number } | null>(null);
   const [storeEdit, setStoreEdit] = useState<number | null>(null);
@@ -112,7 +115,7 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
   }
 
   function openForm(f: SourceForm) {
-    setFormDraft({ isCounted: f.isCounted, leadSource: f.leadSource ?? "", market: f.market ?? "" });
+    setFormDraft({ isCounted: f.isCounted, isPolled: f.isPolled || f.isCounted, category: f.category ?? "", leadSource: f.leadSource ?? "", market: f.market ?? "" });
     setFormProblem(null);
     setFormEdit({ form: f, opened: tick() });
   }
@@ -120,8 +123,13 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
   async function saveForm() {
     if (!formEdit) return;
     const lead = formDraft.leadSource.trim();
-    if (lead.length > 60) return setFormProblem(t.ruleLeadSourceProblem);
-    const body = { forms: [{ formId: formEdit.form.formId, isCounted: formDraft.isCounted, leadSource: lead || null, market: formDraft.market || null }] };
+    const problem = formEditProblem(formDraft);
+    if (problem) return setFormProblem(problem === "leadSource" ? t.ruleLeadSourceProblem : t.polledProblem);
+    // polled and the category (addition 0008p) travel with the rest; a counted form is polled
+    const body = { forms: [{
+      formId: formEdit.form.formId, isCounted: formDraft.isCounted, leadSource: lead || null, market: formDraft.market || null,
+      isPolled: formDraft.isPolled || formDraft.isCounted, category: formDraft.category || null,
+    }] };
     if (await save(() => send("PUT", `${base}/forms`, body))) setFormEdit(null);
   }
 
@@ -360,7 +368,9 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.form}</th>
+                  <th className={th}>{t.polled}{hint(t.polled, t.hintFormPolled)}</th>
                   <th className={th}>{t.counted}{hint(t.counted, t.hintFormCounted)}</th>
+                  <th className={th}>{t.category}{hint(t.category, t.hintFormCategory)}</th>
                   <th className={th}>{t.leadSource}{hint(t.leadSource, t.hintLeadSource)}</th>
                   <th className={th}>{t.market}{hint(t.market, t.hintFormMarket)}</th>
                   <th className={th}></th>
@@ -370,7 +380,9 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
                 {detail.forms.map((f) => (
                   <tr key={f.formId} className={`${tr} ${f.isActive ? "" : "text-p4a-muted"}`} data-form={f.formId}>
                     <td className={td}><span className="font-semibold">{f.name}</span> <span className="text-caption text-p4a-muted">({f.formId})</span></td>
+                    <td className={td}>{f.isPolled ? <Badge tone="success">{copy.configSources.on}</Badge> : <Badge tone="neutral">{copy.configSources.off}</Badge>}</td>
                     <td className={td}>{f.isCounted ? <Badge tone="success">{copy.configSources.on}</Badge> : <Badge tone="neutral">{copy.configSources.off}</Badge>}</td>
+                    <td className={`${td} text-small`}>{f.category === null ? t.noCategory : categories.find((k) => k.code === f.category)?.name ?? f.category}</td>
                     <td className={`${td} text-small`}>{f.leadSource ?? "–"}</td>
                     <td className={`${td} text-small`}>{f.market ?? t.noMarket}</td>
                     <td className={`${td} text-right`}><Button variant="outlined" size="sm" onClick={() => openForm(f)}>{c.edit}</Button></td>
@@ -688,8 +700,21 @@ export function SourceConfig({ detail, markets, copy, locale, timeZone, connecte
 
       {formEdit ? (
         <FormDialog key={formEdit.opened} title={`${t.editForm}: ${formEdit.form.name}`} onSave={saveForm} onClose={() => setFormEdit(null)} busy={state.kind === "saving"} saveLabel={c.save} cancelLabel={c.cancel}>
-          <FlagField name={t.counted} hint={t.hintFormCounted} checked={formDraft.isCounted} onChange={(v) => setFormDraft({ ...formDraft, isCounted: v })} />
+          <FlagField name={t.polled} hint={t.hintFormPolled} checked={formDraft.isPolled || formDraft.isCounted} disabled={formDraft.isCounted}
+            onChange={(v) => setFormDraft({ ...formDraft, isPolled: v })} />
+          <FlagField name={t.counted} hint={t.hintFormCounted} checked={formDraft.isCounted}
+            onChange={(v) => setFormDraft({ ...formDraft, isCounted: v, isPolled: formDraft.isPolled || v })} />
           <div className="grid grid-cols-2 gap-4">
+            <label className={`${label} col-span-2`}>
+              {t.category}
+              <select className={field} value={formDraft.category} onChange={(e) => setFormDraft({ ...formDraft, category: e.target.value })}>
+                <option value="">{t.noCategory}</option>
+                {formCategoryChoices(categories, formEdit.form.category).map((k) => (
+                  <option key={k.code} value={k.code}>{k.isActive ? k.name : t.categorySwitchedOff.replace("{name}", k.name)}</option>
+                ))}
+              </select>
+              <span className="font-normal text-caption text-p4a-muted">{t.hintFormCategory}</span>
+            </label>
             <label className={label}>
               {t.leadSource}
               <input className={field} value={formDraft.leadSource} maxLength={60} onChange={(e) => setFormDraft({ ...formDraft, leadSource: e.target.value })} />

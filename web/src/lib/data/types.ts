@@ -1169,6 +1169,109 @@ export interface CallsPerAgentTags {
   rows: CallsPersonTag[];
 }
 
+// ---- Forms reporting (addition 0008p; brief B17d, 16 October 2026). Form and field names, option values,
+// category codes and names, market codes and counts only: no submission id, no contact id, no email, no
+// answer to a field that is no choice field.
+
+/** How cma.forms_report groups the submissions over time */
+export type FormsGroup = "day" | "week";
+
+/**
+ * The report's filters: a market code ("unknown" for a submission without one), a category code ("none" for
+ * forms without one) and a form (connection id ':' form id); each null for all
+ */
+export interface FormsFilter {
+  market: string | null;
+  category: string | null;
+  form: string | null;
+}
+
+/** How the submissions' contacts were resolved by the submitted email (never shown) */
+export interface FormsResolution {
+  resolved: number;
+  notFound: number;
+  ambiguous: number;
+  noEmail: number;
+  pending: number;
+}
+
+/** The submissions of one form in one market, over one day or ISO week (groupKey) or the whole period (groupKey null) */
+export interface FormsRow extends FormsResolution {
+  /** The business date or the week's Monday; null for the period */
+  groupKey: DateKey | null;
+  /** connection id ':' form id, as the form filter takes it */
+  formKey: string;
+  formName: string;
+  /** A code of the tenant's form categories, or null */
+  category: string | null;
+  /** A market code, or "unknown" */
+  market: string;
+  submissions: number;
+}
+
+/** A form category (configuration, cma.form_category): what a form is for, as the tenant names it */
+export interface FormCategory {
+  code: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+  /** How many forms carry it */
+  forms: number;
+}
+
+export interface FormsReport {
+  from: DateKey;
+  to: DateKey;
+  group: FormsGroup;
+  filter: FormsFilter;
+  /** False when no source of the tenant has a form: the screen says so, never 0 */
+  forms: boolean;
+  /** Per day or week, form and market */
+  rows: FormsRow[];
+  /** Per form and market over the period */
+  totals: FormsRow[];
+  /** Per form and market over the previous period, like for like (as the Calls report: previousPeriod in lib/reports) */
+  previous: FormsRow[];
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  /** The business date of the tenant's earliest stored submission (cma.forms_history_start); null without one */
+  historyStart: DateKey | null;
+  categories: FormCategory[];
+  /** The forms and markets with submissions in the period, for the filters */
+  formList: { key: string; name: string }[];
+  markets: string[];
+}
+
+/** Submissions per form, market, kept field and option value (a multiple-checkboxes answer under each of its values) */
+export interface FormAnswerRow {
+  period: "current" | "previous";
+  formKey: string;
+  formName: string;
+  category: string | null;
+  market: string;
+  field: string;
+  value: string;
+  submissions: number;
+}
+
+export interface FormsAnswers {
+  from: DateKey;
+  to: DateKey;
+  filter: FormsFilter;
+  field: string | null;
+  value: string | null;
+  rows: FormAnswerRow[];
+}
+
+/** A form category as the Sources page saves it (set_form_category, set_form_category_status) */
+export interface FormCategoryInput {
+  code: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1227,12 +1330,30 @@ export interface SourcePipeline {
 export interface SourceForm {
   formId: string;
   name: string;
+  /** Counted in Intake (lead forms); a counted form is always polled */
   isCounted: boolean;
+  /** Read by the poll and the backfill, whether or not it counts (addition 0008p) */
+  isPolled: boolean;
+  /** A code of the tenant's form categories, or null (addition 0008p) */
+  category: string | null;
   leadSource: string | null;
   market: string | null;
-  /** Field names whose values are not personal; kept as they are by every write of this screen */
+  /** The kept choice fields whose answers are stored; kept as they are by every write of this screen */
   keptFields: string[];
+  /** The kept field whose answer gives a submission's market when the form has none (addition 0008p) */
+  marketField: string | null;
+  /** The kept field and the values that make a submission a lead in Intake; null: every submission (addition 0008p) */
+  leadCondition: { field: string; values: string[] } | null;
+  /** The form's fields as the source describes them: name, kind and a choice field's option values (addition 0008p) */
+  fields: SourceFormField[];
   isActive: boolean;
+}
+
+/** A field of a source's form: names and option values only */
+export interface SourceFormField {
+  name: string;
+  kind: "dropdown" | "radio" | "multiple_checkboxes" | "single_checkbox" | "other";
+  options: string[];
 }
 
 export interface SourceCallOutcome {
@@ -1377,6 +1498,10 @@ export interface SourceFormChange {
   isCounted: boolean;
   leadSource: string | null;
   market: string | null;
+  /** Polled (addition 0008p); left out: as it is (a counted form is polled anyway) */
+  isPolled?: boolean;
+  /** A category code or null (addition 0008p); left out: as it is */
+  category?: string | null;
 }
 
 export interface SourceOutcomeChange {
@@ -1827,8 +1952,16 @@ export interface CmaData {
   setSourceSettings(me: Principal, id: string, settings: SourceSettings): Promise<void>;
   /** Counted (set_connection_pipeline, routed and work type kept) and lead (set_pipeline_lead) of one pipeline */
   setSourcePipeline(me: Principal, id: string, input: SourcePipelineInput): Promise<void>;
-  /** Several forms in one transaction (set_form, kept fields kept); an unknown market CMA02 writes nothing */
+  /**
+   * Several forms in one transaction (set_form, kept fields kept; then set_form_reporting when polled or the
+   * category is given, addition 0008p); an unknown market or category CMA02 writes nothing, a counted form
+   * not polled CMA03
+   */
   setSourceForms(me: Principal, id: string, changes: SourceFormChange[]): Promise<void>;
+  /** The tenant's form categories with how many forms carry each (addition 0008p) */
+  getFormCategories(me: Principal): Promise<FormCategory[]>;
+  /** Adds or renames a form category and switches it on or off (set_form_category, set_form_category_status); a malformed code CMA04 */
+  setFormCategory(me: Principal, input: FormCategoryInput): Promise<void>;
   /** Several call outcomes in one transaction (set_call_outcome) */
   setSourceCallOutcomes(me: Principal, id: string, changes: SourceOutcomeChange[]): Promise<void>;
   setSourceLine(me: Principal, id: string, input: SourceLineInput): Promise<void>;
@@ -1896,6 +2029,11 @@ export interface CmaData {
   /** Per person the conversations per counted tag and the untagged ones. Needs performance.team */
   getCallsPerAgentTags(me: Principal, range: HoursRange, filter: CallsFilter): Promise<CallsPerAgentTags>;
 
+  // ---- Forms reporting (addition 0008p): the database checks the permission on every call (CMA06); at most 92 days
+  /** Submissions per day or week, form and market, the period's and the previous period's per form and market, the lists. Needs reports.view or performance.team */
+  getFormsReport(me: Principal, range: HoursRange, group: FormsGroup, filter: FormsFilter): Promise<FormsReport>;
+  /** Submissions per form, market, kept field and value, with the previous period; narrowed by a field and a value. Needs reports.view or performance.team */
+  getFormsAnswers(me: Principal, range: HoursRange, filter: FormsFilter, field: string | null, value: string | null): Promise<FormsAnswers>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url)
   /** The open lead deals not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */

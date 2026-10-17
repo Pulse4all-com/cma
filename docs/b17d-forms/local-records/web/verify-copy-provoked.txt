@@ -1,0 +1,7 @@
+  en.myDay.title: trailing period on a label or title
+  nl: missing key nav.logOut
+  nl.shell.testData: exclamation mark
+  nl.shell.testData: all-caps word
+  nl.shell.testData: backend mechanics in copy ("API")
+copy: FAIL (5 problems)
+exit 1

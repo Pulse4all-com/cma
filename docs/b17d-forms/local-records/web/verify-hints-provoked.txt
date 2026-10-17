@@ -1,0 +1,6 @@
+$ BASE=http://127.0.0.1:8080 node verify/hints.mjs --provoke   (local: Playwright launched with this container's Chromium by path, see README)
+  manager /reports/data-quality: header "Check": 0 info marks, expected 1
+  hidden hints: 9 keycaps still visible
+  hidden hints: ? does not show the keycaps again
+hints: FAIL (3 problems)
+exit 1

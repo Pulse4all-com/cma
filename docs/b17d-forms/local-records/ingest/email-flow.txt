@@ -1,0 +1,39 @@
+$ node verify/email-flow.mjs 
+verify/email-flow.mjs
+
+PASS  A1 one email_poll run, succeeded, with counts                    got [1,"succeeded","email",true]
+PASS  A2 five engagements (an unknown direction skipped): direction, status, actor, owner, category, thread got [["4500000001","out","sent","agent","7100000001","billing","th-9000001
+PASS  A3 each engagement's contact, and associations to contact, deal and ticket got [["4300000101","4300000102","4300000101","4300000101",null],["45000000
+PASS  A4 four threads: status, agent's owner id, contact, ticket, spam, the first message's category got [["8800000001","open",false,"7100000001","4300000103","4200000101",fal
+PASS  A5 six inbox messages: direction, actor kind, owner, status, inbox from the channel account got [["m1a","in","customer",null,"other","1500000001"],["m1d","out","agent
+PASS  A6 seven events: assigned, moved, closed, reopened, with kinds and owner ids only got [["m1b","assigned","system",null,"agent","7100000001",null,null],["m2b
+PASS  A7 contacts held after their emails and threads, every slot read: slot 2 through the alias, a value no market as written got [["4300000101","GB",2],["4300000102","GB",1],["4300000103","Atlantis",
+PASS  A8 the contact nothing points to was never read                  got false
+PASS  A9 catalogs: inboxes (a name with an address replaced by its id), channels with kind and counted got [[["1500000001","Support inbox (test)","active"],["1500000002","150000
+PASS  A10 raw: codes only (direction, status, origin; type, status, client, truncation) got ["clientType","direction","origin","status","statusType","truncationSt
+PASS  A11 the job's log line: counts and outcomes per kind, contacts inserted (none not_held: written after the emails) got [true,4,0,1]
+PASS  B1 a second poll: no message read, no row written (no audit row) got [0,0]
+PASS  B2 a new message: that message and the thread written, nothing else got [7,2,"7100000002"]
+PASS  B3 a 429 on the search: the run failed rate_limited, the engagements' cursor unchanged got ["failed","rate_limited",true]
+PASS  B4 …the conversations still ran: the new assignment and the thread's agent stored got ["7100000001",1]
+PASS  B5 the next run reads the engagements from the kept cursor: the changed email updated got "sent"
+PASS  C1 a thread closed at the source without a new message is stored closed got ["closed",true]
+PASS  C2 a thread gone at the source is forgotten: no contact, no ticket; its messages lose their contact got [true,null,null,[null,null,null]]
+PASS  D1 reconcile crm_email: only the email changed since is written again got [1,"succeeded"]
+PASS  D2 reconcile inbox_thread: a held thread in the source's trash marked archived got true
+PASS  D3 …and forgotten once it is gone from the trash too             got [true,null]
+PASS  E1 backfill crm_email from cma.email_start_date_of; interrupted on its second page got ["2026-10-13","failed","http_503",true]
+PASS  E2 the rerun resumes at the kept value, not the start, and finds the email older than the poll's window got [null,true,true]
+PASS  E3 backfill inbox_thread: the thread older than the poll's window with its message got ["closed",true]
+PASS  E4 backfill contact: held contacts read again with every slot (slot 1 now filled) got {"country":"GB","country_source":1}
+PASS  F1 cma.email_words_match on the 12 shared cases: the expected answers, as the ingest's got [[true,false,false,false,true,false,true,true,false,true,true,false],[
+PASS  F2 cma.email_category_of on the 7 shared cases: the expected categories, as the ingest's got [["billing","reminder","partner",null,null,null,"billing"],["billing",
+PASS  G1 a connection without email_poll is never served (no run, no row); one with it is got [0,0,0,1]
+PASS  G2 tenant two sees none of tenant one's email rows               got [0,0]
+PASS  G3 every email row of the run lives in tenant one                got ["01a14342-f59d-7f83-b7c3-b5848bc15fe4"]
+PASS  H1 no row, audit image, cursor or run holds a name, address, subject, text or raw actor id got []
+PASS  H2 no log line holds them, a token, or an email, thread or contact id got [[],false,false]
+PASS  I1 no row of another tenant written by this run (sync_run, email_*, crm_contact, sync_cursor, any audited table) got []
+
+ALL 33 PASS
+exit 0

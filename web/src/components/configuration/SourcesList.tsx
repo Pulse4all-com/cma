@@ -10,7 +10,7 @@ import type { Locale } from "@/lib/copy";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "../HeaderHint";
 import { Badge } from "../primitives";
-import { td, th } from "./shared";
+import { td, th, tr } from "./tableClasses";
 
 export function kindLabel(kind: SourceConnection["kind"], t: Copy["configSources"]): string {
   return kind ? (t as Record<string, string>)[`kind_${kind}`] ?? kind : t.kindNotSet;
@@ -26,7 +26,7 @@ export function SourcesList({ sources, copy, locale, timeZone }: { sources: Sour
   const hint = (label: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
   if (sources.length === 0) return <p className="text-body text-p4a-muted">{t.empty}</p>;
   return (
-    <table className="w-full border-collapse text-body" data-testid="sources">
+    <table className="w-full border-collapse text-body leading-table" data-testid="sources">
       <thead className="bg-p4a-bgblue text-small text-p4a-heading">
         <tr>
           <th className={th}>{t.connection}</th>
@@ -40,7 +40,7 @@ export function SourcesList({ sources, copy, locale, timeZone }: { sources: Sour
       </thead>
       <tbody>
         {sources.map((s) => (
-          <tr key={s.id} className={s.isActive ? "" : "text-p4a-muted"}>
+          <tr key={s.id} className={`${tr} ${s.isActive ? "" : "text-p4a-muted"}`}>
             <td className={td}><span className="font-semibold">{s.name}</span><span className="block text-caption text-p4a-muted">{t.vendor}: {s.adapter}</span></td>
             <td className={`${td} text-small`}>{kindLabel(s.kind, t)}</td>
             <td className={`${td} text-small tabular-nums`}>{s.accountId}</td>

@@ -1,0 +1,42 @@
+FAIL  working and productive is productive                     got "productive", wanted "otherWork"
+FAIL  working, not productive is other work                    got "otherWork", wanted "productive"
+FAIL  not working, paid is a paid pause                        got "paidPause", wanted "unpaidPause"
+FAIL  not working, unpaid is an unpaid pause                   got "unpaidPause", wanted "paidPause"
+FAIL  an ended day is clocked out, whatever its last status    got "clockedOut", wanted "productive"
+FAIL  no day is not clocked in                                 got "notClockedIn", wanted "clockedOut"
+FAIL  the order is work, pauses, then off the clock            got ["productive","otherWork","paidPause","unpaidPause","clockedOut","notC, wanted ["notClockedIn","clockedOut","unpaidPause","paidPause","otherWork","pr
+FAIL  rows sort by group, then by name                         got ["Ada","Zoë","Ana","Bo","Cas","Dee","Abe"], wanted ["Zoë","Ada","Ana","Bo","Cas","Dee","Abe"]
+FAIL  six tiles with their counts when every group has a status got [["productive",2],["otherWork",1],["paidPause",1],["unpaidPause",1],[", wanted [["productive",1],["otherWork",1],["paidPause",1],["unpaidPause",1],["
+FAIL  no paid pause tile without a paid pause status           got ["productive","otherWork","unpaidPause","clockedOut","notClockedIn"], wanted ["productive","otherWork","paidPause","unpaidPause","clockedOut","notC
+FAIL  the day-state tiles exist even with no status at all     got ["clockedOut","notClockedIn"], wanted []
+FAIL  the group filter keeps that group                        got ["p7","p1"], wanted ["p1"]
+FAIL  the employer filter keeps that employer, across groups   got ["p7","p2","p5"], wanted ["p2","p5"]
+FAIL  both filters combine                                     got ["p1"], wanted ["p7","p1"]
+FAIL  no filter keeps everyone                                 got 7, wanted 6
+FAIL  employers by name, a person without one left out         got [{"key":"company","name":"Company"},{"key":"partner","name":"Partner"}, wanted [{"key":"partner","name":"Partner"},{"key":"company","name":"Company"}
+FAIL  team keys per person, sorted                             got {"p1":["aa","zz"],"p2":["aa"],"p9":["mm"]}, wanted {"p1":["zz","aa"],"p2":["aa"],"p9":["mm"]}
+FAIL  the team filter keeps the team's people across groups    got ["p1","p2"], wanted ["p1"]
+FAIL  the team filter combines with the others                 got ["p1"], wanted []
+FAIL  no team filter without memberships changes nothing       got 7, wanted 2
+FAIL  teams on the board by name, a team of nobody on it left out got [{"key":"aa","name":"Alpha"},{"key":"zz","name":"Zulu"}], wanted [{"key":"aa","name":"Alpha"},{"key":"mm","name":"Not on the board"},{"
+FAIL  since counts whole seconds from the instant              got 1830, wanted 1800
+FAIL  since is never negative                                  got 0, wanted -3570
+FAIL  worked adds the running stretch to the closed ones       got 2430, wanted 600
+FAIL  worked stands still while paused or ended                got 9000, wanted 9030
+FAIL  worked stops at the day's end                            got 1500, wanted 2430
+FAIL  a stretch begun after the day's end counts nothing       got 54000, wanted 54030
+FAIL  a refused clock-in gives the window start, nothing else does got ["07:00",null,null,null], wanted ["07:00","25:00",null,null]
+FAIL  the format drops the hour below one                      got ["0:05","59:59","1:00:00","10:20:30"], wanted ["0:05","59:59","1:00:00","10:20:31"]
+FAIL  the inbound tiles in order with their values             got [{"kind":"count","value":28},{"kind":"count","value":17},{"kind":"pct", wanted [{"kind":"count","value":28},{"kind":"count","value":17},{"kind":"pct"
+FAIL  a caller missed twice is one row (2), oldest first; a later missed call calls nobody back got ["c7-a:no_available_agent:2","c4-a:abandoned_in_ivr:1","c1-b:agents_di, wanted ["c1-a:no_available_agent:2","c4-a:abandoned_in_ivr:1","c1-b:agents_di
+FAIL  called back by an outbound attempt and by an answered call; an earlier outbound call does not count got [false,false,true], wanted [true,true,false]
+FAIL  the lookback (3 days out, 5 in) and a reason without a callback got [false,true,false], wanted [true,true,true]
+FAIL  anonymous calls counted and never listed; a waiting call is not missed got [2,false,false], wanted [3,true,true]
+FAIL  waiting in office time, or the time since the call for a line without a market got [{"kind":"business","seconds":9000},{"kind":"business","seconds":7200}, wanted [{"kind":"elapsed","seconds":9000},{"kind":"elapsed","seconds":7200},{
+FAIL  the link only where the connection has a template        got [false,false,true,false], wanted [true,true,true,true]
+FAIL  no caller, hash, number or name in an answer             got [[],false], wanted [["$.rows"],true]
+FAIL  times missed counts the missed calls since the latest callback got ["d-5:1","e-4:1"], wanted ["d-5:3","e-4:3"]
+FAIL  oldest first, then by the call's id                      got ["z","a","b"], wanted ["a","b","z"]
+
+ALL 39 PROVOKED CHECKS FAILED, as they must
+exit 0

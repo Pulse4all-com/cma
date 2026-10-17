@@ -1,0 +1,25 @@
+verify/outbox.mjs  (--provoke: every check must FAIL)
+
+FAIL  only enabled fields are planned with (currency disabled)         got ["id_1","id_2","store","orders","spent","country","language"], wanted ["id_1","id_2","store","orders","spent","country","currency","language
+FAIL  an empty contact: slot 1, store, totals, country and language written got {"id_1":"7100000001","store":"shop-gb","orders":"2","spent":"240","cou, wanted {}
+FAIL  …the result: ref written in slot 1                               got ["written",1], wanted ["written",2]
+FAIL  if_empty keeps an agent's country and language                   got [null,null,"not_empty","not_empty"], wanted ["GB","en",null,null]
+FAIL  if_empty: the same value is unchanged, not written               got "unchanged", wanted "not_empty"
+FAIL  slot 1 held by another id → slot 2                               got [null,"7100000001",2], wanted ["7100000001",null,1]
+FAIL  …and then no store or totals (they describe the customer in slot 1) got [null,null,null,"not_slot_one"], wanted ["shop-gb","2","240",null]
+FAIL  both slots held by other ids → nothing of the ref, slots_full    got [null,null,"slots_full","slot_taken","slot_taken"], wanted ["7100000001",null,"written",null,null]
+FAIL  the id already in slot 2 → present, nothing written for the ref, no totals got ["present",2,[]], wanted ["written",1,["id_1"]]
+FAIL  everything current → nothing to write (240 equals 240.00)        got [[],"present"], wanted [["spent"],"written"]
+FAIL  always writes only the difference                                got {"orders":"2","spent":"240"}, wanted {"store":"shop-gb","orders":"2","spent":"240"}
+FAIL  always overwrites a different store                              got "shop-gb", wanted undefined
+FAIL  no customer id → no store or totals, the codes by their mode     got [null,{"country":"GB"}], wanted ["written",{}]
+FAIL  a planned property is always one of the enabled fields           got true, wanted false
+FAIL  assertConfigured: a configured property passes                   got "accepted", wanted "property_not_configured"
+FAIL  assertConfigured: a property not in the fields is refused        got "property_not_configured", wanted "accepted"
+FAIL  assertConfigured: a disabled field's property is refused         got "property_not_configured", wanted "accepted"
+FAIL  assertConfigured: email is refused                               got "property_not_configured", wanted "accepted"
+FAIL  no enabled write-back field → the action fails writeback_not_configured got [{"ids":["a1"],"outcome":"failed","result":null,"error":"writeback_not, wanted []
+FAIL  an action this writer does not handle → action_not_supported     got ["action_not_supported"], wanted []
+
+ALL 20 PROVOKED CHECKS FAILED, as they must
+exit 0

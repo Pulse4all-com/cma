@@ -282,3 +282,33 @@ export function parseDay(text: string): string | null {
   const d = new Date(`${t}T00:00:00Z`);
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === t ? t : null;
 }
+
+// ---- Forms reporting (addition 0008p; brief B17d) ------------------------------------------------
+
+/** A form category code as cma.set_form_category takes it: lower-case letters, digits and _, starting with a letter, at most 40, not "none" */
+export const FORM_CATEGORY_CODE = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * What stops a form's edit on the Sources page before it is sent, as cma.set_form and cma.set_form_reporting
+ * refuse it: a lead source over 60 characters, or a counted form that is not polled
+ */
+export function formEditProblem(d: { isCounted: boolean; isPolled: boolean; leadSource: string }): "leadSource" | "polled" | null {
+  if (d.leadSource.trim().length > 60) return "leadSource";
+  if (d.isCounted && !d.isPolled) return "polled";
+  return null;
+}
+
+/** The categories a form's category is chosen from: the active ones, and the form's own when it is switched off (it keeps it) */
+export function formCategoryChoices<C extends { code: string; isActive: boolean }>(categories: readonly C[], current: string | null): C[] {
+  return categories.filter((k) => k.isActive || k.code === current);
+}
+
+/** What stops a form category before it is sent, as cma.set_form_category refuses it: the code, the name (1 to 60) or the order (0 to 9999) */
+export function formCategoryProblem(d: { code: string; name: string; sortOrder: string }): "code" | "name" | "order" | null {
+  if (!FORM_CATEGORY_CODE.test(d.code) || d.code === "none") return "code";
+  const name = d.name.trim();
+  if (name.length < 1 || name.length > 60) return "name";
+  const order = Number(d.sortOrder);
+  if (d.sortOrder.trim() === "" || !Number.isInteger(order) || order < 0 || order > 9999) return "order";
+  return null;
+}

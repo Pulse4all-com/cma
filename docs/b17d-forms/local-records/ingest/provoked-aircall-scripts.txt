@@ -1,0 +1,32 @@
+verify/aircall-scripts.mjs  (--provoke: every check must FAIL)
+
+FAIL  webhook: another company's key → refused, nothing created        got [1,true,0,false], wanted [0,false,1,true]
+FAIL  webhook: a URL that is not https → usage, no API call            got [2,1], wanted [0,2]
+FAIL  webhook: a URL that is not /aircall/<key> → usage                got 2, wanted 0
+FAIL  webhook: the signing secret does not exist yet → refused, nothing created got [1,true,0], wanted [0,false,1]
+FAIL  webhook: created with the six events and the URL                 got [0,"https://ingest.example.com/aircall/key00000000000000000000000001",, wanted [1,null,[]]
+FAIL  …the token went to gcloud secrets versions add on standard input, exactly got "fixture-new-webhook-token-0001", wanted null
+FAIL  …the output names the webhook id, the events and the setting to add got [true,true,true], wanted [false,false,false]
+FAIL  …and never the token or the API key                              got false, wanted true
+FAIL  webhook: a second run for the same URL → refused, prints the existing id, nothing created got [1,true,1,true], wanted [0,false,2,false]
+FAIL  …nothing stored a second time                                    got "fixture-new-webhook-token-0001", wanted "fixture-new-webhook-token-0001fixture-new-webhook-token-0001"
+FAIL  webhook --list: the webhook with active and events, marked for --url, no token got [0,true,false], wanted [1,false,true]
+FAIL  webhook: another connection's URL is its own webhook             got [0,2,true], wanted [1,1,false]
+FAIL  …(a third, for the next check)                                   got 0, wanted 1
+FAIL  webhook --delete <id>: deleted                                   got [0,"deleted bbbbbbbb-0000-4000-8000-000000000003",false], wanted [1,"",true]
+FAIL  webhook: the token cannot be stored → exit 1 with the id to delete, the token not shown got [1,true,false], wanted [0,false,true]
+FAIL  users: one email statement per Aircall user with an email        got [0,3,"select cma.set_user_external_id(u.id, 'aircall_user', '920000000, wanted [1,4,""]
+FAIL  …the user without an email listed as not matched, by id          got true, wanted false
+FAIL  users --also-domain: the other domain's address matches too      got true, wanted false
+FAIL  users --via-owners: per match the statement through the HubSpot owner id, no email got [0,["select cma.set_user_external_id(x.user_id, 'aircall_user', '92000, wanted [1,[],true]
+FAIL  …on stderr the count matched and the ids not matched, no emails  got [true,true,false], wanted [false,false,true]
+FAIL  users --via-owners --also-domain: the partner address matches the owner on the other domain got true, wanted false
+FAIL  …the HubSpot owners read with the HubSpot token, the users with the Aircall key got [true,true], wanted [false,false]
+FAIL  …and no secret printed by any run                                got false, wanted true
+FAIL  replay --adapter aircall: one request per event, each 200        got [0,6,true], wanted [1,1,false]
+FAIL  …the token in the body, as Aircall sends it, and never printed   got [true,false], wanted [false,true]
+FAIL  …without --fresh the fixture's times as they are                 got 1791622801, wanted 1791622802
+FAIL  …with --fresh every time moved by the same amount, the first call starting now got [true,true,true], wanted [false,false,false]
+
+ALL 27 PROVOKED CHECKS FAILED, as they must
+exit 0

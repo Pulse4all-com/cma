@@ -1,0 +1,27 @@
+FAIL  no since, no limit: null and 50                          got {"ok":true,"value":{"since":null,"limit":50}}, wanted {"ok":true,"value":{"since":null,"limit":20}}
+FAIL  an ISO instant and a limit of 200                        got {"ok":true,"value":{"since":"2026-10-11T09:00:00.000Z","limit":200}}, wanted {"ok":false}
+FAIL  a local time is refused                                  got "invalid_since", wanted "ok"
+FAIL  an impossible date is refused                            got "invalid_since", wanted "ok"
+FAIL  limit 0 and 201 are refused                              got ["invalid_limit","invalid_limit"], wanted ["ok","ok"]
+FAIL  ids: lower-cased and deduplicated                        got ["00000000-0000-7000-8000-0000000a0002","00000000-0000-7000-8000-00000, wanted ["00000000-0000-7000-8000-0000000A0002","00000000-0000-7000-8000-00000
+FAIL  ids: empty, not a list, not an id, too many              got ["invalid_ids","invalid_ids","invalid_ids","invalid_ids"], wanted ["ok","ok","ok","ok"]
+FAIL  everyone: title trimmed, urgency kept                    got {"title":"Line check at 12:00","body":"Stay available.","urgency":"urg, wanted null
+FAIL  teams with onlyClockedIn, deduplicated                   got {"teams":["nl","de"],"onlyClockedIn":true}, wanted {"teams":["nl","nl","de"]}
+FAIL  urgency defaults to normal, body to empty                got ["normal",""], wanted ["urgent",""]
+FAIL  language with a level and without                        got [{"language":{"skill":"fr","minLevel":3}},{"language":{"skill":"fr","m, wanted []
+FAIL  users lower-cased                                        got {"users":["00000000-0000-7000-8000-0000000a0002"]}, wanted {"users":["00000000-0000-7000-8000-0000000A0002"]}
+FAIL  an empty title and one of 121 characters are refused     got ["invalid_title","invalid_title"], wanted ["ok","ok"]
+FAIL  a body of 501 characters is refused                      got "invalid_body_text", wanted "ok"
+FAIL  an unknown urgency is refused                            got "invalid_urgency", wanted "ok"
+FAIL  two groups, no group, everyone false, bad level, bad key got ["invalid_target","invalid_target","invalid_target","invalid_target",", wanted ["ok","ok","ok","ok","ok"]
+FAIL  onlyClockedIn must be a boolean                          got "invalid_target", wanted "ok"
+FAIL  first poll: no toasts, the urgent one needs confirming   got [[],["u"]], wanted [["b","a"],["u"]]
+FAIL  …and every message is now known                          got ["a","b","u"], wanted ["a","b"]
+FAIL  second poll: new unread messages toast, oldest first; known and read ones do not got ["d"], wanted ["d","c","b"]
+FAIL  an urgent message unacknowledged keeps asking; an acknowledged one stops got [["u"],0], wanted [[],1]
+FAIL  a new urgent message is never a toast                    got {"toasts":[],"urgent":[{"id":"v","kind":"announcement","urgency":"urge, wanted {"toasts":[{"id":"v","kind":"announcement","urgency":"urgent","title":
+FAIL  the title carries the count, and loses it at zero        got ["(3) Workspace","Workspace","(12) Workspace"], wanted ["Workspace","(3) Workspace","(12) Workspace"]
+FAIL  seconds as m:ss, or a mark when there is nothing         got ["1:23","0:00","–"], wanted ["83","0",""]
+
+ALL 24 PROVOKED CHECKS FAILED, as they must
+exit 0

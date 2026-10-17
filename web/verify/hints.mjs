@@ -4,7 +4,8 @@
  * and the open deals), Intake, Inbound (each of its four groups, addition 0008i) and Data quality,
  * every tile on the Dashboard (the Intake row and the time tiles), the Live board's inbound part
  * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
- * of Calls in each grouping and every header of Calls per agent, carries exactly one info mark: a button with a name, described by a
+ * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
+ * Forms, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -107,6 +108,10 @@ const cases = [
   ["reader", "/reports/follow-up", 26, 8],
   ["agent-one", "/me/follow-up", 23, 0],
   ["supervisor", "/live/board", 0, 6, '[data-testid="follow-up-live"]'],
+  // Forms (addition 0008p): four tiles; the forms table's five headers, the totals per category and per market
+  // (four each) and the answers' four, by day and by week
+  ["manager", "/reports/forms?range=month&group=day", 17, 4],
+  ["reader", "/reports/forms?range=week&group=week", 17, 4],
 ];
 let headers = 0;
 let tiles = 0;

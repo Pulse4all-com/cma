@@ -1,6 +1,6 @@
 /**
- * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…70 (the tasks
- * of addition 0008n are reconciled too) and a
+ * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…74 (the tasks of addition 0008n
+ * are reconciled too; the forms since addition 0008p) and a
  * fake HubSpot API. Everything is invented: tenants, portals, ids, secrets, emails (example.com).
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
@@ -18,8 +18,10 @@
  * ten minutes) and records link_calls; the sweep's outbox guard (brief A5) reports an outbox action
  * still waiting ten minutes after it fell due (outboxPending, one warning per connection with the count
  * and no ids), not a fresh one, not another tenant's and not a delivered one; the forms poll refreshes the catalog keeping configuration,
- * reads counted forms only, stops at the start date and at its cursor, resolves contacts by the
- * definition's email field, keeps host, path, UTM and kept fields only, is idempotent across runs,
+ * reads polled forms only (a counted form, and a support form polled and not counted, whose submissions
+ * never count in Intake; addition 0008p), stops at the start date and at its cursor, resolves contacts by the
+ * definition's email field, keeps host, path, UTM and the answers of kept choice fields within their
+ * options only (one left out and counted as dropped), is idempotent across runs,
  * and a failed contact search leaves the cursor for the next run; the backfill starts at
  * intake.start_date by default, resumes after an interruption without reading the first page again,
  * includes deals created earlier and closed since, and paces its searches; the reconcile picks up a
@@ -39,7 +41,7 @@ console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAI
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…70; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…74; see the header)`);
     process.exit(2);
   }
 }
@@ -64,6 +66,7 @@ const isoAgo = (min) => new Date(now - min * 60_000).toISOString();
 const OLD = "2026-10-02T10:00:00.000Z";
 const FORM_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const FORM_B = "bbbbbbbb-0000-4000-8000-000000000002";
+const FORM_C = "cccccccc-0000-4000-8000-000000000003";
 const at = (iso) => Date.parse(iso);
 const sub = (id, iso, email, extra = {}) => ({
   conversionId: id, submittedAt: at(iso), pageUrl: "https://www.example.com/nl/kopen?utm_source=google&utm_campaign=autumn&gclid=x1",
@@ -93,8 +96,11 @@ const fake = {
   assoc: { "deals>contacts": {} },
   forms: [
     { id: FORM_A, name: "Quote test", archived: false, fieldGroups: [{ fields: [{ name: "firstname", fieldType: "single_line_text", objectTypeId: "0-1" },
-      { name: "work_email", fieldType: "email", objectTypeId: "0-1" }, { name: "product_interest", fieldType: "dropdown", objectTypeId: "0-1" }] }] },
+      { name: "work_email", fieldType: "email", objectTypeId: "0-1" },
+      { name: "product_interest", fieldType: "dropdown", objectTypeId: "0-1", options: [{ label: "AED Plus", value: "AED Plus" }, { label: "AED 3", value: "AED 3" }] }] }] },
     { id: FORM_B, name: "Not counted test", archived: false, fieldGroups: [{ fields: [{ name: "email", fieldType: "email", objectTypeId: "0-1" }] }] },
+    { id: FORM_C, name: "Support test", archived: false, fieldGroups: [{ fields: [{ name: "reason", fieldType: "dropdown", options: [{ value: "Moving" }, { value: "Price" }] },
+      { name: "channel", fieldType: "radio", options: [{ value: "web" }, { value: "phone" }] }, { name: "message", fieldType: "multi_line_text" }] }] },
   ],
   submissions: {
     [FORM_A]: [
@@ -105,6 +111,13 @@ const fake = {
       sub("c-0001", "2026-09-20T10:01:00.000Z", "one@example.com"),
     ],
     [FORM_B]: [sub("c-b001", "2026-10-10T10:00:00.000Z", "one@example.com")],
+    // a support form, polled and not counted: no email field, so no contact search
+    [FORM_C]: [
+      { conversionId: "s-0002", submittedAt: at("2026-10-10T09:30:00.000Z"), pageUrl: "https://www.example.com/support",
+        values: [{ name: "reason", value: "Gone fishing" }, { name: "channel", value: "phone" }, { name: "message", value: "Invented free text" }] },
+      { conversionId: "s-0001", submittedAt: at("2026-10-10T09:00:00.000Z"), pageUrl: "https://www.example.com/support",
+        values: [{ name: "reason", value: "Moving" }, { name: "channel", value: "web" }] },
+    ],
   },
   emails: { "one@example.com": ["4300000001"], "shared@example.com": ["4300000002", "4300000003"] },
 };
@@ -242,6 +255,9 @@ const conn1 = await asAdmin(t1, async () => {
   await q("select cma.set_connection_field($1, 'deal', 'amount', '', 'amount', 1::smallint)", [c.connection_id]);
   await q("select cma.set_form($1, $2, true, 'website', 'GB', array['product_interest', 'work_email'])", [c.connection_id, FORM_A]);
   await q("select cma.set_form($1, $2, false, null, null, '{}')", [c.connection_id, FORM_B]);
+  // the support form: not counted, polled, the reason kept (named before the catalog describes the form)
+  await q("select cma.set_form($1, $2, false, null, null, array['reason'])", [c.connection_id, FORM_C]);
+  await q("select cma.set_form_reporting($1, $2, true, null, null)", [c.connection_id, FORM_C]);
   await q("select cma.set_tenant_setting('ingest.max_attempts', '3')");
   return c.connection_id;
 });
@@ -331,10 +347,11 @@ expect("outbox guard: a delivered action is not counted", (await sweep()).outbox
 let n0 = mark();
 const p1 = await runPollForms({ connectionId: conn1 });
 const forms = await q("select source_form_id, name, is_counted, market, kept_fields, status from cma.connection_form where connection_id = $1 order by 1", [conn1]);
-expect("forms: the catalog refreshed, names from HubSpot", forms.map((f) => f.name), ["Quote test", "Not counted test"], [FORM_A, FORM_B]);
+expect("forms: the catalog refreshed, names from HubSpot", forms.map((f) => f.name), ["Quote test", "Not counted test", "Support test"], [FORM_A, FORM_B, FORM_C]);
 expect("forms: the refresh kept the configuration (counted, market, kept fields)", forms.map((f) => [f.is_counted, f.market, f.kept_fields]),
-  [[true, "GB", ["product_interest", "work_email"]], [false, null, []]], [[true, null, []], [true, null, []]]);
-const subs = await q("select source_id, contact_source_id, contact_resolution, page_host, page_path, utm, kept_values from cma.form_submission where connection_id = $1 order by source_id", [conn1]);
+  [[true, "GB", ["product_interest", "work_email"]], [false, null, []], [false, null, ["reason"]]], [[true, null, []], [true, null, []], [true, null, []]]);
+const subs = await q(`select source_id, contact_source_id, contact_resolution, page_host, page_path, utm, kept_values from cma.form_submission
+  where connection_id = $1 and source_form_id = $2 order by source_id`, [conn1, FORM_A]);
 expect("forms: four submissions since the start date, not the older one", subs.map((s) => s.source_id), ["c-0002", "c-0003", "c-0004", "c-0005"], ["c-0001", "c-0002", "c-0003", "c-0004", "c-0005"]);
 expect("forms: contacts resolved (no email, several, none, one)", subs.map((s) => [s.contact_resolution, s.contact_source_id]),
   [["no_email", null], ["ambiguous", null], ["not_found", null], ["resolved", "4300000001"]], []);
@@ -343,14 +360,20 @@ expect("forms: kept values only the kept field, never the email field", subs[3]?
 const searches1 = since(n0).filter((r) => r.path === "/crm/v3/objects/contacts/search");
 expect("forms: one contact search per distinct email, on the definition's email field", [searches1.length, searches1.every((r) => r.body.filterGroups[0].filters[0].propertyName === "work_email")], [3, true], [4, false]);
 expect("forms: a form not counted is never read", since(n0).filter((r) => r.path.endsWith(FORM_B)).length, 0, 1);
-expect("forms: the run recorded, fetched and upserted four", (await runs("forms_poll")).map((r) => [r.stream, r.status, r.counts.fetched, r.counts.upserted]), [["forms", "succeeded", 4, 4]], [["forms", "failed", 0, 0]]);
-expect("forms: the run's totals", [p1.upserted, p1.failed], [4, 0], [0, 1]);
+expect("forms: a support form polled and not counted is read: its answers within the options kept, never free text",
+  (await q("select source_id, kept_values from cma.form_submission where connection_id = $1 and source_form_id = $2 order by source_id", [conn1, FORM_C])).map((r) => [r.source_id, r.kept_values]),
+  [["s-0001", { reason: "Moving" }], ["s-0002", {}]], [["s-0001", { reason: "Moving", channel: "web" }], ["s-0002", { reason: "Gone fishing" }]]);
+expect("forms: …its submissions never count in Intake (the counted form's four only)",
+  await asAdmin(t1, async () => Number((await q("select coalesce(sum(form_submissions), 0) as n from cma.intake_per_day('2026-10-10', '2026-10-10')"))[0].n)), 4, 6);
+expect("forms: the run recorded, fetched and upserted six, one answer dropped", (await runs("forms_poll")).map((r) => [r.stream, r.status, r.counts.fetched, r.counts.upserted, r.counts.dropped]),
+  [["forms", "succeeded", 6, 6, 1]], [["forms", "failed", 0, 0, 0]]);
+expect("forms: the run's totals", [p1.upserted, p1.dropped, p1.failed], [6, 1, 0], [0, 0, 1]);
 
 n0 = mark();
 await runPollForms({ connectionId: conn1 });
-expect("forms: a second run writes nothing new", Number((await q("select count(*) as n from cma.form_submission where connection_id = $1", [conn1]))[0].n), 4, 8);
-expect("forms: …reads one page (stops at the cursor), no catalog, no search", [since(n0).filter((r) => r.path.startsWith("/form-integrations")).length,
-  since(n0).filter((r) => r.path === "/marketing/v3/forms").length, since(n0).filter((r) => r.path === "/crm/v3/objects/contacts/search").length], [1, 0, 0], [3, 1, 3]);
+expect("forms: a second run writes nothing new", Number((await q("select count(*) as n from cma.form_submission where connection_id = $1", [conn1]))[0].n), 6, 12);
+expect("forms: …reads one page per polled form (stops at the cursor), no catalog, no search", [since(n0).filter((r) => r.path.startsWith("/form-integrations")).length,
+  since(n0).filter((r) => r.path === "/marketing/v3/forms").length, since(n0).filter((r) => r.path === "/crm/v3/objects/contacts/search").length], [2, 0, 0], [3, 1, 3]);
 
 fake.submissions[FORM_A].unshift(sub("c-0006", "2026-10-10T10:06:00.000Z", "one@example.com"));
 await runPollForms({ connectionId: conn1 });
@@ -395,6 +418,16 @@ await runBackfill({ connectionId: conn1, object: "deal" });
 expect("backfill: a finished backfill with the same start reads nothing again", since(n0).length, 0, 2);
 await runBackfill({ connectionId: conn1, object: "form_submission", from: "2026-09-15" });
 expect("backfill: form submissions from an earlier date fill the older one", (await q("select contact_resolution from cma.form_submission where connection_id = $1 and source_id = 'c-0001'", [conn1]))[0]?.contact_resolution, "resolved", null);
+// The support form keeps a second field from now on: the next backfill from the same date reads it again
+// (its kept fields changed) and fills the answers of the submission stored without any; the counted form,
+// unchanged, is not read again, and an answer already stored is not overwritten
+await asAdmin(t1, () => q("select cma.set_form($1, $2, false, null, null, array['reason', 'channel'])", [conn1, FORM_C]));
+n0 = mark();
+await runBackfill({ connectionId: conn1, object: "form_submission", from: "2026-09-15" });
+expect("backfill: a form whose kept fields changed is read again and fills empty answers once; the other form not read",
+  [(await q("select source_id, kept_values from cma.form_submission where connection_id = $1 and source_form_id = $2 order by source_id", [conn1, FORM_C])).map((r) => [r.source_id, r.kept_values]),
+    since(n0).filter((r) => r.path.endsWith(FORM_A)).length, (await runs("backfill")).at(-1)?.counts.upserted],
+  [[["s-0001", { reason: "Moving" }], ["s-0002", { channel: "phone" }]], 0, 1], [[["s-0001", { reason: "Moving", channel: "web" }], ["s-0002", {}]], 1, 0]);
 let usage = null;
 try {
   await runBackfill({ connectionId: conn1, object: "commerce_order" });

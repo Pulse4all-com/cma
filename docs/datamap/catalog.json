@@ -32,8 +32,8 @@
         },
         {
           "name": "form_submission",
-          "what": "Form submissions: form, page, UTM, contact id only",
-          "how": "Form poll every minute"
+          "what": "Form submissions: form, page, UTM, contact id only, and the answers to the form's kept choice fields (option values only)",
+          "how": "Form poll every minute, every polled form's (counted in Intake or not, addition 0008p); the form backfill fills a stored submission's empty answers once"
         },
         {
           "name": "crm_task",
@@ -161,8 +161,18 @@
         },
         {
           "name": "connection_form",
-          "what": "CRM forms, counted, market, kept fields",
-          "how": "Form catalog hourly; switches on Configuration"
+          "what": "CRM forms: polled, counted in Intake, category, market, kept choice fields, market field, lead condition",
+          "how": "Form catalog hourly; switches on Configuration (Sources; kept fields, market field and lead condition by the runbook)"
+        },
+        {
+          "name": "connection_form_field",
+          "what": "Fields of the CRM's forms: name, kind (dropdown, radio, checkboxes, other) and a choice field's option values",
+          "how": "With the form catalog, at most hourly; an option a form drops stays as retired"
+        },
+        {
+          "name": "form_category",
+          "what": "Form categories (what a form is for, such as quote or cancellation): code, name, order, active",
+          "how": "Configuration (Sources); the tenant's own, filled by the runbook"
         },
         {
           "name": "connection_field",

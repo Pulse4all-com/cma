@@ -1,0 +1,559 @@
+
+> cma-ingest@0.1.0 test
+> npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:deploy-script
+
+
+> cma-ingest@0.1.0 verify:signature
+> node verify/signature.mjs
+
+verify/signature.mjs
+
+PASS  signV3 equals the documented construction                        got "3A3HP6wNx19p9aIlUtrpGv7a7ukK/KMwD3qBXAMsoIE="
+PASS  a valid v3 signature is accepted                                 got {"ok":true}
+PASS  the method is part of the signature                              got "bad_signature"
+PASS  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}
+PASS  a timestamp 6 minutes old is refused                             got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 6 minutes ahead is refused                           got {"ok":false,"reason":"stale_timestamp"}
+PASS  a timestamp 4 minutes old is accepted                            got {"ok":true}
+PASS  a tampered body is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a wrong URI is refused                                           got {"ok":false,"reason":"bad_signature"}
+PASS  a query string is part of the URI                                got false
+PASS  one matching URI among the candidates is enough                  got {"ok":true}
+PASS  a missing signature header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a missing timestamp header is refused                            got {"ok":false,"reason":"missing_header"}
+PASS  a non-numeric timestamp is refused                               got {"ok":false,"reason":"bad_timestamp"}
+PASS  an empty secret is refused                                       got {"ok":false,"reason":"bad_signature"}
+PASS  a v1-style signature (hex SHA-256) is refused                    got false
+PASS  HubSpot's decoded characters in the URI                          got "https://ingest.example.com/hubspot/key:a/b@c?q=,;"
+PASS  a signature over the decoded URI is accepted                     got true
+
+ALL 18 PASS
+
+> cma-ingest@0.1.0 verify:mapping
+> node verify/mapping.mjs
+
+verify/mapping.mjs
+
+PASS  one canonical event per webhook event                            got 10
+PASS  event key is hs:<eventId>                                        got "hs:3000000101"
+PASS  deal creation → created deal                                     got ["created","deal","4100000001"]
+PASS  occurredAt in ISO 8601                                           got "2026-10-10T09:00:00.000Z"
+PASS  attempt is attemptNumber + 1                                     got 2
+PASS  property change → changed with the property name                 got ["changed","dealstage"]
+PASS  call creation → created crm_call                                 got ["created","crm_call"]
+PASS  contact→call association: the call is read back                  got ["associated","crm_call","4200000001",null]
+PASS  deal→company association is not kept                             got "association_not_kept"
+PASS  merge → merged on the surviving id, merged ids kept              got ["merged","4300000001",["4300000002"]]
+PASS  deletion → deleted ticket                                        got ["deleted","ticket"]
+PASS  restore → restored deal                                          got "restored"
+PASS  another portal → ignored portal_mismatch                         got "portal_mismatch"
+PASS  events of this portal are not ignored                            got 8
+PASS  no property value is kept (ids only)                             got false
+PASS  no acting user is kept                                           got false
+PASS  raw keeps the event id and subscription                          got ["3000000101","object.creation"]
+PASS  contact.privacyDeletion → deleted contact, privacy flag          got ["deleted","contact","4300000001",true]
+PASS  deal.creation (object-named) → created deal                      got ["created","deal",3]
+PASS  DEAL_TO_CONTACT removal → associated deal, removal noted         got ["deal","4100000004",true,"4300000003"]
+PASS  an object (not an array) body is one event                       got 1
+PASS  an event without an id or object is kept as malformed            got "malformed"
+PASS  a company event is not kept                                      got "object_not_kept"
+PASS  kept association direction: deal → contact                       got {"fromType":"deal","fromId":"2","toType":"contact","toId":"1"}
+PASS  deal properties: structural plus configured only                 got ["amount","closedate","createdate","deal_currency_code","dealstage","h
+PASS  contact properties: configured only                              got ["contact_country","contact_language","contact_shopify_id_1","contact_
+PASS  deal → record ids, pipeline, stage, owner                        got ["4100000001","p-sales","s-new","7100000001"]
+PASS  record amount and currency from the mapping                      got ["1200.50","eur"]
+PASS  no market property mapped: the contact's country                 got ["uk","en"]
+PASS  record raw holds requested properties only                       got false
+PASS  record times                                                     got ["2026-10-10T09:00:00.000Z","2026-10-10T09:01:00.000Z"]
+PASS  a mapped market property wins over the contact                   got null
+PASS  contact → country, language and two ref slots                    got ["NL","nl",{"shopify":[null,"6000000002"]}]
+PASS  primary contact: the labelled one                                got "12"
+PASS  primary contact: the held one when still associated              got "12"
+PASS  primary contact: else the lowest id                              got "9"
+PASS  association diff: new added, gone removed                        got [{"fromType":"deal","fromId":"1","toType":"contact","toId":"2","remove
+
+ALL 37 PASS
+
+> cma-ingest@0.1.0 verify:hash
+> node verify/hash.mjs
+
+verify/hash.mjs
+
+PASS  international format → E.164                                     got "+442000000001"
+PASS  national format with region GB → E.164                           got "+442000000001"
+PASS  00 prefix with region GB → E.164                                 got "+442000000001"
+PASS  national format with region NL → E.164                           got "+31200000001"
+PASS  the hash is HMAC-SHA256(pepper, E.164) in hex                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  national and international formats hash the same                 got true
+PASS  spaces, dashes and brackets do not change the hash               got true
+PASS  another region reads a national number differently               got false
+PASS  a different pepper gives a different hash                        got false
+PASS  another number gives another hash                                got false
+PASS  a national number without a region gives no hash                 got null
+PASS  too short to be a number gives no hash                           got null
+PASS  text gives no hash                                               got null
+PASS  no pepper gives no hash                                          got null
+PASS  a lower-case region is not used                                  got null
+PASS  the hash is 64 lower-case hex characters                         got true
+PASS  an outbound call hashes the number it called                     got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  no digits of either number remain in the call                    got false
+PASS  an inbound call hashes the number that called                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  a call of unknown direction gets no hash                         got null
+PASS  an order's own phone (national, the store's market GB) hashes like the call got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  an order without a phone takes its customer's                    got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  the order's phone comes before its customer's                    got "ef4e925fc1bf61e9d3a21c749481f0f35411901b8457c442409fec506fadc8ce"
+PASS  a customer's phone hashes like the call                          got "aef1b9c350a6d06dfea5a4f25d4bea1e674111122bcb3c0a07cb0bfe4214cf00"
+PASS  Phone withheld by the store → no hash, nothing fails             got null
+PASS  no form of the number remains in the order or the customer       got []
+
+ALL 26 PASS
+
+> cma-ingest@0.1.0 verify:forms
+> node verify/forms.mjs
+
+verify/forms.mjs
+
+PASS  host lower-cased, path without query or fragment                 got ["www.example.com","/nl/aed-kopen"]
+PASS  the five UTM parameters parsed                                   got {"source":"google","medium":"cpc","campaign":"autumn","term":"aed","co
+PASS  other query parameters (click id, email) dropped                 got false
+PASS  no email anywhere in the parsed page                             got false
+PASS  a UTM value cut at 200 characters                                got 200
+PASS  an address without UTM: an empty utm and path /                  got {}
+PASS  not a URL → nothing                                              got {"host":null,"path":null,"utm":{}}
+PASS  a javascript: address → nothing                                  got null
+PASS  the email field is the field of type email                       got "work_email"
+PASS  …else a contact field named email                                got "email"
+PASS  …else none                                                       got null
+PASS  the catalog item: id, name and the fields (no label; a bad name left out, a name once) got ["11111111-0000-0000-0000-000000000001","Request a quote (test)",["fir
+PASS  fields: the four choice kinds with their option values (each once), every other field other without options got ["firstname=other:","work_email=other:","product_interest=dropdown:AED
+PASS  no label of an option reaches the catalog                        got false
+PASS  the submitted email, trimmed, for the search                     got "someone.invented@example.com"
+PASS  no email field → no email                                        got null
+PASS  a value that is not an email → no email                          got null
+PASS  answers: choice fields within their options (multiple checkboxes as a sorted list); text, email and a bank field dropped got {"values":{"product_interest":"AED Plus","customer":"No, I'm not a cus
+PASS  an answer no option accounts for is dropped and counted          got {"values":{"product_interest":"AED Plus"},"dropped":2}
+PASS  multiple checkboxes sent as several values of one name, each once got ["Billing","Device"]
+PASS  a missing or empty answer is neither kept nor dropped            got {"values":{},"dropped":0}
+PASS  a form not described yet (no fields) keeps no answer: each is dropped got {"values":{},"dropped":6}
+PASS  the email field is never kept, even when configured and described as a choice got {"values":{},"dropped":0}
+PASS  no kept fields → no answers                                      got {"values":{},"dropped":0}
+PASS  the item: ids, time, host, path, UTM, contact, answers           got {"item":{"sourceId":"c0000000-0000-0000-0000-000000000001","formId":"1
+PASS  the item holds no email, no name, no phone number, no bank field got [false,false,false,false,false]
+PASS  an unresolved contact carries its resolution, no id              got "ambiguous"
+PASS  the backfill's key of the kept fields: the same for the same set, another once they change got [true,false]
+PASS  stops at the cursor (time and conversion id)                     got ["c5","c4","c3b"]
+PASS  …and says it reached it                                          got true
+PASS  a submission in the cursor's millisecond with another id is new  got ["c5","c4"]
+PASS  an older submission than the cursor stops too                    got ["c5","c4","c3b","c3"]
+PASS  the first poll stops at the start date                           got ["c5","c4","c3b","c3","c2"]
+PASS  a page entirely newer than the cursor is not reached             got false
+PASS  entries without an id or a time are skipped                      got ["c9"]
+PASS  the new cursor is the newest submission read                     got {"at":1791623100000,"id":"c5"}
+PASS  nothing new keeps the old cursor                                 got {"at":1791622980000,"id":"c3"}
+PASS  the search body: modified time between from and to, ascending, ids only got {"filterGroups":[{"filters":[{"propertyName":"hs_lastmodifieddate","op
+PASS  a backfill body asks the created time and the version (modified time) only got ["createdate","hs_lastmodifieddate"]
+PASS  10,100 results all listed across the 10,000-result window        got 10100
+PASS  …by starting a new query at the last value                       got 2
+PASS  …never asking past result 10,000 in one query                    got true
+PASS  a synthetic event: key by object, id and version; kind changed   got ["sync:deal:4100000001:2026-10-10T09:00:00.000Z","changed","cma.reconc
+PASS  the same object and version give the same key (read once)        got "sync:deal:4100000001:2026-10-10T09:00:00.000Z"
+PASS  arguments: --connection must be a uuid                           got true
+PASS  arguments: --from must be a date                                 got true
+PASS  arguments: an unknown argument is refused                        got true
+PASS  arguments: --lookback-minutes is a number                        got {"lookback-minutes":10}
+
+ALL 48 PASS
+
+> cma-ingest@0.1.0 verify:aircall-token
+> node verify/aircall-token.mjs
+
+verify/aircall-token.mjs
+
+PASS  the right token is accepted                                      got {"ok":true}
+PASS  a wrong token of the same length is refused                      got {"ok":false,"reason":"bad_token"}
+PASS  a missing token is refused                                       got {"ok":false,"reason":"missing_token"}
+PASS  an empty token is refused                                        got {"ok":false,"reason":"missing_token"}
+PASS  a token that is not a string is refused                          got {"ok":false,"reason":"missing_token"}
+PASS  a shorter token (a prefix of the right one) is refused           got {"ok":false,"reason":"bad_token"}
+PASS  a longer token (the right one plus a character) is refused       got {"ok":false,"reason":"bad_token"}
+PASS  the token inside data does not count                             got {"ok":false,"reason":"missing_token"}
+PASS  a body that is not JSON is refused                               got {"ok":false,"reason":"not_json"}
+PASS  a JSON array is refused                                          got {"ok":false,"reason":"not_json"}
+PASS  an empty secret refuses everything                               got {"ok":false,"reason":"bad_token"}
+PASS  sameToken: different lengths are false without a compare         got false
+PASS  sameToken: multi-byte characters compare by bytes                got false
+PASS  the adapter accepts its webhook's token                          got {"ok":true}
+PASS  the adapter refuses another token                                got false
+PASS  an unreadable signing secret throws SecretUnavailable (the server answers 500) got "SecretUnavailable"
+PASS  verify.mjs imports timingSafeEqual from node:crypto              got true
+PASS  …calls it on the two buffers                                     got true
+PASS  …after the length check                                          got true
+PASS  …and never compares a token with === or !==                      got false
+
+ALL 20 PASS
+
+> cma-ingest@0.1.0 verify:aircall-mapping
+> node verify/aircall-mapping.mjs
+
+verify/aircall-mapping.mjs
+
+PASS  the six events are the six of the subscription                   got ["call.created","call.answered","call.ended","call.tagged","call.untag
+PASS  each of the six → its key ac:<event>:<call id>:<timestamp>       got ["ac:call.created:9100000001:1791622801","ac:call.answered:9100000001:
+PASS  …kinds: created, then changed for the other five                 got ["created","changed","changed","changed","changed","changed"]
+PASS  …object telephony_call with the call's id, the event as source type got "telephony_call:9100000001:call.ended"
+PASS  …occurred at the event's timestamp (UNIX seconds)                got "2026-10-10T09:00:01.000Z"
+PASS  …none ignored                                                    got 0
+PASS  …raw holds the event, resource and timestamp only                got {"event":"call.tagged","resource":"call","timestamp":1791622902}
+PASS  …no token, number, name, email, comment or link in the events    got false
+PASS  …and no object in memory without the replay allowance            got false
+PASS  the same delivery again gives the same key (Aircall's retries are absorbed) got "ac:call.answered:9100000001:1791622809"
+PASS  another call event (call.hungup) → recorded as ignored, event_not_handled got ["telephony_call","event_not_handled"]
+PASS  another resource (user, contact) → ignored, event_not_handled, under its own type got ["user:event_not_handled","contact:event_not_handled"]
+PASS  …and the contact's name, number and email are not in the event   got false
+PASS  a call event without a call id → ignored, malformed              got "malformed"
+PASS  a call event without a timestamp keeps a stable key              got "ac:call.ended:5:none"
+PASS  a body that is not one object is refused (the server answers 400) got "refused"
+PASS  with the replay allowance the event holds its own call in memory got ["replay",9100000001,"2026-10-10T09:01:41.000Z"]
+PASS  the adapter attaches it only when INGEST_ALLOW_REPLAY=1          got [false,true]
+PASS  replay is on only with INGEST_ALLOW_REPLAY=1 and the setting     got [true,true,false,false]
+PASS  without the variable the setting does nothing (a prod-configured service) got false
+PASS  a call → direction, status, times (UNIX → ISO), duration         got ["outbound","done","2026-10-10T09:00:00.000Z","2026-10-10T09:00:08.000
+PASS  …the user and the line as ids only, archived, the version        got ["9200000001","9300000001",false,"2026-10-10T09:02:00.000Z"]
+PASS  …the other party's number as HMAC(pepper, E.164)                 got "52f0dbac3bc223fcd7e1c5a538e3ed1f9cbfd18dfe48271308bae6a737846fce"
+PASS  …its whole current tag set                                       got [{"tagRef":"9400000001","name":"Interested"}]
+PASS  …raw holds the allowlisted keys only                             got ["answered_at","archived","direction","duration","ended_at","started_a
+PASS  …no number, name, email, comment, recording or link anywhere in the item got false
+PASS  …the line's number neither                                       got false
+PASS  a national number takes the region given (the line's market)     got "729c1f1db7dc49a1cbdcc944a82bebe9753d1080beac371235d8fefe1707ab98"
+PASS  …another region reads it differently                             got [true,false]
+PASS  an anonymous caller gets no hash                                 got null
+PASS  an unanswered inbound call: missed reason, no answer time        got ["inbound","agents_did_not_answer",null]
+PASS  a call without tags in the object leaves the tag set out (tags kept as they are) got false
+PASS  an empty tag list is the empty set (closes every tag)            got []
+PASS  tags: ids as refs, names, duplicates once, tagged_by left out    got [{"tagRef":"1","name":"A"}]
+PASS  an object without a direction is not a call                      got null
+PASS  rawOf drops nested objects and long strings                      got {"status":"done","duration":3}
+PASS  unixIso: 0 and empty are no time                                 got [null,null,null]
+PASS  the fingerprint ignores the number                               got true
+PASS  …and changes when a tag, the status or the archive changes       got [true,true,true]
+PASS  a line → ref, name, digits (the company's own number)            got {"numberRef":"9300000001","name":"Test line GB","digits":"+44 20 0000 
+PASS  a tag → ref and name (colour left out)                           got {"tagRef":"9400000002","name":"Call back"}
+PASS  aircall_max_per_minute: default 60, numbers and digit strings 1 to 120 got [60,30,20,60,60]
+PASS  …a pace of 30 per minute lets one call through every 2 seconds   got 2000
+PASS  …the same connection keeps its pace                              got true
+PASS  after a 429: until X-AircallApi-Reset (UNIX seconds)             got 30000
+PASS  …in milliseconds too                                             got 20000
+PASS  …60 seconds without the header, never more than 70               got [60000,70000]
+PASS  26 hours → two day windows, the second of 2 hours                got [24,2]
+PASS  a backfill of 12 days → 12 windows                               got 12
+
+ALL 49 PASS
+
+> cma-ingest@0.1.0 verify:aircall-scripts
+> node verify/aircall-scripts.mjs
+
+verify/aircall-scripts.mjs
+
+PASS  webhook: another company's key → refused, nothing created        got [1,true,0,false]
+PASS  webhook: a URL that is not https → usage, no API call            got [2,1]
+PASS  webhook: a URL that is not /aircall/<key> → usage                got 2
+PASS  webhook: the signing secret does not exist yet → refused, nothing created got [1,true,0]
+PASS  webhook: created with the six events and the URL                 got [0,"https://ingest.example.com/aircall/key00000000000000000000000001",
+PASS  …the token went to gcloud secrets versions add on standard input, exactly got "fixture-new-webhook-token-0001"
+PASS  …the output names the webhook id, the events and the setting to add got [true,true,true]
+PASS  …and never the token or the API key                              got false
+PASS  webhook: a second run for the same URL → refused, prints the existing id, nothing created got [1,true,1,true]
+PASS  …nothing stored a second time                                    got "fixture-new-webhook-token-0001"
+PASS  webhook --list: the webhook with active and events, marked for --url, no token got [0,true,false]
+PASS  webhook: another connection's URL is its own webhook             got [0,2,true]
+PASS  …(a third, for the next check)                                   got 0
+PASS  webhook --delete <id>: deleted                                   got [0,"deleted bbbbbbbb-0000-4000-8000-000000000003",false]
+PASS  webhook: the token cannot be stored → exit 1 with the id to delete, the token not shown got [1,true,false]
+PASS  users: one email statement per Aircall user with an email        got [0,3,"select cma.set_user_external_id(u.id, 'aircall_user', '920000000
+PASS  …the user without an email listed as not matched, by id          got true
+PASS  users --also-domain: the other domain's address matches too      got true
+PASS  users --via-owners: per match the statement through the HubSpot owner id, no email got [0,["select cma.set_user_external_id(x.user_id, 'aircall_user', '92000
+PASS  …on stderr the count matched and the ids not matched, no emails  got [true,true,false]
+PASS  users --via-owners --also-domain: the partner address matches the owner on the other domain got true
+PASS  …the HubSpot owners read with the HubSpot token, the users with the Aircall key got [true,true]
+PASS  …and no secret printed by any run                                got false
+PASS  replay --adapter aircall: one request per event, each 200        got [0,6,true]
+PASS  …the token in the body, as Aircall sends it, and never printed   got [true,false]
+PASS  …without --fresh the fixture's times as they are                 got 1791622801
+PASS  …with --fresh every time moved by the same amount, the first call starting now got [true,true,true]
+
+ALL 27 PASS
+
+> cma-ingest@0.1.0 verify:shopify-signature
+> node verify/shopify-signature.mjs
+
+verify/shopify-signature.mjs
+
+PASS  signBody equals the documented construction                      got "5FP/d615qfTnJzdhweFBNhvZXeu2hSy9zQCtvSweKsg="
+PASS  a valid HMAC is accepted                                         got {"ok":true}
+PASS  the header name is X-Shopify-Hmac-Sha256 (as Node lower-cases it) got "x-shopify-hmac-sha256"
+PASS  a wrong secret is refused                                        got {"ok":false,"reason":"bad_signature"}
+PASS  a body changed by one byte is refused                            got {"ok":false,"reason":"bad_signature"}
+PASS  the raw bytes count: a re-serialised body (spaces) is refused    got "bad_signature"
+PASS  a missing header is refused                                      got {"ok":false,"reason":"missing_header"}
+PASS  a header that is not a base64 SHA-256 digest is refused          got {"ok":false,"reason":"missing_header"}
+PASS  a hex digest (another encoding) is refused                       got false
+PASS  no secret: refused                                               got {"ok":false,"reason":"bad_signature"}
+PASS  surrounding whitespace in the header is tolerated                got {"ok":true}
+PASS  an empty body is signed as empty                                 got {"ok":true}
+PASS  sameDigest: equal strings                                        got true
+PASS  sameDigest: another length, no compare                           got false
+PASS  sameDigest: not strings                                          got false
+PASS  the compare uses crypto.timingSafeEqual                          got true
+PASS  …and no plain equality on the digest                             got false
+
+ALL 17 PASS
+
+> cma-ingest@0.1.0 verify:shopify-mapping
+> node verify/shopify-mapping.mjs
+
+verify/shopify-mapping.mjs
+
+PASS  orders/create → commerce_order, created, the order id            got ["commerce_order","created","7300000001"]
+PASS  the key is sh:<X-Shopify-Webhook-Id> (Shopify's duplicate key)   got "sh:b54557e4-bdd9-4b37-8a5f-bf7d70bcd043"
+PASS  occurred at X-Shopify-Triggered-At                               got "2026-10-13T08:00:01.123Z"
+PASS  raw holds the topic, the delivery's ids, its time and version only got {"topic":"orders/create","eventId":"98880550-7158-44d4-b7cd-2c97c8a091
+PASS  nothing of the body beyond the id reaches the event              got false
+PASS  the seven topics and their kinds                                 got {"customers/create":"commerce_customer:created","customers/update":"co
+PASS  the same seven as subscription topics                            got ["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_CREA
+PASS  another shop's domain → ignored portal_mismatch                  got "portal_mismatch"
+PASS  the shop domain compared without case                            got undefined
+PASS  no shop domain → ignored portal_mismatch                         got "portal_mismatch"
+PASS  another topic → ignored event_not_handled                        got "event_not_handled"
+PASS  no id → ignored malformed                                        got "malformed"
+PASS  the id from admin_graphql_api_id when id is missing              got "7100000009"
+PASS  no webhook id → the event id with the topic                      got "sh:orders/create:98880550-7158-44d4-b7cd-2c97c8a091b5"
+PASS  neither → a digest of the body (a retry of the same body keys the same) got [true,true]
+PASS  no Triggered-At → the body's updated_at                          got "2026-10-13T08:00:00.000Z"
+PASS  a body that is not one JSON object → SyntaxError                 got ["SyntaxError","SyntaxError"]
+PASS  ids: a number, a digit string and a gid                          got ["7300000001","7300000001","7300000001"]
+PASS  ids: nothing else                                                got [null,null,null,null,null,null]
+PASS  gid of an order and a customer                                   got ["gid://shopify/Order/1","gid://shopify/Customer/2"]
+PASS  a first order: lifetime 1, one at or after → 0, exact            got {"prior":0,"exact":true}
+PASS  a customer with three older orders: lifetime 4, one at or after → 3 got {"prior":3,"exact":true}
+PASS  an older order read later: lifetime 5, three at or after → 2     got {"prior":2,"exact":true}
+PASS  a count that is a lower bound (AT_LEAST) → not exact             got {"prior":2,"exact":false}
+PASS  the search does not hold the order yet (0) → unknown             got {"prior":null,"exact":false}
+PASS  more at or after than the lifetime → 0, not exact                got {"prior":0,"exact":false}
+PASS  no lifetime count → unknown                                      got {"prior":null,"exact":false}
+PASS  the count's search: customer and creation at or after            got "customer_id:7100000001 AND created_at:>='2026-10-12T10:00:00Z'"
+PASS  one count query, one alias per order                             got "query CmaPriorCounts($q0: String!, $q1: String!) { c0: ordersCount(qu
+PASS  a customer: id, state, locale, count, amount, currency, times    got ["7100000001","ENABLED","nb-NO",4,"480.5","NOK","2026-01-02T03:04:05.0
+PASS  …its keys: no email, name or address, the phone as a hash        got ["amountSpent","createdAt","currency","locale","ordersCount","phoneHas
+PASS  …no email, number, name or address anywhere in it                got false
+PASS  an order: ids, name, times, test, currency, amounts (a missing tax amount is null) got ["7300000001","#1001","7100000001","2026-10-12T10:00:00.000Z",false,"G
+PASS  …the source name and the app id (the renewal lists' values)      got ["subscription_contract","580111"]
+PASS  …the landing page as host (lower case) and path, never its query or fragment got ["shop.example.com","/products/aed"]
+PASS  …UTM from the visit's own tags, else the landing page's          got {"source":"news","medium":"email","campaign":"autumn"}
+PASS  …the referrer's host only                                        got "www.google.com"
+PASS  …tags as text only, the prior count and its exactness            got [["aed","pads"],3,true]
+PASS  …its lines: id, sku, product and variant ids, quantity, unit price, currency got [{"lineId":"1","sku":"AED-1","productRef":"8000000001","variantRef":"8
+PASS  …no email, number, name, address or note anywhere in it          got false
+PASS  …lines that could not all be read → no lines key (the stored lines stay) got false
+PASS  …the last visit when there is no first one                       got "/b"
+PASS  …a guest order: no customer id                                   got null
+PASS  a line without an id is left out                                 got null
+PASS  UTM: empty without a visit                                       got {}
+PASS  the order query asks for no name, email, address or note (the order phone and the customer's phone and email are read, hashed or used in memory) got false
+PASS  the customer query reads the email and the phone only through their default fields got [true,true,false]
+PASS  listings ask for ids and times only                              got true
+PASS  subscriptions are created with uri (callbackUrl is deprecated in 2026-10) got true
+PASS  the API version: the setting, else 2026-10                       got ["2027-01","2026-10","2026-10","2026-10"]
+PASS  the route's budget: default 1500, the setting from 100 to 4000   got [1500,800,1500,1500,1500]
+
+ALL 51 PASS
+
+> cma-ingest@0.1.0 verify:shopify-client
+> node verify/shopify-client.mjs
+
+verify/shopify-client.mjs
+
+PASS  five callers at once: one token minted, all get it               got [1,1]
+PASS  …sent form-encoded with the client id and secret (the fake refuses otherwise) got "shpat_fixture_1"
+PASS  a second call reuses the cached token                            got ["shpat_fixture_1",1]
+PASS  within five minutes of its expiry the token is minted again      got ["shpat_fixture_2",2]
+PASS  …six minutes before, it is still used                            got ["shpat_fixture_2",2]
+PASS  no client id setting → client_id_not_set                         got "client_id_not_set"
+PASS  another client id → the token request refused (token_http_400)   got "token_http_400"
+PASS  a missing client secret → client_secret_unavailable              got "client_secret_unavailable"
+PASS  a shop that is not <handle>.myshopify.com → shop_invalid         got "shop_invalid"
+PASS  a query answers its data, at version 2026-10 with the shop's token got [{"ok":true},true,true]
+PASS  the bucket learns the shop's restore rate and maximum from throttleStatus got [100,1000]
+{"severity":"WARNING","message":"shopify throttled","connection":"c1","code":"rate_limited","available":3,"time":"2026-10-16T06:53:07.320Z"}
+PASS  a THROTTLED answer → rate_limited, the estimate emptied          got ["rate_limited",0]
+PASS  a withheld protected field (ACCESS_DENIED) → the data with the field null, nothing fails got "ok"
+PASS  another error without data → graphql_error                       got "graphql_error"
+PASS  a 401 → http_401 and the token dropped (the next call mints)     got ["http_401","ok",1]
+PASS  a 429 → rate_limited                                             got "rate_limited"
+PASS  waitFor: 300 points at 100 a second from empty → 3 seconds       got 3000
+PASS  a webhook never waits past its budget: 300 points short → throttled at once got ["throttled",true]
+PASS  …a short wait that leaves a second of its budget is waited for   got ["ok",true]
+PASS  a job waits for the refill instead (500 points at 1000 a second: about half a second) got ["ok",true]
+PASS  three callers sharing a bucket of 100 at 1000 a second queue behind each other (reserved before the wait) got true
+
+ALL 21 PASS
+
+> cma-ingest@0.1.0 verify:shopify-scripts
+> node verify/shopify-scripts.mjs
+
+verify/shopify-scripts.mjs
+
+PASS  a URL that is not https → usage, nothing asked of Shopify        got [2,0]
+PASS  a URL that is not /shopify/<key> → usage                         got 2
+PASS  a URL with a query → usage (no personal data in the address)     got 2
+PASS  a shop that is not <handle>.myshopify.com → usage                got 2
+PASS  an API version that is not a release → usage                     got 2
+PASS  another client id → the token refused, nothing created           got [1,true,0]
+PASS  a secret that cannot be read → stops before Shopify              got [1,true]
+PASS  create: the seven topics at the address, by the client credentials grant got [0,["CUSTOMERS_CREATE","CUSTOMERS_UPDATE","CUSTOMERS_DELETE","ORDERS_C
+PASS  …the token request form-encoded at /admin/oauth/access_token, GraphQL at 2026-10 got [true,true]
+PASS  …subscribed with uri (not the deprecated callbackUrl)            got true
+PASS  …prints ids and topics only, never the secret or the token       got [true,false]
+PASS  a rerun creates nothing and lists the seven as existing          got [0,7,7]
+PASS  a missing topic is created again, the others left                got [0,1,7]
+PASS  --list: every subscription, those of --url marked                got [0,7,true,false]
+PASS  --delete <numeric id> deletes that subscription                  got [0,false,"deleted gid://shopify/WebhookSubscription/7799999999"]
+PASS  …a second delete of it fails with Shopify's message              got [1,true]
+PASS  --delete with something that is not an id → usage                got 2
+PASS  --source-names: counts per source name and app, the most frequent first got [0,"12\tsubscription_contract\t9900001\tInvented Subscriptions","5\twe
+PASS  …asks for the source name and the app only, created in the last --days days got [true,true]
+PASS  --days beyond 60 → usage                                         got 2
+PASS  two modes at once → usage                                        got 2
+
+ALL 21 PASS
+
+> cma-ingest@0.1.0 verify:outbox
+> node verify/outbox.mjs
+
+verify/outbox.mjs
+
+PASS  only enabled fields are planned with (currency disabled)         got ["id_1","id_2","store","orders","spent","country","language"]
+PASS  an empty contact: slot 1, store, totals, country and language written got {"id_1":"7100000001","store":"shop-gb","orders":"2","spent":"240","cou
+PASS  …the result: ref written in slot 1                               got ["written",1]
+PASS  if_empty keeps an agent's country and language                   got [null,null,"not_empty","not_empty"]
+PASS  if_empty: the same value is unchanged, not written               got "unchanged"
+PASS  slot 1 held by another id → slot 2                               got [null,"7100000001",2]
+PASS  …and then no store or totals (they describe the customer in slot 1) got [null,null,null,"not_slot_one"]
+PASS  both slots held by other ids → nothing of the ref, slots_full    got [null,null,"slots_full","slot_taken","slot_taken"]
+PASS  the id already in slot 2 → present, nothing written for the ref, no totals got ["present",2,[]]
+PASS  everything current → nothing to write (240 equals 240.00)        got [[],"present"]
+PASS  always writes only the difference                                got {"orders":"2","spent":"240"}
+PASS  always overwrites a different store                              got "shop-gb"
+PASS  no customer id → no store or totals, the codes by their mode     got [null,{"country":"GB"}]
+PASS  a planned property is always one of the enabled fields           got true
+PASS  assertConfigured: a configured property passes                   got "accepted"
+PASS  assertConfigured: a property not in the fields is refused        got "property_not_configured"
+PASS  assertConfigured: a disabled field's property is refused         got "property_not_configured"
+PASS  assertConfigured: email is refused                               got "property_not_configured"
+PASS  no enabled write-back field → the action fails writeback_not_configured got [{"ids":["a1"],"outcome":"failed","result":null,"error":"writeback_not
+PASS  an action this writer does not handle → action_not_supported     got ["action_not_supported"]
+
+ALL 20 PASS
+
+> cma-ingest@0.1.0 verify:email-mapping
+> node verify/email-mapping.mjs
+
+verify/email-mapping.mjs
+
+PASS  settings: email_poll true, thread and origin properties, automated origins lower case got [true,"fixture_thread_id","fixture_origin",["automation_fixture","othe
+PASS  settings: email_poll must be the boolean true (a string is off)  got false
+PASS  settings: a property name that is not a plain name is ignored    got null
+PASS  active rules only, in their order                                got ["billing","partner","reminder"]
+PASS  no rule: structural properties, thread and origin only           got ["fixture_origin","fixture_thread_id","hs_createdate","hs_email_direct
+PASS  a subject and a sender domain rule: the subject and the sender's address asked for too got true
+PASS  only a subject rule: the sender's address is not asked for       got false
+PASS  never text, html, headers, recipients or names                   got []
+PASS  EMAIL → out, sent, the owner's agent, billing, the CRM thread id got ["out","sent","agent","7100000001","billing","th-9000001"]
+PASS  INCOMING_EMAIL → in, other, customer without an owner, partner by the sender's domain got ["in","other","customer",null,"partner","th-9000001"]
+PASS  FORWARDED_EMAIL → forwarded, bounced, agent, no category         got ["forwarded","bounced","agent","7100000002",null,null]
+PASS  an automated origin → system, no owner; the reminder rule (billing excluded by its word) got ["out","sent","system",null,"reminder",null]
+PASS  an unknown direction is skipped (null)                           got null
+PASS  no owner → unknown; a thread id with @ dropped; scheduled        got ["out","scheduled","unknown",null,"partner",null]
+PASS  statuses: the CMA's four in any case, else other                 got ["sent","bounced","failed","scheduled","other","other","other"]
+PASS  an engagement item holds no subject, text, html, header, address or name got []
+PASS  raw holds direction, status and origin codes only                got {"direction":"EMAIL","status":"SENT","origin":"AUTOMATION_FIXTURE"}
+PASS  without rules no category is computed                            got null
+PASS  words: the 12 shared cases as cma.email_words_match answers them got [true,false,false,false,true,false,true,true,false,true,true,false]
+PASS  categories: the 7 shared cases as cma.email_category_of answers them got ["billing","reminder","partner",null,null,null,"billing"]
+PASS  the sender's domain: lower case, from a display address, never the local part got ["example.org",null,null,null]
+PASS  the owner map: user id → owner id, archived owners too           got ["7100000001","7100000003"]
+PASS  actor prefixes: A agent, V and E customer, S system, B bot, I integration, others unknown got ["agent","customer","customer","system","bot","integration","unknown",
+PASS  an agent's owner id through its user id; an unmapped agent has none got [{"kind":"agent","ownerRef":"7100000002"},{"kind":"agent","ownerRef":n
+PASS  no actor result holds the actor id                               got false
+PASS  channel kinds from names                                         got ["email","chat","whatsapp","messenger","form","phone","other"]
+PASS  inboxes: archived left out, a name holding an address replaced by the id got [{"inboxId":"1500000001","name":"Support inbox (test)"},{"inboxId":"15
+PASS  channels with their kind                                         got ["email","chat","whatsapp"]
+PASS  channel accounts: ids only (no name, no delivery identifier)     got [["1600000001","1500000001"],["1600000002","1500000002"]]
+PASS  the map in parts under the cursor's 2 kB, read back whole        got [true,true,300]
+PASS  owner pairs hold ids only (no email, no name)                    got "[[\"7000000001\",\"7100000001\"],[\"7000000002\",\"7100000002\"]]"
+PASS  an open thread: agent's owner id, contact, ticket                got ["open","7100000001","4300000103","4200000101",false,"1500000001","100
+PASS  a closed thread: its close time; the assignee an archived owner  got ["closed","7100000003","4300000102",null,false,"1500000002","1002",tru
+PASS  a spam thread stored with is_spam, no agent                      got ["open",null,null,null,true,"1500000001","1002",false]
+PASS  an agent without an owner leaves the thread's agent empty        got null
+PASS  a thread held exactly so is not written again                    got true
+PASS  …and a change of agent is                                        got false
+PASS  thread 1: two messages (in from the customer, out by the agent), one assignment, the comment ignored got [[["in","customer",null,"other"],["out","agent","7100000001","sent"]],
+PASS  thread 1: the first message's category billing (its subject), the contact and inbox of the thread got ["billing","4300000103","1500000001"]
+PASS  thread 2: moved inbox, assigned (agent to agent), closed; the welcome message ignored got [[["moved_inbox","agent","7100000002",null,"1500000001","1500000002"],
+PASS  thread 2: a visitor's message is the customer's, partner by its sender's domain got ["customer","partner"]
+PASS  thread 3: an unknown prefix → unknown; an assignment without assignee → no target got ["unknown","assigned",null,"bot"]
+PASS  thread 4: closed then reopened; a failed outgoing message; an integration's incoming one got [["closed","reopened"],[["in","integration","other"],["out","agent","f
+PASS  after the thread's mark only the later messages and events       got ["m1d0000000000000000000000000004","m1b0000000000000000000000000002"]
+PASS  no message row or thread item holds a name, address, subject, text or raw actor id got []
+PASS  the cursor: the newest latest-message time and the threads at it got {"at":1792133291235,"ids":["2","3"]}
+PASS  …which the next page leaves out, a newer thread at that time kept got ["4"]
+PASS  two country slots: countries per slot (slot 1 empty, slot 2 the dropdown), no single country got [[null,"United Kingdom"],null]
+PASS  one country slot keeps sending country                           got "GB"
+PASS  a record's fallback country: the first non-empty slot            got "United Kingdom"
+PASS  a contact item holds only the configured properties (no email, no name) got []
+PASS  poll 1: succeeded without an error                               got null
+PASS  poll 1: five engagements written (the unknown direction skipped) got ["4500000001","4500000002","4500000003","4500000004","4500000006"]
+PASS  poll 1: four threads, six inbox messages, seven events           got [4,6,7]
+PASS  poll 1: the email's contact read once, after the emails; the one nothing points to never got [["4300000101","4300000102","4300000103","4300000104"],true,false]
+PASS  poll 1: contacts asked for the configured properties only        got ["contact_country","contact_language","country_dropdown"]
+PASS  poll 1: the contact sent with its slots                          got [null,"United Kingdom"]
+PASS  poll 1: associations email → contact, deal, ticket               got ["4500000001>contact:4300000101","4500000001>deal:4100000101","4500000
+PASS  poll 1: the search asked for no text, html, header or recipient  got []
+PASS  poll 1: threads listed by latest message with the required filter, tickets included got true
+PASS  poll 1: catalogs written (two inboxes, three channels) and the owner map read once each way got [2,3,2]
+PASS  poll 1: nothing written, kept in a cursor or logged holds a name, address, subject, text or raw actor id got []
+PASS  poll 1: the run's counts and outcomes are counts only            got true
+PASS  poll 2 (nothing changed): no message read again, nothing written got [0,0,null]
+PASS  poll 2: the catalogs and the owner map not read again within the hour got 0
+PASS  poll 3: a 429 on the search → the run's error rate_limited, the engagements' cursor unchanged got ["rate_limited",true]
+PASS  poll 3: …and the conversations still ran: only thread 1's messages read, the new message stored got [["8800000001"],true]
+PASS  poll 3: the warning carries the part and the code only           got true
+PASS  open check: a thread closed without a message is read again and stored closed got "closed"
+PASS  open check: a thread gone at the source (404, also archived) is forgotten got [["8800000003"],["","true"]]
+PASS  check script: exit 0; the status values and a missing property named got [0,true,true]
+PASS  check script: the thread and origin candidates, an option holding an address left out got [true,true,false]
+PASS  check script: actor prefixes with HubSpot's types, counted       got [true,true,true,true,true,true]
+PASS  check script: no actor id, name, address, subject or the token printed got [[],false]
+PASS  check script: inboxes and channels by id and name, an inbox named by an address not shown got [true,true,true,true]
+PASS  check script: refuses without its arguments (exit 2)             got 2
+
+ALL 76 PASS
+
+> cma-ingest@0.1.0 verify:deploy-script
+> node verify/deploy-script.mjs
+
+verify/deploy-script.mjs
+
+PASS  prod without --front or --jobs → exit 2 with the refusal         got [2,"prod service deploy needs --front <host> (ingest.pulse4all.app); w
+PASS  …before any gcloud call                                          got 0
+PASS  prod with --tenant and --secret but no --front → refused, no call got [2,"prod service deploy needs --front <host> (ingest.pulse4all.app); w
+PASS  prod --jobs --front → refused as before (--front is the service's) got [2,"--front goes with the service deploy, not --jobs",0]
+PASS  prod --jobs → exit 0: the six jobs, no service deploy            got [0,6,0]
+PASS  dev → exit 0: ingress all, the run.app addresses, replay on      got [0,"all","https://cma-ingest-100000000001.europe-west4.run.app,https:/
+PASS  prod --front → exit 0 on the image of the last commit under ingest/ got [0,"b85448a","p4a-cma-prod"]
+PASS  …--ingress=internal-and-cloud-load-balancing                     got "internal-and-cloud-load-balancing"
+PASS  …INGEST_PUBLIC_URLS starts with https://ingest.pulse4all.app     got [true,"https://ingest.pulse4all.app,https://cma-ingest-100000000001.eu
+PASS  …no replay variable in prod, the run.app address refused         got [false,true]
+
+ALL 10 PASS
+exit 0

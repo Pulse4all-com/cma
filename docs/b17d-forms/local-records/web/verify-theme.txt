@@ -1,0 +1,3 @@
+$ BASE=http://127.0.0.1:8080 node verify/theme.mjs    (local: Playwright launched with this container's Chromium by path, see README)
+theme: PASS (50 pages, palette incl. chart fills, Montserrat, heading and body colours, 28 tables per 7.6 and 3.3, a header hint open on 14 report pages)
+exit 0

@@ -1,0 +1,18 @@
+# tools/datamap/build.mjs's check (the page left out) on this branch's docs/datamap/catalog.json against a schema snapshot of the local
+# database at 0008p (00 to 69, #142's 70 to 73, then 74), kept outside the repository. Every problem below is an object of #142
+# (0008n and 0008o: CRM tasks and follow-up), whose own catalog.json entries come with #142; none names an object of 0008p.
+
+cma.connection_task_status: table has no catalog entry
+cma.connection_task_type: table has no catalog entry
+cma.crm_task: table has no catalog entry
+cma_read.connection_pipeline_sla: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.connection_task_status: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.connection_task_type: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.crm_task: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.follow_up_by_owner: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.follow_up_summary: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.open_lead: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.open_task: view is not over a catalog table, not a derived entry and not a dq_ view
+cma_read.open_ticket: view is not over a catalog table, not a derived entry and not a dq_ view
+
+-- problems naming an object of 0008p (form_category, connection_form_field, connection_form, form_submission, dq_form_answer_not_in_options): 0

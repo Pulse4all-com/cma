@@ -162,3 +162,42 @@ export function statusChangesCsv(rows: StatusChangeRow[], s: ExportSettings, l: 
     s,
   );
 }
+
+// ---- Reports > Forms (addition 0008p; brief B17d) ---------------------------------------------
+
+export interface FormsLabels {
+  from: string; to: string; form: string; category: string; market: string; submissions: string; previous: string;
+  resolved: string; notFound: string; ambiguous: string; noEmail: string; pending: string; noCategory: string; unknownMarket: string;
+}
+
+/** A form in a market over the period, as the report's table shows it: the forms report's lines */
+export interface FormsCsvLine {
+  formName: string; category: string | null; market: string; submissions: number; previous: number;
+  resolved: number; notFound: number; ambiguous: number; noEmail: number; pending: number;
+}
+
+/**
+ * One row per form and market, as Reports > Forms shows it: the period, the form, its category (the tenant's
+ * name, the code when the catalog lacks it), the market, the submissions and the previous period's, then the
+ * resolution split. Counts only: no submission, contact or answer to a field that is no choice field.
+ */
+export function formsCsv(lines: FormsCsvLine[], from: string, to: string, categoryNames: Record<string, string>, s: ExportSettings, l: FormsLabels): string {
+  return toCsv(
+    [l.from, l.to, l.form, l.category, l.market, l.submissions, l.previous, l.resolved, l.notFound, l.ambiguous, l.noEmail, l.pending],
+    lines.map((r) => [
+      formatDate(from, s.dateFormat),
+      formatDate(to, s.dateFormat),
+      safeText(r.formName),
+      r.category === null ? l.noCategory : safeText(categoryNames[r.category] ?? r.category),
+      r.market === "unknown" ? l.unknownMarket : r.market,
+      String(r.submissions),
+      String(r.previous),
+      String(r.resolved),
+      String(r.notFound),
+      String(r.ambiguous),
+      String(r.noEmail),
+      String(r.pending),
+    ]),
+    s,
+  );
+}

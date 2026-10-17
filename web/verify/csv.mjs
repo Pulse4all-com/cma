@@ -7,10 +7,12 @@
  * Covers the tenant formats (separator, decimal mark, date format, duration format, byte order
  * mark), quoting, cells a spreadsheet would run as a formula, times in each day's own zone across
  * the autumn clock change, the settings fallback, and who entered a stretch, an import included
- * (addition 0008d).
+ * (addition 0008d). Since addition 0008p the Reports > Forms file: one row per form and market with the
+ * period, the category's name (the code when the catalog lacks it, "No category" for none), Unknown market,
+ * the previous period and the resolution split, a form name a spreadsheet would run as a formula defused.
  */
 import {
-  exportSettingsFrom, formatDate, formatDuration, formatTime, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
+  exportSettingsFrom, formatDate, formatDuration, formatTime, formsCsv, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
 } from "../src/lib/csv.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -111,6 +113,25 @@ expect("an imported stretch and its gap name the import", [imported[1], imported
    "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;Import;No"],
   ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,00;Yes;Yes;Yes;;No",
    "06-03-2026;Ana;Newco;Europe/Amsterdam;Break;10:00;10:15;0,25;No;No;No;;No"]);
+
+// Reports > Forms (addition 0008p): counts only, the period in the tenant's date format
+const formsLabels = { from: "From", to: "To", form: "Form", category: "Category", market: "Market", submissions: "Submissions", previous: "Previous period",
+  resolved: "Contact found", notFound: "No contact", ambiguous: "Several contacts", noEmail: "No email address", pending: "Not looked up yet",
+  noCategory: "No category", unknownMarket: "Unknown market" };
+const formsFile = formsCsv([
+  { formName: "NL Contact", category: "contact", market: "NL", submissions: 3, previous: 4, resolved: 1, notFound: 2, ambiguous: 0, noEmail: 0, pending: 0 },
+  { formName: "=Legacy; form", category: null, market: "unknown", submissions: 0, previous: 1, resolved: 0, notFound: 0, ambiguous: 0, noEmail: 0, pending: 0 },
+  { formName: "Old", category: "retired", market: "GB", submissions: 2, previous: 0, resolved: 0, notFound: 0, ambiguous: 1, noEmail: 0, pending: 1 },
+], "2026-10-05", "2026-10-11", { contact: "Contact" }, DUTCH, formsLabels).split("\r\n");
+expect("forms file: header, the period in the tenant's format, names, unknown market and counts", formsFile.slice(0, 4),
+  ["\uFEFFFrom;To;Form;Category;Market;Submissions;Previous period;Contact found;No contact;Several contacts;No email address;Not looked up yet",
+   "05-10-2026;11-10-2026;NL Contact;Contact;NL;3;4;1;2;0;0;0",
+   "05-10-2026;11-10-2026;\"'=Legacy; form\";No category;Unknown market;0;1;0;0;0;0;0",
+   "05-10-2026;11-10-2026;Old;retired;GB;2;0;0;0;1;0;1"],
+  ["From;To;Form;Category;Market;Submissions;Previous period;Contact found;No contact;Several contacts;No email address;Not looked up yet",
+   "2026-10-05;2026-10-11;NL Contact;contact;NL;3;4;1;2;0;0;0",
+   "2026-10-05;2026-10-11;=Legacy; form;;unknown;0;1;0;0;0;0;0",
+   "2026-10-05;2026-10-11;Old;Old;GB;2;0;0;0;1;0;1"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

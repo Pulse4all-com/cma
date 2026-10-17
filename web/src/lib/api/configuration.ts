@@ -1,7 +1,7 @@
 import "server-only";
 import { ApiError } from "@/lib/api/respond";
 import type {
-  AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
+  AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings,
   SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput,
 } from "@/lib/data";
@@ -175,8 +175,32 @@ export function checkFormChanges(b: Record<string, unknown>): SourceFormChange[]
     if (leadSource !== null && (typeof leadSource !== "string" || leadSource.trim().length === 0 || leadSource.trim().length > 60)) {
       throw new ApiError(400, "invalid_lead_source", "leadSource must be 1 to 60 characters or empty");
     }
-    return { formId: ref(x.formId, "formId"), isCounted: flag(x, "isCounted"), leadSource: leadSource === null ? null : (leadSource as string).trim(), market: marketOrNull(x.market, "market") };
+    const change: SourceFormChange = {
+      formId: ref(x.formId, "formId"), isCounted: flag(x, "isCounted"), leadSource: leadSource === null ? null : (leadSource as string).trim(), market: marketOrNull(x.market, "market"),
+    };
+    // polled and the category (addition 0008p), each optional: left out keeps what the form has
+    if (x.isPolled !== undefined) change.isPolled = flag(x, "isPolled");
+    if (change.isCounted && change.isPolled === false) throw new ApiError(400, "invalid_isPolled", "a counted form is always polled");
+    if (x.category !== undefined) change.category = categoryOrNull(x.category);
+    return change;
   });
+}
+
+const CATEGORY = /^[a-z][a-z0-9_]{0,39}$/;
+
+function categoryOrNull(v: unknown): string | null {
+  if (v === null || v === "") return null;
+  if (typeof v !== "string" || !CATEGORY.test(v) || v === "none") throw new ApiError(400, "invalid_category", "category must be a category code or empty");
+  return v;
+}
+
+/** A form category of the Sources page (addition 0008p): code, name, order and whether it is switched on */
+export function checkFormCategoryInput(b: Record<string, unknown>): FormCategoryInput {
+  const code = b.code;
+  if (typeof code !== "string" || !CATEGORY.test(code) || code === "none") {
+    throw new ApiError(400, "invalid_code", "code must be lower-case letters, digits and _, starting with a letter, at most 40");
+  }
+  return { code, name: text(b, "name", 60), sortOrder: order(b), isActive: b.isActive === undefined ? true : flag(b, "isActive") };
 }
 
 export function checkOutcomeChanges(b: Record<string, unknown>): SourceOutcomeChange[] {
