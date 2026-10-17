@@ -157,6 +157,7 @@ prefix pattern also in `docs/ingest/PROD_RUNBOOK.md` 7.5b):
   block, instead of statements generated to paste.
 - 10g: the option value taken from `connection_form_field.options` (the one starting with "No,").
 - Step 9: the first refresh with fields came about an hour after the deploy (the catalog cursor).
+- 10b: Quote showed 10 forms of which 9 had a market, not 10 of 10 (the generic Quote Form).
 - 10d: `with_market_field` depends on the forms having a country field.
 
 ## Not in the report

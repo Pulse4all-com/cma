@@ -4,7 +4,7 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 
 **What changes:** every form is polled apart from whether it counts in Intake, and Reports → Forms shows every polled form's submissions per form and market. Addition 0008p (`74`, `75`): `connection_form.is_polled` (existing forms polled exactly when they count), the tenant's form categories, each form's fields with their option values, kept answers of choice questions only (checked against the options), a form's market field and lead condition, the reads `cma.forms_report()`, `cma.forms_answers()` and `cma.forms_history_start()` (README, Data model: forms reporting; Decision log, 16 October 2026). The ingest's forms poll and backfill read every polled form, keep choice answers only and count the dropped ones; the backfill fills a stored submission's empty answers once. The web app: Reports → Forms (`/reports/forms`, `reports.view` or `performance.team`) with its file, and on Configuration → Sources a form's polled switch and category, and the form categories.
 
-**Run:** in dev and prod on 17 October 2026 (`records/b17d-dev-2026-10-17`, `records/b17d-prod-2026-10-17`, written down from Martin's report). Corrected afterwards where that run went otherwise: the context block as one Run (Helpers), step 9's wait for the fields, 10c and 10d as a review read and then the same query calling the function, 10g's value from the field's options, and the prefix pattern's single backslashes (10c).
+**Run:** in dev and prod on 17 October 2026 (`records/b17d-dev-2026-10-17`, `records/b17d-prod-2026-10-17`, written down from Martin's report). Corrected afterwards where that run went otherwise: the context block as one Run (Helpers), step 9's wait for the fields, 10b's and 10c's expected rows (the generic Quote Form has no market), 10c and 10d as a review read and then the same query calling the function, 10g's value from the field's options, and the prefix pattern's single backslashes (10c).
 
 **Order matters:**
 - `Pulse4all-com/cma#142` (0008n and 0008o, `70` to `73`) is merged (`c7a3cab`) and has run in dev and prod (`records/0008n-dev-2026-10-16`, `records/0008n-prod-2026-10-16`, `records/0008o-dev-2026-10-16`, `records/0008o-prod-2026-10-16`); without 0008o `74` stops with `addition 0008o (72_follow_up.sql) must run before 0008p` and applies nothing.
@@ -329,7 +329,7 @@ select f.is_counted, f.lead_source, count(*) as forms, count(f.market) as with_m
 from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' group by 1, 2 order by 1 desc, 2;
 reset role;
 ```
-Expected: `t | contact | 9 | 9`, `t | info | 9 | 9`, `t | quote | 10 | 10` (28 counted forms, each with its market) and `f |  | 22 | n`, n the support forms whose name prefix the form rule of 12 October (`PROD_RUNBOOK.md` 7.5b) already read as their market (up to 19; 10c sets them again). Other counts for the counted forms: send me the rows before going on. The local rehearsal of steps 10 and 11 on an invented catalog of this shape is `local-records/db/runbook-step10-rehearsal.txt`.
+Expected: `t | contact | 9 | 9`, `t | info | 9 | 9`, `t | quote | 10 | 9` (28 counted forms; every one but the generic Quote Form with its market: that form has no prefix, so the form rule gave it none; README, Decision log, 17 October 2026) and `f |  | 22 | n`, n the support forms whose name prefix the form rule of 12 October (`PROD_RUNBOOK.md` 7.5b) already read as their market (up to 19; 10c sets them again). Other counts for the counted forms: send me the rows before going on. The local rehearsal of steps 10 and 11 on an invented catalog of this shape is `local-records/db/runbook-step10-rehearsal.txt`.
 
 Then **after the context block**:
 ```sql
@@ -379,7 +379,7 @@ select f.category, f.market, f.is_counted, f.is_polled, count(*) as forms from c
 where f.connection_id = '<conn>' and f.status = 'active' group by 1, 2, 3, 4 order by 1, 2;
 reset role;
 ```
-Expected: per category and market: `cancellation` and `replacement` nine markets each `| f | t | 1` and `| (empty) | f | t | 1`, `contact`, `info` and `quote` their markets `| t | t`, `iban_change | DE | f | t | 1`, `support | (empty) | f | t | 1`. The forms poll reads the support forms' submissions from 1 October within minutes (their first poll goes back to `intake.start_date`).
+Expected: per category and market: `cancellation` and `replacement` nine markets each `| f | t | 1` and `| (empty) | f | t | 1`, `contact`, `info` and `quote` their markets `| t | t` (and `quote | (empty) | t | t | 1`, the generic Quote Form), `iban_change | DE | f | t | 1`, `support | (empty) | f | t | 1`. The forms poll reads the support forms' submissions from 1 October within minutes (their first poll goes back to `intake.start_date`).
 
 **10d. Kept fields and market fields** (brief B17d's amendment, item 7): per category the choice fields whose answers are kept, and for a form without a market its `country_dropdown`, else its `ticket_country`, as market field (kept too). `deployment_outcome` is never kept (Decision log, 16 October 2026). One query over the catalog gives each polled form its kept fields and, without a market, its market field; `set_form` sets counted, lead source and market too, so the form's own are passed as they are. First the review, **Studio (cma-prod-pg)** (read only):
 ```sql
