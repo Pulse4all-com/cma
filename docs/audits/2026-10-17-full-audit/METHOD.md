@@ -103,6 +103,15 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 | 17:20 | 0008r written: `db/78_system_health.sql`, `db/79_verify_system_health.sql`; run locally | 78 applied and rerun (exit 0); 79 13 PASS normal, 13 FAIL provoked; `33` and `73` rerun unchanged |
 | 17:40 | System health web half: `lib/health.ts` + `verify/health.mjs` (39 checks, provoked), data reads, page, route, manifest script, job run row | typecheck exit 0, lint 0 errors; `verify:copy` 1824 keys PASS; the job run locally wrote one run row per tenant |
 | 17:50 | documents route probed on the dev server | traversal, manifest.json, a name outside the list, a NUL byte: 404; a manager: 403; a document in the build: 200 as an attachment, bytes identical |
+| 17:55 | PRs opened: `Pulse4all-com/cma#150` (ingest security, Shopify token cache per connection, batch failures, verifier logins), `#151` (0008q `db/76`/`77`), `#152` (0008r `db/78`/`79`, then README rows and catalog `how`) | each from its own worktree under `/var/tmp/wt/`; the branch names of the brief |
+| 18:00 | System health web half in its worktree: Dockerfile `documents/` copy, `cloudbuild.yaml` `copy-documents` step, `docs/system-health/documents.txt`, theme and layout entries, README paragraph and API row; `npm run typecheck`, `lint`, `build` (real `node_modules` copied in: Turbopack refuses a symlinked one for the standalone output), 16 pure verifiers | all PASS (health 39, copy 1824 keys); the copy step's script run by hand against a tree with 2 of 8 files: 2 copied, 6 reported skipped |
+| 18:05 | standalone server in mock mode on 8083: the page as admin and agent, the documents route with six names | admin 200 with six cards; agent the same no-access rendering as other Configuration pages; REPORT.md 200 attachment, agent 403, unlisted, manifest.json, `..%2F`, `a%2Fb.md`, `.env` 404 |
+| 18:08 | `verify:theme` and `verify:layout` against 8083 (Playwright 1.63 expects headless shell 1243: symlinked to Chromium 1194 in `/opt/pw-browsers`) | theme PASS (54 pages), layout PASS; the verifier's screenshots under `records/layout` restored (`git checkout`, `git clean`): never committed |
+| 18:12 | `#153` opened (System health web half) | — |
+| 18:10 | web security worktree: typecheck, lint, `verify:boundaries` (PASS 229 files; provoke FAIL 5), `verify:iap-token`, 14 pure verifiers, standalone build, mock server on 8084: headers, `/api/health`, `verify:theme` normal and provoked | all PASS; provoke FAIL 9 (the three header checks among them); `#154` opened |
+| 18:18 | Cloud Build config worktree: check-config guards and three deploy flags; the check script run locally with nine substitution sets after applying Cloud Build's `$$` and `${_X}` rules by hand | good set exit 0; eight bad sets exit 1 with their message; `#155` opened |
+| 18:14 | speed worktree: per-request database accounting keyed by the trace id, `instrumentation.ts` span processor (request log line), `x-cma-db` and `cma-db` meta under `CMA_DB_TRACE=1`, `verify/round-trips.mjs`; standalone build, api mode against the local database on 8085 | header and meta carry the counts (`/api/v1/me` tx=1 rt=5; Live board manager tx=7 rt=33); the log line reports tx=0: the trace id at query time differs from the request span's; debugging the span tree |
+| 18:15 | subagents started for the UX fix PR (worktree `fix-ux`) and the ingest reliability and ops PRs (`fix-ingest-reliability`, `fix-ops`) | running |
 
 ## 5. Assumptions made explicit
 
@@ -118,8 +127,9 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 
 ## 7. Where I stopped / next step
 
-- 17:50 UTC: nine of twelve area reports in (5.1, 5.2, 5.6 static, 5.7, 5.8-5.10, 5.11, 5.12, 5.13 drafts,
-  7.4 drafts); 5.3, 5.4/5.5 and 5.14 still running. 0008r database half done and verified locally; the
-  System health web half typechecks and is being built. Next: consolidate findings (severity, dedupe,
-  README check), then the fix PRs in order (b) security, (c) reliability, (e) speed, (g) UX, (a) hygiene,
-  (f) ops scripts, (d) 0008q; then the report set.
+- 18:20 UTC: PRs #150 to #155 open (ingest security, 0008q, 0008r db, 0008r web, web security, Cloud Build
+  config). In progress: the speed PR (the request log line's trace-id join), the UX PR and the ingest
+  reliability and ops PRs (subagents). Then: the README cockpit PR (7.4), the report set (REPORT.md,
+  FINDINGS.csv, PERFORMANCE.md, UX_REVIEW.md, READINESS.md, GEMINI_PROMPT.md, BACKLOG_CANDIDATES.md,
+  docs/OPERATIONS.md, docs/PLAN_B.md, README drift and Decision log rows), the self-review and red-team
+  passes (section 6), the acceptance greps, the final session message.
