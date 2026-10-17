@@ -119,6 +119,10 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 | 18:44 | `verify/round-trips.mjs` with the 44-request budget observed after the change; normal and provoked against a fresh standalone server; the 15 pure verifiers | PASS (44); provoke FAIL (88 problems); all pure verifiers PASS |
 | 18:46 | PRs opened: `#157` (ingest reliability: lock, timeouts, redirects, cap, replay guard), `#158` (ops: deploy.sh main guard, reconcile 03:30, Dependabot), `#159` (speed) | — |
 | 18:50 | report worktree: PERFORMANCE.md written; subagents writing FINDINGS.csv, BACKLOG_CANDIDATES.md, GEMINI_PROMPT.md, READINESS.md, OPERATIONS.md, PLAN_B.md and the README drift fixes | running |
+| 19:05 | REPORT.md, the Decision log rows, the Open decisions bullet and the Last updated line, the ops sentences (03:30, the job lock), CLAUDE.md and RUNBOOK verifier lists (DOC-07, DOC-08); `local-records/` copied in with the one staff address replaced | — |
+| 19:10 | UX branch: real `node_modules`, standalone build, mock server on 8091, `verify:theme` and `verify:layout` normal and provoked | theme PASS (53 pages, no capitals by CSS), provoke FAIL 7; layout PASS, provoke FAIL 55 (the key "10", six unnamed dialogs, the unlabelled group); `#160` opened |
+| 19:20 | FINDINGS.csv (124 rows: 2 High, 29 Medium, 59 Low, 34 Info; 65 fixed, 31 proposed, 6 already open, 22 info), BACKLOG_CANDIDATES.md and GEMINI_PROMPT.md in; the report's DB-01 wording corrected to the finding (a direct `is_counted` update, Medium, not a trigger owner path), the AUD ids added to REPORT.md | — |
+| 19:25 | acceptance greps on every PR branch: no `records/` or `db/00` to `db/75` change, no model name, no address outside `example.*` and service accounts, no secret value; the report worktree committed and `#161` opened | — |
 
 ## 5. Assumptions made explicit
 
@@ -136,9 +140,9 @@ Each finding was read again with the question "what would make this wrong?". Out
 
 - **Dropped or folded into Info**: DB-12 (the statistical anomalies in the dev seed were artefacts of the seed's fixed timestamps, not a bug); five of the sixteen 5.1 items that were style preferences rather than defects; the 5.7 lint-level remarks (kept only CQ-01, CQ-05, CQ-08, CQ-10). The "sources() scans" finding (DB-05) was kept at Low after `explain` on the seed showed an index scan at seed volume; the risk is growth, which the finding now says.
 - **Downgraded**: 5.6-01 (the Live board poll) from the draft's High to Medium: the board's render was measured at 46 ms p50 in the sandbox, far under the target; the finding is about cost growth and database time, not a missed target. UX-06 ("Waiting 0 min") kept at Medium rather than High because the Missed-at column and the hint sit next to the figure.
-- **Confirmed by reproduction**: 5.2-01 (one token cache for every Shopify connection: read twice, then a two-tenant flow case written that fails on main and passes after); DB-01 (the audit trigger's owner path: a statement run as the owner role in the local database); INFRA-01 (a standalone build in iap mode without an audience answered `/api/health` 200 and every page 401); UX-01 (the hydration mismatch root-caused to ICU weekday patterns with an unminified dev server, not to the component suspected first); UX-02 (data-shortcut "10" to "18" observed on the manager's rail; the hook returns on `e.key.length !== 1`).
+- **Confirmed by reproduction**: 5.2-01 (one token cache for every Shopify connection: read twice, then a two-tenant flow case written that fails on main and passes after); DB-01 (a direct update of a line's `is_counted` by the ingest login removing its calls with no acting user: reproduced on a throwaway tenant in the local database, rolled back); INFRA-01 (a standalone build in iap mode without an audience answered `/api/health` 200 and every page 401); UX-01 (the hydration mismatch root-caused to ICU weekday patterns with an unminified dev server, not to the component suspected first); UX-02 (data-shortcut "10" to "18" observed on the manager's rail; the hook returns on `e.key.length !== 1`).
 - **Kept as proposals, not fixes** (rule 10): 5.6-02 (a database change on the follow-up read), DST-02 (the import's ambiguous autumn hour: a correctness question on time, proposed with the exact SQL), DB-09 and DB-10 (historical scripts and the `cma_read` SECURITY DEFINER count: documentation, not code), UX-05 (semantic colour tokens: a style-guide decision for Mark).
-- **Severity check against the brief's scale**: no Critical. Three High (5.2-01, DB-01, INFRA-01), each fixed in a PR (#150, #151, #154 with #155) before the report, as rule 7 requires. Everything else Medium, Low or Info.
+- **Severity check against the brief's scale**: no Critical. Two High (5.2-01, INFRA-01), each fixed in a PR (#150; #154 with #155) before the report, as rule 7 requires; the four CMA-037 items confirmed and fixed (#150, #151), DB-01 at Medium. Everything else Medium, Low or Info: 2 High, 29 Medium, 59 Low, 34 Info in `FINDINGS.csv`.
 
 ### 6.2 Red team (after the fixes, against the PR branches)
 
@@ -156,9 +160,7 @@ Each finding was read again with the question "what would make this wrong?". Out
 
 ## 7. Where I stopped / next step
 
-- 18:50 UTC: PRs #150 to #159 open (ingest security, 0008q, 0008r db and web, web security, Cloud Build
-  config, README cockpit, ingest reliability, ops, speed). In progress: the UX PR (subagent), the report set
-  (two subagents on the CSV, backlog, Gemini prompt, readiness, operations, Plan B and README drift; the
-  lead on REPORT.md, UX_REVIEW.md and this file). Then: the self-review and red-team passes (section 6),
-  the acceptance greps (no secret, no records/ change, no db/00 to db/75 change, no model name), the README
-  Decision log rows and Last updated line in the report PR, the final session message.
+- Done. Twelve PRs open: #150 to #160 (the fixes and the System health increment) and #161 (this report set).
+  Nothing merged, nothing in the cloud touched. What remains is Martin's: the merge order and the steps in
+  each PR description, the Console-only steps in READINESS.md and docs/OPERATIONS.md, the production
+  baseline from the request log line after a week, and the decisions listed under Open decisions.
