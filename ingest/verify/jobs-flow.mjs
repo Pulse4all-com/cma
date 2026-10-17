@@ -4,7 +4,7 @@
  * fake HubSpot API. Everything is invented: tenants, portals, ids, secrets, emails (example.com).
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
- *   INGEST_FLOW_ADMIN_USER=martin@pulse4all.com node verify/jobs-flow.mjs [--provoke]
+ *   INGEST_FLOW_ADMIN_USER=<team login> node verify/jobs-flow.mjs [--provoke]
  *
  * Logins as in verify/flow.mjs: CMA_DB_USER is the service's (a member of cma_app), the admin login
  * creates two throwaway tenants per run (jobs-<run>-one, jobs-<run>-two) and reads as the owner.
@@ -45,7 +45,11 @@ for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
     process.exit(2);
   }
 }
-const ADMIN = process.env.INGEST_FLOW_ADMIN_USER ?? "martin@pulse4all.com";
+const ADMIN = process.env.INGEST_FLOW_ADMIN_USER;
+if (!ADMIN) {
+  console.error("INGEST_FLOW_ADMIN_USER is required: a team login that holds cma_owner and cma_app by SET ROLE (locally, for example, auditor@local)");
+  process.exit(2);
+}
 const RUN = randomBytes(4).toString("hex");
 const SLUG1 = `jobs-${RUN}-one`;
 const SLUG2 = `jobs-${RUN}-two`;
