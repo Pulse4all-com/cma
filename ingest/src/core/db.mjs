@@ -17,9 +17,19 @@
  *   CMA_DB_NAME       cma                                 (default cma)
  *   CMA_DB_POOL_MAX   5                                   per instance
  *   CMA_DB_IP         PUBLIC | PRIVATE                    (default PUBLIC)
+ *   CMA_DB_STATEMENT_TIMEOUT_MS   15000    a statement running longer is cancelled (SQLSTATE 57014, db_57014)
+ *   CMA_DB_IDLE_TX_TIMEOUT_MS     30000    a transaction idle longer is ended by the server (25P03, db_25P03)
+ * Both timeouts (from 1 s to 1 h; another value keeps the default) go to the server as startup parameters
+ * of every pooled session, so a query the 30-second request timeout or a job's task timeout no longer
+ * waits for is not left running (audit 17 October 2026, 5.2-07). A unit of work keeps its SQL inside
+ * the transaction and its vendor calls outside it (process.mjs), so neither fires in normal running.
  * Local only (never set on Cloud Run): CMA_DB_HOST, CMA_DB_PORT, CMA_DB_PASSWORD for a plain
  * connection to a local PostgreSQL (the flow verifier), and CMA_DB_SET_ROLE=cma_app for a login that
  * holds cma_app without inheritance.
+ *
+ *   jobLock(name)  a session-level advisory lock for a scheduled job, held on one pooled client for the
+ *                  run: a second execution Cloud Scheduler starts while the first still runs finds it held
+ *                  and skips (src/jobs/runner.mjs; audit 17 October 2026, 5.2-02)
  */
 import pg from "pg";
 
@@ -33,11 +43,22 @@ function required(name) {
   return v;
 }
 
+/** A timeout from the environment in milliseconds: a whole number from 1 s to 1 h, else the default. */
+function timeoutMs(name, fallback) {
+  const v = Number(process.env[name] ?? fallback);
+  return Number.isInteger(v) && v >= 1000 && v <= 3_600_000 ? v : fallback;
+}
+
 let state = null;
 
 async function open() {
   const database = process.env.CMA_DB_NAME ?? "cma";
   const max = Number(process.env.CMA_DB_POOL_MAX ?? 5);
+  // pg sends both as startup parameters: they bind every session of the pool
+  const timeouts = {
+    statement_timeout: timeoutMs("CMA_DB_STATEMENT_TIMEOUT_MS", 15_000),
+    idle_in_transaction_session_timeout: timeoutMs("CMA_DB_IDLE_TX_TIMEOUT_MS", 30_000),
+  };
   const setRole = process.env.CMA_DB_SET_ROLE;
   if (setRole && setRole !== "cma_app") throw new Error("CMA_DB_SET_ROLE can only be cma_app");
   let pool;
@@ -46,7 +67,7 @@ async function open() {
     pool = new pg.Pool({
       host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), user: required("CMA_DB_USER"),
       password: process.env.CMA_DB_PASSWORD || undefined, database, max, idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000, application_name: "cma-ingest-local",
+      connectionTimeoutMillis: 10_000, application_name: "cma-ingest-local", ...timeouts,
     });
   } else {
     const { Connector, AuthTypes, IpAddressTypes } = await import("@google-cloud/cloud-sql-connector");
@@ -57,7 +78,7 @@ async function open() {
       ipType: process.env.CMA_DB_IP === "PRIVATE" ? IpAddressTypes.PRIVATE : IpAddressTypes.PUBLIC,
     });
     pool = new pg.Pool({ ...opts, user: required("CMA_DB_USER"), database, max, idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000, application_name: "cma-ingest" });
+      connectionTimeoutMillis: 10_000, application_name: "cma-ingest", ...timeouts });
     close = () => connector.close();
   }
   // An idle client's error (a dropped connection) must not crash the process; the next query reconnects
@@ -79,6 +100,12 @@ async function db() {
 async function transaction(setContext, fn) {
   const { pool } = await db();
   const client = await pool.connect();
+  // A session the server ends while this client waits (the idle-in-transaction timeout, a restart)
+  // arrives as an error event on the checked-out client, which pg-pool does not listen to: unheard it
+  // would end the process. Heard, it is this transaction's failure (db_25P03) and the pool drops the client.
+  let ended = null;
+  const onEnded = (err) => { ended ??= err; };
+  client.on("error", onEnded);
   try {
     await client.query("begin");
     await setContext(client);
@@ -87,8 +114,9 @@ async function transaction(setContext, fn) {
     return result;
   } catch (err) {
     await client.query("rollback").catch(() => undefined);
-    throw err;
+    throw ended ?? err;
   } finally {
+    client.removeListener("error", onEnded);
     client.release();
   }
 }
@@ -116,6 +144,39 @@ export function withTenantOnly(tenantId, actorLabel, fn) {
     await q.query("select set_config('app.tenant_id', $1, true), set_config('app.user_id', '', true), set_config('app.actor_label', $2, true)",
       [tenantId, actorLabel ?? "ingest"]);
   }, fn);
+}
+
+const LOCK_SPACE = "cma-ingest";
+
+/**
+ * A session-level advisory lock named for a job, held on one pooled client until release(); null when
+ * another session holds it. Cloud Scheduler starts an execution every minute whether or not the previous
+ * one has finished (README, Database connection budget), so the runner takes this lock and a second
+ * execution skips while the first runs. The two-key form pg_try_advisory_lock(int, int) with the space
+ * hashtext('cma-ingest') keeps it apart from the database's own row locks (hashtextextended, one key).
+ */
+export async function jobLock(name) {
+  const { pool } = await db();
+  const client = await pool.connect();
+  const onEnded = () => undefined; // the session ended under us: the lock went with it; the pool drops the client on release
+  client.on("error", onEnded);
+  const done = () => {
+    client.removeListener("error", onEnded);
+    client.release();
+  };
+  let ok = false;
+  try {
+    ok = (await client.query("select pg_try_advisory_lock(hashtext($1), hashtext($2)) as ok", [LOCK_SPACE, name])).rows[0].ok === true;
+  } finally {
+    if (!ok) done();
+  }
+  if (!ok) return null;
+  return {
+    async release() {
+      await client.query("select pg_advisory_unlock(hashtext($1), hashtext($2))", [LOCK_SPACE, name]).catch(() => undefined);
+      done();
+    },
+  };
 }
 
 /** The SQLSTATE of a database error, or a short code when the database could not be reached. */

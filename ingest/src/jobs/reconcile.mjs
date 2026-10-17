@@ -1,5 +1,5 @@
 /**
- * The reconcile (DESIGN §2, §5, nightly at 02:30 Europe/Amsterdam): per active connection whose
+ * The reconcile (DESIGN §2, §5; nightly, Europe/Amsterdam, at the time docs/ingest/deploy.sh schedules): per active connection whose
  * adapter reconciles, per object type, everything modified in the look-back (26 hours by default;
  * --lookback-minutes shortens it, so the polling fallback of NIGHT_NOTES D3 is only a schedule
  * change) is listed by the adapter and read back through the same path as a webhook (synthetic

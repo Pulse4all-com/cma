@@ -1,7 +1,8 @@
 /**
  * Verifier: the Aircall scripts (docs/ingest/aircall-webhook.mjs, docs/ingest/aircall-users.mjs) and
- * the replay tool's Aircall mode (tools/replay.mjs --adapter aircall), against a fake Aircall and
- * HubSpot API and a fake `gcloud` on PATH (it serves secrets from files and keeps what `versions add`
+ * the replay tool's Aircall mode (tools/replay.mjs --adapter aircall) and its host guard (a URL that is
+ * neither the local machine nor a run.app address is refused unless --allow-host insists; audit 17 October
+ * 2026, 5.2-10), against a fake Aircall and HubSpot API and a fake `gcloud` on PATH (it serves secrets from files and keeps what `versions add`
  * reads on standard input). No network beyond localhost, no database, no real gcloud. Everything is
  * invented (example.com).
  *
@@ -187,6 +188,21 @@ await run(REPLAY, ["--url", `${BASE}/ingest/aircall/key0000000000000000000000001
 const shift = fake.received[0].data.started_at - original[0].data.started_at;
 expect("…with --fresh every time moved by the same amount, the first call starting now", [Math.abs(fake.received[0].data.started_at - before) <= 2, fake.received[4].timestamp - original[4].timestamp === shift, fake.received[4].data.ended_at - original[4].data.ended_at === shift],
   [true, true, true], [false, false, false]);
+
+// The host guard: a public address is refused before any request; the same fake on a second loopback address
+// (Linux answers on all of 127/8) stands in for a host that is neither 127.0.0.1 nor run.app
+fake.received.length = 0;
+r = await run(REPLAY, ["--url", "https://ingest.example.com/aircall/key0000000000000000000000001", "--fixture", fixture, "--secret-env", "VERIFY_REPLAY_SECRET", "--adapter", "aircall"], { VERIFY_REPLAY_SECRET: "fixture-dev-webhook-token" });
+expect("replay: a host that is not the local machine or a run.app address → exit 2 before any request", [r.code, r.err.includes("replay goes to a local service or a dev run.app address, not ingest.example.com; add --allow-host to insist"), r.out, fake.received.length],
+  [2, true, "", 0], [0, false, "200", 6]);
+const mirror = http.createServer((req, res) => server.emit("request", req, res));
+await new Promise((res) => mirror.listen(0, "127.0.0.2", res));
+const ELSEWHERE = `http://127.0.0.2:${mirror.address().port}/ingest/aircall/key0000000000000000000000001`;
+r = await run(REPLAY, ["--url", ELSEWHERE, "--fixture", fixture, "--secret-env", "VERIFY_REPLAY_SECRET", "--adapter", "aircall"], { VERIFY_REPLAY_SECRET: "fixture-dev-webhook-token" });
+expect("replay: …127.0.0.2 is such a host: refused, nothing received", [r.code, fake.received.length], [2, 0], [0, 6]);
+r = await run(REPLAY, ["--url", ELSEWHERE, "--fixture", fixture, "--secret-env", "VERIFY_REPLAY_SECRET", "--adapter", "aircall", "--allow-host"], { VERIFY_REPLAY_SECRET: "fixture-dev-webhook-token" });
+expect("replay: --allow-host insists, with a warning naming the host, and the events arrive", [r.code, fake.received.length, r.err.includes("warning: replaying to 127.0.0.2 (--allow-host)"), r.out.includes("fixture-dev-webhook-token")], [0, 6, true, false], [2, 0, false, true]);
+await new Promise((res) => mirror.close(res));
 
 await new Promise((res) => server.close(res));
 rmSync(dir, { recursive: true, force: true });

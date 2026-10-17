@@ -26,7 +26,11 @@
  * intake.start_date by default, resumes after an interruption without reading the first page again,
  * includes deals created earlier and closed since, and paces its searches; the reconcile picks up a
  * change the webhook missed, leaves a newer row alone, reads only held contacts, honours
- * --lookback-minutes and reads nothing twice; tenant isolation; no email, token or contact id in the
+ * --lookback-minutes and reads nothing twice; tenant isolation; of two executions of a job started at
+ * once the second finds the first one's lock and is skipped with one log line and nothing written, and
+ * runs once the lock is released (audit 17 October 2026, 5.2-02); the pool's statement timeout cancels a
+ * long statement (db_57014) and its idle-in-transaction timeout ends an idle transaction (db_25P03)
+ * without ending the process (5.2-07); no email, token or contact id in the
  * logs, no email in the database; no row of another tenant written by this run (the audit log).
  */
 import http from "node:http";
@@ -211,10 +215,10 @@ const { runSweep } = await import("../src/jobs/sweep.mjs");
 const { runPollForms } = await import("../src/jobs/poll-forms.mjs");
 const { runReconcile } = await import("../src/jobs/reconcile.mjs");
 const { runBackfill } = await import("../src/jobs/backfill.mjs");
-const { UsageError } = await import("../src/jobs/runner.mjs");
+const { UsageError, withJobLock } = await import("../src/jobs/runner.mjs");
 const { recordEvents } = await import("../src/core/events.mjs");
 const { applyUnits } = await import("../src/core/store.mjs");
-const { closeDb } = await import("../src/core/db.mjs");
+const { closeDb, withTenantOnly, dbErrorCode } = await import("../src/core/db.mjs");
 
 // ---- Setup as the admin login --------------------------------------------------------------------
 const admin = new pg.Client({ host: process.env.CMA_DB_HOST, port: Number(process.env.CMA_DB_PORT ?? 5432), database: process.env.CMA_DB_NAME ?? "cma",
@@ -478,6 +482,35 @@ expect("isolation: tenant one sees none of tenant two's runs or cursors", await 
   Number((await q("select count(*) as n from cma.sync_run where connection_id = $1", [conn2]))[0].n),
   Number((await q("select count(*) as n from cma.ingest_event where connection_id = $1", [conn2]))[0].n)]), [0, 0], [1, 1]);
 expect("isolation: the tenant one's requests all carried tenant one's token", fake.requests.filter((r) => r.auth !== `Bearer ${TOKEN2}`).every((r) => r.auth === `Bearer ${TOKEN1}`), true, false);
+
+// ---- G. One execution at a time: the jobs' advisory lock (5.2-02) --------------------------------
+// Two executions of one job at once: both ask for the lock on their own pooled session; exactly one gets
+// it and runs, the other is skipped after one log line (code locked) and writes nothing (a sweep writes
+// a link_calls run row, so the rows count the runs)
+const linksBefore = (await runs("link_calls")).length;
+let l1 = logs.length;
+const pair = await Promise.all([withJobLock("verify-sweep", () => sweep()), withJobLock("verify-sweep", () => sweep())]);
+const skippedLogs = logs.slice(l1).map((l) => JSON.parse(l)).filter((l) => l.code === "locked");
+expect("lock: of two executions started at once, one runs and one is skipped", pair.map((p) => p.ran).sort(), [false, true], [true, true]);
+expect("lock: the skipped one logged once (code locked, no ids) and wrote no run row", [skippedLogs.map((l) => [l.severity, l.message, l.job]), (await runs("link_calls")).length - linksBefore],
+  [[["INFO", "verify-sweep skipped", "verify-sweep"]], 1], [[], 2]);
+expect("lock: released after the run, the next execution runs", (await withJobLock("verify-sweep", () => sweep())).ran, true, false);
+expect("lock: another job's name is another lock", (await withJobLock("verify-forms", async () => "ran")).result, "ran", null);
+
+// ---- H. The pool's timeouts (5.2-07): the pool reopened with one-second timeouts ----------------------
+await closeDb();
+process.env.CMA_DB_STATEMENT_TIMEOUT_MS = "1000";
+process.env.CMA_DB_IDLE_TX_TIMEOUT_MS = "1000";
+const dbCodeOf = (p) => p.then(() => "ok", (e) => dbErrorCode(e));
+let t0 = Date.now();
+expect("timeouts: a statement past CMA_DB_STATEMENT_TIMEOUT_MS is cancelled (db_57014) within the timeout",
+  [await dbCodeOf(withTenantOnly(t1, "verify:jobs", (c) => c.query("select pg_sleep(5)"))), Date.now() - t0 < 4000], ["db_57014", true], ["ok", false]);
+expect("timeouts: a transaction idle past CMA_DB_IDLE_TX_TIMEOUT_MS is ended by the server (db_25P03), the process goes on",
+  await dbCodeOf(withTenantOnly(t1, "verify:jobs", async (c) => { await c.query("select 1"); await new Promise((r) => setTimeout(r, 1600)); return c.query("select 1"); })), "db_25P03", "ok");
+expect("timeouts: the pool serves the next transaction", await dbCodeOf(withTenantOnly(t1, "verify:jobs", (c) => c.query("select 1"))), "ok", "db_57014");
+await closeDb();
+delete process.env.CMA_DB_STATEMENT_TIMEOUT_MS;
+delete process.env.CMA_DB_IDLE_TX_TIMEOUT_MS;
 
 // ---- F. What was written and logged ----------------------------------------------------------------
 const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma.form_submission x where connection_id = $1
