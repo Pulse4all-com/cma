@@ -19,6 +19,7 @@ import type {
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
+  DatabaseProbe, OutboxStatusRow, SystemHealthRun,
 } from "./types";
 import {
   byOwner, daysSince, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, ownRows, summarise,
@@ -3072,6 +3073,45 @@ export const mockData: CmaData = {
     assertAny(me, [...MY_FOLLOW_UP_PERMISSIONS]);
     const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
     return { leads: ownRows(leads, me.userId), tickets: ownRows(tickets, me.userId), tasks: ownRows(tasks, me.userId) };
+  },
+
+  // ---- System health (addition 0008r): invented runs around the current minute ------------------
+
+  async getSystemHealthRuns(me): Promise<SystemHealthRun[]> {
+    assertConfigure(me);
+    const now = Date.now();
+    const at = (secondsAgo: number) => new Date(now - secondsAgo * 1000).toISOString();
+    const sources = seedIntakeConfig(me).sources;
+    const crm = sources.find((x) => x.connection.kind === "crm")?.connection.id ?? null;
+    const tel = sources.find((x) => x.connection.kind === "telephony")?.connection.id ?? null;
+    const shop = sources.find((x) => x.connection.kind === "commerce")?.connection.id ?? null;
+    const ok = (job: string, connectionId: string | null, startedAgo: number, took: number, counts: Record<string, number>, runs24h: number): SystemHealthRun => ({
+      job, connectionId, lastStartedAt: at(startedAgo), lastFinishedAt: at(startedAgo - took), lastStatus: "succeeded", lastError: null, lastCounts: counts,
+      lastSucceededAt: at(startedAgo - took), lastFailedAt: null, lastFailedError: null, runs24h, failed24h: 0,
+    });
+    const rows: SystemHealthRun[] = [
+      // the heartbeat: the sweep's link_calls row, written a moment ago
+      ok("link_calls", crm, 40, 1, { upserted: 2 }, 1440),
+      ok("forms_poll", crm, 35, 2, { fetched: 3, upserted: 1 }, 1440),
+      // the email poll recovered from one failure this morning
+      { ...ok("email_poll", crm, 50, 3, { fetched: 12, upserted: 4 }, 1440), lastFailedAt: at(5 * 3600), lastFailedError: "rate_limited", failed24h: 1 },
+      ok("reconcile", crm, 9.5 * 3600, 95, { fetched: 240, upserted: 7, stale: 2 }, 1),
+      ok("close_forgotten_workdays", null, 25 * 60, 1, { closed: 0 }, 24),
+    ];
+    if (tel) rows.push(ok("reconcile", tel, 9.5 * 3600, 40, { fetched: 80, upserted: 3 }, 1));
+    if (shop) rows.push(ok("subscriptions_check", shop, 9.5 * 3600, 4, { fetched: 2 }, 1), ok("reconcile", shop, 9.4 * 3600, 60, { fetched: 30, upserted: 1 }, 1));
+    return rows;
+  },
+
+  async getOutboxStatus(me): Promise<OutboxStatusRow[]> {
+    assertConfigure(me);
+    // Nothing enqueues an action since 0008h (README): an empty outbox is the normal state
+    return [];
+  },
+
+  async probeDatabase(me): Promise<DatabaseProbe> {
+    assertConfigure(me);
+    return { roundTripMs: 1 };
   },
 
   async setSourcePipelineSla(me, id, input) {

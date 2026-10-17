@@ -40,6 +40,25 @@ steps:
         esac
         echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX} logout=${_LOGOUT_TARGET}"
 
+  # System health documents (addition 0008r): the files docs/system-health/documents.txt names, copied by basename into
+  # web/documents/ so the Docker build (context web/) can list them in its manifest. A file not in this commit is skipped
+  # and said so; the page then shows the documents that are in the build. Bash variables are written $$ (Cloud Build
+  # substitution syntax).
+  - id: copy-documents
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        mkdir -p web/documents
+        n=0
+        while IFS= read -r f || [ -n "$$f" ]; do
+          case "$$f" in ''|'#'*) continue ;; esac
+          if [ -f "$$f" ]; then cp "$$f" web/documents/; n=$$((n+1)); else echo "documents: $$f is not in this commit, skipped"; fi
+        done < docs/system-health/documents.txt
+        echo "documents: $$n file(s) copied into web/documents"
+
   - id: build
     name: gcr.io/cloud-builders/docker
     dir: web

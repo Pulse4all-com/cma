@@ -9,6 +9,7 @@
  * can only return the caller's own data: hours are pay data, never a colleague's.
  */
 import type { Identity, Principal } from "@/lib/auth/identity";
+import type { HealthRun } from "@/lib/health";
 
 /** ISO 8601 instant, always UTC on the wire; screens format in the user's zone */
 export type Instant = string;
@@ -1773,6 +1774,28 @@ export interface MyFollowUp {
   tasks: OpenTask[];
 }
 
+// ---- System health (addition 0008r; Configuration → System health) ------------------------------
+
+/** One row of cma.system_health_runs(): per job and connection over the last 30 days (lib/health) */
+export type SystemHealthRun = HealthRun;
+
+/** One row of cma.outbox_status(): actions per connection and state (0007c) */
+export interface OutboxStatusRow {
+  connectionId: string;
+  connectionName: string;
+  status: string;
+  actions: number;
+  oldestAt: Instant | null;
+  newestAt: Instant | null;
+  nextAttemptAt: Instant | null;
+}
+
+/** The database answering one trivial query under the tenant context, timed by the application */
+export interface DatabaseProbe {
+  /** Round trip of the query in milliseconds, including the pool's checkout; null when it failed */
+  roundTripMs: number | null;
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -2048,4 +2071,12 @@ export interface CmaData {
   getFollowUpByOwner(me: Principal): Promise<FollowUpOwner[]>;
   /** The caller's own rows. Needs leads.accept or workday.own */
   getMyFollowUp(me: Principal): Promise<MyFollowUp>;
+
+  // System health (addition 0008r). Needs tenant.configure; the database checks again (CMA06)
+  /** The jobs' runs per job and connection over the last 30 days (cma.system_health_runs) */
+  getSystemHealthRuns(me: Principal): Promise<SystemHealthRun[]>;
+  /** The outbox per connection and state (cma.outbox_status, 0007c) */
+  getOutboxStatus(me: Principal): Promise<OutboxStatusRow[]>;
+  /** One trivial query under the tenant context, timed, so a slow database shows at a glance */
+  probeDatabase(me: Principal): Promise<DatabaseProbe>;
 }

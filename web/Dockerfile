@@ -30,6 +30,9 @@ COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
 # The scheduler's job (migration 0005a): the same image runs it as a Cloud Run job with another command
 COPY --from=build --chown=app:app /app/jobs ./jobs
+# System health documents (addition 0008r): copied into web/documents/ by cloudbuild.yaml before the build, listed by
+# scripts/documents-manifest.mjs at prebuild; an empty directory with an empty manifest when the copy step did not run
+COPY --from=build --chown=app:app /app/documents ./documents
 USER app
 EXPOSE 8080
 CMD ["node", "server.js"]

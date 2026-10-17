@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/documents-manifest.mjs",
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
@@ -31,7 +32,8 @@
     "verify:signed-out": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/signed-out.mjs",
     "verify:invitations": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/invitations.mjs",
     "verify:preview": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/preview.mjs",
-    "verify:follow-up": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/follow-up.mjs"
+    "verify:follow-up": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/follow-up.mjs",
+    "verify:health": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/health.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",

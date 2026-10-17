@@ -14,6 +14,7 @@ import type {
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   DueState, FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
+  DatabaseProbe, OutboxStatusRow, SystemHealthRun,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -1991,5 +1992,52 @@ export const postgresData: CmaData = {
         tasks: j.tasks.map((x) => toOpenTask(x, me.displayName)),
       };
     });
+  },
+
+  // ---- System health (addition 0008r) --------------------------------------------------------
+
+  async getSystemHealthRuns(me): Promise<SystemHealthRun[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{
+        job: string; connection_id: string | null; last_started_at: Date; last_finished_at: Date | null; last_status: "running" | "succeeded" | "failed";
+        last_error: string | null; last_counts: Record<string, number>; last_succeeded_at: Date | null; last_failed_at: Date | null; last_failed_error: string | null;
+        runs_24h: number; failed_24h: number;
+      }>(`select * from cma.system_health_runs()`);
+      return r.rows.map((x) => ({
+        job: x.job, connectionId: x.connection_id, lastStartedAt: x.last_started_at.toISOString(),
+        lastFinishedAt: x.last_finished_at ? x.last_finished_at.toISOString() : null, lastStatus: x.last_status, lastError: x.last_error,
+        lastCounts: x.last_counts ?? {}, lastSucceededAt: x.last_succeeded_at ? x.last_succeeded_at.toISOString() : null,
+        lastFailedAt: x.last_failed_at ? x.last_failed_at.toISOString() : null, lastFailedError: x.last_failed_error, runs24h: x.runs_24h, failed24h: x.failed_24h,
+      }));
+    });
+  },
+
+  async getOutboxStatus(me): Promise<OutboxStatusRow[]> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<{ connection_id: string; connection_name: string; status: string; actions: number; oldest_at: Date | null; newest_at: Date | null; next_attempt_at: Date | null }>(
+        `select * from cma.outbox_status()`);
+      return r.rows.map((x) => ({
+        connectionId: x.connection_id, connectionName: x.connection_name, status: x.status, actions: x.actions,
+        oldestAt: x.oldest_at ? x.oldest_at.toISOString() : null, newestAt: x.newest_at ? x.newest_at.toISOString() : null,
+        nextAttemptAt: x.next_attempt_at ? x.next_attempt_at.toISOString() : null,
+      }));
+    });
+  },
+
+  async probeDatabase(me): Promise<DatabaseProbe> {
+    // The permission first (the page is tenant.configure's), then one trivial query timed around the whole
+    // transaction: checkout, begin, the context, the query, commit. A failure is a null, never an error page
+    const t0 = performance.now();
+    try {
+      await withTenant(ctx(me), async (q) => {
+        await q.query(`select cma.assert_permission('tenant.configure')`);
+        await q.query(`select 1`);
+      });
+      return { roundTripMs: Math.round(performance.now() - t0) };
+    } catch (e) {
+      if (e instanceof CmaDbError && (e.sqlState === "CMA06" || e.sqlState === "CMA01")) throw e;
+      console.error(`[cma-data] probe failed: ${e instanceof CmaDbError ? e.sqlState : "error"}`);
+      return { roundTripMs: null };
+    }
   },
 };
