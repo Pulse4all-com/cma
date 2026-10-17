@@ -18,7 +18,7 @@ Read `NIGHT_NOTES.md` first (ten minutes: what was built, the one change from th
 | 6 | Deferred (CMA-067): the dev HubSpot app version; a test task reaches the ingest | 10 min |
 | 7 | Dev backfill of tasks (after step 5); the counts | 10 min |
 | 8 | After step 11: dev on the merge's image, a hand check of Follow-up, Welcome, the Live board, Sources, Exports | 20 min |
-| 9 | The task address for `record_url_task` in dev; set it after step 11, on the merge's image | 5 min |
+| 9 | The task address for `record_url_task`: not possible, HubSpot has no task record page (run 16 October 2026; README, Open decisions) | 5 min |
 | 10 | Prod, before the merge: point-in-time recovery on; `70` twice, `72`, `02`, the read-only check of 11.1; records | 20 min |
 | 11 | Merge N16-B; watch the `cma-web-main` build; Welcome in prod | 10 min |
 | 12 | Prod ingest from `main` (service with its front, jobs); backfill of tasks (11.3); Sources and Exports settings (11.4); day one (11.5); the app version (11.2) deferred (CMA-067) | 35 min |
@@ -92,7 +92,7 @@ Expected: `41` its two tenant rows `PASS`, `53` `16 PASS, 0 FAIL`, `69` `29 PASS
 
 **Terminal** (on the N16-B branch, in a tab with the helpers; through the Auth Proxy to dev, `tools/datamap/schema.sql` prints schema only: every column's table, name and type, and the newest migration)
 ```bash
-cd ~/cma && cma_db dev && psql "$PGCONN" -X -At -f tools/datamap/schema.sql > docs/datamap/schema.json && node tools/datamap/build.mjs && cd web && npm run verify:datamap; cd ~/cma && git add docs/datamap && git commit -m "Data map: schema.json from dev after 0008n and 0008o" && git push
+cd ~/cma && cma_db dev && psql "$PGCONN" -X -qAt -f tools/datamap/schema.sql > docs/datamap/schema.json && node tools/datamap/build.mjs && cd web && npm run verify:datamap; cd ~/cma && git add docs/datamap && git commit -m "Data map: schema.json from dev after 0008n and 0008o" && git push
 ```
 Expected: `datamap: PASS (75 tables, 95 views, all described; index.html current)` (72 + 3 tables; 89 + 6 views), the commit on the branch.
 
@@ -185,6 +185,8 @@ Expected: no error page; the counts on Welcome equal the tiles on Follow-up; an 
 
 ## 9. The task address for `record_url_task`
 
+**Not possible (16 October 2026, Martin's run).** HubSpot has no record page for a task: `https://app-eu1.hubspot.com/contacts/<portal id>/record/0-27/<task id>` answers 404, and a task opens only as a preview on the task list. So `record_url_task` is not set for a HubSpot connection, in dev or prod, and Follow-up's task rows have no link; the step below is kept as it was written. Linking a task row to its deal, ticket or contact instead is open (README, Open decisions).
+
 The address now (it needs nothing in the CMA); the setting after step 11, on the merge's image (step 8), once step 7's task rows are in: its preview shows a link for the newest task.
 
 **Browser:** in `CMA dev`, open any task and copy its address. If it reads `https://app-eu1.hubspot.com/contacts/<portal id>/record/0-27/<task id>`, the template is `https://{app_host}/contacts/{account}/record/0-27/{id}` (with `app_host` set as for deals); if a task opens on its record's page instead, note the form and tell me (Open decisions).
@@ -234,7 +236,7 @@ Expected: the image built once under `main`'s tag; `ingress: internal-and-cloud-
 Then `docs/ingest/PROD_RUNBOOK.md`:
 - 11.2 after its first block (this deploy): deferred (CMA-067: the app version, its install and the test task).
 - 11.3: the backfill of tasks by connection id with `--from 2026-09-01`, and its counts.
-- 11.4: on Sources the done statuses, the callback type, the response time per ticket pipeline, `record_url_task` and the Unlinked calls check; on Exports the four settings with Arno and Kira.
+- 11.4: on Sources the done statuses, the callback type, the response time per ticket pipeline and the Unlinked calls check (no `record_url_task`: step 9); on Exports the four settings with Arno and Kira.
 - 11.5 (day one); the task figures are incomplete as Task data before CMA-067 says.
 
 Expected: as each section says.
