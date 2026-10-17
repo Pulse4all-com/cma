@@ -41,7 +41,7 @@ console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAI
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…70; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…74; see the header)`);
     process.exit(2);
   }
 }

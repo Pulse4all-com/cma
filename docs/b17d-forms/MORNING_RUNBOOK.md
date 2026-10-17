@@ -5,7 +5,7 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 **What changes:** every form is polled apart from whether it counts in Intake, and Reports → Forms shows every polled form's submissions per form and market. Addition 0008p (`74`, `75`): `connection_form.is_polled` (existing forms polled exactly when they count), the tenant's form categories, each form's fields with their option values, kept answers of choice questions only (checked against the options), a form's market field and lead condition, the reads `cma.forms_report()`, `cma.forms_answers()` and `cma.forms_history_start()` (README, Data model: forms reporting; Decision log, 16 October 2026). The ingest's forms poll and backfill read every polled form, keep choice answers only and count the dropped ones; the backfill fills a stored submission's empty answers once. The web app: Reports → Forms (`/reports/forms`, `reports.view` or `performance.team`) with its file, and on Configuration → Sources a form's polled switch and category, and the form categories.
 
 **Order matters:**
-- `Pulse4all-com/cma#142` (0008n and 0008o, `70` to `73`) is merged and has run in dev and prod first; without 0008o `74` stops with `addition 0008o (72_follow_up.sql) must run before 0008p` and applies nothing.
+- `Pulse4all-com/cma#142` (0008n and 0008o, `70` to `73`) is merged (`c7a3cab`) and has run in dev and prod (`records/0008n-dev-2026-10-16`, `records/0008n-prod-2026-10-16`, `records/0008o-dev-2026-10-16`, `records/0008o-prod-2026-10-16`); without 0008o `74` stops with `addition 0008o (72_follow_up.sql) must run before 0008p` and applies nothing.
 - 0008p runs in dev and prod **before** the merge: the merge builds and deploys prod's web app, whose Forms page and Sources page read the functions of `74`. Merged first, Reports → Forms answers an error and a CRM connection's Sources page fails until `74` runs.
 - `74` is safe under the ingest image that runs now: that image's forms poll writes the catalog without fields and the counted forms' submissions as before, and nothing reads `is_polled` until the new image runs. The new image needs 0008p (it reads `is_polled` and the fields), so it is deployed after the merge, dev first, then prod (steps 8 and 9).
 - Kept fields, a market field and a lead condition are checked against the fields the source described. The new image's catalog refresh brings them at most an hour after it starts: wait for it (steps 8b and 9).
@@ -32,36 +32,17 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 
 ---
 
-## Helpers (define in every new terminal tab)
+## Helpers
 
-The terminal is set up as `docs/RUNBOOK.md`, Setup (once per machine), describes: gcloud logged in as `martin@pulse4all.com`, Application Default Credentials with quota project `p4a-cma-prod` (the Auth Proxy signs in with them), Node 22 from NodeSource (installed system-wide, nothing to switch on), `psql`, `cloud-sql-proxy` v2 and `gh` as Pulse4all-DEV. A shell function lives only in the tab that defined it: paste this block in every tab that runs `cma_db` or `run_migration` (steps 2 and 5). They are the helpers of `docs/night-2026-10-13/MORNING_RUNBOOK.md`, without their first line, which switched Node 22 on there.
+The terminal is set up as `docs/RUNBOOK.md`, Setup (once per machine), describes. Its step 8 writes the helpers `cma_db` (starts the Auth Proxy once and sets `PGCONN`) and `run_migration` (a migration and its verify, normal and provoked, into `records/`) to `~/.cma_helpers.sh`, sourced from `~/.bashrc`, so every terminal tab has them; this runbook uses them as they are there and adds none. A tab opened before that step sources the file with `. ~/.cma_helpers.sh`.
 
 **Terminal**
 ```bash
-cd ~/cma && node -v
-cma_db () {  # usage: cma_db dev|prod  → starts the proxy once and sets PGCONN
-  local env=$1 port; [ "$env" = dev ] && port=5433 || port=5434
-  pgrep -f "cloud-sql-proxy.*cma-$env-pg" >/dev/null || \
-    (cloud-sql-proxy --auto-iam-authn --port $port "p4a-cma-$env:europe-west4:cma-$env-pg" >/tmp/proxy-$env.log 2>&1 &)
-  sleep 3
-  export PGCONN="host=127.0.0.1 port=$port dbname=cma user=$(gcloud config get-value account 2>/dev/null) sslmode=disable"
-  psql "$PGCONN" -Atc "select 'connected to ' || current_database() || ' as ' || current_user"
-}
-run_migration () {  # usage: run_migration <env> <nn_migration.sql> <nn_verify.sql> <records dir> [earlier verify files...]
-  local env=$1 mig=$2 ver=$3 rec=$4; shift 4
-  cd ~/cma && mkdir -p "records/$rec" && cma_db "$env" || return 1
-  psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$mig" > "records/$rec/${mig%%_*}.txt" 2>&1 && tail -3 "records/$rec/${mig%%_*}.txt"
-  psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$ver" > "records/$rec/${ver%%_*}.txt" 2>&1; tail -6 "records/$rec/${ver%%_*}.txt"
-  sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" "db/$ver" > /tmp/provoke.sql
-  psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "records/$rec/${ver%%_*}-provoked.txt" 2>&1
-  grep -cE "FAIL" "records/$rec/${ver%%_*}-provoked.txt" | sed 's/^/provoked FAIL lines: /'; grep -E "PROVOKED" "records/$rec/${ver%%_*}-provoked.txt" | tail -2
-  for f in "$@"; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "records/$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "records/$rec/${f%%_*}-rerun.txt") PASS rows"; done
-}
+cd ~/cma && node -v && bash -ic 'type -t cma_db run_migration'
 ```
+Expected: `v22.…`, then `function` twice. Anything else: run `docs/RUNBOOK.md`, Setup, step 8 first.
 
-The Studio context block is the one at the top of `docs/ingest/PROD_RUNBOOK.md` (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`, your own user); "after the context block" below means its second part pasted above the statements, in the same Run, with `reset role;` at the end.
-
-Expected: `v22.…` (from `node -v`), no other output; `type cma_db run_migration` then prints both functions.
+The Studio context block is the one at the top of `docs/ingest/PROD_RUNBOOK.md` (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`, your own user). Only the blocks that call a configuration function run "after the context block": its second part (from `set role cma_app;`) pasted above the statements, in the same Run, with `reset role;` at the end. Every other Studio block reads as the owner and stands alone, `set role cma_owner;` … `reset role;`.
 
 ## 1. Review the pull request, build it, run the ingest checks
 
@@ -79,7 +60,7 @@ Expected: `found 0 vulnerabilities` (or the five known high-severity advisories 
 ```bash
 cd ~/cma/ingest && npm ci --no-audit --no-fund 2>&1 | tail -1 && npm run lint && npm test 2>&1 | grep -E "^ALL|FAILED"; cd ~/cma
 ```
-Expected: `found 0 vulnerabilities`, no lint output after the `eslint` line, fourteen lines `ALL n PASS` (18, 37, 26, 48, 20, 49, 27, 17, 51, 21, 21, 20, 76, 10; the fourth is `verify/forms.mjs`, the last `verify/deploy-script.mjs` of `Pulse4all-com/cma#146`), no `FAILED`. **Do not merge yet.**
+Expected: `found 0 vulnerabilities`, no lint output after the `eslint` line, fourteen lines `ALL n PASS` (18, 48, 26, 48, 20, 49, 27, 17, 51, 21, 21, 20, 76, 10; the second is `verify/mapping.mjs` with `Pulse4all-com/cma#142`'s task checks, the fourth `verify/forms.mjs`, the last `verify/deploy-script.mjs` of `Pulse4all-com/cma#146`), no `FAILED`. **Do not merge yet.**
 
 **Studio (cma-dev-pg)** and **Studio (cma-prod-pg)** (read only: #142's additions have run)
 ```sql
@@ -91,11 +72,11 @@ Expected on both instances: `0008n` and `0008o`, no `0008p`. Without `0008o`, ru
 
 ## 2. Addition 0008p in dev
 
-**Terminal** (still on the pull request's branch; `71` and `73` are #142's verifies, on `main` once #142 merged)
+**Terminal** (still on the pull request's branch; `71` and `73` are #142's verifies, on `main` since `c7a3cab` and on this branch since `main` was merged in)
 ```bash
 run_migration dev 74_forms_reporting.sql 75_verify_forms_reporting.sql 0008p-dev-$(date +%F) 33_verify_intake_core.sql 35_verify_telephony.sql 41_verify_lead_metrics.sql 53_verify_sources_configuration.sql 69_verify_email_activity.sql 71_verify_crm_tasks.sql 73_verify_follow_up.sql
 ```
-Expected: `connected to cma as martin@pulse4all.com`; the last lines of `74` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `75` ends with `B19 a run's counts take dropped; another key is refused | PASS`, the verdict row `verdict | PASS | 24 PASS, 0 FAIL`, `(25 rows)`, `DROP FUNCTION` twice and `RESET`; `provoked FAIL lines: 25` (the 24 checks and the verdict's count) and the verdict `PROVOKED, NOT A PASS | 0 PASS, 24 FAIL`; `33_verify_intake_core.sql: 2 PASS rows`, `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `53_verify_sources_configuration.sql: 17 PASS rows`, `69_verify_email_activity.sql: 30 PASS rows`, `71_verify_crm_tasks.sql: 21 PASS rows`, `73_verify_follow_up.sql: 22 PASS rows` (the local run's counts with #142's scripts as they stood on 16 October 2026; a later version of #142 may have more). A `REFUSED` line means the session is not on dev: check `cma_db dev`. Any other `FAIL` row: send me its line.
+Expected: `connected to cma as martin@pulse4all.com`; the last lines of `74` are `INSERT 0 1`, `COMMIT`, `RESET` (no `ERROR`); `75` ends with `B19 a run's counts take dropped; another key is refused | PASS`, the verdict row `verdict | PASS | 24 PASS, 0 FAIL`, `(25 rows)`, `DROP FUNCTION` twice and `RESET`; `provoked FAIL lines: 25` (the 24 checks and the verdict's count) and the verdict `PROVOKED, NOT A PASS | 0 PASS, 24 FAIL`; `33_verify_intake_core.sql: 2 PASS rows`, `35_verify_telephony.sql: 2 PASS rows`, `41_verify_lead_metrics.sql: 2 PASS rows`, `53_verify_sources_configuration.sql: 17 PASS rows`, `69_verify_email_activity.sql: 30 PASS rows`, `71_verify_crm_tasks.sql: 21 PASS rows`, `73_verify_follow_up.sql: 22 PASS rows` (`main`'s `71` and `73` as merged with `Pulse4all-com/cma#142`: 20 and 21 checks plus the verdict, the same after `74`; a local run on 17 October 2026 at 0008p gave these counts). `53` gives 17 only once the one-off dev cleanup of `records/0008o-dev-2026-10-16/README.md` (Note: two leftover throwaway tenants in dev) has run; before it, `53_verify_sources_configuration.sql: 15 PASS rows`, because A4 counts `2 connection(s) without the kind their rows imply` (the two tenants an older `verify:email-flow` left) and the verdict fails. That A4 does not come from 0008p: run the cleanup, then `53` again (`psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/53_verify_sources_configuration.sql | grep -E "A4|verdict"`, expected A4 `PASS` and `16 PASS, 0 FAIL`). A `REFUSED` line means the session is not on dev: check `cma_db dev`. Any other `FAIL` row: send me its line.
 
 **Terminal** (`74` again)
 ```bash
@@ -122,23 +103,19 @@ Expected:
 
 ## 4. The data map: snapshot from dev, rebuild, push
 
-`docs/datamap/README.md`, Refreshing the snapshot, on this branch. **Terminal** (first tab; leave it running; skip when `cma_db dev` already runs a proxy on 5433)
-```bash
-cloud-sql-proxy --auto-iam-authn --port 5433 p4a-cma-dev:europe-west4:cma-dev-pg
-```
-Expected: `The proxy has started successfully and is ready for new connections!`
+`docs/datamap/README.md`, Refreshing the snapshot, on this branch, with the snapshot line of `docs/RUNBOOK.md`, Setup, step 8: `psql -X -qAt` (`-X` skips `~/.psqlrc`, `-q` keeps the `SET` of the query's `set role cma_owner` out of the file, `-At` prints its one line of JSON bare). The snapshot is schema only.
 
-**Terminal** (second tab, in `~/cma`)
+**Terminal** (`~/cma`, still on the pull request's branch)
 ```bash
-psql "host=127.0.0.1 port=5433 dbname=cma user=$(gcloud config get-value account) sslmode=disable" -v ON_ERROR_STOP=1 -qAt -f tools/datamap/schema.sql > docs/datamap/schema.json && grep -o '"latest_migration" : "[^"]*"' docs/datamap/schema.json
+cd ~/cma && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && grep -o '"latest_migration" : "[^"]*"' docs/datamap/schema.json
 ```
-Expected: `"latest_migration" : "0008p"`.
+Expected: `connected to cma as martin@pulse4all.com`, then `"latest_migration" : "0008p"`.
 
 **Terminal** (`~/cma`)
 ```bash
 node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
 ```
-Expected: `datamap: wrote docs/datamap/index.html (… tables, … views)`, then `datamap: … tables, … views, all described; index.html current`: two tables more than after #142 (`form_category`, `connection_form_field`) and three views more (their two reader views and `dq_form_answer_not_in_options`). A problem list naming one of #142's tables means this branch's `catalog.json` lacks #142's entries: merge `main` into the branch first (`git merge origin/main`), then run both lines again. A problem naming anything else: send it to me.
+Expected: `datamap: wrote docs/datamap/index.html (77 tables, 104 views)`, then `datamap: 77 tables, 104 views, all described; index.html current`: two tables more than `main`'s snapshot at 0008o (75 tables, 101 views: `form_category`, `connection_form_field`) and three views more (their two reader views and `dq_form_answer_not_in_options`); a local snapshot at 0008p on 17 October 2026 gave exactly these. A problem list instead: send it to me.
 
 **Terminal** (`~/cma`)
 ```bash
@@ -156,7 +133,7 @@ Expected: `True	7`.
 
 `75`, `53`, `69`, `71` and `73` refuse prod (they write throwaway tenants and run in dev only), so prod runs the migration twice and `33`, `35` and `41`, then a read-only check. `74` adds five columns to `connection_form` (setting `is_polled` on every form as it counts, an audit row each), one to `form_submission` and two tables, and replaces the forms' configuration, catalog, submission, privacy-deletion, run, intake and data-quality functions in one transaction; the ingest's writes wait for it a moment and carry on.
 
-**Terminal** (from the Chromebook, in a tab with the helpers; `db/` scripts only, their output is check rows, counts and ids)
+**Terminal** (from the Chromebook; `db/` scripts only, their output is check rows, counts and ids)
 ```bash
 rec=records/0008p-prod-$(date +%F); mkdir -p "$rec" && cma_db prod && psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/74_forms_reporting.sql > "$rec/74.txt" 2>&1; tail -3 "$rec/74.txt"; psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/74_forms_reporting.sql > "$rec/74-rerun.txt" 2>&1; tail -3 "$rec/74-rerun.txt"
 for f in 33_verify_intake_core.sql 35_verify_telephony.sql 41_verify_lead_metrics.sql; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "$rec/${f%%_*}-rerun.txt") PASS rows"; done
@@ -228,7 +205,7 @@ where ff.kind <> 'other' order by 1, ff.sort_order;
 select status, counts, error, started_at from cma.sync_run where job = 'forms_poll' order by started_at desc limit 3;
 reset role;
 ```
-Expected: `described` equal to `forms`; one row per choice field of the dev forms (kind `dropdown`, `radio`, `multiple_checkboxes` or `single_checkbox`, the number of options, `active`); `succeeded` runs. A `single_checkbox` lists 2 options (`true`, `false`). Note the HubSpot connection's id as `<conn>` (`select id from cma.integration_connection where adapter = 'hubspot'`) and pick one test form `<form id>` with at least one choice field.
+Expected: `described` equal to `forms`; one row per choice field of the dev forms (kind `dropdown`, `radio`, `multiple_checkboxes` or `single_checkbox`, the number of options, `active`); `succeeded` runs. A `single_checkbox` lists 2 options (`true`, `false`). Note the HubSpot connection's id as `<conn>` (in the same block, before `reset role;`: `select c.id from cma.integration_connection c join cma.tenant t on t.id = c.tenant_id where t.slug = 'pulse4all-subscriptions' and c.adapter = 'hubspot';`) and pick one test form `<form id>` with at least one choice field.
 
 **8c. The configuration.** **Studio (cma-dev-pg)** after the context block (the categories as in prod; the test form polled and not counted, category `support`; `<fields>` its choice fields as an array, such as `array['reason']`; the market field only when the form has a country dropdown and no market)
 ```sql
@@ -241,10 +218,18 @@ select cma.set_form_category('iban_change', 'IBAN change', 60);
 select cma.set_form_category('support', 'Support', 70);
 select cma.set_form('<conn>', '<form id>', false, null, null, <fields>);
 select cma.set_form_reporting('<conn>', '<form id>', true, 'support', null);
-select source_form_id, name, is_counted, is_polled, category, kept_fields, market_field from cma.connection_form where connection_id = '<conn>' order by name;
 reset role;
 ```
-Expected: nine empty results, then the forms: the test form `f | t | support` with its kept fields. A field that is no choice field is refused (`a kept field must be a choice field of the form …`, CMA04): take it out.
+Expected: nine empty results. A field that is no choice field is refused (`a kept field must be a choice field of the form …`, CMA04): take it out and run again.
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select f.source_form_id, f.name, f.is_counted, f.is_polled, f.category, f.kept_fields, f.market_field
+from cma.connection_form f where f.connection_id = '<conn>' order by f.name;
+reset role;
+```
+Expected: the forms, the test form `f | t | support` with its kept fields.
 
 **8d. A test submission.** **Browser:** `CMA dev` → Marketing → Forms → the test form → Preview (or its share link): submit it twice with a test contact's email (VENDOR_SETUP §1.2), choosing an option in each choice field, and in the second also ticking its single checkbox if it has one. Wait two minutes (two poll runs).
 
@@ -298,9 +283,9 @@ Expected: `50 | 50`; the choice fields of brief B17d's data: `are_you_already_a_
 
 ## 10. Prod: the configuration, the backfill, Intake before and after the lead rule
 
-Every Studio block of this step runs **after the context block** on `cma-prod-pg`.
+Every Studio block of this step is on `cma-prod-pg`. The blocks that call a configuration function (`set_form_category`, `set_form_reporting`, `set_form`, `set_form_market_field`, `set_form_lead_condition`) run **after the context block**; the reads stand alone as the owner (`set role cma_owner;` … `reset role;`). The statements Studio prints in 10c and 10d are configuration calls: they run after the context block too.
 
-**10a. The categories** (Martin, brief B17d)
+**10a. The categories** (Martin, brief B17d), **after the context block**:
 ```sql
 select cma.set_form_category('contact', 'Contact', 10);
 select cma.set_form_category('info', 'Info', 20);
@@ -309,19 +294,31 @@ select cma.set_form_category('cancellation', 'Cancellation', 40);
 select cma.set_form_category('replacement', 'Replacement', 50);
 select cma.set_form_category('iban_change', 'IBAN change', 60);
 select cma.set_form_category('support', 'Support', 70);
-select code, name, sort_order, status, forms from cma.form_categories();
 reset role;
 ```
-Expected: seven empty results, then the seven categories in that order, `active`, `forms` 0.
+Expected: seven empty results.
 
-**10b. The 28 counted forms: the category from their lead source.** First the catalog:
+**Studio (cma-prod-pg)** (read only)
 ```sql
+set role cma_owner;
+select c.code, c.name, c.sort_order, c.status,
+       (select count(*) from cma.connection_form f where f.tenant_id = c.tenant_id and f.category = c.code) as forms
+from cma.form_category c join cma.tenant t on t.id = c.tenant_id
+where t.slug = 'pulse4all-subscriptions' order by c.sort_order, c.code;
+reset role;
+```
+Expected: the seven categories in that order, `active`, `forms` 0.
+
+**10b. The 28 counted forms: the category from their lead source.** First the catalog, **Studio (cma-prod-pg)** (read only):
+```sql
+set role cma_owner;
 select f.is_counted, f.lead_source, count(*) as forms, count(f.market) as with_market
 from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' group by 1, 2 order by 1 desc, 2;
 reset role;
 ```
 Expected: `t | contact | 9 | 9`, `t | info | 9 | 9`, `t | quote | 10 | 10` (28 counted forms, each with its market) and `f |  | 22 | n`, n the support forms whose name prefix the form rule of 12 October (`PROD_RUNBOOK.md` 7.5b) already read as their market (up to 19; 10c sets them again). Other counts for the counted forms: send me the rows before going on. The local rehearsal of steps 10 and 11 on an invented catalog of this shape is `local-records/db/runbook-step10-rehearsal.txt`.
 
+Then **after the context block**:
 ```sql
 select f.name, cma.set_form_reporting(f.connection_id, f.source_form_id, true, f.lead_source, f.market)
 from cma.connection_form f
@@ -331,8 +328,9 @@ reset role;
 ```
 Expected: 28 rows, each a form's name and an empty value.
 
-**10c. The 22 support forms: polled, not counted, with category and market, one statement per form.** The repository does not hold prod's catalog, so Studio writes the statements from it: the category from the name (cancellation, replacement, IBAN, support), the market from the name's two-letter prefix (AT, BE, DE, DK, ES, FR, NL, SE, UK read as GB; no prefix, no market). Nothing in code knows these names; the statements are read and run by you.
+**10c. The 22 support forms: polled, not counted, with category and market, one statement per form.** The repository does not hold prod's catalog, so Studio writes the statements from it: the category from the name (cancellation, replacement, IBAN, support), the market from the name's two-letter prefix (AT, BE, DE, DK, ES, FR, NL, SE, UK read as GB; no prefix, no market). Nothing in code knows these names; the statements are read and run by you. **Studio (cma-prod-pg)** (read only):
 ```sql
+set role cma_owner;
 select format('select cma.set_form_reporting(%L, %L, true, %L, %s);  -- %s', f.connection_id, f.source_form_id, x.category,
               coalesce(quote_literal(m.code), 'null'), f.name) as statement
 from cma.connection_form f
@@ -340,23 +338,27 @@ cross join lateral (select case when f.name ~* 'iban' then 'iban_change' when f.
                                 when f.name ~* 'replacement' then 'replacement' when f.name ~* 'support' then 'support' end as category,
                            case upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) when 'UK' then 'GB'
                                 else upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) end as prefix) x
-left join cma.market m on m.code = x.prefix and x.prefix in ('AT', 'BE', 'DE', 'DK', 'ES', 'FR', 'NL', 'SE', 'GB')
+left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix and x.prefix in ('AT', 'BE', 'DE', 'DK', 'ES', 'FR', 'NL', 'SE', 'GB')
 where f.connection_id = '<conn>' and f.status = 'active' and not f.is_counted
 order by f.name;
 reset role;
 ```
 Expected: 22 lines `select cma.set_form_reporting('<conn>', '<form id>', true, '<category>', '<market>');  -- <name>`: ten `cancellation` (nine with the market of their prefix, the general one `null`), ten `replacement` (the same), `iban_change` with `'DE'` (DE change IBAN) and `support` with `null` (the General support form). **Read every line against its name.** A category of `null` (a name the four words miss) or a market of `null` behind a prefix (a market not in the catalog, such as one added later) is corrected by hand in that line; ask me when unsure.
 
-Then paste the 22 lines, as printed or corrected, after the context block and run them, with:
+Then paste the 22 lines, as printed or corrected, **after the context block**, with `reset role;` at the end, and run them. Expected: 22 empty results.
+
+**Studio (cma-prod-pg)** (read only)
 ```sql
-select category, market, is_counted, is_polled, count(*) as forms from cma.connection_form
-where connection_id = '<conn>' and status = 'active' group by 1, 2, 3, 4 order by 1, 2;
+set role cma_owner;
+select f.category, f.market, f.is_counted, f.is_polled, count(*) as forms from cma.connection_form f
+where f.connection_id = '<conn>' and f.status = 'active' group by 1, 2, 3, 4 order by 1, 2;
 reset role;
 ```
-Expected: 22 empty results; then per category and market: `cancellation` and `replacement` nine markets each `| f | t | 1` and `| (empty) | f | t | 1`, `contact`, `info` and `quote` their markets `| t | t`, `iban_change | DE | f | t | 1`, `support | (empty) | f | t | 1`. The forms poll reads the support forms' submissions from 1 October within minutes (their first poll goes back to `intake.start_date`).
+Expected: per category and market: `cancellation` and `replacement` nine markets each `| f | t | 1` and `| (empty) | f | t | 1`, `contact`, `info` and `quote` their markets `| t | t`, `iban_change | DE | f | t | 1`, `support | (empty) | f | t | 1`. The forms poll reads the support forms' submissions from 1 October within minutes (their first poll goes back to `intake.start_date`).
 
-**10d. Kept fields and market fields** (brief B17d's amendment, item 7): per category the choice fields whose answers are kept, and for a form without a market its `country_dropdown`, else its `ticket_country`, as market field (kept too). `deployment_outcome` is never kept (Decision log, 16 October 2026). Again Studio writes one statement per form from the catalog (the form's own counted, lead source and market passed as they are, since `set_form` sets them all):
+**10d. Kept fields and market fields** (brief B17d's amendment, item 7): per category the choice fields whose answers are kept, and for a form without a market its `country_dropdown`, else its `ticket_country`, as market field (kept too). `deployment_outcome` is never kept (Decision log, 16 October 2026). Again Studio writes one statement per form from the catalog (the form's own counted, lead source and market passed as they are, since `set_form` sets them all). **Studio (cma-prod-pg)** (read only):
 ```sql
+set role cma_owner;
 with wanted(category, field) as (values
   ('contact', 'are_you_already_a_customer'), ('contact', 'customer_sector'), ('info', 'use_case'),
   ('cancellation', 'cancellation_reason'), ('cancellation', 'source_type'),
@@ -383,14 +385,17 @@ from forms f left join kept k on k.source_form_id = f.source_form_id
 order by f.category, f.name;
 reset role;
 ```
-Expected: 50 lines, one per form, ending with the form's name as a comment: Contact forms keep `are_you_already_a_customer` (and `customer_sector` on the DE form), Info forms `use_case`, Quote forms and DE change IBAN nothing (`{}`), Cancellation forms `cancellation_reason` (and `source_type` where present), Replacement forms `exchange_reason`, `exchange_type` (and `request_channel` where present), the General support form `hs_ticket_category`; a choice field a form keeps already stays kept; the three forms without a market also keep `country_dropdown` (or `ticket_country`) and carry a second statement on the same line, `select cma.set_form_market_field(…);`. **Read the lines against the brief**; a form missing a field it should keep means the form lacks that field in HubSpot (send me its name). Then paste the 50 lines after the context block and run them, with:
+Expected: 50 lines, one per form, ending with the form's name as a comment: Contact forms keep `are_you_already_a_customer` (and `customer_sector` on the DE form), Info forms `use_case`, Quote forms and DE change IBAN nothing (`{}`), Cancellation forms `cancellation_reason` (and `source_type` where present), Replacement forms `exchange_reason`, `exchange_type` (and `request_channel` where present), the General support form `hs_ticket_category`; a choice field a form keeps already stays kept; the three forms without a market also keep `country_dropdown` (or `ticket_country`) and carry a second statement on the same line, `select cma.set_form_market_field(…);`. **Read the lines against the brief**; a form missing a field it should keep means the form lacks that field in HubSpot (send me its name). Then paste the 50 lines **after the context block**, with `reset role;` at the end, and run them. Expected: empty results.
+
+**Studio (cma-prod-pg)** (read only)
 ```sql
-select category, count(*) as forms, count(*) filter (where kept_fields <> '{}') as keeping, count(market_field) as with_market_field,
-       bool_or('deployment_outcome' = any (kept_fields)) as deployment_outcome_kept
-from cma.connection_form where connection_id = '<conn>' and status = 'active' group by 1 order by 1;
+set role cma_owner;
+select f.category, count(*) as forms, count(*) filter (where f.kept_fields <> '{}') as keeping, count(f.market_field) as with_market_field,
+       bool_or('deployment_outcome' = any (f.kept_fields)) as deployment_outcome_kept
+from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' group by 1 order by 1;
 reset role;
 ```
-Expected: empty results; then per category the forms, those keeping answers, `with_market_field` 1 for `cancellation`, `replacement` and `support` and 0 elsewhere, and `deployment_outcome_kept` false on every row.
+Expected: per category the forms, those keeping answers, `with_market_field` 1 for `cancellation`, `replacement` and `support` and 0 elsewhere, and `deployment_outcome_kept` false on every row.
 
 **10e. The backfill from 1 October:** the support forms' submissions the poll has not read yet, and every stored submission's answers. **Terminal** (from the Chromebook)
 ```bash
@@ -420,15 +425,23 @@ reset role;
 ```
 Expected: **Intake B equals Intake A of step 5** for the days both cover, market by market: polling the 22 support forms and storing their submissions changed no Intake figure (brief B17d). A later run date adds the days since step 5; compare the same dates (the Intake report with a custom range shows them). A difference on an earlier date: send me both lists.
 
-**10g. The lead rule on the nine Contact forms.** Tell Kira first that Intake's form counts drop by the existing customers from here on, with Intake B. Then:
+**10g. The lead rule on the nine Contact forms.** Tell Kira first that Intake's form counts drop by the existing customers from here on, with Intake B. Then **after the context block**:
 ```sql
 select f.name, cma.set_form_lead_condition(f.connection_id, f.source_form_id, 'are_you_already_a_customer', array['No, I''m not a customer yet'])
 from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' and f.category = 'contact'
 order by f.name;
-select f.name, f.lead_condition from cma.connection_form f where f.connection_id = '<conn>' and f.lead_condition is not null order by f.name;
 reset role;
 ```
-Expected: nine rows (name, empty value), then the nine forms with `{"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}`. `not an option of are_you_already_a_customer: …` (CMA04) means the option's text differs in HubSpot (another apostrophe): copy the exact value from step 9's catalog (`select options from cma.connection_form_field where name = 'are_you_already_a_customer' limit 1;`) and run again.
+Expected: nine rows (name, empty value). `not an option of are_you_already_a_customer: …` (CMA04) means the option's text differs in HubSpot (another apostrophe): copy the exact value from the field's options and run again.
+
+**Studio (cma-prod-pg)** (read only; the second statement only after a CMA04 above)
+```sql
+set role cma_owner;
+select f.name, f.lead_condition from cma.connection_form f where f.connection_id = '<conn>' and f.lead_condition is not null order by f.name;
+select ff.options from cma.connection_form_field ff where ff.connection_id = '<conn>' and ff.name = 'are_you_already_a_customer' limit 1;
+reset role;
+```
+Expected: the nine forms with `{"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}`; then the field's option values.
 
 **10h. Intake after the lead rule** ("Intake C"): the read of 10f again, then the Contact forms' answers that explain the difference:
 ```sql
@@ -478,7 +491,7 @@ cd ~/cma/web && npm run build >/dev/null && cp -r .next/static .next/standalone/
 ```bash
 cd ~/cma/web && for v in theme layout hints; do BASE=http://localhost:8080 node verify/$v.mjs | tail -1; BASE=http://localhost:8080 node verify/$v.mjs --provoke | tail -1; done
 ```
-Expected, in order (the local run's figures on this branch after `main` of 16 October 2026 with N16-A; pages that `Pulse4all-com/cma#142` adds may raise the counts): `theme: PASS (50 pages, …, 28 tables per 7.6 and 3.3, a header hint open on 14 report pages)`, `theme: FAIL (6 problems)`, `layout: PASS (…, Calls and Calls per agent for 7 identities (…), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Sources with its form categories (every table inside its card), …)`, `layout: FAIL (43 problems)`, `hints: PASS (267 headers and 67 tiles on 22 pages, …)`, `hints: FAIL (3 problems)`. The layout verifier writes its screenshots to `records/layout/`.
+Expected, in order (the local run's figures on this branch after `main` of 17 October 2026, with N16-B's Follow-up pages): `theme: PASS (53 pages, …, 40 tables per 7.6 and 3.3, a header hint open on 16 report pages)`, `theme: FAIL (6 problems)`, `layout: PASS (…, Calls and Calls per agent for 7 identities (…), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Sources with its form categories (every table inside its card), …)`, `layout: FAIL (46 problems)`, then `hints: PASS (…)` and `hints: FAIL (…)`. On `main` too, `hints` can fail on one line that depends on the date, `manager /reports/speed-to-lead?range=month&group=day: 7 headers, expected at least 12`, because the mock's month may hold too few Speed to lead rows for the full table: on 17 October 2026 the local run gave `hints: FAIL (1 problems)` with exactly that line, and `hints: FAIL (4 problems)` provoked. That line alone is not this pull request's; any other `hints` line is: send it to me. The layout verifier writes its screenshots to `records/layout/`.
 
 ## 13. A hand check in prod
 
