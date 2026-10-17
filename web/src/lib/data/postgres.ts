@@ -783,24 +783,27 @@ async function readRules(q: Querier): Promise<AlertRule[]> {
 
 export const postgresData: CmaData = {
   async findPrincipal(identity: Identity): Promise<Principal | null> {
-    // 1. Before a tenant is known: the one SECURITY DEFINER lookup, tenant ids only
-    const tenants = await withoutTenant((q) =>
-      q.query<{ tenant_id: string }>(
+    // One transaction for both steps (the IT audit of 17 October 2026: identity cost two checkouts and two
+    // begin/commit pairs on every request). 1. Before a tenant is known: the one SECURITY DEFINER lookup,
+    // tenant ids only. 2. The tenant context, set as withTenant sets it (set_config(…, true) is transaction-
+    // local), then the app_user check as cma_app under row-level security. The same two statements as before.
+    return withoutTenant(async (q) => {
+      const tenants = await q.query<{ tenant_id: string }>(
         "select tenant_id from cma.find_tenants_for_identity($1, $2)",
         [identity.provider, identity.subject],
-      ),
-    );
-    const match = tenants.rows[0];
-    if (!match) return null;
-    if (tenants.rows.length > 1) {
-      // No tenant picker yet; never guess. Count only: the subject is a personal identifier.
-      console.warn(`[cma-data] identity (${identity.provider}) matches ${tenants.rows.length} tenants; no tenant picker yet`);
-      return null;
-    }
-    const tenantId = match.tenant_id;
-
-    // 2. Inside that tenant, as cma_app under row-level security: the app_user check
-    return withTenant({ tenantId }, async (q) => {
+      );
+      const match = tenants.rows[0];
+      if (!match) return null;
+      if (tenants.rows.length > 1) {
+        // No tenant picker yet; never guess. Count only: the subject is a personal identifier.
+        console.warn(`[cma-data] identity (${identity.provider}) matches ${tenants.rows.length} tenants; no tenant picker yet`);
+        return null;
+      }
+      const tenantId = match.tenant_id;
+      await q.query(
+        `select set_config('app.tenant_id', $1, true), set_config('app.user_id', '', true), set_config('app.actor_label', '', true)`,
+        [tenantId],
+      );
       const r = await q.query<{
         user_id: string;
         display_name: string;
@@ -834,7 +837,7 @@ export const postgresData: CmaData = {
         [identity.provider, identity.subject],
       );
       const row = r.rows[0];
-      // No row: deactivated between the two steps. No role: may not work yet. Both: no access yet.
+      // No row: no active person for the id in that tenant. No role: may not work yet. Both: no access yet.
       if (!row || !row.role_key) return null;
       return {
         tenantId,

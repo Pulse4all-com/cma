@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAccess, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
+import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
 
 /**
  * Shared plumbing for the /api/v1 routes.
@@ -16,6 +17,10 @@ import { CmaDbError } from "@/lib/data/errors";
  */
 
 const NO_STORE = { "cache-control": "no-store" } as const;
+/** no-store, plus the request's database count when CMA_DB_TRACE=1 (local verification only; the data call has completed before the answer is built) */
+function responseHeaders(): Record<string, string> {
+  return DB_TRACE ? { ...NO_STORE, "x-cma-db": formatDbStats(dbStats()) } : { ...NO_STORE };
+}
 
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
@@ -25,11 +30,11 @@ export class ApiError extends Error {
 }
 
 export function ok(data: unknown, status = 200): NextResponse {
-  return NextResponse.json({ data }, { status, headers: NO_STORE });
+  return NextResponse.json({ data }, { status, headers: responseHeaders() });
 }
 
 function fail(status: number, code: string, message: string): NextResponse {
-  return NextResponse.json({ error: { code, message } }, { status, headers: NO_STORE });
+  return NextResponse.json({ error: { code, message } }, { status, headers: responseHeaders() });
 }
 
 /** SQLSTATEs of migrations 0002, 0003 and their additions, and connection failures, as HTTP. Never the SQL text. */

@@ -1,0 +1,266 @@
+[
+  {
+    "path": "/",
+    "subject": "agent-two",
+    "tx": 7,
+    "rt": 30
+  },
+  {
+    "path": "/day",
+    "subject": "agent-two",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/hours",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/messages",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/schedule",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/me/follow-up",
+    "subject": "agent-two",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/account",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/me",
+    "subject": "agent-two",
+    "tx": 1,
+    "rt": 5
+  },
+  {
+    "path": "/api/v1/me/day",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/me/messages?unread=1",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/api/v1/me/statuses",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/me/app-links",
+    "subject": "agent-two",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/",
+    "subject": "manager",
+    "tx": 10,
+    "rt": 45
+  },
+  {
+    "path": "/live/board",
+    "subject": "manager",
+    "tx": 7,
+    "rt": 33
+  },
+  {
+    "path": "/team/hours",
+    "subject": "manager",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/team/people",
+    "subject": "manager",
+    "tx": 8,
+    "rt": 34
+  },
+  {
+    "path": "/roster/planner",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 24
+  },
+  {
+    "path": "/reports/dashboard",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 23
+  },
+  {
+    "path": "/reports/speed-to-lead",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/reports/intake",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 11
+  },
+  {
+    "path": "/reports/inbound",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 12
+  },
+  {
+    "path": "/reports/calls",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 19
+  },
+  {
+    "path": "/reports/calls-per-agent",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 18
+  },
+  {
+    "path": "/reports/follow-up",
+    "subject": "manager",
+    "tx": 6,
+    "rt": 25
+  },
+  {
+    "path": "/reports/forms",
+    "subject": "manager",
+    "tx": 3,
+    "rt": 17
+  },
+  {
+    "path": "/reports/data-quality",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/messages",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/messages/send",
+    "subject": "manager",
+    "tx": 5,
+    "rt": 21
+  },
+  {
+    "path": "/api/v1/team/now",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 10
+  },
+  {
+    "path": "/api/v1/telephony/inbound-now",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 12
+  },
+  {
+    "path": "/api/v1/team/shifts-today",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/",
+    "subject": "supervisor",
+    "tx": 10,
+    "rt": 45
+  },
+  {
+    "path": "/live/board",
+    "subject": "supervisor",
+    "tx": 7,
+    "rt": 33
+  },
+  {
+    "path": "/team/hours",
+    "subject": "supervisor",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/reports/dashboard",
+    "subject": "supervisor",
+    "tx": 5,
+    "rt": 23
+  },
+  {
+    "path": "/",
+    "subject": "admin",
+    "tx": 11,
+    "rt": 49
+  },
+  {
+    "path": "/configuration/statuses",
+    "subject": "admin",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/configuration/teams",
+    "subject": "admin",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/configuration/sources",
+    "subject": "admin",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/configuration/markets",
+    "subject": "admin",
+    "tx": 4,
+    "rt": 19
+  },
+  {
+    "path": "/configuration/alert-rules",
+    "subject": "admin",
+    "tx": 4,
+    "rt": 20
+  },
+  {
+    "path": "/configuration/exports",
+    "subject": "admin",
+    "tx": 3,
+    "rt": 13
+  },
+  {
+    "path": "/configuration/absences",
+    "subject": "admin",
+    "tx": 6,
+    "rt": 25
+  },
+  {
+    "path": "/configuration/app-links",
+    "subject": "admin",
+    "tx": 4,
+    "rt": 18
+  }
+]
