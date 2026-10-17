@@ -150,6 +150,31 @@ On a new machine, one step at a time:
    branch whose migration has run in dev (CLAUDE.md, Database); on `main` it is a check, and
    `git checkout docs/datamap/schema.json` puts the file back.
 
+9. **Terminal**: the gcloud component behind `gcloud run services proxy` (section 4, and the runbooks'
+   service proxy on port 8080), from the apt repository of step 2. A gcloud installed through apt cannot
+   install components itself, so without this package the proxy command stops at the missing
+   `cloud-run-proxy` component.
+
+   ```bash
+   sudo apt-get install -y google-cloud-cli-cloud-run-proxy
+   ```
+
+   Expected: `Setting up google-cloud-cli-cloud-run-proxy …`, or `… is already the newest version` where
+   it is installed.
+
+10. **Terminal**: the browser the Playwright verifiers launch (`theme`, `layout`, `hints`; section 5),
+    in `web/` after its `npm ci`. Rerun it after every Playwright update (a `web/package-lock.json` that
+    moves `playwright`): each Playwright version expects its own browser build, and the verifiers stop
+    with `Executable doesn't exist` until it is there.
+
+    ```bash
+    cd ~/cma/web && npm ci --no-audit --no-fund 2>&1 | tail -1 && npx playwright install chromium; ls ~/.cache/ms-playwright; cd ~/cma
+    ```
+
+    Expected: the download lines, then among the folders `chromium-<build>` and
+    `chromium_headless_shell-<build>` (build 1243 for Playwright 1.63, the version `web/package-lock.json`
+    holds on 17 October 2026; `records/b17d-prod-2026-10-17`).
+
 ## 0. Start of every session
 
 ```bash

@@ -256,7 +256,7 @@ select label, is_connected from cma.connection_call_outcome where connection_id 
 ```
 Expected: one row per outcome, then the list with `is_connected` as the rule says.
 
-**The form rule** (Martin, 12 October 2026; Decision log): a form is counted when its name matches quote, contact or info and not cancellation, replacement or support; its `lead_source` is `quote`, `contact` or `info`, whichever of the three comes first in the name; its market is the name's two-letter prefix, `UK` read as `GB`, when that is a market of the tenant. `set_form` replaces `kept_fields`, so the statement passes the form's current ones:
+**The form rule** (Martin, 12 October 2026; Decision log): a form is counted when its name matches quote, contact or info and not cancellation, replacement or support; its `lead_source` is `quote`, `contact` or `info`, whichever of the three comes first in the name; its market is the name's two-letter prefix, `UK` read as `GB`, when that is a market of the tenant. `set_form` replaces `kept_fields`, so the statement passes the form's current ones. The prefix pattern `'^\s*([A-Za-z]{2})\M'` is written with single backslashes: Studio's `standard_conforming_strings` is on, so a backslash in a plain string literal stays one character, and a doubled backslash matches a literal backslash, which no form name has, so no form would get a market (B17d's prod run, 17 October 2026, `records/b17d-prod-2026-10-17`):
 
 **Studio (cma-prod-pg)** (same tab)
 ```sql
