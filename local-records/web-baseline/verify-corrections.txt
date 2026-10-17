@@ -1,0 +1,38 @@
+
+> cma-web@0.1.0 verify:corrections
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/corrections.mjs
+
+PASS  an ordinary time has one instant                 got ["2026-10-05T09:00:00+02:00"]
+PASS  the repeated autumn hour has two instants        got ["2026-10-25T02:30:00+02:00","2026-10-25T02:30:00+01:00"]
+PASS  the skipped spring hour has none                 got 0
+PASS  a time after the autumn change is winter time    got ["+01:00"]
+PASS  a zone west of UTC                               got "2026-10-05T09:00:00-04:00"
+PASS  local parts read the day's zone, not the server's got {"date":"2026-10-05","time":"09:00","offset":"+02:00"}
+PASS  typed times become 24-hour hh:mm                 got ["09:05","09:05","09:05","17:30","25:00"]
+PASS  rows show effective events in local time         got ["09:00 available","11:00 break","11:15 available","17:30 end"]
+PASS  unchanged rows send nothing                      got ["noChange"]
+PASS  a changed time replaces that event               got [{"kind":"end","at":"2026-10-05T18:00:00+02:00","supersedes":"00000000
+PASS  a removed row voids its event                    got [{"kind":"void","supersedes":"00000000-0000-4000-8000-000000000002"},{
+PASS  a new earlier row becomes the start              got [{"kind":"start","at":"2026-10-05T08:30:00+02:00","statusKey":"trainin
+PASS  add day sends the start first                    got ["start","end"]
+PASS  a skipped time is refused                        got {"x":"gap"}
+PASS  a repeated time needs an offset                  got {"x":"ambiguous"}
+PASS  a chosen offset resolves it                      got "2026-10-25T02:30:00+01:00"
+PASS  a future time is refused                         got {"x":"future"}
+PASS  the first row cannot be clocked out              got ["firstIsEnd"]
+PASS  two clock-outs are refused                       got ["twoEnds"]
+PASS  nothing after the clock-out                      got ["endNotLast"]
+PASS  an invalid time is refused                       got {"x":"time"}
+PASS  kept rows in a retired status send nothing       got [{"kind":"end","at":"2026-10-05T18:00:00+02:00","supersedes":"00000000
+PASS  a changed row in a retired status is refused     got {"00000000-0000-4000-8000-000000000003":"inactive"}
+PASS  a row that becomes the start needs a current status got {"00000000-0000-4000-8000-000000000003":"inactive"}
+PASS  choosing a current status clears it              got [{"kind":"status","at":"2026-10-05T11:20:00+02:00","statusKey":"traini
+PASS  without a list the rule is off                   got {}
+PASS  an imported day shows its rows                   got ["08:00 legacy_session","10:00 break","10:15 legacy_session","16:30 en
+PASS  kept imported rows send nothing                  got ["noChange"]
+PASS  a moved end replaces the imported end            got [{"kind":"end","at":"2026-03-06T16:00:00+01:00","supersedes":"00000000
+PASS  a removed gap voids both of its rows             got [{"kind":"void","supersedes":"00000000-0000-4000-8000-000000000102"},{
+PASS  a moved session row needs a current status       got {"00000000-0000-4000-8000-000000000103":"inactive"}
+
+ALL 31 PASS
+verify:corrections exit 0

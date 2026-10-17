@@ -1,0 +1,40 @@
+psql:db/21_teams_skills.sql:258: NOTICE:  policy "tenant_app" for relation "team" does not exist, skipping
+psql:db/21_teams_skills.sql:258: NOTICE:  policy "tenant_readonly" for relation "team" does not exist, skipping
+psql:db/21_teams_skills.sql:258: NOTICE:  trigger "audit" for relation "team" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/21_teams_skills.sql:259: NOTICE:  policy "tenant_app" for relation "team_member" does not exist, skipping
+psql:db/21_teams_skills.sql:259: NOTICE:  policy "tenant_readonly" for relation "team_member" does not exist, skipping
+psql:db/21_teams_skills.sql:259: NOTICE:  trigger "audit" for relation "team_member" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/21_teams_skills.sql:260: NOTICE:  policy "tenant_app" for relation "skill" does not exist, skipping
+psql:db/21_teams_skills.sql:260: NOTICE:  policy "tenant_readonly" for relation "skill" does not exist, skipping
+psql:db/21_teams_skills.sql:260: NOTICE:  trigger "audit" for relation "skill" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/21_teams_skills.sql:261: NOTICE:  policy "tenant_app" for relation "skill_level" does not exist, skipping
+psql:db/21_teams_skills.sql:261: NOTICE:  policy "tenant_readonly" for relation "skill_level" does not exist, skipping
+psql:db/21_teams_skills.sql:261: NOTICE:  trigger "audit" for relation "skill_level" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/21_teams_skills.sql:262: NOTICE:  policy "tenant_app" for relation "user_skill" does not exist, skipping
+psql:db/21_teams_skills.sql:262: NOTICE:  policy "tenant_readonly" for relation "user_skill" does not exist, skipping
+psql:db/21_teams_skills.sql:262: NOTICE:  trigger "audit" for relation "user_skill" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

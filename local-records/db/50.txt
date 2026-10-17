@@ -1,0 +1,33 @@
+psql:db/50_legacy_time_import.sql:181: NOTICE:  constraint "time_event_import_needs_batch" of relation "time_event" does not exist, skipping
+psql:db/50_legacy_time_import.sql:199: NOTICE:  policy "tenant_app" for relation "import_batch" does not exist, skipping
+psql:db/50_legacy_time_import.sql:199: NOTICE:  policy "tenant_readonly" for relation "import_batch" does not exist, skipping
+psql:db/50_legacy_time_import.sql:199: NOTICE:  trigger "audit" for relation "import_batch" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/50_legacy_time_import.sql:200: NOTICE:  policy "tenant_app" for relation "import_session" does not exist, skipping
+psql:db/50_legacy_time_import.sql:200: NOTICE:  policy "tenant_readonly" for relation "import_session" does not exist, skipping
+psql:db/50_legacy_time_import.sql:200: NOTICE:  trigger "audit" for relation "import_session" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/50_legacy_time_import.sql:201: NOTICE:  policy "tenant_app" for relation "import_person_map" does not exist, skipping
+psql:db/50_legacy_time_import.sql:201: NOTICE:  policy "tenant_readonly" for relation "import_person_map" does not exist, skipping
+psql:db/50_legacy_time_import.sql:201: NOTICE:  trigger "audit" for relation "import_person_map" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/50_legacy_time_import.sql:202: NOTICE:  policy "tenant_app" for relation "import_day" does not exist, skipping
+psql:db/50_legacy_time_import.sql:202: NOTICE:  policy "tenant_readonly" for relation "import_day" does not exist, skipping
+psql:db/50_legacy_time_import.sql:202: NOTICE:  trigger "audit" for relation "import_day" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

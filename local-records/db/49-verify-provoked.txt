@@ -1,0 +1,18 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:41: NOTICE:  schema "pg_temp" does not exist, skipping
+                         check_name                         |        result        |                         detail                         
+------------------------------------------------------------+----------------------+--------------------------------------------------------
+ A1 addition 0008c recorded                                 | FAIL                 | provoked
+ A2 functions executable by cma_app only                    | PASS                 | 
+ A3 time formatted in the tenant's zone                     | PASS                 | 
+ B1 the deal's instant differs between London and Amsterdam | PASS                 | 2026-10-16T09:17:00Z: London 10:17, Amsterdam 11:17
+ B2 one created alert and one assignment alert              | PASS                 | 1 created, 1 assigned
+ B3 created alert in the tenant's time                      | FAIL                 | GB · Sales · created 11:17 (provoked: expected 10:17)
+ B4 assignment alert in the tenant's time                   | FAIL                 | GB · Sales · assigned 11:17 (provoked: expected 10:17)
+ verdict                                                    | PROVOKED, NOT A PASS | 4 PASS, 3 FAIL
+(8 rows)
+

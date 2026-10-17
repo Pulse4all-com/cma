@@ -1,0 +1,1 @@
+psql:db/24_seed_dev_roster.sql:108: NOTICE:  roster fixture written (0 cells this week, next week as a draft)

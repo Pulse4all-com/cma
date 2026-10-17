@@ -1,0 +1,15 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:48: ERROR:  FAIL A3: execute must be granted to cma_app only (not to cma_readonly or public)
+CONTEXT:  PL/pgSQL function inline_code_block line 17 at RAISE
+psql:/var/tmp/provoke.sql:255: ERROR:  FAIL B2: expected the four statuses with exact seconds, got 4 of 4 rows right
+CONTEXT:  PL/pgSQL function inline_code_block line 88 at RAISE
+         tenant          |      roles_with_performance_team      |       verdict        
+-------------------------+---------------------------------------+----------------------
+ pulse4all-invest        | admin, analytics, manager, supervisor | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | admin, analytics, manager, supervisor | PROVOKED, NOT A PASS
+(2 rows)
+

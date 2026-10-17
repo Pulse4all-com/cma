@@ -1,0 +1,39 @@
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:49: NOTICE:  schema "pg_temp" does not exist, skipping
+                                                    check_name                                                     |        result        |                                                                                                  detail                                                                                                  
+-------------------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008l recorded, after 0008k                                                                           | FAIL                 | provoked
+ A2 the table: RLS, audit, the hash unique and hidden, no delete, the reader view without the hash                 | FAIL                 | 
+ A3 the functions: the application's only; the invitee's SECURITY DEFINER, owned, path pinned                      | FAIL                 | 
+ A4 the settings auth.invitation_valid_days (7) and auth.invitation_email_domains (empty)                          | FAIL                 | auth.invitation_email_domains=text: auth.invitation_valid_days=integer:7
+ B1 create: the token once, its hash stored, open for 7 days, listed without token or hash                         | FAIL                 | 43 chars, url-safe true, hash true, raw false, 7 days | verify-new1@example.invalid New one nl agent open | list columns none
+ B2 one invitation per assignable role of the default ladder, each accepted with that role                         | FAIL                 | admin,agent,analytics,manager,supervisor accepted:agent/verify-org accepted:supervisor/verify-org accepted:manager/verify-org accepted:admin/verify-org accepted:analytics/verify-org
+ B3 the system role is refused at creation and at acceptance                                                       | FAIL                 | CMA06 invalid people +0, scheduler holders 1
+ B4 the role ceiling of users.manage_agents; an agent and no acting user refused                                   | FAIL                 | agent,analytics,supervisor agent=ok supervisor=ok analytics=ok manager=CMA06 admin=CMA06 | sees managing 0, renew CMA06, revoke CMA06 | agent CMA06 list CMA06 | nobody CMA01
+ B5 every refusal at creation writes nothing                                                                       | FAIL                 | CMA04 CMA04 CMA04 CMA02 CMA02 CMA02 CMA02 CMA02 CMA04 CMA04 CMA03 CMA03 CMA03 | people CMA06 ok | listed +1
+ B6 the domain setting at creation and at acceptance; empty allows any domain                                      | FAIL                 | CMA04 ok CMA04 late invalid | empty ok | person 0
+ B7 the settings' validation and the expiry following the days                                                     | FAIL                 | 0=CMA04 31=CMA04 -1=CMA04 x=CMA04 1000=CMA04 7.5=CMA04 1=ok 30=ok | expires in 3 | example.org,other.example.org CMA04 CMA04 CMA04 CMA04 CMA04 | manager CMA06
+ B8 renew: a new token, the old one invalid, the renewer the inviter; expired renewed; accepted or revoked refused | FAIL                 | true 43 old invalid/invalid new open renewed by admin true | expired>open 7 | revoked CMA03 accepted CMA03 unknown CMA02 | renewed by another accepted, actor the renewer true
+ B9 revoke: the link stops working, idempotent, accepted refused, rows kept with who and when                      | FAIL                 | ok invalid/invalid accepted CMA03 | revoked by admin1; accepted by Role agent | listed as before true
+ B10 acceptance: teams and skills, the audit naming the inviter, the invitation accepted, the login found          | FAIL                 | accepted | Full person verify-full@example.invalid | teams verify-team-a | skills verify-dutch:3,verify-sales:- | granted by inviter true | audit actor true label invitation | accepted true | lookup 1
+ B11 an expired invitation: preview and acceptance say expired, nothing written                                    | FAIL                 | expired Verify 0008l one / expired people +0 expired
+ B12 wrong account: the invited address shown, the acceptance refused, the address without case                    | FAIL                 | wrong_account verify-wrong@example.invalid / wrong_account people +0 | accepted
+ B13 a used link: already_member for its person, invalid for anyone else                                           | FAIL                 | already_member invalid invalid moved invalid people +0
+ B14 a sign-in id linked in the tenant is a member; working in another tenant it is refused there                  | FAIL                 | already_member Verify 0008l one / already_member true people +0 | other tenant other_tenant/other_tenant people +0 | inactive here accepted true
+ B15 another tenant's context: the link acts on its own tenant only; RLS hides the other tenant's rows             | FAIL                 | accepted in one true | context true true | two sees 0, renew CMA02, revoke CMA02 | people in two 0, in one 1
+ B16 the application cannot read or match the hash; no audit row holds it                                          | FAIL                 | 42501 42501 42501 | audit rows true, with a hash 0
+ B17 the preview changes nothing                                                                                   | FAIL                 | open,wrong_account,invalid | audit +0, invitations same true
+ B18 the inviter's rights and the address checked again at acceptance; no match on an address                      | FAIL                 | invalid invalid invalid | people +0, google ids on the meanwhile person 0
+ B19 malformed input: another token shape invalid; a bad sign-in system or id refused                              | FAIL                 | invalid invalid invalid CMA04 CMA04 CMA04
+ verdict                                                                                                           | PROVOKED, NOT A PASS | 0 PASS, 23 FAIL
+(24 rows)
+

@@ -1,0 +1,31 @@
+
+> cma-web@0.1.0 verify:messages
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/messages.mjs
+
+PASS  no since, no limit: null and 50                          got {"ok":true,"value":{"since":null,"limit":50}}
+PASS  an ISO instant and a limit of 200                        got {"ok":true,"value":{"since":"2026-10-11T09:00:00.000Z","limit":200}}
+PASS  a local time is refused                                  got "invalid_since"
+PASS  an impossible date is refused                            got "invalid_since"
+PASS  limit 0 and 201 are refused                              got ["invalid_limit","invalid_limit"]
+PASS  ids: lower-cased and deduplicated                        got ["00000000-0000-7000-8000-0000000a0002","00000000-0000-7000-8000-00000
+PASS  ids: empty, not a list, not an id, too many              got ["invalid_ids","invalid_ids","invalid_ids","invalid_ids"]
+PASS  everyone: title trimmed, urgency kept                    got {"title":"Line check at 12:00","body":"Stay available.","urgency":"urg
+PASS  teams with onlyClockedIn, deduplicated                   got {"teams":["nl","de"],"onlyClockedIn":true}
+PASS  urgency defaults to normal, body to empty                got ["normal",""]
+PASS  language with a level and without                        got [{"language":{"skill":"fr","minLevel":3}},{"language":{"skill":"fr","m
+PASS  users lower-cased                                        got {"users":["00000000-0000-7000-8000-0000000a0002"]}
+PASS  an empty title and one of 121 characters are refused     got ["invalid_title","invalid_title"]
+PASS  a body of 501 characters is refused                      got "invalid_body_text"
+PASS  an unknown urgency is refused                            got "invalid_urgency"
+PASS  two groups, no group, everyone false, bad level, bad key got ["invalid_target","invalid_target","invalid_target","invalid_target","
+PASS  onlyClockedIn must be a boolean                          got "invalid_target"
+PASS  first poll: no toasts, the urgent one needs confirming   got [[],["u"]]
+PASS  …and every message is now known                          got ["a","b","u"]
+PASS  second poll: new unread messages toast, oldest first; known and read ones do not got ["d"]
+PASS  an urgent message unacknowledged keeps asking; an acknowledged one stops got [["u"],0]
+PASS  a new urgent message is never a toast                    got {"toasts":[],"urgent":[{"id":"v","kind":"announcement","urgency":"urge
+PASS  the title carries the count, and loses it at zero        got ["(3) Workspace","Workspace","(12) Workspace"]
+PASS  seconds as m:ss, or a mark when there is nothing         got ["1:23","0:00","–"]
+
+ALL 24 PASS
+verify:messages exit 0

@@ -1,0 +1,28 @@
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+                                             check_name                                              |        result        |                                      detail                                      
+-----------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------
+ A1 addition 0008g recorded                                                                          | FAIL                 | provoked
+ A2 the two columns, their check and their partial indexes                                           | FAIL                 | 
+ A3 nothing else personal: the tables hold 0007b's columns plus phone_hash                           | FAIL                 | 
+ A4 the reporting views leave the hash out                                                           | FAIL                 | 
+ A5 the upserts are the application's only, in the caller's rights                                   | FAIL                 | 
+ B1 a customer's hash stored lower-cased; the 0007b shape still taken                                | FAIL                 | cu-1:inserted,cu-2:inserted
+ B2 a read without the hash clears it; a stale read leaves it; a newer read sets it                  | FAIL                 | stale
+ B3 a plain number and malformed hashes refused, nothing written                                     | FAIL                 | 8 of 8 refusals
+ B4 orders: hash stored, cleared by a read without it and by a deletion; kinds and lines as in 0007b | FAIL                 | or-1:inserted:first,or-2:inserted:repeat,or-3:inserted:renewal | deleted:renewal
+ B5 a customer's deletion clears its hash and its orders' in that connection only                    | FAIL                 | deleted
+ B6 an order's hash meets an earlier call's, the lookup by hash uses the index                       | FAIL                 | or-4<k-1/t-1 | commerce_order_phone_hash_idx, commerce_customer_phone_hash_idx
+ B7 permissions and tenant isolation                                                                 | FAIL                 | 3 of 3 refusals
+ verdict                                                                                             | PROVOKED, NOT A PASS | 0 PASS, 12 FAIL
+(13 rows)
+
