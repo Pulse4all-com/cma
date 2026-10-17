@@ -1,0 +1,30 @@
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:/var/tmp/wt/fix-db/db/77_verify_audit_hardening.sql:50: NOTICE:  schema "pg_temp" does not exist, skipping
+                                                 check_name                                                  | result |                                                                                                           detail                                                                                                            
+-------------------------------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008q recorded                                                                                  | PASS   | 
+ A2 the uncounted-line trigger unchanged in rights, its function asserting tenant.configure                  | PASS   | tgtype 21, enabled O, secdef t, owner cma_owner, config search_path=pg_catalog, cma, pg_temp, app f, readers f, public f
+ A3 no DELETE grant to the application on a master-data table (CMA-060)                                      | PASS   | set-replace deletes still to migrate: app_user_external_id, business_holiday, business_hours, commerce_order_line, connection_field, coverage_target, crm_contact_ref, market_alias, skill_level, tenant_setting, user_role
+ A4 no function executable by PUBLIC but the helpers                                                         | PASS   | 
+ A5 every SECURITY DEFINER function pins its search path with pg_temp last                                   | PASS   | 
+ A6 the two indexes of ingest_event for the sources read                                                     | PASS   | 
+ A7 the report cores bound their period on the index (coalesce bounds)                                       | PASS   | 
+ B1 a direct update of is_counted without an acting user is refused (CMA01); the calls stay                  | PASS   | 1 refusal, 3 calls
+ B2 an agent's direct update is refused (CMA06); the calls stay                                              | PASS   | 1 refusal, 3 calls
+ B3 the admin switching the line off through set_telephony_number removes the calls, audited with the person | PASS   | 0 calls left
+ B4 the owner without an acting user (a one-off) may switch a line off                                       | PASS   | 0 calls left on line-2
+ B5 an ingest event's audit images carry no payload; the event row keeps it                                  | PASS   | 3 audit rows, 0 with raw, event raw kept t (1 finished)
+ B6 telephony_raw drops a string holding an @ and keeps the rest                                             | PASS   | {"cost": 1.5, "status": "answered", "tags_count": 2}
+ B7 the report cores answer the same rows with and without bounds, a period selects its calls                | PASS   | all 3/3, infinite 3/3, day 2/1, inbound all 2, inbound day 1
+ verdict                                                                                                     | PASS   | 14 PASS, 0 FAIL
+(15 rows)
+

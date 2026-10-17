@@ -1,0 +1,45 @@
+     current_user     |     session_user     
+----------------------+----------------------
+ cma-ingest@local.iam | cma-ingest@local.iam
+(1 row)
+
+BEGIN
+              tenant_set              | user_id_empty |      actor       
+--------------------------------------+---------------+------------------
+ 01a14ad3-1e58-72c3-8295-d82fef5b05f7 |               | ingest-api:audit
+(1 row)
+
+ calls_before | live_before 
+--------------+-------------
+            3 |           3
+(1 row)
+
+ taggings_before 
+-----------------
+               1
+(1 row)
+
+ ingest_may_delete_calls | ingest_may_update_lines | ingest_may_update_is_counted 
+-------------------------+-------------------------+------------------------------
+ f                       | t                       | t
+(1 row)
+
+UPDATE 1
+ calls_after 
+-------------
+           0
+(1 row)
+
+ taggings_after 
+----------------
+              0
+(1 row)
+
+     table_name     | action |     actor_login      |    actor_db_role     | actor_user_id |   actor_label    | count 
+--------------------+--------+----------------------+----------------------+---------------+------------------+-------
+ telephony_call     | delete | cma-ingest@local.iam | cma_owner            | (none)        | ingest-api:audit |     3
+ telephony_call_tag | delete | cma-ingest@local.iam | cma_owner            | (none)        | ingest-api:audit |     1
+ telephony_number   | update | cma-ingest@local.iam | cma-ingest@local.iam | (none)        | ingest-api:audit |     1
+(3 rows)
+
+ROLLBACK

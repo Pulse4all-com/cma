@@ -1,0 +1,42 @@
+ set_config 
+------------
+ false
+(1 row)
+
+         tenant          | lead_deals | called | dq_findings | verdict 
+-------------------------+------------+--------+-------------+---------
+ aircall-9f186ef3-one    |          0 |      0 |           5 | PASS
+ aircall-9f186ef3-two    |          0 |      0 |           1 | PASS
+ aircall-b86524cd-one    |          0 |      0 |           5 | PASS
+ aircall-b86524cd-two    |          0 |      0 |           1 | PASS
+ aircall-c7e3d048-one    |          0 |      0 |           5 | PASS
+ aircall-c7e3d048-two    |          0 |      0 |           1 | PASS
+ flow-7112afd1-one       |          3 |      0 |           5 | PASS
+ flow-7112afd1-two       |          1 |      0 |           4 | PASS
+ flow-83ba6dd0-one       |          3 |      0 |           5 | PASS
+ flow-83ba6dd0-two       |          1 |      0 |           4 | PASS
+ flow-b15e1656-one       |          3 |      0 |           5 | PASS
+ flow-b15e1656-two       |          1 |      0 |           4 | PASS
+ jobs-1735f561-one       |          8 |      0 |           9 | PASS
+ jobs-1735f561-two       |          1 |      0 |           2 | PASS
+ jobs-68e379ac-one       |          8 |      0 |           9 | PASS
+ jobs-68e379ac-two       |          1 |      0 |           2 | PASS
+ jobs-e8435314-one       |          8 |      0 |           9 | PASS
+ jobs-e8435314-two       |          1 |      0 |           2 | PASS
+ outbox-5c0b1723         |          0 |      0 |           0 | PASS
+ outbox-9390e3fc         |          0 |      0 |           0 | PASS
+ outbox-98abd06f         |          0 |      0 |           0 | PASS
+ pulse4all-invest        |          0 |      0 |           0 | PASS
+ pulse4all-subscriptions |          0 |      0 |           0 | PASS
+ shopify-4024803d-one    |          0 |      0 |         212 | PASS
+ shopify-4024803d-two    |          0 |      0 |           1 | PASS
+ shopify-55672355-one    |          0 |      0 |         212 | PASS
+ shopify-55672355-two    |          0 |      0 |           1 | PASS
+ shopify-b76f9e49-one    |          0 |      0 |         207 | PASS
+ shopify-b76f9e49-two    |          0 |      0 |           1 | PASS
+ shopify-f0b75fd9-one    |          0 |      0 |         212 | PASS
+ shopify-f0b75fd9-two    |          0 |      0 |           1 | PASS
+ shopify-fb82c286-one    |          0 |      0 |         207 | PASS
+ shopify-fb82c286-two    |          0 |      0 |           1 | PASS
+(33 rows)
+

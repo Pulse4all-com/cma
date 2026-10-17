@@ -1,0 +1,18 @@
+   sch    |            proname             |                               args                               |   owner   | vol |                proconfig                 |                       acl                        
+----------+--------------------------------+------------------------------------------------------------------+-----------+-----+------------------------------------------+--------------------------------------------------
+ cma      | accept_invitation              | p_token text, p_login_system text, p_login_id text, p_email text | cma_owner | v   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_app=X/cma_owner}
+ cma      | find_tenants_for_identity      | p_system text, p_external_id text                                | cma_owner | s   | {"search_path=pg_catalog, cma"}          | {cma_owner=X/cma_owner,cma_app=X/cma_owner}
+ cma      | ingest_connection              | p_key text                                                       | cma_owner | s   | {"search_path=pg_catalog, cma"}          | {cma_owner=X/cma_owner,cma_app=X/cma_owner}
+ cma      | invitation_preview             | p_token text, p_login_system text, p_login_id text, p_email text | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_app=X/cma_owner}
+ cma      | remove_calls_of_uncounted_line |                                                                  | cma_owner | v   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner}
+ cma_read | data_quality_rows              |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | follow_up_by_owner_rows        |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | follow_up_summary_rows         |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | intake_per_day_rows            |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | lead_to_order_rows             |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | open_leads_rows                |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | open_tasks_rows                |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | open_tickets_rows              |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+ cma_read | speed_to_lead_rows             |                                                                  | cma_owner | s   | {"search_path=pg_catalog, cma, pg_temp"} | {cma_owner=X/cma_owner,cma_readonly=X/cma_owner}
+(14 rows)
+

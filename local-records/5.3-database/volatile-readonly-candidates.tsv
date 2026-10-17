@@ -1,0 +1,25 @@
+acknowledge_message	p_message_id uuid
+forget_commerce_contact_links	p_crm_connection_id uuid, p_contact_id text
+ingest_finish_events	p_connection_id uuid, p_ids uuid[], p_outcome text, p_error text
+ingest_thread_forget	p_connection_id uuid, p_thread_source_id text
+invitation_new_token	
+mark_messages_read	p_message_ids uuid[]
+my_messages	p_since timestamp with time zone, p_limit integer
+outbox_finish	p_ids uuid[], p_outcome text, p_result jsonb, p_error text
+reclassify_orders	
+reclassify_orders_of	p_tenant_id uuid
+refresh_workday	p_workday_id uuid
+remove_all_uncounted_line_calls	
+roster_copy_week	p_from_week_start date, p_to_week_start date, p_team_key text
+set_connection_field	p_connection_id uuid, p_entity text, p_field text, p_ref_system text, p_source_property text
+set_connection_kind	p_connection_id uuid, p_kind text
+set_connection_settings	p_connection_id uuid, p_settings jsonb
+set_connection_status	p_connection_id uuid, p_status text
+set_email_rule_status	p_rule_id uuid, p_status text
+set_form_category_status	p_code text, p_status text
+set_form_lead_condition	p_connection_id uuid, p_form_id text, p_field text, p_values text[]
+set_form_market_field	p_connection_id uuid, p_form_id text, p_field text
+set_market_status	p_code text, p_status text
+set_message_rule_enabled	p_rule_id uuid, p_enabled boolean
+set_pipeline_sla	p_connection_id uuid, p_record_type text, p_pipeline_id text, p_sla_minutes integer
+setup_tenant_table	p_table regclass
