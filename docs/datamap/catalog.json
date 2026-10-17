@@ -433,7 +433,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reconcile and backfill"
+          "how": "Each sweep, form poll, email poll, reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection"
         },
         {
           "name": "sync_cursor",
