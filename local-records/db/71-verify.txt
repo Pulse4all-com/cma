@@ -1,0 +1,36 @@
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:db/71_verify_crm_tasks.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
+                                                 check_name                                                  | result |                                                          detail                                                          
+-------------------------------------------------------------------------------------------------------------+--------+--------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008n recorded, after 0008m                                                                     | PASS   | 
+ A2 the three tables: RLS, tenant policy, audit, no delete, a reader view each                               | PASS   | 
+ A3 the reporting views' exact columns: crm_task without raw, the catalogs whole                             | PASS   | 
+ A4 no subject, body, note or text column; the check on raw                                                  | PASS   | 
+ A5 the functions the application's only, in the caller's rights                                             | PASS   | 
+ A6 held kinds, the contact upsert and the privacy deletion name tasks                                       | PASS   | 
+ B1 three tasks inserted; both catalogs seeded with the defaults                                             | PASS   | t-1:inserted,t-2:inserted,t-3:inserted | COMPLETED:COMPLETED:f NOT_STARTED:Not started:f | CALL:CALL:f:t EMAIL:EMAIL:f:t
+ B2 a newer read updates, an older read is stale                                                             | PASS   | updated stale IN_PROGRESS:2026-10-07 10:00:00
+ B3 the strip of body, subject, notes, the named key, nested, an @ and a long string; the check on raw       | PASS   | kept hs_task_priority,hs_task_status,hs_timestamp | direct body key 23514
+ B4 is_done, is_callback, is_counted and the labels a person set survive a read                              | PASS   | Done:t | Call back:t:f
+ B5 associations as the read gives them: the deal cleared, the ticket set, the contact kept                  | PASS   | k-1:-:x-9
+ B6 deletion keeps the row, an unknown deletion is unknown, a newer read brings it back                      | PASS   | deleted unknown true:true
+ B7 a contact is held while a task points to it, not otherwise                                               | PASS   | k-1:inserted,k-9:not_held
+ B8 the privacy deletion clears the task's contact and answers tasks                                         | PASS   | {"refs": 0, "calls": 0, "tasks": 1, "contacts": 1, "submissions": 0}, 0 tasks still point to the contact
+ B9 tenant isolation: nothing of tenant one in tenant two, the other connection refused, the owner sees both | PASS   | 0 CMA02 1:6
+ B10 eight configuration refusals                                                                            | PASS   | CMA06,CMA04,CMA04,CMA04,CMA02,CMA04,CMA06,CMA06
+ B11 five refusals of the upsert                                                                             | PASS   | CMA04,CMA04,CMA04,CMA04,CMA04
+ B12 the Sources read: statuses and types with their counts, the newest task id; an agent refused            | PASS   | COMPLETED:true:2 IN_PROGRESS:false:1 NOT_STARTED:false:2 | CALL:true:4:3 EMAIL:false:1:0 | sample t-5 | agent CMA06
+ B13 task rows make a connection's kind crm                                                                  | PASS   | crm CMA03 ok
+ B14 a reader scoped to tenant two sees its own task and none of tenant one                                  | PASS   | 0 of one, 1 of two
+ verdict                                                                                                     | PASS   | 20 PASS, 0 FAIL
+(21 rows)
+

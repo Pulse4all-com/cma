@@ -1,0 +1,58 @@
+psql:db/01_foundation.sql:163: NOTICE:  policy "tenant_app" for relation "cma.audit_log" does not exist, skipping
+psql:db/01_foundation.sql:167: NOTICE:  policy "tenant_readonly" for relation "cma.audit_log" does not exist, skipping
+psql:db/01_foundation.sql:356: NOTICE:  policy "tenant_app" for relation "organisation" does not exist, skipping
+psql:db/01_foundation.sql:356: NOTICE:  policy "tenant_readonly" for relation "organisation" does not exist, skipping
+psql:db/01_foundation.sql:356: NOTICE:  trigger "audit" for relation "organisation" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:357: NOTICE:  policy "tenant_app" for relation "channel" does not exist, skipping
+psql:db/01_foundation.sql:357: NOTICE:  policy "tenant_readonly" for relation "channel" does not exist, skipping
+psql:db/01_foundation.sql:357: NOTICE:  trigger "audit" for relation "channel" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:358: NOTICE:  policy "tenant_app" for relation "app_user" does not exist, skipping
+psql:db/01_foundation.sql:358: NOTICE:  policy "tenant_readonly" for relation "app_user" does not exist, skipping
+psql:db/01_foundation.sql:358: NOTICE:  trigger "audit" for relation "app_user" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:359: NOTICE:  policy "tenant_app" for relation "app_user_external_id" does not exist, skipping
+psql:db/01_foundation.sql:359: NOTICE:  policy "tenant_readonly" for relation "app_user_external_id" does not exist, skipping
+psql:db/01_foundation.sql:359: NOTICE:  trigger "audit" for relation "app_user_external_id" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:360: NOTICE:  policy "tenant_app" for relation "app_role" does not exist, skipping
+psql:db/01_foundation.sql:360: NOTICE:  policy "tenant_readonly" for relation "app_role" does not exist, skipping
+psql:db/01_foundation.sql:360: NOTICE:  trigger "audit" for relation "app_role" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:361: NOTICE:  policy "tenant_app" for relation "role_permission" does not exist, skipping
+psql:db/01_foundation.sql:361: NOTICE:  policy "tenant_readonly" for relation "role_permission" does not exist, skipping
+psql:db/01_foundation.sql:361: NOTICE:  trigger "audit" for relation "role_permission" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/01_foundation.sql:362: NOTICE:  policy "tenant_app" for relation "user_role" does not exist, skipping
+psql:db/01_foundation.sql:362: NOTICE:  policy "tenant_readonly" for relation "user_role" does not exist, skipping
+psql:db/01_foundation.sql:362: NOTICE:  trigger "audit" for relation "user_role" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

@@ -1,0 +1,1 @@
+psql:db/03_seed_dev_test_data.sql:112: NOTICE:  teams and skills fixture skipped (migration 0004 or the admin user missing)

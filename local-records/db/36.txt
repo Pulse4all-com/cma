@@ -1,0 +1,32 @@
+psql:db/36_commerce.sql:190: NOTICE:  policy "tenant_app" for relation "commerce_store" does not exist, skipping
+psql:db/36_commerce.sql:190: NOTICE:  policy "tenant_readonly" for relation "commerce_store" does not exist, skipping
+psql:db/36_commerce.sql:190: NOTICE:  trigger "audit" for relation "commerce_store" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:191: NOTICE:  policy "tenant_app" for relation "commerce_customer" does not exist, skipping
+psql:db/36_commerce.sql:191: NOTICE:  policy "tenant_readonly" for relation "commerce_customer" does not exist, skipping
+psql:db/36_commerce.sql:191: NOTICE:  trigger "audit" for relation "commerce_customer" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:192: NOTICE:  policy "tenant_app" for relation "commerce_order" does not exist, skipping
+psql:db/36_commerce.sql:192: NOTICE:  policy "tenant_readonly" for relation "commerce_order" does not exist, skipping
+psql:db/36_commerce.sql:192: NOTICE:  trigger "audit" for relation "commerce_order" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/36_commerce.sql:193: NOTICE:  policy "tenant_app" for relation "commerce_order_line" does not exist, skipping
+psql:db/36_commerce.sql:193: NOTICE:  policy "tenant_readonly" for relation "commerce_order_line" does not exist, skipping
+psql:db/36_commerce.sql:193: NOTICE:  trigger "audit" for relation "commerce_order_line" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

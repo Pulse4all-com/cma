@@ -1,0 +1,15 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:72: ERROR:  FAIL A4: app_link must have row-level security, the tenant_app policy and the audit trigger
+CONTEXT:  PL/pgSQL function inline_code_block line 24 at RAISE
+psql:/var/tmp/provoke.sql:297: ERROR:  FAIL B2: expected 3 audit rows for the links of tenant one, got 3
+CONTEXT:  PL/pgSQL function inline_code_block line 61 at RAISE
+         tenant          |      roles_with_workday_own       |       active_app_links       |       verdict        
+-------------------------+-----------------------------------+------------------------------+----------------------
+ pulse4all-invest        | admin, agent, manager, supervisor | hubspot, aircall             | PROVOKED, NOT A PASS
+ pulse4all-subscriptions | admin, agent, manager, supervisor | hubspot, aircall, team-sheet | PROVOKED, NOT A PASS
+(2 rows)
+

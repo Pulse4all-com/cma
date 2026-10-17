@@ -1,0 +1,82 @@
+agent-two	1280	/	200	963ms	scrollWidth=1280	
+agent-two	1280	/day	200	751ms	scrollWidth=1280	
+agent-two	1280	/hours	200	725ms	scrollWidth=1280	
+agent-two	1280	/schedule	200	797ms	scrollWidth=1280	
+agent-two	1280	/messages	200	724ms	scrollWidth=1280	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+agent-two	1280	/me/follow-up	200	685ms	scrollWidth=1280	
+agent-two	1280	/account	200	720ms	scrollWidth=1280	
+agent-two	1600	/	200	865ms	scrollWidth=1600	
+agent-two	1600	/day	200	734ms	scrollWidth=1600	
+agent-two	1600	/hours	200	795ms	scrollWidth=1600	
+agent-two	1600	/schedule	200	723ms	scrollWidth=1600	
+agent-two	1600	/messages	200	701ms	scrollWidth=1600	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+agent-two	1600	/me/follow-up	200	749ms	scrollWidth=1600	
+agent-two	1600	/account	200	708ms	scrollWidth=1600	
+agent-one	1280	/	200	954ms	scrollWidth=1280	
+agent-one	1600	/	200	875ms	scrollWidth=1600	
+supervisor	1280	/	200	1040ms	scrollWidth=1280	
+supervisor	1280	/live/board	200	864ms	scrollWidth=1280	
+supervisor	1280	/team/hours	200	833ms	scrollWidth=1280	
+supervisor	1280	/reports/dashboard	200	771ms	scrollWidth=1280	
+supervisor	1280	/reports/follow-up	200	799ms	scrollWidth=1280	
+supervisor	1600	/	200	1074ms	scrollWidth=1600	
+supervisor	1600	/live/board	200	855ms	scrollWidth=1600	
+supervisor	1600	/team/hours	200	819ms	scrollWidth=1600	
+supervisor	1600	/reports/dashboard	200	774ms	scrollWidth=1600	
+supervisor	1600	/reports/follow-up	200	784ms	scrollWidth=1600	
+manager	1280	/	200	968ms	scrollWidth=1280	
+manager	1280	/live/board	200	791ms	scrollWidth=1280	
+manager	1280	/team/people	200	736ms	scrollWidth=1280	
+manager	1280	/roster/planner	200	852ms	scrollWidth=1280	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+manager	1280	/team/hours	200	759ms	scrollWidth=1280	
+manager	1280	/reports/dashboard	200	831ms	scrollWidth=1280	
+manager	1280	/reports/speed-to-lead	200	790ms	scrollWidth=1280	
+manager	1280	/reports/intake	200	873ms	scrollWidth=1280	
+manager	1280	/reports/inbound	200	757ms	scrollWidth=1280	
+manager	1280	/reports/calls	200	998ms	scrollWidth=1280	
+manager	1280	/reports/calls-per-agent	200	803ms	scrollWidth=1280	
+manager	1280	/reports/follow-up	200	786ms	scrollWidth=1280	
+manager	1280	/reports/forms	200	1061ms	scrollWidth=1280	
+manager	1280	/reports/data-quality	200	751ms	scrollWidth=1280	
+manager	1280	/messages	200	830ms	scrollWidth=1280	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+manager	1280	/messages/send	200	791ms	scrollWidth=1280	
+manager	1600	/	200	1057ms	scrollWidth=1600	
+manager	1600	/live/board	200	963ms	scrollWidth=1600	
+manager	1600	/team/people	200	932ms	scrollWidth=1600	
+manager	1600	/roster/planner	200	901ms	scrollWidth=1600	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+manager	1600	/team/hours	200	804ms	scrollWidth=1600	
+manager	1600	/reports/dashboard	200	879ms	scrollWidth=1600	
+manager	1600	/reports/speed-to-lead	200	789ms	scrollWidth=1600	
+manager	1600	/reports/intake	200	908ms	scrollWidth=1600	
+manager	1600	/reports/inbound	200	840ms	scrollWidth=1600	
+manager	1600	/reports/calls	200	839ms	scrollWidth=1600	
+manager	1600	/reports/calls-per-agent	200	790ms	scrollWidth=1600	
+manager	1600	/reports/follow-up	200	829ms	scrollWidth=1600	
+manager	1600	/reports/forms	200	896ms	scrollWidth=1600	
+manager	1600	/reports/data-quality	200	737ms	scrollWidth=1600	
+manager	1600	/messages	200	766ms	scrollWidth=1600	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+manager	1600	/messages/send	200	731ms	scrollWidth=1600	
+admin	1280	/	200	1068ms	scrollWidth=1280	
+admin	1280	/configuration/statuses	200	723ms	scrollWidth=1280	
+admin	1280	/configuration/teams	200	735ms	scrollWidth=1280	
+admin	1280	/configuration/absences	200	692ms	scrollWidth=1280	
+admin	1280	/configuration/exports	200	724ms	scrollWidth=1280	
+admin	1280	/configuration/app-links	200	710ms	scrollWidth=1280	
+admin	1280	/configuration/markets	200	748ms	scrollWidth=1280	
+admin	1280	/configuration/alert-rules	200	799ms	scrollWidth=1280	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+admin	1280	/configuration/sources	200	822ms	scrollWidth=1280	
+admin	1280	/account	200	743ms	scrollWidth=1280	
+admin	1600	/	200	1078ms	scrollWidth=1600	
+admin	1600	/configuration/statuses	200	722ms	scrollWidth=1600	
+admin	1600	/configuration/teams	200	721ms	scrollWidth=1600	
+admin	1600	/configuration/absences	200	755ms	scrollWidth=1600	
+admin	1600	/configuration/exports	200	759ms	scrollWidth=1600	
+admin	1600	/configuration/app-links	200	719ms	scrollWidth=1600	
+admin	1600	/configuration/markets	200	714ms	scrollWidth=1600	
+admin	1600	/configuration/alert-rules	200	731ms	scrollWidth=1600	console: pageerror: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+admin	1600	/configuration/sources	200	824ms	scrollWidth=1600	
+admin	1600	/account	200	767ms	scrollWidth=1600	
+analyst	1280	/	200	947ms	scrollWidth=1280	
+analyst	1280	/reports/dashboard	200	897ms	scrollWidth=1280	
+analyst	1600	/	200	1068ms	scrollWidth=1600	
+analyst	1600	/reports/dashboard	200	787ms	scrollWidth=1600	

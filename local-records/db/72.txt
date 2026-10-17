@@ -1,0 +1,1 @@
+psql:db/72_follow_up.sql:203: NOTICE:  constraint "connection_pipeline_sla_minutes_check" of relation "connection_pipeline" does not exist, skipping

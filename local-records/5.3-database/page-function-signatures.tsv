@@ -1,0 +1,72 @@
+absence_types		s
+app_links		s
+app_links_all		s
+calls_filters_check	p_market text, p_line text	i
+calls_overview	p_from date, p_to date, p_market text, p_line text, p_group text	s
+calls_per_person	p_from date, p_to date, p_market text, p_line text	s
+calls_per_person_tags	p_from date, p_to date, p_market text, p_line text	s
+calls_tag_use	p_from date, p_to date, p_market text, p_line text, p_group text	s
+connection_catalogs	p_connection_id uuid	s
+data_quality		s
+data_quality_added_checks		i
+data_quality_checks		i
+data_quality_follow_up_checks		i
+data_quality_forms_checks		i
+directory		s
+email_raw	p_raw jsonb	i
+email_words	p_words text[]	i
+email_words_match	p_value text, p_words text[], p_exclude text[]	i
+email_words_ok	p_words text[]	i
+export_hours	p_from date, p_to date, p_user_id uuid	s
+export_status_changes	p_from date, p_to date, p_user_id uuid	s
+follow_up_by_owner		s
+follow_up_summary		s
+forms_answers	p_from date, p_to date, p_market text, p_category text, p_form text, p_field text, p_value text	s
+forms_filters_check	p_market text, p_category text, p_form text, p_field text, p_value text	i
+forms_history_start		s
+forms_report	p_from date, p_to date, p_group text, p_market text, p_category text, p_form text	s
+inbound_service	p_from date, p_to date, p_group text	s
+inbound_today		s
+intake_per_day	p_from date, p_to date	s
+invitations		s
+lead_to_order_rows	p_from date, p_to date	s
+linked_account_systems		s
+linked_accounts		s
+markets_all		s
+message_rules		s
+message_stats	p_from date, p_to date	s
+missed_callbacks		s
+missed_callbacks_summary		s
+missed_reasons		s
+my_follow_up		s
+my_messages	p_since timestamp with time zone, p_limit integer	v
+my_profile		s
+my_roster	p_from date, p_to date	s
+my_unread_count		s
+open_leads		s
+open_tasks		s
+open_tickets		s
+open_workday	p_occurred_at timestamp with time zone	v
+roster_copy_week	p_from_week_start date, p_to_week_start date, p_team_key text	v
+roster_coverage	p_week_start date, p_team_key text	s
+roster_entries	p_week_start date, p_team_key text	s
+roster_in_scope	p_user_id uuid, p_team_id uuid, p_week_start date	s
+roster_people	p_week_start date, p_team_key text	s
+roster_publish	p_week_start date, p_team_key text	v
+roster_set_entry	p_week_start date, p_team_key text, p_user_id uuid, p_business_date date, p_kind text, p_start_time time without time zone, p_end_time time without time zone, p_absence_key text, p_note text	v
+roster_team_id	p_team_key text	s
+roster_today		s
+roster_week	p_week_start date, p_team_key text	s
+roster_week_id	p_week_start date, p_team_id uuid	v
+roster_weeks	p_team_key text, p_from date, p_to date	s
+sources		s
+speed_to_lead_rows	p_from date, p_to date	s
+speed_to_lead_summary	p_from date, p_to date, p_group text	s
+team_day	p_user_id uuid, p_business_date date	s
+team_hours	p_from date, p_to date, p_user_id uuid	s
+team_members_now		s
+team_now		s
+team_people		s
+team_status_time	p_from date, p_to date, p_user_id uuid	s
+tenant_settings		s
+user_permissions	p_user_id uuid	s

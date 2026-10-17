@@ -1,0 +1,39 @@
+agent-two  /                              transactions  8  statements  20 | cma.my_unread_count(×1 cma.my_roster(×1 cma.my_messages(×1 cma.my_follow_up(×1 cma.find_tenants_for_identity(×1 cma.app_links(×1 
+agent-two  /day                           transactions  4  statements   9 | cma.find_tenants_for_identity(×1 
+agent-two  /hours                         transactions  3  statements   6 | cma.find_tenants_for_identity(×1 
+agent-two  /messages                      transactions  3  statements   7 | cma.my_unread_count(×1 cma.my_messages(×1 cma.find_tenants_for_identity(×1 
+agent-two  /schedule                      transactions  3  statements   6 | cma.my_roster(×1 cma.find_tenants_for_identity(×1 
+agent-two  /me/follow-up                  transactions  4  statements  10 | cma.tenant_settings(×1 cma.my_follow_up(×1 cma.find_tenants_for_identity(×1 
+agent-two  /account                       transactions  3  statements   7 | cma.my_profile(×1 cma.find_tenants_for_identity(×1 
+manager    /                              transactions 11  statements  31 | cma.team_hours(×1 cma.record_url(×1 cma.my_unread_count(×1 cma.my_roster(×1 cma.my_messages(×1 cma.my_follow_up(×1 cma.missed_callbacks_summary(×1 cma.missed_callbacks(×1 cma.inbound_today(×1 cma.follow_up_summary(×1 cma.find_tenants_for_identity(×1 cma.app_links(×1 
+manager    /live/board                    transactions  8  statements  26 | cma.tenant_settings(×1 cma.team_now(×1 cma.team_members_now(×1 cma.roster_today(×1 cma.record_url(×1 cma.missed_callbacks_summary(×1 cma.missed_callbacks(×1 cma.inbound_today(×1 cma.follow_up_summary(×1 cma.find_tenants_for_identity(×1 cma.business_day_end(×1 
+manager    /team/hours                    transactions  5  statements  12 | cma.team_people(×1 cma.team_hours(×1 cma.find_tenants_for_identity(×1 
+manager    /team/people                   transactions  9  statements  26 | cma.teams(×1 cma.skills(×1 cma.roles(×1 cma.organisations(×1 cma.linked_accounts(×1 cma.linked_account_systems(×1 cma.invitations(×1 cma.find_tenants_for_identity(×1 cma.directory(×1 
+manager    /roster/planner                transactions  6  statements  14 | cma.teams(×1 cma.roster_weeks(×1 cma.roster_week(×1 cma.roster_people(×1 cma.roster_entries(×1 cma.roster_coverage(×1 cma.find_tenants_for_identity(×1 cma.absence_types(×1 
+manager    /reports/dashboard             transactions  6  statements  14 | cma.tenant_settings(×1 cma.team_status_time(×1 cma.record_url(×1 cma.intake_per_day(×1 cma.find_tenants_for_identity(×1 cma.crm_records_per_day(×1 
+manager    /reports/speed-to-lead         transactions  4  statements   8 | cma.speed_to_lead_summary(×1 cma.record_url(×1 cma.find_tenants_for_identity(×1 
+manager    /reports/intake                transactions  3  statements   8 | cma.tenant_settings(×1 cma.intake_per_day(×1 cma.find_tenants_for_identity(×1 
+manager    /reports/inbound               transactions  3  statements   9 | cma.tenant_settings(×1 cma.missed_reasons(×1 cma.inbound_service(×1 cma.find_tenants_for_identity(×1 
+manager    /reports/calls                 transactions  4  statements  12 | cma.calls_overview(×3 cma.tenant_settings(×1 cma.telephony_history_start(×1 cma.find_tenants_for_identity(×1 cma.calls_tag_use(×1 
+manager    /reports/calls-per-agent       transactions  4  statements  11 | cma.calls_overview(×2 cma.tenant_settings(×1 cma.find_tenants_for_identity(×1 cma.calls_per_person_tags(×1 cma.calls_per_person(×1 
+manager    /reports/follow-up             transactions  7  statements  19 | cma.record_url(×3 cma.tenant_settings(×1 cma.open_tickets(×1 cma.open_tasks(×1 cma.open_leads(×1 cma.follow_up_by_owner(×1 cma.find_tenants_for_identity(×1 
+manager    /reports/forms                 transactions  4  statements  11 | cma.forms_report(×2 cma.forms_history_start(×1 cma.forms_answers(×1 cma.form_categories(×1 cma.find_tenants_for_identity(×1 
+manager    /reports/data-quality          transactions  3  statements   7 | cma.find_tenants_for_identity(×1 cma.data_quality(×1 
+manager    /messages                      transactions  3  statements   7 | cma.my_unread_count(×1 cma.my_messages(×1 cma.find_tenants_for_identity(×1 
+manager    /messages/send                 transactions  6  statements  15 | cma.teams(×1 cma.team_people(×1 cma.skills(×1 cma.message_stats(×1 cma.find_tenants_for_identity(×1 
+admin      /                              transactions 12  statements  34 | cma.team_hours(×1 cma.roles(×1 cma.record_url(×1 cma.my_unread_count(×1 cma.my_roster(×1 cma.my_messages(×1 cma.my_follow_up(×1 cma.missed_callbacks_summary(×1 cma.missed_callbacks(×1 cma.inbound_today(×1 cma.follow_up_summary(×1 cma.find_tenants_for_identity(×1 cma.app_links(×1 
+admin      /configuration/statuses        transactions  4  statements  10 | cma.work_statuses_all(×1 cma.roles(×1 cma.find_tenants_for_identity(×1 
+admin      /configuration/sources         transactions  5  statements  13 | cma.sources(×1 cma.roles(×1 cma.form_categories(×1 cma.find_tenants_for_identity(×1 
+admin      /configuration/markets         transactions  5  statements  15 | cma.skills(×1 cma.roles(×1 cma.markets_all(×1 cma.find_tenants_for_identity(×1 cma.business_hours_all(×1 cma.business_holidays_all(×1 
+admin      /configuration/alert-rules     transactions  5  statements  16 | cma.tenant_settings(×1 cma.sources(×1 cma.roles(×1 cma.message_rules(×1 cma.find_tenants_for_identity(×1 cma.app_links_all(×1 
+--- api polls and routes
+agent-two  /api/v1/me                     transactions  2  statements   4 | cma.find_tenants_for_identity(×1 
+agent-two  /api/v1/me/day                 transactions  3  statements   6 | cma.find_tenants_for_identity(×1 
+agent-two  /api/v1/me/messages?unread=1   transactions  3  statements   7 | cma.my_unread_count(×1 cma.my_messages(×1 cma.find_tenants_for_identity(×1 
+agent-two  /api/v1/me/messages            transactions  3  statements   7 | cma.my_unread_count(×1 cma.my_messages(×1 cma.find_tenants_for_identity(×1 
+agent-two  /api/v1/me/statuses            transactions  3  statements   7 | cma.find_tenants_for_identity(×1 
+agent-two  /api/v1/me/app-links           transactions  3  statements   7 | cma.find_tenants_for_identity(×1 cma.app_links(×1 
+manager    /api/v1/team/now               transactions  3  statements   8 | cma.team_now(×1 cma.find_tenants_for_identity(×1 cma.business_day_end(×1 
+manager    /api/v1/telephony/inbound-now  transactions  3  statements  10 | cma.record_url(×1 cma.missed_callbacks_summary(×1 cma.missed_callbacks(×1 cma.inbound_today(×1 cma.find_tenants_for_identity(×1 
+manager    /api/v1/messages/stats         transactions  2  statements   4 | cma.find_tenants_for_identity(×1 
+manager    /api/v1/team/shifts-today      transactions  3  statements   7 | cma.roster_today(×1 cma.find_tenants_for_identity(×1 

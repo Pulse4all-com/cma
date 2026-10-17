@@ -1,0 +1,33 @@
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+psql:db/55_verify_uncounted_lines.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+                                            check_name                                            | result |                                                                                                                          detail                                                                                                                           
+--------------------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008f recorded                                                                       | PASS   | 
+ A2 the lines' trigger and its owner's function                                                   | PASS   | tgtype 21, columns 7, enabled O, secdef t, owner cma_owner, config search_path=pg_catalog, cma, pg_temp, app f, readers f, public f
+ A3 the removals are the owner's only                                                             | PASS   | 
+ A4 the application never deletes; call write and line setting unchanged in rights                | PASS   | 
+ A5 no stored call on a line that does not count                                                  | PASS   | 0 call(s) on lines that do not count
+ B1 a counted line: the call is stored                                                            | PASS   | c-1:inserted,c-5:inserted
+ B2 a line that does not count: skipped with its outcome, nothing written                         | PASS   | c-2:skipped_uncounted_line,c-3:inserted,c-2:skipped_uncounted_line
+ B3 a line not in the catalog: the call is stored                                                 | PASS   | c-4:inserted
+ B4 switching a line off removes its calls, taggings and links; CRM calls stay                    | PASS   | line one: 2 calls, 3 taggings, 2 links; 3 links made
+ B5 the audit of those deletes holds ids only, no call data                                       | PASS   | call_link:2 telephony_call:2 telephony_call_tag:3; 0 row(s) with more than ids
+ B6 another connection's and another tenant's calls untouched                                     | PASS   | 
+ B7 switching a line back on deletes nothing; a call on it is stored again                        | PASS   | calls/taggings/links/deletes 3/3/1/7 before, 3/3/1/7 after; c-1:inserted
+ B8 a line added as not counted removes the calls stored while it was unknown                     | PASS   | c-6:skipped_uncounted_line
+ B9 refusals: agent, Ingest user, the application calling the removals, a counted or missing line | PASS   | 6 of 6 refusals
+ B10 lines already off: their calls removed per connection, a rerun zeros                         | PASS   | verify-0008f-one/Verify phones/3/1/1/1 verify-0008f-one/Verify phones two/0/0/0/0 verify-0008f-two/Verify phones/0/0/0/0 | rerun verify-0008f-one/Verify phones/3/0/0/0 verify-0008f-one/Verify phones two/0/0/0/0 verify-0008f-two/Verify phones/0/0/0/0
+ B11 the audit exception is narrow                                                                | PASS   | 
+ B12 the line lock: shared for the call write, exclusive for the removal                          | PASS   | shared t, exclusive t
+ verdict                                                                                          | PASS   | 17 PASS, 0 FAIL
+(18 rows)
+

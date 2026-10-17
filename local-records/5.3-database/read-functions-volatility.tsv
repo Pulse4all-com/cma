@@ -1,0 +1,28 @@
+calls_overview	p_from date, p_to date, p_market text, p_line text, p_group text	s	f	13612
+calls_per_person	p_from date, p_to date, p_market text, p_line text	s	f	13612
+data_quality		s	f	13612
+find_tenants_for_identity	p_system text, p_external_id text	s	t	14
+follow_up_summary		s	f	13612
+forms_report	p_from date, p_to date, p_group text, p_market text, p_category text, p_form text	s	f	13612
+inbound_service	p_from date, p_to date, p_group text	s	f	13612
+inbound_today		s	f	13612
+missed_callbacks		s	f	13612
+my_follow_up		s	f	13612
+my_messages	p_since timestamp with time zone, p_limit integer	v	f	13612
+my_profile		s	f	13612
+my_roster	p_from date, p_to date	s	f	13612
+my_unread_count		s	f	13612
+open_leads		s	f	13612
+open_tasks		s	f	13612
+open_tickets		s	f	13612
+roster_entries	p_week_start date, p_team_key text	s	f	13612
+roster_today		s	f	13612
+roster_week	p_week_start date, p_team_key text	s	f	13612
+roster_weeks	p_team_key text, p_from date, p_to date	s	f	13612
+sources		s	f	13612
+speed_to_lead_summary	p_from date, p_to date, p_group text	s	f	13612
+team_hours	p_from date, p_to date, p_user_id uuid	s	f	13612
+team_now		s	f	13612
+team_people		s	f	13612
+team_status_time	p_from date, p_to date, p_user_id uuid	s	f	13612
+user_permissions	p_user_id uuid	s	f	14

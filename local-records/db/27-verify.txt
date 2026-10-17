@@ -1,0 +1,11 @@
+ set_config 
+------------
+ false
+(1 row)
+
+         tenant          | scheduler_users | roles_with_close_forgotten | grace_minutes | active_statuses | active_links | verdict 
+-------------------------+-----------------+----------------------------+---------------+-----------------+--------------+---------
+ pulse4all-invest        |               1 | scheduler                  | 60            |               5 |            2 | PASS
+ pulse4all-subscriptions |               1 | scheduler                  | 60            |               7 |            3 | PASS
+(2 rows)
+

@@ -1,0 +1,77 @@
+### TZ unset (Cloud Run runs UTC)
+process TZ: (unset: host default) | Intl default: UTC
+
+-- time.ts: date keys in a zone around the 25-hour day
+dateKeyInZone 2026-10-24T21:59:59Z                                     "2026-10-24"
+dateKeyInZone 2026-10-24T22:00:00Z (00:00 CEST)                        "2026-10-25"
+dateKeyInZone 2026-10-25T22:59:59Z (23:59:59 CET)                      "2026-10-25"
+dateKeyInZone 2026-10-25T23:00:00Z (00:00 CET 26th)                    "2026-10-26"
+addDays 2026-10-24 +1 / 2026-10-25 +1 (UTC date arithmetic)            ["2026-10-25","2026-10-26"]
+daysBetween 2026-10-19..2026-10-25 / 2026-10-25..2026-10-26            [6,1]
+startOfWeek 2026-10-25 (Sunday) / endOfMonth                           ["2026-10-19","2026-10-31"]
+hourInZone 2026-10-25T00:30Z / 01:30Z (both 02:xx local)               [2,2]
+fmtTime 00:30Z / 01:30Z en (both read 02:30)                           ["02:30","02:30"]
+fmtZoneShort 00:30Z / 01:30Z                                           ["CEST","CET"]
+sameOffset Amsterdam/Madrid at 01:30Z; Amsterdam/London                [true,false]
+period.ts week for today=2026-10-25 (startOfWeek..+6, as resolvePeriod builds it) ["2026-10-19","2026-10-25"]
+
+-- corrections.ts: the instants of a local time (Day editor)
+instantsForLocal 2026-10-25 02:30                                      ["2026-10-25T02:30:00+02:00","2026-10-25T02:30:00+01:00"]
+instantsForLocal 2026-10-25 07:00 / 22:00                              [["2026-10-25T07:00:00+01:00"],["2026-10-25T22:00:00+01:00"]]
+instantsForLocal 2026-03-29 02:30 (skipped hour)                       []
+
+-- roster.ts: planned shift of 2026-10-25 as instants, planned minutes, adherence
+plannedInstant 07:00 / 22:00 / 24:00                                   ["2026-10-25T06:00:00.000Z","2026-10-25T21:00:00.000Z","2026-10-25T23:00:00.000Z"]
+shiftMinutes 07:00-22:00 vs instants span (min)                        [900,900]
+shiftMinutes 01:00-04:00 vs instants span (hypothetical night shift)   [180,240]
+plannedInstant 02:30 picks the earlier instant                         "2026-10-25T00:30:00.000Z"
+adherence: in 07:03 CET, now 12:00 CET -> onTime                       "onTime"
+adherence: in 07:06 CET -> late                                        "late"
+adherence: out 21:50 CET -> leftEarly                                  "leftEarly"
+adherence: out 21:56 CET -> onTime (within tolerance)                  "onTime"
+weekDays 2026-10-19 / isoWeek 2026-10-25                               [["2026-10-19","2026-10-20","2026-10-21","2026-10-22","2026-10-23","2026-10-24","2026-10-25"],43]
+
+-- live.ts: the ticking clock is instant arithmetic (closedSeconds from the server + now - runningSince)
+workedSeconds at 02:30 CET (01:30Z): 3600 + 3600                       7200
+workedSeconds at 03:30 CET (02:30Z): 3600 + 7200                       10800
+workedSeconds capped by dayEndsAt 2026-10-25T21:00:00Z at 22:30 CET    54000
+secondsSince 00:30Z at 01:30Z / fmtSeconds(54000)                      [3600,"15:00:00"]
+
+### TZ=Europe/Amsterdam (a browser in the agent's zone)
+process TZ: Europe/Amsterdam | Intl default: Europe/Amsterdam
+
+-- time.ts: date keys in a zone around the 25-hour day
+dateKeyInZone 2026-10-24T21:59:59Z                                     "2026-10-24"
+dateKeyInZone 2026-10-24T22:00:00Z (00:00 CEST)                        "2026-10-25"
+dateKeyInZone 2026-10-25T22:59:59Z (23:59:59 CET)                      "2026-10-25"
+dateKeyInZone 2026-10-25T23:00:00Z (00:00 CET 26th)                    "2026-10-26"
+addDays 2026-10-24 +1 / 2026-10-25 +1 (UTC date arithmetic)            ["2026-10-25","2026-10-26"]
+daysBetween 2026-10-19..2026-10-25 / 2026-10-25..2026-10-26            [6,1]
+startOfWeek 2026-10-25 (Sunday) / endOfMonth                           ["2026-10-19","2026-10-31"]
+hourInZone 2026-10-25T00:30Z / 01:30Z (both 02:xx local)               [2,2]
+fmtTime 00:30Z / 01:30Z en (both read 02:30)                           ["02:30","02:30"]
+fmtZoneShort 00:30Z / 01:30Z                                           ["CEST","CET"]
+sameOffset Amsterdam/Madrid at 01:30Z; Amsterdam/London                [true,false]
+period.ts week for today=2026-10-25 (startOfWeek..+6, as resolvePeriod builds it) ["2026-10-19","2026-10-25"]
+
+-- corrections.ts: the instants of a local time (Day editor)
+instantsForLocal 2026-10-25 02:30                                      ["2026-10-25T02:30:00+02:00","2026-10-25T02:30:00+01:00"]
+instantsForLocal 2026-10-25 07:00 / 22:00                              [["2026-10-25T07:00:00+01:00"],["2026-10-25T22:00:00+01:00"]]
+instantsForLocal 2026-03-29 02:30 (skipped hour)                       []
+
+-- roster.ts: planned shift of 2026-10-25 as instants, planned minutes, adherence
+plannedInstant 07:00 / 22:00 / 24:00                                   ["2026-10-25T06:00:00.000Z","2026-10-25T21:00:00.000Z","2026-10-25T23:00:00.000Z"]
+shiftMinutes 07:00-22:00 vs instants span (min)                        [900,900]
+shiftMinutes 01:00-04:00 vs instants span (hypothetical night shift)   [180,240]
+plannedInstant 02:30 picks the earlier instant                         "2026-10-25T00:30:00.000Z"
+adherence: in 07:03 CET, now 12:00 CET -> onTime                       "onTime"
+adherence: in 07:06 CET -> late                                        "late"
+adherence: out 21:50 CET -> leftEarly                                  "leftEarly"
+adherence: out 21:56 CET -> onTime (within tolerance)                  "onTime"
+weekDays 2026-10-19 / isoWeek 2026-10-25                               [["2026-10-19","2026-10-20","2026-10-21","2026-10-22","2026-10-23","2026-10-24","2026-10-25"],43]
+
+-- live.ts: the ticking clock is instant arithmetic (closedSeconds from the server + now - runningSince)
+workedSeconds at 02:30 CET (01:30Z): 3600 + 3600                       7200
+workedSeconds at 03:30 CET (02:30Z): 3600 + 7200                       10800
+workedSeconds capped by dayEndsAt 2026-10-25T21:00:00Z at 22:30 CET    54000
+secondsSince 00:30Z at 01:30Z / fmtSeconds(54000)                      [3600,"15:00:00"]

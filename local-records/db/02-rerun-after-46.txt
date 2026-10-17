@@ -1,0 +1,15 @@
+            create_tenant             
+--------------------------------------
+ 01a14ac1-8b06-7f8a-ac30-8849132389aa
+(1 row)
+
+            create_tenant             
+--------------------------------------
+ 01a14ac1-8b12-7414-8e71-ea5b0d35419a
+(1 row)
+
+psql:db/02_seed_pulse4all.sql:245: NOTICE:  the legacy time import does not exist yet (addition 0008d): rerun this seed after 50_legacy_time_import.sql
+psql:db/02_seed_pulse4all.sql:288: NOTICE:  the missed-reason catalog does not exist yet (addition 0008i): rerun this seed after 60_inbound_service.sql
+psql:db/02_seed_pulse4all.sql:313: NOTICE:  the connected-call threshold does not exist yet (addition 0008j): rerun this seed after 62_calls_overview.sql
+psql:db/02_seed_pulse4all.sql:340: NOTICE:  the invitation settings do not exist yet (addition 0008l): rerun this seed after 66_invitations.sql
+psql:db/02_seed_pulse4all.sql:370: NOTICE:  the follow-up settings do not exist yet (addition 0008o): rerun this seed after 72_follow_up.sql

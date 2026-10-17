@@ -1,0 +1,485 @@
+▲ Next.js 16.3.8 (Turbopack)
+- Local:         http://127.0.0.1:8082
+- Network:       http://127.0.0.1:8082
+✓ Ready in 735ms
+✓ Running next.config.ts took 63ms
+
+○ Compiling /messages ...
+ GET /messages 200 in 11.6s (next.js: 8.9s, proxy.ts: 1572ms, application-code: 1165ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <InnerLayoutRouter url="/messages" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+      <SegmentViewNode type="page" pagePath="messages/p...">
+        <SegmentTrieNode>
+        <MessagesPage>
+          <Shell>
+            <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+              <Shortcuts>
+              <header>
+              <nav>
+              <main className="overflow-y...">
+                <nav>
+                <div className="max-w-4xl">
+                  <header>
+                  <Inbox initial={{messages:[...], ...}} copy={{title:"Mes...", ...}} timeZone="Europe/Madrid" ...>
+                    <div>
+                    <ul className="flex flex-..." data-testid="inbox-list">
+                      <li data-testid="inbox-item" data-unread="true">
+                        <Card className="border-l-4...">
+                          <section className="rounded-ca...">
+                            <div className="flex items...">
+                              <div className="min-w-0">
+                                <div className="flex flex-...">
+                                  <Badge>
+                                  <span className="text-caption text-p4a-grey tabular">
++                                   Sat, 17 Oct, 19:05
+-                                   Sat 17 Oct, 19:05
+                                ...
+                              ...
+                      ...
+                  ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at <unknown> (+                                   Sat, 17 Oct, 19:5)
+    at <unknown> (-                                   Sat 17 Oct, 19:5)
+    at span (<anonymous>)
+    at <unknown> (src/components/Inbox.tsx:120:25)
+    at Array.map (<anonymous>)
+    at Inbox (src/components/Inbox.tsx:108:17)
+    at MessagesPage (src/app/messages/page.tsx:28:7)
+  118 |                         {m.urgency === "urgent" ? <Badge tone="warning">{copy.urgent}</Badge> : null}
+  119 |                         {m.acknowledgedAt ? <Badge tone="success">{copy.acknowledged}</Badge> : null}
+> 120 |                         <span className="text-caption text-p4a-grey tabular">{fmtWhen(m.createdAt, timeZone, locale)}</span>
+      |                         ^
+  121 |                       </div>
+  122 |                       <p className={`mt-2 text-body ${isUnread ? "font-semibold text-p4a-heading" : "text-p4a-body"}`}>{m.title}</p>
+  123 |                       {m.body ? <p className="mt-1 text-small text-p4a-body">{m.body}</p> : null}
+ GET /api/v1/me/messages 200 in 3.1s (next.js: 2.7s, proxy.ts: 256ms, application-code: 155ms)
+ GET /api/v1/me/messages 200 in 3.4s (next.js: 2.9s, proxy.ts: 456ms, application-code: 58ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 37ms (next.js: 6ms, proxy.ts: 19ms, application-code: 12ms)
+ GET /roster/planner 200 in 1940ms (next.js: 1385ms, proxy.ts: 10ms, application-code: 545ms)
+ GET /api/v1/me/messages 200 in 88ms (next.js: 15ms, proxy.ts: 58ms, application-code: 15ms)
+ GET /api/v1/me/messages 200 in 93ms (next.js: 17ms, proxy.ts: 60ms, application-code: 16ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/roster/pl..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="roster/pla...">
+          <SegmentTrieNode>
+          <RosterPlannerPage>
+            <Shell>
+              <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+                <Shortcuts>
+                <header>
+                <nav>
+                <main className="overflow-y...">
+                  <nav>
+                  <div className="max-w-6xl">
+                    <header>
+                    <p>
+                    <RosterPlanner week={{header:{...}, ...}} weeks={[...]} teams={[...]} team="en" absences={[...]} ...>
+                      <div className="flex flex-...">
+                        <WeekBar>
+                        <div>
+                        <div className="overflow-x...">
+                          <table className="w-full bor...">
+                            <thead className="bg-p4a-bgb...">
+                              <tr>
+                                <th>
+                                <th className={"h-10 whitespace-nowrap px-2 text-left font-semibold "}>
++                                 Mon, 12 Oct
+-                                 Mon 12 Oct
+                                ...
+                                ...
+                            ...
+                        ...
+                    ...
+        ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at th (<anonymous>)
+    at <unknown> (src/components/RosterPlanner.tsx:246:19)
+    at Array.map (<anonymous>)
+    at RosterPlanner (src/components/RosterPlanner.tsx:245:23)
+    at RosterPlannerPage (src/app/roster/planner/page.tsx:60:7)
+  244 |                 <th className={th}>{t.person}</th>
+  245 |                 {days.map((d) => (
+> 246 |                   <th key={d} className={`${th} ${d === today ? "text-p4a-deepblue underline decoration-2 underline-offset-4" : ""}`}>
+      |                   ^
+  247 |                     {fmtDate(d, locale, "compact")}
+  248 |                   </th>
+  249 |                 ))}
+ GET /configuration/alert-rules 200 in 2.1s (next.js: 1599ms, proxy.ts: 30ms, application-code: 506ms)
+ GET /api/v1/me/messages 200 in 38ms (next.js: 13ms, proxy.ts: 7ms, application-code: 18ms)
+ GET /api/v1/me/messages 200 in 45ms (next.js: 6ms, proxy.ts: 28ms, application-code: 11ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/configura..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="configurat...">
+          <SegmentTrieNode>
+          <AlertRulesPage>
+            <ConfigurationPage>
+              <Shell>
+                <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+                  <Shortcuts>
+                  <header>
+                  <nav>
+                  ...
+                    <Card>
+                      <section className={"rounded-..."}>
+                        ...
+                          <tbody className={"border-t..."} data-rule="New deal">
+                            <tr>
+                              <td>
+                              <td>
+                              <td>
+                              <td>
+                              <td className="px-3 pt-3 ...">
+                                <span className="block text-caption text-p4a-muted">
++                                 Last alert Sat, 17 Oct 18:40
+-                                 Last alert Sat 17 Oct 18:40
+                              ...
+                            ...
+                          ...
+        ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at <unknown> (+                                 Last alert Sat, 17 Oct 18:40)
+    at <unknown> (-                                 Last alert Sat 17 Oct 18:40)
+    at span (<anonymous>)
+    at <unknown> (src/components/configuration/AlertRulesConfig.tsx:94:36)
+    at Array.map (<anonymous>)
+    at AlertRulesConfig (src/components/configuration/AlertRulesConfig.tsx:79:23)
+    at AlertRulesPage (src/app/configuration/alert-rules/page.tsx:17:7)
+  92 |                 <td className="px-3 pt-3 align-top text-right tabular-nums">
+  93 |                   {r.alerts30d}
+> 94 |                   {r.lastAlertAt ? <span className="block text-caption text-p4a-muted">{t.lastAlert.replace("{when}", fmtWhen(r.lastAlertAt, locale, timeZone))}</span> : null}
+     |                                    ^
+  95 |                 </td>
+  96 |                 <td className="px-3 pt-3 align-top text-right" rowSpan={2}>
+  97 |                   <div className="flex flex-col items-end gap-2">
+ GET /messages 200 in 425ms (next.js: 19ms, proxy.ts: 9ms, application-code: 397ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <InnerLayoutRouter url="/messages" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+      <SegmentViewNode type="page" pagePath="messages/p...">
+        <SegmentTrieNode>
+        <MessagesPage>
+          <Shell>
+            <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+              <Shortcuts>
+              <header>
+              <nav>
+              <main className="overflow-y...">
+                <nav>
+                <div className="max-w-4xl">
+                  <header>
+                  <div>
+                  <Inbox initial={{messages:[...], ...}} copy={{title:"Mes...", ...}} timeZone="Europe/Madrid" ...>
+                    <div>
+                    <ul className="flex flex-..." data-testid="inbox-list">
+                      <li data-testid="inbox-item" data-unread="true">
+                        <Card className="border-l-4...">
+                          <section className="rounded-ca...">
+                            <div className="flex items...">
+                              <div className="min-w-0">
+                                <div className="flex flex-...">
+                                  <Badge>
+                                  <span className="text-caption text-p4a-grey tabular">
++                                   Sat, 17 Oct, 19:05
+-                                   Sat 17 Oct, 19:05
+                                ...
+                              ...
+                      ...
+                  ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at <unknown> (+                                   Sat, 17 Oct, 19:5)
+    at <unknown> (-                                   Sat 17 Oct, 19:5)
+    at span (<anonymous>)
+    at <unknown> (src/components/Inbox.tsx:120:25)
+    at Array.map (<anonymous>)
+    at Inbox (src/components/Inbox.tsx:108:17)
+    at MessagesPage (src/app/messages/page.tsx:28:7)
+  118 |                         {m.urgency === "urgent" ? <Badge tone="warning">{copy.urgent}</Badge> : null}
+  119 |                         {m.acknowledgedAt ? <Badge tone="success">{copy.acknowledged}</Badge> : null}
+> 120 |                         <span className="text-caption text-p4a-grey tabular">{fmtWhen(m.createdAt, timeZone, locale)}</span>
+      |                         ^
+  121 |                       </div>
+  122 |                       <p className={`mt-2 text-body ${isUnread ? "font-semibold text-p4a-heading" : "text-p4a-body"}`}>{m.title}</p>
+  123 |                       {m.body ? <p className="mt-1 text-small text-p4a-body">{m.body}</p> : null}
+ GET /api/v1/me/messages 200 in 50ms (next.js: 20ms, proxy.ts: 16ms, application-code: 14ms)
+ GET /api/v1/me/messages 200 in 186ms (next.js: 38ms, proxy.ts: 18ms, application-code: 131ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 24ms (next.js: 5ms, proxy.ts: 9ms, application-code: 10ms)
+ GET /live/board 200 in 1490ms (next.js: 813ms, proxy.ts: 5ms, application-code: 672ms)
+ GET /api/v1/me/messages 200 in 35ms (next.js: 10ms, proxy.ts: 12ms, application-code: 13ms)
+ GET /api/v1/me/messages 200 in 41ms (next.js: 6ms, proxy.ts: 25ms, application-code: 9ms)
+ GET /day 200 in 1202ms (next.js: 918ms, proxy.ts: 6ms, application-code: 278ms)
+ GET /api/v1/me/messages 200 in 31ms (next.js: 14ms, proxy.ts: 8ms, application-code: 9ms)
+ GET /api/v1/me/messages 200 in 34ms (next.js: 5ms, proxy.ts: 24ms, application-code: 6ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 27ms (next.js: 5ms, proxy.ts: 15ms, application-code: 6ms)
+ GET / 200 in 1030ms (next.js: 684ms, proxy.ts: 5ms, application-code: 342ms)
+ GET /api/v1/me/messages 200 in 39ms (next.js: 4ms, proxy.ts: 12ms, application-code: 22ms)
+ GET /api/v1/me/messages 200 in 51ms (next.js: 16ms, proxy.ts: 14ms, application-code: 21ms)
+ GET /messages 200 in 129ms (next.js: 8ms, proxy.ts: 6ms, application-code: 115ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <InnerLayoutRouter url="/messages" tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+      <SegmentViewNode type="page" pagePath="messages/p...">
+        <SegmentTrieNode>
+        <MessagesPage>
+          <Shell>
+            <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+              <Shortcuts>
+              <header>
+              <nav>
+              <main className="overflow-y...">
+                <nav>
+                <div className="max-w-4xl">
+                  <header>
+                  <Inbox initial={{messages:[...], ...}} copy={{title:"Mes...", ...}} timeZone="Europe/Madrid" ...>
+                    <div>
+                    <ul className="flex flex-..." data-testid="inbox-list">
+                      <li data-testid="inbox-item" data-unread="true">
+                        <Card className="border-l-4...">
+                          <section className="rounded-ca...">
+                            <div className="flex items...">
+                              <div className="min-w-0">
+                                <div className="flex flex-...">
+                                  <Badge>
+                                  <span className="text-caption text-p4a-grey tabular">
++                                   Sat, 17 Oct, 19:05
+-                                   Sat 17 Oct, 19:05
+                                ...
+                              ...
+                      ...
+                  ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at <unknown> (+                                   Sat, 17 Oct, 19:5)
+    at <unknown> (-                                   Sat 17 Oct, 19:5)
+    at span (<anonymous>)
+    at <unknown> (src/components/Inbox.tsx:120:25)
+    at Array.map (<anonymous>)
+    at Inbox (src/components/Inbox.tsx:108:17)
+    at MessagesPage (src/app/messages/page.tsx:28:7)
+  118 |                         {m.urgency === "urgent" ? <Badge tone="warning">{copy.urgent}</Badge> : null}
+  119 |                         {m.acknowledgedAt ? <Badge tone="success">{copy.acknowledged}</Badge> : null}
+> 120 |                         <span className="text-caption text-p4a-grey tabular">{fmtWhen(m.createdAt, timeZone, locale)}</span>
+      |                         ^
+  121 |                       </div>
+  122 |                       <p className={`mt-2 text-body ${isUnread ? "font-semibold text-p4a-heading" : "text-p4a-body"}`}>{m.title}</p>
+  123 |                       {m.body ? <p className="mt-1 text-small text-p4a-body">{m.body}</p> : null}
+ GET /api/v1/me/messages 200 in 38ms (next.js: 10ms, proxy.ts: 20ms, application-code: 7ms)
+ GET /api/v1/me/messages 200 in 45ms (next.js: 17ms, proxy.ts: 17ms, application-code: 12ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 19ms (next.js: 4ms, proxy.ts: 5ms, application-code: 10ms)
+ GET /roster/planner 200 in 263ms (next.js: 6ms, proxy.ts: 7ms, application-code: 250ms)
+ GET /api/v1/me/messages 200 in 26ms (next.js: 6ms, proxy.ts: 10ms, application-code: 10ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/roster/pl..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="roster/pla...">
+          <SegmentTrieNode>
+          <RosterPlannerPage>
+            <Shell>
+              <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+                <Shortcuts>
+                <header>
+                <nav>
+                <main className="overflow-y...">
+                  <nav>
+                  <div className="max-w-6xl">
+                    <header>
+                    <p>
+                    <RosterPlanner week={{header:{...}, ...}} weeks={[...]} teams={[...]} team="en" absences={[...]} ...>
+                      <div className="flex flex-...">
+                        <WeekBar>
+                        <div>
+                        <div className="overflow-x...">
+                          <table className="w-full bor...">
+                            <thead className="bg-p4a-bgb...">
+                              <tr>
+                                <th>
+                                <th className={"h-10 whitespace-nowrap px-2 text-left font-semibold "}>
++                                 Mon, 12 Oct
+-                                 Mon 12 Oct
+                                ...
+                                ...
+                            ...
+                        ...
+                    ...
+        ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at th (<anonymous>)
+    at <unknown> (src/components/RosterPlanner.tsx:246:19)
+    at Array.map (<anonymous>)
+    at RosterPlanner (src/components/RosterPlanner.tsx:245:23)
+    at RosterPlannerPage (src/app/roster/planner/page.tsx:60:7)
+  244 |                 <th className={th}>{t.person}</th>
+  245 |                 {days.map((d) => (
+> 246 |                   <th key={d} className={`${th} ${d === today ? "text-p4a-deepblue underline decoration-2 underline-offset-4" : ""}`}>
+      |                   ^
+  247 |                     {fmtDate(d, locale, "compact")}
+  248 |                   </th>
+  249 |                 ))}
+ GET /api/v1/me/messages 200 in 41ms (next.js: 13ms, proxy.ts: 21ms, application-code: 7ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 18ms (next.js: 4ms, proxy.ts: 6ms, application-code: 8ms)
+ GET /configuration/alert-rules 200 in 318ms (next.js: 5ms, proxy.ts: 8ms, application-code: 305ms)
+[browser] Uncaught Error: Hydration failed because the server rendered text didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/configura..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="configurat...">
+          <SegmentTrieNode>
+          <AlertRulesPage>
+            <ConfigurationPage>
+              <Shell>
+                <div data-rail="expanded" data-hints="shown" className="cma-frame ...">
+                  <Shortcuts>
+                  <header>
+                  <nav>
+                  ...
+                    <Card>
+                      <section className={"rounded-..."}>
+                        ...
+                          <tbody className={"border-t..."} data-rule="New deal">
+                            <tr>
+                              <td>
+                              <td>
+                              <td>
+                              <td>
+                              <td className="px-3 pt-3 ...">
+                                <span className="block text-caption text-p4a-muted">
++                                 Last alert Sat, 17 Oct 18:40
+-                                 Last alert Sat 17 Oct 18:40
+                              ...
+                            ...
+                          ...
+        ...
+      ...
+
+    at <unknown> (https://react.dev/link/hydration-mismatch)
+    at <unknown> (+                                 Last alert Sat, 17 Oct 18:40)
+    at <unknown> (-                                 Last alert Sat 17 Oct 18:40)
+    at span (<anonymous>)
+    at <unknown> (src/components/configuration/AlertRulesConfig.tsx:94:36)
+    at Array.map (<anonymous>)
+    at AlertRulesConfig (src/components/configuration/AlertRulesConfig.tsx:79:23)
+    at AlertRulesPage (src/app/configuration/alert-rules/page.tsx:17:7)
+  92 |                 <td className="px-3 pt-3 align-top text-right tabular-nums">
+  93 |                   {r.alerts30d}
+> 94 |                   {r.lastAlertAt ? <span className="block text-caption text-p4a-muted">{t.lastAlert.replace("{when}", fmtWhen(r.lastAlertAt, locale, timeZone))}</span> : null}
+     |                                    ^
+  95 |                 </td>
+  96 |                 <td className="px-3 pt-3 align-top text-right" rowSpan={2}>
+  97 |                   <div className="flex flex-col items-end gap-2">
+ GET /api/v1/me/messages 200 in 44ms (next.js: 8ms, proxy.ts: 23ms, application-code: 14ms)
+ GET /api/v1/me/messages 200 in 43ms (next.js: 9ms, proxy.ts: 18ms, application-code: 16ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A05%3A13.173Z 200 in 33ms (next.js: 6ms, proxy.ts: 17ms, application-code: 10ms)
+✓ Compiled in 2.1s
+✓ Compiled in 864ms
+ GET /configuration/health 200 in 2.6s (next.js: 1495ms, proxy.ts: 181ms, application-code: 896ms)
+ GET /api/v1/me/messages 200 in 326ms (next.js: 192ms, proxy.ts: 16ms, application-code: 117ms)
+ GET /api/v1/me/messages 200 in 334ms (next.js: 287ms, proxy.ts: 11ms, application-code: 35ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A25%3A09.454Z 200 in 26ms (next.js: 6ms, proxy.ts: 10ms, application-code: 10ms)
+ GET /configuration/health 200 in 262ms (next.js: 6ms, proxy.ts: 7ms, application-code: 249ms)
+ GET /api/v1/me/messages 200 in 38ms (next.js: 9ms, proxy.ts: 23ms, application-code: 6ms)
+ GET /api/v1/me/messages 200 in 43ms (next.js: 14ms, proxy.ts: 15ms, application-code: 13ms)
+ GET /configuration/exports 200 in 1116ms (next.js: 780ms, proxy.ts: 10ms, application-code: 326ms)
+ GET /api/v1/me/messages 200 in 26ms (next.js: 4ms, proxy.ts: 11ms, application-code: 11ms)
+ GET /api/v1/me/messages 200 in 20ms (next.js: 5ms, proxy.ts: 7ms, application-code: 8ms)
+ GET /api/v1/me/messages?since=2026-10-17T17%3A25%3A09.454Z 200 in 26ms (next.js: 15ms, proxy.ts: 6ms, application-code: 5ms)
+ GET /api/v1/configuration/documents/REPORT.md 404 in 2.1s (next.js: 2.1s, proxy.ts: 6ms, application-code: 31ms)
+ GET /api/v1/configuration/documents/..%2FREPORT.md 404 in 79ms (next.js: 63ms, proxy.ts: 6ms, application-code: 10ms)
+ GET /api/v1/configuration/documents/manifest.json 404 in 86ms (next.js: 43ms, proxy.ts: 5ms, application-code: 38ms)
+ GET /api/v1/configuration/documents/..%2F..%2Fpackage.json 404 in 109ms (next.js: 35ms, proxy.ts: 35ms, application-code: 40ms)
+ GET /api/v1/configuration/documents/REPORT.md%00 404 in 179ms (next.js: 130ms, proxy.ts: 35ms, application-code: 14ms)
+ GET /api/v1/configuration/documents/x 404 in 34ms (next.js: 17ms, proxy.ts: 6ms, application-code: 12ms)
+ GET /api/v1/configuration/documents/REPORT.md 403 in 27ms (next.js: 10ms, proxy.ts: 7ms, application-code: 9ms)
+ GET /api/v1/configuration/documents/REPORT.md 200 in 29ms (next.js: 8ms, proxy.ts: 8ms, application-code: 14ms)
