@@ -8,7 +8,10 @@
  *   calls           CRM v3 batch read; the other party's number hashed with the tenant's pepper and
  *                   dropped; associations to contacts and deals
  *   contacts        CRM v3 batch read, only for contacts the CMA holds (0006: never the contact base)
- *   deletions       no read: the record, contact or call is marked deleted at the event's time
+ *   tasks           CRM v3 batch read of the eight structural properties (never body or subject, addition
+ *                   0008n); the first associated contact, deal and ticket through the v4 associations batch
+ *                   read, stored on the task's row
+ *   deletions       no read: the record, contact, call or task is marked deleted at the event's time
  *   privacy         contact.privacyDeletion → cma.ingest_contact_forget(), no read
  *   catalogs        pipelines with stages, and the call outcomes, at most hourly per connection
  *
@@ -23,6 +26,7 @@ import { requestJson, checkedBase, SourceError } from "../../core/http.mjs";
 import { warn } from "../../core/log.mjs";
 import {
   API_OBJECT, propertiesFor, recordFromObject, contactFromObject, contactAttributes, callFromObject, primaryContact, associationDiff,
+  taskFromObject, firstAssociated,
 } from "./map.mjs";
 
 const BATCH_READ = 100;
@@ -198,6 +202,7 @@ function deletionWrites(objectType, id, at) {
   if (objectType === "deal" || objectType === "ticket") return { records: [{ recordType: objectType, sourceId: id, deletedAt: at }] };
   if (objectType === "contact") return { contacts: [{ sourceId: id, deletedAt: at }] };
   if (objectType === "crm_call") return { calls: [{ sourceId: id, deletedAt: at }] };
+  if (objectType === "task") return { tasks: [{ sourceId: id, deletedAt: at }] };
   return {};
 }
 
@@ -215,7 +220,7 @@ function failGroups(groups, code) {
 export async function readBack({ connection, config, events, store, budget }) {
   const units = [];
   const groups = groupEvents(events);
-  const toRead = { deal: [], ticket: [], crm_call: [], contact: [] };
+  const toRead = { deal: [], ticket: [], crm_call: [], contact: [], task: [] };
 
   for (const g of groups) {
     if (g.privacy) {
@@ -335,6 +340,33 @@ export async function readBack({ connection, config, events, store, budget }) {
         units.push(unit(g.events, "processed", null, writes));
       }
       pepper = null;
+    } catch (err) {
+      units.push(...failGroups(list, err instanceof SourceError ? err.code : "readback_error"));
+    }
+  }
+
+  // Tasks (addition 0008n): the structural properties only, never body or subject; the first associated
+  // contact, deal and ticket live on the task's row, so no association diff is written for them
+  if (toRead.task.length) {
+    const list = toRead.task;
+    try {
+      const ids = list.map((g) => g.objectId);
+      const objects = await api.batchRead("task", ids, propertiesFor("task", config));
+      const toContacts = await api.associations("task", "contact", ids);
+      const toDeals = await api.associations("task", "deal", ids);
+      const toTickets = await api.associations("task", "ticket", ids);
+      const byId = new Map(objects.map((o) => [String(o.id), o]));
+      for (const g of list) {
+        const obj = byId.get(g.objectId);
+        if (!obj) {
+          units.push(unit(g.events, "ignored"));
+          continue;
+        }
+        const task = taskFromObject(obj, {
+          contactId: firstAssociated(toContacts.get(g.objectId)), dealId: firstAssociated(toDeals.get(g.objectId)), ticketId: firstAssociated(toTickets.get(g.objectId)),
+        });
+        units.push(unit(g.events, "processed", null, { tasks: [task] }));
+      }
     } catch (err) {
       units.push(...failGroups(list, err instanceof SourceError ? err.code : "readback_error"));
     }

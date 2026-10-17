@@ -69,6 +69,12 @@ const ONLY_INVITATIONS = process.argv.includes("--invitations");
  * includes them.
  */
 const ONLY_PREVIEW = process.argv.includes("--preview");
+/**
+ * --follow-up runs only the checks of the follow-up layer (addition 0008o): the five report routes and the
+ * person's own, their permissions, shapes and filters, and the Sources writes of a pipeline's response time
+ * and the task catalogs. Works against mock data and against a database with the fixture.
+ */
+const ONLY_FOLLOW_UP = process.argv.includes("--follow-up");
 
 // Dev seed subjects (system "mock")
 const TWO_TENANTS = "agent-one";   // exists in two tenants: must never be guessed
@@ -141,7 +147,7 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS || ONLY_PREVIEW;
+const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS || ONLY_PREVIEW || ONLY_FOLLOW_UP;
 if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_GROUP && health.body?.data === "mock"))) {
   console.error(`Not a mock-auth, ${ONLY_GROUP ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
@@ -170,9 +176,15 @@ if (ONLY_PREVIEW) {
   await previewChecks();
   verdict();
 }
+if (ONLY_FOLLOW_UP) {
+  await followUpChecks();
+  verdict();
+}
 
 // ---- preview as role (16 October 2026) -----------------------------------------------------
 await previewChecks();
+// ---- the follow-up layer (addition 0008o) ----------------------------------------------------
+await followUpChecks();
 
 // ---- identity and tenant -------------------------------------------------------------------
 expect("identity in two tenants is refused", (await get(TWO_TENANTS, "/api/v1/me")).status, 403, 200);
@@ -862,6 +874,106 @@ await reportChecks();
 await inboundChecks();
 await callsChecks();
 verdict();
+
+async function followUpChecks() {
+  const READER = "reader";
+  const fu = "/api/v1/reports/follow-up";
+  const sj = (s, method, path, body, headers = { "x-cma-request": "1" }) =>
+    call(s, path, { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+  const SUMMARY_KEYS = ["leadsOpenNotCalled", "leadsPastTarget", "ticketsAtRisk", "ticketsBreached", "ticketsWithoutOwner", "tasksOverdue", "tasksDueToday", "tasksUnmappedOwner"];
+  const LEAD_KEYS = ["dealId", "connectionId", "dealSourceId", "pipelineId", "pipelineLabel", "ownerUserId", "ownerName", "ownerRef", "market", "createdAt", "waitingBusinessSeconds",
+    "ageBusinessDays", "bucketFrom", "bucketTo", "pastTarget", "lastCallAt", "lastCallDays", "recordUrl"].sort();
+  const TICKET_KEYS = ["ticketId", "connectionId", "ticketSourceId", "pipelineId", "pipelineLabel", "stageId", "stageLabel", "ownerUserId", "ownerName", "ownerRef", "market", "createdAt",
+    "openBusinessSeconds", "slaMinutes", "slaState", "minutesToBreach", "recordUrl"].sort();
+  const TASK_KEYS = ["taskId", "connectionId", "taskSourceId", "typeRef", "typeLabel", "isCallback", "priorityRef", "statusRef", "statusLabel", "ownerUserId", "ownerName", "ownerRef", "market",
+    "dueAt", "dueState", "recordType", "recordSourceId", "createdAt", "recordUrl"].sort();
+  const keysOf = (rows, want) => rows.length === 0 || rows.every((r) => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(want));
+  // no customer data in any row: no key naming a name, email, phone, subject or body
+  const clean = (rows) => rows.every((r) => Object.keys(r).every((k) => !/(email|phone|subject|body|address|firstName|lastName)/i.test(k)));
+
+  expect("follow-up: an agent is refused the lists and the summary",
+    [(await get(AGENT, `${fu}/leads`)).status, (await get(AGENT, `${fu}/tickets`)).status, (await get(AGENT, `${fu}/tasks`)).status, (await get(AGENT, `${fu}/summary`)).status, (await get(AGENT, `${fu}/by-owner`)).status],
+    [403, 403, 403, 403, 403], [200, 403, 403, 403, 403]);
+  const summary = await get(SUPERVISOR, `${fu}/summary`);
+  expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts",
+    [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS].sort()), SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k]))],
+    [200, true, true], [403, true, true]);
+  // the reader (reports.view alone) is a mock identity; a database without it answers every call 403, which says nothing
+  if ((await get(READER, "/api/v1/me")).status === 200) {
+    expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
+      [(await get(READER, `${fu}/tasks`)).status, (await get(READER, `${fu}/summary`)).status, (await get(READER, `${fu}/by-owner`)).status], [200, 403, 403], [200, 200, 403]);
+  } else {
+    console.log("note  no reader identity in this tenant: the reader's check is left out");
+  }
+  const leads = await get(MANAGER, `${fu}/leads`);
+  const tickets = await get(MANAGER, `${fu}/tickets`);
+  const tasks = await get(MANAGER, `${fu}/tasks`);
+  expect("follow-up: the manager reads the three lists, every row in shape, no customer data",
+    [leads.status, tickets.status, tasks.status, keysOf(leads.body?.data?.rows ?? [], LEAD_KEYS), keysOf(tickets.body?.data?.rows ?? [], TICKET_KEYS), keysOf(tasks.body?.data?.rows ?? [], TASK_KEYS),
+      clean([...(leads.body?.data?.rows ?? []), ...(tickets.body?.data?.rows ?? []), ...(tasks.body?.data?.rows ?? [])])],
+    [200, 200, 200, true, true, true, true], [200, 200, 403, true, true, true, true]);
+  expect("follow-up: tickets come with the least time left first, no business hours last",
+    (() => { const m = (tickets.body?.data?.rows ?? []).map((r) => r.minutesToBreach); const nums = m.filter((x) => x !== null);
+      return nums.every((x, i) => i === 0 || x >= nums[i - 1]) && m.indexOf(null) === (m.includes(null) ? nums.length : -1); })(), true, false);
+  const attention = await get(MANAGER, `${fu}/tickets?state=attention&market=NL`);
+  expect("follow-up: the state and market filters are read back and applied",
+    [attention.body?.data?.filter, (attention.body?.data?.rows ?? []).every((r) => ["at_risk", "breached"].includes(r.slaState) && r.market === "NL")],
+    [{ market: "NL", owner: null, state: "attention" }, true], [{ market: "NL", owner: null, state: null }, true]);
+  const none = await get(MANAGER, `${fu}/leads?owner=none`);
+  expect("follow-up: owner=none keeps the leads whose owner maps to nobody", (none.body?.data?.rows ?? []).every((r) => r.ownerUserId === null), true, false);
+  const byOwner = await get(MANAGER, `${fu}/by-owner`);
+  const rows = byOwner.body?.data ?? [];
+  expect("follow-up: per person for the manager: people by name, the not-linked row last",
+    [byOwner.status, rows.every((r, i) => r.ownerUserId !== null || i === rows.length - 1),
+      rows.filter((r) => r.ownerUserId !== null).every((r, i, a) => i === 0 || String(a[i - 1].displayName).localeCompare(String(r.displayName)) <= 0)],
+    [200, true, true], [403, true, true]);
+  const mine = await get(AGENT, "/api/v1/me/follow-up");
+  expect("follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs",
+    [mine.status, ["leads", "tickets", "tasks"].every((k) => Array.isArray(mine.body?.data?.[k])),
+      [...(mine.body?.data?.leads ?? []), ...(mine.body?.data?.tickets ?? []), ...(mine.body?.data?.tasks ?? [])].every((r) => r.ownerUserId === meA.userId)],
+    [200, true, true], [403, true, true]);
+  expect("follow-up: the analyst (no leads.accept, no workday.own) is refused their own", (await get(ANALYST, "/api/v1/me/follow-up")).status, 403, 200);
+
+  // the Sources writes (0008n, 0008o), on the tenant's CRM connection
+  const cfgS = "/api/v1/configuration";
+  const sources = (await get(ADMIN, `${cfgS}/sources`)).body?.data ?? [];
+  const src = sources.find((c) => c.kind === "crm") ?? sources.find((c) => c.heldKinds.includes("crm"));
+  if (!src) {
+    console.log("note  no CRM connection in this tenant: the 5 Sources checks of the follow-up layer are left out");
+    return;
+  }
+  const base = `${cfgS}/sources/${src.id}`;
+  const d = (await get(ADMIN, base)).body?.data;
+  expect("follow-up: a connection answers its task catalogs and every pipeline's own response time",
+    [Array.isArray(d?.taskStatuses), Array.isArray(d?.taskTypes), (d?.pipelines ?? []).every((p) => "slaMinutes" in p)], [true, true, true], [true, true, false]);
+  const ticketPipeline = (d?.pipelines ?? []).find((p) => p.recordType === "ticket");
+  if (ticketPipeline) {
+    const set = await sj(ADMIN, "PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId: ticketPipeline.pipelineId, slaMinutes: 90 });
+    const back = await sj(ADMIN, "PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId: ticketPipeline.pipelineId, slaMinutes: ticketPipeline.slaMinutes });
+    const find = (r) => (r.body?.data?.pipelines ?? []).find((p) => p.recordType === "ticket" && p.pipelineId === ticketPipeline.pipelineId)?.slaMinutes;
+    expect("follow-up: a ticket pipeline's response time is written and put back", [set.status, find(set), find(back)], [200, 90, ticketPipeline.slaMinutes], [200, 90, 90]);
+  } else {
+    console.log("note  the connection has no ticket pipeline: the response-time write is left out");
+  }
+  expect("follow-up: a response time on a deal pipeline, out of bounds, or on an unknown pipeline is refused",
+    [(await sj(ADMIN, "PUT", `${base}/pipeline-sla`, { recordType: "deal", pipelineId: "x", slaMinutes: 60 })).status,
+      (await sj(ADMIN, "PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId: ticketPipeline?.pipelineId ?? "x", slaMinutes: 0 })).status,
+      (await sj(ADMIN, "PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId: "no-such-pipeline", slaMinutes: 60 })).status],
+    [400, 400, 404], [200, 400, 404]);
+  expect("follow-up: the manager cannot write a response time or a task status",
+    [(await sj(MANAGER, "PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId: "x", slaMinutes: 60 })).status,
+      (await sj(MANAGER, "PUT", `${base}/task-statuses`, { statusRef: "X", label: "X", isDone: true })).status], [403, 403], [200, 403]);
+  const status = d?.taskStatuses?.[0];
+  if (status) {
+    const flipped = await sj(ADMIN, "PUT", `${base}/task-statuses`, { statusRef: status.statusRef, label: status.label, isDone: !status.isDone });
+    const back = await sj(ADMIN, "PUT", `${base}/task-statuses`, { statusRef: status.statusRef, label: status.label, isDone: status.isDone });
+    const find = (r) => (r.body?.data?.taskStatuses ?? []).find((s) => s.statusRef === status.statusRef)?.isDone;
+    expect("follow-up: a task status's done switch is written and put back", [find(flipped), find(back)], [!status.isDone, status.isDone], [status.isDone, status.isDone]);
+  } else {
+    console.log("note  the connection has no task status: the task-status write is left out");
+  }
+  expect("follow-up: an ill-formed task type is a 400", (await sj(ADMIN, "PUT", `${base}/task-types`, { typeRef: "has space", label: "", isCallback: true, isCounted: true })).status, 400, 200);
+}
 
 function verdict() {
   const passed = results.filter(Boolean).length;

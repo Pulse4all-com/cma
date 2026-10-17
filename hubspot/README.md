@@ -65,11 +65,12 @@ Things to know:
 
   So no spec version lists `crm.schemas.tickets.read` as needed, and it is not requested. If the ticket pipelines read answers 403 at runtime, the ingest logs `catalog refresh skipped` (deal and ticket pipelines are refreshed together) and keeps processing events; then add `crm.schemas.tickets.read`, a read scope the verifier allows once it is in the documented set. Not needed: in dev on 11 October 2026 the pipeline label resolved, so the refresh was not skipped (README Decision log).
 - **`forms` also covers form definitions.** HubSpot has one forms scope: the spec (`Marketing/Forms/Rollouts/144909/v3/forms.json`) names `forms` for reading forms and for creating, updating and deleting them. The CMA only reads the catalog and the submissions.
+- **Tasks need no extra scope (addition 0008n, 16 October 2026).** HubSpot's tasks API (`PublicApiSpecs/CRM/Tasks`, the batch read and the search the ingest uses) names `crm.objects.contacts.read`, which the app holds, so the task subscriptions and reads come with a new app version in both portals but no scope change; the install is updated or reinstalled only when HubSpot asks or the task events do not arrive (`docs/ingest/PROD_RUNBOOK.md` 11.2). The read asks for eight structural properties and never `hs_task_body` or `hs_task_subject`; the database strips any text key regardless (`cma.task_raw`).
 - **Call dispositions need no extra scope.** The outcome catalog endpoint (`/calling/v1/dispositions`) is not in the published specs, and no separate scope is requested for it. Confirmed in dev on 11 October 2026: the catalog was read with the app's scopes, 7 outcomes (README Decision log).
 
 ## Subscriptions and their canonical kinds
 
-All 37 are `crmObjects` (`object.*`), active. The one `hubEvents` entry is `contact.privacyDeletion`. No `legacyCrmObjects` are needed. The list is exactly VENDOR_SETUP.md §1.3, and the verifier compares it.
+All 46 are `crmObjects` (`object.*`), active (37 until addition 0008n added the nine task subscriptions on 16 October 2026). The one `hubEvents` entry is `contact.privacyDeletion`. No `legacyCrmObjects` are needed. The list is exactly VENDOR_SETUP.md §1.3, and the verifier compares it.
 
 | Object | Subscription | Canonical kind (0006) |
 |---|---|---|
@@ -83,10 +84,16 @@ All 37 are `crmObjects` (`object.*`), active. The one `hubEvents` entry is `cont
 | call: `hs_call_status`, `hs_call_disposition`, `hubspot_owner_id` | `object.propertyChange` | `changed` |
 | deal, ticket, call | `object.associationChange` | `associated` |
 | contact | `contact.privacyDeletion` (hubEvents) | `deleted`, plus `cma.ingest_contact_forget()` |
+| task | `object.creation` | `created` (addition 0008n, 16 October 2026) |
+| task | `object.deletion` | `deleted` |
+| task: `hs_task_status`, `hs_timestamp`, `hubspot_owner_id`, `hs_task_completion_date`, `hs_task_type`, `hs_task_priority` | `object.propertyChange` | `changed`; never `hs_task_body` or `hs_task_subject` |
+| task | `object.associationChange` (task ↔ contact, deal, ticket) | `associated`: the task is read back with its first contact, deal and ticket |
 
 Association changes can't be narrowed to one associated type in the configuration: the app webhooks API has no such filter. The ingest service keeps deal → contact, ticket → contact, call → contact and call → deal and ignores the rest.
 
 ## Render, upload, install (Martin, in Cloud Shell)
+
+**Since 16 October 2026 an upload goes through GitHub Actions** with HubSpot's official project actions, the live portal's personal access key a GitHub environment secret limited to `main` with a required approval (README, Decision log, 16 October 2026; backlog CMA-067, not built yet). The HubSpot CLI on Martin's own terminal holds the test account only and never the live portal (README, Access rules, Credentials on the local terminal), so the upload of step 3 below does not run there; until CMA-067 exists no app version is uploaded. The steps below are how it was done in Cloud Shell until then; the render, the client secret and the install stay valid.
 
 The full sequence, with the connection and the secrets, is in `docs/night-2026-10-10/MORNING_RUNBOOK.md` §2.2 to §2.5 for dev and in its prod phase for prod. The steps below were corrected to what happened in dev on 11 October 2026 (`records/hubspot-dev-2026-10-11`).
 

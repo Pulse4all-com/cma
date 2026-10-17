@@ -115,6 +115,11 @@ const pages = [
   { path: "/reports/calls-per-agent?range=month", subject: "manager", tables: true, expand: true },
   // a tenant without telephony: the page says so in words and has no header to explain
   { path: "/reports/calls?range=month", subject: "invest-analyst", noHint: true },
+  // Follow-up and Waiting for you (addition 0008o): the tiles, the three tables and the per-person table; the
+  // attention filter; the person's own rows
+  { path: "/reports/follow-up", subject: "manager", tables: true },
+  { path: "/reports/follow-up?state=attention", subject: "supervisor", tables: true },
+  { path: "/me/follow-up", tables: true },
   // Forms (addition 0008p): the tiles, the columns, the grouped tables, the resolution bars in the series order,
   // by day as the manager and by week as the analyst; Sources with the form categories and the CRM connection's
   // forms with their polled and category columns

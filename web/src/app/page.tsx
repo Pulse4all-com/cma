@@ -4,8 +4,13 @@ import { Swatch } from "@/components/DashboardCharts";
 import { Shell } from "@/components/Shell";
 import { Badge, Card, Notice } from "@/components/primitives";
 import { agentGroupOf } from "@/lib/dashboard";
+import { attentionLines, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, type AttentionLine } from "@/lib/follow-up";
 import { workedSeconds } from "@/lib/live";
-import { data, dataIsMock, type AppLink, type MyMessages, type MyRosterDay, type TeamHours, type WorkStatus, type Workday } from "@/lib/data";
+import {
+  data, dataIsMock, type AppLink, type FollowUpSummary, type InboundNow, type MyFollowUp, type MyMessages, type MyRosterDay, type TeamHours,
+  type WorkStatus, type Workday,
+} from "@/lib/data";
+import { holdsAny } from "@/lib/nav";
 import { cellLabel } from "@/lib/roster";
 import type { Copy, Locale } from "@/lib/copy";
 import { addDays, dateKeyInZone, fmtDate, fmtMinutes, fmtTime, hourInZone } from "@/lib/time";
@@ -19,9 +24,13 @@ const UPDATES_SHOWN = 5;
 /**
  * Welcome (increment e, 7 October 2026): the landing page for everyone with a role, built as
  * blocks per permission. A visit opens nothing; Clock in is an action on the card. The blocks:
- * updates for everyone (empty until Messaging, migration 0006), the to-do line for people holding
- * workday.team, a Reports block for performance.team (the one view of all KPIs later, Roadmap
- * step 9), the Clock in card for workday.own, and the tenant's app links. Staff data only.
+ * updates for everyone (empty until Messaging, migration 0006), Needs attention for people holding
+ * workday.team, monitoring.live or performance.team (since addition 0008o, in place of the to-do line:
+ * the days not clocked out, the leads past the target, the tickets at risk or over their response time,
+ * the tasks overdue, the missed callers not called back; counts and links only), a Reports block for
+ * performance.team (the one view of all KPIs later, Roadmap step 9), the Clock in card for workday.own,
+ * Waiting for you for leads.accept or workday.own (the person's own leads, tickets and tasks, 0008o), and
+ * the tenant's app links. Staff data only.
  */
 export default async function WelcomePage() {
   const r = await resolve();
@@ -34,9 +43,12 @@ export default async function WelcomePage() {
   const hasTeam = me.permissions.includes("workday.team");
   const hasReports = me.permissions.includes("performance.team");
   const hasRoster = me.permissions.includes("roster.view");
+  const hasLive = me.permissions.includes("monitoring.live");
+  const hasAttention = holdsAny(me, FOLLOW_UP_SUMMARY_PERMISSIONS);
+  const hasOwn = holdsAny(me, MY_FOLLOW_UP_PERMISSIONS);
 
   // One read per block the person may see; reading never opens a day
-  const [workday, statuses, team, links, roster, inbox] = await Promise.all([
+  const [workday, statuses, team, links, roster, inbox, summary, inbound, mine] = await Promise.all([
     hasClock ? data().getWorkday(me, today) : Promise.resolve(null),
     hasClock ? data().listStatuses(me) : Promise.resolve([] as WorkStatus[]),
     hasTeam ? data().getTeamHours(me, { from: addDays(today, -TODO_DAYS), to: addDays(today, -1) }, null) : Promise.resolve(null),
@@ -44,6 +56,10 @@ export default async function WelcomePage() {
     hasRoster ? data().getMyRoster(me, { from: today, to: today }) : Promise.resolve([] as MyRosterDay[]),
     // The latest messages for the Updates card (migration 0008); listing sets their delivered time, reading is the person's own click
     data().listMyMessages(me, null, UPDATES_SHOWN),
+    // Needs attention and Waiting for you (addition 0008o): counts for the team, the person's own rows
+    hasAttention ? data().getFollowUpSummary(me) : Promise.resolve(null),
+    hasLive ? data().getInboundNow(me) : Promise.resolve(null),
+    hasOwn ? data().getMyFollowUp(me) : Promise.resolve(null),
   ]);
   // The shift sentence the greeting waited for (migration 0005): from the published roster only
   const todayRoster = roster[0] ?? null;
@@ -67,7 +83,7 @@ export default async function WelcomePage() {
       <div className="mt-8 grid grid-cols-[1fr_18rem] gap-6">
         <div className="flex flex-col gap-6">
           <UpdatesBlock inbox={inbox} timeZone={me.timeZone} locale={me.locale} copy={copy} />
-          {team ? <TodoBlock team={team} copy={copy} /> : null}
+          {summary ? <AttentionBlock summary={summary} team={team} inbound={inbound} copy={copy} /> : null}
           {hasReports ? (
             <Card title={t.reports}>
               <p className="text-body">{t.reportsBody}</p>
@@ -82,6 +98,7 @@ export default async function WelcomePage() {
           {hasClock ? (
             <DayBlock workday={workday} statuses={statuses} timeZone={me.timeZone} locale={me.locale} now={now} copy={copy} />
           ) : null}
+          {mine ? <WaitingBlock mine={mine} copy={copy} /> : null}
           {links.length > 0 ? <AppLinks links={links} copy={copy} /> : null}
         </div>
       </div>
@@ -186,19 +203,61 @@ function UpdatesBlock({ inbox, timeZone, locale, copy }: { inbox: MyMessages; ti
   );
 }
 
-/** Steam's "to do before today's shift", from Team hours: days not clocked out in the last 31 days */
-function TodoBlock({ team, copy }: { team: TeamHours; copy: Copy }) {
+/**
+ * Needs attention (addition 0008o; before it Steam's "to do before today's shift"): one line per figure
+ * with its count and a link to where it is acted on. The days not clocked out of the last 31 days come
+ * from Team hours (workday.team only); the leads past the target, the tickets at risk or over their
+ * response time and the tasks overdue from cma.follow_up_summary; the missed callers not called back from
+ * the Live board's read (monitoring.live, a tenant with telephony). Counts only, no name.
+ */
+function AttentionBlock({ summary, team, inbound, copy }: { summary: FollowUpSummary; team: TeamHours | null; inbound: InboundNow | null; copy: Copy }) {
   const t = copy.welcome;
-  const n = team.days.filter((d) => d.needsCorrection).length;
-  const line = n === 0 ? t.notClockedOutNone : n === 1 ? t.notClockedOutOne : t.notClockedOut.replace("{n}", String(n));
+  const lines = attentionLines(summary,
+    team ? team.days.filter((d) => d.needsCorrection).length : null,
+    inbound && inbound.telephony ? inbound.callbacks.length + inbound.anonymousCount : null);
+  const text = (l: AttentionLine): string => {
+    const one = l.count === 1;
+    const n = String(l.count);
+    switch (l.key) {
+      case "daysNotEnded": return one ? t.attentionDaysOne : t.attentionDays.replace("{n}", n);
+      case "leadsPastTarget": return one ? t.attentionLeadsOne : t.attentionLeads.replace("{n}", n);
+      case "ticketsAtRiskOrBreached": return one ? t.attentionTicketsOne : t.attentionTickets.replace("{n}", n);
+      case "tasksOverdue": return one ? t.attentionTasksOne : t.attentionTasks.replace("{n}", n);
+      case "missedCallbacks": return one ? t.attentionMissedOne : t.attentionMissed.replace("{n}", n);
+    }
+  };
   return (
-    <Card title={t.todo}>
-      <p className="flex items-center gap-3 text-body">
-        <Badge tone={n === 0 ? "success" : "warning"}>{n}</Badge>
+    <Card title={t.attention}>
+      <p className="-mt-1 mb-3 text-caption text-p4a-grey">{t.attentionIntro}</p>
+      <ul className="flex flex-col gap-2" data-testid="needs-attention">
+        {lines.map((l) => (
+          <li key={l.key} className="flex items-center gap-3 text-body">
+            <Badge tone={l.count === 0 ? "success" : "warning"}>{l.count}</Badge>
+            <Link href={l.href} className="font-semibold text-p4a-deepblue hover:underline">{text(l)}</Link>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** Waiting for you (addition 0008o): how much of the follow-up is the person's own, and the page with the rows */
+function WaitingBlock({ mine, copy }: { mine: MyFollowUp; copy: Copy }) {
+  const t = copy.welcome;
+  const n = mine.leads.length + mine.tickets.length + mine.tasks.length;
+  const count = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("{n}", String(k)));
+  const line = n === 0 ? t.waitingNone
+    : t.waitingLine.replace("{leads}", count(mine.leads.length, t.waitingLeadsOne, t.waitingLeads))
+      .replace("{tickets}", count(mine.tickets.length, t.waitingTicketsOne, t.waitingTickets))
+      .replace("{tasks}", count(mine.tasks.length, t.waitingTasksOne, t.waitingTasks));
+  return (
+    <Card title={t.waitingForYou}>
+      <p className="flex items-center gap-3 text-body" data-testid="waiting-for-you">
+        <Badge tone={n === 0 ? "success" : "info"}>{n}</Badge>
         {line}
       </p>
-      <Link href="/team/hours?range=month" className="mt-3 inline-block font-semibold text-p4a-deepblue hover:underline">
-        {t.openTeamHours}
+      <Link href="/me/follow-up" className="mt-3 inline-block font-semibold text-p4a-deepblue hover:underline">
+        {t.openWaiting}
       </Link>
     </Card>
   );

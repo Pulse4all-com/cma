@@ -1,5 +1,6 @@
 /**
- * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…74 (since addition 0008p) and a
+ * Verifier: the ingest jobs end to end (brief B8), against a local PostgreSQL with db/00…74 (the tasks of addition 0008n
+ * are reconciled too; the forms since addition 0008p) and a
  * fake HubSpot API. Everything is invented: tenants, portals, ids, secrets, emails (example.com).
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
@@ -40,7 +41,7 @@ console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAI
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…38; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…70; see the header)`);
     process.exit(2);
   }
 }
@@ -448,21 +449,22 @@ const r1 = await runReconcile({ connectionId: conn1 });
 expect("reconcile: the change the webhook missed arrives", (await deal(4130000001))?.amount, "250.00", "100.00");
 expect("reconcile: a newer row is left alone (stale)", (await deal(4130000003))?.amount, "333.00", "999.00");
 const recRuns = await runs("reconcile");
-expect("reconcile: one run per object type, all succeeded", recRuns.map((r) => [r.stream, r.status]), [["deal", "succeeded"], ["ticket", "succeeded"], ["crm_call", "succeeded"], ["contact", "succeeded"]], []);
+// task since addition 0008n (N16-B): a fifth stream in RECONCILE_OBJECTS' order; crm_email and inbox_thread run only with the email poll on
+expect("reconcile: one run per object type, all succeeded", recRuns.map((r) => [r.stream, r.status]), [["deal", "succeeded"], ["ticket", "succeeded"], ["crm_call", "succeeded"], ["contact", "succeeded"], ["task", "succeeded"]], []);
 expect("reconcile: the stale read counted", (recRuns.find((r) => r.stream === "deal")?.counts.stale ?? 0) >= 1, true, false);
 const lookback = since(n0).find((r) => r.search)?.body.filterGroups[0].filters[0].value;
 expect("reconcile: the default look-back is 26 hours", Math.abs(Number(lookback) - (Date.now() - 26 * 3600_000)) < 120_000, true, false);
 const contactReads = since(n0).filter((r) => r.path === "/crm/v3/objects/contacts/batch/read").flatMap((r) => r.body.inputs.map((i) => String(i.id)));
 expect("reconcile: only held contacts are read", [contactReads.includes("4300000001"), contactReads.includes("4399999999")], [true, false], [true, true]);
 expect("reconcile: the unheld contact counted as skipped", recRuns.find((r) => r.stream === "contact")?.counts.skipped >= 1, true, false);
-expect("reconcile: the run's totals", [r1.runs, r1.failed], [4, 0], [3, 1]);
+expect("reconcile: the run's totals", [r1.runs, r1.failed], [5, 0], [4, 1]);
 n0 = mark();
 const r2 = await runReconcile({ connectionId: conn1 });
 expect("reconcile: a second run lists the same and reads nothing again", [r2.fetched > 0, r2.upserted, since(n0).filter((r) => r.path.endsWith("/batch/read")).length], [true, 0, 0], [true, 1, 1]);
 n0 = mark();
 await runReconcile({ connectionId: conn1, lookbackMinutes: 10, object: "deal" });
 const short = since(n0).find((r) => r.search)?.body.filterGroups[0].filters[0].value;
-expect("reconcile: --lookback-minutes 10 asks the last ten minutes, one object type", [Math.abs(Number(short) - (Date.now() - 10 * 60_000)) < 60_000, (await runs("reconcile")).length], [true, 9], [false, 8]);
+expect("reconcile: --lookback-minutes 10 asks the last ten minutes, one object type", [Math.abs(Number(short) - (Date.now() - 10 * 60_000)) < 60_000, (await runs("reconcile")).length], [true, 11], [false, 10]);
 
 // ---- E. Tenant isolation -------------------------------------------------------------------------
 await recordEvents(ctx2, conn2, [created(4140000001, "9000102")]);

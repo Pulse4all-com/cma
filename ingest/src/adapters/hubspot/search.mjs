@@ -8,7 +8,7 @@ import { SourceError } from "../../core/http.mjs";
 import { iso } from "./map.mjs";
 
 export const MODIFIED = { deal: "hs_lastmodifieddate", ticket: "hs_lastmodifieddate", crm_call: "hs_lastmodifieddate", contact: "lastmodifieddate",
-  crm_email: "hs_lastmodifieddate" };
+  crm_email: "hs_lastmodifieddate", task: "hs_lastmodifieddate" };
 const LIMIT = 100;
 const SEARCH_MAX = 10_000;
 

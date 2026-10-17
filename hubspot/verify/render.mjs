@@ -9,7 +9,8 @@
  * the documented set (since brief B17b with sales-email-read and conversations.read, both read
  * scopes), and the contact write scope is the only write-capable scope (`tickets` and any other
  * *.write or *.delete refused); static auth, private distribution, no redirect URLs; the
- * subscription list is the one VENDOR_SETUP.md §1.3 names (since B17b with country_dropdown); the placeholder target URL and other unfit
+ * subscription list is the one VENDOR_SETUP.md §1.3 names (since B17b with country_dropdown; since addition 0008n,
+ * 16 October 2026, the task subscriptions, never hs_task_body or hs_task_subject); the placeholder target URL and other unfit
  * URLs are refused without --draft; the env files hold no ids, tokens or secrets; build/ is
  * git-ignored.
  */
@@ -106,16 +107,23 @@ const EXPECTED = [
   ...crm("call", "object.creation"),
   ...crm("call", "object.propertyChange", ["hs_call_status", "hs_call_disposition", "hubspot_owner_id"]),
   ...crm("call", "object.deletion"), ...crm("call", "object.associationChange"),
+  // tasks (addition 0008n, 16 October 2026): the structural properties; never hs_task_body or hs_task_subject
+  ...crm("task", "object.creation"), ...crm("task", "object.deletion"),
+  ...crm("task", "object.propertyChange", ["hs_task_status", "hs_timestamp", "hubspot_owner_id", "hs_task_completion_date", "hs_task_type", "hs_task_priority"]),
+  ...crm("task", "object.associationChange"),
 ].sort();
 const subs = (p) => p[HOOKS].config.subscriptions;
 const asText = (list) => list.map((s) => `${s.objectType} ${s.subscriptionType}${s.propertyName ? ` ${s.propertyName}` : ""}`).sort();
 expect("§1.1 names nine contact properties, all in §1.3's subscriptions", [contactProps.length, contactProps.every((p) => subs(dev).crmObjects.some((s) => s.propertyName === p))],
   [9, true], [8, true]);
-expect("every deal, ticket and call property and country_dropdown is named in §1.3",
+expect("every deal, ticket, call and task property and country_dropdown is named in §1.3",
   ["pipeline", "dealstage", "hubspot_owner_id", "closedate", "amount", "hs_pipeline", "hs_pipeline_stage", "closed_date",
-   "hs_call_status", "hs_call_disposition", "contact.privacyDeletion", "object.associationChange", "object.restore", "country_dropdown"].every((x) => s13.includes(`\`${x}\``)),
+   "hs_call_status", "hs_call_disposition", "contact.privacyDeletion", "object.associationChange", "object.restore", "country_dropdown",
+   "hs_task_status", "hs_timestamp", "hs_task_completion_date", "hs_task_type", "hs_task_priority"].every((x) => s13.includes(`\`${x}\``)),
   true, false);
-expect("crmObjects equal §1.3 (37 subscriptions)", asText(subs(dev).crmObjects), EXPECTED, EXPECTED.slice(1));
+expect("crmObjects equal §1.3 (46 subscriptions)", asText(subs(dev).crmObjects), EXPECTED, EXPECTED.slice(1));
+expect("no subscription names a task's text (hs_task_body, hs_task_subject)",
+  [...subs(dev).crmObjects, ...subs(prod).crmObjects].filter((s) => /hs_task_(body|subject)/.test(s.propertyName ?? "")).length, 0, 1);
 expect("the email poll's scopes are read scopes", ["sales-email-read", "conversations.read"].map((x) => auth(dev).requiredScopes.includes(x) && !/write|delete/.test(x)),
   [true, true], [false, false]);
 expect("prod subscribes to exactly the same", JSON.stringify(subs(prod)) === JSON.stringify(subs(dev)), true, false);

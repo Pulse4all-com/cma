@@ -214,6 +214,57 @@
           "subscriptionType": "object.associationChange",
           "objectType": "call",
           "active": true
+        },
+        {
+          "subscriptionType": "object.creation",
+          "objectType": "task",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.deletion",
+          "objectType": "task",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hs_task_status",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hs_timestamp",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hubspot_owner_id",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hs_task_completion_date",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hs_task_type",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.propertyChange",
+          "objectType": "task",
+          "propertyName": "hs_task_priority",
+          "active": true
+        },
+        {
+          "subscriptionType": "object.associationChange",
+          "objectType": "task",
+          "active": true
         }
       ],
       "legacyCrmObjects": [],

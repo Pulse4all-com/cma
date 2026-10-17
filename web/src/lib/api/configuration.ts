@@ -2,8 +2,8 @@ import "server-only";
 import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
-  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourceSettings, SourceStore,
-  SourceTagInput, TeamInput,
+  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings,
+  SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
 
@@ -218,6 +218,26 @@ export function checkTagInput(b: Record<string, unknown>): SourceTagInput {
 /** { code, label, countsInServiceLevel, needsCallback }: one missed-call reason of a telephony connection (addition 0008i) */
 export function checkMissedReasonInput(b: Record<string, unknown>): SourceMissedReasonInput {
   return { code: text(b, "code", 60), label: text(b, "label", 100), countsInServiceLevel: flag(b, "countsInServiceLevel"), needsCallback: flag(b, "needsCallback") };
+}
+
+/** { recordType: "ticket", pipelineId, slaMinutes }: a ticket pipeline's own response time (0008o); 1 to 100000, or null for the tenant default */
+export function checkPipelineSlaInput(b: Record<string, unknown>): SourcePipelineSlaInput {
+  if (b.recordType !== "ticket") throw new ApiError(400, "invalid_record_type", "a response time is set on ticket pipelines only");
+  const v = b.slaMinutes;
+  if (v !== null && (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 100000)) {
+    throw new ApiError(400, "invalid_sla_minutes", "slaMinutes must be a whole number from 1 to 100000, or null for the default");
+  }
+  return { recordType: "ticket", pipelineId: ref(b.pipelineId, "pipelineId"), slaMinutes: v as number | null };
+}
+
+/** { statusRef, label, isDone }: one task status of a CRM connection (0008n) */
+export function checkTaskStatusInput(b: Record<string, unknown>): SourceTaskStatusInput {
+  return { statusRef: ref(b.statusRef, "statusRef"), label: text(b, "label", 100), isDone: flag(b, "isDone") };
+}
+
+/** { typeRef, label, isCallback, isCounted }: one task type of a CRM connection (0008n) */
+export function checkTaskTypeInput(b: Record<string, unknown>): SourceTaskTypeInput {
+  return { typeRef: ref(b.typeRef, "typeRef"), label: text(b, "label", 100), isCallback: flag(b, "isCallback"), isCounted: flag(b, "isCounted") };
 }
 
 export function checkStoreInput(b: Record<string, unknown>): SourceStore {

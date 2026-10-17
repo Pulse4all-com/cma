@@ -17,7 +17,8 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { FormCategory, MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore } from "@/lib/data";
+import type { FormCategory, MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore, SourceTaskStatus, SourceTaskType } from "@/lib/data";
+import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, parsePipelineSla, unlinkedSkipOf } from "@/lib/follow-up";
 import {
   coerceSettingValue, formCategoryChoices, formEditProblem, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
@@ -145,6 +146,31 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
     if (await sendReason(reasonEdit.reason, { label: v })) setReasonEdit(null);
   }
 
+  // a ticket pipeline's own response time (0008o): saved on blur once the text parses and differs
+  const [slaText, setSlaText] = useState<Record<string, string>>({});
+  async function savePipelineSla(pipelineId: string, current: number | null) {
+    const text = slaText[pipelineId];
+    if (text === undefined) return;
+    const v = parsePipelineSla(text);
+    if (v === undefined) return;
+    if (v !== current) await save(() => send("PUT", `${base}/pipeline-sla`, { recordType: "ticket", pipelineId, slaMinutes: v }));
+    setSlaText((prev) => { const next = { ...prev }; delete next[pipelineId]; return next; });
+  }
+
+  // a task status's or type's label (0008n); the switches save at once from the table
+  const [taskEdit, setTaskEdit] = useState<{ kind: "status"; ref: string; row: SourceTaskStatus; opened: number } | { kind: "type"; ref: string; row: SourceTaskType; opened: number } | null>(null);
+  const [taskLabel, setTaskLabel] = useState("");
+  const [taskProblem, setTaskProblem] = useState<string | null>(null);
+  async function saveTaskLabel() {
+    if (!taskEdit) return;
+    const v = taskLabel.trim();
+    if (v.length === 0 || v.length > 100) return setTaskProblem(t.taskLabelProblem);
+    const ok = taskEdit.kind === "status"
+      ? await save(() => send("PUT", `${base}/task-statuses`, { statusRef: taskEdit.ref, label: v, isDone: taskEdit.row.isDone }))
+      : await save(() => send("PUT", `${base}/task-types`, { typeRef: taskEdit.ref, label: v, isCallback: taskEdit.row.isCallback, isCounted: taskEdit.row.isCounted }));
+    if (ok) setTaskEdit(null);
+  }
+
   async function saveStore() {
     const s = { ...store, handle: store.handle.trim(), name: store.name.trim(), currency: store.currency.trim().toUpperCase(), timeZone: store.timeZone.trim() };
     if (!/^[a-z0-9-]{1,60}$/.test(s.handle) || !s.name || s.name.length > 80 || !s.market || !/^[A-Z]{3}$/.test(s.currency) || !s.timeZone) {
@@ -232,6 +258,18 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
       <Card title={t.sectionSettings}>
         <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.settingsIntro} {t.settingsNever}</p>
         {sections.includes("missedReasons") ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="call-link-hint">{t.callLinkHint}</p> : null}
+        {sections.includes("taskStatuses") ? <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted" data-testid="task-link-hint">{t.taskLinkHint}</p> : null}
+        {sections.includes("missedReasons") ? (
+          // the unlinked-calls check (data quality, 0008o): one setting of this connection, written with the others
+          <label className={`${label} mb-4 max-w-3xl`}>
+            <span className="flex items-center">{t.unlinkedCheck}{hint(t.unlinkedCheck, t.unlinkedHint)}</span>
+            <select className={field} data-testid="source-unlinked-check" value={unlinkedSkipOf(original, conn.kind)}
+              onChange={(e) => save(() => send("PUT", `${base}/settings`, { settings: { ...original, [DQ_UNLINKED_SKIP_KEY]: e.target.value } }))}>
+              <option value={DQ_UNLINKED_SKIP_DEFAULT}>{t.unlinkedSkip}</option>
+              <option value={DQ_UNLINKED_SKIP_NONE}>{t.unlinkedAll}</option>
+            </select>
+          </label>
+        ) : null}
         <table className="w-full border-collapse text-body leading-table" data-testid="source-settings">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr><th className={`${th} w-72`}>{t.settingKey}</th><th className={th}>{t.settingValue}</th><th className={th}></th></tr>
@@ -278,6 +316,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                   <th className={th}>{t.pipeline}</th>
                   <th className={th}>{t.counted}{hint(t.counted, t.hintCounted)}</th>
                   <th className={th}>{t.lead}{hint(t.lead, t.hintLead)}</th>
+                  <th className={th}>{t.responseTime}{hint(t.responseTime, t.hintResponseTime)}</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,6 +333,20 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                         <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.lead}: ${p.label}`} checked={p.isLead}
                           onChange={(e) => save(() => send("PUT", `${base}/pipelines`, { recordType: p.recordType, pipelineId: p.pipelineId, isCounted: p.isCounted, isLead: e.target.checked }))} />
                       ) : <span className="text-caption text-p4a-muted">{t.leadDealsOnly}</span>}
+                    </td>
+                    <td className={td}>
+                      {p.recordType === "ticket" ? (
+                        // the pipeline's own response time (0008o): saved on blur once it parses; empty is the tenant default
+                        <span className="flex items-center gap-2">
+                          <input className={`${field} w-24 tabular-nums ${parsePipelineSla(slaText[p.pipelineId] ?? String(p.slaMinutes ?? "")) === undefined ? "border-p4a-error" : ""}`}
+                            inputMode="numeric" maxLength={6} aria-label={`${t.responseTime}: ${p.label}`} data-testid={`pipeline-sla-${p.pipelineId}`}
+                            value={slaText[p.pipelineId] ?? String(p.slaMinutes ?? "")}
+                            onChange={(e) => setSlaText({ ...slaText, [p.pipelineId]: e.target.value })}
+                            onBlur={() => savePipelineSla(p.pipelineId, p.slaMinutes)}
+                            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                          {p.slaMinutes === null ? <span className="text-caption text-p4a-muted">{t.responseTimeDefault}</span> : null}
+                        </span>
+                      ) : <span className="text-caption text-p4a-muted">{t.responseTimeTicketsOnly}</span>}
                     </td>
                   </tr>
                 ))}
@@ -412,6 +465,89 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               </table>
             </>
           ) : null}
+        </Card>
+      ) : null}
+
+      {/* ---- task statuses (addition 0008n) ---- */}
+      {sections.includes("taskStatuses") ? (
+        <Card title={t.sectionTaskStatuses}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.taskStatusesIntro}</p>
+          {detail.taskStatuses.length === 0 ? <p className="text-body text-p4a-muted">{t.taskStatusesEmpty}</p> : (
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-task-statuses">
+              <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                <tr>
+                  <th className={th}>{t.taskStatus}{hint(t.taskStatus, t.hintTaskStatus)}</th>
+                  <th className={th}>{t.taskLabel}{hint(t.taskLabel, t.hintTaskLabel)}</th>
+                  <th className={th}>{t.taskDone}{hint(t.taskDone, t.hintTaskDone)}</th>
+                  <th className={`${th} text-right`}>{t.taskSeen}{hint(t.taskSeen, t.hintTaskSeen)}</th>
+                  <th className={th}>{t.taskLastSeen}</th>
+                  <th className={th}><span className="sr-only">{t.editTaskStatus}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.taskStatuses.map((s) => (
+                  <tr key={s.statusRef} className={tr}>
+                    <td className={`${td} text-small`}>{s.statusRef}</td>
+                    <td className={`${td} font-semibold`}>{s.label}</td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.taskDone}: ${s.label}`} checked={s.isDone}
+                        onChange={(e) => save(() => send("PUT", `${base}/task-statuses`, { statusRef: s.statusRef, label: s.label, isDone: e.target.checked }))} />
+                    </td>
+                    <td className={`${td} tabular-nums text-right`}>{s.seenTasks}</td>
+                    <td className={`${td} whitespace-nowrap tabular-nums text-small`}>{s.lastSeenAt ? fmtDate(dateKeyInZone(s.lastSeenAt, timeZone), locale, "compact") : "–"}</td>
+                    <td className={`${td} text-right`}>
+                      <Button variant="text" size="sm" onClick={() => { setTaskLabel(s.label); setTaskProblem(null); setTaskEdit({ kind: "status", ref: s.statusRef, row: s, opened: tick() }); }}>{c.edit}</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      ) : null}
+
+      {/* ---- task types (addition 0008n) ---- */}
+      {sections.includes("taskTypes") ? (
+        <Card title={t.sectionTaskTypes}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.taskTypesIntro}</p>
+          {detail.taskTypes.length === 0 ? <p className="text-body text-p4a-muted">{t.taskStatusesEmpty}</p> : (
+            <table className="w-full border-collapse text-body leading-table" data-testid="source-task-types">
+              <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                <tr>
+                  <th className={th}>{t.taskType}{hint(t.taskType, t.hintTaskType)}</th>
+                  <th className={th}>{t.taskLabel}{hint(t.taskLabel, t.hintTaskTypeLabel)}</th>
+                  <th className={th}>{t.taskCallback}{hint(t.taskCallback, t.hintTaskCallback)}</th>
+                  <th className={th}>{t.taskCounted}{hint(t.taskCounted, t.hintTaskCounted)}</th>
+                  <th className={`${th} text-right`}>{t.taskSeen}{hint(t.taskSeen, t.hintTaskOpen)}</th>
+                  <th className={`${th} text-right`}>{t.taskOpenCount}</th>
+                  <th className={th}>{t.taskLastSeen}</th>
+                  <th className={th}><span className="sr-only">{t.editTaskType}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.taskTypes.map((y) => (
+                  <tr key={y.typeRef} className={tr}>
+                    <td className={`${td} text-small`}>{y.typeRef}</td>
+                    <td className={`${td} font-semibold`}>{y.label}</td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.taskCallback}: ${y.label}`} checked={y.isCallback}
+                        onChange={(e) => save(() => send("PUT", `${base}/task-types`, { typeRef: y.typeRef, label: y.label, isCallback: e.target.checked, isCounted: y.isCounted }))} />
+                    </td>
+                    <td className={td}>
+                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.taskCounted}: ${y.label}`} checked={y.isCounted}
+                        onChange={(e) => save(() => send("PUT", `${base}/task-types`, { typeRef: y.typeRef, label: y.label, isCallback: y.isCallback, isCounted: e.target.checked }))} />
+                    </td>
+                    <td className={`${td} tabular-nums text-right`}>{y.seenTasks}</td>
+                    <td className={`${td} tabular-nums text-right`}>{y.openTasks}</td>
+                    <td className={`${td} whitespace-nowrap tabular-nums text-small`}>{y.lastSeenAt ? fmtDate(dateKeyInZone(y.lastSeenAt, timeZone), locale, "compact") : "–"}</td>
+                    <td className={`${td} text-right`}>
+                      <Button variant="text" size="sm" onClick={() => { setTaskLabel(y.label); setTaskProblem(null); setTaskEdit({ kind: "type", ref: y.typeRef, row: y, opened: tick() }); }}>{c.edit}</Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Card>
       ) : null}
 
@@ -653,6 +789,17 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
           </div>
           {storeProblem ? <p className="text-small text-p4a-error">{storeProblem}</p> : null}
           <SaveNote state={state} c={c} />
+        </FormDialog>
+      ) : null}
+
+      {taskEdit ? (
+        <FormDialog key={taskEdit.opened} title={`${taskEdit.kind === "status" ? t.editTaskStatus : t.editTaskType}: ${taskEdit.ref}`} onSave={saveTaskLabel}
+          onClose={() => setTaskEdit(null)} busy={state.kind === "saving"} saveLabel={c.save} cancelLabel={c.cancel}>
+          <label className={label}>
+            {t.taskLabel}
+            <input className={field} value={taskLabel} maxLength={100} autoFocus onChange={(e) => setTaskLabel(e.target.value)} />
+          </label>
+          {taskProblem ? <p className="text-small text-p4a-error" role="alert">{taskProblem}</p> : null}
         </FormDialog>
       ) : null}
 

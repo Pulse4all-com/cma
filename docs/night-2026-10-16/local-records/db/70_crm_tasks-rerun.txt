@@ -1,0 +1,57 @@
+DO
+BEGIN
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+psql:70_crm_tasks.sql:133: NOTICE:  relation "crm_task" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:70_crm_tasks.sql:135: NOTICE:  relation "crm_task_due_idx" already exists, skipping
+CREATE INDEX
+psql:70_crm_tasks.sql:136: NOTICE:  relation "crm_task_contact_idx" already exists, skipping
+CREATE INDEX
+psql:70_crm_tasks.sql:137: NOTICE:  relation "crm_task_owner_idx" already exists, skipping
+CREATE INDEX
+psql:70_crm_tasks.sql:151: NOTICE:  relation "connection_task_status" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:70_crm_tasks.sql:169: NOTICE:  relation "connection_task_type" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:70_crm_tasks.sql:174: NOTICE:  policy "tenant_readonly" for relation "crm_task" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:70_crm_tasks.sql:175: NOTICE:  policy "tenant_readonly" for relation "connection_task_status" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:70_crm_tasks.sql:176: NOTICE:  policy "tenant_readonly" for relation "connection_task_type" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

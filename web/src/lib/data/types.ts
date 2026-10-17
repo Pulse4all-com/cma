@@ -1323,6 +1323,8 @@ export interface SourcePipeline {
   isLead: boolean;
   workType: string | null;
   isActive: boolean;
+  /** A ticket pipeline's own response time in business minutes (0008o), null for the tenant's tickets.sla_minutes */
+  slaMinutes: number | null;
 }
 
 export interface SourceForm {
@@ -1402,6 +1404,31 @@ export interface SourceMissedReasonInput {
   needsCallback: boolean;
 }
 
+/**
+ * A task status of a CRM connection (addition 0008n): a status the connection's tasks carry, with the
+ * label and whether it means done (the default: open). Counts only; a task's body or subject never
+ * reaches the Workspace.
+ */
+export interface SourceTaskStatus {
+  statusRef: string;
+  label: string;
+  isDone: boolean;
+  /** Tasks of this connection, deleted ones left out, with the status */
+  seenTasks: number;
+  lastSeenAt: Instant | null;
+}
+
+/** A task type of a CRM connection (0008n): whether it is a callback (KPI 5) and whether it counts in Follow-up */
+export interface SourceTaskType {
+  typeRef: string;
+  label: string;
+  isCallback: boolean;
+  isCounted: boolean;
+  seenTasks: number;
+  openTasks: number;
+  lastSeenAt: Instant | null;
+}
+
 /** Which source property feeds which canonical field (read only in this increment) */
 export interface SourceField {
   entity: string;
@@ -1446,6 +1473,9 @@ export interface SourceDetail {
   sampleIds: Record<string, string>;
   /** A telephony connection's missed-call reasons (addition 0008i); empty for another kind */
   missedReasons: SourceMissedReason[];
+  /** A CRM connection's task statuses and types (addition 0008n); empty for another kind */
+  taskStatuses: SourceTaskStatus[];
+  taskTypes: SourceTaskType[];
 }
 
 /** The connection's own fields a person may change; each only when given */
@@ -1487,6 +1517,26 @@ export interface SourceLineInput {
 
 export interface SourceTagInput {
   tagRef: string;
+  isCounted: boolean;
+}
+
+/** A ticket pipeline's own response time (cma.set_pipeline_sla, 0008o); null for the tenant default */
+export interface SourcePipelineSlaInput {
+  recordType: string;
+  pipelineId: string;
+  slaMinutes: number | null;
+}
+
+export interface SourceTaskStatusInput {
+  statusRef: string;
+  label: string;
+  isDone: boolean;
+}
+
+export interface SourceTaskTypeInput {
+  typeRef: string;
+  label: string;
+  isCallback: boolean;
   isCounted: boolean;
 }
 
@@ -1604,6 +1654,123 @@ export interface LinkedAccount {
 export interface LinkedAccounts {
   systems: LinkedAccountSystem[];
   accounts: LinkedAccount[];
+}
+
+// ---- Follow-up (addition 0008o, night run N16-B, 16 October 2026): what is waiting right now. Open lead deals
+// not called, open tickets against their response time, open tasks; ids, codes, counts and the names of the
+// organisation's own people only. Never a customer's name, number or address, never a task's body or subject.
+
+/** An open ticket against its response time: ok, at risk (past the warning share), breached, or without business hours to count in */
+export type SlaState = "ok" | "at_risk" | "breached" | "no_hours";
+/** An open task against the tenant's business date: due on an earlier date, today, later, or without a due time */
+export type DueState = "overdue" | "today" | "later" | "none";
+
+/** A row of cma.open_leads (0007d's not-called open deals with their age) */
+export interface OpenLead {
+  dealId: string;
+  connectionId: string;
+  dealSourceId: string;
+  pipelineId: string;
+  pipelineLabel: string;
+  /** The deal's owner as a person of the Workspace, or null while the owner is not linked or empty */
+  ownerUserId: string | null;
+  ownerName: string | null;
+  /** The owner's id in the source, null for none; shown as Not mapped, never as the id */
+  ownerRef: string | null;
+  /** A market code, or "unknown" */
+  market: string;
+  createdAt: Instant;
+  /** Business minutes waited so far as seconds; null without business hours (an unknown market) */
+  waitingBusinessSeconds: number | null;
+  ageBusinessDays: number | null;
+  /** The age bucket from leads.age_buckets_business_days: from the previous edge to this one, the last open (to null) */
+  bucketFrom: number | null;
+  bucketTo: number | null;
+  /** True once the target's business minutes have passed, false while within them, null without business hours */
+  pastTarget: boolean | null;
+  lastCallAt: Instant | null;
+  lastCallDays: number | null;
+  recordUrl: string | null;
+}
+
+/** A row of cma.open_tickets, sorted by the minutes to breach (no business hours last) */
+export interface OpenTicket {
+  ticketId: string;
+  connectionId: string;
+  ticketSourceId: string;
+  pipelineId: string;
+  pipelineLabel: string;
+  stageId: string | null;
+  stageLabel: string | null;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerRef: string | null;
+  market: string;
+  createdAt: Instant;
+  openBusinessSeconds: number | null;
+  /** The response time in force: the pipeline's own, else the tenant's */
+  slaMinutes: number;
+  slaState: SlaState;
+  /** Business minutes left, negative once breached; null without business hours */
+  minutesToBreach: number | null;
+  recordUrl: string | null;
+}
+
+/** A row of cma.open_tasks (0008n's tasks, status not done, type counted), sorted by due time */
+export interface OpenTask {
+  taskId: string;
+  connectionId: string;
+  taskSourceId: string;
+  typeRef: string;
+  typeLabel: string;
+  isCallback: boolean;
+  priorityRef: string | null;
+  statusRef: string;
+  statusLabel: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerRef: string | null;
+  /** The deal's or ticket's market, else the contact's country as a code; null when none names a market */
+  market: string | null;
+  dueAt: Instant | null;
+  dueState: DueState;
+  /** The record the task belongs to, by id: the deal, else the ticket; never the contact */
+  recordType: "deal" | "ticket" | null;
+  recordSourceId: string | null;
+  createdAt: Instant;
+  recordUrl: string | null;
+}
+
+/** cma.follow_up_summary: counts only */
+export interface FollowUpSummary {
+  leadsOpenNotCalled: number;
+  leadsPastTarget: number;
+  ticketsAtRisk: number;
+  ticketsBreached: number;
+  ticketsWithoutOwner: number;
+  tasksOverdue: number;
+  tasksDueToday: number;
+  /** Open tasks whose owner is not linked to a person */
+  tasksUnmappedOwner: number;
+}
+
+/** A row of cma.follow_up_by_owner: a person, or (ownerUserId null, last) everything whose owner maps to nobody */
+export interface FollowUpOwner {
+  ownerUserId: string | null;
+  displayName: string | null;
+  openLeads: number;
+  leadsPastTarget: number;
+  openTickets: number;
+  ticketsAtRiskOrBreached: number;
+  tasksOverdue: number;
+  tasksDueToday: number;
+}
+
+/** cma.my_follow_up: the caller's own rows, with their record links */
+export interface MyFollowUp {
+  leads: OpenLead[];
+  tickets: OpenTicket[];
+  tasks: OpenTask[];
 }
 
 export interface CmaData {
@@ -1803,6 +1970,12 @@ export interface CmaData {
   setSourceMissedReason(me: Principal, id: string, input: SourceMissedReasonInput): Promise<void>;
   /** The connection's store (upsert_commerce_store); a handle another store holds CMA03 */
   setSourceStore(me: Principal, id: string, store: SourceStore): Promise<void>;
+  /** A ticket pipeline's own response time (set_pipeline_sla, 0008o); an unknown pipeline CMA02, out of bounds CMA04 */
+  setSourcePipelineSla(me: Principal, id: string, input: SourcePipelineSlaInput): Promise<void>;
+  /** One task status of a CRM connection (set_task_status, 0008n); another kind of connection CMA04 */
+  setSourceTaskStatus(me: Principal, id: string, input: SourceTaskStatusInput): Promise<void>;
+  /** One task type of a CRM connection (set_task_type, 0008n) */
+  setSourceTaskType(me: Principal, id: string, input: SourceTaskTypeInput): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
   getMarkets(me: Principal): Promise<MarketsConfig>;
   /** Adds or changes a market (upsert_market) and its status (set_market_status) */
@@ -1861,4 +2034,18 @@ export interface CmaData {
   getFormsReport(me: Principal, range: HoursRange, group: FormsGroup, filter: FormsFilter): Promise<FormsReport>;
   /** Submissions per form, market, kept field and value, with the previous period; narrowed by a field and a value. Needs reports.view or performance.team */
   getFormsAnswers(me: Principal, range: HoursRange, filter: FormsFilter, field: string | null, value: string | null): Promise<FormsAnswers>;
+  // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
+  // name comes from app_user, the record link from the connection's template (cma.record_url)
+  /** The open lead deals not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */
+  getOpenLeads(me: Principal): Promise<OpenLead[]>;
+  /** The open tickets of counted pipelines against their response time, the least time left first. The same permissions */
+  getOpenTickets(me: Principal): Promise<OpenTicket[]>;
+  /** The open tasks, due first. The same permissions */
+  getOpenTasks(me: Principal): Promise<OpenTask[]>;
+  /** The counts. Needs monitoring.live, performance.team or workday.team */
+  getFollowUpSummary(me: Principal): Promise<FollowUpSummary>;
+  /** Per person, the not-linked row last. Needs performance.team */
+  getFollowUpByOwner(me: Principal): Promise<FollowUpOwner[]>;
+  /** The caller's own rows. Needs leads.accept or workday.own */
+  getMyFollowUp(me: Principal): Promise<MyFollowUp>;
 }

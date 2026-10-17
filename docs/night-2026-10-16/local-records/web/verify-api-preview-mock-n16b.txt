@@ -1,0 +1,16 @@
+verify/api.mjs against http://127.0.0.1:8080
+
+PASS  preview: a manager may not preview: 403, nothing set got [403,""]
+PASS  preview: an agent may not either             got 403
+PASS  preview: an unknown role is a 403 for the admin too, nothing set got [403,""]
+PASS  preview: an ill-formed key is a 400          got 400
+PASS  preview: a write needs the request header    got 400
+PASS  preview: the admin starts one: 204, the cookie for 12 hours, httpOnly, secure, lax, on / got [204,true,true,true,true,true,true]
+PASS  preview: /me stays the admin's own identity while previewing got [200,"admin",true]
+PASS  preview: a report route answers the role's 403 to the previewing admin got 403
+PASS  preview: without the cookie the admin reads the report got 200
+PASS  preview: a manager's preview cookie is ignored got 200
+PASS  preview: Exit while previewing clears the cookie with a 204 got [204,true,true]
+
+ALL 11 PASS
+exit 0

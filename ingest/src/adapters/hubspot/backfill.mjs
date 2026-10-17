@@ -7,6 +7,8 @@
  *   deal            CRM search by createdate, then by closedate (deals created earlier, closed since)
  *   ticket          by createdate, then closed_date
  *   crm_call        by hs_timestamp
+ *   task            by hs_createdate, then by hs_timestamp (the due time: a task made before the start and
+ *                   due after it; addition 0008n)
  *   contact         the contacts the CMA holds (0006: never the contact base; since 0008m also those an
  *                   email or inbox thread points to), by id, read with every mapped country slot
  *   form_submission every polled form's submissions, filling the answers of stored ones without them (forms.mjs)
@@ -26,8 +28,9 @@ import { backfillForms } from "./forms.mjs";
 import { backfillEmails } from "./email.mjs";
 import { backfillThreads } from "./conversations.mjs";
 
-export const BACKFILL_STREAMS = { deal: ["createdate", "closedate"], ticket: ["createdate", "closed_date"], crm_call: ["hs_timestamp"] };
-export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "form_submission", "contact", "crm_email", "inbox_thread"];
+export const BACKFILL_STREAMS = { deal: ["createdate", "closedate"], ticket: ["createdate", "closed_date"], crm_call: ["hs_timestamp"],
+  task: ["hs_createdate", "hs_timestamp"] };
+export const BACKFILL_OBJECTS = ["deal", "ticket", "crm_call", "task", "form_submission", "contact", "crm_email", "inbox_thread"];
 const EMAIL_OBJECTS = new Set(["crm_email", "inbox_thread"]);
 
 /** The default start of an object's backfill when --from is not given: the email objects' own; null for the rest (intake.start_date). */
