@@ -8,7 +8,7 @@
  * activates only the focused button, so Enter at open cancels, and the confirm button is a
  * destructive secondary action without a keycap, never the primary one.
  */
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Button } from "./primitives";
 
 export function ConfirmDialog({
@@ -33,6 +33,8 @@ export function ConfirmDialog({
   irreversible?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  /** The dialog is named by its title for assistive tech (the IT audit of 17 October 2026) */
+  const titleId = useId();
 
   useEffect(() => {
     const d = ref.current;
@@ -48,13 +50,14 @@ export function ConfirmDialog({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onCancel();
       }}
       className="m-auto w-[32rem] rounded-card border border-p4a-border bg-white p-6 text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)] backdrop:bg-p4a-inkt/30"
     >
-      <h2 className="text-panel font-semibold text-p4a-heading">{title}</h2>
+      <h2 id={titleId} className="text-panel font-semibold text-p4a-heading">{title}</h2>
       <div className="mt-2 text-body">{children}</div>
       <div className="mt-6 flex gap-3">
         {irreversible ? (

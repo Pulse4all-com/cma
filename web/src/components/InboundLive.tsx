@@ -123,7 +123,11 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
                           <td className={`${td} tabular`}>{missedAt(r)}</td>
                           <td className={`${td} tabular text-right`}>
                             {w.kind === "business"
-                              ? fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)
+                              ? w.closed
+                                // No office time has passed since the call: the market is closed now, so "0 min" would read as
+                                // "just missed"; the time since the call sits in the title (the IT audit of 17 October 2026)
+                                ? <span className="text-p4a-muted" data-testid="missed-closed" title={t.missedClosedTitle.replace("{time}", fmtBusinessMinutes(Math.floor(r.waitingSeconds / 60), locale))}>{t.missedClosed}</span>
+                                : fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)
                               : <span className="text-p4a-muted" title={t.missedSinceCall}>{fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)}</span>}
                           </td>
                           <td className={`${td} tabular text-right`}>{fmtCount(r.missedCount, locale)}</td>

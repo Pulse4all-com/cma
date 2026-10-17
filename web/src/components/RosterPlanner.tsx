@@ -20,7 +20,7 @@ import { useRouter } from "next/navigation";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AbsenceType, RosterEntry, RosterWeek, RosterWeekSummary, TeamInfo } from "@/lib/data";
 import { absenceKeywordList, cellLabel, coverageGrid, headcountByDate, isoWeek, parseCell, plannedMinutesByUser, weekDays, type Cell, type CellProblem, type CoverageState } from "@/lib/roster";
-import { addDays, fmtDate, fmtMinutes } from "@/lib/time";
+import { addDays, fmtDate, fmtMinutes, fmtDateTime } from "@/lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Badge, Button, Keycap, LinkButton, Notice } from "./primitives";
 import { WeekBar } from "./WeekBar";
@@ -39,6 +39,7 @@ export function RosterPlanner({
   absences,
   today,
   thisWeek,
+  viewerZone,
   copy,
   locale,
 }: {
@@ -212,7 +213,7 @@ export function RosterPlanner({
           <Badge tone={header.status === "published" ? "success" : "neutral"}>{header.status === "published" ? t.published : t.draft}</Badge>
           {header.status === "published" ? (
             <span className="text-p4a-muted">
-              {t.publishedAs.replace("{version}", String(header.version)).replace("{when}", header.publishedAt ? new Intl.DateTimeFormat(locale === "nl" ? "nl-NL" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(header.publishedAt)) : "").replace("{who}", header.publishedByName ?? "")}
+              {t.publishedAs.replace("{version}", String(header.version)).replace("{when}", header.publishedAt ? fmtDateTime(header.publishedAt, viewerZone, locale) : "").replace("{who}", header.publishedByName ?? "")}
             </span>
           ) : (
             <span className="text-p4a-muted">{t.notPublishedYet}</span>

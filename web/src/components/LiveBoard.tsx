@@ -97,7 +97,8 @@ export function LiveBoard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4" aria-label={t.group}>
+      {/* A group of toggle buttons: the name needs a role to be allowed on a div (the IT audit of 17 October 2026) */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-4" role="group" aria-label={t.group}>
         {tiles.map((tile) => (
           <button
             key={tile.group}

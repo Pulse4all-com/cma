@@ -228,7 +228,14 @@ export function sortCallbacks<T extends Pick<MissedCallback, "startedAt" | "sour
   return [...rows].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt) || a.sourceId.localeCompare(b.sourceId));
 }
 
-/** How long a missed call has waited: office time in the line's market, else (a line without a market) the time since the call */
-export function callbackWaiting(r: Pick<MissedCallback, "waitingBusinessSeconds" | "waitingSeconds">): { kind: "business" | "elapsed"; seconds: number } {
-  return r.waitingBusinessSeconds === null ? { kind: "elapsed", seconds: r.waitingSeconds } : { kind: "business", seconds: r.waitingBusinessSeconds };
+/**
+ * How long a missed call has waited: office time in the line's market, else (a line without a market) the
+ * time since the call. closed: no office time at all has passed since the call although time has, so the
+ * line's market is closed right now (a Saturday, the evening); the board then says so instead of "0 min"
+ * (the IT audit of 17 October 2026). The figure itself does not change.
+ */
+export function callbackWaiting(r: Pick<MissedCallback, "waitingBusinessSeconds" | "waitingSeconds">): { kind: "business" | "elapsed"; seconds: number; closed: boolean } {
+  return r.waitingBusinessSeconds === null
+    ? { kind: "elapsed", seconds: r.waitingSeconds, closed: false }
+    : { kind: "business", seconds: r.waitingBusinessSeconds, closed: r.waitingBusinessSeconds === 0 && r.waitingSeconds > 0 };
 }

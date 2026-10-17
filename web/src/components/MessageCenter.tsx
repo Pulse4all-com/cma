@@ -7,11 +7,13 @@
  * a toast for every new message, a desktop notification while the tab is in the background (only
  * with the permission the person granted from the inbox, never asked on load), and the urgent
  * pop-up with a sound that has to be confirmed. References only: a toast carries the title, the body
- * and the record link, never customer data.
+ * and the record link, never customer data. The kind label on a toast and the eyebrow of the pop-up are
+ * caption-size semi-bold in Muted or Warning amber, never in capitals (style guide rule 4; the IT audit of
+ * 17 October 2026 found a CSS transform doing what the copy verifier forbids).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Copy } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { arrivals, POLL_HIDDEN_MS, POLL_VISIBLE_MS, titleWithUnread, TOAST_MS } from "@/lib/messages";
@@ -82,6 +84,8 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
   const since = useRef<string | null>(null);
   const first = useRef(true);
   const dialog = useRef<HTMLDialogElement>(null);
+  /** The pop-up's accessible name is the message's title (the IT audit of 17 October 2026) */
+  const titleId = useId();
   // The latest open() for a notification's click, which fires long after the poll that created it
   const openRef = useRef<(m: MyMessage) => void>(() => {});
 
@@ -223,7 +227,7 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
         <div role="status" aria-live="polite" className="fixed bottom-6 right-6 z-40 flex w-96 flex-col gap-3">
           {toasts.map((m) => (
             <div key={m.id} data-testid="message-toast" className="rounded-card border border-p4a-border bg-white p-4 shadow-[0_8px_24px_rgba(11,19,61,0.12)]">
-              <p className="text-caption font-semibold uppercase tracking-wide text-p4a-muted">{m.kind === "alert" ? copy.alert : copy.announcement}</p>
+              <p className="text-caption font-semibold text-p4a-muted">{m.kind === "alert" ? copy.alert : copy.announcement}</p>
               <p className="mt-1 text-body font-semibold text-p4a-heading">{m.title}</p>
               {m.body ? <p className="mt-1 text-small text-p4a-body">{m.body}</p> : null}
               <div className="mt-3 flex gap-3">
@@ -239,13 +243,14 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
       <dialog
         ref={dialog}
         data-testid="urgent-dialog"
+        aria-labelledby={current ? titleId : undefined}
         onCancel={(e) => e.preventDefault()}
         className="m-auto w-[32rem] rounded-card border-l-4 border-p4a-warning bg-white p-6 text-p4a-body shadow-[0_1px_2px_rgba(11,19,61,0.06)] backdrop:bg-p4a-inkt/40"
       >
         {current ? (
           <>
-            <p className="text-caption font-semibold uppercase tracking-wide text-p4a-warning">{copy.urgentTitle}</p>
-            <h2 className="mt-1 text-panel font-semibold text-p4a-heading">{current.title}</h2>
+            <p className="text-caption font-semibold text-p4a-warning">{copy.urgentTitle}</p>
+            <h2 id={titleId} className="mt-1 text-panel font-semibold text-p4a-heading">{current.title}</h2>
             {current.body ? <p className="mt-2 text-body">{current.body}</p> : null}
             <p className="mt-4 text-small text-p4a-muted">{copy.urgentBody}</p>
             <div className="mt-6 flex items-center gap-3">

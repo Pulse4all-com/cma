@@ -35,7 +35,10 @@
  * Forms (addition 0008p) for seven identities: in the rail for reports.view or performance.team, the keycaps
  * K, Y, F, G and X, four tiles, the forms table and the answers inside their cards, the right-most header's hint
  * inside the viewport, the deltas like for like and "No history to compare yet" before the forms history;
- * Sources with its form categories. Saves screenshots under records/ for the release note.
+ * Sources with its form categories. Since the IT audit of 17 October 2026: only the first nine pages carry a
+ * digit key (no data-shortcut is longer than one character, the later pages have no keycap), every open dialog
+ * has an accessible name (aria-labelledby pointing at its title), and the Live board's tiles form a named
+ * group. Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -48,7 +51,8 @@
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
  *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
- *       spill out of its card, expect FAIL, exit 1
+ *       spill out of its card, writes a two-character key on the manager's tenth page, strips the name off
+ *       every dialog before it is read and the role off the tiles, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -75,6 +79,23 @@ async function acknowledgeUrgent(subject) {
 }
 for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst", "agent-two", "reader", "agent-one"]) await acknowledgeUrgent(subject);
 const b = await chromium.launch();
+
+/**
+ * Every open dialog has an accessible name (the IT audit of 17 October 2026): aria-labelledby pointing at
+ * an element with text, or aria-label. --provoke strips the attributes off first, so the check fails.
+ */
+async function expectDialogNamed(p, where) {
+  const name = await p.evaluate((strip) => {
+    const d = document.querySelector("dialog[open]");
+    if (!d) return null;
+    if (strip) { d.removeAttribute("aria-labelledby"); d.removeAttribute("aria-label"); }
+    const by = d.getAttribute("aria-labelledby");
+    const text = by ? by.split(/\s+/).map((id) => document.getElementById(id)?.textContent?.trim() ?? "").join(" ") : d.getAttribute("aria-label") ?? "";
+    return text.trim();
+  }, provoke);
+  if (name === null) problems.push(`${where}: no open dialog to name`);
+  else if (name === "") problems.push(`${where}: the open dialog has no accessible name`);
+}
 
 async function expectShell(width, height) {
   const p = await b.newPage({ viewport: { width, height } });
@@ -139,10 +160,16 @@ async function expectNavigation() {
     await p.goto(BASE + "/");
     await p.waitForLoadState("networkidle");
     const path = new URL(p.url()).pathname;
-    const links = await p.evaluate(() =>
+    // Since the IT audit of 17 October 2026 only the first nine pages carry a digit key (one keypress; "10" can never be
+    // pressed): the later pages are in the rail without a key or a keycap. --provoke writes a two-character key on the tenth
+    const links = await p.evaluate((spoil) => {
       // The rail is the first nav; the period bar on a page is another
-      [...(document.querySelector("nav")?.querySelectorAll("a[data-shortcut]") ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
-    const want = hrefs.map((h, i) => [String(i + 1), h]);
+      const all = [...(document.querySelector("nav")?.querySelectorAll('a[href]:not([href^="/configuration/"])') ?? [])];
+      if (spoil && all[9]) all[9].setAttribute("data-shortcut", "10");
+      return all.map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href"), !!a.querySelector("kbd"), a.getAttribute("aria-keyshortcuts")]);
+    }, provoke && subject === "manager");
+    const want = hrefs.map((h, i) => [i < 9 ? String(i + 1) : null, h, i < 9, i < 9 ? String(i + 1) : null]);
+    for (const [key, href] of links) if (key !== null && key.length !== 1) problems.push(`${subject}: ${href} carries the key "${key}", which no single keypress gives`);
     const hasClockIn = await p.locator('[data-testid="clock-in"]').count() > 0;
     // The shift sentence (0005): only for a person with a roster (roster.view), from the published fixture
     const hasShiftLine = await p.locator('[data-testid="shift-line"]').count() > 0;
@@ -514,16 +541,20 @@ async function expectLiveBoard() {
       continue;
     }
     if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
-    const m = await p.evaluate(() => {
+    const m = await p.evaluate((strip) => {
       const main = document.querySelector("main");
+      // A name on a plain div or span needs a role (the tiles group, the IT audit of 17 October 2026); --provoke strips it
+      if (strip) document.querySelector('main div[role="group"][aria-label]')?.removeAttribute("role");
       return {
         scrollX: document.documentElement.scrollWidth > window.innerWidth,
         mainX: main ? main.scrollWidth - main.clientWidth : -1,
         tiles: document.querySelectorAll('[data-testid="inbound-tiles"] [data-tile]').length,
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
         notConnected: !!document.querySelector('[data-testid="inbound-live"] [data-testid="inbound-not-connected"]'),
+        unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
       };
-    });
+    }, provoke && subject === "manager");
+    if (m.unnamedLabels > 0) problems.push(`${subject} /live/board: ${m.unnamedLabels} div or span carries aria-label without a role`);
     if (m.scrollX) problems.push(`${subject} /live/board: page scrolls horizontally at 1280`);
     if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
     if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
@@ -661,6 +692,7 @@ async function expectInvitations() {
     const wantRoles = subject === "admin" ? ["agent", "analytics", "supervisor", "manager", "admin"] : ["agent", "analytics", "supervisor"];
     if (!d) problems.push(`${subject} /team/people: V does not open the Invite dialog`);
     else {
+      await expectDialogNamed(p, `${subject} Invite dialog`);
       if (!d.inside) problems.push(`${subject} Invite dialog: not inside the viewport at 1280 x 800`);
       if (JSON.stringify(d.roles) !== JSON.stringify(wantRoles)) problems.push(`${subject} Invite dialog: roles ${d.roles.join(",")}, wanted ${wantRoles.join(",")}`);
       if (d.focus !== "email") problems.push(`${subject} Invite dialog: does not open on the email field`);
@@ -744,6 +776,7 @@ async function expectIrreversibleConfirmations() {
     await dialog.waitFor({ timeout: 5000 }).catch(() => undefined);
     if (provoke) await oldDefault(p);
     check("lines", await state(p));
+    await expectDialogNamed(p, "lines");
     if (provoke) await box.evaluate((el) => { el.checked = false; });
     if (!(await box.isChecked())) problems.push("lines: the box is unticked while the confirmation is open");
     await p.keyboard.press("Enter");
@@ -791,6 +824,7 @@ async function expectIrreversibleConfirmations() {
     await p.locator("dialog[open]").waitFor({ timeout: 5000 }).catch(() => undefined);
     if (provoke) await oldDefault(p);
     check(where, await state(p));
+    await expectDialogNamed(p, where);
     await p.keyboard.press(provoke ? "Escape" : "Enter");
     await p.waitForTimeout(500);
     if (writes.length) problems.push(`${where}: Enter at open wrote ${JSON.stringify(writes)}`);
@@ -823,6 +857,7 @@ async function expectIrreversibleConfirmations() {
       });
       if (!s) problems.push("End workday: E did not open the confirmation");
       else {
+        await expectDialogNamed(p, "End workday");
         if (!s.confirmFocused) problems.push("End workday: the confirmation does not open on its confirm button");
         if (!s.primary || s.keycap !== "Enter") problems.push(`End workday: the confirm button is not the primary style with the Enter keycap (${JSON.stringify(s)})`);
       }
@@ -1030,7 +1065,7 @@ async function expectFrame() {
       banner: document.querySelector('[data-testid="preview-banner"]')?.textContent?.trim() ?? null,
       select: document.querySelector('[data-testid="preview-select"]')?.value ?? null,
       options: [...document.querySelectorAll('[data-testid="preview-select"] option')].map((o) => o.value),
-      rail: [...document.querySelectorAll("nav[data-rail-nav] a[data-shortcut]")].map((a) => a.getAttribute("href")),
+      rail: [...document.querySelectorAll('nav[data-rail-nav] a[href]:not([href^="/configuration/"])')].map((a) => a.getAttribute("href")),
       config: document.querySelectorAll('nav[data-rail-nav] a[href^="/configuration/"]').length,
       name: document.querySelector('header a[href="/account"]')?.textContent?.trim(),
     }));
@@ -1059,7 +1094,8 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  // the manager's rail holds 18 pages since Follow-up (0008o) and Forms (0008p) joined the Reports group
+  // the manager's rail holds 18 pages since Follow-up (0008o) and Forms (0008p) joined the Reports group (only the
+  // first nine with a digit key since the IT audit of 17 October 2026, so the pages are counted by their links)
   for (const [subject, pages] of [["manager", 18], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
@@ -1068,7 +1104,7 @@ async function expectFrame() {
     const m = await p.evaluate(() => ({
       banner: !!document.querySelector('[data-testid="preview-banner"]'),
       select: !!document.querySelector('[data-testid="preview-select"]'),
-      rail: document.querySelectorAll("nav[data-rail-nav] a[data-shortcut]").length,
+      rail: document.querySelectorAll('nav[data-rail-nav] a[href]:not([href^="/configuration/"])').length,
     }));
     if (m.banner || m.select || m.rail !== (provoke ? pages - 1 : pages)) problems.push(`preview: ${subject} with a preview cookie gets ${JSON.stringify(m)}, expected no control, no banner and ${pages} pages`);
     await ctx.close();

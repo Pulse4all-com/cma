@@ -182,7 +182,7 @@ export function navEntries(copy: Copy): NavEntry[] {
   ];
 }
 
-/** key: the digit that opens the page, or null in an unnumbered group */
+/** key: the digit that opens the page, or null in an unnumbered group and from the tenth page on */
 export type VisibleItem = NavItem & { key: string | null };
 export type VisibleEntry =
   | { kind: "page"; icon: NavIcon; item: VisibleItem }
@@ -199,19 +199,25 @@ function mayOpen(me: Principal, item: NavItem): boolean {
   return holdsAny(me, item.permission);
 }
 
+/** A digit key is one keypress: only the first nine numbered pages get one (the IT audit of 17 October 2026) */
+export const MAX_DIGIT_KEYS = 9;
+
 /**
  * The pages and groups this person may see. Keys follow the visible order across the rail, so
- * every person's pages are numbered 1, 2, 3 without gaps, whether a group is open or closed.
+ * every person's pages are numbered 1, 2, 3 without gaps, whether a group is open or closed. The
+ * tenth page and every page after it get no key (null: no keycap, no shortcut), because the hook
+ * reads one keypress and "10" can never be pressed.
  */
 export function visibleNav(me: Principal, copy: Copy): VisibleEntry[] {
   let n = 0;
   const out: VisibleEntry[] = [];
+  const nextKey = (): string | null => (++n <= MAX_DIGIT_KEYS ? String(n) : null);
   for (const entry of navEntries(copy)) {
     if (entry.kind === "page") {
-      if (mayOpen(me, entry.item)) out.push({ kind: "page", icon: entry.icon, item: { ...entry.item, key: String(++n) } });
+      if (mayOpen(me, entry.item)) out.push({ kind: "page", icon: entry.icon, item: { ...entry.item, key: nextKey() } });
       continue;
     }
-    const items = entry.items.filter((i) => mayOpen(me, i)).map((i) => ({ ...i, key: entry.shortcut ? null : String(++n) }));
+    const items = entry.items.filter((i) => mayOpen(me, i)).map((i) => ({ ...i, key: entry.shortcut ? null : nextKey() }));
     if (items.length > 0) out.push({ kind: "group", id: entry.id, label: entry.label, icon: entry.icon, items, shortcut: entry.shortcut });
   }
   return out;

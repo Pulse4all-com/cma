@@ -9,10 +9,11 @@
  * written back, the market, person and state filters over a fixture, the filters' choices (unknown last, the
  * not-linked choice only when a row has no person), the summary and the per-person rows as the database
  * computes them (the not-linked row last, nobody with nothing waiting), the person's own rows, Welcome's
- * Needs attention lines with their links, the Live board's six tiles, the age bucket in words, the
- * unlinked-calls setting in force per kind. Since addition 0008s: the page's one read as cma.follow_up_page returns
- * it (the lists capped at follow_up.list_rows with their filtered totals, the counts before the filters, per person
- * only for performance.team), the list_rows setting's bounds, "Updated …" in words and when it turns stale.
+ * Needs attention lines with their links (the days not clocked out land on Team hours filtered to the days to
+ * correct), the Live board's six tiles, the age bucket in words, the unlinked-calls setting in force per kind.
+ * Since addition 0008s: the page's one read as cma.follow_up_page returns it (the lists capped at
+ * follow_up.list_rows with their filtered totals, the counts before the filters, per person only for
+ * performance.team), the list_rows setting's bounds, "Updated …" in words and when it turns stale.
  */
 import {
   agoText, attentionLines, bucketLabel, byOwner, daysSince, DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_NONE, filterLeads, filterOptions, filterQuery,
@@ -112,7 +113,7 @@ expect("the person's own rows", [ids(ownRows(leads, ana.id)), ids(ownRows(ticket
 const summary = summarise(leads, tickets, tasks);
 expect("attention lines: the five in order, each with where to act",
   attentionLines(summary, 3, 2).map((l) => [l.key, l.count, l.href]),
-  [["daysNotEnded", 3, "/team/hours?range=month"], ["leadsPastTarget", 2, "/reports/follow-up?state=attention"], ["ticketsAtRiskOrBreached", 3, "/reports/follow-up?state=attention"],
+  [["daysNotEnded", 3, "/team/hours?range=month&needs=correction"], ["leadsPastTarget", 2, "/reports/follow-up?state=attention"], ["ticketsAtRiskOrBreached", 3, "/reports/follow-up?state=attention"],
     ["tasksOverdue", 1, "/reports/follow-up?state=attention"], ["missedCallbacks", 2, "/live/board"]],
   [["daysNotEnded", 3, "/team/hours?range=month"], ["leadsPastTarget", 2, "/reports/follow-up"], ["ticketsAtRiskOrBreached", 3, "/reports/follow-up?state=attention"],
     ["tasksOverdue", 1, "/reports/follow-up?state=attention"], ["missedCallbacks", 2, "/live/board"]]);

@@ -12,7 +12,7 @@
  *
  * Keyboard: Tab through the fields, Ctrl+Enter saves, Esc closes (twice with unsaved changes).
  */
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import type { Copy } from "@/lib/copy";
 import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import {
@@ -180,10 +180,13 @@ export function PersonDialog({
   }
 
   const roleChoices = roleOptions(roles, person?.roleKey ?? null);
+  /** The dialog is named by its title for assistive tech (the IT audit of 17 October 2026) */
+  const titleId = useId();
 
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       className="m-auto w-[44rem] max-w-[calc(100vw-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40"
       onCancel={(e) => {
         e.preventDefault();
@@ -199,7 +202,7 @@ export function PersonDialog({
     >
       <div className="flex flex-col gap-6 p-6">
         <header>
-          <h2 className="text-panel font-semibold text-p4a-heading">{target.mode === "add" ? t.addTitle : t.editTitle}</h2>
+          <h2 id={titleId} className="text-panel font-semibold text-p4a-heading">{target.mode === "add" ? t.addTitle : t.editTitle}</h2>
           {target.mode === "add" ? (
             <p className="mt-1 text-small text-p4a-muted">{t.addIntro}</p>
           ) : (

@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { PeriodBar } from "@/components/PeriodBar";
 import { Shell } from "@/components/Shell";
 import { TeamHoursView, type HoursRow } from "@/components/TeamHoursView";
-import { Card, Notice, PageTitle } from "@/components/primitives";
+import { Badge, Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type TeamDay } from "@/lib/data";
 import { resolvePeriod } from "@/lib/period";
 import { dateKeyInZone, fmtDate, fmtMinutes, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
@@ -13,7 +14,9 @@ const MAX_DAYS = 92;
 /**
  * Team hours (Report): clock-in and clock-out per person per day, with Correct a day and Add day.
  * Shown to people holding workday.team; the database checks that permission again on every read
- * and every correction (CMA06). Staff data only, never customer data.
+ * and every correction (CMA06). Staff data only, never customer data. With needs=correction in the
+ * address (Welcome's Needs attention line, the IT audit of 17 October 2026) only the days to correct
+ * are shown (not clocked out, or needing a correction), with a chip saying so and the way back to all.
  */
 export default async function TeamHoursPage({ searchParams }: PageProps<"/team/hours">) {
   const r = await resolve();
@@ -39,10 +42,13 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
 
   const people = await data().listTeamPeople(me);
   const person = typeof sp.person === "string" && people.some((p) => p.userId === sp.person) ? sp.person : "";
+  const toCorrect = sp.needs === "correction";
   const [hours, statuses] = await Promise.all([
     data().getTeamHours(me, period, person || null),
     data().listStatuses(me),
   ]);
+  // The rows to correct: a day capped by the database (not clocked out) or one flagged for a correction
+  const days = toCorrect ? hours.days.filter((d) => d.isCapped || d.needsCorrection) : hours.days;
 
   const chips = (d: TeamDay): HoursRow["chips"] => {
     const out: HoursRow["chips"] = [];
@@ -53,7 +59,7 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
     return out;
   };
 
-  const rows: HoursRow[] = hours.days.map((d) => ({
+  const rows: HoursRow[] = days.map((d) => ({
     key: `${d.userId}:${d.date}`,
     userId: d.userId,
     displayName: d.displayName,
@@ -71,7 +77,7 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
     chips: chips(d),
     own: d.userId === me.userId,
   }));
-  const sum = (f: (d: TeamDay) => number) => fmtMinutes(hours.days.reduce((n, d) => n + f(d), 0));
+  const sum = (f: (d: TeamDay) => number) => fmtMinutes(days.reduce((n, d) => n + f(d), 0));
 
   // The files cover exactly what the table shows: this period, this person or everyone
   const exportQuery = new URLSearchParams({ from: period.from, to: period.to, ...(person ? { userId: person } : {}) });
@@ -82,8 +88,10 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
       }
     : null;
 
-  const query: Record<string, string> =
+  const periodQuery: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
+  // What every link on the page carries along: the period and, when set, the filter to the days to correct
+  const query: Record<string, string> = toCorrect ? { ...periodQuery, needs: "correction" } : periodQuery;
 
   return (
     <Shell copy={copy} me={me} active="team-hours" wide>
@@ -96,8 +104,17 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
         period={period}
         today={today}
         copy={copy}
-        keep={person ? { person } : {}}
+        keep={{ ...(person ? { person } : {}), ...(toCorrect ? { needs: "correction" } : {}) }}
       />
+
+      {toCorrect ? (
+        <p className="mb-4 flex items-center gap-3 text-small" data-testid="needs-correction-chip">
+          <Badge tone="warning">{t.showingToCorrect}</Badge>
+          <Link href={{ pathname: "/team/hours", query: { ...periodQuery, ...(person ? { person } : {}) } }} className="font-semibold text-p4a-deepblue hover:underline">
+            {t.showAll}
+          </Link>
+        </p>
+      ) : null}
 
       {invalid ? (
         <div className="mb-6">
@@ -122,6 +139,7 @@ export default async function TeamHoursPage({ searchParams }: PageProps<"/team/h
           copy={copy}
           locale={me.locale}
           downloads={downloads}
+          emptyLabel={toCorrect ? t.emptyToCorrect : t.empty}
         />
       </Card>
 

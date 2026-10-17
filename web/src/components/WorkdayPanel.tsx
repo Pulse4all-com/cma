@@ -11,8 +11,16 @@
  * the API verifier proves. Keyboard: S moves focus into the status buttons,
  * arrows move between them, Enter picks one. Bare digits stay with the pages,
  * so a tenant can have any number of statuses without clashing shortcuts.
+ *
+ * The focus stays where the person works (the IT audit of 17 October 2026): the current status is
+ * pressed (aria-pressed, Background Blue fill as the top bar's hints toggle) and not disabled, so it can
+ * hold the focus; only the button just clicked is disabled while its change is in flight, and when the
+ * change has landed the focus returns to that button (the new current one, or the clicked one after a
+ * refusal); a status live region says the new status in words. The current status button takes the
+ * focus when the panel mounts, so the person who has just clocked in (the card is replaced by this
+ * panel) keeps a place to work from, as the Clock in button had the focus before.
  */
-import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { WorkStatus, Workday } from "@/lib/data";
@@ -67,14 +75,31 @@ export function WorkdayPanel({
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [statusFailed, setStatusFailed] = useState(false);
+  /** The status whose change is in flight: that button alone is disabled */
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  /** The name of the status just set, for the live region */
+  const [announced, setAnnounced] = useState<string | null>(null);
+  /** The status whose button gets the focus back once the change has landed */
+  const refocus = useRef<string | null>(null);
   const working = workday.status === "working";
   const current = statuses.find((s) => s.key === workday.statusKey);
   const group = useRef<HTMLDivElement>(null);
 
-  /** The buttons that can be chosen now (the current status is disabled) */
+  /** The buttons that can be chosen now (the current, pressed status and the one in flight are not) */
   function choosable(): HTMLButtonElement[] {
-    return Array.from(group.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+    return Array.from(group.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled]):not([aria-pressed="true"])') ?? []);
   }
+
+  // The change has landed (or was refused): the focus goes back to the button it left, unless the person
+  // has moved on to something else in the meantime
+  useEffect(() => {
+    if (pending || refocus.current === null) return;
+    const key = refocus.current;
+    refocus.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body && !group.current?.contains(active)) return;
+    Array.from(group.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((b) => b.dataset.statusKey === key)?.focus();
+  }, [pending, workday.statusKey]);
 
   /** The S shortcut clicks the group itself: move focus to the first choosable status */
   function enterGroup(e: ReactMouseEvent<HTMLDivElement>) {
@@ -103,16 +128,21 @@ export function WorkdayPanel({
   }
 
   function changeStatus(key: string) {
+    if (pendingKey !== null) return;
     setStatusFailed(false);
+    setPendingKey(key);
     startTransition(async () => {
       const res = await fetch("/api/v1/me/status", {
         method: "POST",
         headers: { "content-type": "application/json", "x-cma-request": "1" },
         body: JSON.stringify({ key }),
-      });
-      if (!res.ok) setStatusFailed(true);
+      }).catch(() => null);
+      if (!res?.ok) setStatusFailed(true);
+      else setAnnounced(statuses.find((s) => s.key === key)?.name ?? key);
+      refocus.current = key;
       // Also after a refusal: the day may have ended in another tab
       router.refresh();
+      setPendingKey(null);
     });
   }
 
@@ -192,8 +222,11 @@ export function WorkdayPanel({
                 variant="outlined"
                 size="md"
                 aria-pressed={isCurrent}
-                disabled={isCurrent || pending}
-                onClick={() => changeStatus(s.key)}
+                autoFocus={isCurrent}
+                disabled={pendingKey === s.key}
+                data-status-key={s.key}
+                className="aria-pressed:bg-p4a-bgblue"
+                onClick={() => { if (!isCurrent) changeStatus(s.key); }}
               >
                 <span className="inline-flex items-center gap-2">
                   <StatusDot status={s} />
@@ -208,6 +241,10 @@ export function WorkdayPanel({
             {copy.myDay.statusFailed}
           </p>
         ) : null}
+        {/* Always in the DOM, so assistive tech notices the text when it changes */}
+        <p role="status" aria-live="polite" className="sr-only" data-testid="status-announcement">
+          {announced ? copy.myDay.statusChanged.replace("{status}", announced) : ""}
+        </p>
       </div>
       <div className="mt-6">
         <Button
