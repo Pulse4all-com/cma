@@ -4,6 +4,8 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 
 **What changes:** every form is polled apart from whether it counts in Intake, and Reports → Forms shows every polled form's submissions per form and market. Addition 0008p (`74`, `75`): `connection_form.is_polled` (existing forms polled exactly when they count), the tenant's form categories, each form's fields with their option values, kept answers of choice questions only (checked against the options), a form's market field and lead condition, the reads `cma.forms_report()`, `cma.forms_answers()` and `cma.forms_history_start()` (README, Data model: forms reporting; Decision log, 16 October 2026). The ingest's forms poll and backfill read every polled form, keep choice answers only and count the dropped ones; the backfill fills a stored submission's empty answers once. The web app: Reports → Forms (`/reports/forms`, `reports.view` or `performance.team`) with its file, and on Configuration → Sources a form's polled switch and category, and the form categories.
 
+**Run:** in dev and prod on 17 October 2026 (`records/b17d-dev-2026-10-17`, `records/b17d-prod-2026-10-17`, written down from Martin's report). Corrected afterwards where that run went otherwise: the context block as one Run (Helpers), step 9's wait for the fields, 10c and 10d as a review read and then the same query calling the function, 10g's value from the field's options, and the prefix pattern's single backslashes (10c).
+
 **Order matters:**
 - `Pulse4all-com/cma#142` (0008n and 0008o, `70` to `73`) is merged (`c7a3cab`) and has run in dev and prod (`records/0008n-dev-2026-10-16`, `records/0008n-prod-2026-10-16`, `records/0008o-dev-2026-10-16`, `records/0008o-prod-2026-10-16`); without 0008o `74` stops with `addition 0008o (72_follow_up.sql) must run before 0008p` and applies nothing.
 - 0008p runs in dev and prod **before** the merge: the merge builds and deploys prod's web app, whose Forms page and Sources page read the functions of `74`. Merged first, Reports → Forms answers an error and a CRM connection's Sources page fails until `74` runs.
@@ -42,7 +44,16 @@ cd ~/cma && node -v && bash -ic 'type -t cma_db run_migration'
 ```
 Expected: `v22.…`, then `function` twice. Anything else: run `docs/RUNBOOK.md`, Setup, step 8 first.
 
-The Studio context block is the one at the top of `docs/ingest/PROD_RUNBOOK.md` (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`, your own user). Only the blocks that call a configuration function run "after the context block": its second part (from `set role cma_app;`) pasted above the statements, in the same Run, with `reset role;` at the end. Every other Studio block reads as the owner and stands alone, `set role cma_owner;` … `reset role;`.
+**The Studio context block** (on `cma-dev-pg` in dev, on `cma-prod-pg` in prod; tenant `pulse4all-subscriptions`) is one Run: as the owner it sets the tenant, the user and the actor label through subselects, then switches to the app's role. Each Run in Studio is a fresh session (`docs/ingest/PROD_RUNBOOK.md`, The Studio context block), so the blocks that call a configuration function run "after the context block": these lines pasted above the statements, in the same Run, with `reset role;` at the end. `<your user>` is `martin@pulse4all.com` in prod and `admin@example.com` in dev (the dev seed's admin; Martin's login has no app user in dev).
+```sql
+set role cma_owner;
+select set_config('app.tenant_id', (select t.id::text from cma.tenant t where t.slug = 'pulse4all-subscriptions'), false),
+       set_config('app.user_id', (select u.id::text from cma.app_user u join cma.tenant t on t.id = u.tenant_id
+                                  where t.slug = 'pulse4all-subscriptions' and u.email = '<your user>'), false),
+       set_config('app.actor_label', 'studio:martin', false);
+set role cma_app;
+```
+Expected, above the statements' own results: one row of three values, the tenant's id, the user's id and `studio:martin`. An empty value means the slug or the email matched nothing: stop, the configuration calls would fail. Every other Studio block reads as the owner and stands alone, `set role cma_owner;` … `reset role;`.
 
 ## 1. Review the pull request, build it, run the ingest checks
 
@@ -269,7 +280,9 @@ Expected: `image … exists (sha256:…); no build` (dev's image), six job deplo
 
 Only the jobs are deployed in prod: the service `cma-ingest` keeps its revision. Should it ever be redeployed with this image, that is `PROD_RUNBOOK.md` 7.1's line with `--front ingest.pulse4all.app` and its `--tenant` and `--secret` flags; a bare `deploy.sh prod` stops with exit 2 since `Pulse4all-com/cma#146`.
 
-**Studio (cma-prod-pg)** (repeat until `described` is 50, at most an hour; counts only)
+The fields come with the forms poll's next catalog refresh, and the cursor `forms:catalog` allows one only when the last refresh is an hour old (the old image's last refresh set it). So the first refresh with fields can come up to an hour after the deploy: on 17 October 2026 it came at 14:32 UTC, about an hour after it. Until then `described` stays below `forms`.
+
+**Studio (cma-prod-pg)** (repeat every 10 minutes until `described` is 50, up to an hour after the deploy; counts only)
 ```sql
 set role cma_owner;
 select count(*) as forms, count(fields_refreshed_at) as described from cma.connection_form f join cma.tenant t on t.id = f.tenant_id
@@ -283,7 +296,7 @@ Expected: `50 | 50`; the choice fields of brief B17d's data: `are_you_already_a_
 
 ## 10. Prod: the configuration, the backfill, Intake before and after the lead rule
 
-Every Studio block of this step is on `cma-prod-pg`. The blocks that call a configuration function (`set_form_category`, `set_form_reporting`, `set_form`, `set_form_market_field`, `set_form_lead_condition`) run **after the context block**; the reads stand alone as the owner (`set role cma_owner;` … `reset role;`). The statements Studio prints in 10c and 10d are configuration calls: they run after the context block too.
+Every Studio block of this step is on `cma-prod-pg`. The blocks that call a configuration function (`set_form_category`, `set_form_reporting`, `set_form`, `set_form_market_field`, `set_form_lead_condition`) run **after the context block**; the reads stand alone as the owner (`set role cma_owner;` … `reset role;`). 10c, 10d and 10g first show what they will set in a read-only review; then the same query calling the function runs after the context block.
 
 **10a. The categories** (Martin, brief B17d), **after the context block**:
 ```sql
@@ -328,11 +341,10 @@ reset role;
 ```
 Expected: 28 rows, each a form's name and an empty value.
 
-**10c. The 22 support forms: polled, not counted, with category and market, one statement per form.** The repository does not hold prod's catalog, so Studio writes the statements from it: the category from the name (cancellation, replacement, IBAN, support), the market from the name's two-letter prefix (AT, BE, DE, DK, ES, FR, NL, SE, UK read as GB; no prefix, no market). Nothing in code knows these names; the statements are read and run by you. **Studio (cma-prod-pg)** (read only):
+**10c. The 22 support forms: polled, not counted, with category and market.** The repository does not hold prod's catalog, so one query over it gives each form its category from the name (cancellation, replacement, IBAN, support) and its market from the name's two-letter prefix (AT, BE, DE, DK, ES, FR, NL, SE, UK read as GB; no prefix, no market). Nothing in code knows these names. The prefix pattern `'^\s*([A-Za-z]{2})\M'` is written with single backslashes: Studio's `standard_conforming_strings` is on, so a backslash in a plain string literal stays one character, and a doubled backslash matches a literal backslash, which no form name has, so no form would get a market. First the review, **Studio (cma-prod-pg)** (read only):
 ```sql
 set role cma_owner;
-select format('select cma.set_form_reporting(%L, %L, true, %L, %s);  -- %s', f.connection_id, f.source_form_id, x.category,
-              coalesce(quote_literal(m.code), 'null'), f.name) as statement
+select f.source_form_id, f.name, x.category, m.code as market
 from cma.connection_form f
 cross join lateral (select case when f.name ~* 'iban' then 'iban_change' when f.name ~* 'cancel' then 'cancellation'
                                 when f.name ~* 'replacement' then 'replacement' when f.name ~* 'support' then 'support' end as category,
@@ -343,9 +355,22 @@ where f.connection_id = '<conn>' and f.status = 'active' and not f.is_counted
 order by f.name;
 reset role;
 ```
-Expected: 22 lines `select cma.set_form_reporting('<conn>', '<form id>', true, '<category>', '<market>');  -- <name>`: ten `cancellation` (nine with the market of their prefix, the general one `null`), ten `replacement` (the same), `iban_change` with `'DE'` (DE change IBAN) and `support` with `null` (the General support form). **Read every line against its name.** A category of `null` (a name the four words miss) or a market of `null` behind a prefix (a market not in the catalog, such as one added later) is corrected by hand in that line; ask me when unsure.
+Expected: 22 rows, each a form's id, name, category and market: ten `cancellation` (nine with the market of their prefix, the general one empty), ten `replacement` (the same), `iban_change` with `DE` (DE change IBAN) and `support` without a market (the General support form). **Read every row against its name.** An empty category (a name the four words miss) or an empty market behind a prefix (a market not in the catalog, such as one added later) is set right afterwards, below; ask me when unsure.
 
-Then paste the 22 lines, as printed or corrected, **after the context block**, with `reset role;` at the end, and run them. Expected: 22 empty results.
+Then the same query calling the function, **after the context block**:
+```sql
+select f.name, x.category, m.code as market, cma.set_form_reporting(f.connection_id, f.source_form_id, true, x.category, m.code)
+from cma.connection_form f
+cross join lateral (select case when f.name ~* 'iban' then 'iban_change' when f.name ~* 'cancel' then 'cancellation'
+                                when f.name ~* 'replacement' then 'replacement' when f.name ~* 'support' then 'support' end as category,
+                           case upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) when 'UK' then 'GB'
+                                else upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) end as prefix) x
+left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix and x.prefix in ('AT', 'BE', 'DE', 'DK', 'ES', 'FR', 'NL', 'SE', 'GB')
+where f.connection_id = '<conn>' and f.status = 'active' and not f.is_counted
+order by f.name;
+reset role;
+```
+Expected: the review's 22 rows, each with an empty value in the last column. A row the review showed wrong is set again by hand, after the context block, with its id from the review: `select cma.set_form_reporting('<conn>', '<form id>', true, '<category>', '<market>');` (`null` without quotes for no market), then `reset role;`. Expected: an empty result.
 
 **Studio (cma-prod-pg)** (read only)
 ```sql
@@ -356,7 +381,7 @@ reset role;
 ```
 Expected: per category and market: `cancellation` and `replacement` nine markets each `| f | t | 1` and `| (empty) | f | t | 1`, `contact`, `info` and `quote` their markets `| t | t`, `iban_change | DE | f | t | 1`, `support | (empty) | f | t | 1`. The forms poll reads the support forms' submissions from 1 October within minutes (their first poll goes back to `intake.start_date`).
 
-**10d. Kept fields and market fields** (brief B17d's amendment, item 7): per category the choice fields whose answers are kept, and for a form without a market its `country_dropdown`, else its `ticket_country`, as market field (kept too). `deployment_outcome` is never kept (Decision log, 16 October 2026). Again Studio writes one statement per form from the catalog (the form's own counted, lead source and market passed as they are, since `set_form` sets them all). **Studio (cma-prod-pg)** (read only):
+**10d. Kept fields and market fields** (brief B17d's amendment, item 7): per category the choice fields whose answers are kept, and for a form without a market its `country_dropdown`, else its `ticket_country`, as market field (kept too). `deployment_outcome` is never kept (Decision log, 16 October 2026). One query over the catalog gives each polled form its kept fields and, without a market, its market field; `set_form` sets counted, lead source and market too, so the form's own are passed as they are. First the review, **Studio (cma-prod-pg)** (read only):
 ```sql
 set role cma_owner;
 with wanted(category, field) as (values
@@ -376,16 +401,45 @@ kept as (
   where ff.status = 'active' and ff.name <> 'deployment_outcome' and ff.kind in ('dropdown', 'radio', 'multiple_checkboxes', 'single_checkbox')
     and ((f.category, ff.name) in (select category, field from wanted) or ff.name = f.market_field or ff.name = any (f.kept_fields))
   group by 1)
-select format('select cma.set_form(%L, %L, %L, %L, %L, %L);', f.connection_id, f.source_form_id, f.is_counted, f.lead_source, f.market,
-              coalesce(k.fields, '{}'::text[]))
-       || case when f.market_field is null then ''
-               else format(' select cma.set_form_market_field(%L, %L, %L);', f.connection_id, f.source_form_id, f.market_field) end
-       || '  -- ' || f.name as statement
+select f.category, f.name, coalesce(k.fields, '{}'::text[]) as kept_fields, f.market_field
 from forms f left join kept k on k.source_form_id = f.source_form_id
 order by f.category, f.name;
 reset role;
 ```
-Expected: 50 lines, one per form, ending with the form's name as a comment: Contact forms keep `are_you_already_a_customer` (and `customer_sector` on the DE form), Info forms `use_case`, Quote forms and DE change IBAN nothing (`{}`), Cancellation forms `cancellation_reason` (and `source_type` where present), Replacement forms `exchange_reason`, `exchange_type` (and `request_channel` where present), the General support form `hs_ticket_category`; a choice field a form keeps already stays kept; the three forms without a market also keep `country_dropdown` (or `ticket_country`) and carry a second statement on the same line, `select cma.set_form_market_field(…);`. **Read the lines against the brief**; a form missing a field it should keep means the form lacks that field in HubSpot (send me its name). Then paste the 50 lines **after the context block**, with `reset role;` at the end, and run them. Expected: empty results.
+Expected: 50 rows, one per form: Contact forms keep `are_you_already_a_customer` (and `customer_sector` where present), Info forms `use_case`, Quote forms and DE change IBAN nothing (`{}`), Cancellation forms `cancellation_reason` (and `source_type` where present), Replacement forms `exchange_reason`, `exchange_type` (and `request_channel` where present), the General support form `hs_ticket_category`; a choice field a form keeps already stays kept. `market_field` is filled only for a form without a market that has a `country_dropdown` or `ticket_country` field in HubSpot, and that field is then kept too; a form without a market and without such a field shows it empty (on 17 October 2026 that was all four forms without a market; README, Decision log, 17 October 2026). **Read the rows against the brief**; a form missing a field it should keep means the form lacks that field in HubSpot (send me its name).
+
+Then the same query calling the function, **after the context block**, and in the same Run the market fields (a form's market field must be kept first, so it runs after `set_form`):
+```sql
+with wanted(category, field) as (values
+  ('contact', 'are_you_already_a_customer'), ('contact', 'customer_sector'), ('info', 'use_case'),
+  ('cancellation', 'cancellation_reason'), ('cancellation', 'source_type'),
+  ('replacement', 'exchange_reason'), ('replacement', 'exchange_type'), ('replacement', 'request_channel'),
+  ('support', 'hs_ticket_category')),
+forms as (
+  select f.connection_id, f.source_form_id, f.name, f.is_counted, f.lead_source, f.market, f.category, f.kept_fields,
+         (select min(ff.name) from cma.connection_form_field ff
+          where ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id and ff.status = 'active'
+            and ff.kind in ('dropdown', 'radio') and ff.name in ('country_dropdown', 'ticket_country') and f.market is null) as market_field
+  from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' and f.is_polled),
+kept as (
+  select f.source_form_id, array_agg(ff.name order by ff.name) as fields
+  from forms f join cma.connection_form_field ff on ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id
+  where ff.status = 'active' and ff.name <> 'deployment_outcome' and ff.kind in ('dropdown', 'radio', 'multiple_checkboxes', 'single_checkbox')
+    and ((f.category, ff.name) in (select category, field from wanted) or ff.name = f.market_field or ff.name = any (f.kept_fields))
+  group by 1)
+select f.category, f.name, cma.set_form(f.connection_id, f.source_form_id, f.is_counted, f.lead_source, f.market, coalesce(k.fields, '{}'::text[]))
+from forms f left join kept k on k.source_form_id = f.source_form_id
+order by f.category, f.name;
+select f.name, mf.field, cma.set_form_market_field(f.connection_id, f.source_form_id, mf.field)
+from cma.connection_form f
+cross join lateral (select min(ff.name) as field from cma.connection_form_field ff
+                    where ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id and ff.status = 'active'
+                      and ff.kind in ('dropdown', 'radio') and ff.name in ('country_dropdown', 'ticket_country')) mf
+where f.connection_id = '<conn>' and f.status = 'active' and f.is_polled and f.market is null and mf.field is not null
+order by f.name;
+reset role;
+```
+Expected: the review's 50 rows, each with an empty value in the last column; then one row per form the review showed with a `market_field`, each with an empty value (none when the review showed none).
 
 **Studio (cma-prod-pg)** (read only)
 ```sql
@@ -395,7 +449,7 @@ select f.category, count(*) as forms, count(*) filter (where f.kept_fields <> '{
 from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' group by 1 order by 1;
 reset role;
 ```
-Expected: per category the forms, those keeping answers, `with_market_field` 1 for `cancellation`, `replacement` and `support` and 0 elsewhere, and `deployment_outcome_kept` false on every row.
+Expected: per category the forms and those keeping answers; `with_market_field` counts the forms without a market that have a country field (`country_dropdown` or `ticket_country`) in HubSpot, so it depends on the forms, not on this step: on 17 October 2026 it was 0 on every category, because none of the four forms without a market (the general Cancellation, Replacement and support forms and the generic Quote Form) has one; `deployment_outcome_kept` false on every row.
 
 **10e. The backfill from 1 October:** the support forms' submissions the poll has not read yet, and every stored submission's answers. **Terminal** (from the Chromebook)
 ```bash
@@ -425,23 +479,40 @@ reset role;
 ```
 Expected: **Intake B equals Intake A of step 5** for the days both cover, market by market: polling the 22 support forms and storing their submissions changed no Intake figure (brief B17d). A later run date adds the days since step 5; compare the same dates (the Intake report with a custom range shows them). A difference on an earlier date: send me both lists.
 
-**10g. The lead rule on the nine Contact forms.** Tell Kira first that Intake's form counts drop by the existing customers from here on, with Intake B. Then **after the context block**:
+**10g. The lead rule on the nine Contact forms.** Tell Kira first that Intake's form counts drop by the existing customers from here on, with Intake B. The value is taken from each form's own options in the catalog (`connection_form_field.options`, the option that starts with "No,"), so it is spelled exactly as HubSpot holds it, apostrophe included. First the review, **Studio (cma-prod-pg)** (read only):
 ```sql
-select f.name, cma.set_form_lead_condition(f.connection_id, f.source_form_id, 'are_you_already_a_customer', array['No, I''m not a customer yet'])
-from cma.connection_form f where f.connection_id = '<conn>' and f.status = 'active' and f.category = 'contact'
+set role cma_owner;
+select f.name, o.value
+from cma.connection_form f
+cross join lateral (select x as value from cma.connection_form_field ff cross join unnest(ff.options) x
+                    where ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id
+                      and ff.name = 'are_you_already_a_customer' and ff.status = 'active' and x like 'No,%') o
+where f.connection_id = '<conn>' and f.status = 'active' and f.category = 'contact'
 order by f.name;
 reset role;
 ```
-Expected: nine rows (name, empty value). `not an option of are_you_already_a_customer: …` (CMA04) means the option's text differs in HubSpot (another apostrophe): copy the exact value from the field's options and run again.
+Expected: nine rows, each a Contact form's name and `No, I'm not a customer yet` as HubSpot writes it. Fewer rows (a form whose field has no option starting with "No,") or more (a form with two): send me the rows before going on.
 
-**Studio (cma-prod-pg)** (read only; the second statement only after a CMA04 above)
+Then the same query calling the function, **after the context block**:
+```sql
+select f.name, o.value, cma.set_form_lead_condition(f.connection_id, f.source_form_id, 'are_you_already_a_customer', array[o.value])
+from cma.connection_form f
+cross join lateral (select x as value from cma.connection_form_field ff cross join unnest(ff.options) x
+                    where ff.connection_id = f.connection_id and ff.source_form_id = f.source_form_id
+                      and ff.name = 'are_you_already_a_customer' and ff.status = 'active' and x like 'No,%') o
+where f.connection_id = '<conn>' and f.status = 'active' and f.category = 'contact'
+order by f.name;
+reset role;
+```
+Expected: the review's nine rows, each with an empty value in the last column.
+
+**Studio (cma-prod-pg)** (read only)
 ```sql
 set role cma_owner;
 select f.name, f.lead_condition from cma.connection_form f where f.connection_id = '<conn>' and f.lead_condition is not null order by f.name;
-select ff.options from cma.connection_form_field ff where ff.connection_id = '<conn>' and ff.name = 'are_you_already_a_customer' limit 1;
 reset role;
 ```
-Expected: the nine forms with `{"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}`; then the field's option values.
+Expected: the nine forms with `{"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]}`.
 
 **10h. Intake after the lead rule** ("Intake C"): the read of 10f again, then the Contact forms' answers that explain the difference:
 ```sql
