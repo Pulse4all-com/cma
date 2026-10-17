@@ -245,8 +245,11 @@ function AttentionBlock({ summary, team, inbound, copy }: { summary: FollowUpSum
 function WaitingBlock({ mine, copy }: { mine: MyFollowUp; copy: Copy }) {
   const t = copy.welcome;
   const n = mine.leads.length + mine.tickets.length + mine.tasks.length;
+  const count = (k: number, one: string, many: string) => (k === 1 ? one : many.replace("{n}", String(k)));
   const line = n === 0 ? t.waitingNone
-    : t.waitingLine.replace("{leads}", String(mine.leads.length)).replace("{tickets}", String(mine.tickets.length)).replace("{tasks}", String(mine.tasks.length));
+    : t.waitingLine.replace("{leads}", count(mine.leads.length, t.waitingLeadsOne, t.waitingLeads))
+      .replace("{tickets}", count(mine.tickets.length, t.waitingTicketsOne, t.waitingTickets))
+      .replace("{tasks}", count(mine.tasks.length, t.waitingTasksOne, t.waitingTasks));
   return (
     <Card title={t.waitingForYou}>
       <p className="flex items-center gap-3 text-body" data-testid="waiting-for-you">

@@ -2,7 +2,7 @@
  * The verifiers' harness, as in web/verify: expect(name, actual, expected, provoked). Normal runs
  * compare with expected and must all PASS; --provoke compares with a wrong value and every check
  * must FAIL, which proves each check can fail. writesOutside is the flow verifiers' guard on their
- * own tenants.
+ * own tenants; removeTenants takes a run's own tenants out again.
  */
 export const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -29,6 +29,47 @@ export async function writesOutside(q, { tenants, since, logins }) {
       join cma.audit_log a on a.tenant_id = t.id and a.changed_at >= $2::timestamptz
      where t.id <> all($1::uuid[]) and a.actor_login = any($3::text[])
      group by 1 order by 1`, [tenants, since, [...new Set(logins)]])).map((r) => `${r.table_name}:${r.n}`);
+}
+
+/**
+ * Removes a flow verifier's own throwaway tenants with every row they hold, and returns what still
+ * holds one of their ids as "table:rows" per table, [] when nothing. Only for the tenants the run
+ * created, in a database the verifier has already accepted as dev or local. Every tenant table carries
+ * tenant_id (cma.setup_tenant_table): the rows go table by table in an order where no remaining table
+ * still points to the next one (the foreign keys from the catalog), then the audit rows the deletes
+ * wrote, then the tenants; one transaction, so a failure leaves everything as it was. `q` queries as
+ * the owner.
+ */
+export async function removeTenants(q, tenants) {
+  const tables = (await q(`select c.relname as t from pg_class c
+      join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
+     where c.relnamespace = 'cma'::regnamespace and c.relkind in ('r', 'p') and not c.relispartition`)).map((r) => r.t);
+  const refs = await q(`select ch.relname as child, pa.relname as parent from pg_constraint k
+      join pg_class ch on ch.oid = k.conrelid join pg_class pa on pa.oid = k.confrelid
+     where k.contype = 'f' and k.connamespace = 'cma'::regnamespace and k.conrelid <> k.confrelid`);
+  const left = new Set(tables.filter((t) => t !== "audit_log"));
+  const order = [];
+  while (left.size) {
+    const free = [...left].filter((t) => !refs.some((r) => r.parent === t && left.has(r.child)));
+    if (!free.length) throw new Error(`removeTenants: the foreign keys among ${[...left].join(", ")} form a cycle`);
+    for (const t of free) { order.push(t); left.delete(t); }
+  }
+  await q("begin");
+  try {
+    for (const t of order) await q(`delete from cma."${t}" where tenant_id = any($1::uuid[])`, [tenants]);
+    await q("delete from cma.audit_log where tenant_id = any($1::uuid[])", [tenants]);
+    await q("delete from cma.tenant where id = any($1::uuid[])", [tenants]);
+    await q("commit");
+  } catch (e) {
+    await q("rollback");
+    throw e;
+  }
+  const held = [];
+  for (const t of [...tables, "tenant"]) {
+    const [{ n }] = await q(`select count(*)::int as n from cma."${t}" where ${t === "tenant" ? "id" : "tenant_id"} = any($1::uuid[])`, [tenants]);
+    if (n) held.push(`${t}:${n}`);
+  }
+  return held;
 }
 
 /** Prints the verdict line and sets the exit code. */

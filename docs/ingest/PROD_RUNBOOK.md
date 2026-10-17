@@ -979,7 +979,7 @@ Expected: most held contacts with `country_source` 2 (Contact-Country is filled 
 
 # 11. Tasks and the follow-up layer (additions 0008n and 0008o, night run N16-B)
 
-Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 5 and 7: the migrations with their verifies, the data map, the ingest from the branch, the backfill of tasks); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook steps 8 and 9) and 11.2 to 11.5 from `main`. **Deferred until the upload route exists (backlog CMA-067; README, Decision log, 16 October 2026):** only the app versions and their test tasks (morning runbook step 6, the second half of 11.2). The backfill of tasks (11.3) needs only the new ingest image and the install's existing token and runs after 11.2's deploy. Until the app version a change to a task appears the next morning (the 02:30 reconcile) and a task deleted in HubSpot never arrives, so the task figures are incomplete; accepted (README, Open decisions: the task webhooks as a data prerequisite). The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
+Written in the night of 15 to 16 October 2026, before anything ran in dev or prod; the order corrected the morning after. Run in dev and prod on 16 October 2026 (`records/0008n-dev-2026-10-16`, `records/0008n-prod-2026-10-16`, `records/0008o-dev-2026-10-16` and `records/0008o-prod-2026-10-16`, written from Martin's report): 11.1's `70` twice, `72` and `02`, the merge as `c7a3cab`, the first half of 11.2 (the ingest at `c7a3cab`, its front intact, the `run.app` address 404) and 11.3 (14,689 tasks of 23 owners, the raw keys metadata only); 11.4 item 4 is not possible (HubSpot has no task page), and 11.1's read-only check, the rest of 11.4 and 11.5 are not in that record. Order: dev first (the morning runbook `docs/night-2026-10-16/MORNING_RUNBOOK.md` steps 2 to 5 and 7: the migrations with their verifies, the data map, the ingest from the branch, the backfill of tasks); then 11.1 in prod **before N16-B is merged**; then the merge and the `cma-web-main` build; then the dev hand check on the merge's image (morning runbook steps 8 and 9) and 11.2 to 11.5 from `main`. **Deferred until the upload route exists (backlog CMA-067; README, Decision log, 16 October 2026):** only the app versions and their test tasks (morning runbook step 6, the second half of 11.2). The backfill of tasks (11.3) needs only the new ingest image and the install's existing token and runs after 11.2's deploy. Until the app version a change to a task appears the next morning (the 02:30 reconcile) and a task deleted in HubSpot never arrives, so the task figures are incomplete; accepted (README, Open decisions: the task webhooks as a data prerequisite). The Terminal blocks of this phase run from the Chromebook (README, Access rules, Credentials on the local terminal). Why 11.1 comes before the merge: merging deploys `cma-web` to prod and Welcome calls 0008o's functions on every load, so a merge before `70` and `72` would show Welcome with an error until they ran (as 0008l did). Nothing here touches cloudbuild.yaml, an environment variable or a job schedule.
 
 ## 11.1 The two migrations and their verifies (before the merge)
 
@@ -1073,18 +1073,18 @@ Expected: counts; every status and type the portal uses, each `is_done` false an
 
 ## 11.4 The Sources settings
 
-Items 1, 2 and 4 need 11.3's task rows: set them after it.
+Items 1 and 2 need 11.3's task rows: set them after it.
 
 **Browser:** Workspace → Configuration → Sources → the HubSpot connection:
 1. Task statuses (after 11.3): tick Done for every status that means finished (HubSpot's `COMPLETED`; `DEFERRED` if the team treats it so).
 2. Task types (after 11.3): tick Callback for the type the agents use for a promised call (HubSpot's `CALL` if that is the convention, or the custom type); untick Counted for internal types.
 3. Pipelines: a response time for a ticket pipeline that differs from the default of 240 business minutes; leave empty for the default.
-4. Settings (after 11.3): add `record_url_task` with the live portal's task address, `{id}` for the task (the morning runbook step 9 confirms the address; the preview shows a link for the newest task).
+4. Settings: no `record_url_task`. Not possible (16 October 2026): HubSpot has no record page for a task (`/contacts/<portal id>/record/0-27/<task id>` answers 404; a task opens only as a preview on the task list), so Follow-up's task rows stay without a link (README, Open decisions).
 5. The telephony connection: Unlinked calls check stays at its default (skip outbound calls never connected and never tagged) unless Arno wants every call checked.
 
 **Browser:** Configuration → Exports → Follow-up: the response time, the warning share, the age groups and the callback window as Arno and Kira want them (defaults 240, 75, `1,2,5`, 240).
 
-Expected: Reports → Follow-up shows the tickets with their response time in force, the tasks with their types and the Callback badge, and the links open the records; Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
+Expected: Reports → Follow-up shows the tickets with their response time in force, the tasks with their types and the Callback badge, and the links of leads and tickets open the records (a task row has none); Data quality lists `ticket_no_owner` and `ticket_no_market` once a response time is set.
 
 ## 11.5 Day one
 

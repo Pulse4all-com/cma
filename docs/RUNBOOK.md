@@ -88,6 +88,15 @@ On a new machine, one step at a time:
    has no keyring, so the token sits in that file in plain text (README, Access rules, Credentials on the
    local terminal).
 
+   Then the identity `git` writes into every commit, the same as the GitHub account:
+
+   ```bash
+   git config --global user.name "Pulse4all-DEV" && git config --global user.email "martin@pulse4all.com"
+   git config --global --get user.name; git config --global --get user.email
+   ```
+
+   Expected: `Pulse4all-DEV` and `martin@pulse4all.com`.
+
 7. **Terminal**: the repository.
 
    ```bash
@@ -95,6 +104,51 @@ On a new machine, one step at a time:
    ```
 
    Expected: the latest commit on `main`.
+
+8. **Terminal**: the helpers `cma_db` (starts the Auth Proxy once and sets `PGCONN`) and `run_migration`
+   (a migration and its verify, normal and provoked, into `records/`) in `~/.cma_helpers.sh`, sourced
+   from `~/.bashrc`, so every new terminal tab has them. They are the Helpers block of the morning
+   runbooks (since `docs/night-2026-10-16/MORNING_RUNBOOK.md`); a runbook's block then needs no pasting,
+   unless it differs from the file.
+
+   ```bash
+   cat > ~/.cma_helpers.sh <<'EOF'
+   cma_db () {  # usage: cma_db dev|prod  → starts the proxy once and sets PGCONN
+     local env=$1 port; [ "$env" = dev ] && port=5433 || port=5434
+     pgrep -f "cloud-sql-proxy.*cma-$env-pg" >/dev/null || \
+       (cloud-sql-proxy --auto-iam-authn --port $port "p4a-cma-$env:europe-west4:cma-$env-pg" >/tmp/proxy-$env.log 2>&1 &)
+     sleep 3
+     export PGCONN="host=127.0.0.1 port=$port dbname=cma user=$(gcloud config get-value account 2>/dev/null) sslmode=disable"
+     psql "$PGCONN" -Atc "select 'connected to ' || current_database() || ' as ' || current_user"
+   }
+   run_migration () {  # usage: run_migration <env> <nn_migration.sql> <nn_verify.sql> <records dir> [earlier verify files...]
+     local env=$1 mig=$2 ver=$3 rec=$4; shift 4
+     cd ~/cma && mkdir -p "records/$rec" && cma_db "$env" || return 1
+     psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$mig" > "records/$rec/${mig%%_*}.txt" 2>&1 && tail -3 "records/$rec/${mig%%_*}.txt"
+     psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$ver" > "records/$rec/${ver%%_*}.txt" 2>&1; tail -6 "records/$rec/${ver%%_*}.txt"
+     sed "s/select set_config('verify.provoke', 'false', false);/select set_config('verify.provoke', 'true', false);/" "db/$ver" > /tmp/provoke.sql
+     psql "$PGCONN" -v ON_ERROR_STOP=0 -f /tmp/provoke.sql > "records/$rec/${ver%%_*}-provoked.txt" 2>&1
+     grep -cE "FAIL" "records/$rec/${ver%%_*}-provoked.txt" | sed 's/^/provoked FAIL lines: /'; grep -E "PROVOKED" "records/$rec/${ver%%_*}-provoked.txt" | tail -2
+     for f in "$@"; do psql "$PGCONN" -v ON_ERROR_STOP=1 -f "db/$f" > "records/$rec/${f%%_*}-rerun.txt" 2>&1; echo "$f: $(grep -cE '\| PASS' "records/$rec/${f%%_*}-rerun.txt") PASS rows"; done
+   }
+   EOF
+   grep -q 'cma_helpers.sh' ~/.bashrc || echo '[ -f ~/.cma_helpers.sh ] && . ~/.cma_helpers.sh' >> ~/.bashrc
+   bash -ic 'type -t cma_db run_migration'
+   ```
+
+   Expected: `function` twice. A tab opened before this step sources the file with `. ~/.cma_helpers.sh`.
+
+   The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
+   `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one
+   line of JSON bare, so `docs/datamap/schema.json` holds that line alone:
+
+   ```bash
+   cd ~/cma && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && head -c 60 docs/datamap/schema.json; echo
+   ```
+
+   Expected: `connected to cma as martin@pulse4all.com`, then `{"generated_at" : "…`. Run it only on a
+   branch whose migration has run in dev (CLAUDE.md, Database); on `main` it is a check, and
+   `git checkout docs/datamap/schema.json` puts the file back.
 
 ## 0. Start of every session
 

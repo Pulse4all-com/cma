@@ -12,10 +12,12 @@
  * admin that creates two throwaway tenants per run (email-<run>-one, email-<run>-two) and reads as
  * the owner. Locally CMA_DB_USER may be a login that inherits cma_app (cma-ingest@local.iam). It
  * refuses a database without the dev seed (no active agent.two@example.com: exit 2), so it never runs
- * in prod. At the end this run's connections are set inactive, so no job serves them again; the two
- * tenants and their invented rows stay, as other verifiers' do. Every job runs with this run's
- * connection: without one it serves every active connection of the database, in dev the real
- * tenant's (B17b.1; I1 proves nothing outside the two tenants was written).
+ * in prod. Both connections are of kind crm, as a real HubSpot connection is (cma.set_connection_kind;
+ * without it 53's A4 lists them). At the end this run's connections are set inactive, so no job serves
+ * them again, and the run removes its two tenants with every row they hold (J1), so nothing of it stays
+ * in the database. Every job runs with this run's connection: without one it serves every active
+ * connection of the database, in dev the real tenant's (B17b.1; I1 proves nothing outside the two
+ * tenants was written).
  *
  * Proves: the poll writes engagements (direction, status, actor kinds, the owner, the CRM thread id
  * and the automation origin by configuration, the category), their associations, inbox threads,
@@ -30,7 +32,7 @@
  * cma.email_category_of as in the ingest's memory; a connection without email_poll is not served;
  * tenant isolation; no row, audit image, cursor or log line holds a name, address, subject, text or
  * raw actor id, and no log line an email, thread or contact id; no row of another tenant was written
- * by this run (the audit log).
+ * by this run (the audit log); no row of the run's own tenants is left.
  */
 import { readFileSync } from "node:fs";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -38,7 +40,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
+import { expect, verdict, writesOutside, removeTenants, PROVOKE } from "./lib.mjs";
 import { loadSource, startFakeHubSpot } from "./email-fake.mjs";
 
 console.log(`verify/email-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
@@ -124,6 +126,7 @@ async function asAdmin(tenant, fn) {
 const START = new Date(NOW - 3 * DAY).toISOString().slice(0, 10);
 const conn1 = await asAdmin(t1, async () => {
   const [c] = await q("select * from cma.upsert_connection('hubspot', 'HubSpot email one', '9000201', $1, $2)", [`ingest-hubspot-email${RUN}-signing`, `ingest-hubspot-email${RUN}-token1`]);
+  await q("select cma.set_connection_kind($1, 'crm')", [c.connection_id]);
   await q("select cma.upsert_market('GB', 'United Kingdom', 'Europe/London', 'en', 'GBP')");
   await q("select cma.set_market_alias('united kingdom', 'GB')");
   await q("select cma.set_connection_field($1, 'contact', 'country', '', 'contact_country', 1::smallint)", [c.connection_id]);
@@ -137,8 +140,12 @@ const conn1 = await asAdmin(t1, async () => {
   await q("select cma.set_tenant_setting('email.start_date', $1)", [START]);
   return c.connection_id;
 });
-const conn2 = await asAdmin(t2, async () => (await q("select * from cma.upsert_connection('hubspot', 'HubSpot email two', '9000202', $1, $2)",
-  [`ingest-hubspot-email${RUN}-signing`, `ingest-hubspot-email${RUN}-token2`]))[0].connection_id);
+const conn2 = await asAdmin(t2, async () => {
+  const [c] = await q("select * from cma.upsert_connection('hubspot', 'HubSpot email two', '9000202', $1, $2)",
+    [`ingest-hubspot-email${RUN}-signing`, `ingest-hubspot-email${RUN}-token2`]);
+  await q("select cma.set_connection_kind($1, 'crm')", [c.connection_id]);
+  return c.connection_id;
+});
 
 // ---- Helpers -------------------------------------------------------------------------------------
 const mark = () => fake.state.requests.length;
@@ -331,6 +338,10 @@ await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [c
 // ---- I. Nothing outside this run's tenants -----------------------------------------------------------------
 expect("I1 no row of another tenant written by this run (sync_run, email_*, crm_contact, sync_cursor, any audited table)",
   await writesOutside(q, { tenants: [t1, t2], since: STARTED, logins: [process.env.CMA_DB_USER, ADMIN] }), [], ["sync_run:2"]);
+
+// ---- J. The run's own tenants removed -------------------------------------------------------------------
+expect("J1 the run's two tenants removed with every row they held (no table holds their ids)",
+  await removeTenants(q, [t1, t2]).catch((e) => [`refused: ${e.message}`]), [], ["tenant:2"]);
 await admin.end();
 await fake.close();
 await closeDb();

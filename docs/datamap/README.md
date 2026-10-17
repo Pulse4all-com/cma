@@ -62,7 +62,7 @@ Expected: `The proxy has started successfully and is ready for new connections!`
 **Terminal** (second tab, in `~/cma`)
 
 ```bash
-psql "host=127.0.0.1 port=5433 dbname=cma user=$(gcloud config get-value account) sslmode=disable" -v ON_ERROR_STOP=1 -qAt -f tools/datamap/schema.sql > docs/datamap/schema.json
+psql "host=127.0.0.1 port=5433 dbname=cma user=$(gcloud config get-value account) sslmode=disable" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
 ```
 
 Expected: nothing printed; `docs/datamap/schema.json` is one line of JSON whose `latest_migration` is the increment's migration.
