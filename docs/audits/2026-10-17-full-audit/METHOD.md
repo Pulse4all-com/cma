@@ -92,7 +92,13 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 | 16:45 | local PostgreSQL 16 initdb + start | running on 127.0.0.1:5432 |
 | 16:46 | `/var/tmp/build-local-db.sh` (db/00…74 + seeds) | all exit 0 |
 | 16:47 | all verify scripts normal + provoked | see `local-records/db/_verify-summary.txt` |
-| 16:49 | `npm run build`, typecheck, lint, pure verifiers, ingest lint + test (background) | pending |
+| 16:49 | `npm run build`, typecheck, lint, 16 pure verifiers, ingest lint + `npm test` | all exit 0 (one lint warning: unused `uid` in `verify/follow-up.mjs`); outputs `local-records/web-baseline/` |
+| 16:52 | nine area subagents launched (5.1, 5.2, 5.3, 5.4+5.5, 5.6 static, 5.7, 5.8+5.9+5.10, 5.11, 5.12) | findings in `local-records/<area>/findings.md` |
+| 16:55 | standalone server, mock mode, port 8080; `/var/tmp/measure-ttfb.sh` 50 sequential requests per route | `local-records/5.6-speed-measured/ttfb-mock.txt`: p95 ≤ 126 ms on every page (sandbox) |
+| 16:57 | standalone server, api mode against the local database (`CMA_DB_HOST`), port 8081; `log_statement=all` for one request per page | `round-trips-api.txt`: Welcome 8 (agent) to 12 (admin) transactions, 20 to 34 statements; every page ≥ 3 transactions |
+| 16:59 | `measure-ttfb.sh` against the api server | `ttfb-api-localdb.txt`: p95 ≤ 77 ms on every page (sandbox, dev-seed volume, loopback) |
+| 17:05 | `tc`/netem for an emulated round-trip delay | not available in the sandbox; round-trip cost is estimated from the statement counts instead |
+| 17:06 | Playwright screenshots of every page per mock subject at 1280 and 1600 px (`/var/tmp/screenshots.mjs`, Chromium 1194 via `executablePath`) | `local-records/ux/before/` |
 
 ## 5. Assumptions made explicit
 
@@ -108,6 +114,6 @@ ops scripts' unsafe defaults (the incident class of 16 October 2026). (6) Hygien
 
 ## 7. Where I stopped / next step
 
-- 16:50 UTC: environment ready, database built and verified, threat model written. Next: wave 1 subagents
-  (5.1, 5.2, 5.3, 5.4+5.5, 5.6 static, 5.7, 5.8+5.9+5.10, 5.11, 5.12) while the web build and baseline
-  checks run; then speed measurements (5.6) on the standalone server in mock and api mode.
+- 17:06 UTC: wave 1 subagents running; sandbox speed baseline measured (mock and api mode); screenshots
+  running; drafts for 5.13 (OPERATIONS, Plan B, dated items, gates) and 7.4 (README cockpit edits) being
+  prepared by two more subagents. Next: collect findings, consolidate and self-review, then fixes.
