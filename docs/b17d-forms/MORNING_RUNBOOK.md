@@ -4,7 +4,7 @@ Labels: **Browser**, **Terminal** (Martin's own Linux terminal, Chromebook Linux
 
 **What changes:** every form is polled apart from whether it counts in Intake, and Reports → Forms shows every polled form's submissions per form and market. Addition 0008p (`74`, `75`): `connection_form.is_polled` (existing forms polled exactly when they count), the tenant's form categories, each form's fields with their option values, kept answers of choice questions only (checked against the options), a form's market field and lead condition, the reads `cma.forms_report()`, `cma.forms_answers()` and `cma.forms_history_start()` (README, Data model: forms reporting; Decision log, 16 October 2026). The ingest's forms poll and backfill read every polled form, keep choice answers only and count the dropped ones; the backfill fills a stored submission's empty answers once. The web app: Reports → Forms (`/reports/forms`, `reports.view` or `performance.team`) with its file, and on Configuration → Sources a form's polled switch and category, and the form categories.
 
-**Run:** in dev and prod on 17 October 2026 (`records/b17d-dev-2026-10-17`, `records/b17d-prod-2026-10-17`, written down from Martin's report). Corrected afterwards where that run went otherwise: the context block as one Run (Helpers), step 9's wait for the fields, 10b's and 10c's expected rows (the generic Quote Form has no market), 10c and 10d as a review read and then the same query calling the function, 10g's value from the field's options, and the prefix pattern's single backslashes (10c).
+**Run:** in dev and prod on 17 October 2026 (`records/b17d-dev-2026-10-17`, `records/b17d-prod-2026-10-17`, written down from Martin's report). Corrected afterwards where that run went otherwise: the context block as one Run (Helpers), step 9's wait for the fields, 10b's and 10c's expected rows (the generic Quote Form has no market), 10c and 10d as a review read and then the same query calling the function, 10g's value from the field's options, the prefix pattern's single backslashes (10c), and 10c's market from the tenant's markets without a fixed list (README, Decision log, 17 October 2026).
 
 **Order matters:**
 - `Pulse4all-com/cma#142` (0008n and 0008o, `70` to `73`) is merged (`c7a3cab`) and has run in dev and prod (`records/0008n-dev-2026-10-16`, `records/0008n-prod-2026-10-16`, `records/0008o-dev-2026-10-16`, `records/0008o-prod-2026-10-16`); without 0008o `74` stops with `addition 0008o (72_follow_up.sql) must run before 0008p` and applies nothing.
@@ -341,7 +341,7 @@ reset role;
 ```
 Expected: 28 rows, each a form's name and an empty value.
 
-**10c. The 22 support forms: polled, not counted, with category and market.** The repository does not hold prod's catalog, so one query over it gives each form its category from the name (cancellation, replacement, IBAN, support) and its market from the name's two-letter prefix (AT, BE, DE, DK, ES, FR, NL, SE, UK read as GB; no prefix, no market). Nothing in code knows these names. The prefix pattern `'^\s*([A-Za-z]{2})\M'` is written with single backslashes: Studio's `standard_conforming_strings` is on, so a backslash in a plain string literal stays one character, and a doubled backslash matches a literal backslash, which no form name has, so no form would get a market. First the review, **Studio (cma-prod-pg)** (read only):
+**10c. The 22 support forms: polled, not counted, with category and market.** The repository does not hold prod's catalog, so one query over it gives each form its category from the name (cancellation, replacement, IBAN, support) and its market from the name's two-letter prefix, matched against the tenant's markets (`cma.market`), with no fixed list. A prefix that is not one of the tenant's markets leaves the market empty; UK maps to GB. Nothing in code knows these names. The prefix pattern `'^\s*([A-Za-z]{2})\M'` is written with single backslashes: Studio's `standard_conforming_strings` is on, so a backslash in a plain string literal stays one character, and a doubled backslash matches a literal backslash, which no form name has, so no form would get a market. First the review, **Studio (cma-prod-pg)** (read only):
 ```sql
 set role cma_owner;
 select f.source_form_id, f.name, x.category, m.code as market
@@ -350,12 +350,12 @@ cross join lateral (select case when f.name ~* 'iban' then 'iban_change' when f.
                                 when f.name ~* 'replacement' then 'replacement' when f.name ~* 'support' then 'support' end as category,
                            case upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) when 'UK' then 'GB'
                                 else upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) end as prefix) x
-left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix and x.prefix in ('AT', 'BE', 'DE', 'DK', 'ES', 'FR', 'NL', 'SE', 'GB')
+left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix
 where f.connection_id = '<conn>' and f.status = 'active' and not f.is_counted
 order by f.name;
 reset role;
 ```
-Expected: 22 rows, each a form's id, name, category and market: ten `cancellation` (nine with the market of their prefix, the general one empty), ten `replacement` (the same), `iban_change` with `DE` (DE change IBAN) and `support` without a market (the General support form). **Read every row against its name.** An empty category (a name the four words miss) or an empty market behind a prefix (a market not in the catalog, such as one added later) is set right afterwards, below; ask me when unsure.
+Expected: 22 rows, each a form's id, name, category and market: ten `cancellation` (nine with the market of their prefix, the general one empty), ten `replacement` (the same), `iban_change` with `DE` (DE change IBAN) and `support` without a market (the General support form). **Read every row against its name.** An empty category (a name the four words miss) or an empty market behind a prefix (a prefix that is not one of the tenant's markets: add the market first if it should be one) is set right afterwards, below; ask me when unsure.
 
 Then the same query calling the function, **after the context block**:
 ```sql
@@ -365,7 +365,7 @@ cross join lateral (select case when f.name ~* 'iban' then 'iban_change' when f.
                                 when f.name ~* 'replacement' then 'replacement' when f.name ~* 'support' then 'support' end as category,
                            case upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) when 'UK' then 'GB'
                                 else upper(substring(f.name from '^\s*([A-Za-z]{2})\M')) end as prefix) x
-left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix and x.prefix in ('AT', 'BE', 'DE', 'DK', 'ES', 'FR', 'NL', 'SE', 'GB')
+left join cma.market m on m.tenant_id = f.tenant_id and m.code = x.prefix
 where f.connection_id = '<conn>' and f.status = 'active' and not f.is_counted
 order by f.name;
 reset role;
