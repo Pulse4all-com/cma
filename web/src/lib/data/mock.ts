@@ -4,7 +4,7 @@
  * must say so). Nothing here reaches a database.
  */
 import { MOCK_IDENTITY, MOCK_PRINCIPAL, type Principal } from "@/lib/auth/identity";
-import { CmaDbError } from "@/lib/db/client";
+import { CmaDbError } from "@/lib/data/errors";
 import { instantsForLocal } from "@/lib/corrections";
 import { addDays, dateKeyInZone, startOfWeek } from "@/lib/time";
 import type {

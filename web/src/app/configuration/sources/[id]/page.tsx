@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SourceConfig } from "@/components/configuration/SourceConfig";
 import { Card } from "@/components/primitives";
 import { data } from "@/lib/data";
-import { CmaDbError } from "@/lib/db/client";
+import { CmaDbError } from "@/lib/data/errors";
 import { resolve } from "../../../access";
 import { ConfigurationPage, mayConfigure } from "../../gate";
 

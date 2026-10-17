@@ -1,6 +1,6 @@
 import { getIdentity } from "@/lib/auth/identity";
 import { data } from "@/lib/data";
-import { CmaDbError } from "@/lib/db/client";
+import { CmaDbError } from "@/lib/data/errors";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { isSameOriginPost } from "@/lib/origin";
 

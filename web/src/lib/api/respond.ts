@@ -1,7 +1,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getAccess, type Principal } from "@/lib/auth/identity";
-import { CmaDbError } from "@/lib/db/client";
+import { CmaDbError } from "@/lib/data/errors";
 
 /**
  * Shared plumbing for the /api/v1 routes.

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "verify:copy": "node verify/copy.mjs",
+    "verify:boundaries": "node verify/boundaries.mjs",
     "verify:theme": "node verify/theme.mjs",
     "verify:layout": "node verify/layout.mjs",
     "verify:hints": "node verify/hints.mjs",
