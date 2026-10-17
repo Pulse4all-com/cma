@@ -65,6 +65,13 @@ expect("no client id setting → client_id_not_set", await codeOf(tokenFor(conne
 resetClients();
 expect("another client id → the token request refused (token_http_400)", await codeOf(tokenFor(connection, { client_id: "anotherclientid01" }, AbortSignal.timeout(2000))), "token_http_400", "ok");
 expect("a missing client secret → client_secret_unavailable", await codeOf(tokenFor({ ...connection, signingSecretName: "ingest-shopify-missing" }, settings, AbortSignal.timeout(2000))), "client_secret_unavailable", "ok");
+// Another connection (another tenant's) naming the same shop and client id, both public values, with a secret of its
+// own that holds nothing: it never gets the first connection's cached token (CMA-037 item 1, 17 October 2026)
+await tokenFor(connection, settings, AbortSignal.timeout(2000));
+const mintedForC1 = fake.mints;
+const c2 = { ...connection, connectionId: "c2", signingSecretName: "ingest-shopify-missing" };
+expect("another connection to the same shop and client id reads its own secret: missing → client_secret_unavailable, not the cached token", await codeOf(tokenFor(c2, settings, AbortSignal.timeout(2000))), "client_secret_unavailable", "ok");
+expect("…and no token was minted or handed out for it", fake.mints, mintedForC1, mintedForC1 + 1);
 expect("a shop that is not <handle>.myshopify.com → shop_invalid", (() => { try { shopBase("evil.example.com"); return "ok"; } catch (e) { return e.code; } })(), "shop_invalid", "ok");
 
 // ---- Answers -------------------------------------------------------------------------------------------

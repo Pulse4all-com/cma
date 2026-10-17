@@ -6,7 +6,7 @@
  * +44 20 0000 xxxx range.
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
- *   INGEST_FLOW_ADMIN_USER=martin@pulse4all.com node verify/shopify-flow.mjs [--provoke]
+ *   INGEST_FLOW_ADMIN_USER=<team login> node verify/shopify-flow.mjs [--provoke]
  *
  * Logins as in verify/flow.mjs. Two throwaway tenants per run (shopify-<run>-one, -two); the service
  * and the jobs run in this process; at the end this run's connections are set inactive.
@@ -48,7 +48,11 @@ for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
     process.exit(2);
   }
 }
-const ADMIN = process.env.INGEST_FLOW_ADMIN_USER ?? "martin@pulse4all.com";
+const ADMIN = process.env.INGEST_FLOW_ADMIN_USER;
+if (!ADMIN) {
+  console.error("INGEST_FLOW_ADMIN_USER is required: a team login that holds cma_owner and cma_app by SET ROLE (locally, for example, auditor@local)");
+  process.exit(2);
+}
 const RUN = randomBytes(4).toString("hex");
 const SLUG1 = `shopify-${RUN}-one`;
 const SLUG2 = `shopify-${RUN}-two`;
@@ -93,7 +97,7 @@ const fake = {
   withhold: { email: false, phone: false }, countLag: new Set(),
   shops: { [SHOP_A]: { client: CLIENT_A, secret: SECRET_A }, [SHOP_N]: { client: CLIENT_A, secret: SECRET_A }, [SHOP_X]: { client: CLIENT_X, secret: SECRET_X } },
   customers: {}, orders: {}, subscriptions: {},
-  hs: { contacts: {}, searches: [], reads: [], other: [] },
+  hs: { contacts: {}, searches: [], reads: [], other: [], rateLimitAfter: null },
 };
 const shopOf = (o) => o.shop ?? SHOP_A;
 function addCustomer(key, o = {}) {
@@ -221,6 +225,8 @@ function hubspot(req, body, res) {
   const contacts = fake.hs.contacts;
   if (url.pathname === "/crm/v3/objects/contacts/search") {
     fake.hs.searches.push({ t: Date.now(), body });
+    // the account's search limit: every search past the count set answers 429 (section L3)
+    if (fake.hs.rateLimitAfter !== null && fake.hs.searches.length > fake.hs.rateLimitAfter) return json(429, { message: "rate limited" });
     const match = (c) => (body.filterGroups ?? []).some((g) => g.filters.every((f) => (f.propertyName === "email" ? String(c[f.propertyName] ?? "").toLowerCase() === String(f.value).toLowerCase() : String(c[f.propertyName] ?? "") === String(f.value))));
     const results = Object.entries(contacts).filter(([, c]) => !c.deleted && !c.mergedInto && match(c)).slice(0, body.limit ?? 10).map(([id]) => ({ id, properties: { hs_object_id: id } }));
     return json(200, { total: results.length, results });
@@ -675,8 +681,63 @@ expect("tenant one sees none of tenant two's customers or events", await asAdmin
   Number((await q("select count(*) as n from cma.commerce_customer where connection_id = $1", [connX.x]))[0].n),
   Number((await q("select count(*) as n from cma.ingest_event where connection_id = $1", [connX.x]))[0].n)]), [0, 0], [1, 1]);
 
+// ---- L2. Another tenant naming tenant one's shop and client id (CMA-037 item 1) ------------------------------
+// Tenant two's admin points a connection at shop A with the app's client id (both public values) and a secret name
+// that holds nothing: its reconcile reads its own secret (none) and never rides on tenant one's cached token
+const connB = await asAdmin(t2, async () => {
+  const [b] = await q("select * from cma.upsert_connection('shopify', 'Shopify flow B', $1, $2, null)", [SHOP_A, `ingest-shopify-${RUN}-b-missing`]);
+  await q("select cma.set_connection_settings($1, $2::jsonb)", [b.connection_id, JSON.stringify({ client_id: CLIENT_A, shop_handle: `flow-${RUN}-a` })]);
+  await q("select cma.upsert_commerce_store($1, $2, 'Flow store B', 'GB', 'GBP', 'Europe/London')", [b.connection_id, `flow-${RUN}-a`]);
+  return b.connection_id;
+});
+const mintsA = fake.mints[SHOP_A];
+const tB = mark();
+await runReconcile({ connectionId: connB, lookbackMinutes: 60 });
+const runsB = await runs(connB, "reconcile");
+expect("tenant two's connection to tenant one's shop: its reconcile fails on its own missing secret, every stream",
+  [runsB.length > 0, runsB.map((r) => `${r.status}:${r.error}`).every((x) => x === "failed:client_secret_unavailable")], [true, true], [true, false]);
+expect("…no token minted or reused for the shop, no read with tenant one's token, nothing stored in tenant two",
+  [fake.mints[SHOP_A] - mintsA, gql(tB).length,
+   Number((await q("select count(*) as n from cma.commerce_customer where connection_id = $1", [connB]))[0].n) + Number((await q("select count(*) as n from cma.commerce_order where connection_id = $1", [connB]))[0].n)],
+  [0, 0, 0], [0, 2, 1]);
+
+// ---- L3. One CRM lookup failing fails that customer only (CMA-037 item 3) --------------------------------------
+// Five new customers delivered while Shopify is down (the route leaves them failed for the sweep); the fake CRM then
+// answers 429 to every search after the first two. The sweep matches the first two, fails the third with the limit's
+// code and, since the limit is the account's, the two after it too, and tries those three again at the next sweep
+const R = { r1: "7900000011", r2: "7900000012", r3: "7900000013", r4: "7900000014", r5: "7900000015" };
+for (const [k, id] of Object.entries(R)) {
+  fake.customers[id] = { id, shop: SHOP_A, state: "ENABLED", locale: "en-GB", email: `${k}@example.com`, phone: `+44 20 0000 03${id.slice(-2)}`, createdAt: nowIso(-86400), updatedAt: nowIso(-60) };
+  fake.hs.contacts[`53000000${id.slice(-2)}`] = { email: `${k}@example.com` };
+}
+fake.gqlDown = true;
+const rDeliveries = [];
+for (const id of Object.values(R)) rDeliveries.push(await deliver(conn.aKey, "customers/create", { id: Number(id), email: fake.customers[id].email }));
+fake.gqlDown = false;
+const rEvents = async () => q("select object_id, status, error from cma.ingest_event where connection_id = $1 and object_type = 'commerce_customer' and object_id = any ($2) order by object_id", [conn.a, Object.values(R)]);
+const rLinked = async () => { let n = 0; for (const id of Object.values(R)) { const l = await linkOf(id); if (l && l[1]) n += 1; } return n; };
+expect("five customers delivered while Shopify is down → 200, every event failed for the sweep", [rDeliveries.every((d) => d.status === 200), (await rEvents()).map((e) => e.status)],
+  [true, ["failed", "failed", "failed", "failed", "failed"]], [false, []]);
+fake.hs.rateLimitAfter = fake.hs.searches.length + 2;
+let rSearches = fake.hs.searches.length;
+await forceDue();
+await runSweep({ connectionId: conn.a });
+const rAfter = await rEvents();
+expect("the sweep with the CRM's third search refused (429): two matched, three failed crm_rate_limited (the limit is the account's: the searches stop), three searches",
+  [rAfter.filter((e) => e.status === "processed").length, rAfter.filter((e) => e.status === "failed" && e.error === "crm_rate_limited").length, fake.hs.searches.length - rSearches],
+  [2, 3, 3], [0, 5, 3]);
+expect("…the two matched customers are linked to their contacts", await rLinked(), 2, 0);
+fake.hs.rateLimitAfter = null;
+rSearches = fake.hs.searches.length;
+await forceDue();
+await runSweep({ connectionId: conn.a });
+expect("…the next sweep tries the three again only: all five processed and linked, three searches",
+  [(await rEvents()).every((e) => e.status === "processed"), await rLinked(), fake.hs.searches.length - rSearches],
+  [true, 5, 3], [true, 5, 5]);
+
 // ---- M. What was written and logged ---------------------------------------------------------------------------
 const tenants = [t1, t2];
+await asAdmin(t2, () => q("select cma.set_connection_status($1, 'inactive')", [connB]));
 const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma.commerce_customer x where tenant_id = any ($1)
   union all select row_to_json(x)::text from cma.commerce_order x where tenant_id = any ($1)
   union all select row_to_json(x)::text from cma.commerce_order_line x where tenant_id = any ($1)
@@ -686,9 +747,9 @@ const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma
   union all select row_to_json(x)::text from cma.sync_run x where tenant_id = any ($1)
   union all select row_to_json(x)::text from cma.integration_connection x where tenant_id = any ($1)
   union all select row_to_json(x)::text from cma.audit_log x where tenant_id = any ($1)`, [tenants]));
-const emails = [...Object.values(EMAIL), "order@example.com", "someone@example.com", "someone%40example.com", "renewal-0@example.com", "renewal-199@example.com"]
+const emails = [...Object.values(EMAIL), ...Object.keys(R).map((k) => `${k}@example.com`), "order@example.com", "someone@example.com", "someone%40example.com", "renewal-0@example.com", "renewal-199@example.com"]
   .flatMap((e) => [e, e.toLowerCase()]);
-const numbers = [...Object.values(PHONE), ORDER_PHONE, GUEST_PHONE, "+44 20 0000 3000", "+44 20 0000 3199", "+44 20 0000 0109"]
+const numbers = [...Object.values(PHONE), ...Object.values(R).map((id) => `+44 20 0000 03${id.slice(-2)}`), ORDER_PHONE, GUEST_PHONE, "+44 20 0000 3000", "+44 20 0000 3199", "+44 20 0000 0109"]
   .flatMap((n) => [n, n.replace(/\D/g, ""), `+${n.replace(/\D/g, "").replace(/^0/, "44")}`, n.replace(/\D/g, "").replace(/^(44|0)/, "")]);
 expect("no fixture email in any database row of the flow (audit log included)", emails.filter((e) => dbText.includes(e)), [], emails);
 expect("no fixture phone number, in any form, in any database row", numbers.filter((n) => dbText.includes(n)), [], numbers);

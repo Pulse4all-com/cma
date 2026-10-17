@@ -21,6 +21,7 @@
  * crm_connection_id, or one whose CRM connection is inactive or of an adapter without contact lookups,
  * leaves the link as it is (match_not_configured). The email is never logged, stored or answered.
  */
+import { SourceError } from "../../core/http.mjs";
 import { ADAPTERS } from "../index.mjs";
 import { idOf } from "./map.mjs";
 
@@ -40,10 +41,11 @@ export async function crmOf(store, settings, refSystem) {
 
 /**
  * The customers of one batch (customer id → GraphQL customer node) → customer id → { outcome, link }.
- * outcome: known, ref, one, none, several, not_configured; link: { crmConnectionId, contactId } to set,
+ * outcome: known, ref, one, none, several, not_configured, or error with its code (that customer's units
+ * fail for the sweep; since the IT audit of 17 October 2026 one lookup the CRM cannot answer fails that
+ * customer only, never the whole batch); link: { crmConnectionId, contactId } to set,
  * { crmConnectionId: null, contactId: null } to clear, or null to leave as it is. gone: how many
- * links pointed at a contact the CRM no longer has. Throws a SourceError when the CRM cannot answer
- * (the caller fails the events: the sweep tries again).
+ * links pointed at a contact the CRM no longer has. Throws only when the CMA's own reads fail.
  */
 export async function matchCustomers({ connection, store, side, nodes, budget }) {
   const out = new Map();
@@ -59,17 +61,34 @@ export async function matchCustomers({ connection, store, side, nodes, budget })
   // 1a. the links the CMA holds, checked in one read
   const links = await store.customerLinks(ids);
   const linked = ids.filter((id) => links.get(id)?.crmConnectionId === crmId);
-  const existing = linked.length
-    ? await side.adapter.crm.existingContacts({ connection: side.crm, ids: linked.map((id) => links.get(id).contactId), budget })
-    : new Set();
   let gone = 0;
+  // A CRM that cannot answer the batch read fails the linked customers only (outcome error, for the sweep);
+  // the others go on to their own lookups (CMA-037 item 3)
+  let existing = new Set();
+  let existingError = null;
+  if (linked.length) {
+    try {
+      existing = await side.adapter.crm.existingContacts({ connection: side.crm, ids: linked.map((id) => links.get(id).contactId), budget });
+    } catch (err) {
+      existingError = err instanceof SourceError ? err.code : "error";
+    }
+  }
   for (const id of linked) {
-    if (existing.has(links.get(id).contactId)) out.set(id, { outcome: "known", link: null });
+    if (existingError) out.set(id, { outcome: "error", link: null, code: existingError });
+    else if (existing.has(links.get(id).contactId)) out.set(id, { outcome: "known", link: null });
     else gone += 1;
   }
 
+  // One customer's lookup failing fails that customer only. A rate limit, a missed slot or a timeout on the
+  // CRM's search stops the searches that follow (they would hit the same limit): those customers fail with the
+  // same code and the sweep tries them again; the customers already matched keep their outcome
+  let stopped = null;
   for (const id of ids) {
     if (out.has(id)) continue;
+    if (stopped) {
+      out.set(id, { outcome: "error", link: null, code: stopped });
+      continue;
+    }
     // 1b. the contacts the CMA holds whose refs hold the customer id
     const held = await store.heldRefContacts({ crmConnectionId: crmId, refSystem: connection.adapter, customerId: id });
     if (held.length === 1) {
@@ -88,6 +107,11 @@ export async function matchCustomers({ connection, store, side, nodes, budget })
       found = email
         ? await side.adapter.crm.findContactsByEmail({ connection: side.crm, email, budget })
         : await side.adapter.crm.findContactsByProperties({ connection: side.crm, properties: side.refProperties, value: id, budget });
+    } catch (err) {
+      const code = err instanceof SourceError ? err.code : "error";
+      if (code === "rate_limited" || code === "paced" || code === "timeout") stopped = code;
+      out.set(id, { outcome: "error", link: null, code });
+      continue;
     } finally {
       email = null;
     }

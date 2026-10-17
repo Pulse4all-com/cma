@@ -253,11 +253,12 @@ export async function readBack({ connection, config, events, store, budget }) {
       units.push(unit(g.events, "ignored"));
       continue;
     }
-    if (cid && toMatch.has(cid) && matchError) {
-      units.push(unit(g.events, "failed", matchError));
+    const m = cid ? matches.get(cid) : null;
+    // the batch's own reads failed (the CMA's links or the CRM side), or this customer's lookup did
+    if ((cid && toMatch.has(cid) && matchError) || m?.outcome === "error") {
+      units.push(unit(g.events, "failed", matchError ?? `crm_${m.code}`.slice(0, 60)));
       continue;
     }
-    const m = cid ? matches.get(cid) : null;
     const writes = {};
     const customerNode = cid ? customers.get(cid) : null;
     const customerItem = customerNode ? customerFromNode(customerNode, { pepper, region }) : null;
