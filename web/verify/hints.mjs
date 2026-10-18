@@ -6,7 +6,8 @@
  * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
  * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
  * Forms, since addition 0008t every tile and header of Email and Email per agent, and since addition 0008u every tile, header and
- * level bar of First orders and every header of Orders per person, carries exactly one info mark: a button with a name, described by a
+ * level bar of First orders and every header of Orders per person, and since addition 0008w the Callbacks kept tile and the
+ * headers of the callbacks kept per week and per person, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -83,8 +84,8 @@ const cases = [
   ["manager", "/reports/intake?range=month", 18, 0],
   ["invest-analyst", "/reports/intake?range=month", 18, 0],
   ["manager", "/reports/data-quality", 3, 0],
-  ["manager", "/reports/dashboard?range=month", 0, 10],
-  ["invest-analyst", "/reports/dashboard?range=month", 0, 6],
+  ["manager", "/reports/dashboard?range=month", 0, 11],
+  ["invest-analyst", "/reports/dashboard?range=month", 0, 11],
   // Inbound (addition 0008i): seven headers (the 80th percentile left on 15 October 2026) and one per reason that occurs (the fixture has seven)
   ["manager", "/reports/inbound?range=month&group=day", 13, 0],
   ["manager", "/reports/inbound?range=month&group=market", 13, 0],
@@ -104,9 +105,11 @@ const cases = [
   // Follow-up (addition 0008o): eight tiles; the leads' nine, the tickets' nine and the tasks' eight named headers
   // (the link column's header is read out only, so it is not counted here), and the per-person table's seven
   // for performance.team (the reader, with reports.view alone, has no per-person table); Waiting for you
-  // without the owner columns; the Live board's six follow-up tiles
-  ["manager", "/reports/follow-up", 33, 8],
-  ["reader", "/reports/follow-up", 26, 8],
+  // without the owner columns; the Live board's six follow-up tiles. Since addition 0008w the callbacks kept per week
+  // (eight headers, for reports.view or performance.team) and per person (seven, performance.team); the Dashboard's
+  // Intake row a seventh tile, Callbacks kept (also "No callback type set" for the invest tenant)
+  ["manager", "/reports/follow-up", 48, 8],
+  ["reader", "/reports/follow-up", 34, 8],
   ["agent-one", "/me/follow-up", 23, 0],
   ["supervisor", "/live/board", 0, 6, '[data-testid="follow-up-live"]'],
   // Forms (addition 0008p): four tiles; the forms table's five headers, the totals per category and per market

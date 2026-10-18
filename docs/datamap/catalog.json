@@ -543,6 +543,10 @@
     {
       "name": "first_orders",
       "what": "Per won deal of an order pipeline: market, when, the linked shop order by id, kind (first, repeat, renewal, not first, no contact), currency and amount, the evidence found before it (lead deal, conversation, email, phone match, attempt, known contact), its level, call center or self-service, days from the first touch, the credited person by id (0008u)"
+    },
+    {
+      "name": "callbacks_kept",
+      "what": "Per callback task (a counted callback type) since the intake start: due date, ISO week, the owner's person by id, kept, not kept, pending, without a contact or a due time, the keeping call's time and its minutes from the due time (0008w)"
     }
   ],
   "flows": {

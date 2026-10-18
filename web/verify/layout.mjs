@@ -43,6 +43,9 @@
  * performance.team, Orders per person for performance.team while reports.per_person holds orders (absent from the
  * rail and not found otherwise), the keycaps K, V, G and X, four tiles, a bar per level, "History from" in Muted,
  * every grouping and the tables inside their cards, "No orders connected" for a tenant without an order pipeline.
+ * Callbacks kept (addition 0008w) for five identities: on Follow-up the eight weeks for reports.view or performance.team
+ * and per person for performance.team, both inside their cards, the right-most header hint inside the viewport, "No
+ * callback type set" for a tenant without one, there and on the Dashboard's Intake row.
  * Campaign monitoring (addition 0008v) for seven identities: in the Campaigns group for reports.view or
  * performance.team, a card per journey inside the main area (the archived one absent), a journey's Muted banner,
  * seven dashed placeholders (the drill-down locked), its prerequisites unticked, no figure, the breadcrumbs
@@ -63,7 +66,7 @@
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
  *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
- *       spill out of its card, lets the first orders list spill out of its card, widens the first journey card past the main
+ *       spill out of its card, lets the first orders list and the callbacks' weeks spill out of their cards, widens the first journey card past the main
  *       area, writes a two-character key on the manager's tenth page, strips the name off
  *       every dialog before it is read and the role off the tiles, expect FAIL, exit 1
  */
@@ -750,6 +753,80 @@ async function expectCampaigns() {
   await ctx.close();
 }
 
+// Callbacks kept (addition 0008w, brief N19-A part 4) at 1280 px: on Follow-up below the lists the eight weeks for
+// reports.view or performance.team and the per-person table for performance.team only (the reader sees the weeks; the
+// agent neither); both tables end inside their cards (they may scroll inside them); the weeks' right-most header hint
+// stays inside the viewport; a tenant without a callback type says "No callback type set" in words, on Follow-up and
+// on the Dashboard's Intake row, whose seventh tile it is. --provoke lets the weeks table spill out of its card
+async function expectCallbacks() {
+  // [subject, sees the weeks, sees per person, a callback type counted]
+  const cases = [["manager", true, true, true], ["analyst", true, true, true], ["reader", true, false, true], ["invest-analyst", true, false, false],
+    ["agent-one", false, false, true]];
+  for (const [subject, weeks, owners, connected] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/follow-up");
+    await p.waitForLoadState("networkidle");
+    const where = `${subject} /reports/follow-up`;
+    const m = await p.evaluate(([spill]) => {
+      const inCard = (id) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+        const card = box.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        return box.getBoundingClientRect().right > edge + 0.5 || (getComputedStyle(box).overflowX === "visible"
+          && [...box.querySelectorAll("tr")].some((row) => row.getBoundingClientRect().right > edge + 0.5));
+      };
+      const main = document.querySelector("main");
+      return {
+        weeks: document.querySelectorAll('[data-testid="callbacks-weeks"]').length,
+        weekRows: document.querySelectorAll('[data-testid="callbacks-week"]').length,
+        owners: document.querySelectorAll('[data-testid="callbacks-owners"]').length,
+        notConnected: !!document.querySelector('[data-testid="callbacks-not-connected"]'),
+        spills: [inCard("callbacks-weeks-scroll"), inCard("callbacks-owners-scroll")],
+        mainX: main ? main.scrollWidth - main.clientWidth : 0,
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    }, [provoke && subject === "manager"]);
+    if (m.scrollX || m.mainX > 0) problems.push(`${where}: the page or the main area scrolls sideways at 1280`);
+    if ((m.weeks === 1) !== (weeks && connected)) problems.push(`${where}: the weeks table ${m.weeks ? "shown" : "missing"}`);
+    if ((m.owners === 1) !== (owners && connected)) problems.push(`${where}: the per-person table ${m.owners ? "shown" : "missing"}`);
+    if (m.notConnected !== (weeks && !connected)) problems.push(`${where}: "No callback type set" ${m.notConnected ? "shown" : "missing"}`);
+    if (weeks && connected && m.weekRows !== 8) problems.push(`${where}: ${m.weekRows} weeks, expected the current one and the seven before`);
+    if (m.spills.some((x) => x === true)) problems.push(`${where}: a callbacks table does not end inside its card at 1280`);
+    if (subject === "manager") {
+      const mark = p.locator('[data-testid="callbacks-weeks"] thead th:last-child button[data-header-hint]');
+      if (await mark.count() !== 1) problems.push(`${where}: the weeks' right-most header hint is missing`);
+      else {
+        await mark.focus();
+        const inside = await p.evaluate(() => {
+          const el = document.activeElement;
+          const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+          if (!panel || panel.hidden) return null;
+          const r = panel.getBoundingClientRect();
+          return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+        });
+        if (inside !== true) problems.push(`${where}: the weeks' right-most header hint ${inside === null ? "does not show on focus" : "leaves the viewport"}`);
+      }
+      await p.screenshot({ path: `${outDir}/${subject}-follow-up-callbacks.png`, fullPage: true });
+    }
+    if (subject === "manager" || subject === "invest-analyst") {
+      await p.goto(BASE + "/reports/dashboard?range=month");
+      await p.waitForLoadState("networkidle");
+      const tile = await p.evaluate(() => {
+        const el = document.querySelector('[data-testid="intake-callbacks"]');
+        return el ? { notConnected: !!el.querySelector('[data-testid="not-connected"]'), text: el.textContent ?? "" } : null;
+      });
+      if (!tile) problems.push(`${subject} /reports/dashboard: the Callbacks kept tile is missing from the Intake row`);
+      else if (tile.notConnected !== !connected || (!connected && !tile.text.includes("No callback type set"))) {
+        problems.push(`${subject} /reports/dashboard: the Callbacks kept tile ${connected ? "says not connected" : "does not say No callback type set"}`);
+      }
+    }
+    await ctx.close();
+  }
+}
+
 // Forms (addition 0008p, brief B17d), per identity at 1280 px: in the rail and on the page for reports.view or
 // performance.team (the agent gets the no-permission card and no figures); the page never scrolls sideways;
 // the keycaps K, Y, F, G and X next to the period bar's; four tiles; the forms table and the answers end inside
@@ -1432,6 +1509,7 @@ await expectForms();
 await expectEmail();
 await expectFirstOrders();
 await expectCampaigns();
+await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();
 await expectIrreversibleConfirmations();
@@ -1440,5 +1518,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

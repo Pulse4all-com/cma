@@ -22,8 +22,12 @@ import type {
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
-  Journey, JourneyStatus,
+  Journey, JourneyStatus, CallbackOwner, CallbacksKept,
 } from "./types";
+import {
+  CALLBACKS_PER_OWNER_PERMISSION, CALLBACKS_PERMISSIONS, callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner,
+  type CallbackCallFixture, type CallbackTaskFixture,
+} from "@/lib/callbacks";
 import {
   FIRST_ORDER_GROUPS, firstOrderAmounts, firstOrderFigures, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, ordersPerPerson,
   ORDERS_PER_PERSON_KEY, ORDERS_PER_PERSON_PERMISSION, parseFirstOrderFilter, type OrderDealFixture, type OrderTouch,
@@ -43,7 +47,7 @@ import {
   applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
-  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
+  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
 
@@ -646,6 +650,47 @@ function assertFirstOrders(me: Principal, range: HoursRange, filter: FirstOrderF
   assertReportRange(range);
   if (group !== null && !FIRST_ORDER_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or level");
   if (parseFirstOrderFilter(filter.market ?? "", filter.level ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/**
+ * The callback tasks of the fixture and the calls to their contacts (cma.callbacks_kept_of, addition 0008w): two to five
+ * on each weekday from ten weeks back to two days ahead, each with an owner of the fixture's linked accounts (one owner id
+ * nobody holds), a few without a contact or a due time; calls within the window (some without a direction), outside it,
+ * inbound ones and none. Invented ids only; the invest tenant counts no callback type
+ */
+function mockCallbacks(me: Principal): { tasks: CallbackTaskFixture[]; calls: CallbackCallFixture[] } {
+  if (me.tenantId === MOCK_TENANT_2) return { tasks: [], calls: [] };
+  const owners = ["70000001", "70000002", "70000009", "70000004"];
+  const today = mockToday(me);
+  const now = Date.now();
+  const tasks: CallbackTaskFixture[] = [];
+  const calls: CallbackCallFixture[] = [];
+  const call = (contactId: string, at: number, direction: CallbackCallFixture["direction"]) => {
+    if (at < now) calls.push({ contactId, at: new Date(at).toISOString(), direction });
+  };
+  for (let date = addDays(today, -70); date <= addDays(today, 2); date = addDays(date, 1)) {
+    if ([0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay())) continue;
+    const n = 2 + Math.floor(hashOf(`${me.tenantId}:callbacks:${date}`) * 4);
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => hashOf(`${me.tenantId}:callback:${date}:${i}:${k}`);
+      const due = localMs(date, `${String(9 + Math.floor(h("hour") * 8)).padStart(2, "0")}:${h("half") < 0.5 ? "00" : "30"}`, me.timeZone);
+      const roll = h("kind");
+      const contactId = roll < 0.06 ? null : `k-cb-${date}-${i}`;
+      tasks.push({ id: `${date.replaceAll("-", "")}${i}`, ownerRef: owners[Math.floor(h("owner") * owners.length)]!, contactId,
+        dueAt: roll >= 0.06 && roll < 0.1 ? null : new Date(due).toISOString(), createdAt: new Date(due - 86_400_000).toISOString() });
+      if (contactId === null) continue;
+      const c = h("call");
+      if (c < 0.68) call(contactId, due + (h("off") - 0.5) * 400 * 60_000, h("dir") < 0.1 ? "unknown" : "outbound");
+      else if (c < 0.84) call(contactId, due + (300 + h("off") * 300) * 60_000, "outbound");
+      else if (c < 0.92) call(contactId, due + 30 * 60_000, "inbound");
+    }
+  }
+  return { tasks, calls };
+}
+
+function mockCallbackRecords(me: Principal) {
+  const { tasks, calls } = mockCallbacks(me);
+  return callbackRecords(tasks, calls, Number(mockSetting("tasks.callback_window_minutes")), new Date(), me.timeZone);
 }
 
 /**
@@ -3595,6 +3640,32 @@ export const mockData: CmaData = {
     const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
     const { rows, total } = ordersPerPerson(firstOrdersInPeriod(records, range.from, range.to, filter), mockOrderName);
     return { ...range, filter, connected: me.tenantId !== MOCK_TENANT_2, rows, total, settings, markets: marketsOf(me) };
+  },
+
+  async getCallbacksKept(me, range): Promise<CallbacksKept> {
+    assertAny(me, [...CALLBACKS_PERMISSIONS]);
+    assertReportRange(range);
+    const records = mockCallbackRecords(me);
+    const { weeks, total } = callbackFigures(callbacksInPeriod(records, range.from, range.to));
+    // the previous period like for like: the same length before; while the period runs, its last day up to the time now
+    const days = Math.round((Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / 86_400_000) + 1;
+    const today = mockToday(me);
+    const running = range.to >= today;
+    const previous = callbackFigures(callbacksInPeriod(records, addDays(range.from, -days), addDays(running ? today : range.to, -days),
+      running ? timeInZone(new Date().toISOString(), me.timeZone) : null)).total;
+    return { ...range, connected: me.tenantId !== MOCK_TENANT_2, weeks, total, previous, windowMinutes: Number(mockSetting("tasks.callback_window_minutes")) };
+  },
+
+  async getCallbacksPerOwner(me, range): Promise<CallbackOwner[]> {
+    assertAny(me, [CALLBACKS_PER_OWNER_PERMISSION]);
+    assertReportRange(range);
+    const accounts = seedIntakeConfig(me).accounts;
+    const personOf = (ownerRef: string) => {
+      const a = accounts.find((x) => x.system === "crmtest_owner" && x.externalId === ownerRef);
+      return a ? { userId: a.userId, name: mockOrderName(a.userId) ?? a.userId } : null;
+    };
+    const { rows, total } = callbacksPerOwner(callbacksInPeriod(mockCallbackRecords(me), range.from, range.to), personOf);
+    return [...rows, total];
   },
 
   async getJourneys(me): Promise<Journey[]> {

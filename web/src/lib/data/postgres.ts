@@ -17,7 +17,7 @@ import type {
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
-  Journey, JourneyStatus,
+  Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -769,6 +769,16 @@ async function attributionSettings(q: Querier): Promise<AttributionSettings> {
     windowDays: Number(of("attribution.window_days")), levelOrder: list(of("attribution.level_order")), assistedLevels: list(of("attribution.assisted_levels")),
     knownContactMinutes: Number(of("attribution.known_contact_minutes")), orderMatchMinutes: Number(of("attribution.order_match_minutes")),
   };
+}
+
+/** One row of cma.callbacks_kept_report or its per-person read, as the database answers it */
+interface CallbackKeptDbRow {
+  period?: string; dimension?: string; week_start?: string | null; row_kind?: string; user_id?: string | null; display_name?: string | null;
+  unlinked_owners?: number | null; callbacks: number; kept: number; not_kept: number; pending: number; no_contact: number; no_due?: number;
+}
+
+function toCallbackCounts(r: CallbackKeptDbRow | undefined): CallbackCounts {
+  return { callbacks: r?.callbacks ?? 0, kept: r?.kept ?? 0, notKept: r?.not_kept ?? 0, pending: r?.pending ?? 0, noContact: r?.no_contact ?? 0, noDue: r?.no_due ?? 0 };
 }
 
 /** The tenant's active markets for the filter, then unknown */
@@ -1846,6 +1856,38 @@ export const postgresData: CmaData = {
         ...range, filter, connected: history.rows[0]?.connected ?? false, rows: rows.filter((x) => x.kind !== "total"), total,
         settings: await attributionSettings(q), markets: await marketCodes(q),
       };
+    });
+  },
+
+  async getCallbacksKept(me, range): Promise<CallbacksKept> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the functions check reports.view or performance.team (CMA06) and the 92 days (CMA04)
+      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_report($1::date, $2::date)`, [range.from, range.to]);
+      const connected = await q.query<{ connected: boolean }>(`select cma.callbacks_kept_connected() as connected`);
+      const win = await q.query<{ value: string }>(`select value from cma.tenant_settings() where key = 'tasks.callback_window_minutes'`);
+      if (win.rows[0] === undefined) throw new Error("tenant setting tasks.callback_window_minutes is missing from the catalog");
+      const current = r.rows.filter((x) => x.period === "current");
+      return {
+        ...range, connected: connected.rows[0]?.connected ?? false,
+        weeks: current.filter((x) => x.dimension === "week" && x.week_start).map((x) => ({ weekStart: x.week_start as string, ...toCallbackCounts(x) })),
+        total: toCallbackCounts(current.find((x) => x.dimension === "total")),
+        previous: toCallbackCounts(r.rows.find((x) => x.period === "previous" && x.dimension === "total")),
+        windowMinutes: Number(win.rows[0].value),
+      };
+    });
+  },
+
+  async getCallbacksPerOwner(me, range): Promise<CallbackOwner[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team (CMA06)
+      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_per_owner($1::date, $2::date)`, [range.from, range.to]);
+      return r.rows.map((x) => ({
+        kind: x.row_kind === "person" ? "person" : x.row_kind === "not_linked" ? "notLinked" : "total",
+        userId: x.user_id ?? null, name: x.display_name ?? null, unlinkedOwners: x.unlinked_owners ?? null,
+        callbacks: x.callbacks, kept: x.kept, notKept: x.not_kept, pending: x.pending, noContact: x.no_contact,
+      }));
     });
   },
 

@@ -2209,6 +2209,53 @@ export interface DatabaseProbe {
   roundTripMs: number | null;
 }
 
+/** A callback's state (addition 0008w): kept, not kept, pending while its window is open; without a contact or a due time apart */
+export type CallbackState = "kept" | "not_kept" | "pending" | "no_contact" | "no_due";
+
+/** Callbacks counted (cma.callbacks_kept_figures_of): callbacks = kept + notKept + pending; noContact and noDue apart */
+export interface CallbackCounts {
+  callbacks: number;
+  kept: number;
+  notKept: number;
+  pending: number;
+  noContact: number;
+  noDue: number;
+}
+
+/** One ISO week of callbacks, from its Monday */
+export interface CallbackWeek extends CallbackCounts {
+  weekStart: DateKey;
+}
+
+/**
+ * Callbacks kept (cma.callbacks_kept_report, addition 0008w): the period per ISO week and in total, the previous
+ * period's total like for like; connected false while the tenant counts no callback type (said in words, never 0)
+ */
+export interface CallbacksKept {
+  from: DateKey;
+  to: DateKey;
+  connected: boolean;
+  weeks: CallbackWeek[];
+  total: CallbackCounts;
+  previous: CallbackCounts;
+  /** tasks.callback_window_minutes, for the hints */
+  windowMinutes: number;
+}
+
+/** One row of callbacks kept per person (cma.callbacks_kept_per_owner): a person, the owners without one, the total */
+export interface CallbackOwner {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** On the not-linked row: how many owner ids without a person (never which) */
+  unlinkedOwners: number | null;
+  callbacks: number;
+  kept: number;
+  notKept: number;
+  pending: number;
+  noContact: number;
+}
+
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
 export type JourneyStatus = "placeholder" | "building" | "live";
 
@@ -2510,6 +2557,11 @@ export interface CmaData {
   getFirstOrdersExport(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<FirstOrderListRow[]>;
   /** Orders per person: the credited first orders per person, the not-linked row, the total. Needs performance.team and reports.per_person holding orders */
   getOrdersPerPerson(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<OrdersPerPerson>;
+  // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days
+  /** The period per ISO week and in total, the previous period's total, whether a callback type counts. Needs reports.view or performance.team */
+  getCallbacksKept(me: Principal, range: HoursRange): Promise<CallbacksKept>;
+  /** Per person by name, the owners without a person as one row, the total. Needs performance.team */
+  getCallbacksPerOwner(me: Principal, range: HoursRange): Promise<CallbackOwner[]>;
   // ---- Campaign monitoring (addition 0008v): the database checks the permission on every call (CMA06)
   /** Every journey of the tenant but the archived ones, in their order. Needs reports.view or performance.team */
   getJourneys(me: Principal): Promise<Journey[]>;
