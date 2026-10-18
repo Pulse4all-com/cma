@@ -1,0 +1,13 @@
+
+> cma-web@0.1.0 verify:datamap
+> node ../tools/datamap/verify.mjs
+
+  catalog connection_inbox_account: not a table in cma in schema.json
+  catalog journey: not a table in cma in schema.json
+  catalog email_waiting: derived, not a view in cma_read in schema.json
+  catalog email_not_responding: derived, not a view in cma_read in schema.json
+  catalog first_orders: derived, not a view in cma_read in schema.json
+  catalog callbacks_kept: derived, not a view in cma_read in schema.json
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (7 problems)
+exit 1

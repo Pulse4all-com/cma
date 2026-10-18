@@ -1,0 +1,136 @@
+
+> cma-web@0.1.0 verify:reports
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/reports.mjs
+
+PASS  the four groups parse, anything else is refused            got ["day","market","agent","pipeline",null,null,null,null]
+PASS  G cycles day, market, agent, pipeline and back             got ["market","agent","pipeline","day"]
+PASS  92 days pass, 93 and a backwards range do not              got [null,"length","order",null]
+PASS  percentile_cont: median and 80th percentile interpolate    got [900,4680,25,null]
+PASS  period figures as the summary computes them                got {"deals":8,"called":4,"medianBusinessMinutes":15,"p80BusinessMinutes":
+PASS  nothing known yet: shares and minutes are empty, not 0     got {"deals":1,"called":0,"medianBusinessMinutes":null,"p80BusinessMinutes
+PASS  by day: one group per business date, in order              got [["2026-10-05",3,3,0],["2026-10-06",5,1,3]]
+PASS  by agent: the person's id as key, not mapped under unknown got [["u-ana","Ana",2],["u-bo","Bo",3],["unknown",null,3]]
+PASS  an agent who is not mapped shows as Not mapped             got ["text","text","notMapped"]
+PASS  by market: codes, and unknown said in words                got [["GB","text"],["NL","text"],["unknown","unknownMarket"]]
+PASS  by pipeline: connection and pipeline as key, a missing label unknown got [["c1:","unknownPipeline"],["c1:p1","text"]]
+PASS  totals add counts only                                     got {"deals":8,"called":4,"openNotCalled":3}
+PASS  open deals not called: longest waiting first, no business time last got ["1007","1004","1008"]
+PASS  no row carries an owner id or a personal field             got []
+PASS  without telephony and a shop their figures are null, never 0 got [null,null,null,null,4]
+PASS  connected sources keep their zeros                         got [0,0]
+PASS  each source on its own: telephony counted, shop not connected got [0,null]
+PASS  totals stay null for a source that is not connected        got [null,7,0]
+PASS  a missing figure says which source is not there            got ["noTelephony","noShop","count"]
+PASS  markets in order, unknown last                             got ["BE","GB","NL","unknown"]
+PASS  the market filter keeps one market, none keeps all         got [1,4]
+PASS  bars against the busiest row (leads, deals and tickets)    got [100,33,56,11]
+PASS  records of a type from crm_records_per_day                 got 7
+PASS  owners without a person first, the rest in the database's order got ["owner_without_person","deal_without_contact","market_not_in_catalog"
+PASS  zero and not-available rows are muted, counts are not      got [true,false,false,true]
+PASS  the four inbound groups parse, anything else is refused    got ["day","market","line","hour",null,null,null]
+PASS  G cycles day, market, line, hour and back                  got ["market","line","hour","day"]
+PASS  a reason from the catalog, a new code with the defaults    got [["Hung up early",false,true],["brand_new_code",true,true]]
+PASS  outbound, deleted and uncounted calls are not offered; missing and empty reasons are unknown got [17,["brand_new_code","unknown","unknown"]]
+PASS  waiting: a call of 5 minutes; the lost one of 40 minutes is unanswered as unknown got [[true,null],[false,"unknown"]]
+PASS  the service level with short_abandoned out and a call at exactly 20 s, as 61 B1 and B2 got "6/3/3/0 within 2 of 5 = 40; avg 17 p80 20.6"
+PASS  and with short_abandoned counted: 2 of 6                   got "6/3/3/0 within 2 of 6 = 33.3; avg 17 p80 20.6"
+PASS  the total is computed over every call, as 61 B2's total row got [["GB:0","NL:40"],"9/3/6/0 within 2 of 8 = 25; avg 17 p80 20.6",{"no_a
+PASS  25 October by hour, each call in its line's zone, as 61 B3 got [["01=3","02=2"],["2026-10-25=5"]]
+PASS  a line without a market: the tenant's zone, market unknown, the line's name, as 61 B4 got ["2026-10-22=1","00=1","unknown=1","Line without market=1"]
+PASS  unanswered as a share of the calls with an outcome, a waiting call left out got [50,100,null]
+PASS  one column per reason that occurs, most frequent first, labelled from the catalog got ["unknown:Unknown:3:true","brand_new_code:brand_new_code:1:true","no_a
+PASS  the reasons in the style's series without Leaf Green, Neutral, Denim last; no red, amber or green got [["bg-p4a-deepblue","bg-p4a-lightblue","bg-p4a-rose","bg-p4a-inkt","bg
+PASS  a colour per code: the catalog by code takes the series, a code without a row follows, cycling got [["abandoned_in_ivr:bg-p4a-deepblue","agents_did_not_answer:bg-p4a-lig
+PASS  the same code keeps its colour when the period's totals change order got [["out_of_opening_hours","agents_did_not_answer","brand_new_code"],["a
+PASS  a row's bar: answered first, then the reasons in column order, shares adding up to 1 got [["answered","unknown","brand_new_code","no_available_agent","short_ab
+PASS  group labels: a date, an unknown market, a line without a name, an hour got [{"kind":"date","date":"2026-10-25"},{"kind":"unknownMarket"},{"kind":
+PASS  time to answer: seconds under a minute, minutes and seconds from a minute, a dash for none got ["17 s","21 s","1m 05s","–"]
+PASS  hint values from the tenant's settings, a dash when unknown got "20 s, 3 days, – min, –"
+PASS  no hash, number or name in an inbound answer; each kind found when there got [[],["$.a","$.b","$.c.counterpartHash","$.c.displayName"]]
+PASS  the four calls groups parse, anything else is refused      got ["day","week","market","line",null,null,null]
+PASS  G cycles day, week, market, line and back                  got ["week","market","line","day"]
+PASS  the filters as cma.calls_filters_check takes them: a code or unknown, a connection:line key, empty for all got [{"filter":{"market":"NL","line":"00000000-0000-7000-8000-0000000000c1
+PASS  talk time from the answer to the end, no ringing; a call at exactly the threshold connected, as 63 B1 got [710,true,[3,4,2]]
+PASS  a line that does not count and a deleted call are never counted, as 63 B2 and B12 got [false,24,0]
+PASS  the overview per market, the computed total and the previous period measured after it, as 63 B12 got ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2","NL:8/5/3 4/1 33.3 5 490 
+PASS  a period that ended: the whole previous equal period, across the DST change, a day and a month got [{"from":"2026-10-19","to":"2026-10-25","partial":false},{"from":"2026
+PASS  a period that reaches today: the same elapsed dates, cut; from its first day; before it starts nothing got [{"from":"2026-10-19","to":"2026-10-21","partial":true},{"from":"2026-
+PASS  a period that reaches today compares with the same elapsed dates, as 63 B13 got ["6 calls 3100","1 calls 0","0 calls 0"]
+PASS  on the previous span's last date only the calls up to the time of day in their own zone, as 63 B14 got ["4/3/1 3/0 0 3 2100 700 out 0 null 3","NL 3/1700","GB 1/400"]
+PASS  a period that ended compares with the whole previous one, whatever the time of day, as 63 B15 got ["10/8/2 8/1 50 9 3220 357.8 out 20 20 9","10/8/2 8/1 50 9 3220 357.8 
+PASS  the history start: the earliest business date in its line's zone; deleted, unstarted and uncounted calls left out, as 65 B2 to B5 and B9 got ["2026-10-01","2026-10-02","2026-09-25","2026-09-20",null,null,"2026-0
+PASS  a previous span before the history start shows no change; from it on, the change as before got [true,false,false,true,false,{"direction":"noHistory","pct":null},{"di
+PASS  days and ISO weeks across the DST change, each call in its line's zone, as 63 B7 got [["2026-10-19=1","2026-10-20=1","2026-10-21=4","2026-10-25=4","2026-10
+PASS  untagged: any current tag counts, counted or not, as 63 B3 got ["2026-10-26=1","2026-10-27=0","2026-10-28=1","2026-10-29=0","2026-10-
+PASS  tag use by market, the most used first, untagged last, then the whole period, as 63 B6 got ["GB:Info=1","GB:Test=1(not counted)","GB:-=2","NL:Sale=3","NL:Info=1"
+PASS  per person by name, the users without a person as one counted row, then the total, as 63 B8 got ["person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:3
+PASS  tags per person: counted tags only, untagged last; a tag that does not count still makes a call tagged, as 63 B4 got ["Anna Verify:Sale=1","Anna Verify:-=1","Bram Verify:Info=2","Bram Ver
+PASS  the market and line filters narrow every figure alike, as 63 B5 got ["12/8/3 8/3/8 3 3","4/3/2 3/2/3 2 2","8/5/1 5/1/5 1 1","7/4/1 4/1/4 1
+PASS  the change against the previous period: up, down, the same, new from none, nothing to compare got [{"direction":"up","pct":17.9},{"direction":"down","pct":1.1},{"direct
+PASS  the volume colours in the style's series order, never a red or an amber; Light Blue bars carry no text got ["bg-p4a-deepblue","bg-p4a-green",[]]
+PASS  tags as bars: the top twelve, largest first, the rest as Other with its count; shares of the conversations got [12,"Tag 00",0.1,false,[15,2,0.075]]
+PASS  the groups by tags: twelve columns and Other, counts and shares of the row's conversations, untagged last got [12,true,{"count":20,"share":0.2},{"count":15,"share":0.15},{"count":9
+PASS  the untagged share, the chart's axis without gaps up to today, a count axis got [37.5,null,["26=0","27=0","28=2","29=0","30=0","31=1","01=1"],2,[{"top
+PASS  the per-agent bars scaled to each column's largest person (the total row is not one); a person's split by tag got [2,360,0.25,0,["Info:2:67","Sale:1:33","-:1:33"]]
+PASS  talk time: seconds under a minute, minutes and seconds under an hour, hours and minutes from an hour got ["45 s","1m 29s","1h 02m","–","38%","–"]
+PASS  no hash, number, call id or telephony user id in a calls answer; an agent's own name is allowed got [[],["$.a","$.callId","$.userRef"]]
+PASS  forms: day or week, G cycles, anything else refused        got ["day","week",null,"week","day"]
+PASS  forms: filters as the database checks them (75 B14's refusals: uk, a form without its connection, a bad field) got ["market","form","category",null,true,false]
+PASS  forms: only the filters that are set go into the address   got {"market":"NL","form":"00000000-0000-7000-8000-0000000000aa:f-contact"
+PASS  forms: business dates in each market's zone, days and ISO weeks, the resolution split (75 B11) got "2026-10-01:f-cancel:GB=1 2026-10-02:f-contact:NL=1 2026-10-02:f-legac
+PASS  forms: the previous period like for like (75 B12: running 2, ended 4, not started 0; current 3) got [2,4,0,3]
+PASS  forms: answers per field and value with the previous period; field and value filters (75 B13) got "current:f-contact.are_you_already_a_customer/No, I'm not a customer y
+PASS  forms: filters by market, category, none and form (75 B14) got [8,6,1,4]
+PASS  forms: the history start is the earliest business date in its zone; none without submissions (75 B15) got ["2026-09-20",null]
+PASS  forms: the table's rows by form name, then market with unknown last, the previous period beside them got ["Cancellation/DE=1/0","Cancellation/GB=0/1","Cancellation/NL=1/0","Ca
+PASS  forms: each form with its total over its markets, then its markets got ["Cancellation:3/1[DE,GB,NL,unknown]","General support:6/0[unknown]","
+PASS  forms: totals per category in the catalog's order, forms without one last got ["support:Support=6/0","contact:Contact=3/4","cancellation:Cancellatio
+PASS  forms: totals per market by code, unknown last             got ["DE=1/0","GB=0/1","NL=4/4","unknown=7/1"]
+PASS  forms: the chart's days up to today without gaps; weeks by their Monday got ["05=7 06=4 07=1 08=0","2026-09-28=6 2026-10-05=12"]
+PASS  forms: the answers per form (markets summed), each question's values most answered first got ["Cancellation:cancellation_reason=Pri2/0,Mov0/1;country_dropdown=Atl2
+PASS  forms: the share of contacts found, none without a submission got [0.25,null]
+PASS  forms: no submission, contact or email address in an answer got []
+PASS  email: received, logged replies, agent sends, automated and bounced as cma.email_of flags them (uncounted, spam, inbox copy and deleted out) got "5/1/6/2/1"
+PASS  email: openings at creation and after a close, never a reopen at creation; closes got "t1:created t1:reopened t2:created t6:created | 1"
+PASS  email: first replies in business seconds of the market's zone (out of hours, a mailbox's market, unknown has none) and elapsed got "t1:NL:3600/3600/true t1:NL:12600/12600/true t2:GB:61200/5400/true t6:
+PASS  email: medians as percentile_cont, within target of those with office hours, no hours apart got "4 8100 5400 3/3 1 1"
+PASS  email: business seconds stop at closing time and skip the weekend; none for an unknown market got [7200,null]
+PASS  email: per inbox by name, none (the logged emails) last    got ["Inbox A=2/2/2","Inbox B=3/2/2","none=0/2/0"]
+PASS  email: per market by code, unknown included                got ["GB=2/1","NL=3/3","unknown=1/2"]
+PASS  email: a filter narrows every figure alike (the mailbox's GB conversation only) got "2/1/1"
+PASS  email: the previous period like for like stops at the time of day on its last date, in each row's zone got "12T10:00 12T11:00 13T10:30 12T12:00 12T12:10 12T12:30 12T12:40"
+PASS  email: received per date and inbox, by name                got ["12:Inbox A=1","13:Inbox A=1","13:Inbox B=1","14:Inbox B=2"]
+PASS  email: the five largest series in the style's order, the rest as Other; every date up to today got "0,1,2,3,4,other 12 12,13,14"
+PASS  email per agent: by name, never ranked; owner ids without a person as one row with how many, last; the total got "Anna Example=3/2/1 Bram Example=1/1/0 not linked (2)=2/1/0 | 6/4/1"
+PASS  email per agent: sends by hour of the day in the email's market zone got "10:1 11:1 12:1"
+PASS  email: waiting now since the first incoming message after the last agent reply (a bot's message is no reply), in business time; an uncounted mailbox not got ["t2:GB:7200/7200"]
+PASS  email: groups and filters as the database takes them       got ["week",null,"week","day","{\"filter\":{\"market\":\"NL\",\"inbox\":\"
+PASS  email per agent: the permission and the tenant's switch, both got [true,false,false]
+PASS  email: no subject, address, owner id or phone number in an answer got []
+PASS  first orders: the kinds, as 85 B5 (no contact, repeat, renewal, not first) got "o1:first o10:renewal o11:not_first o13:first o14:first o2:first o3:fi
+PASS  first orders: every flag at the window's edges, a known contact at exactly an hour, as 85 B7 got "o1:101001 o13:100000 o14:000000 o2:010000 o3:001000 o4:000001 o5:0001
+PASS  first orders: the level, the attribution and the credited person (the latest assisted touch, a telephony user, not linked), as 85 B8 got "o1:lead_deal:call_center:bram o13:lead_deal:call_center:anna o14:self
+PASS  first orders: days from the first touch, as 85 B9          got "o1:3.08 o13:90 o14:- o2:5.04 o3:1 o4:- o5:10.17 o6:1 o7:-"
+PASS  first orders: the level order and the assisted set are configuration, as 85 B10 got "o1:email:self_service o13:lead_deal:call_center o2:conversation:self_
+PASS  first orders: the total, per level and per market, as 85 B11 got ["9:5/4:1/1/1/1:4.1","attempt=1:0/1:0/0/0/0:1 conversation=1:1/0:0/0/0
+PASS  first orders: a level filter keeps that level's first orders and nothing counted apart got "2:2/0:0/0/0/0:46.5"
+PASS  first orders: amounts per currency, never summed across, as 85 B12 got "*/EUR=4:240:200:40 */GBP=1:50:50:0 */none=4:-:0:0 GB/GBP=1:50:50:0 NL
+PASS  first orders: the list newest first, capped, with the total, as 85 B15 got "o7:known_contact o6:attempt 9"
+PASS  orders per person: by name, never ranked; the not-linked row; the total, as 85 B16 got "Anna Verify:2:1/0/0/1:50.1 Bram Verify:2:1/1/0/0:4.1 notLinked(1):1:0
+PASS  first orders: the previous span stops at the time of day on its last date in each deal's zone got "o1 o2 o3 o13"
+PASS  first orders: groups, filters and the share as the database takes them got ["level",null,"day","{\"filter\":{\"market\":\"GB\",\"level\":\"phone_
+PASS  first orders: no customer name, address or phone number in an answer (a staff name only) got []
+PASS  business minutes: decimals under an hour, hours from an hour, a dash for none got ["7.5 min","7,5 min","1h 15m","–"]
+PASS  percentages whole, small shares not zero, a dash for none  got ["40%","67%","< 1%","0%","–"]
+PASS  counts with the locale's grouping                          got ["1,234","1.234"]
+PASS  callbacks: the week's states and minutes, as 89's B1       got "k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no
+PASS  callbacks: the window moves with the setting (240: k3 kept), as 89's B3 got "kept"
+PASS  callbacks: pending while the window is open, not kept after, as 89's B4 got ["pending","not_kept"]
+PASS  callbacks: per ISO week and in total, as 89's B6 (Sunday 23:30 in Amsterdam in its week) got ["2026-10-05:7/4/3/0/1/1","7/4/3/0/1/1"]
+PASS  callbacks: the previous week in full, and up to the time of day while the period runs, as 89's B7 got ["3/2/1/0/0/0","7/4/1/2/1/1","2/1/1/0/0/0"]
+PASS  callbacks: per person by name with the not-linked row and the total, as 89's B8 got "Anna Verify:3/3/0/1 Bram Verify:3/0/3/0 notLinked(1):1/1/0/0 total:7/
+PASS  callbacks: the kept share leaves pending out; none decided is no share got [0.75,null]
+PASS  callbacks: Follow-up's span is this week and the seven before got {"from":"2026-08-24","to":"2026-10-18"}
+
+ALL 129 PASS
+exit 0
