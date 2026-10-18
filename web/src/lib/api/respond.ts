@@ -2,7 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAccess, type Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
+import { requestDbTrace } from "@/lib/data";
 
 /**
  * Shared plumbing for the /api/v1 routes.
@@ -17,9 +17,16 @@ import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
  */
 
 const NO_STORE = { "cache-control": "no-store" } as const;
-/** no-store, plus the request's database count when CMA_DB_TRACE=1 (local verification only; the data call has completed before the answer is built) */
+/**
+ * The request's database count as an x-cma-db header when the trace is on (CMA_DB_TRACE=1 with mock sign-in only,
+ * for verify/round-trips.mjs), else none. Built with the answer, after the data calls have completed.
+ */
+export function dbTraceHeader(): Record<string, string> {
+  const trace = requestDbTrace();
+  return trace ? { "x-cma-db": trace } : {};
+}
 function responseHeaders(): Record<string, string> {
-  return DB_TRACE ? { ...NO_STORE, "x-cma-db": formatDbStats(dbStats()) } : { ...NO_STORE };
+  return { ...NO_STORE, ...dbTraceHeader() };
 }
 
 export class ApiError extends Error {

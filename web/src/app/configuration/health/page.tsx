@@ -4,7 +4,7 @@ import type { Copy } from "@/lib/copy";
 import { SystemHealth } from "@/components/configuration/SystemHealth";
 import { Card } from "@/components/primitives";
 import { config } from "@/lib/config";
-import { data } from "@/lib/data";
+import { data, requestDbTrace } from "@/lib/data";
 import { isHttpsUrl } from "@/lib/health";
 import { readManifest } from "../../api/v1/configuration/documents/[name]/route";
 import { resolve } from "../../access";
@@ -37,12 +37,18 @@ async function Panels({ me, copy }: { me: Principal; copy: Copy }) {
     d.probeDatabase(me), d.listSettings(me), d.listSources(me), d.getSystemHealthRuns(me), d.getOutboxStatus(me), readManifest(),
   ]);
   const link = (key: string) => { const v = settings.find((s) => s.key === key)?.value ?? ""; return isHttpsUrl(v) ? v : null; };
+  // The cards stream after the Shell, so the Shell's cma-db meta does not count these reads: a second one, written
+  // after them, carries the request's total (CMA_DB_TRACE=1 with mock sign-in only; verify/round-trips.mjs reads the last)
+  const dbTrace = requestDbTrace();
   return (
-    <SystemHealth
-      copy={copy} locale={me.locale} timeZone={me.timeZone} now={new Date().toISOString()}
-      version={config.version} authMode={config.authMode} dataMode={config.dataMode}
-      probe={probe} settings={settings} sources={sources} runs={runs} outbox={outbox} manifest={manifest}
-      external={{ gemini: link("health.link_gemini_doc"), datamap: link("health.link_datamap") }}
-    />
+    <>
+      {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
+      <SystemHealth
+        copy={copy} locale={me.locale} timeZone={me.timeZone} now={new Date().toISOString()}
+        version={config.version} authMode={config.authMode} dataMode={config.dataMode}
+        probe={probe} settings={settings} sources={sources} runs={runs} outbox={outbox} manifest={manifest}
+        external={{ gemini: link("health.link_gemini_doc"), datamap: link("health.link_datamap") }}
+      />
+    </>
   );
 }

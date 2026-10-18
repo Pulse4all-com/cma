@@ -19,7 +19,7 @@ import type { ReactNode } from "react";
 import { getAccess, rolesOf, type Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
-import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
+import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
 import { breadcrumbs, HINTS_COOKIE, NAV_COOKIE_PREFIX, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
 import { NavGroup, NavIconMark } from "./NavGroup";
@@ -62,9 +62,9 @@ export async function Shell({
   const access = me.canPreview ? await getAccess() : null;
   const roles = access?.kind === "granted" ? await rolesOf(access.real).catch(() => []) : [];
   const ownRoleName = roles.find((r) => r.key === me.roleKey)?.name ?? me.roleKey;
-  // Local verification only (CMA_DB_TRACE=1): the request's database count after every read of the page and the
-  // Shell has completed, for verify/round-trips.mjs; never rendered in a deployed build (the variable is not set)
-  const dbTrace = DB_TRACE ? formatDbStats(dbStats()) : null;
+  // Verification only (CMA_DB_TRACE=1 with mock sign-in): the request's database count after every read of the
+  // page and the Shell has completed, for verify/round-trips.mjs; never rendered in iap mode
+  const dbTrace = requestDbTrace();
 
   return (
     <div

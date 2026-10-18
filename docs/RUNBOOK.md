@@ -281,6 +281,27 @@ closes Agent Two's open past days itself (as the supervisor); no fixture runs fi
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
+`verify:round-trips` against dev (**Terminal**): the database cost of every page and polled route per test user, 46 requests,
+against the budgets in `web/verify/round-trips.json`. The app reports that cost only with `CMA_DB_TRACE=1` and mock sign-in
+(never in iap mode), so the variable is set on dev's `cma-web` for the run and removed right after it; each update makes a new
+revision and keeps the image and the other variables. Dev must run an image with the trace (the speed fixes of the IT audit of
+17 October 2026 or later) and be at `78` (0008r) for the System health row:
+
+```bash
+gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --update-env-vars=CMA_DB_TRACE=1 2>&1 | tail -1
+pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev \
+  --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
+cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (46 requests ...), exit 0
+BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (92 problems), exit 1
+gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
+  --remove-env-vars=CMA_DB_TRACE 2>&1 | tail -1
+curl -s -D - -o /dev/null -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me | grep -ci x-cma-db   # 0: off again
+```
+
+A FAIL names the page, the test user and the count over its budget. Dev's data differs from the seed in volume, not in the
+number of reads per page; the documents route answers 404 while the image carries no documents, which the budget accepts.
+
 `verify:scheduler` against dev (inside 07:00-22:00 Amsterdam): it writes a test day through `PGCONN` and runs the
 job's code locally, which reads `CMA_DB_*`; both must point at dev:
 

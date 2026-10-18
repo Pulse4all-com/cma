@@ -262,5 +262,18 @@
     "subject": "admin",
     "tx": 4,
     "rt": 18
+  },
+  {
+    "path": "/configuration/health",
+    "subject": "admin",
+    "tx": 7,
+    "rt": 30
+  },
+  {
+    "path": "/api/v1/configuration/documents/REPORT.md",
+    "subject": "admin",
+    "tx": 1,
+    "rt": 5,
+    "status": [200, 404]
   }
 ]

@@ -88,14 +88,17 @@ type DbState = { connector: Connector | null; pool: pg.Pool };
 // ---- Per-request database accounting (the IT audit of 17 October 2026, section 5.6) -------------------
 // Correlated by the trace id of Next's request span (src/instrumentation.node.ts registers the provider and
 // consumes the record when the response ends). Counts and milliseconds only: never SQL text, parameters or
-// identities. With CMA_DB_TRACE=1 (local verification, never set in cloudbuild.yaml) the API routes also
-// answer with an x-cma-db header and the Shell renders a cma-db meta, for verify/round-trips.mjs.
+// identities. With CMA_DB_TRACE=1 and mock sign-in (local verification or dev, never set in cloudbuild.yaml) the
+// API routes also answer with an x-cma-db header and the Shell renders a cma-db meta, for verify/round-trips.mjs
+// (requestDbTrace() in @/lib/data).
 export interface DbStats { tx: number; rt: number; dbMs: number }
 // On globalThis, as the pool is: Next bundles the instrumentation file apart from the server chunks, so this module
 // is instantiated twice and a module-level map would never be shared between the writer and the reader
 const gs = globalThis as unknown as { __cmaDbStats?: Map<string, DbStats> };
 const stats = (gs.__cmaDbStats ??= new Map<string, DbStats>());
-export const DB_TRACE = process.env.CMA_DB_TRACE === '1';
+// Only with mock sign-in: in iap mode (prod) the trace is off whatever the environment says, so a stray
+// variable never puts the database cost of a real user's request on the wire
+export const DB_TRACE = process.env.CMA_DB_TRACE === '1' && process.env.CMA_AUTH_MODE === 'mock';
 
 /** The current request's record, created on first use; undefined outside a traced request */
 export function dbStats(): DbStats | undefined {
