@@ -27,6 +27,7 @@ declare
   v_fn      text;
   v_n       int;
   v_cols    text;
+  v_path    text;
 begin
   -- A1. the migration is recorded
   if not exists (select 1 from cma.schema_migration where version = '0006') then
@@ -83,9 +84,12 @@ begin
       raise exception 'FAIL A4: % runs with the wrong rights (only ingest_connection is security definer)', v_fn;
     end if;
   end loop;
+  -- once 0008q is recorded (76, DB-08) the path ends in pg_temp, so no temporary object can shadow cma
+  v_path := case when exists (select 1 from cma.schema_migration where version = '0008q')
+                 then 'search_path=pg_catalog, cma, pg_temp' else 'search_path=pg_catalog, cma' end;
   if (select array_to_string(proconfig, ',') from pg_proc where oid = 'cma.ingest_connection(text)'::regprocedure)
-     is distinct from 'search_path=pg_catalog, cma' then
-    raise exception 'FAIL A4: ingest_connection must pin its search_path';
+     is distinct from v_path then
+    raise exception 'FAIL A4: ingest_connection must pin its search_path (expected %)', v_path;
   end if;
 
   -- A5. every active tenant has exactly one active Ingest user: system kind, the non-assignable
