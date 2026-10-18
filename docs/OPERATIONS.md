@@ -454,7 +454,7 @@ The job alert fires on a single failed execution, not the three in 15 minutes th
 the per-minute jobs: kept on purpose (README, Decision log, 18 October 2026, Martin). A one-off blip of a
 per-minute job therefore sends an email, as `cma-refresh-follow-up` did at 16:04 UTC on 18 October 2026 (a
 reset database connection, `read ECONNRESET`, `exit(1)`; the next minute succeeded). Once the web image's two
-jobs retry a reset connection once (their own PR), such a blip no longer fails their run, so an email from them
+jobs retry a reset connection once (`Pulse4all-com/cma#172`), such a blip no longer fails their run, so an email from them
 means a failure that repeated. Read the job's log first:
 
 **Terminal**
