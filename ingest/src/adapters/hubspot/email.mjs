@@ -151,13 +151,16 @@ export async function writeEmailPage(api, store, config, objects, counts, detail
   const rules = activeRules(config);
   counts.fetched += objects.length;
   // An email the CMA holds at this version is not written again (every update is an audit row): the
-  // poll's boundary and the nightly reconcile list most emails a second time
+  // poll's boundary and the nightly reconcile list most emails a second time. Except to add the origin
+  // the CMA does not hold yet (addition 0008t): a re-read after the connection named its origin property
+  // fills the engagements stored before it
   const versions = await store.emailVersions("crm_email", objects.map((o) => String(o.id)));
   const items = [];
   for (const o of objects) {
     const item = emailFromObject(o, settings, rules);
     const held = versions.get(String(o?.id));
-    if (!item || (held && item.updatedAt && Date.parse(item.updatedAt) <= held)) counts.skipped += 1;
+    const current = held?.at && item?.updatedAt && Date.parse(item.updatedAt) <= held.at;
+    if (!item || (current && !(item.origin && !held.origin))) counts.skipped += 1;
     else items.push(item);
   }
   if (!items.length) return;

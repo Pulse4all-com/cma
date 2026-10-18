@@ -32,7 +32,8 @@
  *   storedContacts(ids)         the contacts with a row in crm_contact (read once when an email points to one)
  *   threadStates(ids)           what the CMA holds of these threads (status, agent, inbox, channel, mailbox,
  *                               contact, ticket, spam, archived, forgotten), to leave an unchanged one unwritten
- *   emailVersions(kind, ids)    the stored version (source_updated_at) of these emails, likewise
+ *   emailVersions(kind, ids)    the stored version (source_updated_at, ms) and origin of these emails, likewise
+ *                               (an engagement held without the origin its read now carries is written again: 0008t)
  *   openThreadIds(), archivedThreadIds()   held threads open, or archived (in the source's trash), not forgotten
  *
  * For a commerce source (migrations 0007b, 0008h):
@@ -273,9 +274,11 @@ export function storeFor(ctx, connectionId) {
     async emailVersions(sourceKind, ids) {
       if (!ids.length) return new Map();
       return withTenant(ctx, async (q) => new Map((await q.query(
-        `select source_id, source_updated_at from cma.email_message
+        `select source_id, source_updated_at, origin from cma.email_message
           where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_kind = $2 and source_id = any ($3::text[])`,
-        [connectionId, sourceKind, ids])).rows.map((r) => [r.source_id, r.source_updated_at ? new Date(r.source_updated_at).getTime() : null])));
+        [connectionId, sourceKind, ids])).rows.map((r) => [r.source_id, {
+        at: r.source_updated_at ? new Date(r.source_updated_at).getTime() : null, origin: r.origin ?? null,
+      }])));
     },
     async openThreadIds(limit = 2000) {
       return withTenant(ctx, async (q) => (await q.query(

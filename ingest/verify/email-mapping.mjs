@@ -16,7 +16,8 @@
  * address replaced by the id, the delivery identifier never read), a message's and a thread's mailbox
  * and an engagement's origin code (addition 0008t); then a whole poll against a fake HubSpot with an
  * in-memory store: what it writes and logs holds none of the fixture's names, addresses, subjects or
- * texts, a second poll reads no message again and writes nothing, a 429 leaves the engagements'
+ * texts, a second poll reads no message again and writes nothing, a re-read writes only an engagement held without
+ * the origin it now carries (0008t), a 429 leaves the engagements'
  * cursor while the conversations still run, and a thread gone at the source is forgotten.
  */
 import { readFileSync } from "node:fs";
@@ -38,7 +39,7 @@ process.env.INGEST_SECRETS_DIR = secretsDir;
 const logs = [];
 const { setLogSink } = await import("../src/core/log.mjs");
 setLogSink((line) => logs.push(line));
-const { emailSettings, emailProperties, emailFromObject, emailStatus, EMAIL_PROPERTIES } = await import("../src/adapters/hubspot/email.mjs");
+const { emailSettings, emailProperties, emailFromObject, emailStatus, EMAIL_PROPERTIES, backfillEmails } = await import("../src/adapters/hubspot/email.mjs");
 const { wordsMatch, classify, activeRules, domainOf } = await import("../src/adapters/hubspot/rules.mjs");
 const { actorOf, channelKind, inboxItems, channelItems, accountPairs, accountItems, threadItem, messageRows, advance, afterCursor, threadSame } =
   await import("../src/adapters/hubspot/conversations.mjs");
@@ -223,7 +224,10 @@ function memoryStore(config) {
     async setCursor(stream, value) { s.cursors.set(stream, JSON.parse(JSON.stringify(value))); },
     async emailStartOf() { return "2026-10-01"; },
     async tenantStartOf(date) { return new Date(`${date}T00:00:00Z`); },
-    async emailVersions(kind, ids) { return new Map(ids.filter((id) => s.emails.has(`${kind}:${id}`)).map((id) => [id, Date.parse(s.emails.get(`${kind}:${id}`).updatedAt)])); },
+    async emailVersions(kind, ids) {
+      return new Map(ids.filter((id) => s.emails.has(`${kind}:${id}`))
+        .map((id) => [id, { at: Date.parse(s.emails.get(`${kind}:${id}`).updatedAt), origin: s.emails.get(`${kind}:${id}`).origin ?? null }]));
+    },
     async upsertEmails(items) { write("emails", items); return count(items.map((i) => outcome(s.emails, `${i.sourceKind}:${i.sourceId}`, i))); },
     async currentAssociations(type, ids) { return [...s.assoc.values()].filter((a) => a.fromType === type && ids.includes(a.fromId) && !a.removed); },
     async upsertAssociations(items) { write("associations", items); return count(items.map((i) => outcome(s.assoc, `${i.fromType}:${i.fromId}:${i.toType}:${i.toId}`, i) === "inserted" ? "added" : "readded")); },
@@ -303,6 +307,15 @@ const p2 = await hubspot.pollEmail({ connection, store, budget: budget(), config
 expect("poll 2 (nothing changed): no message read again, nothing written", [since(n0).filter((r) => r.path.endsWith("/messages")).length, store.state.writes.length - writesBefore, p2.error],
   [0, 0, null], [4, 3, null]);
 expect("poll 2: the catalogs and the owner map not read again within the hour", since(n0).filter((r) => r.path === "/crm/v3/owners" || r.path.endsWith("/inboxes")).length, 0, 2);
+
+// A re-read fills the origin of an engagement stored before the connection named its origin property (addition 0008t):
+// held at its version without an origin, it is written again; the others, held as they are, are not
+store.state.emails.get("crm_email:4500000004").origin = null;
+const writesRe = store.state.writes.length;
+await backfillEmails({ connection, store, budget: budget(), fromMs: NOW - 30 * 86_400_000, untilMs: NOW + 60_000, counts: { fetched: 0, skipped: 0 } });
+expect("a re-read writes only the engagement held without its origin, and fills it",
+  [store.state.writes.slice(writesRe).filter((w) => w.kind === "emails").flatMap((w) => w.items.map((i) => i.sourceId)), store.state.emails.get("crm_email:4500000004").origin],
+  [["4500000004"], "AUTOMATION_FIXTURE"], [[], null]);
 
 // A new message on thread 1, a 429 on the engagements' search
 const newAt = new Date(NOW + 90_000).toISOString();
