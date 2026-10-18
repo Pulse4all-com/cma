@@ -58,8 +58,9 @@
 #   ingest-poll-email  every minute   HubSpot email engagements and inbox conversations (brief B17b), for connections
 #                                     whose settings hold email_poll true: catalogs and owners hourly, threads and
 #                                     messages after their cursors, the open check every email_open_check_minutes (default 15)
-#   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also email engagements and inbox
-#                                     threads, and the inbox trash); Aircall: calls of the last 26 hours and the webhook;
+#   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,
+#                                     email engagements and inbox threads, and the inbox trash); Aircall: calls of the last
+#                                     26 hours and the webhook;
 #                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
 #   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
 #                                     Generic and unused since 0008h (the CMA writes nothing back for commerce), so it is deployed

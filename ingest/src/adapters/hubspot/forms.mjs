@@ -27,7 +27,9 @@
  *                field. A form whose fields the catalog has not described yet keeps no answer
  *
  * A search that fails (429, timeout) stops that form without moving its cursor, so the next run reads
- * the same submissions again (they are idempotent on the conversion id). The cursor moves only when
+ * the same submissions again (they are idempotent on the conversion id). The nightly reconcile reads
+ * every polled form's submissions of its 26 hours again and writes those the CMA does not hold
+ * (reconcileForms, backlog CMA-069): the safety net under the cadence. The cursor moves only when
  * a run reached the old cursor (or the start date), so an interrupted run loses nothing.
  */
 import { createHash } from "node:crypto";
@@ -367,6 +369,56 @@ export async function pollForms({ connection, store, budget, now = Date.now(), a
   await store.setCursor(CADENCE_STREAM, { at: now });
   if (usage.probe && countedEveryMinute) await store.setCursor(PROBE_STREAM, { at: now });
   return { counts, error, detail };
+}
+
+/**
+ * The nightly reconcile of form submissions (backlog CMA-069): every polled, active form's submissions
+ * of the look-back (submitted from sinceMs up to untilMs), newest first. One the CMA does not hold yet is
+ * written as the poll writes it (its contact searched, its kept answers checked); one it holds is
+ * counted as fetched and skipped without a search, as the poll never reads a stored one again. The
+ * poll's cursors are not touched. So the run's upserted count is what the poll missed, a submission
+ * HubSpot listed late or a form whose cadence slot never came, and 0 shows the cadence lost nothing.
+ * A failure stops that form (counted as failed; the first code is the run's error) and the other forms
+ * still run; the daily floor stops the run. api: a client to use instead of the connection's (the verifiers).
+ */
+export async function reconcileForms({ connection, store, budget, sinceMs, untilMs, counts, api = null }) {
+  api ??= hubspotClient(await tokenOf(connection), budget);
+  const forms = (await store.forms()).filter((f) => f.status === "active" && f.isPolled);
+  const contacts = new Map();
+  let error = null;
+  try {
+    for (const form of forms) {
+      try {
+        const emailField = await emailFieldFor(api, form.formId, null, await store.cursor(pollStream(form.formId)));
+        let after;
+        let reached = false;
+        for (let pages = 0; pages < PAGE_CAP && !reached; pages += 1) {
+          const r = await api.submissions(form.formId, after);
+          const take = takeUntil(r?.results ?? [], null, sinceMs);
+          // newer than the run's start: the poll's, not the window's
+          const inWindow = take.fresh.filter((sub) => atOf(sub) <= untilMs);
+          if (inWindow.length) {
+            const held = await store.storedSubmissions(inWindow.map((sub) => String(sub.conversionId)));
+            const missing = inWindow.filter((sub) => !held.has(String(sub.conversionId)));
+            counts.fetched += inWindow.length - missing.length;
+            counts.skipped += inWindow.length - missing.length;
+            if (missing.length) await writePage(api, store, missing, form, emailField, contacts, counts);
+          }
+          after = r?.paging?.next?.after;
+          reached = take.reached || !after;
+        }
+        if (!reached) error ??= "page_cap_backfill_needed";
+      } catch (err) {
+        if (err?.code === "daily_floor") throw err;
+        counts.failed += 1;
+        error ??= err instanceof SourceError ? err.code : (err?.code ?? "forms_error");
+        warn("form reconcile stopped", { connection: connection.connectionId, code: err?.code ?? "forms_error" });
+      }
+    }
+  } finally {
+    contacts.clear();
+  }
+  return error ? { error } : undefined;
 }
 
 /**

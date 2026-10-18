@@ -13,8 +13,10 @@
  * that over five minutes every polled-only form is read exactly once; that the 15th minute adds the open
  * check; that a busy minute still reads every new submission (a counted form's at once, over two pages;
  * a polled-only form's at the latest within the next interval) and every changed thread with its new
- * messages; the probe (forms_poll_probe) both ways; and that settings out of range fall back to their
- * defaults with one log line per run naming them.
+ * messages; that the nightly reconcile reads every polled form and writes a submission the poll missed
+ * (one HubSpot listed late, older than its form's cursor) as the poll writes it, skips held ones without
+ * a search and writes nothing the second time; the probe (forms_poll_probe) both ways; and that settings
+ * out of range fall back to their defaults with one log line per run naming them.
  *
  * Part B runs the real client against a local fake that states the daily limit in HubSpot's headers:
  * endpoint templates without ids, the daily reading (or not_received), the floor guard pausing a backfill
@@ -40,7 +42,8 @@ setLogSink((line) => logs.push(line));
 const { JobBudget } = await import("../src/core/budget.mjs");
 const { SourceError } = await import("../src/core/http.mjs");
 const { endpointOf, dailyOf, usageSettings, formSlots, dueInRun, openCheckDue, minuteOf } = await import("../src/adapters/hubspot/usage.mjs");
-const { pollForms } = await import("../src/adapters/hubspot/forms.mjs");
+const { pollForms, reconcileForms } = await import("../src/adapters/hubspot/forms.mjs");
+const { RECONCILE_OBJECTS } = await import("../src/adapters/hubspot/reconcile.mjs");
 const { pollEmail } = await import("../src/adapters/hubspot/email-poll.mjs");
 const { hubspotClient, RATES } = await import("../src/adapters/hubspot/read.mjs");
 const { hubspot } = await import("../src/adapters/hubspot/index.mjs");
@@ -201,6 +204,7 @@ function memoryStore(w) {
     },
     async upsertForms(items) { return items.length; },
     async upsertSubmissions(items) { return count(items.map((i) => (s.subs.has(i.sourceId) ? "known" : (s.subs.set(i.sourceId, i), "inserted")))); },
+    async storedSubmissions(ids) { return new Set(ids.filter((id) => s.subs.has(id))); },
     async emailVersions(kind, ids) { return new Map(ids.filter((id) => s.emails.has(`${kind}:${id}`)).map((id) => [id, Date.parse(s.emails.get(`${kind}:${id}`).updatedAt)])); },
     async upsertEmails(items) { return count(items.map((i) => put(s.emails, `${i.sourceKind}:${i.sourceId}`, i))); },
     async currentAssociations() { return []; },
@@ -326,6 +330,33 @@ const msgs = (id) => [...s1.state.emails.values()].filter((e) => e.threadId === 
 expect("…every changed thread with its new messages, the new thread with both", [msgs("8800000001"), msgs("8800000002"), msgs("8800000003"), msgs("8800000004")],
   [3, 3, 2, 2], [2, 2, 2, 0]);
 expect("…the walk stops at the page with nothing after the cursor, though the source hands another", m16.walks, 2, 1);
+
+// The nightly reconcile reads forms too: a submission HubSpot listed late (older than its form's cursor) is one the poll never reads
+const late = sub(COUNTED[3], 5, T0 - 4 * 3600_000);
+const lateList = w1.subs.get(COUNTED[3]);
+const latePos = lateList.findIndex((x) => x.submittedAt < late.submittedAt);
+lateList.splice(latePos < 0 ? lateList.length : latePos, 0, late); // in time order, as HubSpot lists it
+const lateId = late.conversionId;
+const pollMissed = await minute(w1, s1, 21);
+const storedByPoll = s1.state.subs.has(lateId);
+const afterRun = addSub(COUNTED[4], 6, at(21) + 30_000);
+const recCounts = { fetched: 0, upserted: 0, stale: 0, skipped: 0, failed: 0 };
+const recBudget = new JobBudget(RATES);
+const recApi = mockClient(w1, recBudget);
+const recMark = w1.log.length;
+const rec1 = await reconcileForms({ connection, store: s1, budget: recBudget, sinceMs: at(21) - 26 * 3600_000, untilMs: at(21), counts: recCounts, api: recApi });
+const recCalls = w1.log.slice(recMark);
+expect("reconcile: forms are one of its streams", RECONCILE_OBJECTS.includes("form_submission"), true, false);
+expect("…the poll never reads a submission older than its form's cursor", [pollMissed.counted, storedByPoll], [28, false], [28, true]);
+expect("reconcile: the submission the poll missed is written, as the poll writes it (its contact searched)",
+  [rec1, recCounts.upserted, s1.state.subs.get(lateId)?.contactId, recCalls.filter((c) => c.what === "contact").length], [undefined, 1, "4300000001", 1], [{ error: "x" }, 0, null, 0]);
+expect("…every held submission of the window counted, skipped without a search; one newer than the run left to the poll",
+  [recCounts.fetched === s1.state.subs.size, recCounts.skipped === recCounts.fetched - 1, s1.state.subs.has(afterRun)], [true, true, false], [false, false, true]);
+expect("…every polled form read, the one with 61 submissions over two pages", [new Set(recCalls.filter((c) => c.what && c.what.includes("-0000-4000-")).map((c) => c.what)).size,
+  recCalls.filter((c) => c.what === COUNTED[7]).length], [50, 2], [28, 1]);
+const recCounts2 = { fetched: 0, upserted: 0, stale: 0, skipped: 0, failed: 0 };
+await reconcileForms({ connection, store: s1, budget: new JobBudget(RATES), sinceMs: at(21) - 26 * 3600_000, untilMs: at(21), counts: recCounts2, api: mockClient(w1, new JobBudget(RATES)) });
+expect("…a second reconcile writes nothing: 0 shows the cadence lost nothing", [recCounts2.upserted, recCounts2.skipped === recCounts2.fetched], [0, true], [1, false]);
 
 // The probe (forms_poll_probe true): no conversion → the counted forms wait for their slots; a conversion → all of them
 const w2 = makeWorld({ email_poll: true, forms_poll_probe: true });

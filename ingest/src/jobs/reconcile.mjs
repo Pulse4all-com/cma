@@ -6,7 +6,8 @@
  * events, stale guard), one sync_run row per object type (job reconcile, stream the object type).
  * Events whose read-back fails are left to the sweep and counted as failed; the run still succeeds.
  * HubSpot's email objects (crm_email, inbox_thread; brief B17b) are reconciled only for connections
- * whose email poll is on, through the poll's own writes.
+ * whose email poll is on, through the poll's own writes; its form submissions (form_submission, backlog
+ * CMA-069) for every connection, every polled form's of the look-back, through the forms poll's writes.
  * An adapter with webhook subscriptions of its own to look after (Shopify) checks them after its
  * streams, one more sync_run row (job subscriptions_check, stream webhooks), unless --object narrows
  * the run.
