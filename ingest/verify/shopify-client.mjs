@@ -1,7 +1,8 @@
 /**
  * Verifier: the Shopify Admin API client (src/adapters/shopify/client.mjs): the client credentials
- * token and its cache, the cost bucket, and how answers are classified. Against a fake Shopify on
- * localhost; no database, no real Shopify. Everything is invented.
+ * token and its cache, the cost bucket, how answers are classified, and the outbound rules of
+ * src/core/http.mjs (no redirect followed, a cap on the body read; audit 17 October 2026, 5.2-08). Against
+ * a fake Shopify on localhost; no database, no real Shopify. Everything is invented.
  *
  *   node verify/shopify-client.mjs             every check must PASS
  *   node verify/shopify-client.mjs --provoke   every check must FAIL
@@ -17,7 +18,7 @@ console.log(`verify/shopify-client.mjs${PROVOKE ? "  (--provoke: every check mus
 const SHOP = "client-a.myshopify.com";
 const SECRET = "fixture-client-secret-0001";
 const CLIENT = "fixtureclientid0001";
-const fake = { mints: 0, expiresIn: 86399, answer: null, requests: [], delay: 0 };
+const fake = { mints: 0, expiresIn: 86399, answer: null, requests: [], delay: 0, redirect: false, followed: 0, bigBytes: 4000 };
 const server = http.createServer((req, res) => {
   let data = "";
   req.on("data", (c) => { data += c; });
@@ -25,6 +26,9 @@ const server = http.createServer((req, res) => {
     const json = (status, body) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
     fake.requests.push({ path: req.url, token: req.headers["x-shopify-access-token"], t: Date.now() });
     if (fake.delay) await new Promise((r) => setTimeout(r, fake.delay));
+    if (req.url === "/elsewhere") { fake.followed += 1; return json(200, { data: { ok: "followed" } }); }
+    if (req.url === "/big") return json(200, { filler: "x".repeat(fake.bigBytes) });
+    if (fake.redirect) { res.writeHead(302, { location: "/elsewhere" }); return res.end(); }
     if (req.url === `/shop/${SHOP}/admin/oauth/access_token`) {
       const f = new URLSearchParams(data);
       if (f.get("client_secret") !== SECRET || f.get("client_id") !== CLIENT || f.get("grant_type") !== "client_credentials") return json(400, { error: "invalid_client" });
@@ -47,6 +51,7 @@ process.env.INGEST_SECRETS_DIR = secretsDir;
 process.env.INGEST_SHOPIFY_API_BASE = `http://127.0.0.1:${server.address().port}/shop/{shop}`;
 
 const { shopifyClient, tokenFor, resetClients, bucketOf, availableNow, waitFor, shopBase } = await import("../src/adapters/shopify/client.mjs");
+const { requestJson, MAX_RESPONSE_BYTES } = await import("../src/core/http.mjs");
 const { Budget, JobBudget } = await import("../src/core/budget.mjs");
 const connection = { connectionId: "c1", externalAccountId: SHOP, signingSecretName: "ingest-shopify-verify-signing" };
 const settings = { client_id: CLIENT, api_version: "2026-10" };
@@ -93,6 +98,16 @@ expect("a 401 → http_401 and the token dropped (the next call mints)", [await 
 fake.answer = { status: 429 };
 expect("a 429 → rate_limited", await codeOf(api.query("query X { ok }")), "rate_limited", "ok");
 fake.answer = null;
+
+// ---- Redirects and oversized answers (src/core/http.mjs) -------------------------------------------------------
+fake.redirect = true;
+expect("a redirect answer is not followed: http_302, the token never sent to the redirect's target", [await codeOf(api.query("query X { ok }")), fake.followed], ["http_302", 0], ["ok", 1]);
+resetClients();
+expect("…nor by the token request: token_http_302, the client secret stays with the shop's host", [await codeOf(tokenFor(connection, settings, AbortSignal.timeout(2000))), fake.followed], ["token_http_302", 0], ["ok", 1]);
+fake.redirect = false;
+const base = `http://127.0.0.1:${server.address().port}`;
+expect("a body over the cap fails bad_response (the rest is not read)", await codeOf(requestJson(`${base}/big`, { maxBytes: 1000 })), "bad_response", "ok");
+expect("…a body within the cap is read whole; the default cap is 16 MiB", [(await requestJson(`${base}/big`))?.filler?.length, MAX_RESPONSE_BYTES], [4000, 16 * 1024 * 1024], [1000, 0]);
 
 // ---- The cost bucket -----------------------------------------------------------------------------------------
 resetClients();

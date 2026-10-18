@@ -4,6 +4,11 @@
  * http_<status> otherwise. Errors carry a code only, never a response body (which could hold data);
  * a 429 also carries the source's rate-limit headers (names with limit, remaining, reset or retry:
  * counts and times, never data), so an adapter can hold its calls until the source's reset.
+ *
+ * No redirect is followed (redirect: manual, so a 3xx answer is http_3xx like any other status): the
+ * hosts are pinned, and a followed redirect would carry a vendor token to another host. A body is read
+ * up to MAX_RESPONSE_BYTES; above that the call fails bad_response instead of filling the instance's
+ * memory (audit 17 October 2026, 5.2-08).
  */
 export class SourceError extends Error {
   constructor(code, status = null, rateLimit = null) {
@@ -16,6 +21,7 @@ export class SourceError extends Error {
 }
 
 const RATE_HEADER = /limit|remaining|reset|retry/i;
+export const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
 /** Only https, or plain http to the local machine (the verifiers' fake sources). */
 export function checkedBase(url) {
@@ -30,8 +36,21 @@ export function checkedBase(url) {
   return u.origin;
 }
 
+/** The body as text, at most maxBytes; SourceError bad_response above that (the rest is not read). */
+async function readText(res, maxBytes) {
+  if (!res.body) return "";
+  const parts = [];
+  let size = 0;
+  for await (const chunk of res.body) {
+    size += chunk.byteLength;
+    if (size > maxBytes) throw new SourceError("bad_response", res.status); // leaving the loop cancels the stream
+    parts.push(chunk);
+  }
+  return new TextDecoder().decode(Buffer.concat(parts));
+}
+
 /** fetch → parsed JSON; throws SourceError. The caller passes the budget's signal. */
-export async function requestJson(url, { method = "GET", headers = {}, body, signal } = {}) {
+export async function requestJson(url, { method = "GET", headers = {}, body, signal, maxBytes = MAX_RESPONSE_BYTES } = {}) {
   let res;
   try {
     res = await fetch(url, {
@@ -39,6 +58,7 @@ export async function requestJson(url, { method = "GET", headers = {}, body, sig
       headers: { accept: "application/json", ...(body !== undefined ? { "content-type": "application/json" } : {}), ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal,
+      redirect: "manual",
     });
   } catch (err) {
     if (err?.name === "TimeoutError" || err?.name === "AbortError") throw new SourceError("timeout");
@@ -51,8 +71,9 @@ export async function requestJson(url, { method = "GET", headers = {}, body, sig
   }
   let text;
   try {
-    text = await res.text();
+    text = await readText(res, maxBytes);
   } catch (err) {
+    if (err instanceof SourceError) throw err;
     if (err?.name === "TimeoutError" || err?.name === "AbortError") throw new SourceError("timeout");
     throw new SourceError("unreachable");
   }

@@ -69,7 +69,10 @@ export function clientIdOf(settings) {
 const tokens = new Map(); // connection id|signing secret name|client id → { promise, value, expiresAt }
 const tokenKey = (connection, clientId) => `${connection.connectionId}|${connection.signingSecretName ?? ""}|${clientId}`;
 
-/** Mints a token by the client credentials grant: { value, expiresAt }; SourceError token_<code> otherwise. */
+/**
+ * Mints a token by the client credentials grant: { value, expiresAt }; SourceError token_<code> otherwise.
+ * No redirect is followed (a 3xx answer is token_http_3xx): the client secret goes to the shop's own host only.
+ */
 export async function mintToken(shop, clientId, clientSecret, signal) {
   let res;
   try {
@@ -78,6 +81,7 @@ export async function mintToken(shop, clientId, clientSecret, signal) {
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: new URLSearchParams({ grant_type: "client_credentials", client_id: clientId, client_secret: clientSecret }).toString(),
       signal,
+      redirect: "manual",
     });
   } catch (err) {
     throw new SourceError(err?.name === "TimeoutError" || err?.name === "AbortError" ? "token_timeout" : "token_unreachable");

@@ -17,6 +17,10 @@
  *   --fresh        hubspot: new event ids and occurrence times now; aircall: every timestamp of the
  *                  fixture (the event's and the call's) moved so the first call starts now; either
  *                  way a second replay is not a duplicate
+ *   --allow-host   replay to a host other than the local machine or a run.app address. Without it such
+ *                  a --url is refused before any request (exit 2): prod is reached through its public
+ *                  front, never a run.app address, so a dev command pasted with the prod address stops
+ *                  here (audit 17 October 2026, 5.2-10)
  *
  * A dev Aircall connection whose settings hold {"replay": true} reads the call from the event itself
  * (the service needs INGEST_ALLOW_REPLAY=1, which deploy.sh sets in dev only); without the setting the
@@ -46,6 +50,11 @@ let secret;
 if (arg("secret-env")) secret = process.env[arg("secret-env")];
 else if (arg("secret-file")) secret = readFileSync(arg("secret-file"), "utf8").replace(/\r?\n$/, "");
 if (!secret) fail("the signing secret is needed: --secret-env <VAR> or --secret-file <path>");
+// Dev and local only: prod's run.app address refuses everyone (ingress), so run.app means dev in practice
+const host = (() => { try { return new URL(url).hostname; } catch { return ""; } })();
+const devOrLocal = host === "localhost" || host === "127.0.0.1" || host.endsWith(".run.app");
+if (!devOrLocal && !flag("allow-host")) fail(`replay goes to a local service or a dev run.app address, not ${host || url}; add --allow-host to insist`);
+if (!devOrLocal) console.error(`warning: replaying to ${host} (--allow-host)`);
 
 let events = JSON.parse(readFileSync(fixture, "utf8"));
 if (!Array.isArray(events)) events = [events];

@@ -3,9 +3,14 @@
  * (every active connection of every tenant with an active Ingest user, src/core/connection.mjs),
  * one sync_run row per run and stream, structured logs (connection ids, counts, codes; never an
  * object id of a person or a payload) and the exit code: 0 when every connection was served, 1 when
- * any failed (the others are still served; the next scheduled run tries again).
+ * any failed (the others are still served; the next scheduled run tries again). The scheduled jobs run
+ * one execution at a time (main's lock option: a session advisory lock named for the job, db.mjs
+ * jobLock): Cloud Scheduler starts the next execution every minute whether or not the previous one has
+ * finished, and a second one that finds the lock held logs `<job> skipped` with code locked, writes
+ * nothing and exits 0 (audit 17 October 2026, 5.2-02). No sync_run row records a skip: the table knows
+ * running, succeeded and failed only (migration 0007's vocabulary).
  */
-import { closeDb, dbErrorCode } from "../core/db.mjs";
+import { closeDb, dbErrorCode, jobLock } from "../core/db.mjs";
 import { SourceError } from "../core/http.mjs";
 import { info, error } from "../core/log.mjs";
 
@@ -64,12 +69,41 @@ export async function withRun(store, { job, stream = null, from = null, to = nul
   }
 }
 
-/** Runs a job's main function as a process: logs, closes the pool, sets the exit code. */
-export async function main(job, fn) {
+/**
+ * Runs fn under the job's advisory lock: { ran: true, result }, or { ran: false } after one log line
+ * (code locked) when another execution still holds it; nothing is written then.
+ */
+export async function withJobLock(job, fn) {
+  const held = await jobLock(job);
+  if (!held) {
+    info(`${job} skipped`, { job, code: "locked" });
+    return { ran: false, result: null };
+  }
+  try {
+    return { ran: true, result: await fn() };
+  } finally {
+    await held.release();
+  }
+}
+
+/** Runs a job's main function as a process: logs, closes the pool, sets the exit code. lock: one execution at a time. */
+export async function main(job, fn, { lock = false } = {}) {
   const started = Date.now();
   let failed = 1;
   try {
-    const r = await fn(process.argv.slice(2));
+    const run = () => fn(process.argv.slice(2));
+    let r;
+    if (lock) {
+      const l = await withJobLock(job, run);
+      if (!l.ran) {
+        await closeDb();
+        process.exitCode = 0;
+        return;
+      }
+      r = l.result;
+    } else {
+      r = await run();
+    }
     failed = r?.failed ?? 0;
     info(`${job} finished`, { job, ...r, ms: Date.now() - started });
   } catch (err) {
