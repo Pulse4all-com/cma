@@ -1,0 +1,20 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 4
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:db/78_system_health.sql:208: NOTICE:  constraint "sync_run_connection_check" of relation "sync_run" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+INSERT 0 1
+COMMIT
+RESET
