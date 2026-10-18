@@ -5,7 +5,7 @@
  * every tile on the Dashboard (the Intake row and the time tiles), the Live board's inbound part
  * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
  * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
- * Forms, carries exactly one info mark: a button with a name, described by a
+ * Forms, and since addition 0008t every tile and header of Email and Email per agent, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -112,6 +112,13 @@ const cases = [
   // (four each) and the answers' four, by day and by week
   ["manager", "/reports/forms?range=month&group=day", 17, 4],
   ["reader", "/reports/forms?range=week&group=week", 17, 4],
+  // Email (addition 0008t): five tiles; the tables by inbox (ten headers), mailbox (eight), category and market
+  // (six each), waiting now (seven) and not responding (six), by day and by week; Email per agent: the person
+  // and five figures
+  ["manager", "/reports/email?range=month&group=day", 43, 5],
+  ["reader", "/reports/email?range=month&group=week", 43, 5],
+  ["manager", "/reports/email-per-agent?range=month", 6, 0],
+  ["supervisor", "/reports/email-per-agent?range=week", 6, 0],
 ];
 let headers = 0;
 let tiles = 0;

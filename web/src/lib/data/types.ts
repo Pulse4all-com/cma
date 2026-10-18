@@ -1273,6 +1273,160 @@ export interface FormCategoryInput {
   isActive: boolean;
 }
 
+// ---- Email reports (addition 0008t; brief N19-A part 1, 18 October 2026). Ids, codes, counts and times
+// only: no subject, body, address, name or phone number exists to show. Mailboxes are the inboxes' channel
+// accounts; an engagement's origin tells inbox copies and automations apart, as configuration.
+
+/** How cma.email_report groups the period over time */
+export type EmailGroup = "day" | "week";
+
+/**
+ * The report's filters: a market code ("unknown" for an email without one), an inbox and a mailbox (each
+ * connection id ':' source id); each null for all. An engagement has no inbox or mailbox, so either filter
+ * leaves engagements out
+ */
+export interface EmailFilter {
+  market: string | null;
+  inbox: string | null;
+  account: string | null;
+}
+
+/** The figures of a group, the period or the previous period (cma.email_figures_of) */
+export interface EmailFigures {
+  /** Inbox messages in or forwarded on counted inboxes, mailboxes and channels, spam left out */
+  received: number;
+  /** Engagements in or forwarded (logged replies): a column of their own, never added to received */
+  loggedReplies: number;
+  /** Out and sent by an agent (inbox messages and engagements that are no inbox copy and no automation) */
+  sentAgent: number;
+  /** Out and sent by an automation (the connection's automated origins, or a bot, an AI, the system, an integration) */
+  sentAutomated: number;
+  bouncedFailed: number;
+  /** Conversations created, or reopened after a close */
+  threadsOpened: number;
+  threadsClosed: number;
+  /** Openings with a first agent reply */
+  replied: number;
+  replyMedianSeconds: number | null;
+  /** In the conversation's market's office hours; null when no opening had them */
+  replyMedianBusinessSeconds: number | null;
+  /** Openings replied within email.reply_target_minutes, of those whose market has office hours */
+  withinTarget: number;
+  targetKnown: number;
+  /** Replied openings of an unknown market: no business hours */
+  noHours: number;
+  closeMedianSeconds: number | null;
+  closeMedianBusinessSeconds: number | null;
+}
+
+/** The figures of one group: a date or a week's Monday, a market, an inbox, a mailbox or a category ('none' for an email without one) */
+export interface EmailRow extends EmailFigures {
+  groupKey: string;
+  groupLabel: string | null;
+}
+
+/** Received inbox messages per date (or week) and inbox or mailbox, for the columns */
+export interface EmailSeriesRow {
+  groupKey: DateKey;
+  seriesKey: string;
+  seriesLabel: string | null;
+  received: number;
+}
+
+/** A conversation waiting now: ids, ages and its link only */
+export interface EmailWaitingRow {
+  connectionId: string;
+  threadId: string;
+  inboxName: string | null;
+  accountName: string | null;
+  market: string;
+  waitingSince: Instant;
+  waitedSeconds: number;
+  /** In the market's office hours; null for an unknown market (no business hours) */
+  waitedBusinessSeconds: number | null;
+  recordUrl: string | null;
+}
+
+/** An open lead deal not responding: ids, ages and its link only */
+export interface EmailNotRespondingRow {
+  connectionId: string;
+  dealId: string;
+  pipelineLabel: string;
+  market: string;
+  /** The deal's owner as a person; null when the owner maps to nobody */
+  ownerUserId: string | null;
+  ownerName: string | null;
+  lastEmailAt: Instant;
+  daysSince: number;
+  recordUrl: string | null;
+}
+
+export interface EmailReport {
+  from: DateKey;
+  to: DateKey;
+  group: EmailGroup;
+  filter: EmailFilter;
+  /** False when no source of the tenant has an inbox or an email: the screen says so, never 0 */
+  email: boolean;
+  /** Per date or week */
+  rows: EmailRow[];
+  total: EmailFigures;
+  /** The previous period's total, like for like (as Calls) */
+  previous: EmailFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  /** The business date of the tenant's earliest counted email (cma.email_history_start); null without one */
+  historyStart: DateKey | null;
+  byInbox: EmailRow[];
+  byAccount: EmailRow[];
+  byCategory: EmailRow[];
+  byMarket: EmailRow[];
+  receivedByInbox: EmailSeriesRow[];
+  receivedByAccount: EmailSeriesRow[];
+  /** The tenant's settings the hints name */
+  replyTargetMinutes: number;
+  noResponseDays: number;
+  waiting: { rows: EmailWaitingRow[]; total: number };
+  notResponding: { rows: EmailNotRespondingRow[]; total: number };
+  /** The lists for the filters: markets, inboxes and mailboxes with email in the period */
+  markets: string[];
+  inboxes: { key: string; name: string }[];
+  accounts: { key: string; name: string }[];
+}
+
+/** One row of cma.email_per_person: a person, the not-linked actions, or the total */
+export interface EmailPerson {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** How many owner ids act without a person (kind notLinked); never which */
+  unlinkedOwners: number | null;
+  sent: number;
+  replies: number;
+  threadsClosed: number;
+  replyMedianSeconds: number | null;
+  replyMedianBusinessSeconds: number | null;
+  withinTarget: number;
+  targetKnown: number;
+  /** Agent sends per hour of day (0 to 23), in each email's market zone */
+  sentByHour: number[];
+}
+
+export interface EmailPerAgent {
+  from: DateKey;
+  to: DateKey;
+  filter: EmailFilter;
+  email: boolean;
+  /** People by name, then the not-linked row when there is one */
+  rows: EmailPerson[];
+  total: EmailPerson;
+  replyTargetMinutes: number;
+  markets: string[];
+  inboxes: { key: string; name: string }[];
+  accounts: { key: string; name: string }[];
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1477,6 +1631,61 @@ export interface SourceDetail {
   /** A CRM connection's task statuses and types (addition 0008n); empty for another kind */
   taskStatuses: SourceTaskStatus[];
   taskTypes: SourceTaskType[];
+  /** A CRM connection's conversations: inboxes, mailboxes and channels (additions 0008m and 0008t); empty for another kind */
+  inboxes: SourceInbox[];
+  mailboxes: SourceMailbox[];
+  inboxChannels: SourceInboxChannel[];
+}
+
+/** An inbox of a CRM connection's conversations (0008m): name from the source; counted and market as configuration */
+export interface SourceInbox {
+  inboxId: string;
+  name: string;
+  isCounted: boolean;
+  market: string | null;
+  isActive: boolean;
+}
+
+/**
+ * A mailbox (0008t): an inbox's channel account. The name is the source's, or its id when the source's name
+ * holds an address (the CMA keeps no address); the label is a person's and survives every refresh
+ */
+export interface SourceMailbox {
+  accountId: string;
+  name: string;
+  label: string | null;
+  inboxId: string | null;
+  channelId: string | null;
+  isCounted: boolean;
+  market: string | null;
+  isActive: boolean;
+}
+
+/** A channel of a CRM connection's conversations (0008m): name and kind from the source; counted as configuration */
+export interface SourceInboxChannel {
+  channelId: string;
+  name: string;
+  kind: string;
+  isCounted: boolean;
+  isActive: boolean;
+}
+
+export interface SourceInboxInput {
+  inboxId: string;
+  isCounted: boolean;
+  market: string | null;
+}
+
+export interface SourceMailboxInput {
+  accountId: string;
+  label: string | null;
+  isCounted: boolean;
+  market: string | null;
+}
+
+export interface SourceInboxChannelInput {
+  channelId: string;
+  isCounted: boolean;
 }
 
 /** The connection's own fields a person may change; each only when given */
@@ -2046,6 +2255,12 @@ export interface CmaData {
   setSourceTaskStatus(me: Principal, id: string, input: SourceTaskStatusInput): Promise<void>;
   /** One task type of a CRM connection (set_task_type, 0008n) */
   setSourceTaskType(me: Principal, id: string, input: SourceTaskTypeInput): Promise<void>;
+  /** One inbox of a CRM connection (set_inbox, 0008m: counted and market; its work type and channel kept) */
+  setSourceInbox(me: Principal, id: string, input: SourceInboxInput): Promise<void>;
+  /** One mailbox (set_inbox_account, 0008t): label, counted, market; a label with an @ CMA04 */
+  setSourceMailbox(me: Principal, id: string, input: SourceMailboxInput): Promise<void>;
+  /** One channel of the conversations (set_inbox_channel, 0008m: counted; its tenant channel kept) */
+  setSourceInboxChannel(me: Principal, id: string, input: SourceInboxChannelInput): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
   getMarkets(me: Principal): Promise<MarketsConfig>;
   /** Adds or changes a market (upsert_market) and its status (set_market_status) */
@@ -2104,6 +2319,11 @@ export interface CmaData {
   getFormsReport(me: Principal, range: HoursRange, group: FormsGroup, filter: FormsFilter): Promise<FormsReport>;
   /** Submissions per form, market, kept field and value, with the previous period; narrowed by a field and a value. Needs reports.view or performance.team */
   getFormsAnswers(me: Principal, range: HoursRange, filter: FormsFilter, field: string | null, value: string | null): Promise<FormsAnswers>;
+  // ---- Email reports (addition 0008t): the database checks the permission on every call (CMA06); at most 92 days
+  /** Reports → Email: every section of the period in one read, waiting now and not responding. Needs reports.view or performance.team */
+  getEmailReport(me: Principal, range: HoursRange, group: EmailGroup, filter: EmailFilter): Promise<EmailReport>;
+  /** Email per agent: per person, the not-linked actions, the total. Needs performance.team and reports.per_person holding email */
+  getEmailPerAgent(me: Principal, range: HoursRange, filter: EmailFilter): Promise<EmailPerAgent>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)

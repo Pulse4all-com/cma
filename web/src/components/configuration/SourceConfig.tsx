@@ -15,12 +15,15 @@
  * outcomes, A adds or edits the store; Ctrl+Enter saves a dialog, Esc closes it.
  */
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { FormCategory, MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMissedReason, SourceSettings, SourceStore, SourceTaskStatus, SourceTaskType } from "@/lib/data";
+import type {
+  FormCategory, MarketConfig, SourceDetail, SourceForm, SourceKind, SourceLine, SourceMailbox, SourceMissedReason, SourceSettings, SourceStore, SourceTaskStatus, SourceTaskType,
+} from "@/lib/data";
 import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, parsePipelineSla, unlinkedSkipOf } from "@/lib/follow-up";
 import {
-  coerceSettingValue, formCategoryChoices, formEditProblem, kindChoices, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsSize, settingText, sourceSections,
+  coerceSettingValue, emailMarketSteps, formCategoryChoices, formEditProblem, kindChoices, mailboxLabelProblem, recordTypeOfSetting, recordUrlPreview, settingCodes,
+  settingKeyProblem, settingsSize, settingText, sourceSections,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
@@ -35,8 +38,21 @@ const EXAMPLE_ID = "123456789";
 
 type Row = { id: number; key: string; text: string; isNew: boolean };
 
-export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null }: {
+/** The tenant's email settings (additions 0008m and 0008t), shown in words on a CRM connection */
+export interface EmailSettingsInWords {
+  startDate: string | null;
+  replyTargetMinutes: number | null;
+  noResponseDays: number | null;
+  marketOrder: string | null;
+}
+
+const EMAIL_NUMBER_KEYS = { reply: "email.reply_target_minutes", days: "email.no_response_days" } as const;
+const EMAIL_NUMBER_MAX = { reply: 10080, days: 90 } as const;
+
+export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, email = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+  /** The tenant's email settings (addition 0008t), shown in words on a CRM connection */
+  email?: EmailSettingsInWords | null;
   /** The tenant's form categories (addition 0008p), for a form's category */
   categories?: FormCategory[];
   /** telephony.connected_min_seconds (addition 0008j), shown in words on a telephony connection */
@@ -90,6 +106,12 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
   const [reasonEdit, setReasonEdit] = useState<{ reason: SourceMissedReason; opened: number } | null>(null);
   const [reasonLabel, setReasonLabel] = useState("");
   const [reasonProblem, setReasonProblem] = useState<string | null>(null);
+  // a mailbox's label (0008t); its switch and market save at once from the table
+  const [mailboxEdit, setMailboxEdit] = useState<{ mailbox: SourceMailbox; opened: number } | null>(null);
+  const [mailboxLabel, setMailboxLabel] = useState("");
+  const [mailboxProblem, setMailboxProblem] = useState<string | null>(null);
+  // the two email numbers (0008t), each saved on blur once it parses, as a pipeline's response time
+  const [emailText, setEmailText] = useState<Partial<Record<keyof typeof EMAIL_NUMBER_KEYS, string>>>({});
 
   async function rename() {
     const v = name.trim();
@@ -169,6 +191,31 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
       ? await save(() => send("PUT", `${base}/task-statuses`, { statusRef: taskEdit.ref, label: v, isDone: taskEdit.row.isDone }))
       : await save(() => send("PUT", `${base}/task-types`, { typeRef: taskEdit.ref, label: v, isCallback: taskEdit.row.isCallback, isCounted: taskEdit.row.isCounted }));
     if (ok) setTaskEdit(null);
+  }
+
+  const emailNumber = (k: keyof typeof EMAIL_NUMBER_KEYS, text: string) => {
+    const v = text.trim();
+    return /^\d{1,5}$/.test(v) && Number(v) >= 1 && Number(v) <= EMAIL_NUMBER_MAX[k] ? Number(v) : null;
+  };
+  async function saveEmailNumber(k: keyof typeof EMAIL_NUMBER_KEYS) {
+    const text = emailText[k];
+    if (text === undefined || !email) return;
+    const v = emailNumber(k, text);
+    if (v === null) return;
+    const current = k === "reply" ? email.replyTargetMinutes : email.noResponseDays;
+    if (v !== current) await save(() => send("PUT", "/api/v1/configuration/settings", { key: EMAIL_NUMBER_KEYS[k], value: String(v) }));
+    setEmailText((prev) => { const next = { ...prev }; delete next[k]; return next; });
+  }
+
+  /** One mailbox as it would be saved: its current label, switch and market, with the change given */
+  function sendMailbox(m: SourceMailbox, change: Partial<Pick<SourceMailbox, "label" | "isCounted" | "market">>) {
+    const body = { accountId: m.accountId, label: m.label, isCounted: m.isCounted, market: m.market, ...change };
+    return save(() => send("PUT", `${base}/mailboxes`, body));
+  }
+  async function saveMailboxLabel() {
+    if (!mailboxEdit) return;
+    if (mailboxLabelProblem(mailboxLabel)) return setMailboxProblem(t.mailboxLabelProblem);
+    if (await sendMailbox(mailboxEdit.mailbox, { label: mailboxLabel.trim() || null })) setMailboxEdit(null);
   }
 
   async function saveStore() {
@@ -551,6 +598,164 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
         </Card>
       ) : null}
 
+      {/* ---- email (addition 0008t) ---- */}
+      {sections.includes("email") ? (
+        <Card title={t.sectionEmail}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.emailIntro}</p>
+          <div className="mb-6 grid grid-cols-2 gap-x-8 gap-y-6">
+            <section>
+              <h3 className="mb-3 text-body font-semibold text-p4a-heading">{t.emailSettingsTitle}</h3>
+              <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-3 text-small" data-testid="source-email-settings">
+                <dt className="font-semibold">{t.emailPoll}</dt>
+                <dd>{original.email_poll === true ? t.emailPollOn : t.emailPollOff}</dd>
+                <dt className="font-semibold">{t.emailStart}</dt>
+                <dd>{email?.startDate ? fmtDate(email.startDate, locale, "compact") : t.emailStartNone}</dd>
+                {(["reply", "days"] as const).map((k) => {
+                  const current = email ? (k === "reply" ? email.replyTargetMinutes : email.noResponseDays) : null;
+                  const text = emailText[k] ?? (current === null ? "" : String(current));
+                  const title = k === "reply" ? t.emailReplyTarget : t.emailNoResponse;
+                  return (
+                    <Fragment key={k}>
+                      <dt className="font-semibold">{title}</dt>
+                      <dd className="flex flex-col gap-2">
+                        <span>{current === null ? "–" : (k === "reply" ? t.emailReplyTargetValue.replace("{minutes}", String(current)) : t.emailNoResponseValue.replace("{days}", String(current)))}</span>
+                        <input className={`${field} w-24 tabular-nums ${emailNumber(k, text) === null ? "border-p4a-error" : ""}`} inputMode="numeric" maxLength={5}
+                          aria-label={title} data-testid={`source-email-${k}`} value={text} disabled={!email}
+                          onChange={(e) => setEmailText({ ...emailText, [k]: e.target.value })}
+                          onBlur={() => saveEmailNumber(k)}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+                        {emailNumber(k, text) === null ? <span className="text-caption text-p4a-error" role="alert">{t.emailNumberProblem}</span> : null}
+                      </dd>
+                    </Fragment>
+                  );
+                })}
+                <dt className="font-semibold">{t.emailMarketOrder}</dt>
+                <dd>{t.emailMarketOrderValue.replace("{steps}", emailMarketSteps(email?.marketOrder).map((x) => t[`emailStep_${x}`]).join(", "))}</dd>
+              </dl>
+            </section>
+            <section>
+              <h3 className="mb-3 text-body font-semibold text-p4a-heading">{t.emailOriginTitle}</h3>
+              <p className="mb-3 text-small text-p4a-muted">{t.emailOriginIntro}</p>
+              <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-3 text-small" data-testid="source-email-origins">
+                <dt className="font-semibold">{t.emailOriginProperty}</dt>
+                <dd className="break-all">{typeof original.email_origin_property === "string" && original.email_origin_property.trim() ? original.email_origin_property : t.emailOriginNone}</dd>
+                <dt className="font-semibold">{t.emailInboxCopies}</dt>
+                <dd className="break-words">{settingCodes(original, "email_inbox_copy_origins").length > 0
+                  ? t.emailInboxCopiesValue.replace("{codes}", settingCodes(original, "email_inbox_copy_origins").join(", ")) : t.emailInboxCopiesNone}</dd>
+                <dt className="font-semibold">{t.emailAutomated}</dt>
+                <dd className="break-words">{settingCodes(original, "email_automated_origins").length > 0
+                  ? t.emailAutomatedValue.replace("{codes}", settingCodes(original, "email_automated_origins").join(", ")) : t.emailAutomatedNone}</dd>
+              </dl>
+            </section>
+          </div>
+
+          <h3 className="mb-2 text-body font-semibold text-p4a-heading">{t.emailInboxes}</h3>
+          {detail.inboxes.length === 0 ? <p className="mb-6 text-body text-p4a-muted">{t.emailInboxesEmpty}</p> : (
+            <div className="mb-6 overflow-x-auto">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-inboxes">
+                <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                  <tr>
+                    <th className={th}>{t.emailInbox}</th>
+                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailInboxCounted)}</th>
+                    <th className={th}>{t.market}{hint(t.market, t.hintEmailInboxMarket)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.inboxes.map((b) => (
+                    <tr key={b.inboxId} className={`${tr} ${b.isActive ? "" : "text-p4a-muted"}`}>
+                      <td className={td}><span className="font-semibold">{b.name}</span> <span className="text-caption text-p4a-muted">({b.inboxId})</span></td>
+                      <td className={td}>
+                        <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${b.name}`} checked={b.isCounted}
+                          onChange={(e) => save(() => send("PUT", `${base}/inboxes`, { inboxId: b.inboxId, isCounted: e.target.checked, market: b.market }))} />
+                      </td>
+                      <td className={td}>
+                        <select className={`${field} w-36`} aria-label={`${t.market}: ${b.name}`} value={b.market ?? ""}
+                          onChange={(e) => save(() => send("PUT", `${base}/inboxes`, { inboxId: b.inboxId, isCounted: b.isCounted, market: e.target.value || null }))}>
+                          <option value="">{t.noMarket}</option>
+                          {[...new Set([...marketCodes, ...(b.market ? [b.market] : [])])].map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <h3 className="mb-2 text-body font-semibold text-p4a-heading">{t.emailMailboxes}</h3>
+          {detail.mailboxes.length === 0 ? <p className="mb-6 text-body text-p4a-muted">{t.emailMailboxesEmpty}</p> : (
+            <div className="mb-6 overflow-x-auto">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-mailboxes">
+                <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                  <tr>
+                    <th className={th}>{t.emailMailbox}{hint(t.emailMailbox, t.hintEmailMailbox)}</th>
+                    <th className={th}>{t.emailInbox}</th>
+                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailMailboxCounted)}</th>
+                    <th className={th}>{t.market}{hint(t.market, t.hintEmailMailboxMarket)}</th>
+                    <th className={th}><span className="sr-only">{t.editMailbox}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.mailboxes.map((m) => {
+                    const shown = m.label ?? m.name;
+                    return (
+                      <tr key={m.accountId} className={`${tr} ${m.isActive ? "" : "text-p4a-muted"}`} data-mailbox={m.accountId}>
+                        <td className={td}>
+                          <span className="font-semibold">{shown}</span>{" "}
+                          <span className="text-caption text-p4a-muted">({m.label && m.name !== m.accountId ? `${m.name} · ` : ""}{m.accountId})</span>
+                        </td>
+                        <td className={`${td} text-small`}>{detail.inboxes.find((b) => b.inboxId === m.inboxId)?.name ?? m.inboxId ?? "–"}</td>
+                        <td className={td}>
+                          <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${shown}`} checked={m.isCounted}
+                            onChange={(e) => sendMailbox(m, { isCounted: e.target.checked })} />
+                        </td>
+                        <td className={td}>
+                          <select className={`${field} w-36`} aria-label={`${t.market}: ${shown}`} value={m.market ?? ""}
+                            onChange={(e) => sendMailbox(m, { market: e.target.value || null })}>
+                            <option value="">{t.noMarket}</option>
+                            {[...new Set([...marketCodes, ...(m.market ? [m.market] : [])])].map((x) => <option key={x} value={x}>{x}</option>)}
+                          </select>
+                        </td>
+                        <td className={`${td} text-right`}>
+                          <Button variant="text" size="sm" onClick={() => { setMailboxLabel(m.label ?? ""); setMailboxProblem(null); setMailboxEdit({ mailbox: m, opened: tick() }); }}>{c.edit}</Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <h3 className="mb-2 text-body font-semibold text-p4a-heading">{t.emailChannels}</h3>
+          {detail.inboxChannels.length === 0 ? <p className="text-body text-p4a-muted">{t.emailChannelsEmpty}</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-inbox-channels">
+                <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                  <tr>
+                    <th className={th}>{t.emailChannel}</th>
+                    <th className={th}>{t.emailChannelKind}</th>
+                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailChannelCounted)}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.inboxChannels.map((k) => (
+                    <tr key={k.channelId} className={`${tr} ${k.isActive ? "" : "text-p4a-muted"}`}>
+                      <td className={td}><span className="font-semibold">{k.name}</span> <span className="text-caption text-p4a-muted">({k.channelId})</span></td>
+                      <td className={`${td} text-small`}>{k.kind}</td>
+                      <td className={td}>
+                        <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${k.name}`} checked={k.isCounted}
+                          onChange={(e) => save(() => send("PUT", `${base}/inbox-channels`, { channelId: k.channelId, isCounted: e.target.checked }))} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      ) : null}
+
       {/* ---- lines ---- */}
       {sections.includes("lines") ? (
         <Card title={t.sectionLines}>
@@ -789,6 +994,18 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
           </div>
           {storeProblem ? <p className="text-small text-p4a-error">{storeProblem}</p> : null}
           <SaveNote state={state} c={c} />
+        </FormDialog>
+      ) : null}
+
+      {mailboxEdit ? (
+        <FormDialog key={mailboxEdit.opened} title={`${t.editMailbox}: ${mailboxEdit.mailbox.accountId}`} onSave={saveMailboxLabel}
+          onClose={() => setMailboxEdit(null)} busy={state.kind === "saving"} saveLabel={c.save} cancelLabel={c.cancel}>
+          <label className={label}>
+            {t.mailboxLabel}
+            <input className={field} value={mailboxLabel} maxLength={80} onChange={(e) => setMailboxLabel(e.target.value)} data-testid="mailbox-label" />
+            <span className="font-normal text-caption text-p4a-muted">{t.mailboxLabelHint}</span>
+          </label>
+          {mailboxProblem ? <p className="text-small text-p4a-error" role="alert">{mailboxProblem}</p> : null}
         </FormDialog>
       ) : null}
 

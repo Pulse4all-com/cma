@@ -156,6 +156,13 @@ begin
     'email_message=id,tenant_id,connection_id,source_system,source_kind,source_id,thread_source_id,inbox_source_id,channel_source_id,direction,status,occurred_at,actor_kind,owner_ref,category,contact_source_id,source_created_at,source_updated_at,source_deleted_at,synced_at',
     'email_thread_event=id,tenant_id,connection_id,source_id,thread_source_id,kind,occurred_at,actor_kind,owner_ref,to_actor_kind,to_owner_ref,from_inbox_source_id,to_inbox_source_id,synced_at'] loop
     v_want := split_part(v_t, '=', 2);
+    -- since addition 0008t (82_email_reports.sql) both views end with its columns (amended in place: 69
+    -- runs in dev only)
+    if v_t like 'email_thread=%' and exists (select 1 from cma.schema_migration where version = '0008t') then
+      v_want := v_want || ',account_ref';
+    elsif v_t like 'email_message=%' and exists (select 1 from cma.schema_migration where version = '0008t') then
+      v_want := v_want || ',account_ref,origin';
+    end if;
     select string_agg(column_name, ',' order by ordinal_position) into v_cols
     from information_schema.columns where table_schema = 'cma_read' and table_name = split_part(v_t, '=', 1);
     if v_cols is distinct from v_want then
@@ -165,7 +172,7 @@ begin
     select string_agg(column_name, ',' order by ordinal_position) into v_cols
     from information_schema.columns where table_schema = 'cma' and table_name = split_part(v_t, '=', 1);
     if split_part(v_t, '=', 1) in ('email_thread', 'email_message') then
-      v_want := v_want || ',raw';
+      v_want := regexp_replace(v_want, ',synced_at(,|$)', ',synced_at,raw\1');
     end if;
     if v_cols is distinct from v_want then
       v_bad := v_bad || 'the table ' || split_part(v_t, '=', 1) || ' has ' || coalesce(v_cols, 'no columns') || '; ';

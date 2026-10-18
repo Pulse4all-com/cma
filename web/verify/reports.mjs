@@ -40,7 +40,14 @@
  * market, category, none and form and the malformed ones refused, the history start; then the screen's
  * arrangement: the lines per form and market, the forms with their markets, the totals per category (the
  * catalog's order, none last) and per market (unknown last), the chart's columns without gaps, the
- * answers per form, the share of contacts found, and no submission, contact or email in an answer.
+ * answers per form, the share of contacts found, and no submission, contact or email in an answer. Since
+ * addition 0008t (brief N19-A part 1) also Email and Email per agent (src/lib/email.ts), on a fixture with the
+ * edges 83 proves in the database: an uncounted inbox and channel, a spam conversation, an inbox copy and an
+ * automated send by origin, a deleted email, a reopen at creation (no opening) and one after a close (an
+ * opening), a first reply in and out of office hours in the market's zone, an unknown market ("No business
+ * hours"), a mailbox's market before its inbox's, an owner without a person (one not-linked row with how many,
+ * never which), the figures and medians, the groups with none last, the received series and its Other, waiting
+ * now, the filters and groups as the database checks them, the per-person switch, and nothing personal in an answer.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -54,6 +61,10 @@ import {
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
 import { dateKeyInZone } from "../src/lib/time.ts";
+import {
+  businessSeconds, emailCloses, emailFigures, emailFilterQuery, emailGroups, emailInPeriod, emailOpenings, emailPerPerson, emailPrevious, emailRecords,
+  emailSeries, emailWaiting, nextEmailGroup, parseEmailFilter, parseEmailGroup, perPersonOpen, seriesColumns, withinShare,
+} from "../src/lib/email.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -649,6 +660,132 @@ expect("forms: the share of contacts found, none without a submission", [resolve
 const formsAnswer = { totals, previous: formLines, answers: b13rows };
 const leaks = JSON.stringify(formsAnswer).match(/"(email|contact\w*|submissionId|sourceId|source_id|contactId)"\s*:/gi) ?? [];
 expect("forms: no submission, contact or email address in an answer", leaks, [], ["\"email\":"]);
+
+// ---- Email and Email per agent (addition 0008t) -------------------------------------------------------
+// Fictional ids; a Monday-to-Friday 09:00-17:00 week in October 2026 (summer time until the 25th), NL in
+// Amsterdam's zone, GB in London's
+const EC = "00000000-0000-7000-8000-0000000000c1";
+const emailCatalog = {
+  inboxes: [{ id: "ib1", name: "Inbox A", isCounted: true, market: "NL" }, { id: "ib2", name: "Inbox B", isCounted: true, market: null },
+    { id: "ib3", name: "Inbox C", isCounted: false, market: "NL" }],
+  accounts: [{ id: "ac1", name: "5001", label: "Mailbox A", isCounted: true, market: "GB" }, { id: "ac2", name: "5002", label: null, isCounted: false, market: null }],
+  channels: [{ id: "ch1", isCounted: true }, { id: "ch2", isCounted: false }],
+  inboxCopyOrigins: ["origin_copy"], automatedOrigins: ["origin_auto"],
+  zones: { NL: "Europe/Amsterdam", GB: "Europe/London" }, tenantZone: "Europe/Amsterdam",
+  officeHours: { 1: ["09:00", "17:00"], 2: ["09:00", "17:00"], 3: ["09:00", "17:00"], 4: ["09:00", "17:00"], 5: ["09:00", "17:00"] },
+  replyTargetMinutes: 240,
+};
+const eThread = (id, o) => ({ connectionId: EC, sourceSystem: "hubspot", id, inboxId: "ib1", accountId: null, channelId: "ch1", status: "open", isSpam: false,
+  category: null, market: null, events: [], ...o });
+const eMsg = (o) => ({ kind: "inbox_message", connectionId: EC, sourceSystem: "hubspot", threadId: null, inboxId: "ib1", accountId: null, channelId: "ch1",
+  direction: "in", status: "sent", actorKind: "customer", ownerRef: null, origin: null, category: null, market: null, deleted: false, ...o });
+const eLog = (o) => eMsg({ kind: "crm_email", threadId: null, inboxId: null, channelId: null, direction: "out", actorKind: "agent", ...o });
+const emailThreads = [
+  // reopened after its close: two openings; the reply to the second by an owner id without a person
+  eThread("t1", { createdAt: "2026-10-12T08:00:00Z", category: "billing",
+    events: [{ kind: "closed", at: "2026-10-12T14:00:00Z", actorKind: "agent", ownerRef: "101" }, { kind: "reopened", at: "2026-10-13T08:00:00Z", actorKind: "customer", ownerRef: null }] }),
+  // through a mailbox with its own market (GB) on an inbox without one; a reopen at creation is no opening
+  eThread("t2", { inboxId: "ib2", accountId: "ac1", createdAt: "2026-10-13T16:30:00Z",
+    events: [{ kind: "reopened", at: "2026-10-13T16:31:00Z", actorKind: "system", ownerRef: null }] }),
+  eThread("t3", { createdAt: "2026-10-13T09:00:00Z", isSpam: true }),
+  eThread("t4", { inboxId: "ib3", createdAt: "2026-10-13T09:00:00Z" }),
+  eThread("t5", { channelId: "ch2", createdAt: "2026-10-13T09:00:00Z" }),
+  // no market from the chain, its inbox has none: unknown, no office hours
+  eThread("t6", { inboxId: "ib2", createdAt: "2026-10-14T08:00:00Z" }),
+  // through a mailbox that does not count
+  eThread("t7", { accountId: "ac2", createdAt: "2026-10-13T09:00:00Z" }),
+];
+const emailMessages = [
+  eMsg({ threadId: "t1", at: "2026-10-12T08:00:00Z" }),
+  eMsg({ threadId: "t1", at: "2026-10-12T09:00:00Z", direction: "out", actorKind: "agent", ownerRef: "101" }),
+  eMsg({ threadId: "t1", at: "2026-10-13T08:30:00Z" }),
+  eMsg({ threadId: "t1", at: "2026-10-13T12:00:00Z", direction: "out", actorKind: "agent", ownerRef: "102" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-13T16:30:00Z" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T09:30:00Z", direction: "out", actorKind: "agent", ownerRef: "103" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T10:00:00Z" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T10:05:00Z", direction: "out", actorKind: "bot" }),
+  eMsg({ threadId: "t3", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t4", inboxId: "ib3", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t5", channelId: "ch2", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t6", inboxId: "ib2", at: "2026-10-14T08:00:00Z" }),
+  eMsg({ threadId: "t6", inboxId: "ib2", at: "2026-10-14T08:30:00Z", direction: "out", actorKind: "agent", ownerRef: "101" }),
+  eMsg({ threadId: "t7", at: "2026-10-13T09:00:00Z" }),
+  eLog({ at: "2026-10-12T10:00:00Z", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:10:00Z", origin: "ORIGIN_AUTO", market: "NL" }),
+  eLog({ at: "2026-10-12T10:20:00Z", origin: "ORIGIN_COPY", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:30:00Z", direction: "in", actorKind: "customer", market: "NL" }),
+  eLog({ at: "2026-10-12T10:40:00Z", status: "bounced", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:50:00Z", ownerRef: "101", market: "NL", deleted: true }),
+  eLog({ at: "2026-10-13T11:00:00Z", ownerRef: "999" }),
+];
+const eRecs = emailRecords(emailMessages, emailThreads, emailCatalog);
+const eOpen = emailOpenings(emailMessages, emailThreads, emailCatalog);
+const eClose = emailCloses(emailThreads, emailCatalog);
+const NO_FILTER = { market: null, inbox: null, account: null };
+const eFig = emailFigures(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER));
+expect("email: received, logged replies, agent sends, automated and bounced as cma.email_of flags them (uncounted, spam, inbox copy and deleted out)",
+  `${eFig.received}/${eFig.loggedReplies}/${eFig.sentAgent}/${eFig.sentAutomated}/${eFig.bouncedFailed}`, "5/1/6/2/1", "8/1/7/2/1");
+expect("email: openings at creation and after a close, never a reopen at creation; closes",
+  eOpen.map((o) => `${o.threadId}:${o.kind}`).join(" ") + ` | ${eClose.length}`, "t1:created t1:reopened t2:created t6:created | 1",
+  "t1:created t1:reopened t2:created t2:reopened t6:created | 1");
+expect("email: first replies in business seconds of the market's zone (out of hours, a mailbox's market, unknown has none) and elapsed",
+  eOpen.map((o) => `${o.threadId}:${o.market}:${o.replySeconds}/${o.replyBusinessSeconds ?? "-"}/${o.replyWithinTarget ?? "-"}`).join(" "),
+  "t1:NL:3600/3600/true t1:NL:12600/12600/true t2:GB:61200/5400/true t6:unknown:1800/-/-",
+  "t1:NL:3600/3600/true t1:NL:12600/12600/true t2:NL:61200/1800/true t6:unknown:1800/1800/true");
+expect("email: medians as percentile_cont, within target of those with office hours, no hours apart",
+  `${eFig.replied} ${eFig.replyMedianSeconds} ${eFig.replyMedianBusinessSeconds} ${eFig.withinTarget}/${eFig.targetKnown} ${eFig.noHours} ${withinShare(eFig)}`,
+  "4 8100 5400 3/3 1 1", "4 12600 5400 3/4 0 0.75");
+expect("email: business seconds stop at closing time and skip the weekend; none for an unknown market",
+  [businessSeconds(emailCatalog, "NL", "2026-10-16T14:00:00Z", "2026-10-19T08:00:00Z"), businessSeconds(emailCatalog, "XX", "2026-10-16T14:00:00Z", "2026-10-19T08:00:00Z")],
+  [3600 + 3600, null], [237600, 0]);
+const byInbox = emailGroups(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER), "inbox");
+expect("email: per inbox by name, none (the logged emails) last",
+  byInbox.map((r) => `${r.groupLabel ?? "none"}=${r.received}/${r.sentAgent}/${r.threadsOpened}`), ["Inbox A=2/2/2", "Inbox B=3/2/2", "none=0/2/0"],
+  ["none=0/2/0", "Inbox A=2/2/2", "Inbox B=3/2/2"]);
+expect("email: per market by code, unknown included",
+  emailGroups(eRecs, eOpen, eClose, "market").map((r) => `${r.groupKey}=${r.received + r.loggedReplies}/${r.sentAgent}`), ["GB=2/1", "NL=3/3", "unknown=1/2"],
+  ["NL=3/3", "GB=2/1", "unknown=1/2"]);
+expect("email: a filter narrows every figure alike (the mailbox's GB conversation only)",
+  (() => { const f = { market: "GB", inbox: null, account: `${EC}:ac1` }; const x = emailFigures(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", f), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", f), []); return `${x.received}/${x.sentAgent}/${x.threadsOpened}`; })(),
+  "2/1/1", "5/6/4");
+expect("email: the previous period like for like stops at the time of day on its last date, in each row's zone",
+  emailPrevious(eRecs, { from: "2026-10-12", to: "2026-10-13", partial: true }, NO_FILTER, "2026-10-20T10:00:00Z")
+    .map((r) => `${r.date.slice(8)}T${r.localTime.slice(0, 5)}`).join(" "),
+  "12T10:00 12T11:00 13T10:30 12T12:00 12T12:10 12T12:30 12T12:40", "12T10:00 12T11:00 13T10:30 13T14:00 13T17:30 12T12:00 12T12:10 12T12:30 12T12:40 13T13:00");
+const eSeries = emailSeries(eRecs, "day", "inbox");
+expect("email: received per date and inbox, by name", eSeries.map((r) => `${r.groupKey.slice(8)}:${r.seriesLabel}=${r.received}`),
+  ["12:Inbox A=1", "13:Inbox A=1", "13:Inbox B=1", "14:Inbox B=2"], ["12:Inbox A=1", "13:Inbox B=1", "13:Inbox A=1", "14:Inbox B=2"]);
+const manySeries = Array.from({ length: 8 }, (_, i) => ({ groupKey: "2026-10-12", seriesKey: `k${i}`, seriesLabel: `S${i}`, received: 10 - i }));
+const eCols = seriesColumns(manySeries, "day", "2026-10-12", "2026-10-18", "2026-10-14");
+expect("email: the five largest series in the style's order, the rest as Other; every date up to today",
+  `${eCols.series.map((x) => x.index ?? "other").join(",")} ${eCols.values.get("2026-10-12|other")} ${eCols.keys.map((k) => k.slice(8)).join(",")}`,
+  "0,1,2,3,4,other 12 12,13,14", "0,1,2,3,4,5,6,7 0 12,13,14,15,16,17,18");
+const ePeople = { "101": { userId: "u1", name: "Anna Example" }, "103": { userId: "u3", name: "Bram Example" } };
+const ePerPerson = emailPerPerson(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER), (_s, ref) => (ref ? ePeople[ref] ?? null : null));
+expect("email per agent: by name, never ranked; owner ids without a person as one row with how many, last; the total",
+  ePerPerson.rows.map((p) => `${p.name ?? `not linked (${p.unlinkedOwners})`}=${p.sent}/${p.replies}/${p.threadsClosed}`).join(" ")
+    + ` | ${ePerPerson.total.sent}/${ePerPerson.total.replies}/${ePerPerson.total.threadsClosed}`,
+  "Anna Example=3/2/1 Bram Example=1/1/0 not linked (2)=2/1/0 | 6/4/1", "Anna Example=3/2/1 not linked (2)=2/1/0 Bram Example=1/1/0 | 6/4/1");
+expect("email per agent: sends by hour of the day in the email's market zone",
+  ePerPerson.rows[0].sentByHour.map((v, h) => (v ? `${h}:${v}` : "")).filter(Boolean).join(" "), "10:1 11:1 12:1", "8:1 9:1 10:1");
+const eWait = emailWaiting(emailMessages, emailThreads, emailCatalog, "2026-10-14T12:00:00Z");
+expect("email: waiting now since the first incoming message after the last agent reply (a bot's message is no reply), in business time; an uncounted mailbox not",
+  eWait.map((w) => `${w.threadId}:${w.market}:${w.waitedSeconds}/${w.waitedBusinessSeconds}`), ["t2:GB:7200/7200"], ["t2:GB:6900/6900", "t7:NL:97200/28800"]);
+expect("email: groups and filters as the database takes them",
+  [parseEmailGroup("week"), parseEmailGroup("month"), nextEmailGroup("day"), nextEmailGroup("week"),
+    JSON.stringify(parseEmailFilter("NL", `${EC}:ib1`, " ")), parseEmailFilter("nl", null, null).problem, parseEmailFilter(null, "a@b", null).problem,
+    JSON.stringify(emailFilterQuery({ market: "unknown", inbox: null, account: `${EC}:ac1` }))],
+  ["week", null, "week", "day", JSON.stringify({ filter: { market: "NL", inbox: `${EC}:ib1`, account: null }, problem: null }), "market", "inbox",
+    JSON.stringify({ market: "unknown", account: `${EC}:ac1` })],
+  ["week", "month", "day", "week", "", null, null, ""]);
+expect("email per agent: the permission and the tenant's switch, both",
+  [perPersonOpen({ permissions: ["performance.team"], perPerson: ["email"] }, "email"), perPersonOpen({ permissions: ["performance.team"], perPerson: ["orders"] }, "email"),
+    perPersonOpen({ permissions: ["reports.view"], perPerson: ["email"] }, "email")], [true, false, false], [true, true, true]);
+const emailLeaks = JSON.stringify({ rows: ePerPerson.rows, waiting: eWait, groups: byInbox }).match(/"(subject|body|address|from|to|sender|recipient|ownerRef|email|phone)"\s*:/gi) ?? [];
+expect("email: no subject, address, owner id or phone number in an answer", emailLeaks, [], ["\"ownerRef\":"]);
 
 // ---- formats -----------------------------------------------------------------------------------
 expect("business minutes: decimals under an hour, hours from an hour, a dash for none",

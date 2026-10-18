@@ -58,12 +58,12 @@
       "tables": [
         {
           "name": "email_message",
-          "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category",
-          "how": "Email poll every minute (engagements modified since its cursor; inbox messages of changed threads), the nightly reconcile (last 26 hours) and the backfill; only when the connection's email_poll is on"
+          "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category, the mailbox (channel account) a message went through, an engagement's origin code (inbox copies and automations told apart by the connection's settings)",
+          "how": "Email poll every minute (engagements modified since its cursor, with the origin property the connection names; inbox messages of changed threads, with their mailbox), the nightly reconcile (last 26 hours) and the backfill; only when the connection's email_poll is on"
         },
         {
           "name": "email_thread",
-          "what": "Inbox conversations: inbox, channel, open or closed, the current agent, contact and ticket ids, spam",
+          "what": "Inbox conversations: inbox, channel, the mailbox it came in through, open or closed, the current agent, contact and ticket ids, spam",
           "how": "Email poll every minute (threads whose latest message is newer than its cursor; every ten minutes the open check), the nightly reconcile with the trash check, the backfill; only when the connection's email_poll is on"
         },
         {
@@ -193,6 +193,11 @@
           "name": "connection_inbox_channel",
           "what": "Channels of the CRM's conversations (email, chat, ...): the CMA channel, counted",
           "how": "The email poll's channel catalog hourly (when the connection's email_poll is on); switches on Configuration"
+        },
+        {
+          "name": "connection_inbox_account",
+          "what": "Mailboxes: the channel accounts of the CRM's inboxes (a shared address connected to an inbox); the source's name, or its id when the name holds an address, a label a person sets, counted, market",
+          "how": "The email poll's catalog hourly with the inboxes (when the connection's email_poll is on); label, counted and market on Configuration, Sources"
         },
         {
           "name": "connection_email_rule",
@@ -521,6 +526,14 @@
     {
       "name": "connection_pipeline_sla",
       "what": "Per pipeline: its own SLA in business minutes, or null for the tenant default (0008o)"
+    },
+    {
+      "name": "email_waiting",
+      "what": "Open conversations whose latest message is the customer's: inbox, mailbox, market, waiting since, business and elapsed time, the link to the conversation"
+    },
+    {
+      "name": "email_not_responding",
+      "what": "Open lead deals whose contact got an agent email at least email.no_response_days ago with no email, inbox message or connected call back since: deal, pipeline, market, owner, the last email"
     }
   ],
   "flows": {

@@ -12,7 +12,9 @@
  * shared fixtures that verify/email-flow.mjs runs through cma.email_words_match and
  * cma.email_category_of; actor ids to kinds and owner ids (R2); the catalogs (names holding an
  * address dropped); threads, messages and the three event kinds; the cursor's boundary; the owner map
- * kept in cursors; the contact's country slots; then a whole poll against a fake HubSpot with an
+ * kept in cursors; the contact's country slots; the mailboxes (channel accounts: a name holding an
+ * address replaced by the id, the delivery identifier never read), a message's and a thread's mailbox
+ * and an engagement's origin code (addition 0008t); then a whole poll against a fake HubSpot with an
  * in-memory store: what it writes and logs holds none of the fixture's names, addresses, subjects or
  * texts, a second poll reads no message again and writes nothing, a 429 leaves the engagements'
  * cursor while the conversations still run, and a thread gone at the source is forgotten.
@@ -38,7 +40,7 @@ const { setLogSink } = await import("../src/core/log.mjs");
 setLogSink((line) => logs.push(line));
 const { emailSettings, emailProperties, emailFromObject, emailStatus, EMAIL_PROPERTIES } = await import("../src/adapters/hubspot/email.mjs");
 const { wordsMatch, classify, activeRules, domainOf } = await import("../src/adapters/hubspot/rules.mjs");
-const { actorOf, channelKind, inboxItems, channelItems, accountPairs, threadItem, messageRows, advance, afterCursor, threadSame } =
+const { actorOf, channelKind, inboxItems, channelItems, accountPairs, accountItems, threadItem, messageRows, advance, afterCursor, threadSame } =
   await import("../src/adapters/hubspot/conversations.mjs");
 const { ownerPairs, packMap, unpackMap } = await import("../src/adapters/hubspot/owners.mjs");
 const { contactFromObject, contactAttributes } = await import("../src/adapters/hubspot/map.mjs");
@@ -96,6 +98,13 @@ const engText = JSON.stringify(Object.keys(source.engagements).map(eng));
 expect("an engagement item holds no subject, text, html, header, address or name", forbiddenIn(engText), [], ["something"]);
 expect("raw holds direction, status and origin codes only", eng("4500000004").raw, { direction: "EMAIL", status: "SENT", origin: "AUTOMATION_FIXTURE" }, {});
 expect("without rules no category is computed", emailFromObject({ id: "4500000001", properties: source.engagements["4500000001"] }, settings, []).category, null, "billing");
+// Addition 0008t: the origin's code on the item (the database tells an inbox copy and an automation apart by configuration)
+const copy = emailFromObject({ id: "4500000091", properties: { ...source.engagements["4500000001"], fixture_origin: "CONVERSATIONS" } }, settings, []);
+expect("the origin's code on the item: an automation's, an inbox copy's (still the agent's: the database leaves it out), none without one",
+  [eng("4500000004").origin, copy.origin, copy.actorKind, eng("4500000001").origin],
+  ["AUTOMATION_FIXTURE", "CONVERSATIONS", "agent", null], [undefined, undefined, "system", "CONVERSATIONS"]);
+expect("an origin that is no code (a space, an @) is not sent", emailFromObject({ id: "4500000092", properties: { ...source.engagements["4500000001"],
+  fixture_origin: "CRM UI@x" } }, settings, []).origin, null, "CRM UI@x");
 
 // ---- C. The rules: the shared fixtures --------------------------------------------------------------
 const wordResults = RULES.words.map((c) => wordsMatch(c.value, c.words, c.exclude));
@@ -122,6 +131,10 @@ expect("inboxes: archived left out, a name holding an address replaced by the id
   [{ inboxId: "1500000001", name: "Support inbox (test)" }, { inboxId: "1500000002", name: "1500000002" }], source.inboxes);
 expect("channels with their kind", channelItems(source.channels).map((c) => c.kind), ["email", "chat", "whatsapp"], ["other", "other", "other"]);
 expect("channel accounts: ids only (no name, no delivery identifier)", accountPairs(source.channelAccounts), [["1600000001", "1500000001"], ["1600000002", "1500000002"]], [["1600000001", "support.invented@example.com"]]);
+expect("mailboxes (0008t): a name holding an address replaced by the id, inbox and channel, no delivery identifier; an archived one left out",
+  accountItems([...source.channelAccounts, { id: "1600000009", channelId: "1002", inboxId: "1500000001", name: "Old box", archived: true }]),
+  [{ accountId: "1600000001", name: "1600000001", inboxId: "1500000001", channelId: "1002" }, { accountId: "1600000002", name: "Sales mailbox", inboxId: "1500000002", channelId: "1002" }],
+  source.channelAccounts);
 const parts = packMap(Array.from({ length: 300 }, (_, i) => [String(7000000000 + i), String(7100000000 + i)]));
 expect("the map in parts under the cursor's 2 kB, read back whole", [parts.length > 1, parts.every((p) => p.length <= 1800), unpackMap(parts).size], [true, true, 300], [false, true, 299]);
 expect("owner pairs hold ids only (no email, no name)", JSON.stringify(ownerPairs(source.owners.active)), '[["7000000001","7100000001"],["7000000002","7100000002"]]',
@@ -138,10 +151,16 @@ expect("a closed thread: its close time; the assignee an archived owner", tShape
 expect("a spam thread stored with is_spam, no agent", tShape(th("8800000003")), ["open", null, null, null, true, "1500000001", "1002", false],
   ["open", null, null, null, false, "1500000001", "1002", false]);
 expect("an agent without an owner leaves the thread's agent empty", th("8800000004").ownerRef, null, "7000009999");
+expect("a thread's mailbox: the channel account it started on (0008t)", ["8800000001", "8800000002"].map((id) => th(id).accountId), ["1600000001", "1600000002"], [null, null]);
 expect("a thread held exactly so is not written again", threadSame({ status: "open", ownerRef: "7100000001", inboxId: "1500000001", channelId: "1002", contactId: "4300000103",
   ticketId: "4200000101", isSpam: false, isArchived: false, forgotten: false }, th("8800000001")), true, false);
 expect("…and a change of agent is", threadSame({ status: "open", ownerRef: "7100000002", inboxId: "1500000001", channelId: "1002", contactId: "4300000103",
   ticketId: "4200000101", isSpam: false, isArchived: false, forgotten: false }, th("8800000001")), false, true);
+const heldNoMailbox = { status: "open", ownerRef: "7100000001", inboxId: "1500000001", channelId: "1002", contactId: "4300000103", ticketId: "4200000101", isSpam: false,
+  isArchived: false, forgotten: false };
+expect("a thread held without its mailbox: written again by the poll (account), the open check's comparison unchanged",
+  [threadSame(heldNoMailbox, th("8800000001"), { account: true }), threadSame(heldNoMailbox, th("8800000001")),
+    threadSame({ ...heldNoMailbox, accountId: "1600000001" }, th("8800000001"), { account: true })], [false, true, true], [true, true, false]);
 const accounts = new Map(accountPairs(source.channelAccounts));
 const rows = (id, afterMs = null) => messageRows(source.messages[id], { thread: { id, ...source.threads[id] }, owners, accounts, rules, afterMs });
 const r1 = rows("8800000001");
@@ -151,6 +170,7 @@ expect("thread 1: two messages (in from the customer, out by the agent), one ass
   [[["in", "customer", null, "other"]], [], 0]);
 expect("thread 1: the first message's category billing (its subject), the contact and inbox of the thread", [r1.firstCategory, r1.emails[0].contactId, r1.emails[0].inboxId],
   ["billing", "4300000103", "1500000001"], [null, null, null]);
+expect("a message's mailbox: the channel account it went through (0008t)", r1.emails.map((e) => e.accountId), ["1600000001", "1600000001"], [null, null]);
 const r2 = rows("8800000002");
 expect("thread 2: moved inbox, assigned (agent to agent), closed; the welcome message ignored",
   [r2.events.map((e) => [e.kind, e.actorKind, e.ownerRef, e.toOwnerRef ?? null, e.fromInboxId ?? null, e.toInboxId ?? null]), r2.ignored],
@@ -187,7 +207,8 @@ expect("a contact item holds only the configured properties (no email, no name)"
 
 // ---- G. A whole poll against the fake HubSpot, with an in-memory store ----------------------------------
 function memoryStore(config) {
-  const s = { cursors: new Map(), emails: new Map(), threads: new Map(), events: new Map(), contacts: new Map(), assoc: new Map(), inboxes: [], channels: [], writes: [], forgotten: [] };
+  const s = { cursors: new Map(), emails: new Map(), threads: new Map(), events: new Map(), contacts: new Map(), assoc: new Map(), inboxes: [], channels: [], mailboxes: [], writes: [],
+    forgotten: [] };
   const write = (kind, items) => s.writes.push({ kind, items: JSON.parse(JSON.stringify(items)) });
   const outcome = (map, key, item) => {
     const had = map.has(key);
@@ -222,7 +243,7 @@ function memoryStore(config) {
     async threadStates(ids) {
       return new Map(ids.filter((id) => s.threads.has(id)).map((id) => {
         const x = s.threads.get(id);
-        return [id, { status: x.status, ownerRef: x.ownerRef, inboxId: x.inboxId, channelId: x.channelId, contactId: x.contactId, ticketId: x.ticketId,
+        return [id, { status: x.status, ownerRef: x.ownerRef, inboxId: x.inboxId, channelId: x.channelId, accountId: x.accountId, contactId: x.contactId, ticketId: x.ticketId,
           isSpam: x.isSpam, isArchived: x.isArchived, forgotten: Boolean(x.forgotten) }];
       }));
     },
@@ -230,6 +251,7 @@ function memoryStore(config) {
     async upsertThreadEvents(items) { write("events", items); return count(items.map((i) => (s.events.has(i.sourceId) ? "known" : (s.events.set(i.sourceId, i), "inserted")))); },
     async upsertInboxes(items) { write("inboxes", items); s.inboxes = items; return items.length; },
     async upsertInboxChannels(items) { write("channels", items); s.channels = items; return items.length; },
+    async upsertInboxAccounts(items) { write("mailboxes", items); s.mailboxes = items; return items.length; },
     async threadForget(id) { s.forgotten.push(id); const x = s.threads.get(id); if (x) { x.forgotten = true; x.contactId = null; } return { threads: x ? 1 : 0, messages: 0 }; },
     async openThreadIds() { return [...s.threads.values()].filter((x) => x.status === "open" && !x.forgotten).map((x) => x.sourceId); },
     async archivedThreadIds() { return [...s.threads.values()].filter((x) => x.isArchived && !x.forgotten).map((x) => x.sourceId); },
@@ -264,8 +286,13 @@ expect("poll 1: the search asked for no text, html, header or recipient", firstR
   .flatMap((r) => r.body.properties).filter((p) => /text|html|header|_to_/.test(p)), [], ["hs_email_text"]);
 expect("poll 1: threads listed by latest message with the required filter, tickets included", firstReqs.filter((r) => r.path.endsWith("/conversations/threads") && r.query.sort)
   .every((r) => r.query.sort === "latestMessageTimestamp" && r.query.latestMessageTimestampAfter && r.query.association === "TICKET"), true, false);
-expect("poll 1: catalogs written (two inboxes, three channels) and the owner map read once each way",
-  [store.state.inboxes.length, store.state.channels.length, firstReqs.filter((r) => r.path === "/crm/v3/owners").length], [2, 3, 2], [3, 3, 0]);
+expect("poll 1: catalogs written (two inboxes, three channels, two mailboxes) and the owner map read once each way",
+  [store.state.inboxes.length, store.state.channels.length, store.state.mailboxes.length, firstReqs.filter((r) => r.path === "/crm/v3/owners").length],
+  [2, 3, 2, 2], [3, 3, 0, 0]);
+expect("poll 1: the mailboxes by id, inbox and channel; the address-like name never written, the second's name kept",
+  store.state.mailboxes.map((m) => `${m.accountId}:${m.name}:${m.inboxId}:${m.channelId}`), ["1600000001:1600000001:1500000001:1002", "1600000002:Sales mailbox:1500000002:1002"], []);
+expect("poll 1: messages and threads carry their mailbox", [[...store.state.emails.values()].filter((e) => e.sourceKind === "inbox_message" && e.accountId).length,
+  [...store.state.threads.values()].filter((t) => t.accountId).length], [6, 4], [0, 0]);
 expect("poll 1: nothing written, kept in a cursor or logged holds a name, address, subject, text or raw actor id",
   forbiddenIn(written + logs.join("\n") + JSON.stringify(p1)), [], ["x"]);
 expect("poll 1: the run's counts and outcomes are counts only", Object.values(p1.counts).every((v) => Number.isInteger(v)) && JSON.stringify(p1.detail).match(/"\d{6,}"/) === null, true, false);

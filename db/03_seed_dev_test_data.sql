@@ -110,3 +110,21 @@ begin
   end loop;
 end
 $$;
+
+-- Both per-person reports on in dev (after addition 0008t; night run N19-A, 18 October 2026), so Email per
+-- agent and Orders per person can be tried on the dev data before a decision for prod: the seed sets it, since
+-- 02 writes Pulse4all's own value (email) first.
+do $$
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'reports.per_person') then
+    raise notice 'the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, 'reports.per_person', 'email,orders'
+  from cma.tenant t
+  where t.slug = 'pulse4all-subscriptions'
+  on conflict (tenant_id, key) do update set value = excluded.value
+    where cma.tenant_setting.value is distinct from excluded.value;
+end
+$$;

@@ -9,7 +9,9 @@
  *                forwarded), status (hs_email_status whose value in lower case is sent, bounced,
  *                failed or scheduled; anything else other), time, the owner, the CRM thread id and
  *                the automation origin when the connection names their properties (settings
- *                email_thread_property, email_origin_property, email_automated_origins), the category
+ *                email_thread_property, email_origin_property, email_automated_origins), the origin's
+ *                code itself (cma.email_message.origin, addition 0008t: the reports leave out the
+ *                origins the setting email_inbox_copy_origins names), the category
  *   associations email → contact, deal, ticket (v4 batch read), stored in their one direction
  *   contacts     the contact the email points to (labelled primary, else the lowest id) read once,
  *                after the email is written (R6: ingest_upsert_contacts holds it only then)
@@ -106,6 +108,7 @@ export function emailFromObject(obj, settings, rules) {
     actorKind,
     ownerRef: actorKind === "agent" ? owner : null,
     category,
+    origin,
     createdAt: iso(p.hs_createdate) ?? iso(obj.createdAt),
     updatedAt: iso(obj.updatedAt) ?? iso(p.hs_lastmodifieddate),
     raw,

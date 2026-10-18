@@ -9,11 +9,12 @@ import type { MarketConfig, SourceCallOutcome, SourceForm, SourceKind, SourceSet
 
 export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
 
-export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "taskStatuses" | "taskTypes" | "lines" | "tags" | "missedReasons" | "store";
+export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "taskStatuses" | "taskTypes" | "email" | "lines" | "tags" | "missedReasons" | "store";
 
 const SECTIONS: Record<SourceKind, SourceSection[]> = {
   // taskStatuses, taskTypes: the task catalogs of Follow-up and KPI 5 (addition 0008n)
-  crm: ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"],
+  // email: the inboxes, mailboxes and channels of the email reports, and their settings in words (addition 0008t)
+  crm: ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes", "email"],
   // missedReasons: the missed-call reasons of the inbound report and the Live board (addition 0008i)
   telephony: ["lines", "tags", "missedReasons"],
   commerce: ["store"],
@@ -311,4 +312,30 @@ export function formCategoryProblem(d: { code: string; name: string; sortOrder: 
   const order = Number(d.sortOrder);
   if (d.sortOrder.trim() === "" || !Number.isInteger(order) || order < 0 || order > 9999) return "order";
   return null;
+}
+
+// ---- Email (addition 0008t): the connection's origin settings and a mailbox's label -------------------------
+
+/** The connection settings naming email origins, shown read-only on the Email section (cma.setting_codes) */
+export const EMAIL_ORIGIN_SETTINGS = ["email_origin_property", "email_inbox_copy_origins", "email_automated_origins"] as const;
+
+/** A comma-separated codes setting as written, trimmed and without empty parts or repeats (cma.setting_codes compares them without case) */
+export function settingCodes(settings: SourceSettings, key: string): string[] {
+  const v = settings[key];
+  if (typeof v !== "string") return [];
+  return [...new Set(v.split(",").map((x) => x.trim()).filter(Boolean))];
+}
+
+/** A mailbox label as cma.set_inbox_account takes it: 1 to 80 characters without @, or empty for the source's name */
+export function mailboxLabelProblem(text: string): boolean {
+  const v = text.trim();
+  return v.length > 80 || v.includes("@");
+}
+
+/** The steps of email.market_order (contact, form, record, inbox) in the tenant's order; the default when unreadable */
+export function emailMarketSteps(value: string | null | undefined): ("contact" | "form" | "record" | "inbox")[] {
+  const all = ["contact", "form", "record", "inbox"] as const;
+  const parts = (value ?? "").split(",");
+  const ok = parts.length > 0 && parts.every((p) => (all as readonly string[]).includes(p)) && new Set(parts).size === parts.length;
+  return ok ? (parts as ("contact" | "form" | "record" | "inbox")[]) : [...all];
 }
