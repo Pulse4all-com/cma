@@ -115,7 +115,7 @@ export function Card({
   );
 }
 
-type BadgeTone = "success" | "info" | "warning" | "error" | "neutral";
+export type BadgeTone = "success" | "info" | "warning" | "error" | "neutral";
 const badgeClass: Record<BadgeTone, string> = {
   success: "bg-p4a-success-surface text-p4a-success",
   info: "bg-p4a-bgblue text-p4a-deepblue",

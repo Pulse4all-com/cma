@@ -24,6 +24,9 @@
 --      summary; per person with the not-mapped row; the person's own rows isolated between people
 --      and tenants, with the record links; the unlinked-call skip rule on, off, inbound, tagged and
 --      connected; the permissions refused where they must be; a reader scoped to one tenant
+-- Since addition 0008s (80_follow_up_snapshot.sql) the application's reads come from a snapshot the refresh
+-- job computes once a minute (the first read computes it when there is none): block B refreshes it after the
+-- two changes it makes before reading again (the bucket setting, the pipeline override); its checks are the same.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -418,6 +421,7 @@ begin
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_tenant_setting('leads.age_buckets_business_days', '2,4');
     perform set_config('app.user_id', v_manager1::text, true);
+    perform cma.refresh_follow_up_of(v_t1);   -- since 0008s the reads come from the snapshot: refreshed after a change
     select string_agg(format('%s:%s-%s', l.deal_source_id, l.bucket_from, l.bucket_to), ' ' order by l.deal_source_id) into v_txt2
     from cma.open_leads() l where l.deal_source_id in ('d1', 'd3');
     v_rows := v_rows || array['12', 'B2 the buckets at their edges; the setting moves the leads',
@@ -477,6 +481,7 @@ begin
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_pipeline_sla(v_crm, 'ticket', 'billing', 60);
     perform set_config('app.user_id', v_manager1::text, true);
+    perform cma.refresh_follow_up_of(v_t1);   -- since 0008s the reads come from the snapshot: refreshed after a change
     select string_agg(format('%s:%s:%s:%s', t.ticket_source_id, t.sla_state, coalesce(t.minutes_to_breach::text, 'null'), t.sla_minutes), ' ' order by ord) into v_txt
     from (select t.*, row_number() over () as ord from cma.open_tickets() t) t;
     perform set_config('app.user_id', v_agent1::text, true);

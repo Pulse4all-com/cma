@@ -6,13 +6,12 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import type { Copy } from "@/lib/copy";
-import { data, dataIsMock, type FollowUpOwner, type FollowUpSummary } from "@/lib/data";
-import {
-  filterLeads, filterOptions, filterTasks, filterTickets, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, parseFollowUpFilter, summarise,
-} from "@/lib/follow-up";
+import type { Copy, Locale } from "@/lib/copy";
+import { data, dataIsMock, type FollowUpList, type FollowUpOwner, type FollowUpSummary } from "@/lib/data";
+import { agoText, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, isStale, parseFollowUpFilter } from "@/lib/follow-up";
 import { holdsAny } from "@/lib/nav";
 import { fillHint, fmtCount } from "@/lib/reports";
+import { fmtDateTime } from "@/lib/time";
 import { resolve } from "../../access";
 
 type TileKey = keyof FollowUpSummary;
@@ -31,16 +30,18 @@ function Tile({ label, info, value, testId }: { label: string; info: { about: st
 }
 
 /**
- * Follow-up (Reports, addition 0008o, night run N16-B): what is waiting right now, read every 10 seconds
- * while the tab is open (LiveRefresh): the eight counts as tiles, then the open lead deals not called
- * (cma.open_leads), the open tickets against their response time (cma.open_tickets) and the open tasks
- * (cma.open_tasks), each with a link to the record in its own system, and for performance.team the figures
- * per person (cma.follow_up_by_owner; per-person figures sit under the employee-monitoring point, like Calls
- * per agent). The market (K), person (O) and state (S) filters narrow the three lists; the tiles count
- * everything. Shown to people holding reports.view, performance.team or monitoring.live; the database checks
- * again on every read. Ids, codes, counts and the names of the organisation's own people only: no customer
- * name, number or address, never a task's text. Every header explains itself in a hint (copy.hints), the
- * target and the warning share filled in from the tenant's settings.
+ * Follow-up (Reports, addition 0008o, night run N16-B): what is waiting, read every 10 seconds while the tab
+ * is open (LiveRefresh): the eight counts as tiles, then the open lead deals not called, the open tickets
+ * against their response time and the open tasks, each with a link to the record in its own system, and for
+ * performance.team the figures per person (per-person figures sit under the employee-monitoring point, like
+ * Calls per agent). The market (K), person (O) and state (S) filters narrow the three lists; the tiles count
+ * everything. Since addition 0008s (Decision log, 18 October 2026) the page makes one read, cma.follow_up_page:
+ * the figures come from a snapshot computed once a minute ("Updated …" under the title, Muted once older than
+ * three minutes), the filters run in the database, and each list shows its first follow_up.list_rows rows with
+ * "Showing n of total" and, when there are more, a hint to narrow it with the filters. Shown to people holding
+ * reports.view, performance.team or monitoring.live; the database checks again. Ids, codes, counts and the names
+ * of the organisation's own people only: no customer name, number or address, never a task's text. Every header
+ * explains itself in a hint (copy.hints), the target and the warning share filled in from the tenant's settings.
  */
 export default async function FollowUpPage({ searchParams }: PageProps<"/reports/follow-up">) {
   const r = await resolve();
@@ -58,26 +59,18 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
   }
 
   const filter = parseFollowUpFilter(await searchParams);
-  const canByOwner = me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION);
-  const [leads, tickets, tasks, byOwner, settings] = await Promise.all([
-    data().getOpenLeads(me), data().getOpenTickets(me), data().getOpenTasks(me),
-    canByOwner ? data().getFollowUpByOwner(me) : Promise.resolve(null),
-    data().listSettings(me),
-  ]);
-  const setting = (key: string): number | null => {
-    const v = settings.find((x) => x.key === key)?.value;
-    return v === undefined || !/^\d+$/.test(v) ? null : Number(v);
-  };
+  // One read: the snapshot's counts, per person, the filter choices and the three lists after the filter
+  const page = await data().getFollowUpPage(me, filter);
+  // Per person only for performance.team as the page is seen (a preview narrows it); the database decides for the real person
+  const byOwner = me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION) ? page.byOwner : null;
   const ctx: TableContext = {
     copy, locale: me.locale, timeZone: me.timeZone, withOwner: true,
-    targetMinutes: setting("speed_to_lead.target_minutes"), warningPct: setting("tickets.sla_warning_pct"),
+    targetMinutes: page.settings.targetMinutes, warningPct: page.settings.warningPct,
   };
   // The tiles count everything waiting; the filters narrow the lists below them
-  const summary = summarise(leads, tickets, tasks);
-  const options = filterOptions(leads, tickets, tasks);
-  const shownLeads = filterLeads(leads, filter);
-  const shownTickets = filterTickets(tickets, filter);
-  const shownTasks = filterTasks(tasks, filter);
+  const summary = page.summary;
+  const now = new Date();
+  const stale = isStale(page.computedAt, now);
   const h = copy.hints;
   const fill = (text: string) => fillHint(text, { hours: h.officeHours, target: ctx.targetMinutes, warning: ctx.warningPct }, me.locale);
   const tileCopy: Record<TileKey, { label: string; hint: string }> = {
@@ -96,7 +89,12 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
     <Shell copy={copy} me={me} active="follow-up" wide>
       <LiveRefresh />
       <PageTitle>{t.title}</PageTitle>
-      <p className="-mt-2 mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
+      <p className={`-mt-2 mb-2 text-small ${stale ? "text-p4a-muted" : "text-p4a-body"}`} data-testid="follow-up-updated" data-stale={stale ? "true" : "false"}>
+        <time dateTime={page.computedAt} title={fmtDateTime(page.computedAt, me.timeZone, me.locale)}>
+          {t.updated.replace("{when}", agoText(page.computedAt, now, me.locale))}
+        </time>
+      </p>
+      <p className="mb-6 max-w-3xl text-small text-p4a-muted">{t.intro}</p>
 
       <div className="mb-6 grid grid-cols-4 gap-4 2xl:grid-cols-8" data-testid="follow-up-summary">
         {TILES.map((key) => (
@@ -106,18 +104,21 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
       </div>
 
       <div className="mb-6">
-        <FollowUpFilters options={options} filter={filter} copy={copy} />
+        <FollowUpFilters options={page.options} filter={filter} t={t} unknownMarket={copy.reports.unknownMarket} />
       </div>
 
       <div className="flex flex-col gap-6">
         <Card title={t.leadsTitle}>
-          <LeadsTable rows={shownLeads} ctx={ctx} empty={empty(leads.length, t.leadsEmpty)} />
+          <LeadsTable rows={page.leads.rows} ctx={ctx} empty={empty(page.counts.leads, t.leadsEmpty)} />
+          <Showing list={page.leads} t={t} locale={me.locale} testId="follow-up-leads-showing" />
         </Card>
         <Card title={t.ticketsTitle}>
-          <TicketsTable rows={shownTickets} ctx={ctx} empty={empty(tickets.length, t.ticketsEmpty)} />
+          <TicketsTable rows={page.tickets.rows} ctx={ctx} empty={empty(page.counts.tickets, t.ticketsEmpty)} />
+          <Showing list={page.tickets} t={t} locale={me.locale} testId="follow-up-tickets-showing" />
         </Card>
         <Card title={t.tasksTitle}>
-          <TasksTable rows={shownTasks} ctx={ctx} empty={empty(tasks.length, t.tasksEmpty)} />
+          <TasksTable rows={page.tasks.rows} ctx={ctx} empty={empty(page.counts.tasks, t.tasksEmpty)} />
+          <Showing list={page.tasks} t={t} locale={me.locale} testId="follow-up-tasks-showing" />
         </Card>
         {byOwner ? (
           <Card title={t.byOwnerTitle}>
@@ -133,6 +134,17 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
         </div>
       ) : null}
     </Shell>
+  );
+}
+
+/** Under a list: "Showing n of total", and when the list holds more than it shows, how to narrow it */
+function Showing({ list, t, locale, testId }: { list: FollowUpList<unknown>; t: Copy["followUp"]; locale: Locale; testId: string }) {
+  if (list.total === 0) return null;
+  return (
+    <p className="mt-3 text-small text-p4a-muted" data-testid={testId}>
+      <span className="tabular">{t.showing.replace("{n}", fmtCount(list.rows.length, locale)).replace("{total}", fmtCount(list.total, locale))}</span>
+      {list.total > list.rows.length ? <span>{` · ${t.showingHint}`}</span> : null}
+    </p>
   );
 }
 

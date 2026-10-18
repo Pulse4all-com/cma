@@ -313,6 +313,11 @@ node verify/scheduler.mjs; echo "exit $?"     # ALL 10 PASS
 
 It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job step exits 1 and every close check fails.
 
+`verify:refresh-follow-up` against dev (addition 0008s): the same exports, then `node verify/refresh-follow-up.mjs`
+(`ALL 10 PASS`). Once the job is deployed in dev, pause its schedule for the run and resume it after
+(`gcloud scheduler jobs pause|resume cma-refresh-follow-up-minutely --project=p4a-cma-dev --location=europe-west4`),
+so a scheduled refresh does not take the lock the verifier's second session holds (section 7a, step 3).
+
 The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `import`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
 workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do.
@@ -352,6 +357,108 @@ Database `cma`, IAM database authentication. You log in as yourself (reader by d
 - see exactly what the app sees: `set role cma_app;` plus `select set_config('app.tenant_id', '<uuid>', false);`
 - a new migration: the next free number in `db/`, rerunnable, forward-only, with its verify script; run in
   dev, verify, records, then prod (README, Release flow)
+
+## 7a. Addition 0008s: the follow-up snapshot (18 October 2026)
+
+Reports → Follow-up, the Live board's card and Welcome read a snapshot computed once a minute per tenant by
+the job `cma-refresh-follow-up` (README, Data model: follow-up snapshot; The follow-up refresh). The job's
+script ships in the web image, so it is deployed with the image of the merge that brings it. The order:
+`80` in dev with its verifies, the data map and the job verifier from the branch, then `80` in prod just
+before the merge, the merge, then the job in dev and prod. The web on `main` runs unchanged on the migrated
+database (the same shapes; it ignores the new `computed_at`), but nothing refreshes the snapshot until the
+job runs: keep the gap between the prod migration and the job's first run to the build's few minutes.
+
+1. **Terminal** (dev, on the pull request's branch): the migration, its verify, provoked, and `73` and `79` again.
+
+   ```bash
+   cd ~/cma && git fetch origin && git checkout <branch> && git pull
+   run_migration dev 80_follow_up_snapshot.sql 81_verify_follow_up_snapshot.sql 0008s-dev-2026-10-18 73_verify_follow_up.sql 79_verify_system_health.sql
+   ```
+
+   Expected: `INSERT 0 1`, `COMMIT`, `RESET` (a rerun says `INSERT 0 0`); the verdict `PASS | 19 PASS, 0 FAIL`;
+   `provoked FAIL lines: 20` and `PROVOKED, NOT A PASS | 0 PASS, 19 FAIL`; `73_verify_follow_up.sql: 22 PASS rows`
+   (21 checks and the verdict) and `79_verify_system_health.sql: 14 PASS rows` (13 and the verdict).
+
+2. **Terminal** (dev, the same branch): the data map's schema snapshot and the page, committed to the branch.
+
+   ```bash
+   cd ~/cma && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && head -c 60 docs/datamap/schema.json; echo
+   node tools/datamap/build.mjs && cd web && npm run verify:datamap; cd ~/cma
+   git add docs/datamap/schema.json docs/datamap/index.html && git commit -m "Data map: schema snapshot from dev after 0008s" && git push
+   ```
+
+   Expected: `{"generated_at" : "…`, `datamap: wrote docs/datamap/index.html (… tables, … views)`, then
+   `datamap: PASS (… tables, … views, all described; index.html current)`.
+
+3. **Terminal** (dev, the same branch): the job, run from the branch against dev, proves the refresh and fills
+   dev's snapshots (the job is not deployed in dev yet, so nothing else refreshes at the same time).
+
+   ```bash
+   cma_db dev
+   export CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=martin@pulse4all.com CMA_DB_SET_ROLE=cma_app
+   cd ~/cma/web && node verify/refresh-follow-up.mjs; echo "exit $?"
+   node verify/refresh-follow-up.mjs --provoke; echo "exit $?"
+   ```
+
+   Expected: `ALL 10 PASS`, exit 0; then `ALL 10 PROVOKED CHECKS FAILED, as they must`, exit 0. It refuses a
+   database without the dev seed (exit 2).
+
+4. **Studio** (cma-dev-pg): every tenant's snapshot, its age and size (ids, times and counts only).
+
+   ```sql
+   set role cma_owner;
+   select t.slug, s.computed_at, s.duration_ms, (select count(*) from cma.follow_up_item i where i.tenant_id = s.tenant_id) as items
+   from cma.follow_up_snapshot s join cma.tenant t on t.id = s.tenant_id order by 1;
+   reset role;
+   ```
+
+   Expected: one row per tenant with a scheduler user, `computed_at` from step 3, `duration_ms` in the
+   hundreds or low thousands.
+
+5. **Terminal** (prod, just before the merge): the migration alone; `81`, `73` and `79` are dev only.
+
+   ```bash
+   cd ~/cma && mkdir -p records/0008s-prod-2026-10-18 && cma_db prod
+   psql "$PGCONN" -v ON_ERROR_STOP=1 -f db/80_follow_up_snapshot.sql > records/0008s-prod-2026-10-18/80.txt 2>&1; tail -3 records/0008s-prod-2026-10-18/80.txt
+   ```
+
+   Expected: `INSERT 0 1`, `COMMIT`, `RESET`.
+
+6. **Browser**: merge the pull request (squash); the build deploys the web to prod (section 3). Note its short
+   SHA.
+
+7. **Terminal**: the job and its schedule, dev first, with the merge's image; then its first run in each.
+
+   ```bash
+   cd ~/cma && bash docs/scheduler/deploy-follow-up.sh dev <short sha>
+   gcloud run jobs execute cma-refresh-follow-up --project=p4a-cma-dev --region=europe-west4 --wait 2>&1 | tail -2
+   bash docs/scheduler/deploy-follow-up.sh prod <short sha>
+   gcloud run jobs execute cma-refresh-follow-up --project=p4a-cma-prod --region=europe-west4 --wait 2>&1 | tail -2
+   ```
+
+   Expected per environment: `job cma-refresh-follow-up on …:<short sha>, schedule cma-refresh-follow-up-minutely
+   every minute (UTC) in p4a-cma-…`, then gcloud's line that the execution has successfully completed (a
+   scheduled run in the same minute may make it skip a tenant: harmless).
+
+8. **Terminal** (prod): the job's lines, one per tenant: the tenant's id, rows and `duration_ms`.
+
+   ```bash
+   gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-follow-up AND jsonPayload.message="refresh-follow-up"' \
+     --project=p4a-cma-prod --freshness=10m --limit=10 \
+     --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.refreshed)'
+   ```
+
+   Expected: INFO rows, `refreshed` True, one per tenant per minute; a WARNING with `refreshed` False means a
+   run overlapped the next one and skipped that tenant (harmless once; every minute means the refresh takes
+   longer than a minute).
+
+9. **Browser** (prod): Configuration → System health lists Refresh follow-up with a run in the last minute;
+   Reports → Follow-up shows "Updated now" or "Updated … seconds ago" under the title and "Showing n of total"
+   under each list; the request lines (section 6) show `/reports/follow-up` well under a second.
+
+To pause the refresh (the figures then stand still and "Updated …" turns grey after three minutes):
+`gcloud scheduler jobs pause cma-refresh-follow-up-minutely --project=p4a-cma-prod --location=europe-west4`
+(**Terminal**); `resume` in place of `pause` starts it again.
 
 ## 8. Add a person to prod
 

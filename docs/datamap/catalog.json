@@ -422,6 +422,22 @@
       ]
     },
     {
+      "key": "followup",
+      "label": "Follow-up snapshot",
+      "tables": [
+        {
+          "name": "follow_up_snapshot",
+          "what": "Per tenant: when the follow-up figures were last computed and how long it took, the eight counts and the figures per person (ids and counts, no names)",
+          "how": "Replaced every minute per tenant by the refresh job cma-refresh-follow-up (cma.refresh_follow_up, since 0008s); computed once on demand when a tenant has none"
+        },
+        {
+          "name": "follow_up_item",
+          "what": "Every open lead, ticket and task of the latest refresh: kind, order, market, owner as a person, state, and the row's fields as JSON (ids, codes and times; never a task's text)",
+          "how": "Rewritten with the snapshot every minute per tenant from cma.open_leads_of, open_tickets_of and open_tasks_of (since 0008s); derived, no audit trigger"
+        }
+      ]
+    },
+    {
       "key": "plumbing",
       "label": "Ingest and audit",
       "tables": [
@@ -433,7 +449,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection"
+          "how": "Each sweep, form poll, email poll, reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection"
         },
         {
           "name": "sync_cursor",
@@ -568,7 +584,8 @@
       ],
       "doms": [
         "time",
-        "plumbing"
+        "plumbing",
+        "followup"
       ]
     },
     "legacy": {

@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return forPrincipal(async (me) => {
     requireAnyPermission(me, [FOLLOW_UP_BY_OWNER_PERMISSION]);
-    return ok(await data().getFollowUpByOwner(me));
+    // the same array as before, each row with computedAt (addition 0008s): when the snapshot was computed
+    const r = await data().getFollowUpByOwner(me);
+    return ok(r.rows.map((x) => ({ ...x, computedAt: r.computedAt })));
   });
 }

@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 /**
  * The caller's own rows (cma.my_follow_up, addition 0008o): the leads not called, the tickets and the tasks
  * whose owner is linked to them on People, each with its record link. Needs leads.accept or workday.own, here
- * and again in the database. Always the caller's own: a preview as another role never changes whose rows.
+ * and again in the database. Always the caller's own: a preview as another role never changes whose rows. Since
+ * addition 0008s from the snapshot: every row of theirs, with computedAt (when it was computed).
  */
 export async function GET() {
   return forPrincipal(async (me) => {

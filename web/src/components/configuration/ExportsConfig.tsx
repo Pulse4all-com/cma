@@ -25,9 +25,11 @@ import { SaveNote, field, label, send, useSave } from "./shared";
 const FOLLOW_UP_KEYS: Record<FollowUpSettingKey, keyof Copy["configExports"]> = {
   "tickets.sla_minutes": "tickets_sla_minutes", "tickets.sla_warning_pct": "tickets_sla_warning_pct",
   "leads.age_buckets_business_days": "leads_age_buckets_business_days", "tasks.callback_window_minutes": "tasks_callback_window_minutes",
+  "follow_up.list_rows": "follow_up_list_rows",
 };
 const FOLLOW_UP_HINTS: Record<FollowUpSettingKey, keyof Copy["configExports"]> = {
   "tickets.sla_minutes": "slaHint", "tickets.sla_warning_pct": "pctHint", "leads.age_buckets_business_days": "bucketsHint", "tasks.callback_window_minutes": "windowHint",
+  "follow_up.list_rows": "rowsHint",
 };
 
 export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; copy: Copy }) {

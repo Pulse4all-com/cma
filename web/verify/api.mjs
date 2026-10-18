@@ -72,7 +72,8 @@ const ONLY_PREVIEW = process.argv.includes("--preview");
 /**
  * --follow-up runs only the checks of the follow-up layer (addition 0008o): the five report routes and the
  * person's own, their permissions, shapes and filters, and the Sources writes of a pipeline's response time
- * and the task catalogs. Works against mock data and against a database with the fixture.
+ * and the task catalogs. Works against mock data and against a database with the fixture. Since addition 0008s
+ * every follow-up answer carries computedAt, when the snapshot it reads was computed (per row on by-owner).
  */
 const ONLY_FOLLOW_UP = process.argv.includes("--follow-up");
 
@@ -887,6 +888,7 @@ async function followUpChecks() {
     "openBusinessSeconds", "slaMinutes", "slaState", "minutesToBreach", "recordUrl"].sort();
   const TASK_KEYS = ["taskId", "connectionId", "taskSourceId", "typeRef", "typeLabel", "isCallback", "priorityRef", "statusRef", "statusLabel", "ownerUserId", "ownerName", "ownerRef", "market",
     "dueAt", "dueState", "recordType", "recordSourceId", "createdAt", "recordUrl"].sort();
+  const isTime = (v) => typeof v === "string" && !Number.isNaN(Date.parse(v));
   const keysOf = (rows, want) => rows.length === 0 || rows.every((r) => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(want));
   // no customer data in any row: no key naming a name, email, phone, subject or body
   const clean = (rows) => rows.every((r) => Object.keys(r).every((k) => !/(email|phone|subject|body|address|firstName|lastName)/i.test(k)));
@@ -895,9 +897,10 @@ async function followUpChecks() {
     [(await get(AGENT, `${fu}/leads`)).status, (await get(AGENT, `${fu}/tickets`)).status, (await get(AGENT, `${fu}/tasks`)).status, (await get(AGENT, `${fu}/summary`)).status, (await get(AGENT, `${fu}/by-owner`)).status],
     [403, 403, 403, 403, 403], [200, 403, 403, 403, 403]);
   const summary = await get(SUPERVISOR, `${fu}/summary`);
-  expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts",
-    [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS].sort()), SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k]))],
-    [200, true, true], [403, true, true]);
+  expect("follow-up: the supervisor (monitoring.live) reads the summary's eight counts and computedAt",
+    [summary.status, JSON.stringify(Object.keys(summary.body?.data ?? {}).sort()) === JSON.stringify([...SUMMARY_KEYS, "computedAt"].sort()), SUMMARY_KEYS.every((k) => Number.isInteger(summary.body?.data?.[k])),
+      isTime(summary.body?.data?.computedAt)],
+    [200, true, true, true], [403, true, true, true]);
   // the reader (reports.view alone) is a mock identity; a database without it answers every call 403, which says nothing
   if ((await get(READER, "/api/v1/me")).status === 200) {
     expect("follow-up: the reader (reports.view alone) reads the tasks, no summary and no per-person figures",
@@ -912,6 +915,8 @@ async function followUpChecks() {
     [leads.status, tickets.status, tasks.status, keysOf(leads.body?.data?.rows ?? [], LEAD_KEYS), keysOf(tickets.body?.data?.rows ?? [], TICKET_KEYS), keysOf(tasks.body?.data?.rows ?? [], TASK_KEYS),
       clean([...(leads.body?.data?.rows ?? []), ...(tickets.body?.data?.rows ?? []), ...(tasks.body?.data?.rows ?? [])])],
     [200, 200, 200, true, true, true, true], [200, 200, 403, true, true, true, true]);
+  expect("follow-up: each list says when its snapshot was computed (computedAt)",
+    [isTime(leads.body?.data?.computedAt), isTime(tickets.body?.data?.computedAt), isTime(tasks.body?.data?.computedAt)], [true, true, true], [true, true, false]);
   expect("follow-up: tickets come with the least time left first, no business hours last",
     (() => { const m = (tickets.body?.data?.rows ?? []).map((r) => r.minutesToBreach); const nums = m.filter((x) => x !== null);
       return nums.every((x, i) => i === 0 || x >= nums[i - 1]) && m.indexOf(null) === (m.includes(null) ? nums.length : -1); })(), true, false);
@@ -923,15 +928,19 @@ async function followUpChecks() {
   expect("follow-up: owner=none keeps the leads whose owner maps to nobody", (none.body?.data?.rows ?? []).every((r) => r.ownerUserId === null), true, false);
   const byOwner = await get(MANAGER, `${fu}/by-owner`);
   const rows = byOwner.body?.data ?? [];
-  expect("follow-up: per person for the manager: people by name, the not-linked row last",
+  expect("follow-up: per person for the manager: people by name, the not-linked row last, each row with computedAt",
     [byOwner.status, rows.every((r, i) => r.ownerUserId !== null || i === rows.length - 1),
-      rows.filter((r) => r.ownerUserId !== null).every((r, i, a) => i === 0 || String(a[i - 1].displayName).localeCompare(String(r.displayName)) <= 0)],
-    [200, true, true], [403, true, true]);
+      rows.filter((r) => r.ownerUserId !== null).every((r, i, a) => i === 0 || String(a[i - 1].displayName).localeCompare(String(r.displayName)) <= 0),
+      rows.every((r) => isTime(r.computedAt))],
+    [200, true, true, true], [403, true, true, true]);
   const mine = await get(AGENT, "/api/v1/me/follow-up");
-  expect("follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs",
+  // the agent's own id read here: these checks run before the identity checks below declare meA
+  const agentId = (await get(AGENT, "/api/v1/me")).body?.data?.userId;
+  expect("follow-up: the agent reads their own rows (leads.accept or workday.own), every row theirs, and computedAt",
     [mine.status, ["leads", "tickets", "tasks"].every((k) => Array.isArray(mine.body?.data?.[k])),
-      [...(mine.body?.data?.leads ?? []), ...(mine.body?.data?.tickets ?? []), ...(mine.body?.data?.tasks ?? [])].every((r) => r.ownerUserId === meA.userId)],
-    [200, true, true], [403, true, true]);
+      [...(mine.body?.data?.leads ?? []), ...(mine.body?.data?.tickets ?? []), ...(mine.body?.data?.tasks ?? [])].every((r) => r.ownerUserId === agentId),
+      isTime(mine.body?.data?.computedAt)],
+    [200, true, true, true], [403, true, true, true]);
   expect("follow-up: the analyst (no leads.accept, no workday.own) is refused their own", (await get(ANALYST, "/api/v1/me/follow-up")).status, 403, 200);
 
   // the Sources writes (0008n, 0008o), on the tenant's CRM connection
