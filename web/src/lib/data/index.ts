@@ -1,4 +1,5 @@
 import { config } from "@/lib/config";
+import { DB_TRACE, dbStats, formatDbStats } from "@/lib/db/client";
 import { mockData } from "./mock";
 import { postgresData } from "./postgres";
 import type { CmaData } from "./types";
@@ -18,3 +19,12 @@ export function data(): CmaData {
 
 /** True when the screens must say that nothing is saved */
 export const dataIsMock = config.dataMode === "mock";
+
+/**
+ * The current request's database cost as "tx=…;rt=…;ms=…" for verify/round-trips.mjs, or null when the trace is
+ * off: it is on only with CMA_DB_TRACE=1 and mock sign-in (lib/db/client DB_TRACE), never in iap mode. Read it
+ * after the request's reads have completed (the Shell's meta, the API's x-cma-db header).
+ */
+export function requestDbTrace(): string | null {
+  return DB_TRACE ? formatDbStats(dbStats()) : null;
+}

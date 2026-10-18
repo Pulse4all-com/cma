@@ -126,13 +126,19 @@ export const getAccess = cache(async (): Promise<Access | null> => {
   return { kind: "granted", identity, principal: await previewed(real), real };
 });
 
+/**
+ * The tenant's roles as the real principal reads them, once per request (React cache): the preview and the
+ * Shell's select both need the list, and before the IT audit of 17 October 2026 an admin's page read it twice
+ */
+export const rolesOf = cache((real: Principal) => data().listRoles(real));
+
 /** The principal as the pages and the API see it: narrowed when an admin's preview cookie names a known role */
 async function previewed(real: Principal): Promise<Principal> {
   if (!real.canPreview) return real;
   const roleKey = (await cookies()).get(PREVIEW_COOKIE)?.value;
   if (!isRoleKey(roleKey)) return real;
   try {
-    return applyPreview(real, roleKey, await data().listRoles(real));
+    return applyPreview(real, roleKey, await rolesOf(real));
   } catch (e) {
     // A role list that cannot be read is no preview: the admin keeps their own view
     console.warn(`[cma-auth] preview ignored: ${e instanceof Error ? e.message : String(e)}`);

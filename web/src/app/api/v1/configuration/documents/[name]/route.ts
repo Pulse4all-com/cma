@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { ApiError, forPrincipal, requireAnyPermission } from "@/lib/api/respond";
+import { ApiError, dbTraceHeader, forPrincipal, requireAnyPermission } from "@/lib/api/respond";
 import { documentContentType, documentEntry, isDocumentName, parseManifest } from "@/lib/health";
 
 /**
@@ -33,6 +33,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ nam
         "content-length": String(body.byteLength),
         "content-disposition": `attachment; filename="${entry.name}"`,
         "x-content-type-options": "nosniff",
+        ...dbTraceHeader(),
       },
     });
   });

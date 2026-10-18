@@ -16,10 +16,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
-import { getAccess, type Principal } from "@/lib/auth/identity";
+import { getAccess, rolesOf, type Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
-import { data } from "@/lib/data";
+import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
 import { breadcrumbs, HINTS_COOKIE, NAV_COOKIE_PREFIX, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
 import { NavGroup, NavIconMark } from "./NavGroup";
@@ -60,8 +60,11 @@ export async function Shell({
   // Preview as role: the tenant's roles for the select, listed with the real principal (the mock checks
   // the caller's own permissions, which a preview narrows; the database checks the real user either way)
   const access = me.canPreview ? await getAccess() : null;
-  const roles = access?.kind === "granted" ? await data().listRoles(access.real).catch(() => []) : [];
+  const roles = access?.kind === "granted" ? await rolesOf(access.real).catch(() => []) : [];
   const ownRoleName = roles.find((r) => r.key === me.roleKey)?.name ?? me.roleKey;
+  // Verification only (CMA_DB_TRACE=1 with mock sign-in): the request's database count after every read of the
+  // page and the Shell has completed, for verify/round-trips.mjs; never rendered in iap mode
+  const dbTrace = requestDbTrace();
 
   return (
     <div
@@ -69,6 +72,7 @@ export async function Shell({
       data-hints={hintsHidden ? "hidden" : "shown"}
       className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_1fr]"
     >
+      {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       <Shortcuts />
       <header className="col-span-2 flex items-center justify-between border-b border-p4a-border bg-white px-6">
         <div className="flex items-center gap-4">

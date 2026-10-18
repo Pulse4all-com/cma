@@ -12,6 +12,7 @@
     "verify:copy": "node verify/copy.mjs",
     "verify:boundaries": "node verify/boundaries.mjs",
     "verify:theme": "node verify/theme.mjs",
+    "verify:round-trips": "node verify/round-trips.mjs",
     "verify:layout": "node verify/layout.mjs",
     "verify:hints": "node verify/hints.mjs",
     "verify:iap": "node verify/iap-token.mjs",
@@ -38,6 +39,8 @@
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-node": "^2.12.0",
     "jose": "^6.2.12",
     "next": "16.3.8",
     "pg": "^8.23.1",

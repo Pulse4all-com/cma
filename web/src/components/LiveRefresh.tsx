@@ -14,12 +14,18 @@ export const REFRESH_MS = 10_000;
 export function LiveRefresh() {
   const router = useRouter();
   useEffect(() => {
-    let id: ReturnType<typeof setInterval> | null = null;
+    // A timeout chain, not an interval: the next tick is armed after the refresh was requested, so a slow
+    // render never overlaps the next one (the IT audit of 17 October 2026, finding 5.6-11)
+    let id: ReturnType<typeof setTimeout> | null = null;
+    const tick = () => {
+      router.refresh();
+      id = setTimeout(tick, REFRESH_MS);
+    };
     const start = () => {
-      if (id === null) id = setInterval(() => router.refresh(), REFRESH_MS);
+      if (id === null) id = setTimeout(tick, REFRESH_MS);
     };
     const stop = () => {
-      if (id !== null) clearInterval(id);
+      if (id !== null) clearTimeout(id);
       id = null;
     };
     const onVisibility = () => {
