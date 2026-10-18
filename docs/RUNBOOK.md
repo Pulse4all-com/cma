@@ -328,6 +328,20 @@ App messages start with `[cma-data]`, `[cma-db]` or `[cma-api]`. A 503 `database
 service could not reach Cloud SQL; check the instance is running and the service account still has
 Cloud SQL Client and Cloud SQL Instance User.
 
+The request lines (**Terminal**): one JSON line per page request, RSC request and API request, with the route
+pattern (`/api/v1/configuration/documents/[name]`, never the path; `null` when Next names none), the status,
+the total and database milliseconds, and the transactions (`tx`) and statements (`rt`) the request cost.
+Severity WARNING above 800 ms, ERROR on a 5xx. A request `proxy.ts` refuses itself (401) writes none.
+
+```bash
+gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-web" AND jsonPayload.message="request"' \
+  --project=p4a-cma-prod --freshness=1h --limit=50 \
+  --format='table(timestamp, severity, jsonPayload.route, jsonPayload.status, jsonPayload.rsc, jsonPayload.totalMs, jsonPayload.dbMs, jsonPayload.tx, jsonPayload.rt)'
+```
+
+Expected: a row for every page, RSC refresh and API call of the last hour; a Live poll reads
+`/live/board 200 True <totalMs> <dbMs> <tx> <rt>`. Add `AND severity>=WARNING` to the filter for the slow ones only.
+
 ## 7. Database work (Cloud SQL Studio)
 
 Dev: `https://console.cloud.google.com/sql/instances/cma-dev-pg/studio?project=p4a-cma-dev`

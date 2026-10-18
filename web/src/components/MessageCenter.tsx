@@ -199,6 +199,7 @@ export function MessageCenter({ copy, active }: { copy: Copy["messages"]; active
     <>
       <Link
         href="/messages"
+        prefetch={false}
         title={copy.openInbox}
         aria-label={badge && unread ? `${copy.openInbox} · ${unread === 1 ? copy.unreadOne : copy.unread.replace("{n}", String(unread))}` : copy.openInbox}
         aria-current={active ? "page" : undefined}

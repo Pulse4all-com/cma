@@ -1646,13 +1646,18 @@ export const postgresData: CmaData = {
   async getAlertRules(me) {
     return withTenant(ctx(me), async (q) => {
       const rules = await readRules(q);
-      // the pipelines a rule can name: of the tenant's customer-record connections (kind crm, or rows that say so)
-      const sources = (await q.query<SourceDbRow>(`select * from cma.sources()`)).rows.map(toSource)
-        .filter((c) => c.kind === "crm" || (c.kind === null && c.heldKinds.includes("crm")));
+      // The pipelines a rule can name: of the tenant's customer-record connections (kind crm, or rows that say so),
+      // read with the connections in one statement, so the page costs the same whatever the number of connections
+      // (before 18 October 2026 one cma.connection_config statement per connection)
+      const sources = await q.query<SourceDbRow & { config: ConfigJson | null }>(
+        `select s.*, case when s.kind = 'crm' or (s.kind is null and 'crm' = any(s.held_kinds))
+                          then cma.connection_config(s.connection_id) end as config
+         from cma.sources() s`,
+      );
       const pipelines: AlertPipelineChoice[] = [];
-      for (const c of sources) {
-        for (const p of (await readConfig(q, c.id)).pipelines) {
-          pipelines.push({ connectionName: c.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted });
+      for (const row of sources.rows) {
+        for (const p of row.config?.pipelines ?? []) {
+          pipelines.push({ connectionName: row.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted });
         }
       }
       const age = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'alerts.max_age_minutes'`);
