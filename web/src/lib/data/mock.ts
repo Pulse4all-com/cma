@@ -22,6 +22,7 @@ import type {
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
+  Journey, JourneyStatus,
 } from "./types";
 import {
   FIRST_ORDER_GROUPS, firstOrderAmounts, firstOrderFigures, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, ordersPerPerson,
@@ -646,6 +647,26 @@ function assertFirstOrders(me: Principal, range: HoursRange, filter: FirstOrderF
   if (group !== null && !FIRST_ORDER_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or level");
   if (parseFirstOrderFilter(filter.market ?? "", filter.level ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
 }
+
+/**
+ * The journeys of Campaign monitoring (cma.journeys(), addition 0008v): the three of db/02's seed for the first tenant,
+ * one with an invented design link, and an archived one that never shows; the invest tenant has none
+ */
+const MOCK_JOURNEYS: (Omit<Journey, "status"> & { status: JourneyStatus | "archived"; sortOrder: number })[] = [
+  {
+    code: "fca-uk-consumers", name: "FCA · UK consumers", market: "GB", status: "placeholder", sortOrder: 10,
+    summary: "Every UK consumer customer through every required communication and step, with drill-down per customer and an audit pack.",
+    designUrl: "https://design.example.invalid/fca-uk-consumers",
+    prerequisites: ["Consumer or business flag on every GB contact", "Agreement date on the contract", "A call tag that proves the welcome call",
+      "Template ids on the journey's emails", "Call-recording consent decided", "Step list by Gemma and Kira, checked by Yordi",
+      "Drill-down permission and access log agreed with Yordi"],
+  },
+  { code: "opc", name: "OPC", market: null, status: "placeholder", sortOrder: 20, summary: "Steps, coverage and drill-down to be defined with Kira.",
+    designUrl: null, prerequisites: ["Step list and population defined by Kira."] },
+  { code: "exchange", name: "Exchange", market: null, status: "placeholder", sortOrder: 30, summary: "Steps, coverage and drill-down to be defined with Kira.",
+    designUrl: null, prerequisites: ["Step list and population defined by Kira."] },
+  { code: "old-pilot", name: "Old pilot", market: "NL", status: "archived", sortOrder: 5, summary: null, designUrl: null, prerequisites: [] },
+];
 
 /** The open lead deals not responding (cma.email_not_responding): invented deals, ids and ages only */
 function mockNotResponding(me: Principal): EmailNotRespondingRow[] {
@@ -3574,6 +3595,15 @@ export const mockData: CmaData = {
     const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
     const { rows, total } = ordersPerPerson(firstOrdersInPeriod(records, range.from, range.to, filter), mockOrderName);
     return { ...range, filter, connected: me.tenantId !== MOCK_TENANT_2, rows, total, settings, markets: marketsOf(me) };
+  },
+
+  async getJourneys(me): Promise<Journey[]> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    if (me.tenantId === MOCK_TENANT_2) return [];
+    return MOCK_JOURNEYS.filter((j) => j.status !== "archived")
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name) || a.code.localeCompare(b.code))
+      .map((j) => ({ code: j.code, name: j.name, summary: j.summary, market: j.market, status: j.status as JourneyStatus, designUrl: j.designUrl,
+        prerequisites: j.prerequisites }));
   },
 
   async setSourceInbox(me, id, input) {

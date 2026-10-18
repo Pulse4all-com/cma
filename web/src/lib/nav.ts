@@ -20,7 +20,7 @@ export function prefCookie(name: string, value: string): string {
   return `${name}=${value}; path=/; max-age=31536000; samesite=lax; secure`;
 }
 
-export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "gear";
+export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "flag" | "gear";
 export type ShellPage =
   | "welcome"
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
@@ -32,6 +32,8 @@ export type ShellPage =
   | "email" | "email-per-agent"
   /** First orders and Orders per person (addition 0008u, brief N19-A part 2) */
   | "first-orders" | "orders-per-person"
+  /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
+  | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
   | "follow-up" | "my-follow-up"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
@@ -44,7 +46,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
 
@@ -177,6 +179,17 @@ export function navEntries(copy: Copy): NavEntry[] {
       ],
     },
     {
+      // Campaigns (addition 0008v, brief N19-A part 3): Campaign monitoring, the journeys as placeholders for the
+      // compliance and campaign monitors, for the report permissions; after Reports, so no key above it moves
+      kind: "group",
+      id: "campaigns",
+      label: copy.nav.campaigns,
+      icon: "flag",
+      items: [
+        { page: "campaigns", href: "/campaigns", label: copy.nav.campaignMonitoring, permission: ["reports.view", "performance.team"] },
+      ],
+    },
+    {
       // Configuration (0005a): tenant.configure only (the admin); agents, supervisors and managers never
       // see the group. No digit keys: the group opens with C (page-first) and Enter opens a page.
       kind: "group",
@@ -263,7 +276,8 @@ export interface Crumb {
  * page this person may see; no link when they may see none) › the page's label, from the navigation
  * model; a bare page is Welcome › the page. My account and Send a message are no rail items and get
  * their own trail; Welcome shows none. A page's own trail (the connection's name on Sources) is appended,
- * and the page's crumb becomes a link. The last crumb is never a link.
+ * and the page's crumb becomes a link; a journey's page (0008v) is Welcome › Campaigns › the journey. The last
+ * crumb is never a link.
  */
 export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = []): Crumb[] {
   if (active === "welcome") return [];
@@ -271,6 +285,8 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
   if (active === "account") own = [{ label: copy.account.title, href: "/account" }];
   else if (active === "my-follow-up") own = [{ label: copy.followUp.myTitle, href: "/me/follow-up" }];
   else if (active === "messages-send") own = [{ label: copy.nav.messages, href: "/messages" }, { label: copy.messages.composeTitle, href: "/messages/send" }];
+  // A journey's page (addition 0008v): Campaigns › the journey's name, the group's one page being the list of journeys
+  else if (active === "campaigns" && trail.length > 0) own = [{ label: copy.nav.campaigns, href: "/campaigns" }];
   else {
     for (const entry of navEntries(copy)) {
       if (entry.kind === "page") {

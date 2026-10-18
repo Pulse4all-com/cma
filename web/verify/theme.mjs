@@ -20,7 +20,7 @@
  * per agent with a person's hours and the not-linked row opened; the CRM connection's page now holds its email
  * section (inboxes, mailboxes, channels). Since addition 0008u First orders (by day, week, market and level, and for a
  * tenant without an order pipeline) and Orders per person; the CRM connection's page now holds the order pipeline
- * switch and the stage outcomes.
+ * switch and the stage outcomes. Since addition 0008v Campaign monitoring and a journey's page with its placeholders.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
@@ -164,6 +164,11 @@ const pages = [
   { path: "/reports/first-orders?range=month&group=level", subject: "analyst", tables: true },
   { path: "/reports/orders-per-person?range=month", subject: "manager", tables: true },
   { path: "/reports/first-orders?range=month", subject: "invest-analyst", noHint: true },
+  // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
+  // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
+  { path: "/campaigns", subject: "manager" },
+  { path: "/campaigns/fca-uk-consumers", subject: "analyst" },
+  { path: "/campaigns", subject: "invest-analyst" },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },

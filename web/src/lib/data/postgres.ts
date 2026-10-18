@@ -17,6 +17,7 @@ import type {
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
+  Journey, JourneyStatus,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -1845,6 +1846,16 @@ export const postgresData: CmaData = {
         ...range, filter, connected: history.rows[0]?.connected ?? false, rows: rows.filter((x) => x.kind !== "total"), total,
         settings: await attributionSettings(q), markets: await marketCodes(q),
       };
+    });
+  },
+
+  async getJourneys(me): Promise<Journey[]> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks reports.view or performance.team (CMA06) and leaves the archived journeys out
+      const r = await q.query<{ code: string; name: string; summary: string | null; market: string | null; status: JourneyStatus;
+        design_url: string | null; prerequisites: string[] }>(`select code, name, summary, market, status, design_url, prerequisites from cma.journeys()`);
+      return r.rows.map((x) => ({ code: x.code, name: x.name, summary: x.summary, market: x.market, status: x.status, designUrl: x.design_url,
+        prerequisites: x.prerequisites }));
     });
   },
 

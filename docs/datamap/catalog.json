@@ -423,6 +423,11 @@
           "name": "schema_migration",
           "what": "Which migrations ran when",
           "how": "Each migration"
+        },
+        {
+          "name": "journey",
+          "what": "Journeys of Campaign monitoring (0008v): code, name, summary, market, status (placeholder, building, live, archived), design link and prerequisites; placeholders, no steps or customers yet",
+          "how": "Configuration: the customer's seed (02) and cma.set_journey; never deleted, archived hides one"
         }
       ]
     },

@@ -2209,6 +2209,26 @@ export interface DatabaseProbe {
   roundTripMs: number | null;
 }
 
+/** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
+export type JourneyStatus = "placeholder" | "building" | "live";
+
+/**
+ * A journey of Campaign monitoring (addition 0008v): a placeholder for a compliance or campaign monitor, as
+ * configuration (cma.journeys()). Code, name, summary and prerequisites as a person set them; no customer data
+ */
+export interface Journey {
+  code: string;
+  name: string;
+  summary: string | null;
+  /** A market code of the catalog, or null */
+  market: string | null;
+  status: JourneyStatus;
+  /** The design's https link, or null until one exists */
+  designUrl: string | null;
+  /** The data prerequisites, in their order */
+  prerequisites: string[];
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -2490,6 +2510,9 @@ export interface CmaData {
   getFirstOrdersExport(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<FirstOrderListRow[]>;
   /** Orders per person: the credited first orders per person, the not-linked row, the total. Needs performance.team and reports.per_person holding orders */
   getOrdersPerPerson(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<OrdersPerPerson>;
+  // ---- Campaign monitoring (addition 0008v): the database checks the permission on every call (CMA06)
+  /** Every journey of the tenant but the archived ones, in their order. Needs reports.view or performance.team */
+  getJourneys(me: Principal): Promise<Journey[]>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)
