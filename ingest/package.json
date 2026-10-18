@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/server.mjs",
     "lint": "eslint",
-    "test": "npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:deploy-script",
+    "test": "npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:api-budget && npm run verify:deploy-script",
     "verify:signature": "node verify/signature.mjs",
     "verify:mapping": "node verify/mapping.mjs",
     "verify:hash": "node verify/hash.mjs",
@@ -21,6 +21,7 @@
     "verify:shopify-scripts": "node verify/shopify-scripts.mjs",
     "verify:outbox": "node verify/outbox.mjs",
     "verify:email-mapping": "node verify/email-mapping.mjs",
+    "verify:api-budget": "node verify/api-budget.mjs",
     "verify:deploy-script": "node verify/deploy-script.mjs",
     "verify:flow": "node verify/flow.mjs",
     "verify:jobs-flow": "node verify/jobs-flow.mjs",

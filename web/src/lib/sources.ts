@@ -97,6 +97,63 @@ export function recordUrlPreview(template: string, settings: SourceSettings, acc
   return url;
 }
 
+// ---- Reading a source: the polls' cadence and the daily floor (backlog CMA-069) --------------------
+
+/**
+ * The connection settings the ingest reads for how often it polls and how much of the source's daily
+ * limit a backfill or the nightly reconcile may use, with their defaults and ranges, exactly as the
+ * ingest applies them (ingest/src/adapters/hubspot/usage.mjs): a whole number in range, as a number or
+ * its digits as text, else the default
+ */
+export const POLL_SETTINGS = {
+  formsIntervalMinutes: { setting: "forms_poll_interval_minutes", fallback: 5, min: 1, max: 1440 },
+  openCheckMinutes: { setting: "email_open_check_minutes", fallback: 15, min: 1, max: 1440 },
+  floorPct: { setting: "api_daily_floor_pct", fallback: 25, min: 1, max: 90 },
+} as const;
+export type PollSettingName = keyof typeof POLL_SETTINGS;
+/** On: one search a minute decides whether the forms that count in Intake are read; off by default */
+export const POLL_PROBE_SETTING = "forms_poll_probe";
+
+/** A typed value as the setting takes it: a whole number within its range, else null */
+export function parsePollSetting(name: PollSettingName, text: string): number | null {
+  const t = text.trim();
+  if (!/^\d{1,5}$/.test(t)) return null;
+  const n = Number(t);
+  const spec = POLL_SETTINGS[name];
+  return n >= spec.min && n <= spec.max ? n : null;
+}
+
+export interface PollCadence {
+  formsIntervalMinutes: number;
+  openCheckMinutes: number;
+  floorPct: number;
+  probe: boolean;
+  /** The settings whose stored value is out of range, so their default applies */
+  outOfRange: PollSettingName[];
+}
+
+/** The values in force for a connection's settings, each stored value within its range or the default */
+export function pollCadenceOf(settings: SourceSettings): PollCadence {
+  const outOfRange: PollSettingName[] = [];
+  const value = (name: PollSettingName): number => {
+    const spec = POLL_SETTINGS[name];
+    const v = settings[spec.setting];
+    if (v === undefined || v === "") return spec.fallback;
+    const n = typeof v === "number" ? v : typeof v === "string" ? parsePollSetting(name, v) : null;
+    if (n !== null && Number.isInteger(n) && n >= spec.min && n <= spec.max) return n;
+    outOfRange.push(name);
+    return spec.fallback;
+  };
+  const probe = settings[POLL_PROBE_SETTING];
+  return {
+    formsIntervalMinutes: value("formsIntervalMinutes"),
+    openCheckMinutes: value("openCheckMinutes"),
+    floorPct: value("floorPct"),
+    probe: probe === true || probe === "true",
+    outOfRange,
+  };
+}
+
 // ---- Rules by name pattern (forms and call outcomes) ---------------------------------------------
 
 /** "Quote, contact; info" → ["quote", "contact", "info"]: lower case, trimmed, each once, in order */

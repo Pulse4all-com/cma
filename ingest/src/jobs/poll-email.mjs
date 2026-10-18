@@ -3,7 +3,9 @@
  * today) and whose settings switch it on (email_poll true), one sync_run row (job email_poll, stream
  * email): the CRM's email engagements modified since their cursor, then the inbox conversations (the
  * catalogs and the owner map hourly, the changed threads with their new messages and events, the open
- * check every ten minutes). The adapter does the source's part (src/adapters/hubspot/email-poll.mjs).
+ * check every email_open_check_minutes, default 15). The adapter does the source's part
+ * (src/adapters/hubspot/email-poll.mjs). The connection's log line carries the run's requests per
+ * endpoint and the daily limit HubSpot stated (backlog CMA-069).
  * Logs: connection ids, counts per kind and codes; never an id of an email, thread or contact, a
  * subject, an address or a name.
  */
@@ -27,14 +29,16 @@ export async function runPollEmail({ connectionId = null, adapters = ADAPTERS, n
       if (!adapter.emailPollEnabled(config)) continue;
       total.connections += 1;
       let detail = {};
+      const budget = new JobBudget(adapter.rates);
       const r = await withRun(store, { job: "email_poll", stream: "email", to: new Date() }, async (counts) => {
-        const p = await adapter.pollEmail({ connection: c, store, budget: new JobBudget(adapter.rates), config, now: now ?? Date.now() });
+        const p = await adapter.pollEmail({ connection: c, store, budget, config, now: now ?? Date.now() });
         for (const k of Object.keys(counts)) counts[k] += p.counts[k] ?? 0;
         detail = p.detail ?? {};
         return { error: p.error };
       });
       for (const k of ["fetched", "upserted", "stale", "skipped"]) total[k] += r.counts[k];
-      info("poll-email: connection", { connection: c.connectionId, ...r.counts, outcomes: detail, error: r.error ?? undefined });
+      // with the run's requests per endpoint and the daily limit (CMA-069): the log only, sync_run's counts take no such key
+      info("poll-email: connection", { connection: c.connectionId, ...r.counts, outcomes: detail, ...budget.usage(), error: r.error ?? undefined });
       if (!r.ok) {
         total.failed += 1;
         warn("poll-email: connection failed", { connection: c.connectionId, code: r.error });

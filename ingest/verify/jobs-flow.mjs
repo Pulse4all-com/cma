@@ -266,6 +266,8 @@ const conn1 = await asAdmin(t1, async () => {
   // the support form: not counted, polled, the reason kept (named before the catalog describes the form)
   await q("select cma.set_form($1, $2, false, null, null, array['reason'])", [c.connection_id, FORM_C]);
   await q("select cma.set_form_reporting($1, $2, true, null, null)", [c.connection_id, FORM_C]);
+  // every polled form every minute, as the forms checks below were written (polled-only forms every 5 minutes by default since CMA-069)
+  await q("select cma.set_connection_settings($1, $2::jsonb)", [c.connection_id, JSON.stringify({ forms_poll_interval_minutes: 1 })]);
   await q("select cma.set_tenant_setting('ingest.max_attempts', '3')");
   return c.connection_id;
 });

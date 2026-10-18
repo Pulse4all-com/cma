@@ -20,6 +20,8 @@
  *
  * The event log is the sweep's own audit (every event's attempts, status and error); sync_run has
  * no job value for the sweep itself (migration 0007's vocabulary), so only the link step has a row.
+ * A connection whose read-backs made requests the adapter counts (HubSpot) gets one log line with them
+ * per endpoint and the daily limit stated (backlog CMA-069).
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -74,6 +76,9 @@ export async function runSweep({ connectionId = null, adapters = ADAPTERS, maxMs
         warn("sweep: catalogs not refreshed", { connection: c.connectionId, adapter: c.adapter, code: codeOf(err) });
       }
     }
+    // The connection's requests per endpoint and the daily limit stated, when it made any (CMA-069)
+    const usage = budget.usage();
+    if (usage.apiCalls) info("sweep: connection", { connection: c.connectionId, adapter: c.adapter, ...usage });
   }
 
   // Calls linked once per tenant, recorded on its first CRM connection (the side whose calls are linked)
