@@ -1,0 +1,52 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/75_verify_forms_reporting.sql:63: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                              check_name                                               | result |                                                                                                                                                                                                                                                                 detail                                                                                                                                                                                                                                                                  
+-------------------------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008p recorded, after 0008o                                                               | PASS   | 
+ A2 two tenant tables with row-level security, audit, no delete and reader views                       | PASS   | 
+ A3 forms polled apart from counted, category, market field, lead rule, the submissions' mark          | PASS   | 
+ A4 functions the application's only, in the caller's rights; no submission or contact id read         | PASS   | 
+ A5 data quality: earlier lists unchanged, the forms check apart with its view                         | PASS   | 
+ B1 the catalog: found forms counted and polled, fields with kinds and options                         | PASS   | 4 | f-cancel:true/true/true f-contact:true/true/true f-legacy:true/true/false f-support:true/true/true | f-cancel.cancellation_reason=dropdown:Moving|Price|Other f-cancel.country_dropdown=dropdown:United Kingdom|Netherlands|Atlantis f-cancel.iban=other: f-contact.email=other: f-contact.are_you_already_a_customer=radio:Yes, I'm an existing Customer|No, I'm not a customer yet f-contact.message=other: f-support.hs_ticket_category=multiple_checkboxes:Billing|Device|Delivery f-support.consent=single_checkbox:true|false
+ B2 polled apart from counted; a counted form always polled                                            | PASS   | false/true false/false/cancellation new:false/false true/true CMA03 23514
+ B3 kept fields: choice fields of a described form, names of one not described                         | PASS   | CMA04 ok ok CMA03 f-cancel=cancellation_reason|country_dropdown f-contact=are_you_already_a_customer f-legacy=notes|product
+ B4 refusals of the reporting and the categories                                                       | PASS   | CMA02 CMA02 CMA04 ok CMA04 CMA04 CMA04 CMA02 CMA04 CMA06 CMA06 CMA06 CMA02
+ B5 market field and lead condition: refusals, set and cleared                                         | PASS   | CMA04 CMA04 CMA04 CMA04 CMA02 CMA02 {"field": "are_you_already_a_customer", "values": ["No, I'm not a customer yet"]} cleared
+ B6 answers kept within the options only; free text and bank fields never                              | PASS   | s-c1={"are_you_already_a_customer": "No, I'm not a customer yet"} s-c3={} s-c7={} s-l1={"product": "aed plus"} s-t1={"hs_ticket_category": ["Billing", "Device"]} s-t2={"hs_ticket_category": ["Device"]} s-t3={}
+ B7 empty answers filled once, never overwritten, never after a privacy deletion                       | PASS   | inserted,inserted,inserted filled known {"refs": 0, "calls": 0, "contacts": 0, "submissions": 1} known,known s-f1={"hs_ticket_category": ["Delivery"]}/false s-f2={}/true s-f3={}/true
+ B8 a support form polled and not counted changes no intake or lead-metrics read                       | PASS   | 5 stored; alike
+ B9 the lead rule: an existing customer and a missing answer are no lead                               | PASS   | 3 1 3 3
+ B10 the market of a submission: form, market field through an alias, contact, unknown                 | PASS   | f-cancel@1001-2230=GB/answer f-cancel@1005-1200=DE/contact f-cancel@1005-1300=unknown/- f-cancel@1006-1300=NL/answer f-contact@1001-2230=NL/form f-contact@1005-0900=NL/form f-contact@1006-1000=NL/form
+ B11 business dates in the market's zone, days and ISO weeks, the resolution split                     | PASS   | 2026-10-01:f-cancel:GB=1 2026-10-02:f-contact:NL=1 2026-10-02:f-legacy:unknown=1 | 2026-10-05:f-cancel=1/1/0 2026-10-05:f-cancel=1/0/1 2026-10-05:f-contact=3/0/3
+ B12 the previous period like for like (running, ended, not started)                                   | PASS   | current:3 ended:4 future:0 running:2
+ B13 answers per field and value with the previous period; field and value filters                     | PASS   | current:f-contact.are_you_already_a_customer/No, I'm not a customer yet=1 current:f-contact.are_you_already_a_customer/Yes, I'm an existing Customer=1 current:f-support.hs_ticket_category/Billing=1 current:f-support.hs_ticket_category/Delivery=1 current:f-support.hs_ticket_category/Device=2 previous:f-contact.are_you_already_a_customer/No, I'm not a customer yet=2 previous:f-contact.are_you_already_a_customer/Yes, I'm an existing Customer=1 | Device=2
+ B14 filters by market, category, none and form; malformed filters refused                             | PASS   | category-none=1 category-support=6 form-cancel=4 market-unknown=8 CMA04 CMA04 CMA04 CMA04 CMA04
+ B15 the history start: earliest business date in its zone; none without submissions                   | PASS   | 2026-09-20 null
+ B16 second refresh: an option retired and back, a field archived; the check finds a value kept before | PASS   | 0 No, I'm not a customer yet/Yes, I'm an existing Customer 2/0 are_you_already_a_customer:active,email:archived,message:archived 3 true 1 s-l1/product s-l1
+ B17 permissions: reports.view or performance.team read; agent and Ingest user refused                 | PASS   |  ok/ok/ok/ok ok/ok/ok/ok CMA06/CMA06/CMA06/CMA06 CMA06/CMA06/CMA06/CMA06 contact:active:1,cancellation:active:1,support:active:1,old:inactive:0 true/cancellation/country_dropdown/3/United Kingdom
+ B18 tenant isolation for the tables, the reads and the configuration                                  | PASS   | 0/0/0/0 0/0/null CMA02 CMA02
+ B19 a run's counts take dropped; another key is refused                                               | PASS   | ok CMA04 {"dropped": 1, "fetched": 3, "upserted": 2}
+ verdict                                                                                               | PASS   | 24 PASS, 0 FAIL
+(25 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+RESET
