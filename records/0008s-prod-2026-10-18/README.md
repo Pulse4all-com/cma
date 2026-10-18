@@ -40,8 +40,11 @@ its request lines read from Cloud Logging (`docs/RUNBOOK.md` section 6) into `li
 | `live-after-summary.txt` | `/live/board  n=46  total p50=157.7 p95=328.3  db p50=262.2` |
 | `live-after.txt` | 42 request lines of `/live/board`, 2026-10-18 09:27:46 to 09:34:29 UTC, every one status `200`, severity `INFO`, RSC `True`, 8 transactions and 37 statements; total 140.7 to 473.9 ms |
 
-The summary counts 46 polls; `live-after.txt` holds 42 lines. Martin's report: every poll 200, no
-`WARNING`; before 0008s a poll took 1.5 to 2.1 s. The first polls, 09:27:46 to 09:28:26 UTC (233.7 to
+`live-after.txt` was read with `--freshness=15m`. The summary was made later, with the same filter and
+`--freshness=1h`: Martin's command is `gcloud logging read` with that filter and `--format=json`, piped into a
+`jq` that groups the lines by route and takes p50 and p95 by sorted index. So it counts 46 polls, the file's 42
+and 4 after 09:34:29 UTC. Martin's report: every poll 200, no `WARNING`; before 0008s a poll took 1.5 to
+2.1 s. The first polls, 09:27:46 to 09:28:26 UTC (233.7 to
 473.9 ms total in the file), are the warm-up after opening the page.
 
 For readers: `DB_MS` is higher than `TOTAL_MS` because the board runs its reads as 8 transactions in parallel
@@ -55,5 +58,5 @@ For readers: `DB_MS` is higher than `TOTAL_MS` because the board runs its reads 
 - How the absence of the audit trigger was checked.
 - Step 9's System health card for the refresh and Reports → Follow-up's "Updated …" line.
 - The request lines behind 0.1 s, 0.2 s and the Live board's 1.5 to 2.1 s before 0008s.
-- The four polls the summary counts beyond `live-after.txt`'s 42 lines, and the command that made the
-  summary.
+- The four polls after 09:34:29 UTC line by line: the summary counts them, and no file in this folder holds
+  them.

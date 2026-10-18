@@ -58,6 +58,18 @@ Dev got no revision on `19fa69f`, `1ead2c3` or `a6db116`. At the end of the day 
   dev's `cma-web` (`f1cf4db`).
 - `cma-close-forgotten-workdays`: on `web:607396f` in both projects.
 
+## After the records
+
+From Martin's output of 18 October 2026 (UTC), after the builds above:
+
+| Build | Start | SHA | Status | cma-web revision (prod) | Revision created |
+|---|---|---|---|---|---|
+| `e94fab22` | 13:30:33 | `c98028c` | `SUCCESS` | `cma-web-00076-g6b`, Ready True | 13:33:27 |
+
+`c98028c` on `main` is "UX (IT audit, 17 October 2026): hydration mismatch, nine page keys, focus kept after a
+status change, error and not-found pages, "Closed" on the Live board, no CSS all-caps, days-to-correct filter,
+dialog names" (`Pulse4all-com/cma#160`). Dev was not deployed with it.
+
 ## Not in the report
 
 - The source commit of the new ingest image (`sha256:103f771a…`) and of the 03:40:46 build.
