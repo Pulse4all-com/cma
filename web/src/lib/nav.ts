@@ -33,6 +33,8 @@ export type ShellPage =
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
   /** Sources, Markets and Alert rules (addition 0008e, night of 13 October 2026) */
   | "config-sources" | "config-markets" | "config-alert-rules"
+  /** System health (addition 0008r, the IT audit of 17 October 2026) */
+  | "config-health"
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
@@ -40,7 +42,7 @@ export type NavHref =
   | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
-  | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules";
+  | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
 
 export interface NavItem {
   page: ShellPage;
@@ -173,6 +175,8 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "config-sources", href: "/configuration/sources", label: copy.nav.configSources, permission: "tenant.configure" },
         { page: "config-markets", href: "/configuration/markets", label: copy.nav.configMarkets, permission: "tenant.configure" },
         { page: "config-alert-rules", href: "/configuration/alert-rules", label: copy.nav.configAlertRules, permission: "tenant.configure" },
+        // System health (addition 0008r): sources, jobs, the heartbeat and the outbox from what the jobs leave behind; the audit documents
+        { page: "config-health", href: "/configuration/health", label: copy.nav.configHealth, permission: "tenant.configure" },
       ],
     },
   ];

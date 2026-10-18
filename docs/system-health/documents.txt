@@ -1,0 +1,11 @@
+# Documents the System health page offers for download (addition 0008r, Configuration → System health).
+# One repository path per line, copied by basename into web/documents/ by cloudbuild.yaml's copy-documents step.
+# The page serves only names on the allowlist in web/src/lib/health.ts; a file missing from a commit is skipped.
+docs/audits/2026-10-17-full-audit/REPORT.md
+docs/audits/2026-10-17-full-audit/PERFORMANCE.md
+docs/audits/2026-10-17-full-audit/READINESS.md
+docs/audits/2026-10-17-full-audit/UX_REVIEW.md
+docs/audits/2026-10-17-full-audit/FINDINGS.csv
+docs/audits/2026-10-17-full-audit/METHOD.md
+docs/OPERATIONS.md
+docs/PLAN_B.md

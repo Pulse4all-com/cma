@@ -153,7 +153,7 @@ async function expectNavigation() {
     const configLinks = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll('a[href^="/configuration/"]') ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
     const wantConfig = subject === "admin"
       ? [["/configuration/statuses"], ["/configuration/teams"], ["/configuration/absences"], ["/configuration/exports"], ["/configuration/app-links"],
-         ["/configuration/sources"], ["/configuration/markets"], ["/configuration/alert-rules"]].map(([h]) => [null, h])
+         ["/configuration/sources"], ["/configuration/markets"], ["/configuration/alert-rules"], ["/configuration/health"]].map(([h]) => [null, h])
       : [];
     if (JSON.stringify(configLinks) !== JSON.stringify(wantConfig)) problems.push(`${subject}: configuration pages ${JSON.stringify(configLinks)}, expected ${JSON.stringify(wantConfig)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);

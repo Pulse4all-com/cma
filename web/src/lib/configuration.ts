@@ -85,7 +85,7 @@ export const EXPORT_SETTING_VALUES: Record<ExportSettingKey, readonly string[]> 
 export const MINUTE_SETTING_KEYS = ["roster.adherence_tolerance_minutes", "workday.auto_close_grace_minutes"] as const;
 export type MinuteSettingKey = (typeof MINUTE_SETTING_KEYS)[number];
 /** Whole seconds, on the same page (addition 0008j): from how much talk time an outbound call is connected */
-export const SECOND_SETTING_KEYS = ["telephony.connected_min_seconds"] as const;
+export const SECOND_SETTING_KEYS = ["telephony.connected_min_seconds", "health.heartbeat_fresh_seconds", "health.heartbeat_late_seconds"] as const;
 export type SecondSettingKey = (typeof SECOND_SETTING_KEYS)[number];
 /** The page anchor of a setting, so another page can link to it (Sources links to the threshold) */
 export function settingAnchor(key: string): string {
