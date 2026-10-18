@@ -363,6 +363,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                   <th className={th}>{t.pipeline}</th>
                   <th className={th}>{t.counted}{hint(t.counted, t.hintCounted)}</th>
                   <th className={th}>{t.lead}{hint(t.lead, t.hintLead)}</th>
+                  <th className={th}>{t.orderPipeline}{hint(t.orderPipeline, t.hintOrderPipeline)}</th>
                   <th className={th}>{t.responseTime}{hint(t.responseTime, t.hintResponseTime)}</th>
                 </tr>
               </thead>
@@ -382,6 +383,14 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                       ) : <span className="text-caption text-p4a-muted">{t.leadDealsOnly}</span>}
                     </td>
                     <td className={td}>
+                      {p.recordType === "deal" ? (
+                        // the order pipeline (addition 0008u): its won deals are orders for Reports, First orders
+                        <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.orderPipeline}: ${p.label}`} checked={p.isOrder}
+                          data-testid={`pipeline-order-${p.pipelineId}`}
+                          onChange={(e) => save(() => send("PUT", `${base}/pipelines`, { recordType: p.recordType, pipelineId: p.pipelineId, isCounted: p.isCounted, isLead: p.isLead, isOrder: e.target.checked }))} />
+                      ) : <span className="text-caption text-p4a-muted">{t.orderDealsOnly}</span>}
+                    </td>
+                    <td className={td}>
                       {p.recordType === "ticket" ? (
                         // the pipeline's own response time (0008o): saved on blur once it parses; empty is the tenant default
                         <span className="flex items-center gap-2">
@@ -399,6 +408,41 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                 ))}
               </tbody>
             </table>
+          )}
+          {/* the deal stages' outcomes (addition 0008u): from the source, a person's choice kept over every later read */}
+          <h3 className="mb-2 mt-6 text-body font-semibold text-p4a-heading">{t.stagesTitle}</h3>
+          <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.stagesIntro}</p>
+          {detail.pipelines.filter((p) => p.recordType === "deal").every((p) => p.stages.length === 0) ? <p className="text-body text-p4a-muted">{t.stagesEmpty}</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-stages">
+                <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                  <tr>
+                    <th className={th}>{t.pipeline}</th>
+                    <th className={th}>{t.stage}</th>
+                    <th className={th}>{t.stageOutcome}{hint(t.stageOutcome, t.hintStageOutcome)}</th>
+                    <th className={th}><span className="sr-only">{t.outcomeFromSource}</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.pipelines.filter((p) => p.recordType === "deal").flatMap((p) => p.stages.map((st) => (
+                    <tr key={`${p.pipelineId}:${st.stageId}`} className={`${tr} ${st.isActive && p.isActive ? "" : "text-p4a-muted"}`}>
+                      <td className={`${td} text-small`}>{p.label}</td>
+                      <td className={td}><span className="font-semibold">{st.label}</span> <span className="text-caption text-p4a-muted">({st.stageId})</span></td>
+                      <td className={td}>
+                        <select className={`${field} w-36`} aria-label={`${t.stageOutcome}: ${p.label}, ${st.label}`} value={st.outcome ?? "none"}
+                          data-testid={`stage-outcome-${p.pipelineId}-${st.stageId}`}
+                          onChange={(e) => save(() => send("PUT", `${base}/stages`, { pipelineId: p.pipelineId, stageId: st.stageId, outcome: e.target.value }))}>
+                          <option value="won">{t.outcomeWon}</option>
+                          <option value="lost">{t.outcomeLost}</option>
+                          <option value="none">{t.outcomeNone}</option>
+                        </select>
+                      </td>
+                      <td className={`${td} text-caption text-p4a-muted`}>{st.outcomeSource === "person" ? t.outcomeByPerson : st.outcomeSource === "source" ? t.outcomeFromSource : ""}</td>
+                    </tr>
+                  )))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       ) : null}

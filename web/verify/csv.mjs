@@ -12,7 +12,7 @@
  * the previous period and the resolution split, a form name a spreadsheet would run as a formula defused.
  */
 import {
-  exportSettingsFrom, formatDate, formatDuration, formatTime, formsCsv, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
+  exportSettingsFrom, firstOrdersCsv, formatDate, formatDuration, formatTime, formsCsv, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
 } from "../src/lib/csv.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -132,6 +132,29 @@ expect("forms file: header, the period in the tenant's format, names, unknown ma
    "2026-10-05;2026-10-11;NL Contact;contact;NL;3;4;1;2;0;0;0",
    "2026-10-05;2026-10-11;=Legacy; form;;unknown;0;1;0;0;0;0;0",
    "2026-10-05;2026-10-11;Old;Old;GB;2;0;0;0;1;0;1"]);
+
+// First orders (addition 0008u): the period, the deal, when in the reader's zone, the level in words, yes or no per
+// evidence, the amount with the tenant's decimal mark and never a sum across currencies
+const foLabels = { from: "From", to: "To", deal: "Deal", orderedAt: "Ordered", market: "Market", level: "Level", attribution: "Attribution", leadDeal: "Lead deal",
+  conversation: "Conversation", email: "Email", phoneMatch: "Phone match", attempt: "Call attempt", knownContact: "Known contact", currency: "Currency",
+  amount: "Amount", days: "Days from first touch", yes: "yes", no: "no", callCenter: "call center", selfService: "self-service", unknownMarket: "Unknown market" };
+const foLevels = { lead_deal: "Lead deal", conversation: "Conversation", email: "Email", phone_match: "Phone match", attempt: "Call attempt",
+  known_contact: "Known contact", self_service: "No evidence" };
+const ev = (on) => ({ lead_deal: on.includes("l"), conversation: on.includes("c"), email: on.includes("e"), phone_match: on.includes("p"), attempt: false,
+  known_contact: on.includes("k") });
+const foFile = firstOrdersCsv([
+  { connectionId: "c", dealSourceId: "4100000001", market: "NL", createdAt: "2026-10-05T22:30:00.000Z", level: "lead_deal", attribution: "call_center",
+    evidence: ev("lek"), phoneHashed: true, hasOrder: true, currency: "EUR", amount: 1234.5, daysFromFirstTouch: 3.08, recordUrl: null },
+  { connectionId: "c", dealSourceId: "4100000002", market: "unknown", createdAt: "2026-10-06T09:00:00.000Z", level: "self_service", attribution: "self_service",
+    evidence: ev(""), phoneHashed: false, hasOrder: false, currency: null, amount: null, daysFromFirstTouch: null, recordUrl: null },
+], "2026-10-05", "2026-10-11", "Europe/Amsterdam", DUTCH, foLabels, foLevels).split("\r\n");
+expect("first orders file: header, the date and time in the reader's zone, the level in words, yes or no, the decimal comma", foFile.slice(0, 3),
+  ["\uFEFFFrom;To;Deal;Ordered;Market;Level;Attribution;Lead deal;Conversation;Email;Phone match;Call attempt;Known contact;Currency;Amount;Days from first touch",
+   "05-10-2026;11-10-2026;4100000001;06-10-2026 00:30;NL;Lead deal;call center;yes;no;yes;no;no;yes;EUR;1234,50;3,08",
+   "05-10-2026;11-10-2026;4100000002;06-10-2026 11:00;Unknown market;No evidence;self-service;no;no;no;no;no;no;;;"],
+  ["From;To;Deal;Ordered;Market;Level;Attribution;Lead deal;Conversation;Email;Phone match;Call attempt;Known contact;Currency;Amount;Days from first touch",
+   "2026-10-05;2026-10-11;4100000001;2026-10-05 22:30;NL;lead_deal;call_center;true;false;true;false;false;true;EUR;1234.5;3.08",
+   "2026-10-05;2026-10-11;4100000002;2026-10-06 09:00;unknown;self_service;self_service;false;false;false;false;false;false;;;"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

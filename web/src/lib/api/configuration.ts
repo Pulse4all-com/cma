@@ -2,7 +2,7 @@ import "server-only";
 import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
-  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings,
+  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
   SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
@@ -158,7 +158,22 @@ export function checkSettingsInput(b: Record<string, unknown>): SourceSettings {
 }
 
 export function checkPipelineInput(b: Record<string, unknown>): SourcePipelineInput {
-  return { recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineId: ref(b.pipelineId, "pipelineId"), isCounted: bool(b, "isCounted"), isLead: bool(b, "isLead") };
+  const input: SourcePipelineInput = {
+    recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineId: ref(b.pipelineId, "pipelineId"), isCounted: bool(b, "isCounted"), isLead: bool(b, "isLead"),
+  };
+  // the order pipeline switch (0008u): optional, a deal pipeline's only
+  if (b.isOrder !== undefined) {
+    input.isOrder = bool(b, "isOrder");
+    if (input.isOrder && input.recordType !== "deal") throw new ApiError(400, "invalid_isOrder", "only a deal pipeline can be an order pipeline");
+  }
+  return input;
+}
+
+/** { pipelineId, stageId, outcome }: a deal stage's outcome as a person sets it (0008u): won, lost or none */
+export function checkStageOutcomeInput(b: Record<string, unknown>): SourceStageOutcomeInput {
+  const outcome = b.outcome;
+  if (outcome !== "won" && outcome !== "lost" && outcome !== "none") throw new ApiError(400, "invalid_outcome", "outcome must be won, lost or none");
+  return { pipelineId: ref(b.pipelineId, "pipelineId"), stageId: ref(b.stageId, "stageId"), outcome };
 }
 
 function list(b: Record<string, unknown>, name: string): Record<string, unknown>[] {

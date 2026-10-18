@@ -18,7 +18,9 @@
  * the analyst), the Sources list with its form categories and the CRM connection's page, their tables too. Since
  * addition 0008t Email (by day as the manager, by week as the analyst, and for a tenant without email) and Email
  * per agent with a person's hours and the not-linked row opened; the CRM connection's page now holds its email
- * section (inboxes, mailboxes, channels).
+ * section (inboxes, mailboxes, channels). Since addition 0008u First orders (by day, week, market and level, and for a
+ * tenant without an order pipeline) and Orders per person; the CRM connection's page now holds the order pipeline
+ * switch and the stage outcomes.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
@@ -152,6 +154,16 @@ const pages = [
   { path: "/reports/email?range=month&group=week", subject: "analyst", tables: true },
   { path: "/reports/email-per-agent?range=month", subject: "manager", tables: true, expand: true },
   { path: "/reports/email?range=month", subject: "invest-analyst", noHint: true },
+  // First orders and Orders per person (addition 0008u): the tiles, the columns in the series order (call center
+  // Deep Blue, self-service Leaf Green), the level bars, the tables by market and level, the amounts and the order
+  // list with its evidence badges, by day as the manager and by week as the analyst; the per-person table; a tenant
+  // without an order pipeline
+  { path: "/reports/first-orders?range=month", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month&group=week", subject: "analyst", tables: true },
+  { path: "/reports/first-orders?range=month&group=market", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month&group=level", subject: "analyst", tables: true },
+  { path: "/reports/orders-per-person?range=month", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month", subject: "invest-analyst", noHint: true },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },

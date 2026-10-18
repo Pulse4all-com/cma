@@ -248,7 +248,9 @@ begin
   end if;
   select string_agg(column_name, ',' order by ordinal_position) into v_cols
   from information_schema.columns where table_schema = 'cma_read' and table_name = 'crm_contact';
-  if v_cols is distinct from 'id,tenant_id,connection_id,source_system,source_id,country,language,source_updated_at,source_deleted_at,synced_at,currency,store,country_source' then
+  -- since addition 0008u (84_first_orders.sql) the view ends with source_created_at (amended in place: 69 runs in dev only)
+  if v_cols is distinct from 'id,tenant_id,connection_id,source_system,source_id,country,language,source_updated_at,source_deleted_at,synced_at,currency,store,country_source'
+       || (case when exists (select 1 from cma.schema_migration where version = '0008u') then ',source_created_at' else '' end) then
     v_bad := v_bad || 'cma_read.crm_contact has ' || coalesce(v_cols, 'no columns') || '; ';
   end if;
   if (select count(*) from cma.data_quality_checks()) <> 15

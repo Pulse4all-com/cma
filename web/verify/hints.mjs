@@ -5,7 +5,8 @@
  * every tile on the Dashboard (the Intake row and the time tiles), the Live board's inbound part
  * (its seven tiles and the missed calls' headers), and since addition 0008j every tile and tag-table header
  * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
- * Forms, and since addition 0008t every tile and header of Email and Email per agent, carries exactly one info mark: a button with a name, described by a
+ * Forms, since addition 0008t every tile and header of Email and Email per agent, and since addition 0008u every tile, header and
+ * level bar of First orders and every header of Orders per person, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not.
@@ -119,6 +120,16 @@ const cases = [
   ["reader", "/reports/email?range=month&group=week", 43, 5],
   ["manager", "/reports/email-per-agent?range=month", 6, 0],
   ["supervisor", "/reports/email-per-agent?range=week", 6, 0],
+  // First orders (addition 0008u): four tiles; the table per market (ten headers), the amounts (five) and the order
+  // list (seven named headers; the link column's is read out only), by day and by week; grouped by market the table
+  // per group adds ten more, grouped by level five; Orders per person: the person and seven figures. The bars per
+  // level carry their marks too, checked below
+  ["manager", "/reports/first-orders?range=month&group=day", 22, 4],
+  ["manager", "/reports/first-orders?range=month&group=week", 22, 4],
+  ["manager", "/reports/first-orders?range=month&group=market", 32, 4],
+  ["reader", "/reports/first-orders?range=month&group=level", 27, 4],
+  ["manager", "/reports/orders-per-person?range=month", 8, 0],
+  ["supervisor", "/reports/orders-per-person?range=week", 8, 0],
 ];
 let headers = 0;
 let tiles = 0;
@@ -136,6 +147,28 @@ for (const [subject, path, minHeaders, minTiles, scope] of cases) {
   if (c.tiles < minTiles) problems.push(`${subject} ${path}: ${c.tiles} tiles, expected at least ${minTiles}`);
   headers += c.headers;
   tiles += c.tiles;
+  await ctx.close();
+}
+
+// First orders (addition 0008u): every bar per level names its level with one described mark, one bar per level
+// in the tenant's order and the no-evidence bar last
+let levelBars = 0;
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/first-orders?range=month");
+  await p.waitForLoadState("networkidle");
+  const bars = await p.evaluate(() => [...document.querySelectorAll('[data-testid="first-order-levels"] > li')].map((li) => {
+    const marks = li.querySelectorAll("button[data-header-hint]");
+    const panel = marks.length === 1 ? document.getElementById(marks[0].getAttribute("aria-describedby") ?? "") : null;
+    return { marks: marks.length, named: marks.length === 1 && !!marks[0].getAttribute("aria-label"), text: panel?.getAttribute("role") === "tooltip" ? panel.textContent.trim() : "" };
+  }));
+  if (bars.length < 7) problems.push(`first orders: ${bars.length} level bars, expected one per level and the no-evidence bar`);
+  bars.forEach((x, i) => {
+    if (x.marks !== 1 || !x.named) problems.push(`first orders: level bar ${i + 1} has ${x.marks} info marks or no name`);
+    else if (!x.text || /[{}]/.test(x.text)) problems.push(`first orders: level bar ${i + 1}'s hint is empty or unfilled: ${x.text}`);
+  });
+  levelBars = bars.length;
   await ctx.close();
 }
 
@@ -228,6 +261,6 @@ for (const [subject, path, minHeaders, minTiles, scope] of cases) {
 await b.close();
 for (const x of problems) console.log("  " + x);
 console.log(problems.length === 0
-  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps)`
+  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages and ${levelBars} level bars on First orders, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps)`
   : `hints: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

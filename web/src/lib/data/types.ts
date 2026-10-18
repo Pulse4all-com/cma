@@ -1427,6 +1427,140 @@ export interface EmailPerAgent {
   accounts: { key: string; name: string }[];
 }
 
+// ---- First orders (addition 0008u; brief N19-A part 2, 18 October 2026): of the new first orders, which came
+// in by self-service and which through the call center. Ids, codes, counts, amounts and times only: no name,
+// address or phone number exists to show; a phone is "hashed" or not.
+
+/** How cma.first_orders_report groups the period */
+export type FirstOrderGroup = "day" | "week" | "market" | "level";
+
+/** The evidence of a first order, as attribution.level_order names it */
+export type FirstOrderEvidence = "lead_deal" | "conversation" | "email" | "phone_match" | "attempt" | "known_contact";
+
+/** A first order's level: the first evidence in the tenant's level order that holds, else self_service */
+export type FirstOrderLevel = FirstOrderEvidence | "self_service";
+
+/** Where a first order came in: the call center when its level is an assisted one, else self-service */
+export type FirstOrderAttribution = "call_center" | "self_service";
+
+/** The report's filters: a market code ("unknown" for a deal without one) and a level; each null for all */
+export interface FirstOrderFilter {
+  market: string | null;
+  level: FirstOrderLevel | null;
+}
+
+/** The figures of a group, the period or the previous period (cma.first_orders_figures_of) */
+export interface FirstOrderFigures {
+  /** Won order deals whose contact has no earlier one and whose store order is no renewal or repeat */
+  firstOrders: number;
+  callCenter: number;
+  selfService: number;
+  /** Counted apart, never attributed: the contact's later orders, renewals, orders the store counts as repeat, deals without a contact */
+  repeats: number;
+  renewals: number;
+  notFirst: number;
+  noContact: number;
+  /** First orders with a touch in the window, and the median days from the first touch to the order */
+  withTouch: number;
+  daysMedian: number | null;
+}
+
+export interface FirstOrderRow extends FirstOrderFigures {
+  /** A date, a Monday, a market code or a level */
+  groupKey: string;
+}
+
+/** First orders' amounts in one currency (never summed across currencies); currency null for orders without one */
+export interface FirstOrderAmount {
+  market: string | null;
+  currency: string | null;
+  orders: number;
+  amount: number | null;
+  callCenterAmount: number;
+  selfServiceAmount: number;
+}
+
+/** One first order of the list: ids, market, time, level, evidence, the link; no name, address or number */
+export interface FirstOrderListRow {
+  connectionId: string;
+  dealSourceId: string;
+  market: string;
+  createdAt: Instant;
+  level: FirstOrderLevel;
+  attribution: FirstOrderAttribution;
+  evidence: Record<FirstOrderEvidence, boolean>;
+  /** The linked store order or its customer carries a phone hash (phone matching possible) */
+  phoneHashed: boolean;
+  hasOrder: boolean;
+  currency: string | null;
+  amount: number | null;
+  daysFromFirstTouch: number | null;
+  recordUrl: string | null;
+}
+
+/** The tenant's attribution settings, for the hints and the order of the levels */
+export interface AttributionSettings {
+  windowDays: number;
+  levelOrder: FirstOrderEvidence[];
+  assistedLevels: FirstOrderEvidence[];
+  knownContactMinutes: number;
+  orderMatchMinutes: number;
+}
+
+export interface FirstOrdersReport {
+  from: DateKey;
+  to: DateKey;
+  group: FirstOrderGroup;
+  filter: FirstOrderFilter;
+  /** An order pipeline is set (Configuration, Sources); false: "No orders connected", never 0 */
+  connected: boolean;
+  /** Per group of the grouping, in order */
+  rows: FirstOrderRow[];
+  total: FirstOrderFigures;
+  /** The previous period's total, like for like */
+  previous: FirstOrderFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  byLevel: FirstOrderRow[];
+  byMarket: FirstOrderRow[];
+  amounts: FirstOrderAmount[];
+  amountsByMarket: FirstOrderAmount[];
+  list: { rows: FirstOrderListRow[]; total: number };
+  /** The first date whose window the stored data covers; the phone tier's own start */
+  historyStart: DateKey | null;
+  phoneStart: DateKey | null;
+  settings: AttributionSettings;
+  markets: string[];
+}
+
+/** A person's credited first orders (the owner of the latest assisted touch), or the not-linked row, or the total */
+export interface OrderPerson {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** How many owner ids without a person (the not-linked row only), never which */
+  unlinkedOwners: number | null;
+  orders: number;
+  leadDeal: number;
+  conversation: number;
+  email: number;
+  phoneMatch: number;
+  otherLevels: number;
+  daysMedian: number | null;
+}
+
+export interface OrdersPerPerson {
+  from: DateKey;
+  to: DateKey;
+  filter: FirstOrderFilter;
+  connected: boolean;
+  rows: OrderPerson[];
+  total: OrderPerson;
+  settings: AttributionSettings;
+  markets: string[];
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1480,6 +1614,20 @@ export interface SourcePipeline {
   isActive: boolean;
   /** A ticket pipeline's own response time in business minutes (0008o), null for the tenant's tickets.sla_minutes */
   slaMinutes: number | null;
+  /** A deal pipeline whose won deals are orders (0008u) */
+  isOrder: boolean;
+  /** Its stages with their outcome (0008u), in display order */
+  stages: SourceStage[];
+}
+
+/** A pipeline stage (0008u): the source's closed flag and the outcome, from the source or a person's choice */
+export interface SourceStage {
+  stageId: string;
+  label: string;
+  isClosed: boolean;
+  outcome: "won" | "lost" | null;
+  outcomeSource: "source" | "person" | null;
+  isActive: boolean;
 }
 
 export interface SourceForm {
@@ -1700,6 +1848,15 @@ export interface SourcePipelineInput {
   pipelineId: string;
   isCounted: boolean;
   isLead: boolean;
+  /** A deal pipeline whose won deals are orders (0008u); left as it is when not given */
+  isOrder?: boolean;
+}
+
+/** A deal stage's outcome as a person sets it (0008u) */
+export interface SourceStageOutcomeInput {
+  pipelineId: string;
+  stageId: string;
+  outcome: "won" | "lost" | "none";
 }
 
 /** One form's new configuration; its kept fields stay as they are */
@@ -2229,8 +2386,10 @@ export interface CmaData {
   setSourceConnection(me: Principal, id: string, input: SourceConnectionInput): Promise<void>;
   /** Replaces the non-secret settings (set_connection_settings); a secret-looking key CMA04 */
   setSourceSettings(me: Principal, id: string, settings: SourceSettings): Promise<void>;
-  /** Counted (set_connection_pipeline, routed and work type kept) and lead (set_pipeline_lead) of one pipeline */
+  /** Counted (set_connection_pipeline, routed and work type kept), lead (set_pipeline_lead) and, when given, order (set_pipeline_order, 0008u) of one pipeline */
   setSourcePipeline(me: Principal, id: string, input: SourcePipelineInput): Promise<void>;
+  /** A deal stage's outcome, a person's choice kept over every later read (set_stage_outcome, 0008u); an unknown stage CMA02 */
+  setSourceStageOutcome(me: Principal, id: string, input: SourceStageOutcomeInput): Promise<void>;
   /**
    * Several forms in one transaction (set_form, kept fields kept; then set_form_reporting when polled or the
    * category is given, addition 0008p); an unknown market or category CMA02 writes nothing, a counted form
@@ -2324,6 +2483,13 @@ export interface CmaData {
   getEmailReport(me: Principal, range: HoursRange, group: EmailGroup, filter: EmailFilter): Promise<EmailReport>;
   /** Email per agent: per person, the not-linked actions, the total. Needs performance.team and reports.per_person holding email */
   getEmailPerAgent(me: Principal, range: HoursRange, filter: EmailFilter): Promise<EmailPerAgent>;
+  // ---- First orders (addition 0008u): the database checks the permission on every call (CMA06); at most 92 days
+  /** Reports → First orders: the period per group, level and market, the previous total, the amounts per currency, the list, the history. Needs reports.view or performance.team */
+  getFirstOrders(me: Principal, range: HoursRange, group: FirstOrderGroup, filter: FirstOrderFilter): Promise<FirstOrdersReport>;
+  /** The first orders of the list for the CSV file, newest first, up to 500. Needs reports.view or performance.team */
+  getFirstOrdersExport(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<FirstOrderListRow[]>;
+  /** Orders per person: the credited first orders per person, the not-linked row, the total. Needs performance.team and reports.per_person holding orders */
+  getOrdersPerPerson(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<OrdersPerPerson>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)

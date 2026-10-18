@@ -39,6 +39,10 @@
  * reports.view or performance.team, Email per agent for performance.team while the tenant's reports.per_person
  * holds email (absent from the rail and not found otherwise), the keycaps K, I, B and G, the tables inside their
  * cards, a row's hours opened by Enter, Down to the next person, "No email connected" for a tenant without email.
+ * First orders and Orders per person (addition 0008u) for seven identities: First orders for reports.view or
+ * performance.team, Orders per person for performance.team while reports.per_person holds orders (absent from the
+ * rail and not found otherwise), the keycaps K, V, G and X, four tiles, a bar per level, "History from" in Muted,
+ * every grouping and the tables inside their cards, "No orders connected" for a tenant without an order pipeline.
  * Since the IT audit of 17 October 2026: only the first nine pages carry a
  * digit key (no data-shortcut is longer than one character, the later pages have no keycap), every open dialog
  * has an accessible name (aria-labelledby pointing at its title), and the Live board's tiles form a named
@@ -55,7 +59,7 @@
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
  *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
- *       spill out of its card, writes a two-character key on the manager's tenth page, strips the name off
+ *       spill out of its card, lets the first orders list spill out of its card, writes a two-character key on the manager's tenth page, strips the name off
  *       every dialog before it is read and the role off the tiles, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
@@ -144,24 +148,28 @@ async function expectNavigation() {
     // Since 0008o (16 October 2026) Follow-up follows Speed to lead (reports.view, performance.team or monitoring.live);
     // since 0008p Forms (reports.view or performance.team) follows Calls per agent, so Data quality moves by one;
     // since 0008t Email (reports.view or performance.team) and Email per agent (performance.team, and the tenant's
-    // reports.per_person holding email, as the dev seed's does) follow Forms
+    // reports.per_person holding email, as the dev seed's does) follow Forms; since 0008u First orders (reports.view or
+    // performance.team) and Orders per person (performance.team, and reports.per_person holding orders, as the dev
+    // seed's does) follow Email per agent
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/data-quality"], false],
-    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent
+      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"], false],
+    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent;
+    // First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/email",
-      "/reports/data-quality"], false],
+      "/reports/first-orders", "/reports/data-quality"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake",
-      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent"], true],
+      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders",
+      "/reports/orders-per-person"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
       "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/data-quality"], true],
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
       "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/data-quality"], true],
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -312,7 +320,7 @@ async function expectReports() {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
-    "/reports/email", "/reports/email-per-agent", "/reports/data-quality"]) {
+    "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -540,6 +548,106 @@ async function expectEmail() {
         else if (!inside) problems.push(`${where}: the right-most header's hint leaves the viewport`);
       }
       await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+    }
+    await ctx.close();
+  }
+}
+
+// First orders and Orders per person (addition 0008u, brief N19-A part 2), per identity at 1280 px: First
+// orders in the rail and on the page for reports.view or performance.team, Orders per person for performance.team
+// while the tenant's reports.per_person holds orders (the reader sees First orders only; the agent gets the
+// no-permission card; the invest tenant, without an order pipeline and without the switch, sees First orders say
+// "No orders connected" in words and no Orders per person: absent from the rail, its page not found); the page never
+// scrolls sideways, in every grouping; the keycaps K, V (and G and X on First orders) next to the period bar's; four
+// tiles, a bar per level and "History from" in Muted; the tables end inside their cards (they may scroll inside
+// them); the right-most header's hint stays inside the viewport. --provoke lets the order list spill out of its card
+async function expectFirstOrders() {
+  // [subject, sees First orders, sees Orders per person, orders connected]
+  const cases = [
+    ["manager", true, true, true], ["supervisor", true, true, true], ["admin", true, true, true], ["analyst", true, true, true],
+    ["reader", true, false, true], ["invest-analyst", true, false, false], ["agent-one", false, false, true],
+  ];
+  for (const [subject, orders, perPerson, connected] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/first-orders") !== orders) problems.push(`${subject}: First orders ${orders ? "missing from" : "shown in"} the rail`);
+    if (rail.includes("/reports/orders-per-person") !== perPerson) problems.push(`${subject}: Orders per person ${perPerson ? "missing from" : "shown in"} the rail`);
+    const pages = [
+      ["/reports/first-orders?range=month&group=day", orders, "first-order-list-scroll", "first-order-list"],
+      ["/reports/first-orders?range=month&group=market", orders, "first-order-by-group-scroll", "first-order-by-group"],
+      ["/reports/first-orders?range=month&group=level", orders, "first-order-by-group-scroll", "first-order-by-group"],
+      ["/reports/orders-per-person?range=month", perPerson, "orders-person-scroll", "orders-person-table"],
+    ];
+    for (const [path, may, scroll, table] of pages) {
+      const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1]})` : ""}`;
+      const firstOrders = path.startsWith("/reports/first-orders");
+      const r = await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        tiles: document.querySelectorAll('[data-testid="first-order-tiles"] > *').length,
+        levels: document.querySelectorAll('[data-testid="first-order-levels"] > li').length,
+        history: (() => {
+          const el = document.querySelector('[data-testid="first-order-history"]');
+          return el ? { text: el.textContent?.trim() ?? "", muted: el.classList.contains("text-p4a-muted") } : null;
+        })(),
+        notConnected: !!document.querySelector('[data-testid="first-orders-not-connected"], [data-testid="orders-person-not-connected"]'),
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        // without the tenant's switch the per-person page does not exist; without the permission it says so
+        if (!firstOrders && subject === "invest-analyst" && r?.status() !== 404) problems.push(`${where}: answers ${r?.status()}, expected 404 without reports.per_person`);
+        if (m.tables > 0 || m.notConnected) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      if (!connected) {
+        if (!m.notConnected || m.tables > 0 || m.tiles > 0) problems.push(`${where}: a tenant without an order pipeline does not say so in words`);
+        continue;
+      }
+      for (const k of ["T", "W", "M", "C", "K", "V", ...(firstOrders ? ["G", "X"] : [])]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (firstOrders) {
+        if (m.tiles !== 4) problems.push(`${where}: ${m.tiles} tiles, expected 4`);
+        if (m.levels < 2) problems.push(`${where}: ${m.levels} level bars, expected one per level`);
+        if (!m.history || !m.history.text.startsWith("History from") || !m.history.muted) problems.push(`${where}: "History from" missing or not in Muted (${JSON.stringify(m.history)})`);
+      }
+      const f = await p.evaluate(([id, spill]) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+        const card = box.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        const main = document.querySelector("main");
+        return { spills: box.getBoundingClientRect().right > edge + 0.5 || (getComputedStyle(box).overflowX === "visible"
+          && [...box.querySelectorAll("tr")].some((row) => row.getBoundingClientRect().right > edge + 0.5)), mainX: main.scrollWidth - main.clientWidth };
+      }, [scroll, provoke && subject === "manager" && scroll === "first-order-list-scroll"]);
+      if (!f) problems.push(`${where}: ${scroll} missing`);
+      else {
+        if (f.spills) problems.push(`${where}: its table does not end inside its card at 1280`);
+        if (f.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${f.mainX}px at 1280`);
+      }
+      // the order list ends on the link column, whose header is a hidden label without a hint: the right-most hint is the amount's
+      const marks = p.locator(`[data-testid="${table}"] thead th button[data-header-hint]`);
+      const mark = marks.last();
+      if (await marks.count() === 0) problems.push(`${where}: the right-most header's hint is missing`);
+      else {
+        await mark.focus();
+        const inside = await p.evaluate(() => {
+          const el = document.activeElement;
+          const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+          if (!panel || panel.hidden) return null;
+          const rect = panel.getBoundingClientRect();
+          return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight;
+        });
+        if (inside === null) problems.push(`${where}: the right-most header's hint does not show on focus`);
+        else if (!inside) problems.push(`${where}: the right-most header's hint leaves the viewport`);
+      }
+      const name = path.split("?")[0].split("/").pop() + (path.includes("group=") && !path.includes("group=day") ? `-${path.split("group=")[1]}` : "");
+      await p.screenshot({ path: `${outDir}/${subject}-${name}.png`, fullPage: true });
     }
     await ctx.close();
   }
@@ -1198,10 +1306,10 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  // the manager's rail holds 20 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t) joined
-  // the Reports group (only the first nine with a digit key since the IT audit of 17 October 2026, so the pages are
-  // counted by their links)
-  for (const [subject, pages] of [["manager", 20], ["agent-one", 5]]) {
+  // the manager's rail holds 22 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
+  // orders and Orders per person (0008u) joined the Reports group (only the first nine with a digit key since the IT
+  // audit of 17 October 2026, so the pages are counted by their links)
+  for (const [subject, pages] of [["manager", 22], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -1225,6 +1333,7 @@ await expectLiveBoard();
 await expectCalls();
 await expectForms();
 await expectEmail();
+await expectFirstOrders();
 await expectIntakeConfiguration();
 await expectInvitations();
 await expectIrreversibleConfirmations();
@@ -1233,5 +1342,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

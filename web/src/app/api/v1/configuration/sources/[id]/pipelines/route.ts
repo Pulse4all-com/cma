@@ -5,7 +5,7 @@ import { data } from "@/lib/data";
 export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
-/** { recordType, pipelineId, isCounted, isLead }: counted (routed and work type kept) and lead (deals) of one pipeline. Answers the connection with its catalogs */
+/** { recordType, pipelineId, isCounted, isLead, isOrder? }: counted (routed and work type kept), lead (deals) and, when given, order (deals, 0008u) of one pipeline. Answers the connection with its catalogs */
 export async function PUT(request: Request, { params }: Params) {
   return forPrincipal(async (me) => {
     assertSameSiteWrite(request);

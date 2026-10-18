@@ -12,6 +12,10 @@
  * functions. HubSpot's own structural properties (pipeline, stage, owner, times) are named here;
  * every other property comes from the connection's field mapping (cma.connection_field). A call's
  * numbers are hashed and dropped: the result never holds a number.
+ *
+ * Since addition 0008u (brief N19-A part 2): a contact gives its creation time (the object's own createdAt,
+ * slot 1, so no extra property is read; slots 2 to 9 are created_at properties the connection maps), and a
+ * deal stage its outcome from the pipelines read (probability 1.0 won, a closed stage at 0.0 lost).
  */
 import { hashNumber } from "../../core/hash.mjs";
 
@@ -238,7 +242,10 @@ function slotOf(f) {
  * A contact → ingest_upsert_contacts item, refs as {system: [slot 1, slot 2, …]}. The country
  * (addition 0008m, brief B17b): one mapped slot is sent as `country`, as before; two or more as
  * `countries`, the value of slot n at element n - 1 (null when empty), and the database keeps the
- * first that names a catalog market (cma.contact_country_pick).
+ * first that names a catalog market (cma.contact_country_pick). The creation time (addition 0008u):
+ * slot 1 is the object's own createdAt; with created_at properties mapped to slots 2 to 9 the item
+ * carries `createdAts` (element n - 1 is slot n, null when empty) and the database keeps the earliest,
+ * else `createdAt`; neither when no time is known, so the stored one stays.
  */
 export function contactFromObject(obj, config) {
   const p = obj?.properties ?? {};
@@ -246,6 +253,7 @@ export function contactFromObject(obj, config) {
   const c = { sourceId: String(obj.id), updatedAt: iso(obj.updatedAt) ?? iso(p.lastmodifieddate), raw: pick(p, propertiesFor("contact", config)) };
   const refs = {};
   const countries = [];
+  const created = [iso(obj.createdAt) ?? iso(p.createdate)];
   for (const f of fields) {
     if (f.field === "ref" && f.refSystem) {
       const slot = slotOf(f);
@@ -258,14 +266,36 @@ export function contactFromObject(obj, config) {
       if (!slot) continue;
       while (countries.length < slot) countries.push(null);
       countries[slot - 1] = text(p[f.property]);
+    } else if (f.field === "created_at") {
+      const slot = slotOf(f);
+      if (!slot || slot < 2) continue;
+      while (created.length < slot) created.push(null);
+      created[slot - 1] = iso(p[f.property]);
     } else if (CONTACT_KEYS[f.field]) {
       c[CONTACT_KEYS[f.field]] = text(p[f.property]);
     }
   }
   if (countries.length > 1) c.countries = countries;
   else if (countries.length === 1) c.country = countries[0];
+  if (created.length > 1 && created.some((v) => v)) c.createdAts = created;
+  else if (created[0]) c.createdAt = created[0];
   if (Object.keys(refs).length) c.refs = refs;
   return c;
+}
+
+/**
+ * A pipeline stage's outcome (addition 0008u): a deal stage at probability 1.0 is won, a closed one at
+ * 0.0 lost, any other none (null); a stage of another record type gives none. HubSpot's stage metadata
+ * holds strings ("1.0"); the probability is required on deal stages, so a missing one is none.
+ */
+export function stageOutcome(recordType, stage) {
+  if (recordType !== "deal") return null;
+  const raw = stage?.metadata?.probability;
+  const probability = raw === undefined || raw === null || raw === "" ? NaN : Number(raw);
+  if (probability === 1) return "won";
+  const closed = String(stage?.metadata?.isClosed ?? "").toLowerCase() === "true";
+  if (probability === 0 && closed) return "lost";
+  return null;
 }
 
 /**

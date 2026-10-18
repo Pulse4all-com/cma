@@ -30,6 +30,8 @@ export type ShellPage =
   | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "forms" | "data-quality"
   /** Email and Email per agent (addition 0008t, brief N19-A part 1) */
   | "email" | "email-per-agent"
+  /** First orders and Orders per person (addition 0008u, brief N19-A part 2) */
+  | "first-orders" | "orders-per-person"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
   | "follow-up" | "my-follow-up"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
@@ -42,7 +44,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/data-quality"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
 
@@ -166,6 +168,11 @@ export function navEntries(copy: Copy): NavEntry[] {
         // README Decision log, 18 October 2026)
         { page: "email", href: "/reports/email", label: copy.nav.email, permission: ["reports.view", "performance.team"] },
         { page: "email-per-agent", href: "/reports/email-per-agent", label: copy.nav.emailPerAgent, permission: "performance.team", perPerson: "email" },
+        // First orders (addition 0008u, brief N19-A part 2): self-service or call center, as Email; Orders per person the
+        // credited first orders per person, for performance.team while the tenant's reports.per_person holds orders
+        // (off for Pulse4all until Yordi confirms it, README Open decisions)
+        { page: "first-orders", href: "/reports/first-orders", label: copy.nav.firstOrders, permission: ["reports.view", "performance.team"] },
+        { page: "orders-per-person", href: "/reports/orders-per-person", label: copy.nav.ordersPerPerson, permission: "performance.team", perPerson: "orders" },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },

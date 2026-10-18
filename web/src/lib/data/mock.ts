@@ -21,7 +21,12 @@ import type {
   FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
+  AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
 } from "./types";
+import {
+  FIRST_ORDER_GROUPS, firstOrderAmounts, firstOrderFigures, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, ordersPerPerson,
+  ORDERS_PER_PERSON_KEY, ORDERS_PER_PERSON_PERMISSION, parseFirstOrderFilter, type OrderDealFixture, type OrderTouch,
+} from "@/lib/first-orders";
 import {
   EMAIL_GROUPS, EMAIL_PER_AGENT_PERMISSION, EMAIL_PER_PERSON_KEY, emailCloses, emailFigures, emailGroups, emailInPeriod, emailOpenings, emailPerPerson,
   emailPrevious, emailRecords, emailSeries, emailWaiting, parseEmailFilter, type EmailCatalog, type EmailMessageFixture, type EmailThreadFixture,
@@ -545,6 +550,103 @@ function mockEmailPersonOf(me: Principal) {
   };
 }
 
+// ---- First orders (addition 0008u): the fixture's won order deals with what the database would find around them.
+// Invented ids; today always holds one first order of every level, a repeat, a renewal, a store repeat, one without
+// a contact, an order without a phone hash and one in pounds, so every page shows each case whatever the date.
+
+/** The tenant's attribution settings as the mock holds them */
+function mockAttribution(): AttributionSettings {
+  const list = (k: string) => (mockSetting(k) === "" ? [] : (mockSetting(k).split(",") as FirstOrderEvidence[]));
+  return {
+    windowDays: Number(mockSetting("attribution.window_days")), levelOrder: list("attribution.level_order"), assistedLevels: list("attribution.assisted_levels"),
+    knownContactMinutes: Number(mockSetting("attribution.known_contact_minutes")), orderMatchMinutes: Number(mockSetting("attribution.order_match_minutes")),
+  };
+}
+
+const MOCK_ORDER_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin" };
+
+function mockOrderDeals(me: Principal): OrderDealFixture[] {
+  if (me.tenantId === MOCK_TENANT_2) return [];
+  const today = mockToday(me);
+  const now = Date.now();
+  const markets = ["NL", "NL", "GB", "DE", "unknown"];
+  const owners = [{ system: "crmtest_owner", ref: "70000001" }, { system: "crmtest_owner", ref: "70000002" }, { system: "crmtest_owner", ref: "70000009" },
+    { system: "crmtest_owner", ref: "70000004" }, { system: "phonetest_user", ref: "900001" }];
+  const out: OrderDealFixture[] = [];
+  const ago = (t: number, days: number) => new Date(t - days * 86_400_000).toISOString();
+  const deal = (id: string, t: number, market: string, o: Partial<OrderDealFixture>): OrderDealFixture => ({
+    connectionId: MOCK_CRM_CONNECTION, dealSourceId: id, createdAt: new Date(t).toISOString(), market, zone: MOCK_ORDER_ZONES[market] ?? me.timeZone,
+    contact: `k-${id}`, earlierOrderDeal: false, storeOrderKind: "first", currency: market === "GB" ? "GBP" : "EUR", amount: 89.95, phoneHashed: true,
+    contactCreatedAt: new Date(t - 10 * 60_000).toISOString(), touches: [], recordUrl: `https://example.com/crm/deal/${id}`, ...o,
+  });
+  const touch = (kind: OrderTouch["kind"], t: number, days: number, owner: number): OrderTouch =>
+    ({ kind, at: ago(t, days), system: owners[owner]!.system, ownerRef: owners[owner]!.ref });
+  for (let date = mockStartDate(me); date <= today; date = addDays(date, 1)) {
+    const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+    const n = Math.floor(hashOf(`${me.tenantId}:orders:${date}`) * (weekend ? 3 : 6));
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => hashOf(`${me.tenantId}:order:${date}:${i}:${k}`);
+      const market = markets[Math.floor(h("market") * markets.length)]!;
+      const t = Math.min(now - 60_000, localMs(date, `${String(8 + Math.floor(h("hour") * 12)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`,
+        MOCK_ORDER_ZONES[market] ?? me.timeZone));
+      const roll = h("kind");
+      const touches: OrderTouch[] = [];
+      if (h("lead") < 0.35) touches.push(touch("lead_deal", t, 1 + h("leadAt") * 20, Math.floor(h("leadOwner") * 4)));
+      if (h("conv") < 0.25) touches.push(touch("conversation", t, 0.5 + h("convAt") * 10, Math.floor(h("convOwner") * 4)));
+      if (h("email") < 0.3) touches.push(touch("email", t, 0.2 + h("emailAt") * 15, Math.floor(h("emailOwner") * 4)));
+      if (h("phone") < 0.12) touches.push(touch("phone_match", t, 1 + h("phoneAt") * 30, 4));
+      if (h("attempt") < 0.15) touches.push(touch("attempt", t, 0.5 + h("attemptAt") * 5, Math.floor(h("attemptOwner") * 4)));
+      out.push(deal(`9${date.replaceAll("-", "").slice(2)}${String(i).padStart(2, "0")}`, t, market, {
+        contact: roll < 0.05 ? null : `k-${date}-${i}`,
+        earlierOrderDeal: roll >= 0.05 && roll < 0.13,
+        storeOrderKind: roll >= 0.13 && roll < 0.18 ? "renewal" : roll >= 0.18 && roll < 0.22 ? "repeat" : h("noOrder") < 0.1 ? null : "first",
+        currency: h("noAmount") < 0.08 ? null : market === "GB" ? "GBP" : "EUR",
+        amount: h("noAmount") < 0.08 ? null : Math.round((49.95 + h("amount") * 250) * 100) / 100,
+        phoneHashed: h("hashed") < 0.7,
+        contactCreatedAt: h("known") < 0.4 ? ago(t, 200) : new Date(t - 10 * 60_000).toISOString(),
+        touches,
+      }));
+    }
+  }
+  // today's fixed cases, a few minutes apart
+  const at = (k: number) => now - (k + 1) * 7 * 60_000;
+  out.push(
+    deal("8100000001", at(0), "NL", { touches: [touch("lead_deal", at(0), 3, 0), touch("email", at(0), 1, 1)] }),
+    deal("8100000002", at(1), "GB", { touches: [touch("conversation", at(1), 2, 1)] }),
+    deal("8100000003", at(2), "NL", { touches: [touch("email", at(2), 1, 3)] }),
+    deal("8100000004", at(3), "DE", { touches: [touch("phone_match", at(3), 6, 4), touch("phone_match", at(3), 9, 2)] }),
+    deal("8100000005", at(4), "NL", { touches: [touch("attempt", at(4), 1, 0)] }),
+    deal("8100000006", at(5), "NL", { contactCreatedAt: ago(at(5), 300), phoneHashed: false }),
+    deal("8100000007", at(6), "unknown", { currency: null, amount: null }),
+    deal("8100000008", at(7), "NL", { contact: null }),
+    deal("8100000009", at(8), "NL", { earlierOrderDeal: true }),
+    deal("8100000010", at(9), "NL", { storeOrderKind: "renewal" }),
+    deal("8100000011", at(10), "GB", { storeOrderKind: "repeat" }),
+  );
+  return out;
+}
+
+/** Whose a linked account is: the person holding it in the fixture's linked accounts */
+function mockOrderPersonOf(me: Principal) {
+  const accounts = seedIntakeConfig(me).accounts;
+  return (system: string, ownerRef: string | null) => {
+    const a = ownerRef === null ? undefined : accounts.find((x) => x.system === system && x.externalId === ownerRef);
+    return a ? { userId: a.userId, name: mockOrderName(a.userId) ?? a.userId } : null;
+  };
+}
+
+/** A credited person's name: the team's, the test manager's */
+function mockOrderName(userId: string): string | null {
+  return mockOwnerName(userId) ?? (userId === MOCK_MANAGER_ID ? "Test manager" : null);
+}
+
+function assertFirstOrders(me: Principal, range: HoursRange, filter: FirstOrderFilter, group: FirstOrderGroup | null, permissions: string[]): void {
+  assertAny(me, permissions);
+  assertReportRange(range);
+  if (group !== null && !FIRST_ORDER_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or level");
+  if (parseFirstOrderFilter(filter.market ?? "", filter.level ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
 /** The open lead deals not responding (cma.email_not_responding): invented deals, ids and ages only */
 function mockNotResponding(me: Principal): EmailNotRespondingRow[] {
   if (me.tenantId === MOCK_TENANT_2) return [];
@@ -842,6 +944,12 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "email.no_response_days", value: "5", isDefault: true },
   { key: "email.market_order", value: "contact,form,record,inbox", isDefault: true },
   { key: "reports.per_person", value: "email,orders", isDefault: false },
+  // first orders (addition 0008u): the attribution settings at their catalog defaults
+  { key: "attribution.window_days", value: "90", isDefault: true },
+  { key: "attribution.level_order", value: "lead_deal,conversation,email,phone_match,attempt,known_contact", isDefault: true },
+  { key: "attribution.assisted_levels", value: "lead_deal,conversation,email,phone_match", isDefault: true },
+  { key: "attribution.known_contact_minutes", value: "60", isDefault: true },
+  { key: "attribution.order_match_minutes", value: "1440", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1343,6 +1451,8 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
+  "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
+  "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1605,8 +1715,12 @@ const MOCK_FORM_FIELDS = {
   support: [choice("email", "other", []), choice("hs_ticket_category", "multiple_checkboxes", ["Billing (test)", "Device (test)", "Delivery (test)"]), MOCK_COUNTRY],
 };
 const outcome = (outcomeRef: string, label: string, isConnected: boolean): SourceCallOutcome => ({ outcomeRef, label, isConnected, isActive: true });
-const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null): SourcePipeline =>
-  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes });
+const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null,
+  isOrder = false, stages: SourceStage[] = []): SourcePipeline =>
+  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes, isOrder, stages });
+/** A pipeline stage with its outcome (addition 0008u): the source's unless a person chose it */
+const stage = (stageId: string, label: string, isClosed: boolean, outcome: SourceStage["outcome"] = null, outcomeSource: SourceStage["outcomeSource"] = null): SourceStage =>
+  ({ stageId, label, isClosed, outcome, outcomeSource: outcome === null ? outcomeSource : outcomeSource ?? "source", isActive: true });
 /** The task catalogs of the fixture's CRM connection (addition 0008n), consistent with the follow-up rows below */
 const taskStatus = (statusRef: string, label: string, isDone: boolean, seenTasks: number): SourceTaskStatus =>
   ({ statusRef, label, isDone, seenTasks, lastSeenAt: seenTasks ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null });
@@ -1619,8 +1733,13 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
   if (existing) return existing;
   const t = me.tenantId;
   const crm = mockSource(t, 1, "crmtest", "Customer records (test)", "100200300", "crm", {
-    pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true), pipeline("deal", "p-self-serve", "Web orders (test)", true, false),
-      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true), pipeline("ticket", "p-support", "Support (test)", true, true),
+    // since addition 0008u the deal pipelines carry their stages' outcomes; Web orders is the order pipeline (not for tenant two, which has no shop)
+    pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true, null, false,
+      [stage("s-new", "New (test)", false), stage("s-qualified", "Qualified (test)", false), stage("s-won", "Won (test)", true, "won"), stage("s-lost", "Lost (test)", true, "lost")]),
+      pipeline("deal", "p-self-serve", "Web orders (test)", true, false, null, t !== MOCK_TENANT_2,
+        [stage("s-paid", "Paid (test)", true, "won"), stage("s-refunded", "Refunded (test)", true, "lost", "person")]),
+      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true, null, false, [stage("s-open", "Open (test)", false)]),
+      pipeline("ticket", "p-support", "Support (test)", true, true),
       // Billing keeps its own response time of an hour (addition 0008o); Support follows the tenant default
       pipeline("ticket", "p-billing", "Billing (test)", true, true, 60)],
     taskStatuses: [taskStatus("NOT_STARTED", "Not started", false, 5), taskStatus("IN_PROGRESS", "In progress", false, 0), taskStatus("COMPLETED", "Completed", true, 12)],
@@ -2915,8 +3034,16 @@ export const mockData: CmaData = {
   async setSourcePipeline(me, id, input) {
     const x = sourceOf(me, id);
     const p = x.pipelines.find((y) => y.recordType === input.recordType && y.pipelineId === input.pipelineId);
-    if (p) Object.assign(p, { isCounted: input.isCounted, isLead: input.isLead });
-    else x.pipelines.push({ ...pipeline(input.recordType, input.pipelineId, input.pipelineId, input.isCounted, input.isLead) });
+    if (input.isOrder && input.recordType !== "deal") throw new CmaDbError("CMA04", "only a deal pipeline can be an order pipeline");
+    if (p) Object.assign(p, { isCounted: input.isCounted, isLead: input.isLead, ...(input.isOrder !== undefined ? { isOrder: input.isOrder } : {}) });
+    else x.pipelines.push({ ...pipeline(input.recordType, input.pipelineId, input.pipelineId, input.isCounted, input.isLead, null, input.isOrder ?? false) });
+  },
+
+  async setSourceStageOutcome(me, id, input) {
+    const x = sourceOf(me, id);
+    const st = x.pipelines.find((p) => p.recordType === "deal" && p.pipelineId === input.pipelineId)?.stages.find((y) => y.stageId === input.stageId);
+    if (!st) throw new CmaDbError("CMA02", "no such stage");
+    Object.assign(st, { outcome: input.outcome === "none" ? null : input.outcome, outcomeSource: "person" });
   },
 
   async setSourceForms(me, id, changes) {
@@ -3410,6 +3537,43 @@ export const mockData: CmaData = {
     const crm = seedIntakeConfig(me).sources.find((s) => s.connection.kind === "crm")!;
     return { ...range, filter, email: crm.inboxes.length > 0 || messages.length > 0, rows, total, replyTargetMinutes: c.replyTargetMinutes,
       ...mockEmailLists(emails, range.from, range.to) };
+  },
+
+  async getFirstOrders(me, range, group, filter): Promise<FirstOrdersReport> {
+    assertFirstOrders(me, range, filter, group, ["reports.view", "performance.team"]);
+    const settings = mockAttribution();
+    const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
+    const rows = firstOrdersInPeriod(records, range.from, range.to, filter);
+    const prev = previousPeriod(range, mockToday(me));
+    const previous = firstOrdersInPeriod(records, prev.from, prev.to, filter, prev.partial ? new Date().toISOString() : null);
+    const firstDate = records.reduce<string | null>((m, r) => (m === null || r.date < m ? r.date : m), null);
+    const phoneDate = records.filter((r) => r.phoneHashed).reduce<string | null>((m, r) => (m === null || r.date < m ? r.date : m), null);
+    const intakeStart = addDays(mockToday(me), -200);
+    const historyStart = firstDate === null ? null : [addDays(intakeStart, settings.windowDays), firstDate].sort()[1]!;
+    return {
+      ...range, group, filter, connected: me.tenantId !== MOCK_TENANT_2,
+      rows: firstOrderGroups(rows, group), total: firstOrderFigures(rows), previous: firstOrderFigures(previous),
+      previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+      byLevel: firstOrderGroups(rows, "level"), byMarket: firstOrderGroups(rows, "market"),
+      amounts: firstOrderAmounts(rows, false), amountsByMarket: firstOrderAmounts(rows, true),
+      list: firstOrderList(rows, listRowsOf(mockSetting("follow_up.list_rows"))),
+      historyStart, phoneStart: phoneDate, settings, markets: marketsOf(me),
+    };
+  },
+
+  async getFirstOrdersExport(me, range, filter) {
+    assertFirstOrders(me, range, filter, null, ["reports.view", "performance.team"]);
+    const records = firstOrderRecords(mockOrderDeals(me), mockAttribution(), mockOrderPersonOf(me));
+    return firstOrderList(firstOrdersInPeriod(records, range.from, range.to, filter), 500).rows;
+  },
+
+  async getOrdersPerPerson(me, range, filter): Promise<OrdersPerPerson> {
+    assertFirstOrders(me, range, filter, null, [ORDERS_PER_PERSON_PERMISSION]);
+    if (!me.perPerson.includes(ORDERS_PER_PERSON_KEY)) throw new CmaDbError("CMA06", "per-person figures for orders are switched off for this tenant");
+    const settings = mockAttribution();
+    const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
+    const { rows, total } = ordersPerPerson(firstOrdersInPeriod(records, range.from, range.to, filter), mockOrderName);
+    return { ...range, filter, connected: me.tenantId !== MOCK_TENANT_2, rows, total, settings, markets: marketsOf(me) };
   },
 
   async setSourceInbox(me, id, input) {

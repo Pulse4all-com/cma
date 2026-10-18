@@ -72,10 +72,10 @@ function dateLabel(key: string, group: EmailGroup, copy: Copy, locale: Locale, s
   return group === "week" ? copy.email.weekLabel.replace("{week}", String(weekNumber(key))) : fmtDate(key, locale, short ? "short" : "compact");
 }
 
-type Column = { key: string; parts: { key: string; label: string; value: number; fill: string }[] };
+export type Column = { key: string; parts: { key: string; label: string; value: number; fill: string }[] };
 
-/** Columns over the dates or weeks, each stacked from its parts; gridlines Border Grey, axis labels 12 units Footnote Grey (7.7) */
-function StackedColumns({ columns, group, label, testId, copy, locale }: {
+/** Columns over the dates or weeks, each stacked from its parts; gridlines Border Grey, axis labels 12 units Footnote Grey (7.7). First orders (0008u) uses them too */
+export function StackedColumns({ columns, group, label, testId, copy, locale }: {
   columns: Column[]; group: EmailGroup; label: string; testId: string; copy: Copy; locale: Locale;
 }) {
   const n = (x: number) => fmtCount(x, locale);
@@ -126,7 +126,7 @@ function StackedColumns({ columns, group, label, testId, copy, locale }: {
   );
 }
 
-function Legend({ items, label, testId }: { items: { key: string; label: string; className: string }[]; label: string; testId: string }) {
+export function Legend({ items, label, testId }: { items: { key: string; label: string; className: string }[]; label: string; testId: string }) {
   return (
     <ul className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-caption text-p4a-grey" aria-label={label} data-testid={testId}>
       {items.map((x) => (

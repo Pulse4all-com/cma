@@ -16,6 +16,7 @@ import type {
   DueState, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
+  AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -266,7 +267,7 @@ type EmailDbFigures = {
 };
 type EmailDbRow = EmailDbFigures & { period: string; dimension: string; group_key: string | null; group_label: string | null };
 
-const numOrNull = (v: string | number | null): number | null => (v === null ? null : Number(v));
+const numOrNull = (v: string | number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v));
 
 function toEmailFigures(x: EmailDbFigures): EmailFigures {
   return {
@@ -736,6 +737,73 @@ function toSource(r: SourceDbRow): SourceConnection {
   };
 }
 
+// ---- First orders (addition 0008u): the rows of cma.first_orders_report, first_orders_amounts, first_orders_list
+// and first_orders_per_person; numeric columns arrive as text
+type FirstOrderDbRow = {
+  period: string; dimension: string; group_key: string | null; first_orders: number; call_center: number; self_service: number; repeats: number;
+  renewals: number; not_first: number; no_contact: number; with_touch: number; days_median: string | null;
+};
+function toFirstOrderFigures(r: FirstOrderDbRow | undefined): FirstOrderFigures {
+  return {
+    firstOrders: r?.first_orders ?? 0, callCenter: r?.call_center ?? 0, selfService: r?.self_service ?? 0, repeats: r?.repeats ?? 0,
+    renewals: r?.renewals ?? 0, notFirst: r?.not_first ?? 0, noContact: r?.no_contact ?? 0, withTouch: r?.with_touch ?? 0, daysMedian: numOrNull(r?.days_median),
+  };
+}
+
+function firstOrderRowsOf(rows: FirstOrderDbRow[], dimension: string): FirstOrderRow[] {
+  return rows.filter((r) => r.period === "current" && r.dimension === dimension && r.group_key !== null)
+    .map((r) => ({ groupKey: r.group_key!, ...toFirstOrderFigures(r) }));
+}
+
+/** The tenant's attribution settings; the catalog holds all five with their defaults (0008u), so a missing row is a database fault */
+async function attributionSettings(q: Querier): Promise<AttributionSettings> {
+  const r = await q.query<{ key: string; value: string }>(`select key, value from cma.tenant_settings() where key like 'attribution.%'`);
+  const of = (k: string) => {
+    const v = r.rows.find((x) => x.key === k)?.value;
+    if (v === undefined) throw new Error(`tenant setting ${k} is missing from the catalog`);
+    return v;
+  };
+  const list = (v: string) => (v === "" ? [] : (v.split(",") as FirstOrderEvidence[]));
+  return {
+    windowDays: Number(of("attribution.window_days")), levelOrder: list(of("attribution.level_order")), assistedLevels: list(of("attribution.assisted_levels")),
+    knownContactMinutes: Number(of("attribution.known_contact_minutes")), orderMatchMinutes: Number(of("attribution.order_match_minutes")),
+  };
+}
+
+/** The tenant's active markets for the filter, then unknown */
+async function marketCodes(q: Querier): Promise<string[]> {
+  const r = await q.query<{ code: string }>(`select code from cma.market where status = 'active' order by sort_order, code`);
+  return [...r.rows.map((x) => x.code), "unknown"];
+}
+
+type FirstOrderListDbRow = {
+  connection_id: string; deal_source_id: string; market: string; created_at: Date; level: FirstOrderListRow["level"]; attribution: FirstOrderListRow["attribution"];
+  lead_deal: boolean; conversation: boolean; email: boolean; phone_match: boolean; attempt: boolean; known_contact: boolean; phone_hashed: boolean;
+  has_order: boolean; currency: string | null; amount: string | null; days_from_first_touch: string | null; record_url: string | null; total_rows: number;
+};
+
+function toFirstOrderListRow(x: FirstOrderListDbRow): FirstOrderListRow {
+  return {
+    connectionId: x.connection_id, dealSourceId: x.deal_source_id, market: x.market, createdAt: x.created_at.toISOString(), level: x.level, attribution: x.attribution,
+    evidence: { lead_deal: x.lead_deal, conversation: x.conversation, email: x.email, phone_match: x.phone_match, attempt: x.attempt, known_contact: x.known_contact },
+    phoneHashed: x.phone_hashed, hasOrder: x.has_order, currency: x.currency, amount: numOrNull(x.amount), daysFromFirstTouch: numOrNull(x.days_from_first_touch),
+    recordUrl: x.record_url,
+  };
+}
+
+type OrderPersonDbRow = {
+  row_kind: string; user_id: string | null; display_name: string | null; unlinked_owners: number | null; orders: number; lead_deal: number;
+  conversation: number; email: number; phone_match: number; other_levels: number; days_median: string | null;
+};
+
+function toOrderPerson(r: OrderPersonDbRow): OrderPerson {
+  return {
+    kind: r.row_kind === "not_linked" ? "notLinked" : r.row_kind === "total" ? "total" : "person", userId: r.user_id, name: r.display_name,
+    unlinkedOwners: r.unlinked_owners, orders: r.orders, leadDeal: r.lead_deal, conversation: r.conversation, email: r.email, phoneMatch: r.phone_match,
+    otherLevels: r.other_levels, daysMedian: numOrNull(r.days_median),
+  };
+}
+
 async function readSource(q: Querier, id: string): Promise<SourceConnection> {
   const r = await q.query<SourceDbRow>(`select * from cma.sources() where connection_id = $1::uuid`, [id]);
   const row = r.rows[0];
@@ -750,7 +818,10 @@ type ConfigJson = {
   inboxChannels?: { channelId: string; name: string; kind: string; isCounted: boolean; status: string }[];
   inboxAccounts?: { accountId: string; name: string; label: string | null; inboxId: string | null; channelId: string | null; isCounted: boolean;
     market: string | null; status: string }[];
-  pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string }[];
+  pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string;
+    // addition 0008u (a database before it has neither)
+    isOrder?: boolean;
+    stages?: { stageId: string; label: string; order: number; isClosed: boolean; outcome: "won" | "lost" | null; outcomeSource: "source" | "person" | null; status: string }[] }[];
   store: { handle: string; name: string; market: string; currency: string; timeZone: string } | null;
   writeback: { field: string; slot: number; property: string; mode: string; enabled: boolean }[];
 };
@@ -779,7 +850,11 @@ async function readCatalogs(q: Querier, id: string): Promise<CatalogsJson> {
 }
 
 function toPipeline(p: ConfigJson["pipelines"][number], slaMinutes: number | null = null): SourcePipeline {
-  return { recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType, isActive: p.status === "active", slaMinutes };
+  return {
+    recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType,
+    isActive: p.status === "active", slaMinutes, isOrder: p.isOrder ?? false,
+    stages: (p.stages ?? []).map((x) => ({ stageId: x.stageId, label: x.label, isClosed: x.isClosed, outcome: x.outcome, outcomeSource: x.outcomeSource, isActive: x.status === "active" })),
+  };
 }
 
 /** cma.connection_task_catalogs (addition 0008n): the task statuses and types a CRM connection has seen, with the configuration in force */
@@ -1710,6 +1785,73 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getFirstOrders(me, range, group, filter): Promise<FirstOrdersReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the functions check the permission, the group and the filters first
+      const r = await q.query<FirstOrderDbRow>(`select * from cma.first_orders_report($1::date, $2::date, $3, $4, $5)`,
+        [range.from, range.to, group, filter.market, filter.level]);
+      const amounts = await q.query<{ dimension: string; group_key: string | null; currency: string; orders: number; amount: string | null;
+        call_center_amount: string; self_service_amount: string }>(`select * from cma.first_orders_amounts($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const list = await q.query<FirstOrderListDbRow>(`select * from cma.first_orders_list($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const history = await q.query<{ history_start: string | null; phone_start: string | null; connected: boolean }>(
+        `select history_start::text, phone_start::text, connected from cma.first_orders_history_start()`);
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      const toAmount = (a: (typeof amounts.rows)[number]): FirstOrderAmount => ({
+        market: a.group_key, currency: a.currency === "none" ? null : a.currency, orders: a.orders, amount: numOrNull(a.amount),
+        callCenterAmount: Number(a.call_center_amount), selfServiceAmount: Number(a.self_service_amount),
+      });
+      return {
+        ...range, group, filter, connected: history.rows[0]?.connected ?? false,
+        rows: firstOrderRowsOf(r.rows, group),
+        total: toFirstOrderFigures(r.rows.find((x) => x.period === "current" && x.dimension === "total")),
+        previous: toFirstOrderFigures(r.rows.find((x) => x.period === "previous")),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        byLevel: firstOrderRowsOf(r.rows, "level"), byMarket: firstOrderRowsOf(r.rows, "market"),
+        amounts: amounts.rows.filter((a) => a.dimension === "total").map(toAmount),
+        amountsByMarket: amounts.rows.filter((a) => a.dimension === "market").map(toAmount),
+        list: {
+          rows: list.rows.map(toFirstOrderListRow),
+          total: list.rows[0]?.total_rows ?? 0,
+        },
+        historyStart: history.rows[0]?.history_start ?? null, phoneStart: history.rows[0]?.phone_start ?? null,
+        settings: await attributionSettings(q), markets: await marketCodes(q),
+      };
+    });
+  },
+
+  async getFirstOrdersExport(me, range, filter): Promise<FirstOrderListRow[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<FirstOrderListDbRow>(`select * from cma.first_orders_list($1::date, $2::date, $3, $4, 500)`,
+        [range.from, range.to, filter.market, filter.level]);
+      return r.rows.map(toFirstOrderListRow);
+    });
+  },
+
+  async getOrdersPerPerson(me, range, filter): Promise<OrdersPerPerson> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team and the tenant's reports.per_person (orders) first (CMA06)
+      const r = await q.query<OrderPersonDbRow>(`select * from cma.first_orders_per_person($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const history = await q.query<{ connected: boolean }>(`select connected from cma.first_orders_history_start()`);
+      const rows = r.rows.map(toOrderPerson);
+      const total = rows.find((x) => x.kind === "total") ?? toOrderPerson({ row_kind: "total", user_id: null, display_name: null, unlinked_owners: null,
+        orders: 0, lead_deal: 0, conversation: 0, email: 0, phone_match: 0, other_levels: 0, days_median: null });
+      return {
+        ...range, filter, connected: history.rows[0]?.connected ?? false, rows: rows.filter((x) => x.kind !== "total"), total,
+        settings: await attributionSettings(q), markets: await marketCodes(q),
+      };
+    });
+  },
+
+  async setSourceStageOutcome(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_stage_outcome($1::uuid, 'deal', $2, $3, $4)`, [id, input.pipelineId, input.stageId, input.outcome]));
+  },
+
   async setSourceInbox(me, id, input): Promise<void> {
     await withTenant(ctx(me), async (q) => {
       // set_inbox takes the work type and channel too: the stored ones travel back unchanged
@@ -1777,6 +1919,10 @@ export const postgresData: CmaData = {
       }
       if (!cur || cur.isLead !== input.isLead) {
         await q.query(`select cma.set_pipeline_lead($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.isLead]);
+      }
+      // the order pipeline switch (0008u), when given
+      if (input.isOrder !== undefined && (!cur || (cur.isOrder ?? false) !== input.isOrder)) {
+        await q.query(`select cma.set_pipeline_order($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.isOrder]);
       }
     });
   },

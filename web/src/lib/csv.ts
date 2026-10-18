@@ -11,7 +11,7 @@
  * at the start) gets a leading apostrophe: names are typed by people, and a CSV opened in a
  * spreadsheet program must never run them.
  */
-import type { ExportHoursRow, StatusChangeRow, TenantSetting } from "./data/types";
+import type { ExportHoursRow, FirstOrderLevel, FirstOrderListRow, StatusChangeRow, TenantSetting } from "./data/types";
 
 export type Separator = "comma" | "semicolon" | "tab";
 export type DecimalMark = "point" | "comma";
@@ -197,6 +197,50 @@ export function formsCsv(lines: FormsCsvLine[], from: string, to: string, catego
       String(r.ambiguous),
       String(r.noEmail),
       String(r.pending),
+    ]),
+    s,
+  );
+}
+
+// ---- Reports > First orders (addition 0008u; brief N19-A part 2) -------------------------------------------
+
+export interface FirstOrdersLabels {
+  from: string; to: string; deal: string; orderedAt: string; market: string; level: string; attribution: string; leadDeal: string; conversation: string;
+  email: string; phoneMatch: string; attempt: string; knownContact: string; currency: string; amount: string; days: string; yes: string; no: string;
+  callCenter: string; selfService: string; unknownMarket: string;
+}
+
+/** The date of an instant in a zone as YYYY-MM-DD (Intl, no runtime import) */
+function dateInZone(instant: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(instant));
+}
+
+/**
+ * One row per first order, as Reports > First orders lists it: the period, the deal's id, when it was ordered
+ * (date and time in the reader's zone), the market, the level (in the reader's words), the attribution, each piece
+ * of evidence as yes or no, the currency and amount (decimal mark from the settings, never summed), the days from the
+ * first touch. Ids, codes, amounts and times only: no name, address or phone number exists to export.
+ */
+export function firstOrdersCsv(rows: FirstOrderListRow[], from: string, to: string, timeZone: string, s: ExportSettings, l: FirstOrdersLabels,
+  levelNames: Record<FirstOrderLevel, string>): string {
+  const yn = (v: boolean) => (v ? l.yes : l.no);
+  const decimal = (v: number | null) => (v === null ? "" : s.decimalMark === "comma" ? v.toFixed(2).replace(".", ",") : v.toFixed(2));
+  return toCsv(
+    [l.from, l.to, l.deal, l.orderedAt, l.market, l.level, l.attribution, l.leadDeal, l.conversation, l.email, l.phoneMatch, l.attempt, l.knownContact,
+      l.currency, l.amount, l.days],
+    rows.map((r) => [
+      formatDate(from, s.dateFormat),
+      formatDate(to, s.dateFormat),
+      safeText(r.dealSourceId),
+      `${formatDate(dateInZone(r.createdAt, timeZone), s.dateFormat)} ${formatTime(r.createdAt, timeZone)}`,
+      r.market === "unknown" ? l.unknownMarket : r.market,
+      levelNames[r.level],
+      r.attribution === "call_center" ? l.callCenter : l.selfService,
+      yn(r.evidence.lead_deal), yn(r.evidence.conversation), yn(r.evidence.email), yn(r.evidence.phone_match), yn(r.evidence.attempt),
+      yn(r.evidence.known_contact),
+      r.currency ?? "",
+      decimal(r.amount),
+      decimal(r.daysFromFirstTouch),
     ]),
     s,
   );

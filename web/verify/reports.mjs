@@ -48,6 +48,13 @@
  * hours"), a mailbox's market before its inbox's, an owner without a person (one not-linked row with how many,
  * never which), the figures and medians, the groups with none last, the received series and its Other, waiting
  * now, the filters and groups as the database checks them, the per-person switch, and nothing personal in an answer.
+ * Since addition 0008u (brief N19-A part 2) also First orders and Orders per person (src/lib/first-orders.ts), on
+ * 85's own scenario, so the definitions are the ones 85 proves in the database: the kinds (no contact, renewal,
+ * repeat, not first, first), every flag at the window's edges, a known contact at exactly the minutes, the level and
+ * the attribution with the level order and the assisted set changed, the credited person (the latest assisted touch,
+ * through a telephony user, not linked), days from the first touch, the figures per level and market, amounts per
+ * currency never summed across, the list, per person by name with the not-linked row, the filters and groups, and
+ * no name, address or phone number in an answer.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -65,6 +72,10 @@ import {
   businessSeconds, emailCloses, emailFigures, emailFilterQuery, emailGroups, emailInPeriod, emailOpenings, emailPerPerson, emailPrevious, emailRecords,
   emailSeries, emailWaiting, nextEmailGroup, parseEmailFilter, parseEmailGroup, perPersonOpen, seriesColumns, withinShare,
 } from "../src/lib/email.ts";
+import {
+  firstOrderAmounts, firstOrderFigures, firstOrderFilterQuery, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, levelsInOrder,
+  nextFirstOrderGroup, ordersPerPerson, parseFirstOrderFilter, parseFirstOrderGroup, callCenterShare,
+} from "../src/lib/first-orders.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -786,6 +797,105 @@ expect("email per agent: the permission and the tenant's switch, both",
     perPersonOpen({ permissions: ["reports.view"], perPerson: ["email"] }, "email")], [true, false, false], [true, true, true]);
 const emailLeaks = JSON.stringify({ rows: ePerPerson.rows, waiting: eWait, groups: byInbox }).match(/"(subject|body|address|from|to|sender|recipient|ownerRef|email|phone)"\s*:/gi) ?? [];
 expect("email: no subject, address, owner id or phone number in an answer", emailLeaks, [], ["\"ownerRef\":"]);
+
+// ---- First orders and Orders per person (addition 0008u) ---------------------------------------------
+// 85's scenario: tenant one's order deals of the week of 5 to 11 October 2026 with what the database finds around
+// them (the touches in the window, the linked order, the contact's creation time); owners 101 Anna and 103 Bram, 102
+// nobody, telephony user u1 Anna
+const FO = "00000000-0000-7000-8000-0000000000c1";
+const foSettings = { windowDays: 90, levelOrder: ["lead_deal", "conversation", "email", "phone_match", "attempt", "known_contact"],
+  assistedLevels: ["lead_deal", "conversation", "email", "phone_match"], knownContactMinutes: 60, orderMatchMinutes: 1440 };
+const foPeople = { "verifycrm_owner:101": { userId: "anna", name: "Anna Verify" }, "verifycrm_owner:103": { userId: "bram", name: "Bram Verify" },
+  "verifytel_user:u1": { userId: "anna", name: "Anna Verify" } };
+const foPersonOf = (system, ref) => foPeople[`${system}:${ref}`] ?? null;
+const foNames = { anna: "Anna Verify", bram: "Bram Verify" };
+const ord = (id, at, market, o = {}) => ({ connectionId: FO, dealSourceId: id, createdAt: at, market, zone: market === "GB" ? "Europe/London" : "Europe/Amsterdam",
+  contact: `k-${id}`, earlierOrderDeal: false, storeOrderKind: null, currency: null, amount: null, phoneHashed: false, contactCreatedAt: null, touches: [],
+  recordUrl: `https://crm.example.invalid/portal-1/deal/${id}`, ...o });
+const tch = (kind, at, system, ownerRef) => ({ kind, at, system, ownerRef });
+const crm = "verifycrm_owner";
+const foDeals = [
+  ord("o1", "2026-10-05T10:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 100, contactCreatedAt: "2026-01-01T00:00:00.000Z",
+    touches: [tch("lead_deal", "2026-10-02T08:00:00.000Z", crm, "101"), tch("email", "2026-10-04T09:00:00.000Z", crm, "103")] }),
+  ord("o2", "2026-10-06T09:00:00.000Z", "GB", { storeOrderKind: "first", currency: "GBP", amount: 50, contactCreatedAt: "2026-10-06T08:30:00.000Z",
+    touches: [tch("conversation", "2026-10-01T08:00:10.000Z", crm, "103")] }),
+  ord("o3", "2026-10-07T12:00:00.000Z", "NL", { currency: "EUR", amount: 70, contactCreatedAt: "2026-10-07T11:30:00.000Z",
+    touches: [tch("email", "2026-10-06T12:00:00.000Z", crm, "102")] }),
+  ord("o4", "2026-10-08T12:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 40, contactCreatedAt: "2025-12-01T00:00:00.000Z" }),
+  ord("o5", "2026-10-08T14:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 30, phoneHashed: true, contactCreatedAt: "2026-10-08T13:30:00.000Z",
+    touches: [tch("phone_match", "2026-09-28T10:00:00.000Z", crm, "101"), tch("phone_match", "2026-10-07T10:00:00.000Z", "verifytel_user", "u1")] }),
+  ord("o6", "2026-10-09T09:00:00.000Z", "NL", { contactCreatedAt: "2026-10-09T08:30:00.000Z", touches: [tch("attempt", "2026-10-08T09:00:00.000Z", crm, "101")] }),
+  ord("o7", "2026-10-09T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-09T14:00:00.000Z" }),
+  ord("o8", "2026-10-10T10:00:00.000Z", "NL", { contact: null, currency: "EUR", amount: 25 }),
+  ord("o9", "2026-10-10T12:00:00.000Z", "NL", { earlierOrderDeal: true, storeOrderKind: "repeat", currency: "EUR", amount: 20 }),
+  ord("o10", "2026-10-11T09:00:00.000Z", "NL", { storeOrderKind: "renewal", currency: "EUR", amount: 15 }),
+  ord("o11", "2026-10-11T10:00:00.000Z", "NL", { storeOrderKind: "repeat", currency: "EUR", amount: 60 }),
+  // a lead deal exactly at the window's start counts; an email a second before it and one at T do not
+  ord("o13", "2026-10-06T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-06T14:30:00.000Z",
+    touches: [tch("lead_deal", "2026-07-08T15:00:00.000Z", crm, "101"), tch("email", "2026-07-08T14:59:59.000Z", crm, "103"), tch("email", "2026-10-06T15:00:00.000Z", crm, "103")] }),
+  ord("o14", "2026-10-07T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-07T14:59:00.000Z",
+    touches: [tch("lead_deal", "2026-10-07T15:00:00.000Z", crm, "101"), tch("lead_deal", "2026-07-09T14:59:59.000Z", crm, "101")] }),
+];
+const foRecs = firstOrderRecords(foDeals, foSettings, foPersonOf);
+const foWeek = firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-11", { market: null, level: null });
+const foById = (recs) => [...recs].sort((a, b) => a.dealSourceId.localeCompare(b.dealSourceId));
+expect("first orders: the kinds, as 85 B5 (no contact, repeat, renewal, not first)",
+  foById(foRecs).map((r) => `${r.dealSourceId}:${r.kind}`).join(" "),
+  "o1:first o10:renewal o11:not_first o13:first o14:first o2:first o3:first o4:first o5:first o6:first o7:first o8:no_contact o9:repeat",
+  "o1:first o10:renewal o11:repeat o13:first o14:first o2:first o3:first o4:first o5:first o6:first o7:first o8:first o9:not_first");
+expect("first orders: every flag at the window's edges, a known contact at exactly an hour, as 85 B7",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${["lead_deal", "conversation", "email", "phone_match", "attempt", "known_contact"].map((e) => Number(r.evidence[e])).join("")}`).join(" "),
+  "o1:101001 o13:100000 o14:000000 o2:010000 o3:001000 o4:000001 o5:000100 o6:000010 o7:000001",
+  "o1:101001 o13:101000 o14:100000 o2:010000 o3:001000 o4:000000 o5:000100 o6:000010 o7:000000");
+expect("first orders: the level, the attribution and the credited person (the latest assisted touch, a telephony user, not linked), as 85 B8",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${r.level}:${r.attribution}:${r.creditedUserId ?? (r.creditedOwnerRef ? "not linked" : "-")}`).join(" "),
+  "o1:lead_deal:call_center:bram o13:lead_deal:call_center:anna o14:self_service:self_service:- o2:conversation:call_center:bram o3:email:call_center:not linked "
+    + "o4:known_contact:self_service:- o5:phone_match:call_center:anna o6:attempt:self_service:- o7:known_contact:self_service:-",
+  "o1:lead_deal:call_center:anna o13:lead_deal:call_center:anna o14:self_service:self_service:- o2:conversation:call_center:bram o3:email:call_center:- "
+    + "o4:known_contact:self_service:- o5:phone_match:call_center:anna o6:attempt:call_center:anna o7:known_contact:self_service:-");
+expect("first orders: days from the first touch, as 85 B9",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${r.daysFromFirstTouch ?? "-"}`).join(" "),
+  "o1:3.08 o13:90 o14:- o2:5.04 o3:1 o4:- o5:10.17 o6:1 o7:-", "o1:2.04 o13:90 o14:0 o2:5.04 o3:1 o4:- o5:0.17 o6:1 o7:-");
+const foChanged = firstOrderRecords(foDeals, { ...foSettings, levelOrder: ["email", "lead_deal", "conversation", "phone_match", "attempt", "known_contact"],
+  assistedLevels: ["lead_deal"] }, foPersonOf);
+expect("first orders: the level order and the assisted set are configuration, as 85 B10",
+  foById(foChanged.filter((r) => ["o1", "o2", "o3", "o5", "o13"].includes(r.dealSourceId))).map((r) => `${r.dealSourceId}:${r.level}:${r.attribution}`).join(" "),
+  "o1:email:self_service o13:lead_deal:call_center o2:conversation:self_service o3:email:self_service o5:phone_match:self_service",
+  "o1:lead_deal:call_center o13:lead_deal:call_center o2:conversation:call_center o3:email:call_center o5:phone_match:call_center");
+const foFig = (f) => `${f.firstOrders}:${f.callCenter}/${f.selfService}:${f.repeats}/${f.renewals}/${f.notFirst}/${f.noContact}:${f.daysMedian ?? "-"}`;
+expect("first orders: the total, per level and per market, as 85 B11",
+  [foFig(firstOrderFigures(foWeek)), firstOrderGroups(foWeek, "level").map((r) => `${r.groupKey}=${foFig(r)}`).join(" "),
+    firstOrderGroups(foWeek, "market").map((r) => `${r.groupKey}=${foFig(r)}`).join(" ")],
+  ["9:5/4:1/1/1/1:4.1", "attempt=1:0/1:0/0/0/0:1 conversation=1:1/0:0/0/0/0:5 email=1:1/0:0/0/0/0:1 known_contact=2:0/2:0/0/0/0:- lead_deal=2:2/0:0/0/0/0:46.5 "
+    + "phone_match=1:1/0:0/0/0/0:10.2 self_service=1:0/1:0/0/0/0:-", "GB=1:1/0:0/0/0/0:5 NL=8:4/4:1/1/1/1:3.1"],
+  ["9:5/4:1/1/1/1:4.1", "", ""]);
+expect("first orders: a level filter keeps that level's first orders and nothing counted apart",
+  foFig(firstOrderFigures(firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-11", { market: null, level: "lead_deal" }))), "2:2/0:0/0/0/0:46.5", "2:2/0:1/1/1/1:46.5");
+expect("first orders: amounts per currency, never summed across, as 85 B12",
+  [...firstOrderAmounts(foWeek, false), ...firstOrderAmounts(foWeek, true)].map((a) => `${a.market ?? "*"}/${a.currency ?? "none"}=${a.orders}:${a.amount ?? "-"}:${a.callCenterAmount}:${a.selfServiceAmount}`).join(" "),
+  "*/EUR=4:240:200:40 */GBP=1:50:50:0 */none=4:-:0:0 GB/GBP=1:50:50:0 NL/EUR=4:240:200:40 NL/none=4:-:0:0",
+  "*/EUR=5:290:250:40 */none=4:-:0:0 GB/GBP=1:50:50:0 NL/EUR=4:240:200:40");
+const foList = firstOrderList(foWeek, 2);
+expect("first orders: the list newest first, capped, with the total, as 85 B15",
+  `${foList.rows.map((r) => `${r.dealSourceId}:${r.level}`).join(" ")} ${foList.total}`, "o7:known_contact o6:attempt 9", "o1:lead_deal o2:conversation 9");
+const foPeopleRows = ordersPerPerson(foWeek, (id) => foNames[id] ?? null);
+expect("orders per person: by name, never ranked; the not-linked row; the total, as 85 B16",
+  [...foPeopleRows.rows, foPeopleRows.total].map((p) => `${p.name ?? `${p.kind}(${p.unlinkedOwners ?? "-"})`}:${p.orders}:${p.leadDeal}/${p.conversation}/${p.email}/${p.phoneMatch}:${p.daysMedian ?? "-"}`).join(" "),
+  "Anna Verify:2:1/0/0/1:50.1 Bram Verify:2:1/1/0/0:4.1 notLinked(1):1:0/0/1/0:1 total(-):5:2/1/1/1:5",
+  "Bram Verify:2:1/1/0/0:4.1 Anna Verify:2:1/0/0/1:50.1 total(-):5:2/1/1/1:5");
+expect("first orders: the previous span stops at the time of day on its last date in each deal's zone",
+  firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-07", { market: null, level: null }, "2026-10-20T13:30:00.000Z").map((r) => r.dealSourceId).join(" "),
+  "o1 o2 o3 o13", "o1 o2 o3 o13 o14");
+expect("first orders: groups, filters and the share as the database takes them",
+  [parseFirstOrderGroup("level"), parseFirstOrderGroup("month"), nextFirstOrderGroup("level"), JSON.stringify(parseFirstOrderFilter("GB", "phone_match")),
+    parseFirstOrderFilter("gb", null).problem, parseFirstOrderFilter(null, "phone").problem, JSON.stringify(firstOrderFilterQuery({ market: "unknown", level: "self_service" })),
+    callCenterShare({ callCenter: 5, firstOrders: 9 }) === 5 / 9, callCenterShare({ callCenter: 0, firstOrders: 0 }),
+    levelsInOrder({ levelOrder: ["email", "lead_deal"] }).join(",")],
+  ["level", null, "day", JSON.stringify({ filter: { market: "GB", level: "phone_match" }, problem: null }), "market", "level",
+    JSON.stringify({ market: "unknown", level: "self_service" }), true, null, "email,lead_deal,conversation,phone_match,attempt,known_contact,self_service"],
+  ["level", "month", "week", "", null, null, "", false, 0, "email,lead_deal"]);
+const foLeaks = JSON.stringify({ list: foList, people: foPeopleRows }).match(/"(name|firstName|lastName|address|email_address|phone|phoneNumber|phoneHash|contact\w*)"\s*:/gi) ?? [];
+expect("first orders: no customer name, address or phone number in an answer (a staff name only)", foLeaks.filter((x) => !/"name"/.test(x)), [], ["\"phone\":"]);
 
 // ---- formats -----------------------------------------------------------------------------------
 expect("business minutes: decimals under an hour, hours from an hour, a dash for none",
