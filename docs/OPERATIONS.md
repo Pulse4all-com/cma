@@ -373,8 +373,9 @@ Expected: the version `DISABLED`. Keep the newest two enabled for the 5-minute w
 | NocoDB's two secrets (`docs/nocodb/service.template.yaml`) | NocoDB's own JWT secret and encryption key | not rotated by a version add: a new encryption key makes the stored source credentials unreadable, so a rotation is a NocoDB re-setup (`docs/nocodb/README.md`) |
 
 The service accounts have no keys (IAM database authentication; README Decision log) and the IAP client is
-Google-managed: nothing to rotate there. Secret Manager data access logging is on in both projects since 13
-October 2026, so every read of a secret value is in the audit log with who read it.
+Google-managed: nothing to rotate there. Secret Manager data access logging is on in prod since 18 October
+2026, 14:55 UTC (not 13 October, as recorded before; dev not checked again; `records/console-2026-10-18`), so
+every read of a secret value is in prod's audit log with who read it.
 
 ## 8. Where the logs are
 
@@ -436,28 +437,52 @@ Armor's `429`s never reach this log (answered at the load balancer); they show o
 on `jsonPayload.message` or `textPayload`, and leave the request log (`logName` ending in `requests`) out of a
 saved query. Build logs: RUNBOOK 3.
 
-## 9. Alerts: today, and the set to create
+## 9. Alerts: the four policies, and the set still to create
 
-Today one policy exists, `cma-ingest 429` (Console → Monitoring → Alerting → Policies): the load balancer's
-request count for `cma-ingest-backend` with `response_code = 429`, summed over 5 minutes, firing above 0,
-auto-closing after 30 minutes, to the email channel "CMA ingest alerts" (`docs/ingest/alert.sh`; the address
-is in the channel only; a rerun of `alert.sh prod --email <alert address>` updates it, never duplicates it).
+Four policies exist in `p4a-cma-prod` (Console → Monitoring → Alerting → Policies), all to the email channel
+"CMA ingest alerts" (the address is in the channel only), as Martin's output of 18 October 2026 shows them
+(`records/console-2026-10-18`):
+
+| Policy | Since | Metric and filter | Fires | Documentation text (the first check) |
+|---|---|---|---|---|
+| `cma-ingest 429` | 13 October 2026 (`docs/ingest/alert.sh`; a rerun of `alert.sh prod --email <alert address>` updates it, never duplicates it) | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name = "cma-ingest-backend"`, `response_code = 429` | summed over 5 minutes, above 0; auto-close 30 minutes | whether a source retries or someone floods the endpoint; the limits are set by `docs/ingest/front.sh` |
+| `cma-prod-pg connections above 75 of 93` | 18 October 2026, 14:59 UTC | `cloudsql.googleapis.com/database/postgresql/num_backends` for `p4a-cma-prod:cma-prod-pg`, the mean per minute summed over the instance's databases | above 75 for 2 minutes | the budget's ceiling of 88 of 93 usable (README, Database connection budget); `cma-web`'s scale-out and the jobs' overlap (`cma-refresh-follow-up` runs every minute) |
+| `cma-web more than 5 server errors in 5 minutes` | 18 October 2026, 14:59 UTC | `run.googleapis.com/request_count`, resource `cloud_run_revision`, `service_name = "cma-web"`, `response_code_class = "5xx"`, the count per 5 minutes summed over the service's revisions | above 5; auto-close 30 minutes | `cma-web`'s log (section 8), the latest revision, the connections alert |
+| `Cloud Run job failed (any job)` | 18 October 2026, 15:00 UTC | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = "failed"`, the count per 10 minutes summed per `job_name` | above 0: **one failed execution of any job**; auto-close 30 minutes | the job's latest execution and its log; `cma-refresh-follow-up` runs every minute, so a repeat is likely if it is a code or database problem |
+
+The job alert fires on a single failed execution, not the three in 15 minutes this section first planned for
+the per-minute jobs: kept on purpose (README, Decision log, 18 October 2026, Martin). A one-off blip of a
+per-minute job therefore sends an email, as `cma-refresh-follow-up` did at 16:04 UTC on 18 October 2026 (a
+reset database connection, `read ECONNRESET`, `exit(1)`; the next minute succeeded). Once the web image's two
+jobs retry a reset connection once (their own PR), such a blip no longer fails their run, so an email from them
+means a failure that repeated. Read the job's log first:
+
+**Terminal**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="<job name>" AND severity>=WARNING' --project=p4a-cma-prod --freshness=1d --limit=50 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.error, jsonPayload.reason, textPayload)'
+```
+Expected: the failed execution's lines. A code in `ERROR` is the database's or the source's (the ingest's codes
+in `docs/ingest/README.md`, Jobs); a stack trace in `TEXT_PAYLOAD` with `ECONNRESET`, `ETIMEDOUT` or the
+connector is a connection that dropped; `WARNING … running` lines are a run that overlapped the next minute and
+skipped, no failure.
+
 Budget alerts email the billing admins (dev €75, prod €150 per month; README Environments and infrastructure).
-Secret Manager data access logging is on. Nothing watches errors, latency, the jobs, the database or the
-certificates (audit finding INFRA-06).
+Secret Manager data access logging is on in prod since 18 October 2026, 14:55 UTC (README, Environments and
+infrastructure).
 
-The set to create, all in `p4a-cma-prod`, all to the existing channel "CMA ingest alerts" (or a second email
-channel for the Workspace, if Martin prefers two). The thresholds are starting points; each policy carries a
-documentation text that names the first check. Create them in the Console as below, one at a time, and
-check the list after each; the equivalent JSON for `gcloud monitoring policies create` is in the audit's
-infrastructure findings (INFRA-06), to be folded into `docs/ingest/alert.sh` as a table of policies with
-`--only <name>` and its existing `--dry-run` once each has been created once by hand.
+**The set still to create** (audit finding INFRA-06), all in `p4a-cma-prod`, all to the same channel (or a
+second email channel for the Workspace, if Martin prefers two). Nothing yet watches latency, the database's CPU,
+memory and disk, the ingest's server errors, the public front or the certificates. The thresholds are starting
+points; each policy carries a documentation text that names the first check. Create them in the Console as
+below, one at a time, and check the list after each; the equivalent JSON for `gcloud monitoring policies
+create` is in the audit's infrastructure findings (INFRA-06), to be folded into `docs/ingest/alert.sh` as a
+table of policies with `--only <name>` and its existing `--dry-run` once each has been created once by hand.
 
 **Terminal** (before and after each policy)
 ```bash
 gcloud monitoring policies list --project=p4a-cma-prod --format='table(displayName,enabled)'
 ```
-Expected before: one row, `cma-ingest 429  True`. After each step below: one more row with the name given.
+Expected before: the four rows above, each `True`. After each step below: one more row with the name given.
 
 **Browser:** Console → Monitoring → Alerting → Create policy, for each of the following. Expected after Save:
 the policy listed, enabled, with the channel attached; no incident open (a new policy on a healthy system
@@ -465,10 +490,9 @@ stays quiet).
 
 | Policy name | Metric and filter | Condition | Documentation text (the first check) |
 |---|---|---|---|
-| `cma-web-backend 5xx ratio` and `cma-ingest-backend 5xx ratio` | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name` = the backend, numerator `response_code_class = 500`, denominator all codes | ratio above 2 % over a 5-minute window, for 5 minutes; auto-close 30 minutes | revisions list, the app lines (section 8), Cloud SQL connections; RUNBOOK 10 when a deploy caused it |
+| `cma-ingest-backend 5xx ratio` (`cma-web` has its count above) | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name = "cma-ingest-backend"`, numerator `response_code_class = 500`, denominator all codes | ratio above 2 % over a 5-minute window, for 5 minutes; auto-close 30 minutes | revisions list, the app lines (section 8), Cloud SQL connections |
 | `cma-web-backend p95 latency` and `cma-ingest-backend p95 latency` | `loadbalancing.googleapis.com/https/backend_latencies` for the backend, aligner delta, reducer 95th percentile | web above 2000 ms, ingest above 5000 ms, for 10 minutes | Cloud SQL CPU and connections first, then the slow routes |
-| `cma jobs failing` | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = failed`, grouped by `job_name` | the per-minute jobs (`ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `cma-refresh-follow-up`): 3 or more failed executions in 15 minutes; `ingest-reconcile` and `cma-close-forgotten-workdays`: one failed execution in an hour | the job's log with `severity>=WARNING` (section 8); the codes in `docs/ingest/README.md`, Jobs |
-| `cma-prod-pg capacity` | `cloudsql.googleapis.com/database/cpu/utilization`, `memory/utilization`, `disk/utilization`, `network/connections` for `p4a-cma-prod:cma-prod-pg` | CPU above 80 % for 10 minutes; memory above 90 % for 10 minutes; disk above 80 % for an hour; connections above 80 for 5 minutes (the budget's ceiling is 88 of 93 usable; README, Database connection budget) | the `pg_stat_activity` count per login (section 10, weekly step 2); raising `max_connections` is rejected (Decision log, 15 October 2026) |
+| `cma-prod-pg capacity` (connections have their policy above) | `cloudsql.googleapis.com/database/cpu/utilization`, `memory/utilization`, `disk/utilization` for `p4a-cma-prod:cma-prod-pg` | CPU above 80 % for 10 minutes; memory above 90 % for 10 minutes; disk above 80 % for an hour | the `pg_stat_activity` count per login (section 10, weekly step 2); raising `max_connections` is rejected (Decision log, 15 October 2026) |
 | `cma front reachability and certificates` | two uptime checks first (Monitoring → Uptime checks): `ingest.pulse4all.app/health`, HTTPS, every 5 minutes, status 2xx, SSL validation on; `workspace.pulse4all.app/`, status 2xx or 3xx (IAP's redirect is the right "alive" answer there). Then `monitoring.googleapis.com/uptime_check/check_passed` and `time_until_ssl_cert_expires` | the check failing from two or more regions for 10 minutes; a certificate under 15 days from expiry | `gcloud compute ssl-certificates describe cma-web-cert` or `cma-ingest-cert` `--global` (`managed.status`, `managed.domainStatus`); the DNS A record |
 
 Six checker regions once every 5 minutes stay far under Cloud Armor's 600 requests per minute per IP. The
