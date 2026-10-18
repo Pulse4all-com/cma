@@ -1,0 +1,14 @@
+verify/refresh-follow-up.mjs  (--provoke: every check must FAIL)
+
+FAIL  the job exits 0 and writes one line per tenant               got [0,true], wanted [1,true]
+FAIL  every line: the tenant's id, rows and duration_ms as numbers, refreshed got true, wanted false
+FAIL  no @ and no unparsed line in the job's output                got [false,false], wanted [true,false]
+FAIL  every tenant's snapshot was computed just now                got 2, wanted 0
+FAIL  every tenant has a succeeded run row whose rows match its line got true, wanted false
+FAIL  the second session holds the dev tenant's lock               got true, wanted false
+FAIL  the job skips the locked tenant (WARNING, running) and exits 0 got [0,false,"running","WARNING"], wanted [0,true,null,"INFO"]
+FAIL  the job refreshes the other tenants meanwhile                got true, wanted false
+FAIL  the locked tenant's run row: succeeded, skipped              got succeeded 1, wanted succeeded 0
+FAIL  once the lock is gone, the tenant is refreshed again         got true, wanted false
+
+ALL 10 PROVOKED CHECKS FAILED, as they must

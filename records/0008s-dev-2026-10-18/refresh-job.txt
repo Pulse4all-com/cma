@@ -1,0 +1,14 @@
+verify/refresh-follow-up.mjs
+
+PASS  the job exits 0 and writes one line per tenant               got [0,true]
+PASS  every line: the tenant's id, rows and duration_ms as numbers, refreshed got true
+PASS  no @ and no unparsed line in the job's output                got [false,false]
+PASS  every tenant's snapshot was computed just now                got 2
+PASS  every tenant has a succeeded run row whose rows match its line got true
+PASS  the second session holds the dev tenant's lock               got true
+PASS  the job skips the locked tenant (WARNING, running) and exits 0 got [0,false,"running","WARNING"]
+PASS  the job refreshes the other tenants meanwhile                got true
+PASS  the locked tenant's run row: succeeded, skipped              got succeeded 1
+PASS  once the lock is gone, the tenant is refreshed again         got true
+
+ALL 10 PASS

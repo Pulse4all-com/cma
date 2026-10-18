@@ -1,0 +1,105 @@
+DO
+BEGIN
+SET
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:db/74_forms_reporting.sql:193: NOTICE:  relation "form_category" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/74_forms_reporting.sql:203: NOTICE:  column "is_polled" of relation "connection_form" already exists, skipping
+ALTER TABLE
+UPDATE 0
+ALTER TABLE
+ALTER TABLE
+psql:db/74_forms_reporting.sql:207: NOTICE:  column "category" of relation "connection_form" already exists, skipping
+ALTER TABLE
+psql:db/74_forms_reporting.sql:208: NOTICE:  column "market_field" of relation "connection_form" already exists, skipping
+ALTER TABLE
+psql:db/74_forms_reporting.sql:209: NOTICE:  column "lead_condition" of relation "connection_form" already exists, skipping
+ALTER TABLE
+psql:db/74_forms_reporting.sql:210: NOTICE:  column "fields_refreshed_at" of relation "connection_form" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+psql:db/74_forms_reporting.sql:255: NOTICE:  relation "connection_form_field" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/74_forms_reporting.sql:260: NOTICE:  policy "tenant_readonly" for relation "form_category" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/74_forms_reporting.sql:261: NOTICE:  policy "tenant_readonly" for relation "connection_form_field" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+ALTER TABLE
+ALTER TABLE
+psql:db/74_forms_reporting.sql:272: NOTICE:  column "kept_cleared_at" of relation "form_submission" already exists, skipping
+ALTER TABLE
+COMMENT
+COMMENT
+COMMENT
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET
