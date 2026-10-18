@@ -2,6 +2,51 @@
 
 Security, reliability, speed, UX, code quality, configurability and data protection of the repository `Pulse4all-com/cma`, with the soft-launch readiness and a System health page. Static review and local runs only: nothing in Google Cloud, HubSpot, Aircall or Shopify was called, and no branch was merged. The companion files in this directory: `FINDINGS.csv` (every finding with its id, severity, evidence, status), `PERFORMANCE.md`, `UX_REVIEW.md`, `READINESS.md` (gates, SLOs, dated items, verdict), `METHOD.md` (plan, threat model, command log, self-review), `GEMINI_PROMPT.md` (the hand-off for the Gemini Gem), `BACKLOG_CANDIDATES.md`. Raw outputs, free of secrets and personal data, under `local-records/` (the 82 "before" screenshots stay on the audit's session branch to keep 11 MB of images out of `main`).
 
+## Status on 18 October 2026
+
+Added when this report was brought up to `main` at `c3e7603`; sections 1 to 10 stay as written on 17 October 2026. `FINDINGS.csv`'s `status` column and the last column of `BACKLOG_CANDIDATES.md` carry the same state: `merged` where the fix PR is on `main`, `merged (partly)` where a remainder stays proposed, `overtaken` where later work took the finding's place. Sources: `git log` of `main` and Martin's records of 17 and 18 October 2026 (`records/deploys-2026-10-18`, `records/0008q-*`, `records/0008r-*`, `records/0008s-*`, `records/speed-dev-2026-10-18`, `records/audit-2026-10-18`).
+
+**Every fix PR of section 3 is merged**, in this order (squash commit on `main`; where it runs):
+
+| PR | Commit | Where it runs on 18 October 2026 |
+|---|---|---|
+| [#151](https://github.com/Pulse4all-com/cma/pull/151) 0008q, with [#162](https://github.com/Pulse4all-com/cma/pull/162) | `aa75189`, `f278450` | `76` in dev and prod, `77` in dev (`records/0008q-dev-2026-10-18`, `records/0008q-prod-2026-10-18`); #162 lets `31` accept the search path 0008q pins |
+| [#150](https://github.com/Pulse4all-com/cma/pull/150) ingest security | `5507265` | the ingest jobs on `ingest:9acbacc` in dev and prod |
+| [#157](https://github.com/Pulse4all-com/cma/pull/157) ingest reliability | `8bf6fcb` | the same jobs |
+| [#158](https://github.com/Pulse4all-com/cma/pull/158) ops | `9acbacc` | the same jobs; the reconcile's 03:30 schedule in prod is to be confirmed by Martin |
+| [#154](https://github.com/Pulse4all-com/cma/pull/154) web security | `c2b5c9d` | prod `cma-web-00070-5rn` |
+| [#152](https://github.com/Pulse4all-com/cma/pull/152) System health, database | `7343667` | `78` in dev and prod, `79` in dev (`records/0008r-dev-2026-10-18`, `records/0008r-prod-2026-10-18`) |
+| [#155](https://github.com/Pulse4all-com/cma/pull/155) Cloud Build guard | `19fa69f` | prod `cma-web-00071-bzd` |
+| [#153](https://github.com/Pulse4all-com/cma/pull/153) System health, web | `607396f` | prod `cma-web-00072-42g` |
+| [#159](https://github.com/Pulse4all-com/cma/pull/159) speed | `f1cf4db` | prod `cma-web-00073-h5z`; dev's `cma-web` since 07:17:19 UTC |
+| [#160](https://github.com/Pulse4all-com/cma/pull/160) UX | `c98028c` | prod `cma-web-00076-g6b`; dev not deployed with it |
+| [#156](https://github.com/Pulse4all-com/cma/pull/156) README cockpit | `c3e7603` | no build |
+
+The `cma-ingest` service got one new image in dev and prod on 18 October 2026 whose source commit is not in Martin's report, so whether the service (not only the jobs) carries #150 and #157 is his to confirm.
+
+**Beyond the audit**, merged the same day:
+
+- [#165](https://github.com/Pulse4all-com/cma/pull/165) `1ead2c3` (prod `cma-web-00074-6lc`): a request line for every request (the line of #159 followed the front end's trace sampling and missed most requests), the Alert rules page reading its connections' pipelines in one statement instead of one per connection, no prefetch on the frame's links, so a Live poll is 2 requests instead of 7.
+- [#166](https://github.com/Pulse4all-com/cma/pull/166) `a6db116` (prod `cma-web-00075-2hj`): addition 0008s, the follow-up snapshot, computed every minute per tenant by the job `cma-refresh-follow-up`, with one data call for Reports → Follow-up; `80` in dev and prod, `81` in dev.
+
+**Measured in prod** (`records/0008s-prod-2026-10-18`, `records/speed-dev-2026-10-18`):
+
+- `/live/board` on `a6db116`: 46 polls, total p50 157.7 ms and p95 328.3 ms (before 0008s 1.5 to 2.1 s per poll, Martin's report); each poll is still 8 transactions and 37 statements.
+- `/reports/follow-up`: 5.7 s before (median 5708.4 ms total, 8180 ms of database time), 0.2 s after; the refresh takes 1.6 to 2.2 s for 3,463 rows.
+- In dev: `verify:api` ALL 271 PASS and, provoked, all 271 FAIL (`records/audit-2026-10-18`); `verify:round-trips` failed once before #165 on the admin's Alert rules page (21 statements against a budget of 20), the page #165 changed; no run on `1ead2c3` or later is recorded.
+
+**Findings whose state changed beyond the merges**:
+
+- AUD-024 (the Live board's composite read): **open**. #165 took a poll from 7 requests to 2, but the board's own request is still 8 transactions per poll.
+- AUD-025 (`follow_up_summary` re-derived on every call): **overtaken** by #166. The snapshot takes the cost out of the page; the lookback bound is an Open decision for Kira (README, Open decisions).
+- AUD-059 (reads that grow with history): **partly overtaken**. `open_tickets_of` and `open_tasks_of` are read once a minute by the refresh, no longer per page; the `ingest_event` retention and `data_quality_of` stay open.
+- AUD-109 (no request timing): merged in #159; #165 extended the line to every request.
+- AUD-043 (dependencies): Dependabot is in (#158). On 18 October 2026 `npm audit` in `web/` reports 5 high, the same dev-only chain (`eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`), and 0 with `--omit=dev`; Dependabot's first pull request, [#164](https://github.com/Pulse4all-com/cma/pull/164) (the web minor and patch group), is open, not merged.
+
+**Counts in `FINDINGS.csv` now**: 40 merged, 8 merged (partly), 17 fixed in this report PR, 29 proposed, 1 proposed and partly overtaken, 1 overtaken, 6 already open, 22 info (124).
+
+**The soft-launch verdict (section 7) on 18 October 2026: go, conditional, unchanged.** Condition 1 is met (every fix PR merged). Condition 2 is not yet confirmed: the jobs run `ingest:9acbacc`, and Martin confirms the reconcile's 03:30 schedule in prod before the night of 24 to 25 October 2026. Conditions 3 (the Console steps) and 4 (the per-person figures) are open. Condition 5 (gate B3) was measured on day one; the week of request lines is still open. `READINESS.md` has the gate-by-gate status.
+
 ## 1. Verdict in one paragraph
 
 The CMA is in better shape than a system this young usually is: tenant isolation is enforced in the database on every table, every write is gated by a permission the database checks again, the copy, palette and components follow the style guide with unusual discipline, and the verifier suites are large and honest. The audit found **no Critical finding** and **two High findings**, both closed in pull requests before this report: a Shopify access token cached once for every connection (a cross-tenant path inside the ingest process) and a mis-configured `cma-web` revision that would pass the deploy and lock everyone out. The four items of backlog row CMA-037 are confirmed and fixed, among them the Medium that a direct update of a line's `is_counted` by the ingest login removed its calls with no acting user and no permission check. The soft launch is **go, conditional on five things** (section 7): the fix PRs merged in the order of section 3, the four Console-only steps done, the DST change of the reconcile schedule live before the night of 25 October, Yordi's clearance of the per-person figures on the pages that show them, and the first week of the request log line read against the speed targets. Daylight-saving time is handled correctly everywhere the clock and pay depend on it; the one scheduling defect (the 02:30 reconcile) is fixed in [#158](https://github.com/Pulse4all-com/cma/pull/158).

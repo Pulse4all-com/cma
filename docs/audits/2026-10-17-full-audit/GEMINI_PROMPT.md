@@ -127,7 +127,8 @@ audit-log retention and partitioning (CMA-003 and CMA-026, AUD-010).
 ## What you are asked to do
 
 (a) After the PRs above are merged, re-verify every finding whose status in `FINDINGS.csv` starts with
-`fixed` against `main`: read the code at the file and line the evidence column names and confirm the
+`fixed` or `merged` (the latter since 18 October 2026, when every fix PR was on `main`; `REPORT.md`, Status on
+18 October 2026) against `main`: read the code at the file and line the evidence column names and confirm the
 recommendation is in place; where a status says `(partly)` or `(pending PR)`, say what is in and what is not.
 Report a finding as fixed only when you have seen the change on `main`.
 

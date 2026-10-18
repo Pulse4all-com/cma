@@ -9,6 +9,30 @@ Console or the Admin console; Console-only gates carry Martin's steps and their 
 
 Verdict: **Go, conditional** (REPORT.md, section 7): the soft launch can start once the fix PRs are merged in the report's order, the jobs are redeployed with the 03:30 reconcile before the night of 24 to 25 October 2026, the four Console-only steps below are done, Yordi has cleared the per-person pages named in gate B4, and the first production week of the request log line has been read against the speed targets. No Critical finding; the two High findings are closed in #150, #154 and #155, and the four CMA-037 items in #150 and #151.
 
+## Status on 18 October 2026
+
+Added when the report was brought up to `main` at `c3e7603`; the gate tables below keep their "Status today" of 17 October 2026. Every fix PR named in section 2 is merged (commits and where each runs: `REPORT.md`, Status on 18 October 2026). Sources: Martin's records of 17 and 18 October 2026 (`records/deploys-2026-10-18`, `records/0008q-*`, `records/0008r-*`, `records/0008s-*`, `records/speed-dev-2026-10-18`, `records/audit-2026-10-18`).
+
+| Gate | Status on 18 October 2026 |
+|---|---|
+| B1 time and the clock change | **open.** #158 (`9acbacc`) is merged and the ingest jobs run `ingest:9acbacc` in dev and prod; the reconcile's 03:30 schedule in prod is to be confirmed by Martin before Saturday 24 October (`gcloud scheduler jobs describe ingest-reconcile --project=p4a-cma-prod --location=europe-west4 --format='value(schedule,timeZone)'`, expected `30 3 * * *` and `Europe/Amsterdam`) |
+| B2 the manager's screens are right | #160 (`c98028c`) in prod since 13:33:27 UTC (`cma-web-00076-g6b`); the manager's walk-through is open |
+| B3 the manager's screens are fast | measured on day one, the week of log lines still open: `/live/board` p50 157.7 ms, p95 328.3 ms over 46 polls (`records/0008s-prod-2026-10-18`); `/reports/follow-up` 5.7 s before 0008s, 0.2 s after. Since #165 (`1ead2c3`) every request writes its line, so the week counts from that deploy (07:54:14 UTC) |
+| B4 per-person figures cleared | open, unchanged |
+| B5 a bad deploy is noticed | #154, #155, #152 and #153 merged and in prod (`cma-web-00070-5rn` to `00072-42g`; 0008r's `78` in dev and prod); the alert set (S3) is open |
+| B6 no Critical or High open | both fixes merged: #155 in prod; #150's token cache in the ingest jobs (`ingest:9acbacc`); the `cma-ingest` service runs a new image of 18 October whose source commit is not in the report, so Martin confirms it carries #150 |
+| S1 Plan B, S2 rollback runbook | met for the documents once this report PR is merged; the agents' copy, the dry runs open |
+| S3 alert set, S4 2-Step Verification | open (Console only) |
+| S5 System health page | #152 and #153 merged, 0008r in dev and prod, `79` PASS in dev; the page in prod and the two `health.link_*` settings are not in the records |
+| S6 database hardening 0008q | met: #151 (with #162) merged; `76` in dev and prod, `77` PASS and failing under provoke in dev (it runs in dev only) |
+| S7 web security hardening | #154 in prod; "no console violation on the daily pages" is not in the records |
+| S8 ingest reliability | #157 merged, in the jobs on `ingest:9acbacc` in dev and prod; no overlap observed or recorded yet |
+| S9 operations hygiene | #158 merged; Dependabot's first pull request seen ([#164](https://github.com/Pulse4all-com/cma/pull/164), open); the reconcile schedule as B1 |
+| S10 restore drill | open |
+| S11 README current | #156 merged; this report PR's drift fixes and Decision log rows pending its merge |
+
+Dependencies (3.4): `npm audit` in `web/` reports 5 high on 18 October 2026, the same dev-only chain as on 17 October, 0 with `--omit=dev`; Dependabot's #164 is open. Beyond the audit, addition 0008s (#166) added the job `cma-refresh-follow-up` (every minute, pool 2): `docs/OPERATIONS.md` covers it beside the scheduler's close.
+
 ## 1. The soft launch, defined
 
 > Arno, the call center manager, works in the Workspace every day (Team hours and corrections, People and

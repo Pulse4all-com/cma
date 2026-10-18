@@ -33,7 +33,8 @@ record or a runbook. Where a pull request of the audit changes a step, the step 
 | `cma-ingest` (`ingest.pulse4all.app`, no IAP, Cloud Armor) | Cloud Run service | `bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app …` by hand, dev first from the same commit (`docs/ingest/README.md`, Deploy) | `…/cma/ingest:<short sha>` of the last commit under `ingest/` |
 | `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-reconcile`, `ingest-outbox`, `ingest-backfill` | Cloud Run jobs | `bash docs/ingest/deploy.sh prod --jobs` | the ingest image |
 | `cma-close-forgotten-workdays` | Cloud Run job | `bash docs/scheduler/deploy.sh prod <short sha>` after a web deploy that changes the job | the web image |
-| Cloud Scheduler: the three per-minute ingest jobs, `ingest-reconcile` (02:30 Europe/Amsterdam today; 03:30 once the pull request fix-ops is merged and `deploy.sh prod --jobs` has run), `cma-close-forgotten-workdays-hourly` (`0 * * * *`, UTC); `ingest-outbox` has no schedule or a paused one | `europe-west4` | the two deploy scripts | |
+| `cma-refresh-follow-up` (since addition 0008s, Pulse4all-com/cma#166, 18 October 2026) | Cloud Run job | `bash docs/scheduler/deploy-follow-up.sh prod <short sha>` right after the web deploy of a merge that changes the job (RUNBOOK 7a) | the web image |
+| Cloud Scheduler: the three per-minute ingest jobs, `ingest-reconcile` (03:30 Europe/Amsterdam, `deploy.sh`'s default since #158; that prod's schedule says so is Martin's to confirm, section 5), `cma-close-forgotten-workdays-hourly` (`0 * * * *`, UTC), `cma-refresh-follow-up-minutely` (`* * * * *`, UTC, since 0008s); `ingest-outbox` has no schedule or a paused one | `europe-west4` | the three deploy scripts | |
 | `cma-nocodb` (read-only table browser, behind IAP) | Cloud Run service | `docs/nocodb/deploy.sh prod` (`--dry-run` first) | the pinned image of `docs/nocodb/service.template.yaml` |
 | Load balancer `cma-web-urlmap`; backends `cma-web-backend` (IAP), `cma-ingest-backend` (Cloud Armor `cma-ingest-armor`), `cma-signed-out-backend` (a bucket) | global | `docs/ingest/front.sh` (`--dry-run`), `docs/signed-out/deploy.sh` (a dry run without `--apply`) | |
 | `cma-prod-pg` (PostgreSQL 18, regional high availability, daily backups with point-in-time recovery) | Cloud SQL, `europe-west4` | migrations by hand in Studio, dev first (README, Release flow; RUNBOOK 7) | |
@@ -50,7 +51,7 @@ change; it is also step 1 of the daily check (section 10). Stop at the first ste
 go to section 3.
 
 1. **Browser:** Configuration → System health (`/configuration/health`; the page of pull requests #152 and
-   #153, for `tenant.configure` holders). Until it is live, start at step 2.
+   #153, in prod since 18 October 2026, for `tenant.configure` holders).
    Expected: the version card shows the short sha you just merged, auth `IAP` and data `API`; the database
    probe `Fast`; the heartbeat `Fresh`; every source `Working`; every job row without `Failed`, `Stuck` or
    `Never ran`; the outbox without `needs_review` or `failed` rows. What each other state means: section 4.
@@ -69,9 +70,9 @@ go to section 3.
 4. **Browser:** `https://workspace.pulse4all.app/api/health` in the same signed-in browser (the route sits
    behind IAP like every page; without an IAP session it answers a redirect to Google, which is right).
    Expected: `{"status":"ok","version":"<short sha>","auth":"iap","data":"api"}`. `"auth"` must be `iap` and
-   `"data"` must be `api`; anything else is a wrong trigger substitution (RUNBOOK 9): roll back. Once pull
-   request #154 is live the route answers `503` with `"status":"misconfigured"` and a `problems` list for a
-   revision that cannot serve anyone, and once #155 is live such a revision never takes traffic (the startup
+   `"data"` must be `api`; anything else is a wrong trigger substitution (RUNBOOK 9): roll back. Since pull
+   request #154 the route answers `503` with `"status":"misconfigured"` and a `problems` list for a
+   revision that cannot serve anyone, and since #155 such a revision never takes traffic (the startup
    probe on this route).
 
 5. **Browser:** `https://ingest.pulse4all.app/health` (no IAP in front of the ingest).
@@ -139,8 +140,8 @@ the `run.app` check of section 2 step 6 still answers `404`.
 Cleaner, when the previous good commit is known: deploy that commit again with the script, so every flag the
 script sets (ingress, public URLs, budgets, boost) is set as the script sets it, and the image is pulled by tag
 without a build. The script requires a clean `ingest/` tree and refuses a prod service deploy without
-`--front`; once fix-ops is merged it also refuses a checkout that is not `main`, so a rollback by commit then
-means a revert commit on `main` first.
+`--front`; since #158 it also refuses a checkout that is not `main`, so a rollback by commit means a revert
+commit on `main` first.
 
 **Terminal** (untested here; dry-run first)
 ```bash
@@ -185,6 +186,15 @@ cd ~/cma && bash docs/scheduler/deploy.sh prod <previous web short sha>
 ```
 Expected: `job cma-close-forgotten-workdays on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<sha>, schedule cma-close-forgotten-workdays-hourly hourly (UTC) in p4a-cma-prod`.
 
+The follow-up refresh (since 0008s) runs the web image the same way; its deploy is its rollback, to an image no older
+than `a6db116`, the first that carries its script:
+
+**Terminal**
+```bash
+cd ~/cma && bash docs/scheduler/deploy-follow-up.sh prod <previous web short sha>
+```
+Expected: `job cma-refresh-follow-up on europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<sha>, schedule cma-refresh-follow-up-minutely every minute (UTC) in p4a-cma-prod`.
+
 ### 3.5 A database migration
 
 There is no rollback of a migration: migrations are forward-only (README, Release flow). A mistake is a new
@@ -203,15 +213,15 @@ with the page's button, not by reloading in a loop.
 
 | Card and state | What it means | First check | What to do |
 |---|---|---|---|
-| Application: probe `Slow` (over 200 ms) | one trivial read took long: the database is busy or far | section 10, weekly step 2 (connections); Console → Cloud SQL → `cma-prod-pg` → CPU and connections | a leak or a slow statement: find the login far above its ceiling; a pull request fix-speed and 0008q (#151) reduce the heaviest reads |
+| Application: probe `Slow` (over 200 ms) | one trivial read took long: the database is busy or far | section 10, weekly step 2 (connections); Console → Cloud SQL → `cma-prod-pg` → CPU and connections | a leak or a slow statement: find the login far above its ceiling; the speed work (#159) and 0008q (#151) reduced the heaviest reads, and since 0008s (#166) Follow-up reads a snapshot |
 | Application: probe `No answer` | the service cannot reach Cloud SQL | `cma-web` app lines (section 8): a 503 `database_unavailable` | RUNBOOK 6: the instance running, the service account still Cloud SQL Client and Instance User; a Cloud SQL maintenance restart passes within minutes |
 | Heartbeat `Late` (older than the fresh threshold) | the sweep's last `link_calls` run is 2 to 15 minutes old: an execution is slow or a minute was skipped | section 2 step 10 (sweep lines); the jobs card | one late beat after a vendor blip is normal; late for three refreshes in a row: treat as `Silent` |
 | Heartbeat `Silent` (older than the late threshold) or `No run yet` | the sweep is not running: the schedule paused, the job failing at start, the image broken, or Cloud Scheduler not invoking | section 5 (`scheduler jobs list`: `ENABLED`, a recent `lastAttemptTime`); then the sweep's log with `severity>=WARNING` | resume a paused schedule; a failing start after a deploy: roll the jobs back (3.3); `token_unavailable` or `pepper_unavailable` in the log: a secret or its accessor (section 7) |
-| Source `Needs attention` | events parked for review, a job of this connection failed in the last day and recovered, or an active connection heard nothing for a day | Configuration → Sources → the connection: parked count, last event; the reconcile's codes (section 8) | parked events need a person (the sweep gives up after `ingest.max_attempts`); a day without events on a weekday is a vendor subscription question: wait for the next 02:30 reconcile, which recreates Shopify subscriptions and re-activates the Aircall webhook, or run it by hand (section 5) |
+| Source `Needs attention` | events parked for review, a job of this connection failed in the last day and recovered, or an active connection heard nothing for a day | Configuration → Sources → the connection: parked count, last event; the reconcile's codes (section 8) | parked events need a person (the sweep gives up after `ingest.max_attempts`); a day without events on a weekday is a vendor subscription question: wait for the next 03:30 reconcile, which recreates Shopify subscriptions and re-activates the Aircall webhook, or run it by hand (section 5) |
 | Source `Failing` | a job's last run for this connection failed, or never succeeded | the jobs card: the row's error code | `http_401`/`http_403`: a token, scope or secret (section 7); `rate_limited`: resolves itself; `account_mismatch` or `webhook_token_mismatch`: the connection's settings against the vendor's account (`docs/ingest/README.md`, Aircall, Shopify) |
 | Source `Off` | the connection is inactive | Configuration → Sources | section 6 says what stopped and how it catches up |
 | Job `Failed` | the last execution exited 1: at least one connection failed | the error code on the row; the job's log (section 8) | the next schedule is the retry; a daily or hourly job: run it by hand once (section 5) after the cause is gone |
-| Job `Stuck` (running over 15 minutes) | an execution did not finish its run row (the task timeout is 10 minutes for the per-minute jobs, 60 for the reconcile) | Console → Cloud Run → Jobs → the job → executions | a killed execution leaves the row `running`; once fix-ingest-reliability is merged a second execution of the same job exits at once instead of piling up; the row ages out of the page's 30-day window |
+| Job `Stuck` (running over 15 minutes) | an execution did not finish its run row (the task timeout is 10 minutes for the per-minute jobs, 60 for the reconcile) | Console → Cloud Run → Jobs → the job → executions | a killed execution leaves the row `running`; since #157 a second execution of the same ingest job exits at once instead of piling up; the row ages out of the page's 30-day window |
 | Job `Never ran` | no run row in 30 days | is the job expected? (`ingest-backfill` and `ingest-outbox` run by hand only) | for a scheduled job: section 5 |
 | Outbox `needs_review` or `failed` rows | contact write-backs the outbox gave up on, or failed and waiting | Reports → Data quality: "Updates still waiting" (`outbox_pending`) and `writeback_parked` | `ingest-outbox` has no schedule since 0008h: a pending row older than ten minutes is expected until a schedule or a manual run exists; parked rows need a person (`docs/ingest/README.md`, Outbox) |
 
@@ -224,20 +234,23 @@ select job, connection_id, status, error, started_at, finished_at from cma.sync_
 reset role;
 ```
 Expected: `link_calls`, `forms_poll` and `email_poll` rows every minute, `succeeded`; a `reconcile` row after
-02:30 (03:30 once fix-ops is live); `close_forgotten_workdays` rows hourly once 0008r has run.
+03:30; `close_forgotten_workdays` rows hourly (since 0008r) and `refresh_follow_up` rows every minute per tenant
+(since 0008s).
 
 ## 5. Pause and resume a Cloud Scheduler job
 
 Names: `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-reconcile`, `ingest-outbox` (paused
-where it exists), `cma-close-forgotten-workdays-hourly`. All in location `europe-west4`.
+where it exists), `cma-close-forgotten-workdays-hourly`, `cma-refresh-follow-up-minutely`. All in location
+`europe-west4`.
 
 **Terminal** (what runs today)
 ```bash
 gcloud scheduler jobs list --project=p4a-cma-prod --location=europe-west4 --format='table(name.basename(),schedule,timeZone,state,lastAttemptTime)'
 ```
-Expected: the three per-minute ingest schedules `* * * * *` and the reconcile `30 2 * * *` (`30 3 * * *` once
-fix-ops is live), Europe/Amsterdam, `ENABLED`; `ingest-outbox` `PAUSED` or absent;
-`cma-close-forgotten-workdays-hourly` `0 * * * *` `Etc/UTC` `ENABLED`; every `lastAttemptTime` recent.
+Expected: the three per-minute ingest schedules `* * * * *` and the reconcile `30 3 * * *` (since #158;
+`30 2 * * *` means the schedules predate it: rerun `deploy.sh prod --jobs` as in 3.3), Europe/Amsterdam,
+`ENABLED`; `ingest-outbox` `PAUSED` or absent; `cma-close-forgotten-workdays-hourly` `0 * * * *` `Etc/UTC`
+`ENABLED`; `cma-refresh-follow-up-minutely` `* * * * *` `Etc/UTC` `ENABLED`; every `lastAttemptTime` recent.
 
 **Terminal** (pause one; untested here; dry-run first, that is: the `list` above first)
 ```bash
@@ -269,6 +282,7 @@ What stops while each is paused, and how it catches up (`docs/ingest/README.md`,
 | `ingest-poll-email` | email engagements and inbox threads | the cursors continue |
 | `ingest-reconcile` | the nightly 26-hour catch-up, the Aircall webhook check, the Shopify subscription check | run it by hand once; a gap longer than 26 hours needs a backfill (`ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>`; PROD_RUNBOOK 7.8, 8.8, 9.8) |
 | `cma-close-forgotten-workdays-hourly` | the hourly close of days left open | idempotent: the next run or a manual execution closes everything overdue |
+| `cma-refresh-follow-up-minutely` | the follow-up snapshot: Reports → Follow-up, the Live board's Follow-up now and Welcome's Waiting for you keep the last one, and "Updated …" turns muted after three minutes | the next run, or `gcloud run jobs execute cma-refresh-follow-up`, refreshes every tenant |
 
 When to pause:
 
@@ -280,9 +294,9 @@ When to pause:
 - The clock change of 24 to 25 October 2026 (03:00 CEST becomes 02:00 CET): the forgotten-day job runs hourly
   in UTC and closes a day only once the tenant's window end plus the grace has passed (Pulse4all 22:00 plus
   60 minutes), so the night's repeated hour changes nothing in it (the audit's DST review, 5.12: no finding
-  above Low). The reconcile's 02:30 falls in the repeated hour; fix-ops moves it to 03:30. If fix-ops is not
-  live by Saturday 24 October, run the reconcile by hand on Sunday morning with the command above and check
-  one `reconcile` row per connection in Studio.
+  above Low). The reconcile's old 02:30 fell in the repeated hour; #158 moved it to 03:30. If prod's schedule
+  (the `list` above) still says `30 2 * * *` on Saturday 24 October, run the reconcile by hand on Sunday
+  morning with the command above and check one `reconcile` row per connection in Studio.
 
 ## 6. Switch a connection off and on
 
@@ -402,6 +416,13 @@ Expected: the nightly run's lines. `subscriptions_recreated` and `webhook_reacti
 ```bash
 gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-close-forgotten-workdays' --project=p4a-cma-prod --freshness=1d --limit=20 --format='value(timestamp,textPayload)'
 ```
+
+**Terminal** (the follow-up refresh, since 0008s; RUNBOOK 7a)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-refresh-follow-up AND jsonPayload.message="refresh-follow-up"' --project=p4a-cma-prod --freshness=10m --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.refreshed)'
+```
+Expected: INFO rows, `refreshed` True, one per tenant per minute; a WARNING with `refreshed` False now and then
+is a skipped overlap, every minute means a refresh longer than a minute.
 Expected: one short line per hourly run, most of them closing nothing.
 
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
@@ -446,19 +467,19 @@ stays quiet).
 |---|---|---|---|
 | `cma-web-backend 5xx ratio` and `cma-ingest-backend 5xx ratio` | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name` = the backend, numerator `response_code_class = 500`, denominator all codes | ratio above 2 % over a 5-minute window, for 5 minutes; auto-close 30 minutes | revisions list, the app lines (section 8), Cloud SQL connections; RUNBOOK 10 when a deploy caused it |
 | `cma-web-backend p95 latency` and `cma-ingest-backend p95 latency` | `loadbalancing.googleapis.com/https/backend_latencies` for the backend, aligner delta, reducer 95th percentile | web above 2000 ms, ingest above 5000 ms, for 10 minutes | Cloud SQL CPU and connections first, then the slow routes |
-| `cma jobs failing` | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = failed`, grouped by `job_name` | the per-minute jobs (`ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`): 3 or more failed executions in 15 minutes; `ingest-reconcile` and `cma-close-forgotten-workdays`: one failed execution in an hour | the job's log with `severity>=WARNING` (section 8); the codes in `docs/ingest/README.md`, Jobs |
-| `cma-prod-pg capacity` | `cloudsql.googleapis.com/database/cpu/utilization`, `memory/utilization`, `disk/utilization`, `network/connections` for `p4a-cma-prod:cma-prod-pg` | CPU above 80 % for 10 minutes; memory above 90 % for 10 minutes; disk above 80 % for an hour; connections above 80 for 5 minutes (the budget's ceiling is 86 of 93 usable; README, Database connection budget) | the `pg_stat_activity` count per login (section 10, weekly step 2); raising `max_connections` is rejected (Decision log, 15 October 2026) |
+| `cma jobs failing` | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = failed`, grouped by `job_name` | the per-minute jobs (`ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `cma-refresh-follow-up`): 3 or more failed executions in 15 minutes; `ingest-reconcile` and `cma-close-forgotten-workdays`: one failed execution in an hour | the job's log with `severity>=WARNING` (section 8); the codes in `docs/ingest/README.md`, Jobs |
+| `cma-prod-pg capacity` | `cloudsql.googleapis.com/database/cpu/utilization`, `memory/utilization`, `disk/utilization`, `network/connections` for `p4a-cma-prod:cma-prod-pg` | CPU above 80 % for 10 minutes; memory above 90 % for 10 minutes; disk above 80 % for an hour; connections above 80 for 5 minutes (the budget's ceiling is 88 of 93 usable; README, Database connection budget) | the `pg_stat_activity` count per login (section 10, weekly step 2); raising `max_connections` is rejected (Decision log, 15 October 2026) |
 | `cma front reachability and certificates` | two uptime checks first (Monitoring → Uptime checks): `ingest.pulse4all.app/health`, HTTPS, every 5 minutes, status 2xx, SSL validation on; `workspace.pulse4all.app/`, status 2xx or 3xx (IAP's redirect is the right "alive" answer there). Then `monitoring.googleapis.com/uptime_check/check_passed` and `time_until_ssl_cert_expires` | the check failing from two or more regions for 10 minutes; a certificate under 15 days from expiry | `gcloud compute ssl-certificates describe cma-web-cert` or `cma-ingest-cert` `--global` (`managed.status`, `managed.domainStatus`); the DNS A record |
 
 Six checker regions once every 5 minutes stay far under Cloud Armor's 600 requests per minute per IP. The
-p95 per route (the SLOs S2 and S3 of READINESS) needs the request timing log line and a log-based distribution
-metric the pull request fix-speed adds; until then the backend latency above is the one latency signal.
+p95 per route (the SLOs S2 and S3 of READINESS) needs the request timing log line (since #159, on every request since #165) and a
+log-based distribution metric on it; until that metric exists the backend latency above is the one latency signal.
 
 ## 10. Daily and weekly checks
 
 ### Daily (five minutes, in the morning)
 
-1. **Browser:** section 2 step 1 (System health), or steps 2 to 5 of section 2 until the page is live.
+1. **Browser:** section 2 step 1 (System health).
 2. **Browser:** Reports → Data quality (`/reports/data-quality`).
    Expected: the rows as yesterday; no "Updates still waiting" count and no parked write-backs; tickets without
    owner or market, unlinked task owners and shop customers without a contact not jumping. Then Configuration →
@@ -468,7 +489,7 @@ metric the pull request fix-speed adds; until then the backend latency above is 
    Expected: nothing, and a nightly run without `webhook_*`, `account_mismatch` or `*_unavailable` codes.
 4. **Terminal:** the scheduler's last attempts (section 5, the `list` command).
    Expected: every schedule `ENABLED`, `lastAttemptTime` within the last hour (the forgotten-day job) or
-   minute (the ingest jobs).
+   minute (the ingest jobs and the follow-up refresh).
 5. **Browser:** Time → Team hours, yesterday: days marked as needing correction (the forgotten-day close) are
    the manager's to review today.
 
@@ -509,8 +530,8 @@ metric the pull request fix-speed adds; until then the backend latency above is 
    ```
    Expected: `found 0 vulnerabilities` for what ships; the known high advisories live under
    `eslint-config-next` (a devDependency; README Open decisions) and show only without `--omit=dev`. Never
-   `npm audit fix --force`. Once fix-ops is merged, Dependabot opens one grouped minor-and-patch pull request
-   per project per month; a major stays by hand.
+   `npm audit fix --force`. Since #158 Dependabot opens one grouped minor-and-patch pull request
+   per project per month (the first, #164 for `web/`, on 18 October 2026); a major stays by hand.
 6. **Browser:** until each is settled: Admin console → Security → 2-Step Verification, the agents' unit
    (README Open decisions; READINESS, gates); GitHub → the repository's ruleset on `main` still requires a
    pull request.
@@ -582,10 +603,10 @@ No phone numbers or addresses here: the team's directory holds them.
   first): the next `deploy.sh prod --front …` replaces every environment variable anyway (README Decision log,
   16 October 2026).
 - Never edit `cma-web`'s environment in the Console: it comes from `cloudbuild.yaml` plus the trigger's
-  substitutions, and the next build undoes a Console edit (RUNBOOK 9). Once #155 is live, `min-instances=1`,
+  substitutions, and the next build undoes a Console edit (RUNBOOK 9). Since #155 `min-instances=1`,
   the startup probe and the CPU boost are in the file as well.
 - Never a prod service deploy of the ingest without `--front ingest.pulse4all.app`; the script refuses it since
-  16 October 2026 (and a non-`main` checkout once fix-ops is live), so a refusal is the guard working.
+  16 October 2026 (and a non-`main` checkout since #158), so a refusal is the guard working.
 - Dev first, prod from the same commit: a prod deploy that builds is a sign dev was skipped.
 - Never push to `main`; it accepts pull requests only, Martin squash-merges, and a merge touching `web/**` or
   `cloudbuild.yaml` deploys prod at once (the repository's working rules).
