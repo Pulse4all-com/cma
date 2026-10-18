@@ -16,9 +16,9 @@
 --      minutes) holds a CRM connection with a counted callback type, an uncounted one and a plain call type,
 --      owners 101 Anna and 103 Bram linked, 102 not, and the callbacks of the week of 5 to 11 October 2026
 --      and the week before: kept by a call 30 minutes after, exactly 60 after (a logged call without a
---      direction) and exactly 60 before (the earliest of two); not kept by a call 61 minutes after and an
---      inbound one; without a contact; without a due time; a deleted one; one whose call's association was
---      removed; one still within its window. Tenant two has no callback type. Checked: the states with the
+--      direction), exactly 60 before (the earliest of two) and an inbound call 20 minutes after; not kept by
+--      a call 61 minutes after; without a contact; without a due time; a deleted one; one whose call's
+--      association was removed; one still within its window. Tenant two has no callback type. Checked: the states with the
 --      call's minutes from the due time; the window's edges and the earliest call; the setting moving the
 --      window; pending while the window is open; the tasks apart and absent; the figures per ISO week and
 --      in total; the previous period like for like and while the period runs; per person by name with the
@@ -223,17 +223,19 @@ begin
       pg_temp.v0008w_task('k11', 'CB', '2026-09-30 10:00:00+00', 'c11', '101'),
       pg_temp.v0008w_task('k12', 'CB', '2026-10-01 10:00:00+00', 'c12', '101'),
       pg_temp.v0008w_task('k13', 'CB', '2026-10-02 08:00:00+00', 'c13', '101'),
-      pg_temp.v0008w_task('k14', 'CB', '2026-10-09 07:00:00+00', 'c14', '103')));
+      pg_temp.v0008w_task('k14', 'CB', '2026-10-09 07:00:00+00', 'c14', '103'),
+      pg_temp.v0008w_task('k15', 'CB', '2026-10-08 13:00:00+00', 'c15', '101')));
     perform cma.ingest_upsert_tasks(v_crm, '[{"sourceId": "k9", "statusRef": "OPEN", "typeRef": "CB", "deletedAt": "2026-10-05T00:00:00Z",
                                              "createdAt": "2026-09-20T09:00:00Z", "updatedAt": "2026-10-05T00:00:00Z"}]');
-    -- the calls: k1 30 minutes after; k2 exactly 60 after, without a direction; k3 61 after and an inbound one
-    -- within; k4 exactly 60 before and 30 before; k9's within (a deleted task); k10's within, its association
-    -- removed; k11 at the due time; k12 two hours after; k13 ten minutes after (10:10 in Amsterdam on Friday 2 October)
+    -- the calls: k1 30 minutes after; k2 exactly 60 after, without a direction; k3 61 after; k4 exactly 60
+    -- before and 30 before; k15 an inbound call 20 minutes after (either direction keeps); k9's within (a
+    -- deleted task); k10's within, its association removed; k11 at the due time; k12 two hours after; k13 ten
+    -- minutes after (10:10 in Amsterdam on Friday 2 October)
     perform cma.ingest_upsert_calls(v_crm, jsonb_build_array(
       pg_temp.v0008w_call('l1', '2026-10-06 10:30:00+00', 'outbound'),
       pg_temp.v0008w_call('l2', '2026-10-06 13:00:00+00', null),
       pg_temp.v0008w_call('l3', '2026-10-07 10:01:00+00', 'outbound'),
-      pg_temp.v0008w_call('l3b', '2026-10-07 09:10:00+00', 'inbound'),
+      pg_temp.v0008w_call('l15', '2026-10-08 13:20:00+00', 'inbound'),
       pg_temp.v0008w_call('l4', '2026-10-07 11:00:00+00', 'outbound'),
       pg_temp.v0008w_call('l4b', '2026-10-07 11:30:00+00', 'outbound'),
       pg_temp.v0008w_call('l9', '2026-10-08 11:00:00+00', 'outbound'),
@@ -244,7 +246,7 @@ begin
     perform cma.ingest_upsert_associations(v_crm, (
       select jsonb_agg(jsonb_build_object('fromType', 'crm_call', 'fromId', x.call, 'toType', 'contact', 'toId', x.contact, 'removed', x.removed,
                                           'changedAt', '2026-10-01T00:00:00Z'))
-      from (values ('l1', 'c1', false), ('l2', 'c2', false), ('l3', 'c3', false), ('l3b', 'c3', false), ('l4', 'c4', false), ('l4b', 'c4', false),
+      from (values ('l1', 'c1', false), ('l2', 'c2', false), ('l3', 'c3', false), ('l15', 'c15', false), ('l4', 'c4', false), ('l4b', 'c4', false),
                    ('l9', 'c1', false), ('l10', 'c10', false), ('l11', 'c11', false), ('l12', 'c12', false), ('l13', 'c13', false)) as x(call, contact, removed)));
     perform cma.ingest_upsert_associations(v_crm, '[{"fromType": "crm_call", "fromId": "l10", "toType": "contact", "toId": "c10", "removed": true,
                                                     "changedAt": "2026-10-12T00:00:00Z"}]');
@@ -255,15 +257,15 @@ begin
     select string_agg(format('%s:%s:%s', x.task_source_id, x.state, coalesce(x.minutes_from_due::text, '-')), ' ' order by x.placed_at, x.task_source_id) into v_txt
     from cma.callbacks_kept_of(v_t1, v_from, v_to, v_after) x;
     v_rows := v_rows || array['11', 'B1 the week''s callbacks with their states and the call''s minutes from the due time',
-      case when v_txt = 'k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k14:not_kept:- k10:not_kept:-'
+      case when v_txt = 'k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B2. the window's edges: exactly 60 after (a call without a direction) and 60 before kept, the earliest of
-    --     two; 61 after not, nor an inbound call within; a removed association no call
+    --     two; 61 after not; an inbound call keeps; a removed association no call
     select string_agg(format('%s:%s', x.task_source_id, coalesce(to_char(x.call_at at time zone 'UTC', 'HH24:MI'), '-')), ' ' order by x.task_source_id) into v_txt
-    from cma.callbacks_kept_of(v_t1, v_from, v_to, v_after) x where x.task_source_id in ('k2', 'k3', 'k4', 'k10');
-    v_rows := v_rows || array['12', 'B2 the window''s edges, the earliest call, no inbound call, no removed association',
-      case when v_txt = 'k10:- k2:13:00 k3:- k4:11:00' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    from cma.callbacks_kept_of(v_t1, v_from, v_to, v_after) x where x.task_source_id in ('k2', 'k3', 'k4', 'k10', 'k15');
+    v_rows := v_rows || array['12', 'B2 the window''s edges, the earliest call, an inbound call, no removed association',
+      case when v_txt = 'k10:- k15:13:20 k2:13:00 k3:- k4:11:00' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B3. the setting moves the window: at 240 minutes k3's call 61 after keeps it; back to 60 it does not
     perform set_config('app.user_id', v_admin1::text, true);
@@ -291,13 +293,13 @@ begin
     v_rows := v_rows || array['15', 'B5 a type not counted, not a callback and a deleted task absent; no due time placed by its creation',
       case when v_txt = '0/2026-10-08' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B6. the figures per ISO week and in total (6 with a contact and a due time: 3 kept, 3 not; 1 without a
+    -- B6. the figures per ISO week and in total (7 with a contact and a due time: 4 kept, 3 not; 1 without a
     --     contact, 1 without a due time); the week of Sunday 11 October 23:30 in Amsterdam is still 5 October's
     select string_agg(format('%s:%s:%s/%s/%s/%s/%s/%s', f.dimension, coalesce(f.week_start::text, '-'), f.callbacks, f.kept, f.not_kept, f.pending,
                              f.no_contact, f.no_due), ' ') into v_txt
     from cma.callbacks_kept_figures_of(v_t1, date '2026-10-05', date '2026-10-11', v_after) f;
     v_rows := v_rows || array['16', 'B6 the figures per ISO week and in total',
-      case when v_txt = 'week:2026-10-05:6/3/3/0/1/1 total:-:6/3/3/0/1/1' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'week:2026-10-05:7/4/3/0/1/1 total:-:7/4/3/0/1/1' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B7. the report: the previous week in full after the period (k11 and k13 kept, k12 not); while the period
     --     runs (Friday 09:30) the callbacks due later in the week are pending (k14 and k10), and the week before
@@ -307,9 +309,9 @@ begin
     select v_txt || ' | ' || string_agg(format('%s:%s/%s/%s/%s', r.period, r.callbacks, r.kept, r.not_kept, r.pending), ' ') into v_txt
     from cma.callbacks_kept_report_of(v_t1, date '2026-10-05', date '2026-10-11', v_running) r where r.dimension = 'total';
     v_rows := v_rows || array['17', 'B7 the previous period like for like: in full after the period, up to the time of day while it runs',
-      case when v_txt = 'current:total:6/3/3 previous:total:3/2/1 | current:6/3/1/2 previous:2/1/1/0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'current:total:7/4/3 previous:total:3/2/1 | current:7/4/1/2 previous:2/1/1/0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B8. per person by name, never ranked: Anna (k1, k2 kept; k5 without a contact), Bram (k3, k14 and k10 not
+    -- B8. per person by name, never ranked: Anna (k1, k2, k15 kept; k5 without a contact), Bram (k3, k14 and k10 not
     --     kept), one owner id without a person (k4 kept), the total; refused for the reader (reports.view)
     perform set_config('app.user_id', v_super1::text, true);
     select string_agg(format('%s:%s/%s/%s/%s', coalesce(p.display_name, p.row_kind || coalesce('(' || p.unlinked_owners || ')', '')),
@@ -318,7 +320,7 @@ begin
     perform set_config('app.user_id', v_reader1::text, true);
     v_txt := v_txt || ' ' || pg_temp.v0008w_code('select * from cma.callbacks_kept_per_owner(date ''2026-10-05'', date ''2026-10-11'')');
     v_rows := v_rows || array['18', 'B8 per person by name with the not-linked row and the total; not for reports.view alone',
-      case when v_txt = 'Anna Verify:2/2/0/1 Bram Verify:3/0/3/0 not_linked(1):1/1/0/0 total:6/3/3/1 CMA06' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'Anna Verify:3/3/0/1 Bram Verify:3/0/3/0 not_linked(1):1/1/0/0 total:7/4/3/1 CMA06' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B9. the range and the permissions: more than 92 days refused; the report for reports.view (the reader) and
     --     performance.team (the supervisor), per person for the supervisor and the analyst; the agent and the
@@ -368,8 +370,8 @@ begin
     v_rows := v_rows || array['21', 'B11 tenant isolation for the reads and the configuration',
       case when v_txt = 'CMA02 total:0/0 true' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'null')];
 
-    -- B12. a reader scoped to tenant one sees its callbacks since the intake start (the week's eight and the
-    --      three of the week before; five kept) with their states; scoped to tenant two, none of tenant one's
+    -- B12. a reader scoped to tenant one sees its callbacks since the intake start (the week's nine and the
+    --      three of the week before; six kept) with their states; scoped to tenant two, none of tenant one's
     perform set_config('role', 'cma_readonly', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     select format('%s/%s', (select count(*) from cma_read.callbacks_kept where tenant_id = v_t1),
@@ -378,7 +380,7 @@ begin
     select v_txt || format(' %s', (select count(*) from cma_read.callbacks_kept where tenant_id = v_t1)) into v_txt;
     perform set_config('role', 'cma_app', true);
     v_rows := v_rows || array['22', 'B12 a reader scoped to one tenant sees its own callbacks only',
-      case when v_txt = '11/5 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = '12/6 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

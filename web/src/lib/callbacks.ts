@@ -1,9 +1,10 @@
 /**
  * Callbacks kept (addition 0008w, brief N19-A part 4; KPI 5): the definition of cma.callbacks_kept_of written once more
  * for the mock and its verifier, the figures per ISO week and per person, and the kept share for the screens. A
- * callback is a task of a type marked as a callback and counted; it is kept when a call to its contact (not inbound)
- * starts within tasks.callback_window_minutes before or after its due time, both edges included; not kept once that
- * window has closed without one; pending while it is open. Without a contact or a due time it is counted apart. Pure,
+ * callback is a task of a type marked as a callback and counted; it is kept when a call with its contact, in either
+ * direction, starts within tasks.callback_window_minutes before or after its due time, both edges included (README
+ * Open decisions, Callbacks kept); not kept once that window has closed without one; pending while it is open.
+ * Without a contact or a due time it is counted apart. Pure,
  * with no runtime imports beyond time.ts and reports.ts, so the verifier runs it under Node's type stripping.
  */
 import type { CallbackCounts, CallbackOwner, CallbackState, CallbackWeek, DateKey, Instant } from "./data/types.ts";
@@ -59,7 +60,7 @@ export interface CallbackRecord {
   minutesFromDue: number | null;
 }
 
-/** Every callback with its state at `now`: the earliest call not inbound within the window around the due time */
+/** Every callback with its state at `now`: the earliest call with the contact, either direction, within the window around the due time */
 export function callbackRecords(tasks: CallbackTaskFixture[], calls: CallbackCallFixture[], windowMinutes: number, now: Date,
                                 timeZone: string): CallbackRecord[] {
   const win = windowMinutes * 60_000;
@@ -70,7 +71,7 @@ export function callbackRecords(tasks: CallbackTaskFixture[], calls: CallbackCal
     if (k.dueAt !== null && k.contactId !== null) {
       const due = Date.parse(k.dueAt);
       const within = calls
-        .filter((c) => c.contactId === k.contactId && c.direction !== "inbound" && Math.abs(Date.parse(c.at) - due) <= win)
+        .filter((c) => c.contactId === k.contactId && Math.abs(Date.parse(c.at) - due) <= win)
         .map((c) => c.at)
         .sort((a, b) => Date.parse(a) - Date.parse(b));
       callAt = within[0] ?? null;

@@ -56,7 +56,7 @@
  * currency never summed across, the list, per person by name with the not-linked row, the filters and groups, and
  * no name, address or phone number in an answer.
  * Since addition 0008w (brief N19-A part 4) also Callbacks kept (src/lib/callbacks.ts), on 89's own scenario: the states
- * and the call's minutes from the due time, the window's edges and the setting moving it, pending while the window is
+ * and the call's minutes from the due time, the window's edges, an inbound call, the setting moving it, pending while the window is
  * open, the figures per ISO week and in total, the previous period like for like, per person with the not-linked row.
  */
 import {
@@ -912,17 +912,17 @@ expect("counts with the locale's grouping", [fmtCount(1234, "en"), fmtCount(1234
 
 // ---- Callbacks kept (addition 0008w, brief N19-A part 4) on 89's own scenario --------------------------
 // The callback tasks of a counted callback type that 89 keeps (k7 of an uncounted type, k8 not a callback and the deleted
-// k9 never reach the definition), the calls to their contacts (l10's association removed, so no call of c10), the window
-// set to 60 minutes, in Europe/Amsterdam
+// k9 never reach the definition), the calls with their contacts in either direction (l10's association removed, so no
+// call of c10), the window set to 60 minutes, in Europe/Amsterdam
 const cbTasks = [
   ["k1", "2026-10-06T10:00:00Z", "c1", "101"], ["k2", "2026-10-06T12:00:00Z", "c2", "101"], ["k3", "2026-10-07T09:00:00Z", "c3", "103"],
   ["k4", "2026-10-07T12:00:00Z", "c4", "102"], ["k5", "2026-10-08T09:00:00Z", null, "101"], ["k6", null, "c6", "101", "2026-10-08T10:00:00Z"],
   ["k10", "2026-10-11T21:30:00Z", "c10", "103"], ["k11", "2026-09-30T10:00:00Z", "c11", "101"], ["k12", "2026-10-01T10:00:00Z", "c12", "101"],
-  ["k13", "2026-10-02T08:00:00Z", "c13", "101"], ["k14", "2026-10-09T07:00:00Z", "c14", "103"],
+  ["k13", "2026-10-02T08:00:00Z", "c13", "101"], ["k14", "2026-10-09T07:00:00Z", "c14", "103"], ["k15", "2026-10-08T13:00:00Z", "c15", "101"],
 ].map(([id, dueAt, contactId, ownerRef, createdAt]) => ({ id, dueAt, contactId, ownerRef, createdAt: createdAt ?? "2026-09-20T09:00:00Z" }));
 const cbCalls = [
   ["c1", "2026-10-06T10:30:00Z", "outbound"], ["c2", "2026-10-06T13:00:00Z", "unknown"], ["c3", "2026-10-07T10:01:00Z", "outbound"],
-  ["c3", "2026-10-07T09:10:00Z", "inbound"], ["c4", "2026-10-07T11:00:00Z", "outbound"], ["c4", "2026-10-07T11:30:00Z", "outbound"],
+  ["c15", "2026-10-08T13:20:00Z", "inbound"], ["c4", "2026-10-07T11:00:00Z", "outbound"], ["c4", "2026-10-07T11:30:00Z", "outbound"],
   ["c11", "2026-09-30T10:00:00Z", "outbound"], ["c12", "2026-10-01T12:00:00Z", "outbound"], ["c13", "2026-10-02T08:10:00Z", "outbound"],
 ].map(([contactId, at, direction]) => ({ contactId, at, direction }));
 const cbAfter = new Date("2026-10-20T09:00:00Z");
@@ -932,8 +932,8 @@ const cbWeek = callbacksInPeriod(cbRecs, "2026-10-05", "2026-10-11");
 expect("callbacks: the week's states and minutes, as 89's B1",
   [...cbWeek].sort((a, b) => Date.parse(cbTasks.find((t) => t.id === a.id).dueAt ?? cbTasks.find((t) => t.id === a.id).createdAt)
     - Date.parse(cbTasks.find((t) => t.id === b.id).dueAt ?? cbTasks.find((t) => t.id === b.id).createdAt)).map((r) => `${r.id}:${r.state}:${r.minutesFromDue ?? "-"}`).join(" "),
-  "k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k14:not_kept:- k10:not_kept:-",
-  "k1:kept:30 k2:kept:60 k3:kept:61 k4:kept:-60 k5:no_contact:- k6:no_due:- k14:not_kept:- k10:not_kept:-");
+  "k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-",
+  "k1:kept:30 k2:kept:60 k3:kept:61 k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-");
 expect("callbacks: the window moves with the setting (240: k3 kept), as 89's B3",
   callbackRecords(cbTasks, cbCalls, 240, cbAfter, "Europe/Amsterdam").find((r) => r.id === "k3").state, "kept", "not_kept");
 expect("callbacks: pending while the window is open, not kept after, as 89's B4",
@@ -944,19 +944,19 @@ const cbFig = (c) => `${c.callbacks}/${c.kept}/${c.notKept}/${c.pending}/${c.noC
 const cbFigures = callbackFigures(cbWeek);
 expect("callbacks: per ISO week and in total, as 89's B6 (Sunday 23:30 in Amsterdam in its week)",
   [cbFigures.weeks.map((w) => `${w.weekStart}:${cbFig(w)}`).join(" "), cbFig(cbFigures.total)],
-  ["2026-10-05:6/3/3/0/1/1", "6/3/3/0/1/1"], ["2026-10-12:1/0/1/0/0/0 2026-10-05:5/3/2/0/1/1", "6/3/3/0/1/1"]);
+  ["2026-10-05:7/4/3/0/1/1", "7/4/3/0/1/1"], ["2026-10-12:1/0/1/0/0/0 2026-10-05:6/4/2/0/1/1", "7/4/3/0/1/1"]);
 const cbRunRecs = callbackRecords(cbTasks, cbCalls, 60, cbRunning, "Europe/Amsterdam");
 expect("callbacks: the previous week in full, and up to the time of day while the period runs, as 89's B7",
   [cbFig(callbackFigures(callbacksInPeriod(cbRecs, "2026-09-28", "2026-10-04")).total),
     cbFig(callbackFigures(callbacksInPeriod(cbRunRecs, "2026-10-05", "2026-10-11")).total),
     cbFig(callbackFigures(callbacksInPeriod(cbRunRecs, "2026-09-28", "2026-10-02", "09:30:00")).total)],
-  ["3/2/1/0/0/0", "6/3/1/2/1/1", "2/1/1/0/0/0"], ["3/2/1/0/0/0", "6/3/1/2/1/1", "3/2/1/0/0/0"]);
+  ["3/2/1/0/0/0", "7/4/1/2/1/1", "2/1/1/0/0/0"], ["3/2/1/0/0/0", "7/4/1/2/1/1", "3/2/1/0/0/0"]);
 const cbNames = { "101": { userId: "u-anna", name: "Anna Verify" }, "103": { userId: "u-bram", name: "Bram Verify" } };
 const cbOwners = callbacksPerOwner(cbWeek, (ref) => cbNames[ref] ?? null);
 expect("callbacks: per person by name with the not-linked row and the total, as 89's B8",
   [...cbOwners.rows, cbOwners.total].map((o) => `${o.name ?? o.kind}${o.unlinkedOwners ? `(${o.unlinkedOwners})` : ""}:${o.callbacks}/${o.kept}/${o.notKept}/${o.noContact}`).join(" "),
-  "Anna Verify:2/2/0/1 Bram Verify:3/0/3/0 notLinked(1):1/1/0/0 total:6/3/3/1",
-  "Bram Verify:3/0/3/0 Anna Verify:2/2/0/1 notLinked(1):1/1/0/0 total:6/3/3/1");
+  "Anna Verify:3/3/0/1 Bram Verify:3/0/3/0 notLinked(1):1/1/0/0 total:7/4/3/1",
+  "Bram Verify:3/0/3/0 Anna Verify:3/3/0/1 notLinked(1):1/1/0/0 total:7/4/3/1");
 expect("callbacks: the kept share leaves pending out; none decided is no share",
   [keptShare({ kept: 3, notKept: 1 }), keptShare({ kept: 0, notKept: 0 })], [0.75, null], [0.6, 0]);
 expect("callbacks: Follow-up's span is this week and the seven before",

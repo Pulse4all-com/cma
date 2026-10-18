@@ -7,10 +7,11 @@
 -- 81_verify_follow_up_snapshot.sql (dev) again (unchanged).
 --
 -- Brief N19-A, part 4 (stretch; business case KPI 5): of the callback tasks due in a period, how many were
--- kept: a call to the task's contact started within tasks.callback_window_minutes (0008o, 240 by default)
--- before or after the due time. Addition 0008n holds the tasks with their types (is_callback and is_counted
--- as configuration) and 0007a/0008j the calls; this addition adds the definition and its reads, for the
--- Dashboard's Intake row and Reports → Follow-up. Ids, counts and times only.
+-- kept: a call with the task's contact, in either direction, started within tasks.callback_window_minutes
+-- (0008o, 240 by default) before or after the due time (the definition README Open decisions proposes).
+-- Addition 0008n holds the tasks with their types (is_callback and is_counted as configuration) and
+-- 0007a/0008j the calls; this addition adds the definition and its reads, for the Dashboard's Intake row and
+-- Reports → Follow-up. Ids, counts and times only.
 --
 -- What it adds
 --   definition         cma.callbacks_kept_of(tenant, from, to, now): every task of a counted callback type
@@ -27,11 +28,13 @@
 --
 -- Definitions (one place each; README, Data model: callbacks kept)
 --   callback           a task of a type flagged is_callback and is_counted, not deleted, whatever its status
---   kept               a call to the task's contact (a CRM call associated with the contact, not deleted,
---                      not inbound: outbound, or a logged call without a direction) whose start (the linked
---                      telephony call's, else the CRM's time) lies within tasks.callback_window_minutes before
---                      or after the due time, both edges included; the call is the earliest such one
---   not kept           a callback with a due time and a contact, no such call, and the window closed
+--   kept               a call with the task's contact in either direction (a CRM call associated with the
+--                      contact, not deleted) whose start (the linked telephony call's, else the CRM's time)
+--                      lies within tasks.callback_window_minutes before or after the due time, both edges
+--                      included; the call is the earliest such one (README Open decisions, Callbacks kept:
+--                      either direction, as proposed there; Kira confirms)
+--   not kept           a callback with a due time and a contact, no such call, and the window closed (a task
+--                      completed without a call too)
 --   pending            the same while the window is still open (due + window after now): neither kept nor not
 --   apart              a callback without a contact ('no_contact') or without a due time ('no_due', placed by
 --                      its creation): counted, never in the kept share
@@ -110,7 +113,7 @@ as $$
               from cma.crm_association a
               join cma.crm_call cl
                 on cl.tenant_id = a.tenant_id and cl.connection_id = a.connection_id and cl.source_id = a.from_id
-               and cl.source_deleted_at is null and cl.direction <> 'inbound'
+               and cl.source_deleted_at is null
               -- the call's start as cma.crm_call_connected_of's effective_at: the linked telephony call's, else the CRM's
               left join cma.call_link l on l.tenant_id = cl.tenant_id and l.crm_call_id = cl.id and l.unlinked_at is null
               left join cma.telephony_call tc on tc.tenant_id = l.tenant_id and tc.id = l.telephony_call_id and tc.source_deleted_at is null
