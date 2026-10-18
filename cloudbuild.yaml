@@ -1,6 +1,7 @@
 # Cloud Build: build the web image, push it to Artifact Registry, deploy to
 # Cloud Run cma-web. Triggered on main for changes under web/ (and this file);
-# the same file runs by hand with `gcloud builds submit`.
+# the same file runs by hand with `gcloud builds submit`, which must pass the trigger's substitutions:
+# since 17 October 2026 check-config refuses the file's own defaults (iap without an audience).
 #
 # The deploy sets ALL environment variables of the service (--set-env-vars), so
 # this file and the trigger's substitutions are the one place the service is
@@ -38,6 +39,24 @@ steps:
           legacy|signed-out) ;;
           *) echo "_LOGOUT_TARGET must be legacy or signed-out, got '${_LOGOUT_TARGET}'; nothing deployed"; exit 1 ;;
         esac
+        # The IT audit of 17 October 2026 (INFRA-01): a build whose substitutions fell back to the file's
+        # defaults must stop here, not lock everyone out after a successful-looking deploy
+        case "${_AUTH_MODE}" in
+          iap|mock) ;;
+          *) echo "_AUTH_MODE must be iap or mock, got '${_AUTH_MODE}'; nothing deployed"; exit 1 ;;
+        esac
+        case "${_DATA_MODE}" in
+          api|mock) ;;
+          *) echo "_DATA_MODE must be api or mock, got '${_DATA_MODE}'; nothing deployed"; exit 1 ;;
+        esac
+        if [ "${_AUTH_MODE}" = "iap" ] && ! [[ "${_IAP_AUDIENCE}" =~ ^/projects/[0-9]+/global/backendServices/[0-9]+$$ ]]; then
+          echo "_AUTH_MODE=iap needs _IAP_AUDIENCE as /projects/<number>/global/backendServices/<id>, got '${_IAP_AUDIENCE}'; nothing deployed"
+          exit 1
+        fi
+        if ! [[ "${_MAX_INSTANCES}" =~ ^[1-9][0-9]*$$ ]] || ! [[ "${_DB_POOL_MAX}" =~ ^[1-9][0-9]*$$ ]]; then
+          echo "_MAX_INSTANCES and _DB_POOL_MAX must be whole numbers above 0, got '${_MAX_INSTANCES}' and '${_DB_POOL_MAX}'; nothing deployed"
+          exit 1
+        fi
         echo "config: auth=${_AUTH_MODE} data=${_DATA_MODE} db=${_DB_INSTANCE} max-instances=${_MAX_INSTANCES} pool=${_DB_POOL_MAX} logout=${_LOGOUT_TARGET}"
 
   - id: build
@@ -65,6 +84,13 @@ steps:
       - --image=${_REPO}/web:${SHORT_SHA}
       - --port=8080
       - --max-instances=${_MAX_INSTANCES}
+      # The IT audit of 17 October 2026 (INFRA-01, INFRA-02): the floor the console has held since 12 October
+      # 2026 (README, Decision log) now in the file; a startup probe on /api/health, which answers 503 when the
+      # running configuration cannot serve anyone, so such a revision never takes traffic; the startup CPU boost
+      # that cma-ingest has had since 13 October 2026. Connection budget unchanged (max-instances and the pool).
+      - --min-instances=1
+      - --startup-probe=httpGet.path=/api/health,httpGet.port=8080,periodSeconds=2,timeoutSeconds=2,failureThreshold=30
+      - --cpu-boost
       - --set-env-vars=CMA_AUTH_MODE=${_AUTH_MODE},CMA_DATA_MODE=${_DATA_MODE},IAP_AUDIENCE=${_IAP_AUDIENCE},CMA_VERSION=${SHORT_SHA},CMA_DB_INSTANCE=${_DB_INSTANCE},CMA_DB_USER=${_DB_USER},CMA_DB_NAME=${_DB_NAME},CMA_DB_POOL_MAX=${_DB_POOL_MAX},CMA_LOGOUT_TARGET=${_LOGOUT_TARGET}
       - --quiet
 
