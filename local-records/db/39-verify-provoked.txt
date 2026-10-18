@@ -1,0 +1,23 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:170: ERROR:  FAIL A1: migration 0007c not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+psql:/var/tmp/provoke.sql:299: ERROR:  FAIL B1: write-back fields are commerce_orders:1:verifyshop_orders:always:true,commerce_ref:1:verifyshop_id_1:slot:true,commerce_ref:2:verifyshop_id_2:slot:true,commerce_spent:1:verifyshop_spent:always:true,commerce_store:1:verifyshop_store:always:true,country:1:verify_country:if_empty:true,currency:1:verify_currency:if_empty:true,language:1:verify_language:if_empty:true
+CONTEXT:  PL/pgSQL function inline_code_block line 41 at RAISE
+psql:/var/tmp/provoke.sql:444: ERROR:  FAIL C1: the action is pending 9000001 {"country": "GB", "currency": "GBP", "commerce_ref": "7001", "commerce_spent": 120.51, "commerce_store": "verify-gb", "commerce_orders": 3} commerce_customer:7001 by 01a14ac2-174a-7f76-9d91-04082b24f5be
+CONTEXT:  PL/pgSQL function inline_code_block line 49 at RAISE
+psql:/var/tmp/provoke.sql:663: ERROR:  FAIL D1: claimed {01a14ac2-177f-7101-9c3c-c6cf848215da,01a14ac2-1780-7cb4-8e08-ff262e3bf99b,01a14ac2-1782-7dc1-b976-42c00bc13806} (3 at one attempt), or claimed again at once
+CONTEXT:  PL/pgSQL function inline_code_block line 47 at RAISE
+psql:/var/tmp/provoke.sql:811: ERROR:  FAIL E1: retry did not answer pending
+CONTEXT:  PL/pgSQL function inline_code_block line 54 at RAISE
+psql:/var/tmp/provoke.sql:974: ERROR:  FAIL F1: provoked
+CONTEXT:  PL/pgSQL function inline_code_block line 57 at RAISE
+         tenant          | writeback_fields | outbox_open | outbox_parked | outbox_sent |       verdict        
+-------------------------+------------------+-------------+---------------+-------------+----------------------
+ pulse4all-invest        |                0 |           0 |             0 |           0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |                0 |           0 |             0 |           0 | PROVOKED, NOT A PASS
+(2 rows)
+

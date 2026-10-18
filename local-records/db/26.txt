@@ -1,0 +1,1 @@
+psql:db/26_configuration.sql:74: NOTICE:  constraint "app_user_kind_check" of relation "app_user" does not exist, skipping

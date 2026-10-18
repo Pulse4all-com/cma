@@ -1,0 +1,66 @@
+   current_user    
+-------------------
+ cma-web@local.iam
+(1 row)
+
+    case    | app_user | time_event | telephony_call | audit_log | tenant_setting 
+------------+----------+------------+----------------+-----------+----------------
+ no context |        0 |          0 |              0 |         0 |              0
+(1 row)
+
+BEGIN
+ set_config 
+------------
+ 
+(1 row)
+
+     case      | app_user | time_event | telephony_call | audit_log 
+---------------+----------+------------+----------------+-----------
+ empty context |        0 |          0 |              0 |         0
+(1 row)
+
+psql:/var/tmp/5.3/failclosed.sql:10: ERROR:  new row violates row-level security policy for table "organisation"
+ROLLBACK
+BEGIN
+ set_config 
+------------
+ not-a-uuid
+(1 row)
+
+psql:/var/tmp/5.3/failclosed.sql:15: ERROR:  invalid input syntax for type uuid: "not-a-uuid"
+ROLLBACK
+     case      | tenant | permission | setting | schema_migration 
+---------------+--------+------------+---------+------------------
+ global tables |     20 |         19 |      35 |               35
+(1 row)
+
+       case       | workday_summary 
+------------------+-----------------
+ views no context |               0
+(1 row)
+
+psql:/var/tmp/5.3/failclosed.sql:22: ERROR:  permission denied for schema cma_read
+LINE 1: select count(*) from cma_read.app_user;
+                             ^
+BEGIN
+              set_config              
+--------------------------------------
+ 01a14ac1-8b06-7f8a-ac30-8849132389aa
+(1 row)
+
+                                                                                        QUERY PLAN                                                                                         
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   Output: count(*)
+   ->  Seq Scan on cma.time_event
+         Output: id, tenant_id, workday_id, user_id, kind, status_id, occurred_at, recorded_at, source, supersedes_event_id, reason, approved_by, import_batch_id
+         Filter: ((time_event.user_id = '01a14ac1-8b63-7b13-b169-1683e04580f8'::uuid) AND (time_event.tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))
+(5 rows)
+
+                                                                                            QUERY PLAN                                                                                            
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on workday
+   Filter: ((user_id = '01a14ac1-8b63-7b13-b169-1683e04580f8'::uuid) AND (business_date = CURRENT_DATE) AND (tenant_id = (NULLIF(current_setting('app.tenant_id'::text, true), ''::text))::uuid))
+(2 rows)
+
+ROLLBACK

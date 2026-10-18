@@ -1,0 +1,11 @@
+ set_config 
+------------
+ false
+(1 row)
+
+         tenant          |     window     | auto_close_at | grace_minutes |  digest_to   | open_past_grace | verdict 
+-------------------------+----------------+---------------+---------------+--------------+-----------------+---------
+ pulse4all-invest        | 07:00 to 22:00 | 17:00         | 60            | workday.team |               0 | PASS
+ pulse4all-subscriptions | 07:00 to 22:00 | 17:00         | 60            | workday.team |               1 | PASS
+(2 rows)
+

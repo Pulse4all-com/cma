@@ -1,0 +1,1 @@
+psql:db/06_seed_dev_time_model.sql:106: NOTICE:  time model fixture written

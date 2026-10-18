@@ -1,0 +1,16 @@
+psql:db/38_outbox.sql:195: NOTICE:  policy "tenant_app" for relation "writeback_field" does not exist, skipping
+psql:db/38_outbox.sql:195: NOTICE:  policy "tenant_readonly" for relation "writeback_field" does not exist, skipping
+psql:db/38_outbox.sql:195: NOTICE:  trigger "audit" for relation "writeback_field" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/38_outbox.sql:196: NOTICE:  policy "tenant_app" for relation "outbox_action" does not exist, skipping
+psql:db/38_outbox.sql:196: NOTICE:  policy "tenant_readonly" for relation "outbox_action" does not exist, skipping
+psql:db/38_outbox.sql:196: NOTICE:  trigger "audit" for relation "outbox_action" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

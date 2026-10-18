@@ -1,0 +1,22 @@
+CREATE OR REPLACE FUNCTION cma.setup_tenant_table(p_table regclass)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+begin
+  execute format('alter table %s enable row level security', p_table);
+  execute format('grant select, insert, update, delete on %s to cma_app', p_table);
+
+  execute format('drop policy if exists tenant_app on %s', p_table);
+  execute format(
+    'create policy tenant_app on %s to cma_app
+       using      (tenant_id = cma.current_tenant_id())
+       with check (tenant_id = cma.current_tenant_id())', p_table);
+
+  execute format('drop policy if exists tenant_readonly on %s', p_table);   -- from an earlier draft
+
+  execute format('drop trigger if exists audit on %s', p_table);
+  execute format(
+    'create trigger audit after insert or update or delete on %s
+       for each row execute function cma.audit_row()', p_table);
+end
+$function$

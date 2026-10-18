@@ -1,0 +1,17 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:124: ERROR:  FAIL A1: addition 0008d not recorded
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+psql:/var/tmp/provoke.sql:418: ERROR:  FAIL B1: the admin's stage gave (01a14ac2-2ff4-7584-8f44-119e56766b5b,01a14ac2-2f9f-7b5a-a24d-f06f66973bc0,verify-main,verify_source,verify.csv,2026-03-02,2026-03-06,Europe/Amsterdam,staged,verify_import,lunch,,,,,,,,,,01a14ac2-2fce-7f88-b413-4fb0bccbe93c,"2026-10-17 16:46:42.587904+00","2026-10-17 16:46:42.587904+00")
+CONTEXT:  PL/pgSQL function inline_code_block line 70 at RAISE
+psql:/var/tmp/provoke.sql:596: ERROR:  FAIL C1: the throwaway tenant has no unpaid (lunch) or paid (break) pause status
+CONTEXT:  PL/pgSQL function inline_code_block line 39 at RAISE
+         tenant          | staged | loaded | voided | imported_days |       verdict        
+-------------------------+--------+--------+--------+---------------+----------------------
+ pulse4all-invest        |      0 |      0 |      0 |             0 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |      0 |      0 |      0 |             0 | PROVOKED, NOT A PASS
+(2 rows)
+

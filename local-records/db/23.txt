@@ -1,0 +1,40 @@
+psql:db/23_roster.sql:170: NOTICE:  policy "tenant_app" for relation "absence_type" does not exist, skipping
+psql:db/23_roster.sql:170: NOTICE:  policy "tenant_readonly" for relation "absence_type" does not exist, skipping
+psql:db/23_roster.sql:170: NOTICE:  trigger "audit" for relation "absence_type" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/23_roster.sql:171: NOTICE:  policy "tenant_app" for relation "roster_week" does not exist, skipping
+psql:db/23_roster.sql:171: NOTICE:  policy "tenant_readonly" for relation "roster_week" does not exist, skipping
+psql:db/23_roster.sql:171: NOTICE:  trigger "audit" for relation "roster_week" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/23_roster.sql:172: NOTICE:  policy "tenant_app" for relation "roster_publication" does not exist, skipping
+psql:db/23_roster.sql:172: NOTICE:  policy "tenant_readonly" for relation "roster_publication" does not exist, skipping
+psql:db/23_roster.sql:172: NOTICE:  trigger "audit" for relation "roster_publication" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/23_roster.sql:173: NOTICE:  policy "tenant_app" for relation "roster_entry" does not exist, skipping
+psql:db/23_roster.sql:173: NOTICE:  policy "tenant_readonly" for relation "roster_entry" does not exist, skipping
+psql:db/23_roster.sql:173: NOTICE:  trigger "audit" for relation "roster_entry" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/23_roster.sql:174: NOTICE:  policy "tenant_app" for relation "coverage_target" does not exist, skipping
+psql:db/23_roster.sql:174: NOTICE:  policy "tenant_readonly" for relation "coverage_target" does not exist, skipping
+psql:db/23_roster.sql:174: NOTICE:  trigger "audit" for relation "coverage_target" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

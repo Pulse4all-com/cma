@@ -1,0 +1,40 @@
+psql:db/34_telephony.sql:231: NOTICE:  policy "tenant_app" for relation "telephony_call" does not exist, skipping
+psql:db/34_telephony.sql:231: NOTICE:  policy "tenant_readonly" for relation "telephony_call" does not exist, skipping
+psql:db/34_telephony.sql:231: NOTICE:  trigger "audit" for relation "telephony_call" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/34_telephony.sql:232: NOTICE:  policy "tenant_app" for relation "telephony_tag" does not exist, skipping
+psql:db/34_telephony.sql:232: NOTICE:  policy "tenant_readonly" for relation "telephony_tag" does not exist, skipping
+psql:db/34_telephony.sql:232: NOTICE:  trigger "audit" for relation "telephony_tag" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/34_telephony.sql:233: NOTICE:  policy "tenant_app" for relation "telephony_call_tag" does not exist, skipping
+psql:db/34_telephony.sql:233: NOTICE:  policy "tenant_readonly" for relation "telephony_call_tag" does not exist, skipping
+psql:db/34_telephony.sql:233: NOTICE:  trigger "audit" for relation "telephony_call_tag" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/34_telephony.sql:234: NOTICE:  policy "tenant_app" for relation "telephony_number" does not exist, skipping
+psql:db/34_telephony.sql:234: NOTICE:  policy "tenant_readonly" for relation "telephony_number" does not exist, skipping
+psql:db/34_telephony.sql:234: NOTICE:  trigger "audit" for relation "telephony_number" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/34_telephony.sql:235: NOTICE:  policy "tenant_app" for relation "call_link" does not exist, skipping
+psql:db/34_telephony.sql:235: NOTICE:  policy "tenant_readonly" for relation "call_link" does not exist, skipping
+psql:db/34_telephony.sql:235: NOTICE:  trigger "audit" for relation "call_link" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+

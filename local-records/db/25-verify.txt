@@ -1,0 +1,7 @@
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/25_verify_roster.sql:444: ERROR:  FAIL B3: the entries read [2026-10-19 shift 10:00:00-18:00:00 desk 4; 2026-10-19 shift 09:00:00-17:30:00; 2026-10-20 absence - sick]
+CONTEXT:  PL/pgSQL function inline_code_block line 93 at RAISE

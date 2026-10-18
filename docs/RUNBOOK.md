@@ -221,7 +221,7 @@ npm run build 2>&1 | tail -15; echo "build exit: ${PIPESTATUS[0]}"   # must be 0
 ```
 
 When `web/` or `db/` changed, run the verifiers that need a server or a database (section 5: `api`,
-`theme`, `layout`, `iap-token`, `scheduler`) and every `db/` script the pull request adds, as in section 7.
+`theme`, `layout`, `hints`, `iap-token`, `scheduler`, `round-trips`, `refresh-follow-up`) and every `db/` script the pull request adds, as in section 7.
 Then merge:
 
 ```bash
@@ -272,8 +272,8 @@ Test users: `agent-two`, `supervisor`, `manager`, `admin`, `analyst` (one tenant
 Against dev, through the proxy from step 4:
 
 ```bash
-cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL 111 PASS (since the night build of 8 October 2026)
-node verify/api.mjs --provoke; echo "exit $?"                     # ALL 111 PROVOKED CHECKS FAILED, exit 0
+cd ~/cma/web && node verify/api.mjs; echo "exit $?"              # ALL n PASS: 271 in dev since addition 0008p (records/audit-2026-10-18), six notes for checks dev lacks an identity or a connection for
+node verify/api.mjs --provoke; echo "exit $?"                     # ALL n PROVOKED CHECKS FAILED, exit 0
 ```
 
 The verifier clocks Agent Two in through the start route (a visit opens nothing since increment e) and
@@ -318,7 +318,7 @@ It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job 
 (`gcloud scheduler jobs pause|resume cma-refresh-follow-up-minutely --project=p4a-cma-dev --location=europe-west4`),
 so a scheduled refresh does not take the lock the verifier's second session holds (section 7a, step 3).
 
-The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `import`, `theme`, `layout`, `iap-token`) run locally, the last two against a local server; see the header
+The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `theme`, `layout`, `hints`, `iap-token`) run locally, `theme`, `layout` and `hints` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
 workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do.
 

@@ -1,0 +1,106 @@
+
+> cma-web@0.1.0 verify:configuration
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/configuration.mjs
+
+PASS  flags are frozen once a status has time                  got true
+PASS  flags are free on a new status                           got false
+PASS  the default cannot be retired                            got "default"
+PASS  a working status with another working one can            got null
+PASS  the last working status cannot                           got "lastWorking"
+PASS  a retired status has nothing to retire                   got null
+PASS  active statuses in order, retired hidden                 got ["p","a","b"]
+PASS  retired statuses after the active ones                   got ["p","a","b","z"]
+PASS  a bad key is named                                       got "key"
+PASS  a duplicate key on add                                   got "duplicate"
+PASS  the same key on edit is fine                             got null
+PASS  an empty name is named                                   got "name"
+PASS  markets: lowercase, unique, sorted                       got ["be","de","nl"]
+PASS  markets: a bad token refuses                             got null
+PASS  markets: empty is no markets                             got []
+PASS  levels from a comma list                                 got [{"level":1,"name":"Basic"},{"level":2,"name":"Good"},{"level":3,"name
+PASS  levels: empty is binary                                  got []
+PASS  levels: duplicates refuse                                got null
+PASS  levels back to text in level order                       got "A, B"
+PASS  a target is found                                        got 2
+PASS  no target is 0                                           got 0
+PASS  a typed target                                           got 7
+PASS  an empty target clears                                   got 0
+PASS  a bad target refuses                                     got null
+PASS  minutes parse                                            got 120
+PASS  minutes refuse a decimal                                 got null
+PASS  preview in the Dutch format                              got ["with BOM","Date;Person;Worked","08-10-2026;A. Example;7,50"]
+PASS  preview in the defaults                                  got ["with BOM","Date,Person,Worked","2026-10-08,A. Example,7.50"]
+PASS  preview with tabs, hh:mm and no mark                     got ["no BOM","Date ⇥ Person ⇥ Worked","2026-10-08 ⇥ A. Example ⇥ 7:30"]
+PASS  preview in minutes with a decimal comma stays one cell   got "2026-10-08,A. Example,450"
+PASS  a customer-records connection has six sections           got ["pipelines","forms","callOutcomes","fields","taskStatuses","taskTypes
+PASS  an unset kind shows what its rows imply                  got ["lines","tags","missedReasons"]
+PASS  an automation connection has no catalog section          got []
+PASS  the kind is free while nothing is held                   got ["crm","telephony","commerce","automation"]
+PASS  held rows narrow the kinds offered                       got ["crm"]
+PASS  a settings key in the right form                         got null
+PASS  a secret-looking key is refused                          got "secret"
+PASS  the word key in a key is refused too                     got "secret"
+PASS  an upper-case key is refused                             got "key"
+PASS  a new key that exists is a duplicate                     got "duplicate"
+PASS  settings with a nested value are refused                 got "value"
+PASS  flat settings pass                                       got null
+PASS  settings measured as the database does                   got 18
+PASS  a boolean stays a boolean                                got false
+PASS  a number stays a number                                  got 42
+PASS  a new setting is text                                    got "true"
+PASS  the record type of a link template                       got "ticket"
+PASS  no record type for another key                           got null
+PASS  a record link as cma.record_url builds it                got "https://app.example.com/r/147000/deal/41000123"
+PASS  no link without a valid host                             got null
+PASS  no link while a placeholder stays unfilled               got null
+PASS  no link that is not https                                got null
+PASS  words are lower case, trimmed, once                      got ["quote","contact","info"]
+PASS  a name matches an include word                           got true
+PASS  an exclude word wins                                     got false
+PASS  no include words match every name                        got true
+PASS  the first word found in the name                         got "contact"
+PASS  a UK prefix reads through the alias                      got "GB"
+PASS  a code prefix is the market                              got "NL"
+PASS  three letters are no prefix                              got null
+PASS  an unknown prefix names no market                        got null
+PASS  the lead rule changes the forms it should                got ["f1","f2","f3","f4","f5","f6","f7","f8"]
+PASS  a quote form gets quote and NL                           got {"isCounted":true,"leadSource":"quote","market":"NL"}
+PASS  a UK contact form gets contact and GB                    got {"isCounted":true,"leadSource":"contact","market":"GB"}
+PASS  a cancellation form stops counting                       got {"isCounted":false,"leadSource":null,"market":null}
+PASS  a form without a market prefix keeps its market          got {"isCounted":true,"leadSource":"quote","market":null}
+PASS  a second run changes nothing                             got 0
+PASS  a rule that sets nothing is refused                      got "nothing"
+PASS  the first word needs include words                       got "noInclude"
+PASS  a lead source value needs a value                        got "leadSource"
+PASS  the outcome rule: not reached and voicemail off, connected on got ["o1=true","o2=false","o3=false","o4=true","o5=false"]
+PASS  others left alone change nothing                         got 0
+PASS  office hours as typed                                    got "09:00-12:30,13:00-17:00"
+PASS  hours in four digits and to 24:00                        got "09:00-24:00"
+PASS  empty hours are closed                                   got ""
+PASS  overlapping ranges are refused                           got null
+PASS  a range that closes before it opens is refused           got null
+PASS  a market without own hours follows the default           got {"hours":"09:00-17:00","fromDefault":true}
+PASS  a market with own hours is closed on a day without       got {"hours":"","fromDefault":false}
+PASS  UK is refused as a market code                           got "uk"
+PASS  a minimum level needs a skill                            got "level"
+PASS  a holiday date is a real date                            got null
+PASS  record types from the pipelines and the rules            got ["deal","follow_up","ticket"]
+PASS  pipelines of a type, counted first                       got ["p1","p2"]
+PASS  pipeline labels, an unknown id as itself                 got ["Sales","px"]
+PASS  an empty age is the default                              got null
+PASS  an age above a week is refused                           got "invalid"
+PASS  a new rule with a name in use is a duplicate             got "duplicate"
+PASS  a name of the other trigger is refused on edit           got "trigger"
+PASS  contact cannot raise alerts                              got "recordType"
+PASS  the effect of a created-record rule                      got ["A new deal in any counted pipeline alerts the holders of leads.accep
+PASS  the effect of an assignment rule, switched off           got ["Off.","When a deal in Sales gets an owner, that owner's person is al
+PASS  a counted form that is not polled is refused             got "polled"
+PASS  a polled form that does not count is fine                got null
+PASS  a lead source over 60 characters comes first             got "leadSource"
+PASS  a switched-off category is not offered to another form   got ["quote","info"]
+PASS  a form keeps its own switched-off category               got ["quote","legacy","info"]
+PASS  category codes as the database takes them                got [null,"code","code","code","code",null]
+PASS  a category needs a name and an order from 0 to 9999      got ["name","order","order",null]
+
+ALL 99 PASS
+verify:configuration exit 0

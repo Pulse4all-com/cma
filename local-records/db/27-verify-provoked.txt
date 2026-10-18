@@ -1,0 +1,15 @@
+ set_config 
+------------
+ true
+(1 row)
+
+psql:/var/tmp/provoke.sql:141: ERROR:  FAIL A2: app_user.kind, app_role.is_assignable or cma_read.app_user.kind is missing
+CONTEXT:  PL/pgSQL function inline_code_block line 17 at RAISE
+psql:/var/tmp/provoke.sql:538: ERROR:  FAIL B1: the scheduler is listed on the directory
+CONTEXT:  PL/pgSQL function inline_code_block line 84 at RAISE
+         tenant          | scheduler_users | roles_with_close_forgotten | grace_minutes | active_statuses | active_links |       verdict        
+-------------------------+-----------------+----------------------------+---------------+-----------------+--------------+----------------------
+ pulse4all-invest        |               1 | scheduler                  | 60            |               5 |            2 | PROVOKED, NOT A PASS
+ pulse4all-subscriptions |               1 | scheduler                  | 60            |               7 |            3 | PROVOKED, NOT A PASS
+(2 rows)
+

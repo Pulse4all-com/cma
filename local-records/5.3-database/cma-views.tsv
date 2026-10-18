@@ -1,0 +1,9 @@
+import_session_staging	cma_owner	cma_owner=arwdDxt/cma_owner cma_app=ar/cma_owner	t	f
+roster_published_entry	cma_owner	cma_owner=arwdDxt/cma_owner cma_app=r/cma_owner	t	f
+roster_published_entry_all	cma_owner	cma_owner=arwdDxt/cma_owner	f	f
+time_event_effective	cma_owner	cma_owner=arwdDxt/cma_owner cma_app=r/cma_owner	t	f
+time_event_effective_all	cma_owner	cma_owner=arwdDxt/cma_owner	f	f
+time_interval	cma_owner	cma_owner=arwdDxt/cma_owner cma_app=r/cma_owner	t	f
+time_interval_all	cma_owner	cma_owner=arwdDxt/cma_owner	f	f
+workday_summary	cma_owner	cma_owner=arwdDxt/cma_owner cma_app=r/cma_owner	t	f
+workday_summary_all	cma_owner	cma_owner=arwdDxt/cma_owner	f	f

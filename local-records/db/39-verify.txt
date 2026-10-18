@@ -1,0 +1,7 @@
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/39_verify_outbox.sql:663: ERROR:  FAIL D1: claimed {01a14ac2-169a-7608-b108-c5beb0d7e93d,01a14ac2-169b-77f5-bfd9-670277b4ecaf,01a14ac2-169b-7dfb-bf90-21eeaa8a1e21} (3 at one attempt), or claimed again at once
+CONTEXT:  PL/pgSQL function inline_code_block line 47 at RAISE

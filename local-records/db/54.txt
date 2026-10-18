@@ -1,0 +1,4 @@
+ tenant | connection | connection_id | lines_not_counted | calls_removed | taggings_removed | links_removed 
+--------+------------+---------------+-------------------+---------------+------------------+---------------
+(0 rows)
+
