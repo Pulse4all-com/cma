@@ -5,7 +5,7 @@
  * as every other write), the refusal messages per HTTP status, a save note, the field classes,
  * and a native <dialog> form shell with Ctrl+Enter to save and Esc to close.
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { Button, Notice } from "../primitives";
@@ -89,6 +89,8 @@ export function FormDialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  /** The dialog is named by its title for assistive tech (the IT audit of 17 October 2026) */
+  const titleId = useId();
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
@@ -97,6 +99,7 @@ export function FormDialog({
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       className={`m-auto ${wide ? "w-[44rem]" : "w-[32rem]"} max-w-[calc(100vw-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40`}
       onCancel={(e) => {
         e.preventDefault();
@@ -111,7 +114,7 @@ export function FormDialog({
     >
       <div className="flex flex-col gap-6 p-6">
         <header>
-          <h2 className="text-panel font-semibold text-p4a-heading">{title}</h2>
+          <h2 id={titleId} className="text-panel font-semibold text-p4a-heading">{title}</h2>
           {intro ? <p className="mt-1 text-small text-p4a-muted">{intro}</p> : null}
         </header>
         {children}

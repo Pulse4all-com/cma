@@ -133,14 +133,14 @@ export async function Shell({
             if (entry.kind === "page") {
               const current = entry.item.page === active;
               // The label with its key is the name in the folded rail (title and aria-label); the keycap is hidden there
-              const name = `${entry.item.label} (${entry.item.key})`;
+              const name = entry.item.key ? `${entry.item.label} (${entry.item.key})` : entry.item.label;
               return (
                 <li key={entry.item.page}>
                   <Link
                     href={entry.item.href}
                     prefetch={false}
                     aria-current={current ? "page" : undefined}
-                    data-shortcut={entry.item.key}
+                    data-shortcut={entry.item.key ?? undefined}
                     aria-keyshortcuts={entry.item.key ?? undefined}
                     title={name}
                     aria-label={name}
@@ -151,7 +151,7 @@ export async function Shell({
                   >
                     <NavIconMark name={entry.icon} />
                     <span data-rail-text className="min-w-0 flex-1 truncate">{entry.item.label}</span>
-                    <Keycap data-rail-text>{entry.item.key}</Keycap>
+                    {entry.item.key ? <Keycap data-rail-text>{entry.item.key}</Keycap> : null}
                   </Link>
                 </li>
               );

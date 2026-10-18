@@ -229,20 +229,24 @@ export function agoText(computedAt: string, now: Date, locale: string): string {
 
 export type AttentionKey = "daysNotEnded" | "leadsPastTarget" | "ticketsAtRiskOrBreached" | "tasksOverdue" | "missedCallbacks";
 
+/** Team hours filtered to the days to correct (needsCorrection or isCapped), as the Needs attention line opens it */
+export const TEAM_HOURS_TO_CORRECT = "/team/hours?range=month&needs=correction";
+
 export interface AttentionLine {
   key: AttentionKey;
   count: number;
-  href: "/team/hours?range=month" | "/reports/follow-up?state=attention" | "/live/board";
+  href: typeof TEAM_HOURS_TO_CORRECT | "/reports/follow-up?state=attention" | "/live/board";
 }
 
 /**
  * The lines of the Needs attention block, in order, each with where to act: the days not clocked out (only
- * for a person who may correct them: null leaves the line out), the summary's three figures, and the
- * missed callers not called back (null without monitoring.live or without telephony)
+ * for a person who may correct them: null leaves the line out; the link lands on the rows to correct, not on
+ * the whole month: the IT audit of 17 October 2026), the summary's three figures, and the missed callers not
+ * called back (null without monitoring.live or without telephony)
  */
 export function attentionLines(summary: FollowUpSummary, daysNotEnded: number | null, missedCallbacks: number | null): AttentionLine[] {
   const out: AttentionLine[] = [];
-  if (daysNotEnded !== null) out.push({ key: "daysNotEnded", count: daysNotEnded, href: "/team/hours?range=month" });
+  if (daysNotEnded !== null) out.push({ key: "daysNotEnded", count: daysNotEnded, href: TEAM_HOURS_TO_CORRECT });
   out.push({ key: "leadsPastTarget", count: summary.leadsPastTarget, href: "/reports/follow-up?state=attention" });
   out.push({ key: "ticketsAtRiskOrBreached", count: summary.ticketsAtRisk + summary.ticketsBreached, href: "/reports/follow-up?state=attention" });
   out.push({ key: "tasksOverdue", count: summary.tasksOverdue, href: "/reports/follow-up?state=attention" });

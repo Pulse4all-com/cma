@@ -77,13 +77,26 @@ export function fmtTime(instant: Instant, timeZone: string, locale: Locale): str
  */
 export function fmtDate(key: DateKey, locale: Locale, style: "long" | "short" | "compact" = "long"): string {
   const d = toUtcDate(key);
+  // The parts joined by one space, never the locale's own punctuation: ICU versions differ on it (Node 22
+  // writes "Sat 17 Oct", a browser "Sat, 17 Oct"), and a client component that formats a date on the server
+  // and again in the browser must render the same text, or React regenerates the tree (the IT audit of
+  // 17 October 2026, React error 418 on Messages, the roster planner and Alert rules)
   return new Intl.DateTimeFormat(intlLocale[locale], {
     timeZone: "UTC",
     weekday: style === "short" ? undefined : "short",
     day: "numeric",
     month: style === "long" ? "long" : "short",
     year: style === "long" ? "numeric" : undefined,
-  }).format(d);
+  })
+    .formatToParts(d)
+    .filter((p) => p.type === "weekday" || p.type === "day" || p.type === "month" || p.type === "year")
+    .map((p) => p.value)
+    .join(" ");
+}
+
+/** Thu 12 Oct, 14:05 in the zone given: a date with its time, short, for lists; the same text on the server and in the browser */
+export function fmtDateTimeShort(instant: Instant, timeZone: string, locale: Locale): string {
+  return `${fmtDate(dateKeyInZone(instant, timeZone), locale, "compact")}, ${fmtTime(instant, timeZone, locale)}`;
 }
 
 /**

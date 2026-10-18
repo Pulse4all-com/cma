@@ -11,6 +11,7 @@ import type { Copy, Locale } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { Badge, Button, Card } from "./primitives";
 import { MESSAGES_ARRIVED_EVENT, MESSAGES_CHANGED_EVENT } from "./MessageCenter";
+import { fmtDateTimeShort } from "@/lib/time";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
 type Permission = "unsupported" | "default" | "granted" | "denied";
@@ -31,14 +32,17 @@ const permissionStore = {
   },
 };
 
+/** Thu 12 Oct, 14:05 in the viewer's zone, the same text on the server and in the browser (lib/time) */
 function fmtWhen(instant: string, timeZone: string, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale === "nl" ? "nl-NL" : "en-GB", { timeZone, weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(instant));
+  return fmtDateTimeShort(instant, timeZone, locale);
 }
 
 export function Inbox({ initial, copy, timeZone, locale }: { initial: MyMessages; copy: Copy["messages"]; timeZone: string; locale: Locale }) {
   const [list, setList] = useState<MyMessage[]>(initial.messages);
   const permission = useSyncExternalStore(permissionStore.subscribe, permissionStore.get, permissionStore.server);
   const [pending, startTransition] = useTransition();
+  /** A mark-read or acknowledge that was refused or did not arrive: said in words, never silent (the IT audit of 17 October 2026) */
+  const [writeFailed, setWriteFailed] = useState(false);
   const unread = list.filter((m) => m.readAt === null).length;
 
   useEffect(() => {
@@ -54,22 +58,28 @@ export function Inbox({ initial, copy, timeZone, locale }: { initial: MyMessages
 
   function markRead(ids: string[]) {
     if (!ids.length) return;
+    setWriteFailed(false);
     startTransition(async () => {
-      const res = await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) });
-      if (res.ok) {
+      const res = await fetch("/api/v1/me/messages/read", { method: "POST", headers: HEADERS, body: JSON.stringify({ ids }) }).catch(() => null);
+      if (res?.ok) {
         const now = new Date().toISOString();
         setList((l) => l.map((m) => (ids.includes(m.id) && m.readAt === null ? { ...m, deliveredAt: m.deliveredAt ?? now, readAt: now } : m)));
+      } else {
+        setWriteFailed(true);
       }
       window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
     });
   }
 
   function acknowledge(id: string) {
+    setWriteFailed(false);
     startTransition(async () => {
-      const res = await fetch(`/api/v1/me/messages/${id}/ack`, { method: "POST", headers: HEADERS });
-      if (res.ok) {
+      const res = await fetch(`/api/v1/me/messages/${id}/ack`, { method: "POST", headers: HEADERS }).catch(() => null);
+      if (res?.ok) {
         const now = new Date().toISOString();
         setList((l) => l.map((m) => (m.id === id ? { ...m, deliveredAt: m.deliveredAt ?? now, readAt: m.readAt ?? now, acknowledgedAt: now } : m)));
+      } else {
+        setWriteFailed(true);
       }
       window.dispatchEvent(new Event(MESSAGES_CHANGED_EVENT));
     });
@@ -100,6 +110,11 @@ export function Inbox({ initial, copy, timeZone, locale }: { initial: MyMessages
           </Button>
         </div>
       </div>
+      {writeFailed ? (
+        <p role="alert" className="mb-4 text-small text-p4a-body" data-testid="inbox-write-failed">
+          {copy.writeFailed}
+        </p>
+      ) : null}
 
       {list.length === 0 ? (
         <Card><p className="text-body text-p4a-muted">{copy.empty}</p></Card>

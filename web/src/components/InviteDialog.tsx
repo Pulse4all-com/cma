@@ -12,7 +12,7 @@
  *
  * Keyboard: Tab through the fields, Ctrl+Enter creates, Esc closes (twice with unsaved changes).
  */
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { InvitationLink, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import {
@@ -139,10 +139,14 @@ export function InviteDialog({ mode, context, copy, onClose, onDone }: {
     return { href, mail, expiresHere: fmtDateTime(made.link.expiresAt, context.timeZone, context.screenLocale) };
   })() : null;
 
+  /** The dialog is named by its title for assistive tech (the IT audit of 17 October 2026) */
+  const titleId = useId();
+
   return (
     <dialog
       ref={ref}
       data-testid="invite-dialog"
+      aria-labelledby={titleId}
       className="m-auto w-[44rem] max-w-[calc(100vw-4rem)] rounded-card border border-p4a-border bg-white p-0 text-p4a-body backdrop:bg-p4a-inkt/40"
       onCancel={(e) => {
         e.preventDefault();
@@ -158,7 +162,7 @@ export function InviteDialog({ mode, context, copy, onClose, onDone }: {
     >
       <div className="flex flex-col gap-6 p-6">
         <header>
-          <h2 className="text-panel font-semibold text-p4a-heading">
+          <h2 id={titleId} className="text-panel font-semibold text-p4a-heading">
             {made ? (mode.kind === "link" ? t.renewTitle : t.readyTitle) : t.dialogTitle}
           </h2>
           {made && view ? (

@@ -20,12 +20,14 @@
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
  * Welcome and Inbound, the hidden keycaps (cma-hints), the breadcrumbs, and the admin previewing as agent
- * (cma-preview-role: the banner and the select) on Welcome and My account.
+ * (cma-preview-role: the banner and the select) on Welcome and My account. Since the IT audit of 17 October
+ * 2026 no visible element is set in capitals by CSS (text-transform: uppercase) except a two-letter code such
+ * as a market (style guide rule 4: the copy verifier cannot see a transform).
  *
  *   BASE=http://localhost:8080 node verify/theme.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/theme.mjs --provoke   injects an
- *       off-palette element and a stray font, greys out one hint panel and sets one Inbound table back
- *       to line-height 1.6, expect FAIL, exit 1
+ *       off-palette element in capitals and a stray font, greys out one hint panel and sets one Inbound table
+ *       back to line-height 1.6, expect FAIL, exit 1
  *
  * Needs the app running in mock mode and Playwright's Chromium installed
  * (npx playwright install chromium).
@@ -205,17 +207,21 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
     await p.evaluate(() => {
       const el = document.createElement("p");
       el.textContent = "provoked";
-      el.style.cssText = "color:#ff0000;font-family:Georgia,serif";
+      el.style.cssText = "color:#ff0000;font-family:Georgia,serif;text-transform:uppercase";
       document.querySelector("main")?.appendChild(el);
     });
   }
   const found = await p.evaluate(() => {
-    const out = { fonts: new Set(), colours: [], headings: [], body: null };
+    const out = { fonts: new Set(), colours: [], headings: [], body: null, capitals: [] };
     const vis = (el) => el.getClientRects().length > 0;
     for (const el of document.querySelectorAll("body *")) {
       if (!vis(el)) continue;
       const cs = getComputedStyle(el);
       out.fonts.add(cs.fontFamily.split(",")[0].trim().replace(/^["']|["']$/g, ""));
+      // Capitals by CSS (style guide rule 4): only two-letter codes, such as a team's markets, may be set that way
+      if (cs.textTransform === "uppercase" && !/^([A-Za-z]{2})(\s+[A-Za-z]{2})*$/.test(el.textContent?.trim() ?? "")) {
+        out.capitals.push(`${el.tagName.toLowerCase()} "${(el.textContent ?? "").trim().slice(0, 30)}"`);
+      }
       const props = ["color", "backgroundColor", "borderTopColor", "outlineColor"];
       // Chart marks and icons: what an SVG paints is its fill and stroke
       if (el instanceof SVGElement && el.tagName.toLowerCase() !== "svg" && el.tagName.toLowerCase() !== "g") props.push("fill", "stroke");
@@ -229,6 +235,7 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
     return { ...out, fonts: [...out.fonts] };
   });
   for (const f of found.fonts) if (!/montserrat/i.test(f)) problems.push(`${path}: typeface "${f}" is not Montserrat`);
+  for (const c of found.capitals) problems.push(`${path}: ${c} is set in capitals by CSS (style guide rule 4)`);
   for (const [sel, prop, value] of found.colours) {
     const hex = rgbToHex(value);
     if (hex && hex !== "transparent" && !palette.has(hex)) problems.push(`${path}: ${sel} ${prop} ${hex} is not in the palette`);
@@ -282,5 +289,5 @@ if (hintsChecked < 5) problems.push(`only ${hintsChecked} report pages showed a 
 
 const unique = [...new Set(problems)];
 for (const x of unique) console.log("  " + x);
-console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours, ${tablesChecked} tables per 7.6 and 3.3, a header hint open on ${hintsChecked} report pages${hintsSkipped.length ? `; not on ${hintsSkipped.join(", ")}, where an alert dialog holds the focus` : ""})` : `theme: FAIL (${unique.length} problems)`);
+console.log(unique.length === 0 ? `theme: PASS (${pages.length} pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, ${tablesChecked} tables per 7.6 and 3.3, a header hint open on ${hintsChecked} report pages${hintsSkipped.length ? `; not on ${hintsSkipped.join(", ")}, where an alert dialog holds the focus` : ""})` : `theme: FAIL (${unique.length} problems)`);
 process.exit(unique.length === 0 ? 0 : 1);

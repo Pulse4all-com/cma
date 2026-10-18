@@ -15,7 +15,8 @@
  * call, an earlier outbound call not counting, a later missed call calling nobody back, the lookback, a
  * reason without a callback, anonymous calls counted and never listed, a waiting call not missed and a
  * lost one missed, oldest first, office time or the time since the call, the link only with a template,
- * no caller in any answer, and the times missed counted since the latest callback (61 B15).
+ * no caller in any answer, and the times missed counted since the latest callback (61 B15). Since the IT audit of
+ * 17 October 2026 also when the waiting figure reads Closed (no office time since the call) instead of 0 min.
  */
 import {
   INBOUND_TILES, LIVE_GROUPS, callbackWaiting, employersOf, filterRows, fmtSeconds, inboundTileValue, liveGroupOf, liveRows, missedCallbacks,
@@ -176,8 +177,14 @@ expect("anonymous calls counted and never listed; a waiting call is not missed",
   [2, false, false], [3, true, true]);
 expect("waiting in office time, or the time since the call for a line without a market",
   three.rows.map((r) => callbackWaiting(r)),
-  [{ kind: "business", seconds: 9000 }, { kind: "business", seconds: 7200 }, { kind: "business", seconds: 3600 }, { kind: "elapsed", seconds: 2400 }],
-  [{ kind: "elapsed", seconds: 9000 }, { kind: "elapsed", seconds: 7200 }, { kind: "elapsed", seconds: 3600 }, { kind: "business", seconds: 2400 }]);
+  [{ kind: "business", seconds: 9000, closed: false }, { kind: "business", seconds: 7200, closed: false }, { kind: "business", seconds: 3600, closed: false }, { kind: "elapsed", seconds: 2400, closed: false }],
+  [{ kind: "elapsed", seconds: 9000, closed: false }, { kind: "elapsed", seconds: 7200, closed: false }, { kind: "elapsed", seconds: 3600, closed: false }, { kind: "business", seconds: 2400, closed: false }]);
+// Closed (the IT audit of 17 October 2026): no office time since the call although time has passed, so the board says
+// "Closed" instead of "0 min"; a call missed this very second, a line without a market and any office time at all are not closed
+expect("closed when no office time has passed since the call, and only then",
+  [{ waitingBusinessSeconds: 0, waitingSeconds: 54000 }, { waitingBusinessSeconds: 0, waitingSeconds: 0 }, { waitingBusinessSeconds: null, waitingSeconds: 54000 },
+    { waitingBusinessSeconds: 30, waitingSeconds: 54000 }].map((r) => callbackWaiting(r).closed),
+  [true, false, false, false], [true, true, false, false]);
 expect("the link only where the connection has a template",
   three.rows.map((r) => r.recordUrl !== null), [false, false, true, false], [true, true, true, true]);
 expect("no caller, hash, number or name in an answer",

@@ -46,6 +46,7 @@ export function TeamHoursView({
   copy,
   locale,
   downloads,
+  emptyLabel,
 }: {
   rows: HoursRow[];
   totals: { worked: string; paid: string };
@@ -61,6 +62,8 @@ export function TeamHoursView({
   locale: Locale;
   /** Download links for the period and person shown; null without workday.export */
   downloads: { hours: string; statusChanges: string } | null;
+  /** What to say without rows: the period's, or the filter's (only the days to correct) */
+  emptyLabel?: string;
 }) {
   const t = copy.teamHours;
   const router = useRouter();
@@ -156,7 +159,7 @@ export function TeamHoursView({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-body text-p4a-muted">{t.empty}</p>
+        <p className="text-body text-p4a-muted">{emptyLabel ?? t.empty}</p>
       ) : (
         <table className="w-full border-collapse text-body">
           <thead>

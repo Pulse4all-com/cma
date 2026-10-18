@@ -7,9 +7,11 @@
  * open day. The card names the tenant's default status; no status name is in code or copy.
  * The button has focus when the page opens, so Enter clocks in (keyboard-first, as on Log out).
  * Before the workday window starts the database refuses (0008b): the card then says when the day
- * starts, with the time the database gave, and the button stays.
+ * starts, with the time the database gave, and the button stays. While the clock-in is in flight the
+ * button is busy (aria-busy, dimmed), not disabled, so it keeps the focus until the open day replaces
+ * the card and the person can press Enter again after a refusal (the IT audit of 17 October 2026).
  */
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Copy } from "@/lib/copy";
 import { workdayStartsAt } from "@/lib/live";
@@ -20,20 +22,25 @@ export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: st
   const [pending, startTransition] = useTransition();
   const [failed, setFailed] = useState(false);
   const [startsAt, setStartsAt] = useState<string | null>(null);
+  /** One clock-in at a time: a second Enter while the first is in flight does nothing */
+  const inFlight = useRef(false);
 
   function clockIn() {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setFailed(false);
     setStartsAt(null);
     startTransition(async () => {
-      const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+      const res = await fetch("/api/v1/me/day/start", { method: "POST", headers: { "x-cma-request": "1" } }).catch(() => null);
+      if (!res?.ok) {
+        const body = res ? ((await res.json().catch(() => null)) as { error?: { message?: string } } | null) : null;
         const at = workdayStartsAt(body?.error?.message);
         if (at) setStartsAt(at);
         else setFailed(true);
       }
       // Also after a refusal: the day may have been opened in another tab
       router.refresh();
+      inFlight.current = false;
     });
   }
 
@@ -44,10 +51,10 @@ export function ClockInCard({ defaultStatusName, copy }: { defaultStatusName: st
       <button
         type="button"
         autoFocus
-        disabled={pending}
+        aria-busy={pending}
         onClick={clockIn}
         data-testid="clock-in"
-        className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-button bg-p4a-deepblue px-6 font-semibold text-white hover:bg-p4a-denim disabled:opacity-60"
+        className="mt-6 inline-flex h-12 w-full items-center justify-center gap-3 rounded-button bg-p4a-deepblue px-6 font-semibold text-white hover:bg-p4a-denim aria-busy:opacity-60"
       >
         {copy.welcome.clockIn}
         <Keycap>Enter</Keycap>
