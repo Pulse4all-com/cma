@@ -1,0 +1,9 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:db/31_verify_ingest_crm_records.sql:142: ERROR:  FAIL A4: ingest_connection must pin its search_path
+CONTEXT:  PL/pgSQL function inline_code_block line 66 at RAISE
