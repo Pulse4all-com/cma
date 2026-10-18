@@ -62,7 +62,12 @@ export function clientIdOf(settings) {
 }
 
 // ---- Tokens ----------------------------------------------------------------------------------------
-const tokens = new Map(); // shop|client id → { promise, value, expiresAt }
+// Keyed by the connection, the secret it mints with and the client id, never by the shop alone: a connection
+// of another tenant naming the same shop and client id (both public values) must read its own secret and
+// mint its own token (CMA-037 item 1, the IT audit of 17 October 2026). Within a tenant a shop has one
+// connection (unique per tenant, adapter and account), so one token per connection is still one per shop
+const tokens = new Map(); // connection id|signing secret name|client id → { promise, value, expiresAt }
+const tokenKey = (connection, clientId) => `${connection.connectionId}|${connection.signingSecretName ?? ""}|${clientId}`;
 
 /** Mints a token by the client credentials grant: { value, expiresAt }; SourceError token_<code> otherwise. */
 export async function mintToken(shop, clientId, clientSecret, signal) {
@@ -92,13 +97,13 @@ export async function mintToken(shop, clientId, clientSecret, signal) {
 }
 
 /**
- * The shop's current token: the cached one until five minutes before it expires, else a new one (one
- * mint per shop and client id however many callers ask at once).
+ * The connection's current token for its shop: the cached one until five minutes before it expires, else a
+ * new one (one mint per connection and client id however many callers ask at once).
  */
 export async function tokenFor(connection, settings, signal, now = Date.now()) {
   const clientId = clientIdOf(settings);
   const shop = connection.externalAccountId;
-  const k = `${shop}|${clientId}`;
+  const k = tokenKey(connection, clientId);
   const hit = tokens.get(k);
   if (hit?.value && hit.expiresAt - TOKEN_MARGIN_MS > now) return hit.value;
   if (hit?.promise) return (await hit.promise).value;
@@ -122,10 +127,10 @@ export async function tokenFor(connection, settings, signal, now = Date.now()) {
   }
 }
 
-/** Forgets a shop's token (a 401 answer); the next call mints a new one. */
+/** Forgets a connection's token (a 401 answer); the next call mints a new one. */
 export function dropToken(connection, settings) {
   try {
-    tokens.delete(`${connection.externalAccountId}|${clientIdOf(settings)}`);
+    tokens.delete(tokenKey(connection, clientIdOf(settings)));
   } catch {
     // no client id: nothing cached
   }

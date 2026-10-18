@@ -4,8 +4,8 @@
  * fixtures verify/fixtures/hubspot/email-source.json and email-rules.json). Everything is invented:
  * tenants, portals, ids, names, addresses, subjects, texts.
  *
- *   CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=martin@pulse4all.com CMA_DB_SET_ROLE=cma_app \
- *   INGEST_FLOW_ADMIN_USER=martin@pulse4all.com node verify/email-flow.mjs [--provoke]
+ *   CMA_DB_HOST=127.0.0.1 CMA_DB_PORT=5433 CMA_DB_NAME=cma CMA_DB_USER=<your login> CMA_DB_SET_ROLE=cma_app \
+ *   INGEST_FLOW_ADMIN_USER=<team login> node verify/email-flow.mjs [--provoke]
  *
  * In dev (docs/b17b-email-ingest/MORNING_RUNBOOK.md, step 7) through cloud-sql-proxy --auto-iam-authn on
  * port 5433: your own login is both the job's (it holds cma_app; CMA_DB_SET_ROLE=cma_app) and the
@@ -51,7 +51,11 @@ for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
     process.exit(2);
   }
 }
-const ADMIN = process.env.INGEST_FLOW_ADMIN_USER ?? "martin@pulse4all.com";
+const ADMIN = process.env.INGEST_FLOW_ADMIN_USER;
+if (!ADMIN) {
+  console.error("INGEST_FLOW_ADMIN_USER is required: a team login that holds cma_owner and cma_app by SET ROLE (locally, for example, auditor@local)");
+  process.exit(2);
+}
 const RUN = randomBytes(4).toString("hex");
 const SLUG1 = `email-${RUN}-one`;
 const SLUG2 = `email-${RUN}-two`;
