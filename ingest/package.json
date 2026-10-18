@@ -39,7 +39,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@google-cloud/cloud-sql-connector": "^1.12.0",
+    "@google-cloud/cloud-sql-connector": "^1.12.1",
     "libphonenumber-js": "^1.13.15",
     "pg": "^8.23.1"
   },
