@@ -15,7 +15,8 @@
  *
  * Incoming x-cma-identity-* headers are always removed first, so nothing a
  * client sends can impersonate anyone; the app only ever sees what this file
- * set. Static assets and the health route are not gated here (IAP in front of
+ * set. IAP's own headers (the assertion and its plain identity headers) are
+ * removed after verification too, so no page or route can read or log them. Static assets and the health route are not gated here (IAP in front of
  * the load balancer still gates them).
  *
  * /signed-out (README, Authentication; docs/signed-out) is never served by cma-web: the load balancer
@@ -30,6 +31,8 @@ import { IapVerifyError, verifyIapJwt } from "@/lib/auth/iap";
 
 /** Behind IAP with the Google-managed OAuth client every identity is a Google account */
 const IAP_PROVIDER = "google";
+/** IAP's own request headers: read here, never passed on to a page or route */
+export const IAP_HEADERS = ["x-goog-iap-jwt-assertion", "x-goog-authenticated-user-email", "x-goog-authenticated-user-id"] as const;
 
 const MOCK_SUBJECT_HEADER = "x-cma-mock-subject";
 const MOCK_SUBJECT_COOKIE = "cma-mock-subject";
@@ -82,6 +85,10 @@ function mock(request: NextRequest, headers: Headers) {
 }
 
 function pass(headers: Headers, identity: Identity) {
+  // The app never sees IAP's own headers: the assertion has done its work here and is a bearer proof for
+  // its lifetime, and the plain identity headers are never to be trusted (README, Authentication), so
+  // nothing downstream can read or log them (the IT audit of 17 October 2026)
+  for (const name of IAP_HEADERS) headers.delete(name);
   headers.set(IDENTITY_HEADERS.provider, identity.provider);
   headers.set(IDENTITY_HEADERS.subject, identity.subject);
   headers.set(IDENTITY_HEADERS.email, identity.email);

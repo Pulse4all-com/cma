@@ -4,6 +4,7 @@ import { postgresData } from "./postgres";
 import type { CmaData } from "./types";
 
 export type * from "./types";
+export { CmaDbError, CMA_SQLSTATE, type CmaSqlState } from "./errors";
 
 /**
  * The one entry point for screens. Swapping the implementation happens here only.

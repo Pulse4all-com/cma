@@ -20,7 +20,6 @@ import type { Copy } from "@/lib/copy";
 import { agentGroupOf, GROUP_BG } from "@/lib/dashboard";
 import { Badge, Button, Card } from "./primitives";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { endWorkdayAction } from "@/app/actions";
 import { workedSeconds } from "@/lib/live";
 
 /** A one-second clock as an external store: no setState in effects, no hydration mismatch */
@@ -118,8 +117,13 @@ export function WorkdayPanel({
   }
 
   function confirmEnd() {
+    setStatusFailed(false);
     startTransition(async () => {
-      await endWorkdayAction();
+      // The same guarded route the API verifier covers (assertSameSiteWrite), not a server action: one
+      // write rule for every write (the IT audit of 17 October 2026). A refusal shows the status problem
+      // line; the refresh then shows the day as the database has it (ended in another tab, for example)
+      const res = await fetch("/api/v1/me/day/end", { method: "POST", headers: { "x-cma-request": "1" } });
+      if (!res.ok && res.status !== 409) setStatusFailed(true);
       setConfirming(false);
       router.refresh();
     });

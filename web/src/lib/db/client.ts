@@ -1,6 +1,7 @@
 import 'server-only';
 import pg from 'pg';
 import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-connector';
+import { CMA_SQLSTATE, CmaDbError, isCmaSqlState } from '@/lib/data/errors';
 
 /**
  * Database client for the CMA web app.
@@ -33,32 +34,7 @@ import { AuthTypes, Connector, IpAddressTypes } from '@google-cloud/cloud-sql-co
 
 // ---- Error translation -----------------------------------------------------------------------
 
-/** SQLSTATEs raised by the functions of migrations 0002 and 0003. The API maps codes, not text. */
-export type CmaSqlState = 'CMA01' | 'CMA02' | 'CMA03' | 'CMA04' | 'CMA05' | 'CMA06';
-
-export const CMA_SQLSTATE = {
-  CMA01: 'no acting user or user inactive',
-  CMA02: 'not found or not yours',
-  CMA03: 'workday already ended',
-  CMA04: 'invalid correction or event',
-  CMA05: 'tenant configuration missing',
-  CMA06: 'not permitted',
-} as const satisfies Record<CmaSqlState, string>;
-
-export class CmaDbError extends Error {
-  readonly sqlState: CmaSqlState | 'DB_UNAVAILABLE' | 'DB_ERROR';
-  readonly detail: string | undefined;
-  constructor(sqlState: CmaDbError['sqlState'], message: string, detail?: string) {
-    super(message);
-    this.name = 'CmaDbError';
-    this.sqlState = sqlState;
-    this.detail = detail;
-  }
-}
-
-function isCmaSqlState(code: unknown): code is CmaSqlState {
-  return typeof code === 'string' && code in CMA_SQLSTATE;
-}
+export { CMA_SQLSTATE, CmaDbError, type CmaSqlState } from '@/lib/data/errors';
 
 /** Turns a pg error into a CmaDbError; never leaks SQL text to the caller. */
 export function translateDbError(err: unknown): CmaDbError {

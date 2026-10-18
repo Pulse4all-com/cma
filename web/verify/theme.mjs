@@ -73,6 +73,18 @@ async function acknowledgeUrgent(subject) {
   }
 }
 for (const subject of ["manager", "supervisor", "admin", "analyst", "invest-analyst"]) await acknowledgeUrgent(subject);
+// The security headers (next.config.ts): the first CSP step of the IT audit of 17 October 2026 on a page, a
+// route and the proxy's 401 alike; provoked, the expected policy is a different one
+{
+  const expected = provoke ? "frame-ancestors 'self'" : "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+  for (const [path, headers] of [["/", { "x-cma-mock-subject": "agent-two" }], ["/api/v1/me", { "x-cma-mock-subject": "agent-two" }], ["/day", { "x-cma-mock-subject": "no-such-person-" + "x".repeat(70) }]]) {
+    const r = await fetch(BASE + path, { headers, redirect: "manual" });
+    const csp = r.headers.get("content-security-policy");
+    if (csp !== expected) problems.push(`${path}: content-security-policy is ${JSON.stringify(csp)}, not ${JSON.stringify(expected)}`);
+    if (r.headers.get("x-content-type-options") !== "nosniff") problems.push(`${path}: x-content-type-options is not nosniff`);
+    if (r.headers.get("x-frame-options") !== "DENY") problems.push(`${path}: x-frame-options is not DENY`);
+  }
+}
 const b = await chromium.launch();
 const pages = [
   { path: "/" }, { path: "/day" }, { path: "/day", subject: "agent-two", start: true },

@@ -3,7 +3,7 @@
  * week, this month or a custom range, all as calendar dates in the viewer's zone.
  */
 import type { HoursRange } from "@/lib/data";
-import { addDays, daysBetween, endOfMonth, isDateKey, startOfMonth, startOfWeek } from "@/lib/time";
+import { addDays, daysBetween, endOfMonth, isDateKey, startOfMonth, startOfWeek } from "./time.ts";
 
 export type Range = "today" | "week" | "month" | "custom";
 export const RANGES: Range[] = ["today", "week", "month", "custom"];
