@@ -8,7 +8,9 @@
  * verify/follow-up.mjs tests it without a browser or a database. Nothing here knows a vendor, a
  * pipeline, a market or a status key.
  */
-import type { DueState, FollowUpOwner, FollowUpSummary, OpenLead, OpenTask, OpenTicket, SlaState } from "./data/types";
+import type {
+  DueState, FollowUpFilterOptions, FollowUpOwner, FollowUpPage, FollowUpSummary, OpenLead, OpenTask, OpenTicket, SlaState,
+} from "./data/types";
 
 /** The reads of the open leads, tickets and tasks (cma.open_leads, open_tickets, open_tasks), any one of them */
 export const FOLLOW_UP_PERMISSIONS = ["reports.view", "performance.team", "monitoring.live"] as const;
@@ -94,13 +96,8 @@ export function filterTasks(rows: OpenTask[], f: FollowUpFilter): OpenTask[] {
   return rows.filter((r) => marketMatches(r, f.market) && ownerMatches(r, f.owner) && (f.state !== "attention" || taskNeedsAttention(r)));
 }
 
-export interface FilterOptions {
-  /** Market codes in order, "unknown" last when any row has none */
-  markets: string[];
-  /** The people who own something, by name, then OWNER_NONE when any row has no person */
-  owners: { id: string; name: string | null }[];
-  hasUnowned: boolean;
-}
+/** The choices of the filters (types.ts FollowUpFilterOptions) */
+export type FilterOptions = FollowUpFilterOptions;
 
 /** The choices of the filters, from every row before filtering, so a choice never disappears while it is made */
 export function filterOptions(leads: OpenLead[], tickets: OpenTicket[], tasks: OpenTask[]): FilterOptions {
@@ -172,6 +169,62 @@ export function ownRows<T extends { ownerUserId: string | null }>(rows: T[], use
   return rows.filter((r) => r.ownerUserId === userId);
 }
 
+// ---- The snapshot (addition 0008s) ---------------------------------------------------------------
+
+/** follow_up.list_rows: the rows each list shows after its filters, as cma.follow_up_page bounds it */
+export const FOLLOW_UP_LIST_ROWS_DEFAULT = 100;
+export const FOLLOW_UP_LIST_ROWS_MAX = 500;
+/** Figures older than this read as stale: "Updated …" turns Muted (the refresh runs every minute) */
+export const FOLLOW_UP_STALE_MS = 3 * 60_000;
+
+/** The rows a list shows: the setting's value within 1 to 500, the default when it is not a whole number */
+export function listRowsOf(value: string | number | null | undefined): number {
+  const n = typeof value === "number" ? value : value !== null && value !== undefined && /^\d{1,6}$/.test(value) ? Number(value) : FOLLOW_UP_LIST_ROWS_DEFAULT;
+  return Math.min(FOLLOW_UP_LIST_ROWS_MAX, Math.max(1, Math.trunc(n)));
+}
+
+/**
+ * cma.follow_up_page over the three lists (the mock data layer): the summary of every row, per person for
+ * performance.team only, the filter choices from every row, each list after the filter with its total and its
+ * first rows, and the counts before the filters
+ */
+export function followUpPage(
+  leads: OpenLead[], tickets: OpenTicket[], tasks: OpenTask[], filter: FollowUpFilter,
+  opts: { rows: number; canByOwner: boolean; computedAt: string; durationMs: number; targetMinutes: number | null; warningPct: number | null },
+): FollowUpPage {
+  const cap = listRowsOf(opts.rows);
+  const list = <T>(shown: T[]) => ({ total: shown.length, rows: shown.slice(0, cap) });
+  return {
+    computedAt: opts.computedAt,
+    durationMs: opts.durationMs,
+    rows: cap,
+    summary: summarise(leads, tickets, tasks),
+    byOwner: opts.canByOwner ? byOwner(leads, tickets, tasks) : null,
+    options: filterOptions(leads, tickets, tasks),
+    settings: { targetMinutes: opts.targetMinutes, warningPct: opts.warningPct },
+    counts: { leads: leads.length, tickets: tickets.length, tasks: tasks.length },
+    leads: list(filterLeads(leads, filter)),
+    tickets: list(filterTickets(tickets, filter)),
+    tasks: list(filterTasks(tasks, filter)),
+  };
+}
+
+/** True when the figures are older than FOLLOW_UP_STALE_MS at now */
+export function isStale(computedAt: string, now: Date): boolean {
+  return now.getTime() - Date.parse(computedAt) > FOLLOW_UP_STALE_MS;
+}
+
+/** How long ago the figures were computed, in words: "now", "20 seconds ago", "2 minutes ago", "1 hour ago" (the locale's own) */
+export function agoText(computedAt: string, now: Date, locale: string): string {
+  const s = Math.max(0, Math.round((now.getTime() - Date.parse(computedAt)) / 1000));
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (s < 10) return rtf.format(0, "second");
+  if (s < 60) return rtf.format(-s, "second");
+  if (s < 3600) return rtf.format(-Math.floor(s / 60), "minute");
+  if (s < 86_400) return rtf.format(-Math.floor(s / 3600), "hour");
+  return rtf.format(-Math.floor(s / 86_400), "day");
+}
+
 // ---- Welcome's Needs attention and the Live board's tiles --------------------------------------
 
 export type AttentionKey = "daysNotEnded" | "leadsPastTarget" | "ticketsAtRiskOrBreached" | "tasksOverdue" | "missedCallbacks";
@@ -217,7 +270,8 @@ export function daysSince(date: string, today: string): number {
 
 // ---- The settings, as cma.check_tenant_setting applies them -------------------------------------
 
-export const FOLLOW_UP_SETTING_KEYS = ["tickets.sla_minutes", "tickets.sla_warning_pct", "leads.age_buckets_business_days", "tasks.callback_window_minutes"] as const;
+export const FOLLOW_UP_SETTING_KEYS = ["tickets.sla_minutes", "tickets.sla_warning_pct", "leads.age_buckets_business_days", "tasks.callback_window_minutes",
+  "follow_up.list_rows"] as const;
 export type FollowUpSettingKey = (typeof FOLLOW_UP_SETTING_KEYS)[number];
 
 /** cma.is_bucket_list: one to five increasing whole numbers from 1, comma-separated (spaces are stripped first, as the trigger does) */
@@ -229,13 +283,14 @@ export function normaliseBucketList(text: string): string | null {
   return v;
 }
 
-/** A whole number within the setting's bounds, or null: 1 to 100000 business minutes, 1 to 100 %, 0 to 10080 minutes */
+/** A whole number within the setting's bounds, or null: 1 to 100000 business minutes, 1 to 100 %, 0 to 10080 minutes, 1 to 500 rows */
 export function parseFollowUpSetting(key: FollowUpSettingKey, text: string): string | null {
   if (key === "leads.age_buckets_business_days") return normaliseBucketList(text);
   const t = text.trim();
   if (!/^\d{1,6}$/.test(t)) return null;
   const n = Number(t);
-  const [min, max] = key === "tickets.sla_minutes" ? [1, 100000] : key === "tickets.sla_warning_pct" ? [1, 100] : [0, 10080];
+  const [min, max] = key === "tickets.sla_minutes" ? [1, 100000] : key === "tickets.sla_warning_pct" ? [1, 100]
+    : key === "follow_up.list_rows" ? [1, FOLLOW_UP_LIST_ROWS_MAX] : [0, 10080];
   return n >= min && n <= max ? String(n) : null;
 }
 

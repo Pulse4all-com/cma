@@ -5,7 +5,9 @@
  * own people only: a customer's name, number or address never reaches these rows, nor a task's text. An
  * owner not linked to a person reads Not mapped, never as an id. Every header explains itself in a hint
  * (copy.hints). Tables follow docs/style/Pulse4all-Style.md 7.6: rows of at least 40 px, zebra rows, a
- * hover row; the state badges in the palette's tones, no filled red cell.
+ * hover row; the state badges in the palette's tones, no filled red cell. Since addition 0008s the headers
+ * stay here and the rows go to the client body FollowUpRows as short formatted cells, so the page's
+ * 10-second refresh carries values rather than every cell's markup.
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
@@ -13,13 +15,11 @@ import type { DueState, OpenLead, OpenTask, OpenTicket, SlaState } from "@/lib/d
 import { bucketLabel } from "@/lib/follow-up";
 import { fillHint, fmtBusinessMinutes, fmtCount } from "@/lib/reports";
 import { fmtDateTime } from "@/lib/time";
+import { FollowUpRows, type Cell, type CellRow } from "./FollowUpRows";
 import { HeaderHint } from "./HeaderHint";
-import { RecordLink } from "./ReportParts";
-import { Badge } from "./primitives";
+import { Badge, type BadgeTone } from "./primitives";
 
 const th = "h-10 px-3 py-1 font-semibold";
-const td = "h-10 whitespace-nowrap px-3";
-const tr = "border-b border-p4a-border last:border-b-0 odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 
 export interface TableContext {
   copy: Copy;
@@ -37,43 +37,53 @@ function Hint({ ctx, label, text }: { ctx: TableContext; label: string; text: st
   return <HeaderHint label={h.about.replace("{label}", label)} text={fillHint(text, { hours: h.officeHours, target: ctx.targetMinutes, warning: ctx.warningPct }, ctx.locale)} />;
 }
 
-function Owner({ ownerUserId, ownerName, ownerRef, copy }: { ownerUserId: string | null; ownerName: string | null; ownerRef: string | null; copy: Copy }) {
+// The rows are drawn by the client body FollowUpRows from short cells (addition 0008s): one entry per column
+function ownerCell(r: { ownerUserId: string | null; ownerName: string | null; ownerRef: string | null }, copy: Copy): Cell {
   const t = copy.followUp;
-  if (ownerUserId !== null) return <>{ownerName ?? t.notMapped}</>;
-  if (ownerRef !== null) return <span className="text-p4a-muted">{t.notMapped}</span>;
-  return <span className="text-p4a-muted">{t.noOwner}</span>;
+  if (r.ownerUserId !== null) return r.ownerName ?? t.notMapped;
+  return { m: r.ownerRef !== null ? t.notMapped : t.noOwner };
 }
 
-function market(code: string | null, copy: Copy): ReactNode {
-  return code === null || code === "unknown" ? <span className="text-p4a-muted">{copy.reports.unknownMarket}</span> : code;
+function marketCell(code: string | null, copy: Copy): Cell {
+  return code === null || code === "unknown" ? { m: copy.reports.unknownMarket } : code;
+}
+
+function slaTone(state: SlaState, copy: Copy): [BadgeTone, string] {
+  const t = copy.followUp;
+  switch (state) {
+    case "ok": return ["success", t.stateOk];
+    case "at_risk": return ["warning", t.stateAtRisk];
+    case "breached": return ["error", t.stateBreached];
+    case "no_hours": return ["neutral", t.stateNoHours];
+  }
+}
+
+function dueTone(state: DueState, copy: Copy): [BadgeTone, string] {
+  const t = copy.followUp;
+  switch (state) {
+    case "overdue": return ["error", t.dueOverdue];
+    case "today": return ["warning", t.dueToday];
+    case "later": return ["neutral", t.dueLater];
+    case "none": return ["neutral", t.dueNone];
+  }
 }
 
 export function slaBadge(state: SlaState, copy: Copy): ReactNode {
-  const t = copy.followUp;
-  switch (state) {
-    case "ok": return <Badge tone="success">{t.stateOk}</Badge>;
-    case "at_risk": return <Badge tone="warning">{t.stateAtRisk}</Badge>;
-    case "breached": return <Badge tone="error">{t.stateBreached}</Badge>;
-    case "no_hours": return <Badge tone="neutral">{t.stateNoHours}</Badge>;
-  }
+  const [tone, label] = slaTone(state, copy);
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
 export function dueBadge(state: DueState, copy: Copy): ReactNode {
-  const t = copy.followUp;
-  switch (state) {
-    case "overdue": return <Badge tone="error">{t.dueOverdue}</Badge>;
-    case "today": return <Badge tone="warning">{t.dueToday}</Badge>;
-    case "later": return <Badge tone="neutral">{t.dueLater}</Badge>;
-    case "none": return <Badge tone="neutral">{t.dueNone}</Badge>;
-  }
+  const [tone, label] = dueTone(state, copy);
+  return <Badge tone={tone}>{label}</Badge>;
 }
 
+const badge = ([b, v]: [BadgeTone, string]): Cell => ({ b, v });
+
 export function LeadsTable({ rows, ctx, empty, testId = "follow-up-leads" }: { rows: OpenLead[]; ctx: TableContext; empty: string; testId?: string }) {
-  const { copy, locale, timeZone } = ctx;
-  const t = copy.followUp;
-  const h = copy.hints;
+  const t = ctx.copy.followUp;
+  const h = ctx.copy.hints;
   if (rows.length === 0) return <p className="text-body text-p4a-muted" data-testid={`${testId}-empty`}>{empty}</p>;
-  const n = (x: number) => fmtCount(x, locale);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
@@ -92,43 +102,16 @@ export function LeadsTable({ rows, ctx, empty, testId = "follow-up-leads" }: { r
             <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
-        <tbody>
-          {rows.map((l) => {
-            const bucket = bucketLabel(l.bucketFrom, l.bucketTo);
-            return (
-              <tr key={l.dealId} className={tr}>
-                <td className={`${td} font-semibold`}>{l.dealSourceId}</td>
-                <td className={td}>{l.pipelineLabel}</td>
-                <td className={td}>{market(l.market, copy)}</td>
-                {ctx.withOwner ? <td className={td}><Owner ownerUserId={l.ownerUserId} ownerName={l.ownerName} ownerRef={l.ownerRef} copy={copy} /></td> : null}
-                <td className={`${td} tabular`}>{fmtDateTime(l.createdAt, timeZone, locale)}</td>
-                <td className={`${td} tabular text-right`}>{fmtBusinessMinutes(l.waitingBusinessSeconds === null ? null : Math.floor(l.waitingBusinessSeconds / 60), locale)}</td>
-                <td className={td}>{bucket === null ? <span className="text-p4a-muted">{t.noHours}</span> : t.ageDays.replace("{bucket}", bucket)}</td>
-                <td className={td}>
-                  {l.pastTarget === true ? <Badge tone="error">{t.pastTarget}</Badge>
-                    : l.pastTarget === false ? <Badge tone="success">{t.withinTarget}</Badge>
-                    : <Badge tone="neutral">{t.noHours}</Badge>}
-                </td>
-                <td className={`${td} tabular`}>
-                  {l.lastCallDays === null ? <span className="text-p4a-muted">{t.lastCallNone}</span>
-                    : l.lastCallDays === 0 ? t.lastCallToday : l.lastCallDays === 1 ? t.lastCallDaysOne : t.lastCallDays.replace("{n}", n(l.lastCallDays))}
-                </td>
-                <td className={`${td} text-right`}><RecordLink url={l.recordUrl} label={t.openRecord.replace("{type}", t.deal.toLowerCase()).replace("{id}", l.dealSourceId)} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
+        <FollowUpRows columns={leadColumns(ctx)} rows={rows.map((l) => leadRow(l, ctx))} />
       </table>
     </div>
   );
 }
 
 export function TicketsTable({ rows, ctx, empty, testId = "follow-up-tickets" }: { rows: OpenTicket[]; ctx: TableContext; empty: string; testId?: string }) {
-  const { copy, locale } = ctx;
-  const t = copy.followUp;
-  const h = copy.hints;
+  const t = ctx.copy.followUp;
+  const h = ctx.copy.hints;
   if (rows.length === 0) return <p className="text-body text-p4a-muted" data-testid={`${testId}-empty`}>{empty}</p>;
-  const n = (x: number) => fmtCount(x, locale);
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
@@ -147,41 +130,16 @@ export function TicketsTable({ rows, ctx, empty, testId = "follow-up-tickets" }:
             <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
-        <tbody>
-          {rows.map((x) => (
-            <tr key={x.ticketId} className={tr}>
-              <td className={`${td} font-semibold`}>{x.ticketSourceId}</td>
-              <td className={td}>{x.pipelineLabel}</td>
-              <td className={td}>{x.stageLabel ?? <span className="text-p4a-muted">–</span>}</td>
-              <td className={td}>{market(x.market, copy)}</td>
-              {ctx.withOwner ? <td className={td}><Owner ownerUserId={x.ownerUserId} ownerName={x.ownerName} ownerRef={x.ownerRef} copy={copy} /></td> : null}
-              <td className={`${td} tabular text-right`}>{fmtBusinessMinutes(x.openBusinessSeconds === null ? null : Math.floor(x.openBusinessSeconds / 60), locale)}</td>
-              <td className={`${td} tabular text-right`}>{t.minutes.replace("{n}", n(x.slaMinutes))}</td>
-              <td className={td}>{slaBadge(x.slaState, copy)}</td>
-              <td className={`${td} tabular text-right`}>
-                {x.minutesToBreach === null ? <span className="text-p4a-muted">–</span>
-                  : x.minutesToBreach < 0 ? <span className="text-p4a-error">{t.minutesOver.replace("{n}", n(-x.minutesToBreach))}</span>
-                  : t.minutes.replace("{n}", n(x.minutesToBreach))}
-              </td>
-              <td className={`${td} text-right`}><RecordLink url={x.recordUrl} label={t.openRecord.replace("{type}", t.ticket.toLowerCase()).replace("{id}", x.ticketSourceId)} /></td>
-            </tr>
-          ))}
-        </tbody>
+        <FollowUpRows columns={ticketColumns(ctx)} rows={rows.map((x) => ticketRow(x, ctx))} />
       </table>
     </div>
   );
 }
 
 export function TasksTable({ rows, ctx, empty, testId = "follow-up-tasks" }: { rows: OpenTask[]; ctx: TableContext; empty: string; testId?: string }) {
-  const { copy, locale, timeZone } = ctx;
-  const t = copy.followUp;
-  const h = copy.hints;
+  const t = ctx.copy.followUp;
+  const h = ctx.copy.hints;
   if (rows.length === 0) return <p className="text-body text-p4a-muted" data-testid={`${testId}-empty`}>{empty}</p>;
-  const record = (k: OpenTask): ReactNode => {
-    if (k.recordType === "deal") return t.recordDeal.replace("{id}", k.recordSourceId ?? "");
-    if (k.recordType === "ticket") return t.recordTicket.replace("{id}", k.recordSourceId ?? "");
-    return <span className="text-p4a-muted">{t.noRecord}</span>;
-  };
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
@@ -199,25 +157,88 @@ export function TasksTable({ rows, ctx, empty, testId = "follow-up-tasks" }: { r
             <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
-        <tbody>
-          {rows.map((k) => (
-            <tr key={k.taskId} className={tr}>
-              <td className={`${td} font-semibold`}>{k.taskSourceId}</td>
-              <td className={td}>
-                {k.typeLabel}
-                {k.isCallback ? <span className="ml-2"><Badge tone="info">{t.callback}</Badge></span> : null}
-              </td>
-              <td className={td}>{k.priorityRef ?? <span className="text-p4a-muted">–</span>}</td>
-              <td className={td}>{k.statusLabel}</td>
-              {ctx.withOwner ? <td className={td}><Owner ownerUserId={k.ownerUserId} ownerName={k.ownerName} ownerRef={k.ownerRef} copy={copy} /></td> : null}
-              <td className={`${td} tabular`}>{k.dueAt ? fmtDateTime(k.dueAt, timeZone, locale) : <span className="text-p4a-muted">–</span>}</td>
-              <td className={td}>{dueBadge(k.dueState, copy)}</td>
-              <td className={td}>{record(k)}</td>
-              <td className={`${td} text-right`}><RecordLink url={k.recordUrl} label={t.openRecord.replace("{type}", t.task.toLowerCase()).replace("{id}", k.taskSourceId)} /></td>
-            </tr>
-          ))}
-        </tbody>
+        <FollowUpRows columns={taskColumns(ctx)} rows={rows.map((k) => taskRow(k, ctx))} />
       </table>
     </div>
   );
+}
+
+// ---- The cells of each row, in the header's column order ------------------------------------------
+
+function leadColumns(ctx: TableContext): string[] {
+  return ["font-semibold", "", "", ...(ctx.withOwner ? [""] : []), "tabular", "tabular text-right", "", "", "tabular", "text-right"];
+}
+
+function leadRow(l: OpenLead, ctx: TableContext): CellRow {
+  const { copy, locale, timeZone } = ctx;
+  const t = copy.followUp;
+  const bucket = bucketLabel(l.bucketFrom, l.bucketTo);
+  const n = (x: number) => fmtCount(x, locale);
+  return {
+    k: l.dealId,
+    c: [
+      l.dealSourceId,
+      l.pipelineLabel,
+      marketCell(l.market, copy),
+      ...(ctx.withOwner ? [ownerCell(l, copy)] : []),
+      fmtDateTime(l.createdAt, timeZone, locale),
+      fmtBusinessMinutes(l.waitingBusinessSeconds === null ? null : Math.floor(l.waitingBusinessSeconds / 60), locale),
+      bucket === null ? { m: t.noHours } : t.ageDays.replace("{bucket}", bucket),
+      l.pastTarget === true ? { b: "error", v: t.pastTarget } : l.pastTarget === false ? { b: "success", v: t.withinTarget } : { b: "neutral", v: t.noHours },
+      l.lastCallDays === null ? { m: t.lastCallNone }
+        : l.lastCallDays === 0 ? t.lastCallToday : l.lastCallDays === 1 ? t.lastCallDaysOne : t.lastCallDays.replace("{n}", n(l.lastCallDays)),
+      { u: l.recordUrl, l: t.openRecord.replace("{type}", t.deal.toLowerCase()).replace("{id}", l.dealSourceId) },
+    ],
+  };
+}
+
+function ticketColumns(ctx: TableContext): string[] {
+  return ["font-semibold", "", "", "", ...(ctx.withOwner ? [""] : []), "tabular text-right", "tabular text-right", "", "tabular text-right", "text-right"];
+}
+
+function ticketRow(x: OpenTicket, ctx: TableContext): CellRow {
+  const { copy, locale } = ctx;
+  const t = copy.followUp;
+  const n = (v: number) => fmtCount(v, locale);
+  return {
+    k: x.ticketId,
+    c: [
+      x.ticketSourceId,
+      x.pipelineLabel,
+      x.stageLabel ?? { m: "–" },
+      marketCell(x.market, copy),
+      ...(ctx.withOwner ? [ownerCell(x, copy)] : []),
+      fmtBusinessMinutes(x.openBusinessSeconds === null ? null : Math.floor(x.openBusinessSeconds / 60), locale),
+      t.minutes.replace("{n}", n(x.slaMinutes)),
+      badge(slaTone(x.slaState, copy)),
+      x.minutesToBreach === null ? { m: "–" }
+        : x.minutesToBreach < 0 ? { e: t.minutesOver.replace("{n}", n(-x.minutesToBreach)) }
+        : t.minutes.replace("{n}", n(x.minutesToBreach)),
+      { u: x.recordUrl, l: t.openRecord.replace("{type}", t.ticket.toLowerCase()).replace("{id}", x.ticketSourceId) },
+    ],
+  };
+}
+
+function taskColumns(ctx: TableContext): string[] {
+  return ["font-semibold", "", "", "", ...(ctx.withOwner ? [""] : []), "tabular", "", "", "text-right"];
+}
+
+function taskRow(k: OpenTask, ctx: TableContext): CellRow {
+  const { copy, locale, timeZone } = ctx;
+  const t = copy.followUp;
+  return {
+    k: k.taskId,
+    c: [
+      k.taskSourceId,
+      k.isCallback ? { v: k.typeLabel, tag: ["info", t.callback] } : k.typeLabel,
+      k.priorityRef ?? { m: "–" },
+      k.statusLabel,
+      ...(ctx.withOwner ? [ownerCell(k, copy)] : []),
+      k.dueAt ? fmtDateTime(k.dueAt, timeZone, locale) : { m: "–" },
+      badge(dueTone(k.dueState, copy)),
+      k.recordType === "deal" ? t.recordDeal.replace("{id}", k.recordSourceId ?? "")
+        : k.recordType === "ticket" ? t.recordTicket.replace("{id}", k.recordSourceId ?? "") : { m: t.noRecord },
+      { u: k.recordUrl, l: t.openRecord.replace("{type}", t.task.toLowerCase()).replace("{id}", k.taskSourceId) },
+    ],
+  };
 }

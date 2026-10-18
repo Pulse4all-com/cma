@@ -10,12 +10,14 @@
  * not-linked choice only when a row has no person), the summary and the per-person rows as the database
  * computes them (the not-linked row last, nobody with nothing waiting), the person's own rows, Welcome's
  * Needs attention lines with their links, the Live board's six tiles, the age bucket in words, the
- * unlinked-calls setting in force per kind.
+ * unlinked-calls setting in force per kind. Since addition 0008s: the page's one read as cma.follow_up_page returns
+ * it (the lists capped at follow_up.list_rows with their filtered totals, the counts before the filters, per person
+ * only for performance.team), the list_rows setting's bounds, "Updated …" in words and when it turns stale.
  */
 import {
-  attentionLines, bucketLabel, byOwner, daysSince, DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_NONE, filterLeads, filterOptions, filterQuery,
-  filterTasks, filterTickets, FOLLOW_UP_TILES, normaliseBucketList, OWNER_NONE, ownRows, parseFollowUpFilter, parseFollowUpSetting, parsePipelineSla,
-  summarise, unlinkedSkipOf,
+  agoText, attentionLines, bucketLabel, byOwner, daysSince, DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_NONE, filterLeads, filterOptions, filterQuery,
+  filterTasks, filterTickets, FOLLOW_UP_TILES, followUpPage, isStale, listRowsOf, normaliseBucketList, OWNER_NONE, ownRows, parseFollowUpFilter,
+  parseFollowUpSetting, parsePipelineSla, summarise, unlinkedSkipOf,
 } from "../src/lib/follow-up.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -35,6 +37,10 @@ expect("buckets: out of order, from 0, six of them, a word, empty are refused",
 expect("response time: 1 and 100000 pass, 0 and 100001 do not",
   ["1", "100000", "0", "100001", "four"].map((v) => parseFollowUpSetting("tickets.sla_minutes", v)), ["1", "100000", null, null, null], ["0", "100000", null, null, null]);
 expect("warning share: 1 to 100", ["1", "100", "0", "101"].map((v) => parseFollowUpSetting("tickets.sla_warning_pct", v)), ["1", "100", null, null], ["1", "100", "0", null]);
+expect("list rows: 1 to 500 pass, 0, 501 and a word do not",
+  ["1", "100", "500", "0", "501", "many"].map((v) => parseFollowUpSetting("follow_up.list_rows", v)), ["1", "100", "500", null, null, null], ["1", "100", "500", null, "501", null]);
+expect("list rows in force: the value within 1 to 500, the default 100 when missing or ill-formed",
+  [listRowsOf("25"), listRowsOf(0), listRowsOf(1000), listRowsOf(null), listRowsOf("x")], [25, 1, 500, 100, 100], [25, 0, 1000, 100, 100]);
 expect("callback window: 0 to 10080", ["0", "10080", "10081", "-1"].map((v) => parseFollowUpSetting("tasks.callback_window_minutes", v)), ["0", "10080", null, null], [null, "10080", null, null]);
 expect("a pipeline's response time: empty is the default, 60 is 60, 0 and a word are refused",
   ["", " 60 ", "0", "x", "100001"].map(parsePipelineSla), [null, 60, undefined, undefined, undefined], [null, 60, 0, undefined, undefined]);
@@ -113,6 +119,32 @@ expect("attention lines: the five in order, each with where to act",
 expect("attention lines: without Team hours and without telephony, the three figures alone",
   attentionLines(summary, null, null).map((l) => l.key), ["leadsPastTarget", "ticketsAtRiskOrBreached", "tasksOverdue"], ["daysNotEnded", "leadsPastTarget", "ticketsAtRiskOrBreached", "tasksOverdue"]);
 expect("the Live board's six tiles are summary figures", [FOLLOW_UP_TILES.length, FOLLOW_UP_TILES.every((k) => typeof summary[k] === "number")], [6, true], [7, true]);
+
+// ---- the page's one read (0008s), as cma.follow_up_page returns it -------------------------------------------
+const at = "2026-10-18T10:00:00.000Z";
+const pageOf = (filter, rows, canByOwner) => followUpPage(leads, tickets, tasks, filter, { rows, canByOwner, computedAt: at, durationMs: 12, targetMinutes: 15, warningPct: 80 });
+const all = { market: null, owner: null, state: null };
+const nl = pageOf({ market: "NL", owner: null, state: null }, 1, true);
+expect("page: each list the first rows after the filter, with the filtered total",
+  [[nl.leads.total, ids(nl.leads.rows)], [nl.tickets.total, ids(nl.tickets.rows)], [nl.tasks.total, ids(nl.tasks.rows)]],
+  [[2, ["d1"]], [3, ["x1"]], [1, ["k1"]]], [[2, ["d1", "d3"]], [3, ["x1"]], [1, ["k1"]]]);
+expect("page: the summary, the choices and the counts take every row, whatever the filter",
+  [JSON.stringify(nl.summary) === JSON.stringify(summarise(leads, tickets, tasks)), nl.options.markets, nl.counts],
+  [true, ["GB", "NL", "unknown"], { leads: 4, tickets: 5, tasks: 4 }], [true, ["NL"], { leads: 2, tickets: 3, tasks: 0 }]);
+expect("page: the rows asked for, capped at 500 and at least 1",
+  [pageOf(all, 3, true).rows, pageOf(all, 1000, true).rows, pageOf(all, 0, true).rows, ids(pageOf(all, 1000, true).tickets.rows).length], [3, 500, 1, 5], [3, 1000, 0, 5]);
+expect("page: per person for performance.team only, the time computed passed on",
+  [pageOf(all, 100, true).byOwner?.length, pageOf(all, 100, false).byOwner, nl.computedAt], [4, null, at], [4, [], at]);
+
+// ---- "Updated …" under the title -----------------------------------------------------------------------------
+const now = new Date("2026-10-18T10:05:00.000Z");
+const ago = (ms) => new Date(now.getTime() - ms).toISOString();
+expect("updated: now, seconds, minutes, an hour ago in English",
+  [agoText(ago(4_000), now, "en"), agoText(ago(40_000), now, "en"), agoText(ago(120_000), now, "en"), agoText(ago(3_700_000), now, "en")],
+  ["now", "40 seconds ago", "2 minutes ago", "1 hour ago"], ["now", "40 seconds ago", "2 minutes ago", "61 minutes ago"]);
+expect("updated: in Dutch", [agoText(ago(4_000), now, "nl"), agoText(ago(120_000), now, "nl")], ["nu", "2 minuten geleden"], ["nu", "2 minutes ago"]);
+expect("updated: stale only past three minutes; a time ahead of now is fresh",
+  [isStale(ago(60_000), now), isStale(ago(180_000), now), isStale(ago(181_000), now), isStale(ago(-5_000), now)], [false, false, true, false], [false, true, true, false]);
 
 // ---- formats and the unlinked-calls setting ---------------------------------------------------------------
 expect("the age bucket in words: 0–1, 2–5, 5+ (open), none without business hours",

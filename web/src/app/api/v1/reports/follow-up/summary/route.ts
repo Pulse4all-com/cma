@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 /**
  * The follow-up counts right now (cma.follow_up_summary, addition 0008o): leads not called and past the target,
  * tickets at risk, breached and without owner, tasks overdue, due today and with an owner nobody maps to.
- * Needs monitoring.live, performance.team or workday.team, here and again in the database.
+ * Needs monitoring.live, performance.team or workday.team, here and again in the database. Since addition 0008s
+ * from the snapshot, with computedAt (when it was computed, at most about a minute ago).
  */
 export async function GET() {
   return forPrincipal(async (me) => {

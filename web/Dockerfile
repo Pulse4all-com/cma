@@ -28,7 +28,7 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
 COPY --from=build --chown=app:app /app/public ./public
-# The scheduler's job (migration 0005a): the same image runs it as a Cloud Run job with another command
+# The scheduler's jobs (migration 0005a, addition 0008s): the same image runs them as Cloud Run jobs with another command
 COPY --from=build --chown=app:app /app/jobs ./jobs
 # System health documents (addition 0008r): copied into web/documents/ by cloudbuild.yaml before the build, listed by
 # scripts/documents-manifest.mjs at prebuild; an empty directory with an empty manifest when the copy step did not run

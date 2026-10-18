@@ -13,7 +13,7 @@ import type {
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  DueState, FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
+  DueState, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
@@ -748,8 +748,43 @@ function toOpenTask(r: OpenTaskDb, ownerName: string | null = r.owner_name ?? nu
   };
 }
 
+type SummaryDb = {
+  leads_open_not_called: number; leads_past_target: number; tickets_at_risk: number; tickets_breached: number;
+  tickets_without_owner: number; tasks_overdue: number; tasks_due_today: number; tasks_unmapped_owner: number;
+};
+function toSummary(x: SummaryDb): FollowUpSummary {
+  return {
+    leadsOpenNotCalled: x.leads_open_not_called, leadsPastTarget: x.leads_past_target, ticketsAtRisk: x.tickets_at_risk, ticketsBreached: x.tickets_breached,
+    ticketsWithoutOwner: x.tickets_without_owner, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today, tasksUnmappedOwner: x.tasks_unmapped_owner,
+  };
+}
+type OwnerDb = {
+  owner_user_id: string | null; display_name: string | null; open_leads: number; leads_past_target: number; open_tickets: number;
+  tickets_at_risk_or_breached: number; tasks_overdue: number; tasks_due_today: number;
+};
+function toOwner(x: OwnerDb): FollowUpOwner {
+  return {
+    ownerUserId: x.owner_user_id, displayName: x.display_name, openLeads: x.open_leads, leadsPastTarget: x.leads_past_target, openTickets: x.open_tickets,
+    ticketsAtRiskOrBreached: x.tickets_at_risk_or_breached, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today,
+  };
+}
+/** cma.follow_up_page's JSON (addition 0008s): snake_case keys, numbers as numbers, settings as text */
+type FollowUpPageDb = {
+  computed_at: string; duration_ms: number; rows: number; summary: SummaryDb; by_owner: OwnerDb[] | null;
+  options: { markets: string[]; owners: { id: string; name: string | null }[]; has_unowned: boolean };
+  settings: { target_minutes: string | null; warning_pct: string | null };
+  counts: { lead?: number; ticket?: number; task?: number };
+  leads: { total: number; rows: OpenLeadDb[] }; tickets: { total: number; rows: OpenTicketDb[] }; tasks: { total: number; rows: OpenTaskDb[] };
+};
+const wholeOrNull = (v: string | null | undefined): number | null => (v !== null && v !== undefined && /^\d+$/.test(v) ? Number(v) : null);
+
 /** The owner's name joined in: the application reads app_user under row-level security, so only this tenant's people */
 const OWNER_JOIN = `left join cma.app_user u on u.tenant_id = r.tenant_id and u.id = r.owner_user_id`;
+
+/** When the snapshot the list was just read from was computed (a second statement in the list's transaction) */
+async function computedAt(q: Querier): Promise<string> {
+  return one((await q.query<{ at: Date }>(`select cma.follow_up_computed_at() as at`)).rows, "follow_up_computed_at").at.toISOString();
+}
 
 type MarketDbRow = {
   code: string; name: string; time_zone: string; language_code: string; language_skill_key: string | null; min_language_level: number | null;
@@ -1943,61 +1978,74 @@ export const postgresData: CmaData = {
     });
   },
 
-  // ---- Follow-up (addition 0008o): every function checks its permission and reads the current tenant under row-level security
-  async getOpenLeads(me): Promise<OpenLead[]> {
+  // ---- Follow-up (addition 0008o): every function checks its permission and reads the current tenant under row-level security.
+  // Since addition 0008s they read the snapshot the refresh job computes once a minute (computed once on demand when a tenant has none)
+  async getFollowUpPage(me, filter): Promise<FollowUpPage> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<OpenLeadDb>(
-        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r ${OWNER_JOIN}`);
-      return r.rows.map((x) => toOpenLead(x));
-    });
-  },
-
-  async getOpenTickets(me): Promise<OpenTicket[]> {
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<OpenTicketDb>(
-        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r ${OWNER_JOIN}`);
-      return r.rows.map((x) => toOpenTicket(x));
-    });
-  },
-
-  async getOpenTasks(me): Promise<OpenTask[]> {
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<OpenTaskDb>(
-        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'task', r.task_source_id) as record_url from cma.open_tasks() r ${OWNER_JOIN}`);
-      return r.rows.map((x) => toOpenTask(x));
-    });
-  },
-
-  async getFollowUpSummary(me): Promise<FollowUpSummary> {
-    return withTenant(ctx(me), async (q) => {
-      const s = one((await q.query<{ leads_open_not_called: number; leads_past_target: number; tickets_at_risk: number; tickets_breached: number;
-        tickets_without_owner: number; tasks_overdue: number; tasks_due_today: number; tasks_unmapped_owner: number }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
+      // the function checks the permission, the filters and the per-person figures' permission itself; the rows are capped there
+      const j = one((await q.query<{ j: FollowUpPageDb }>(`select cma.follow_up_page($1, $2, $3, null) as j`,
+        [filter.market, filter.owner, filter.state])).rows, "follow_up_page").j;
       return {
-        leadsOpenNotCalled: s.leads_open_not_called, leadsPastTarget: s.leads_past_target, ticketsAtRisk: s.tickets_at_risk, ticketsBreached: s.tickets_breached,
-        ticketsWithoutOwner: s.tickets_without_owner, tasksOverdue: s.tasks_overdue, tasksDueToday: s.tasks_due_today, tasksUnmappedOwner: s.tasks_unmapped_owner,
+        computedAt: isoAny(j.computed_at)!, durationMs: j.duration_ms, rows: j.rows, summary: toSummary(j.summary),
+        byOwner: j.by_owner ? j.by_owner.map(toOwner) : null,
+        options: { markets: j.options.markets, owners: j.options.owners, hasUnowned: j.options.has_unowned },
+        settings: { targetMinutes: wholeOrNull(j.settings.target_minutes), warningPct: wholeOrNull(j.settings.warning_pct) },
+        counts: { leads: j.counts.lead ?? 0, tickets: j.counts.ticket ?? 0, tasks: j.counts.task ?? 0 },
+        leads: { total: j.leads.total, rows: j.leads.rows.map((x) => toOpenLead(x)) },
+        tickets: { total: j.tickets.total, rows: j.tickets.rows.map((x) => toOpenTicket(x)) },
+        tasks: { total: j.tasks.total, rows: j.tasks.rows.map((x) => toOpenTask(x)) },
       };
     });
   },
 
-  async getFollowUpByOwner(me): Promise<FollowUpOwner[]> {
+  async getOpenLeads(me): Promise<FollowUpRowsAt<OpenLead>> {
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ owner_user_id: string | null; display_name: string | null; open_leads: number; leads_past_target: number; open_tickets: number;
-        tickets_at_risk_or_breached: number; tasks_overdue: number; tasks_due_today: number }>(`select * from cma.follow_up_by_owner()`);
-      return r.rows.map((x) => ({
-        ownerUserId: x.owner_user_id, displayName: x.display_name, openLeads: x.open_leads, leadsPastTarget: x.leads_past_target, openTickets: x.open_tickets,
-        ticketsAtRiskOrBreached: x.tickets_at_risk_or_breached, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today,
-      }));
+      const r = await q.query<OpenLeadDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url from cma.open_leads() r ${OWNER_JOIN}`);
+      return { rows: r.rows.map((x) => toOpenLead(x)), computedAt: await computedAt(q) };
+    });
+  },
+
+  async getOpenTickets(me): Promise<FollowUpRowsAt<OpenTicket>> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OpenTicketDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'ticket', r.ticket_source_id) as record_url from cma.open_tickets() r ${OWNER_JOIN}`);
+      return { rows: r.rows.map((x) => toOpenTicket(x)), computedAt: await computedAt(q) };
+    });
+  },
+
+  async getOpenTasks(me): Promise<FollowUpRowsAt<OpenTask>> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OpenTaskDb>(
+        `select r.*, u.display_name as owner_name, cma.record_url(r.connection_id, 'task', r.task_source_id) as record_url from cma.open_tasks() r ${OWNER_JOIN}`);
+      return { rows: r.rows.map((x) => toOpenTask(x)), computedAt: await computedAt(q) };
+    });
+  },
+
+  async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {
+    return withTenant(ctx(me), async (q) => {
+      const s = one((await q.query<SummaryDb & { computed_at: Date }>(`select * from cma.follow_up_summary()`)).rows, "follow_up_summary");
+      return { ...toSummary(s), computedAt: s.computed_at.toISOString() };
+    });
+  },
+
+  async getFollowUpByOwner(me): Promise<FollowUpRowsAt<FollowUpOwner>> {
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<OwnerDb>(`select * from cma.follow_up_by_owner()`);
+      return { rows: r.rows.map(toOwner), computedAt: await computedAt(q) };
     });
   },
 
   async getMyFollowUp(me): Promise<MyFollowUp> {
     return withTenant(ctx(me), async (q) => {
       // the function answers the caller's own rows as JSON (snake_case keys, the record links filled in); the owner is the caller
-      const j = one((await q.query<{ j: { leads: OpenLeadDb[]; tickets: OpenTicketDb[]; tasks: OpenTaskDb[] } }>(`select cma.my_follow_up() as j`)).rows, "my_follow_up").j;
+      const j = one((await q.query<{ j: { leads: OpenLeadDb[]; tickets: OpenTicketDb[]; tasks: OpenTaskDb[]; computed_at: string } }>(
+        `select cma.my_follow_up() as j`)).rows, "my_follow_up").j;
       return {
         leads: j.leads.map((x) => toOpenLead(x, me.displayName)),
         tickets: j.tickets.map((x) => toOpenTicket(x, me.displayName)),
         tasks: j.tasks.map((x) => toOpenTask(x, me.displayName)),
+        computedAt: isoAny(j.computed_at)!,
       };
     });
   },

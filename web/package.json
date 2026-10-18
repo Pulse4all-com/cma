@@ -35,7 +35,8 @@
     "verify:invitations": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/invitations.mjs",
     "verify:preview": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/preview.mjs",
     "verify:follow-up": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/follow-up.mjs",
-    "verify:health": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/health.mjs"
+    "verify:health": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/health.mjs",
+    "verify:refresh-follow-up": "node verify/refresh-follow-up.mjs"
   },
   "dependencies": {
     "@google-cloud/cloud-sql-connector": "^1.12.0",

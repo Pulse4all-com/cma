@@ -5,7 +5,8 @@
  * what is waiting right now (lib/follow-up filterOptions), so they need no catalog read; choosing loads the
  * page with the filter in its query, so a filtered view can be bookmarked and the 10-second refresh keeps it.
  * K, O and S are free on this page: it has no period bar and no grouping; the rail holds its digits and W,
- * the top bar L and ?.
+ * the top bar L and ?. It takes only its own strings (copy.followUp and the unknown market's name), not the whole
+ * copy: a client component's props travel in every refresh of the page (addition 0008s).
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -13,8 +14,7 @@ import type { Copy } from "@/lib/copy";
 import { filterQuery, OWNER_NONE, type FilterOptions, type FollowUpFilter } from "@/lib/follow-up";
 import { Keycap } from "./primitives";
 
-export function FollowUpFilters({ options, filter, copy }: { options: FilterOptions; filter: FollowUpFilter; copy: Copy }) {
-  const t = copy.followUp;
+export function FollowUpFilters({ options, filter, t, unknownMarket }: { options: FilterOptions; filter: FollowUpFilter; t: Copy["followUp"]; unknownMarket: string }) {
   const router = useRouter();
   const select = "h-10 w-48 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
   const markets = filter.market && !options.markets.includes(filter.market) ? [...options.markets, filter.market] : options.markets;
@@ -33,7 +33,7 @@ export function FollowUpFilters({ options, filter, copy }: { options: FilterOpti
         <select value={filter.market ?? ""} data-shortcut="k" data-testid="follow-up-market" className={select}
           onChange={(e) => go({ ...filter, market: e.target.value || null })}>
           <option value="">{t.allMarkets}</option>
-          {markets.map((m) => <option key={m} value={m}>{m === "unknown" ? copy.reports.unknownMarket : m}</option>)}
+          {markets.map((m) => <option key={m} value={m}>{m === "unknown" ? unknownMarket : m}</option>)}
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">

@@ -140,8 +140,8 @@
   {
     "path": "/reports/follow-up",
     "subject": "manager",
-    "tx": 6,
-    "rt": 25
+    "tx": 2,
+    "rt": 9
   },
   {
     "path": "/reports/forms",

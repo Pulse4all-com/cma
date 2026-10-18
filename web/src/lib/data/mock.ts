@@ -18,11 +18,12 @@ import type {
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  FollowUpOwner, FollowUpSummary, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
+  FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
 } from "./types";
 import {
-  byOwner, daysSince, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, FOLLOW_UP_SUMMARY_PERMISSIONS, MY_FOLLOW_UP_PERMISSIONS, ownRows, summarise,
+  byOwner, daysSince, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, FOLLOW_UP_SUMMARY_PERMISSIONS, followUpPage, listRowsOf,
+  MY_FOLLOW_UP_PERMISSIONS, ownRows, summarise,
 } from "@/lib/follow-up";
 import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
@@ -650,6 +651,8 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "tickets.sla_warning_pct", value: "75", isDefault: true },
   { key: "leads.age_buckets_business_days", value: "1,2,5", isDefault: true },
   { key: "tasks.callback_window_minutes", value: "240", isDefault: true },
+  // the rows each Follow-up list shows (addition 0008s), at its default
+  { key: "follow_up.list_rows", value: "100", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1150,6 +1153,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
+  "follow_up.list_rows": "100",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -3041,38 +3045,58 @@ export const mockData: CmaData = {
     return out;
   },
 
-  // ---- Follow-up (addition 0008o): the same permission checks as the database functions, over the fixture
-  async getOpenLeads(me): Promise<OpenLead[]> {
+  // ---- Follow-up (addition 0008o): the same permission checks as the database functions, over the fixture. Since
+  // addition 0008s the database reads a snapshot computed once a minute; the mock computes on every read, so its
+  // figures are always "now" (computedAt is the read's own time)
+  async getFollowUpPage(me, filter): Promise<FollowUpPage> {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
-    return mockFollowUpRows(me, Date.now()).leads;
+    const now = Date.now();
+    const { leads, tickets, tasks } = mockFollowUpRows(me, now);
+    const num = (key: string) => (/^\d+$/.test(mockSetting(key)) ? Number(mockSetting(key)) : null);
+    return followUpPage(leads, tickets, tasks, filter, {
+      rows: listRowsOf(mockSetting("follow_up.list_rows")), canByOwner: me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION),
+      computedAt: new Date(now).toISOString(), durationMs: 0,
+      targetMinutes: num("speed_to_lead.target_minutes"), warningPct: num("tickets.sla_warning_pct"),
+    });
   },
 
-  async getOpenTickets(me): Promise<OpenTicket[]> {
+  async getOpenLeads(me): Promise<FollowUpRowsAt<OpenLead>> {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
-    return mockFollowUpRows(me, Date.now()).tickets;
+    const now = Date.now();
+    return { rows: mockFollowUpRows(me, now).leads, computedAt: new Date(now).toISOString() };
   },
 
-  async getOpenTasks(me): Promise<OpenTask[]> {
+  async getOpenTickets(me): Promise<FollowUpRowsAt<OpenTicket>> {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
-    return mockFollowUpRows(me, Date.now()).tasks;
+    const now = Date.now();
+    return { rows: mockFollowUpRows(me, now).tickets, computedAt: new Date(now).toISOString() };
   },
 
-  async getFollowUpSummary(me): Promise<FollowUpSummary> {
+  async getOpenTasks(me): Promise<FollowUpRowsAt<OpenTask>> {
+    assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
+    const now = Date.now();
+    return { rows: mockFollowUpRows(me, now).tasks, computedAt: new Date(now).toISOString() };
+  },
+
+  async getFollowUpSummary(me): Promise<FollowUpSummaryAt> {
     assertAny(me, [...FOLLOW_UP_SUMMARY_PERMISSIONS]);
-    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
-    return summarise(leads, tickets, tasks);
+    const now = Date.now();
+    const { leads, tickets, tasks } = mockFollowUpRows(me, now);
+    return { ...summarise(leads, tickets, tasks), computedAt: new Date(now).toISOString() };
   },
 
-  async getFollowUpByOwner(me): Promise<FollowUpOwner[]> {
+  async getFollowUpByOwner(me): Promise<FollowUpRowsAt<FollowUpOwner>> {
     assertAny(me, [FOLLOW_UP_BY_OWNER_PERMISSION]);
-    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
-    return byOwner(leads, tickets, tasks);
+    const now = Date.now();
+    const { leads, tickets, tasks } = mockFollowUpRows(me, now);
+    return { rows: byOwner(leads, tickets, tasks), computedAt: new Date(now).toISOString() };
   },
 
   async getMyFollowUp(me): Promise<MyFollowUp> {
     assertAny(me, [...MY_FOLLOW_UP_PERMISSIONS]);
-    const { leads, tickets, tasks } = mockFollowUpRows(me, Date.now());
-    return { leads: ownRows(leads, me.userId), tickets: ownRows(tickets, me.userId), tasks: ownRows(tasks, me.userId) };
+    const now = Date.now();
+    const { leads, tickets, tasks } = mockFollowUpRows(me, now);
+    return { leads: ownRows(leads, me.userId), tickets: ownRows(tickets, me.userId), tasks: ownRows(tasks, me.userId), computedAt: new Date(now).toISOString() };
   },
 
   // ---- System health (addition 0008r): invented runs around the current minute ------------------
@@ -3097,6 +3121,8 @@ export const mockData: CmaData = {
       { ...ok("email_poll", crm, 50, 3, { fetched: 12, upserted: 4 }, 1440), lastFailedAt: at(5 * 3600), lastFailedError: "rate_limited", failed24h: 1 },
       ok("reconcile", crm, 9.5 * 3600, 95, { fetched: 240, upserted: 7, stale: 2 }, 1),
       ok("close_forgotten_workdays", null, 25 * 60, 1, { closed: 0 }, 24),
+      // the follow-up snapshot (0008s): refreshed every minute
+      ok("refresh_follow_up", null, 20, 1, { rows: 27, leads: 5, tickets: 12, tasks: 10, duration_ms: 140, skipped: 0 }, 1440),
     ];
     if (tel) rows.push(ok("reconcile", tel, 9.5 * 3600, 40, { fetched: 80, upserted: 3 }, 1));
     if (shop) rows.push(ok("subscriptions_check", shop, 9.5 * 3600, 4, { fetched: 2 }, 1), ok("reconcile", shop, 9.4 * 3600, 60, { fetched: 30, upserted: 1 }, 1));

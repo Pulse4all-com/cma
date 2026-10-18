@@ -1767,11 +1767,58 @@ export interface FollowUpOwner {
   tasksDueToday: number;
 }
 
-/** cma.my_follow_up: the caller's own rows, with their record links */
+/** cma.my_follow_up: the caller's own rows, with their record links, as the snapshot computed them */
 export interface MyFollowUp {
   leads: OpenLead[];
   tickets: OpenTicket[];
   tasks: OpenTask[];
+  /** When the snapshot was computed (addition 0008s): at most about a minute ago */
+  computedAt: Instant;
+}
+
+/** The summary as the snapshot computed it, and when (addition 0008s) */
+export type FollowUpSummaryAt = FollowUpSummary & { computedAt: Instant };
+
+/** Every row of one of the snapshot's lists (the API reads them in full), and when they were computed */
+export interface FollowUpRowsAt<T> {
+  rows: T[];
+  computedAt: Instant;
+}
+
+/** The choices of Reports → Follow-up's filters, from every row of the snapshot, so a choice never disappears while it is made */
+export interface FollowUpFilterOptions {
+  /** Market codes in order, "unknown" last when any row has none */
+  markets: string[];
+  /** The people who own something, by name */
+  owners: { id: string; name: string | null }[];
+  /** Some row has no person (OWNER_NONE) */
+  hasUnowned: boolean;
+}
+
+/** A list after the filters: the filtered total and its first rows (follow_up.list_rows) */
+export interface FollowUpList<T> {
+  total: number;
+  rows: T[];
+}
+
+/** Reports → Follow-up in one read (cma.follow_up_page, addition 0008s) */
+export interface FollowUpPage {
+  computedAt: Instant;
+  durationMs: number;
+  /** The rows each list shows at most (the tenant's follow_up.list_rows, 1 to 500) */
+  rows: number;
+  /** Every row waiting, whatever the filters */
+  summary: FollowUpSummary;
+  /** Per person, for performance.team only (null otherwise) */
+  byOwner: FollowUpOwner[] | null;
+  options: FollowUpFilterOptions;
+  /** The lead target and the warning share the hints name */
+  settings: { targetMinutes: number | null; warningPct: number | null };
+  /** Every row of each list before the filters */
+  counts: { leads: number; tickets: number; tasks: number };
+  leads: FollowUpList<OpenLead>;
+  tickets: FollowUpList<OpenTicket>;
+  tasks: FollowUpList<OpenTask>;
 }
 
 // ---- System health (addition 0008r; Configuration → System health) ------------------------------
@@ -2058,17 +2105,20 @@ export interface CmaData {
   /** Submissions per form, market, kept field and value, with the previous period; narrowed by a field and a value. Needs reports.view or performance.team */
   getFormsAnswers(me: Principal, range: HoursRange, filter: FormsFilter, field: string | null, value: string | null): Promise<FormsAnswers>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
-  // name comes from app_user, the record link from the connection's template (cma.record_url)
-  /** The open lead deals not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */
-  getOpenLeads(me: Principal): Promise<OpenLead[]>;
-  /** The open tickets of counted pipelines against their response time, the least time left first. The same permissions */
-  getOpenTickets(me: Principal): Promise<OpenTicket[]>;
-  /** The open tasks, due first. The same permissions */
-  getOpenTasks(me: Principal): Promise<OpenTask[]>;
+  // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
+  // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)
+  /** Reports → Follow-up in one read: the counts, per person (performance.team), the filter choices, the three lists after the filter. Needs reports.view, performance.team or monitoring.live */
+  getFollowUpPage(me: Principal, filter: { market: string | null; owner: string | null; state: "attention" | null }): Promise<FollowUpPage>;
+  /** Every open lead deal not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */
+  getOpenLeads(me: Principal): Promise<FollowUpRowsAt<OpenLead>>;
+  /** Every open ticket of a counted pipeline against its response time, the least time left first. The same permissions */
+  getOpenTickets(me: Principal): Promise<FollowUpRowsAt<OpenTicket>>;
+  /** Every open task, due first. The same permissions */
+  getOpenTasks(me: Principal): Promise<FollowUpRowsAt<OpenTask>>;
   /** The counts. Needs monitoring.live, performance.team or workday.team */
-  getFollowUpSummary(me: Principal): Promise<FollowUpSummary>;
+  getFollowUpSummary(me: Principal): Promise<FollowUpSummaryAt>;
   /** Per person, the not-linked row last. Needs performance.team */
-  getFollowUpByOwner(me: Principal): Promise<FollowUpOwner[]>;
+  getFollowUpByOwner(me: Principal): Promise<FollowUpRowsAt<FollowUpOwner>>;
   /** The caller's own rows. Needs leads.accept or workday.own */
   getMyFollowUp(me: Principal): Promise<MyFollowUp>;
 
