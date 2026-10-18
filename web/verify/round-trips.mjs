@@ -15,6 +15,8 @@
  *   BASE=http://localhost:8080 node verify/round-trips.mjs --provoke   every budget is 0: expect FAIL
  *   BASE=http://localhost:8080 node verify/round-trips.mjs --observed  prints the observed costs as JSON rows
  *
+ * Locally the budget is observed on the dev seed plus verify/round-trips-fixture.sql (two CRM connections, so the
+ * alert-rules row proves its cost does not grow with the number of connections; 18 October 2026).
  * Against dev: CMA_DB_TRACE=1 set on cma-web for the run and removed after it (docs/RUNBOOK.md, 5. Verifiers).
  * It sits with verify:api (a server and a database), not with the pure verifiers.
  */

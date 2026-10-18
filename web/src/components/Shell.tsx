@@ -11,6 +11,11 @@
  * banner above the breadcrumbs; lib/auth/preview). The fold and the hints are data attributes on the
  * frame that globals.css styles, read from the cookies here on the server, so a page renders in its
  * state without a flicker and a click changes it at once (ShellPrefs).
+ *
+ * The frame's links never prefetch (prefetch={false}, Decision log 18 October 2026): every page is dynamic and has
+ * no loading boundary, so a prefetch carried no page data, and the router.refresh() of a polled page (LiveRefresh)
+ * invalidated the client cache, so each poll fetched every visible link's route again. A click loads the page as
+ * before, in one request.
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -100,6 +105,7 @@ export async function Shell({
             {t.signedInAs}{" "}
             <Link
               href="/account"
+              prefetch={false}
               title={t.openAccount}
               aria-current={active === "account" ? "page" : undefined}
               className="font-semibold text-p4a-body underline-offset-2 hover:text-p4a-deepblue hover:underline"
@@ -110,6 +116,7 @@ export async function Shell({
           </span>
           <Link
             href="/logout"
+            prefetch={false}
             data-shortcut="l"
             aria-keyshortcuts="L"
             className="inline-flex h-8 items-center gap-2 rounded-button border border-p4a-deepblue px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue"
@@ -131,6 +138,7 @@ export async function Shell({
                 <li key={entry.item.page}>
                   <Link
                     href={entry.item.href}
+                    prefetch={false}
                     aria-current={current ? "page" : undefined}
                     data-shortcut={entry.item.key}
                     aria-keyshortcuts={entry.item.key ?? undefined}
@@ -164,6 +172,7 @@ export async function Shell({
                     <li key={item.page}>
                       <Link
                         href={item.href}
+                        prefetch={false}
                         aria-current={current ? "page" : undefined}
                         data-shortcut={item.key ?? undefined}
                         aria-keyshortcuts={item.key ?? undefined}
@@ -235,7 +244,7 @@ function Breadcrumbs({ crumbs, label }: { crumbs: Crumb[]; label: string }) {
               {last ? (
                 <span aria-current="page" className="font-semibold text-p4a-inkt">{c.label}</span>
               ) : c.href ? (
-                <Link href={c.href} className="hover:text-p4a-deepblue hover:underline">{c.label}</Link>
+                <Link href={c.href} prefetch={false} className="hover:text-p4a-deepblue hover:underline">{c.label}</Link>
               ) : (
                 <span>{c.label}</span>
               )}

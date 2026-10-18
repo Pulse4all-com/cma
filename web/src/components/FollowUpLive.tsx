@@ -29,7 +29,8 @@ export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct 
     <section aria-labelledby="follow-up-now" className="flex flex-col gap-4" data-testid="follow-up-live">
       <div className="flex items-baseline justify-between gap-4">
         <h2 id="follow-up-now" className="text-panel font-semibold text-p4a-heading">{copy.live.followUpTitle}</h2>
-        <Link href="/reports/follow-up" className="text-small font-semibold text-p4a-deepblue hover:underline">{copy.live.openFollowUp}</Link>
+        {/* no prefetch: this card sits on a polled page and would fetch the route again on every refresh (Shell) */}
+        <Link href="/reports/follow-up" prefetch={false} className="text-small font-semibold text-p4a-deepblue hover:underline">{copy.live.openFollowUp}</Link>
       </div>
       <div className="grid grid-cols-3 gap-4 2xl:grid-cols-6" data-testid="follow-up-tiles">
         {FOLLOW_UP_TILES.map((key) => (
