@@ -3,6 +3,7 @@ import { CallbackOwnersTable, CallbackWeeksTable } from "@/components/CallbacksT
 import { FollowUpFilters } from "@/components/FollowUpFilters";
 import { LeadsTable, TasksTable, TicketsTable, type TableContext } from "@/components/FollowUpTables";
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { NoReportPermission, NotConnected } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -196,13 +197,13 @@ function ByOwnerTable({ rows, copy, ctx }: { rows: FollowUpOwner[]; copy: Copy; 
     <table className="w-full border-collapse text-body leading-table" data-testid="follow-up-by-owner">
       <thead>
         <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-          <th className={th}>{t.person}{hint(t.person, h.fuPerson)}</th>
-          <th className={`${th} text-right`}>{t.byOpenLeads}{hint(t.byOpenLeads, h.fuByOpenLeads)}</th>
-          <th className={`${th} text-right`}>{t.byLeadsPast}{hint(t.byLeadsPast, h.fuByLeadsPast)}</th>
-          <th className={`${th} text-right`}>{t.byOpenTickets}{hint(t.byOpenTickets, h.fuByOpenTickets)}</th>
-          <th className={`${th} text-right`}>{t.byTicketsRisk}{hint(t.byTicketsRisk, h.fuByTicketsRisk)}</th>
-          <th className={`${th} text-right`}>{t.byTasksOverdue}{hint(t.byTasksOverdue, h.fuByTasksOverdue)}</th>
-          <th className={`${th} text-right`}>{t.byTasksToday}{hint(t.byTasksToday, h.fuByTasksToday)}</th>
+          <th className={th}><HintLabel label={t.person}>{hint(t.person, h.fuPerson)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byOpenLeads}>{hint(t.byOpenLeads, h.fuByOpenLeads)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byLeadsPast}>{hint(t.byLeadsPast, h.fuByLeadsPast)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byOpenTickets}>{hint(t.byOpenTickets, h.fuByOpenTickets)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byTicketsRisk}>{hint(t.byTicketsRisk, h.fuByTicketsRisk)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byTasksOverdue}>{hint(t.byTasksOverdue, h.fuByTasksOverdue)}</HintLabel></th>
+          <th className={`${th} text-right`}><HintLabel label={t.byTasksToday}>{hint(t.byTasksToday, h.fuByTasksToday)}</HintLabel></th>
         </tr>
       </thead>
       <tbody>

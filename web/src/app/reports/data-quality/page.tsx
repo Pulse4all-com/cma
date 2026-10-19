@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
@@ -56,9 +57,9 @@ export default async function DataQualityPage() {
         <table className="w-full border-collapse text-body" data-testid="data-quality">
           <thead>
             <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-              <th className={`${th} w-80`}>{t.check}{hint(t.check, h.check)}</th>
-              <th className={`${th} w-28 text-right`}>{t.count}{hint(t.count, h.count)}</th>
-              <th className={th}>{t.fix}{hint(t.fix, h.fix)}</th>
+              <th className={`${th} w-80`}><HintLabel label={t.check}>{hint(t.check, h.check)}</HintLabel></th>
+              <th className={`${th} w-28 text-right`}><HintLabel label={t.count}>{hint(t.count, h.count)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.fix}>{hint(t.fix, h.fix)}</HintLabel></th>
             </tr>
           </thead>
           <tbody>

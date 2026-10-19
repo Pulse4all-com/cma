@@ -21,6 +21,7 @@ export function ConfirmDialog({
   onCancel,
   busy = false,
   irreversible = false,
+  confirmDisabled = false,
 }: {
   open: boolean;
   title: string;
@@ -31,6 +32,8 @@ export function ConfirmDialog({
   onCancel: () => void;
   busy?: boolean;
   irreversible?: boolean;
+  /** The confirm button alone is disabled (what it would change is still being read, addition 0008y); Cancel works */
+  confirmDisabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The dialog is named by its title for assistive tech (the IT audit of 17 October 2026) */
@@ -61,11 +64,11 @@ export function ConfirmDialog({
       <div className="mt-2 text-body">{children}</div>
       <div className="mt-6 flex gap-3">
         {irreversible ? (
-          <Button variant="destructive" size="md" onClick={onConfirm} disabled={busy} data-confirm="irreversible">
+          <Button variant="destructive" size="md" onClick={onConfirm} disabled={busy || confirmDisabled} data-confirm="irreversible">
             {confirmLabel}
           </Button>
         ) : (
-          <Button variant="primary" size="md" onClick={onConfirm} disabled={busy} autoFocus shortcut="Enter">
+          <Button variant="primary" size="md" onClick={onConfirm} disabled={busy || confirmDisabled} autoFocus shortcut="Enter">
             {confirmLabel}
           </Button>
         )}

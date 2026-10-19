@@ -11,7 +11,8 @@
  * main area never scrolls sideways at 1280 px (12 October 2026). The irreversible confirmations (B9a.1,
  * 13 October 2026): switching a line off, dissolving a team and copying the previous week open on Cancel,
  * Enter at open writes nothing, the confirm button is the destructive secondary style without a keycap, and
- * a line's box stays ticked until the switch-off is confirmed; End workday, an ordinary confirmation, opens
+ * a line's box stays ticked until the switch-off is confirmed, and since addition 0008y its question names the stored calls
+ * it removes, the confirm button disabled while the count loads and after a failed read (backlog CMA-020); End workday, an ordinary confirmation, opens
  * on its confirm button (agent-two clocks in through the route for it, inside the mock's 07:00 to 22:00
  * workday window). Inbound and the Live board (addition 0008i): the Inbound report at 1280 px with its
  * keycaps, a hint on its right-most reason column, its table scrolling inside its card and no text on a
@@ -46,6 +47,16 @@
  * Callbacks kept (addition 0008w) for five identities: on Follow-up the eight weeks for reports.view or performance.team
  * and per person for performance.team, both inside their cards, the right-most header hint inside the viewport, "No
  * callback type set" for a tenant without one, there and on the Dashboard's Intake row.
+ * Attempts per deal and Attempts per agent (addition 0008y) for seven identities: Attempts per deal for reports.view or
+ * performance.team, Attempts per agent for performance.team while reports.per_person holds attempts (absent from the rail
+ * and not found otherwise), after Email per agent so no one's first nine digit keys move, the keycaps K, P, S and G, five
+ * tiles, every grouping and the tables inside their cards, the right-most header's hint inside the viewport. The rail as
+ * an accordion (19 October 2026): Time then Reports leaves only Reports open with cma-nav-open=reports, the server
+ * renders one group open after a reload, a click on the open group closes it, Configuration's letter C opens it alone
+ * and focuses its first page (Time has no letter), the folded rail unfolds with only the clicked group open, the
+ * retired cma-nav-time and cma-nav-reports cookies are ignored and expired on the first toggle, a digit key opens a page
+ * of a closed group and the closed group keeps its pill. No header's info mark wraps apart from its label at 1440 px on
+ * Follow-up, Attempts per deal and Attempts per agent, and Attempts per deal never scrolls sideways.
  * Campaign monitoring (addition 0008v) for seven identities: in the Campaigns group for reports.view or
  * performance.team, a card per journey inside the main area (the archived one absent), a journey's Muted banner,
  * seven dashed placeholders (the drill-down locked), its prerequisites unticked, no figure, the breadcrumbs
@@ -68,7 +79,8 @@
  *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
  *       spill out of its card, lets the first orders list and the callbacks' weeks spill out of their cards, widens the first journey card past the main
  *       area, writes a two-character key on the manager's tenth page, strips the name off
- *       every dialog before it is read and the role off the tiles, expect FAIL, exit 1
+ *       every dialog before it is read and the role off the tiles, expects Time still open after Reports opens,
+ *       breaks the line before one header's mark per page, lets the attempts list spill out of its card, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -159,27 +171,29 @@ async function expectNavigation() {
     // reports.per_person holding email, as the dev seed's does) follow Forms; since 0008u First orders (reports.view or
     // performance.team) and Orders per person (performance.team, and reports.per_person holding orders, as the dev
     // seed's does) follow Email per agent; since 0008v the Campaigns group (Campaign monitoring, reports.view or
-    // performance.team) follows Reports
+    // performance.team) follows Reports; since 0008y Attempts per deal (reports.view or performance.team) and Attempts per
+    // agent (performance.team, and reports.per_person holding attempts, as the dev seed's does) follow Email per agent, so no
+    // one's first nine pages change their digit key (the analyst's ninth is Calls, the reader's Email)
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality",
-      "/campaigns"], false],
+      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders",
+      "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent;
-    // First orders without Orders per person
+    // First orders without Orders per person; Attempts per deal without Attempts per agent
     ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/email",
-      "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
+      "/reports/attempts", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake",
-      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders",
-      "/reports/orders-per-person", "/campaigns"], true],
+      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/attempts",
+      "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
       "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
       "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -330,7 +344,8 @@ async function expectReports() {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
-    "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"]) {
+    "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person",
+    "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -1191,6 +1206,41 @@ async function expectIrreversibleConfirmations() {
       await p.waitForFunction(() => document.querySelector('[data-testid="source-lines"] input[type="checkbox"]')?.checked, null, { timeout: 5000 }).catch(() => undefined);
       if (await dialog.count()) problems.push("lines: switching a line on asked for confirmation");
     }
+    // The stored calls it removes (backlog CMA-020, addition 0008y): while the count loads the confirm button is disabled
+    // and Cancel works; then the question names the count; a failed read says so in the error colour, names no number and
+    // keeps the button disabled. Nothing is written. --provoke expects the button enabled while the count loads
+    {
+      const confirm = dialog.locator("[data-confirm]");
+      const before = puts.length;
+      let release = () => {};
+      await p.route("**/lines/stored-calls**", async (route) => { await new Promise((r) => { release = r; }); await route.continue(); });
+      await box.click();
+      await dialog.waitFor({ timeout: 5000 }).catch(() => undefined);
+      const counting = await dialog.locator('[data-testid="line-off-counting"][role="status"]').count();
+      const waiting = await confirm.isDisabled().catch(() => null);
+      if (counting !== 1 || waiting !== !provoke) problems.push(`lines: while the count loads the dialog shows ${counting} counting line and the confirm button is ${waiting ? "disabled" : "enabled"}, expected one and ${provoke ? "enabled" : "disabled"}`);
+      release();
+      const shown = await dialog.locator('[data-testid="line-off-count"]').waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const count = shown ? await dialog.locator('[data-testid="line-off-count"]').evaluate((el) => ({ n: el.getAttribute("data-stored-calls"), text: el.textContent ?? "" })) : null;
+      if (!count || !/^\d+$/.test(count.n ?? "") || !count.text.includes(Number(count.n).toLocaleString("en-GB"))) problems.push(`lines: the question names no stored-calls count once read (${JSON.stringify(count)})`);
+      if (await confirm.isDisabled().catch(() => true)) problems.push("lines: the confirm button stays disabled once the count is read");
+      await p.keyboard.press("Escape");
+      await p.waitForTimeout(300);
+      await p.unroute("**/lines/stored-calls**");
+      await p.route("**/lines/stored-calls**", (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: { code: "internal" } }) }));
+      await box.click();
+      await dialog.waitFor({ timeout: 5000 }).catch(() => undefined);
+      const failed = await dialog.locator('[data-testid="line-off-failed"][role="alert"]').waitFor({ timeout: 5000 }).then(() => true, () => false);
+      const failedText = failed ? await dialog.locator('[data-testid="line-off-failed"]').evaluate((el) => ({ text: el.textContent ?? "", error: el.classList.contains("text-p4a-error") })) : null;
+      if (!failedText || !failedText.error || /\d[\d,.]*\s+stored call/.test(failedText.text)) problems.push(`lines: a failed count read shows ${JSON.stringify(failedText)}, expected the error copy in the error colour without a number`);
+      if (!(await confirm.isDisabled().catch(() => false))) problems.push("lines: the confirm button is enabled after a failed count read");
+      await dialog.locator("[data-confirm-cancel]").click();
+      await p.waitForTimeout(300);
+      await p.unroute("**/lines/stored-calls**");
+      if (await dialog.count()) problems.push("lines: Cancel does not close the confirmation after a failed count read");
+      if (puts.length !== before) problems.push(`lines: reading the count wrote ${JSON.stringify(puts.slice(before))}`);
+      if (!(await box.isChecked())) problems.push("lines: the box is unticked after the count checks");
+    }
     await ctx.close();
   }
 
@@ -1328,8 +1378,8 @@ async function expectFrame() {
       expanded: document.querySelector('button[aria-controls="nav-group-reports"]')?.getAttribute("aria-expanded"),
     }));
     const jar = await jarOf(ctx);
-    if (open.width !== 256 || open.expanded !== "true" || jar["cma-rail"] !== "expanded" || jar["cma-nav-reports"] !== "open") {
-      problems.push(`rail: a group's click gave ${JSON.stringify({ ...open, rail: jar["cma-rail"], group: jar["cma-nav-reports"] })}, expected the rail unfolded and the group open, both cookies written`);
+    if (open.width !== 256 || open.expanded !== "true" || jar["cma-rail"] !== "expanded" || jar["cma-nav-open"] !== "reports") {
+      problems.push(`rail: a group's click gave ${JSON.stringify({ ...open, rail: jar["cma-rail"], group: jar["cma-nav-open"] })}, expected the rail unfolded and the group open, both cookies written`);
     }
     await ctx.close();
   }
@@ -1357,7 +1407,8 @@ async function expectFrame() {
     await p.goto(BASE + "/roster/planner");
     await p.waitForLoadState("networkidle");
     const m = await p.evaluate(() => {
-      const vis = (el) => el.getClientRects().length > 0;
+      // Log out's keycap and the shortcuts line keep their space, invisible (19 October 2026)
+      const vis = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden";
       return {
         kbd: [...document.querySelectorAll("kbd")].filter(vis).length,
         hint: [...document.querySelectorAll("[data-shortcuts-hint]")].some(vis),
@@ -1480,10 +1531,11 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  // the manager's rail holds 23 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
-  // orders and Orders per person (0008u) joined the Reports group and Campaign monitoring (0008v) the Campaigns group
-  // (only the first nine with a digit key since the IT audit of 17 October 2026, so the pages are counted by their links)
-  for (const [subject, pages] of [["manager", 23], ["agent-one", 5]]) {
+  // the manager's rail holds 25 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
+  // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
+  // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
+  // 2026, so the pages are counted by their links)
+  for (const [subject, pages] of [["manager", 25], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -1498,16 +1550,283 @@ async function expectFrame() {
   }
 }
 
+// The rail as an accordion (19 October 2026): at most one group open, the open one in the cookie cma-nav-open (empty for
+// none) and rendered by the server, a click on the open group closing it, a group's letter opening it (closing the other)
+// with the focus on its first page, a click in the folded rail unfolding it with only that group open, the retired
+// per-group cookies ignored and expired on the first toggle; aria-expanded and aria-controls agree with what shows, a
+// closed group holding the current page keeps its white pill and the digit keys work with every group closed.
+// Time has no letter, so the letter is Configuration's C, for the admin. --provoke expects the per-group behaviour of
+// 7 October 2026 (Time still open after Reports opens)
+async function expectAccordion() {
+  const host = new URL(BASE).hostname;
+  const contextOf = async (subject, cookies) => {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    // host-only, as a page's document.cookie writes them
+    await ctx.addCookies(Object.entries(cookies).map(([name, value]) => ({ name, value, url: BASE + "/" })));
+    return ctx;
+  };
+  const jarOf = async (ctx) => Object.fromEntries((await ctx.cookies()).filter((c) => c.domain.replace(/^\./, "") === host).map((c) => [c.name, c.value]));
+  const groupsOf = (p) => p.evaluate(() => [...document.querySelectorAll('nav[data-rail-nav] button[aria-controls^="nav-group-"]')].map((btn) => {
+    const list = document.getElementById(btn.getAttribute("aria-controls") ?? "");
+    return {
+      id: btn.getAttribute("data-nav-group"),
+      expanded: btn.getAttribute("aria-expanded"),
+      controls: !!list && list.tagName === "UL",
+      shown: !!list && list.getClientRects().length > 0,
+      pill: btn.getAttribute("data-current") === "true" && btn.classList.contains("bg-white"),
+    };
+  }));
+  const openOf = (g) => g.filter((x) => x.expanded === "true").map((x) => x.id);
+  const agree = (where, g) => {
+    for (const x of g) {
+      if (!x.controls) problems.push(`accordion ${where}: ${x.id}'s aria-controls names no list`);
+      if ((x.expanded === "true") !== x.shown) problems.push(`accordion ${where}: ${x.id} has aria-expanded ${x.expanded} while its pages are ${x.shown ? "shown" : "hidden"}`);
+    }
+  };
+  const expectOpen = (where, g, want) => {
+    if (JSON.stringify(openOf(g)) !== JSON.stringify(want)) problems.push(`accordion ${where}: open ${JSON.stringify(openOf(g))}, expected ${JSON.stringify(want)}`);
+  };
+  const click = async (p, id) => {
+    await p.locator(`nav[data-rail-nav] button[aria-controls="nav-group-${id}"]`).click();
+    await p.waitForTimeout(150);
+  };
+  /** The groups the server renders open, from its HTML (the rail toggle's own aria-expanded is not a group) */
+  const serverOpen = async (ctx, path) => {
+    const html = await (await ctx.request.get(BASE + path)).text();
+    return [...html.matchAll(/<button[^>]*aria-controls="nav-group-([a-z-]+)"[^>]*>/g)].filter((m) => m[0].includes('aria-expanded="true"')).map((m) => m[1]);
+  };
+
+  // 1. Time then Reports: only Reports open, the cookie names it; the server renders it so after a reload; a click on
+  // Reports closes it, none open and the cookie empty; a digit key still opens a page of a closed group
+  {
+    const ctx = await contextOf("manager", {});
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    expectOpen("on a first visit", await groupsOf(p), []);
+    await click(p, "time");
+    expectOpen("after Time", await groupsOf(p), ["time"]);
+    await click(p, "reports");
+    const g = await groupsOf(p);
+    expectOpen("after Time then Reports", g, provoke ? ["time", "reports"] : ["reports"]);
+    agree("after Time then Reports", g);
+    const jar = await jarOf(ctx);
+    if (jar["cma-nav-open"] !== "reports") problems.push(`accordion: the cookie is cma-nav-open=${JSON.stringify(jar["cma-nav-open"])}, expected reports`);
+    const fromServer = await serverOpen(ctx, "/");
+    if (JSON.stringify(fromServer) !== JSON.stringify(["reports"])) problems.push(`accordion: the server renders ${JSON.stringify(fromServer)} open, expected exactly one aria-expanded="true", on Reports`);
+    await p.reload();
+    await p.waitForLoadState("networkidle");
+    expectOpen("after a reload", await groupsOf(p), ["reports"]);
+    await click(p, "reports");
+    const none = await groupsOf(p);
+    expectOpen("after a click on the open Reports", none, []);
+    agree("with none open", none);
+    const after = await jarOf(ctx);
+    if (after["cma-nav-open"] !== "") problems.push(`accordion: with none open the cookie is ${JSON.stringify(after["cma-nav-open"])}, expected empty`);
+    if ((await serverOpen(ctx, "/")).length !== 0) problems.push("accordion: with the cookie empty the server still renders a group open");
+    // the manager's sixth page is My day, in the closed Time group
+    await p.keyboard.press("6");
+    await p.waitForURL("**/day").catch(() => undefined);
+    if (new URL(p.url()).pathname !== "/day") problems.push(`accordion: key 6 opened ${new URL(p.url()).pathname} with every group closed, expected /day`);
+    await p.waitForLoadState("networkidle");
+    const pill = (await groupsOf(p)).find((x) => x.id === "time");
+    if (!pill?.pill || pill.expanded !== "false") problems.push(`accordion: the closed Time group holding My day is ${JSON.stringify(pill)}, expected closed with its white pill`);
+    await p.screenshot({ path: `${outDir}/manager-rail-accordion.png` });
+    await ctx.close();
+  }
+
+  // 2. A group's letter (Configuration's C, the admin): Reports open first, then C opens only Configuration and focuses its
+  // first page; C again closes it
+  {
+    const ctx = await contextOf("admin", { "cma-nav-open": "reports" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    expectOpen("for the admin with the cookie", await groupsOf(p), ["reports"]);
+    await p.locator("main h1").click();
+    await p.keyboard.press("c");
+    await p.waitForTimeout(250);
+    const g = await groupsOf(p);
+    expectOpen("after C", g, ["configuration"]);
+    agree("after C", g);
+    const focus = await p.evaluate(() => document.activeElement?.getAttribute("href"));
+    if (focus !== "/configuration/statuses") problems.push(`accordion: after C the focus is on ${JSON.stringify(focus)}, expected Configuration's first page`);
+    if ((await jarOf(ctx))["cma-nav-open"] !== "configuration") problems.push("accordion: C did not write cma-nav-open=configuration");
+    await ctx.close();
+  }
+
+  // 3. The folded rail: a click on Reports unfolds it with only Reports open (Time was open before the fold)
+  {
+    const ctx = await contextOf("manager", { "cma-rail": "collapsed", "cma-nav-open": "time" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    await click(p, "reports");
+    const width = await p.evaluate(() => Math.round(document.querySelector("nav[data-rail-nav]").getBoundingClientRect().width));
+    const g = await groupsOf(p);
+    expectOpen("after a click in the folded rail", g, ["reports"]);
+    agree("after a click in the folded rail", g);
+    const jar = await jarOf(ctx);
+    if (width !== 256 || jar["cma-rail"] !== "expanded" || jar["cma-nav-open"] !== "reports") problems.push(`accordion: a click in the folded rail gave ${width}px, cma-rail=${jar["cma-rail"]}, cma-nav-open=${jar["cma-nav-open"]}, expected 256, expanded and reports`);
+    await ctx.close();
+  }
+
+  // 4. The retired cookies of 7 October 2026: ignored (none open, on the server too) and expired after one toggle
+  {
+    const ctx = await contextOf("manager", { "cma-nav-time": "open", "cma-nav-reports": "open" });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    expectOpen("with the retired cookies", await groupsOf(p), []);
+    if ((await serverOpen(ctx, "/")).length !== 0) problems.push("accordion: the server renders a group open from a retired per-group cookie");
+    await click(p, "time");
+    const jar = await jarOf(ctx);
+    const left = ["cma-nav-time", "cma-nav-reports"].filter((k) => k in jar);
+    if (left.length > 0 || jar["cma-nav-open"] !== "time") problems.push(`accordion: after one toggle ${JSON.stringify(left)} still set and cma-nav-open=${JSON.stringify(jar["cma-nav-open"])}, expected both expired and time`);
+    await ctx.close();
+  }
+}
+
+// No header's info mark wraps apart from its label (19 October 2026): at 1440 px with the rail open, on Follow-up, Attempts
+// per deal (two groupings) and Attempts per agent, every header's mark sits on the line of the label's last word. Attempts
+// per deal never scrolls sideways there. --provoke breaks the line before one mark per page
+async function expectNoWrappedMarks() {
+  for (const [subject, path] of [["manager", "/reports/follow-up"], ["manager", "/reports/attempts?range=month&group=day"],
+    ["manager", "/reports/attempts?range=month&group=pipeline&scope=counted"], ["manager", "/reports/attempts-per-agent?range=month"]]) {
+    const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + path);
+    await p.waitForLoadState("networkidle");
+    const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1].split("&")[0]})` : ""} at 1440`;
+    const r = await p.evaluate((spoil) => {
+      const ths = [...document.querySelectorAll("main th")].filter((th) => th.querySelector("button[data-header-hint]"));
+      if (spoil && ths[0]) ths[0].querySelector("button[data-header-hint]").parentElement.before(document.createElement("br"));
+      const out = { headers: 0, wrapped: [] };
+      for (const th of ths) {
+        const texts = [];
+        const walk = document.createTreeWalker(th, NodeFilter.SHOW_TEXT, {
+          acceptNode: (n) => n.parentElement.closest(".sr-only, [data-hint-panel], button") || !/\S/.test(n.textContent) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+        });
+        while (walk.nextNode()) texts.push(walk.currentNode);
+        const last = texts.at(-1);
+        if (!last) continue; // a header read out only (the link column)
+        out.headers++;
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        const line = [...range.getClientRects()].at(-1);
+        const mark = th.querySelector("button[data-header-hint]").getBoundingClientRect();
+        const middle = mark.top + mark.height / 2;
+        if (!line || middle < line.top - 1 || middle > line.bottom + 1 || mark.left < line.left) out.wrapped.push(th.textContent.trim().slice(0, 40));
+      }
+      const main = document.querySelector("main");
+      return { ...out, scrollX: document.documentElement.scrollWidth > window.innerWidth || main.scrollWidth > main.clientWidth };
+    }, provoke);
+    if (r.headers === 0) problems.push(`${where}: no header with a mark to check`);
+    for (const h of r.wrapped) problems.push(`${where}: the info mark of "${h}" wraps apart from its label`);
+    if (path.startsWith("/reports/attempts?") && r.scrollX) problems.push(`${where}: the page scrolls sideways`);
+    await ctx.close();
+  }
+}
+
+// Attempts per deal and Attempts per agent (addition 0008y), per identity at 1280 px: Attempts per deal in the rail and on
+// the page for reports.view or performance.team, Attempts per agent for performance.team while the tenant's
+// reports.per_person holds attempts (the reader sees Attempts per deal only; the agent gets the no-permission card; the
+// invest tenant, without the switch, has no Attempts per agent: absent from the rail, its page not found); the page never
+// scrolls sideways, in every grouping and with every deal counted; the keycaps K, P, S (and G on Attempts per deal) next
+// to the period bar's; five tiles; the tables end inside their cards; the right-most header's hint stays inside the
+// viewport. --provoke lets the deal list spill out of its card
+async function expectAttempts() {
+  // [subject, sees Attempts per deal, sees Attempts per agent]
+  const cases = [
+    ["manager", true, true], ["supervisor", true, true], ["admin", true, true], ["analyst", true, true],
+    ["reader", true, false], ["invest-analyst", true, false], ["agent-one", false, false],
+  ];
+  for (const [subject, deals, perAgent] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/attempts") !== deals) problems.push(`${subject}: Attempts per deal ${deals ? "missing from" : "shown in"} the rail`);
+    if (rail.includes("/reports/attempts-per-agent") !== perAgent) problems.push(`${subject}: Attempts per agent ${perAgent ? "missing from" : "shown in"} the rail`);
+    const pages = [
+      ["/reports/attempts?range=month&group=day", deals, "attempts-list-scroll", "attempts-list", ["K", "P", "S", "G", "T", "W", "M", "C"]],
+      ["/reports/attempts?range=month&group=week", deals, "attempts-list-scroll", "attempts-list", ["G"]],
+      ["/reports/attempts?range=month&group=market&scope=counted", deals, "attempts-groups-scroll", "attempts-groups", ["G"]],
+      ["/reports/attempts?range=month&group=pipeline", deals, "attempts-groups-scroll", "attempts-groups", ["G"]],
+      ["/reports/attempts-per-agent?range=month", perAgent, "attempts-agents-scroll", "attempts-agents-table", ["K", "P", "S", "T", "W", "M", "C"]],
+    ];
+    for (const [path, may, scroll, table, keys] of pages) {
+      const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1].split("&")[0]})` : ""}`;
+      const perDeal = path.startsWith("/reports/attempts?");
+      const r = await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        tiles: document.querySelectorAll('[data-testid="attempts-tiles"] > *').length,
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        // without the tenant's switch the per-agent page does not exist; without the permission it says so
+        if (!perDeal && subject === "invest-analyst" && r?.status() !== 404) problems.push(`${where}: answers ${r?.status()}, expected 404 without reports.per_person`);
+        if (m.tables > 0) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (perDeal && m.tiles !== 5) problems.push(`${where}: ${m.tiles} tiles, expected 5`);
+      if (await p.locator(`[data-testid="${table}"]`).count() === 0) {
+        problems.push(`${where}: ${table} missing`);
+        continue;
+      }
+      const inside = await p.evaluate(([id, spill]) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) box.style.overflowX = "visible";
+        const main = document.querySelector("main");
+        const card = box.parentElement.getBoundingClientRect();
+        const r = box.getBoundingClientRect();
+        return { main: main.scrollWidth - main.clientWidth, inCard: r.right <= card.right + 0.5 };
+      }, [scroll, provoke && subject === "manager" && path.includes("group=day")]);
+      if (!inside) problems.push(`${where}: the table has no scroll container`);
+      else if (inside.main > 0 || !inside.inCard) problems.push(`${where}: the table spills out of its card, the main area scrolls sideways by ${inside.main}px at 1280`);
+      if (subject === "manager") {
+        const mark = p.locator(`[data-testid="${table}"] thead th:last-child button[data-header-hint]`);
+        if (await mark.count() !== 1) problems.push(`${where}: the right-most header's hint is missing`);
+        else {
+          await mark.focus();
+          const h = await p.evaluate(() => {
+            const m = document.activeElement;
+            const panel = m && document.getElementById(m.getAttribute("aria-describedby") ?? "");
+            if (!panel || panel.hidden || getComputedStyle(panel).visibility !== "visible") return null;
+            const r = panel.getBoundingClientRect();
+            return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+          });
+          if (h === null) problems.push(`${where}: the right-most header's hint does not show on focus`);
+          else if (!h) problems.push(`${where}: the right-most header's hint leaves the viewport`);
+          await p.keyboard.press("Escape");
+        }
+        await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}-${path.includes("group=") ? path.split("group=")[1].split("&")[0] : "month"}.png`, fullPage: true });
+      }
+    }
+    await ctx.close();
+  }
+}
+
 await expectShell(1280, 800);
 await expectShell(1920, 1080);
 await expectNavigation();
 await expectFrame();
+await expectAccordion();
+await expectNoWrappedMarks();
 await expectReports();
 await expectLiveBoard();
 await expectCalls();
 await expectForms();
 await expectEmail();
 await expectFirstOrders();
+await expectAttempts();
 await expectCampaigns();
 await expectCallbacks();
 await expectIntakeConfiguration();
@@ -1518,5 +1837,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps, the five tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

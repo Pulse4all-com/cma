@@ -17,6 +17,7 @@ import {
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { Keycap } from "./primitives";
 
 const th = "h-10 whitespace-nowrap px-2 py-1 font-semibold";
@@ -180,11 +181,11 @@ export function FormsTable({ lines, categories, prev, copy, locale }: {
       <table className="w-full border-collapse text-body leading-table" data-testid="forms-table">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.formMarket}{hint(t.formMarket, `${h.formsForm} ${h.formsMarket}`)}</th>
-            <th className={`${th} text-right`}>{t.submissions}{hint(t.submissions, h.formsSubmissions)}</th>
-            <th className={`${th} text-right`}>{t.previous}{hint(t.previous, h.formsPrevious)}</th>
-            <th className={`${th} text-right`}>{t.change}{hint(t.change, h.formsChange)}</th>
-            <th className={`${th} text-right`}>{t.resolved}{hint(t.resolved, h.formsResolved)}</th>
+            <th className={th}><HintLabel label={t.formMarket}>{hint(t.formMarket, `${h.formsForm} ${h.formsMarket}`)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.submissions}>{hint(t.submissions, h.formsSubmissions)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.previous}>{hint(t.previous, h.formsPrevious)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.change}>{hint(t.change, h.formsChange)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.resolved}>{hint(t.resolved, h.formsResolved)}</HintLabel></th>
           </tr>
         </thead>
         {formsTableGroups(lines).map((g) => (
@@ -243,10 +244,10 @@ export function FormsTotals({ title, label, labelHint, totalHint, rows, prev, te
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{label}{hint(label, labelHint)}</th>
-            <th className={`${th} text-right`}>{t.submissions}{hint(t.submissions, totalHint)}</th>
-            <th className={`${th} text-right`}>{t.previous}{hint(t.previous, h.formsPrevious)}</th>
-            <th className={`${th} text-right`}>{t.change}{hint(t.change, h.formsChange)}</th>
+            <th className={th}><HintLabel label={label}>{hint(label, labelHint)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.submissions}>{hint(t.submissions, totalHint)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.previous}>{hint(t.previous, h.formsPrevious)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.change}>{hint(t.change, h.formsChange)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>
@@ -327,10 +328,10 @@ export function AnswersTable({ rows, copy, locale }: { rows: FormAnswerRow[]; co
       <table className="w-full border-collapse text-body leading-table" data-testid="forms-answers">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.question}{hint(t.question, h.formsQuestion)}</th>
-            <th className={th}>{t.answer}{hint(t.answer, h.formsAnswer)}</th>
-            <th className={`${th} text-right`}>{t.submissions}{hint(t.submissions, h.formsAnswerCount)}</th>
-            <th className={`${th} text-right`}>{t.previous}{hint(t.previous, h.formsPrevious)}</th>
+            <th className={th}><HintLabel label={t.question}>{hint(t.question, h.formsQuestion)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.answer}>{hint(t.answer, h.formsAnswer)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.submissions}>{hint(t.submissions, h.formsAnswerCount)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.previous}>{hint(t.previous, h.formsPrevious)}</HintLabel></th>
           </tr>
         </thead>
         {answerGroups(rows).map((g) => (

@@ -1,4 +1,5 @@
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { keptShare } from "@/lib/callbacks";
 import type { Copy, Locale } from "@/lib/copy";
 import type { CallbackCounts, CallbackOwner, CallbackWeek } from "@/lib/data";
@@ -44,14 +45,14 @@ export function CallbackWeeksTable({ weeks, from, to, total, minutes, copy, loca
       <table className="w-full border-collapse text-body leading-table" data-testid="callbacks-weeks">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.week}{hint(t.week, h.cbWeek)}</th>
-            <th className={`${th} text-right`}>{t.cbCallbacks}{hint(t.cbCallbacks, h.cbCallbacks)}</th>
-            <th className={`${th} text-right`}>{t.cbKept}{hint(t.cbKept, h.cbKept)}</th>
-            <th className={`${th} text-right`}>{t.cbNotKept}{hint(t.cbNotKept, h.cbNotKept)}</th>
-            <th className={`${th} text-right`}>{t.cbPending}{hint(t.cbPending, h.cbPending)}</th>
-            <th className={`${th} text-right`}>{t.cbShare}{hint(t.cbShare, h.cbShare)}</th>
-            <th className={`${th} text-right`}>{t.cbNoContact}{hint(t.cbNoContact, h.cbNoContact)}</th>
-            <th className={`${th} text-right`}>{t.cbNoDue}{hint(t.cbNoDue, h.cbNoDue)}</th>
+            <th className={th}><HintLabel label={t.week}>{hint(t.week, h.cbWeek)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbCallbacks}>{hint(t.cbCallbacks, h.cbCallbacks)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbKept}>{hint(t.cbKept, h.cbKept)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbNotKept}>{hint(t.cbNotKept, h.cbNotKept)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbPending}>{hint(t.cbPending, h.cbPending)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbShare}>{hint(t.cbShare, h.cbShare)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbNoContact}>{hint(t.cbNoContact, h.cbNoContact)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbNoDue}>{hint(t.cbNoDue, h.cbNoDue)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>
@@ -85,13 +86,13 @@ export function CallbackOwnersTable({ rows, minutes, copy, locale }: { rows: Cal
       <table className="w-full border-collapse text-body leading-table" data-testid="callbacks-owners">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.person}{hint(t.person, h.cbPerson)}</th>
-            <th className={`${th} text-right`}>{t.cbCallbacks}{hint(t.cbCallbacks, h.cbCallbacks)}</th>
-            <th className={`${th} text-right`}>{t.cbKept}{hint(t.cbKept, h.cbKept)}</th>
-            <th className={`${th} text-right`}>{t.cbNotKept}{hint(t.cbNotKept, h.cbNotKept)}</th>
-            <th className={`${th} text-right`}>{t.cbPending}{hint(t.cbPending, h.cbPending)}</th>
-            <th className={`${th} text-right`}>{t.cbShare}{hint(t.cbShare, h.cbShare)}</th>
-            <th className={`${th} text-right`}>{t.cbNoContact}{hint(t.cbNoContact, h.cbNoContact)}</th>
+            <th className={th}><HintLabel label={t.person}>{hint(t.person, h.cbPerson)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbCallbacks}>{hint(t.cbCallbacks, h.cbCallbacks)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbKept}>{hint(t.cbKept, h.cbKept)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbNotKept}>{hint(t.cbNotKept, h.cbNotKept)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbPending}>{hint(t.cbPending, h.cbPending)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbShare}>{hint(t.cbShare, h.cbShare)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.cbNoContact}>{hint(t.cbNoContact, h.cbNoContact)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

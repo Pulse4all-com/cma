@@ -16,6 +16,7 @@ import type { Copy } from "@/lib/copy";
 import type { DirectoryPerson, LinkedAccounts, OrganisationInfo, RoleInfo, SkillInfo, TeamInfo } from "@/lib/data";
 import { filterPeople, linkedCount, linkedLabel, skillLabel } from "@/lib/team";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { InviteDialog, type InviteContext } from "./InviteDialog";
 import { PersonDialog, type PersonDialogTarget } from "./PersonDialog";
 import { Badge, Button, Keycap } from "./primitives";
@@ -155,7 +156,7 @@ export function TeamDirectory({
               <th className={th}>{t.skills}</th>
               <th className={th}>{t.status}</th>
               {linked.systems.length > 0 ? (
-                <th className={th}>{t.linkedColumn}<HeaderHint label={copy.hints.about.replace("{label}", t.linkedColumn)} text={t.hintLinked} /></th>
+                <th className={th}><HintLabel label={t.linkedColumn}><HeaderHint label={copy.hints.about.replace("{label}", t.linkedColumn)} text={t.hintLinked} /></HintLabel></th>
               ) : null}
               <th className={th}>
                 <span className="sr-only">{t.edit}</span>

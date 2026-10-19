@@ -21,6 +21,7 @@ import {
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { Keycap } from "./primitives";
 
 /** Day, week, market or line as links on the Calls report; G moves to the next one */
@@ -71,15 +72,19 @@ export function previousLabel(from: string, to: string, partial: boolean, copy: 
 
 /**
  * A figure's change against the previous period, like for like, in words with an arrow; Muted whatever its
- * direction. When the previous span starts before the telephony history (`previousFrom` before
+ * direction, unless the figure has a better direction (`better`, addition 0008y): then Leaf Green when it moved that
+ * way and Error (#B8433C) when it moved the other, as Pulse4all-Style 7.7 colours a KPI delta (text only, never a
+ * filled tile). When the previous span starts before the telephony history (`previousFrom` before
  * `historyStart`, callsChange) no change at all: "No history to compare yet", the history's first date in
  * the title
  */
-export function DeltaLine({ current, previous, compared, previousFrom, historyStart, copy, locale, historyText }: {
+export function DeltaLine({ current, previous, compared, previousFrom, historyStart, copy, locale, historyText, better }: {
   current: number | null; previous: number | null; compared: { text: string; dates: string | null; partial: boolean };
   previousFrom: string; historyStart: string | null; copy: Copy; locale: Locale;
   /** The title naming where the history starts, {date} filled in; the telephony history's when left out (Forms gives its own, addition 0008p) */
   historyText?: string;
+  /** The direction in which the figure improves; left out for a volume, whose change is neither good nor bad */
+  better?: "up" | "down";
 }) {
   const t = copy.calls;
   const d = callsChange(current, previous, previousFrom, historyStart);
@@ -95,8 +100,10 @@ export function DeltaLine({ current, previous, compared, previousFrom, historySt
     : d.direction === "same" ? t.deltaSame
     : d.pct === null ? t.deltaNew
     : (d.direction === "up" ? t.deltaUp : t.deltaDown).replace("{pct}", fmtShare(d.pct / 100, locale));
+  const tone = better === undefined || (d.direction !== "up" && d.direction !== "down") ? "text-p4a-muted"
+    : d.direction === better ? "text-p4a-green" : "text-p4a-error";
   return (
-    <p className="mt-1 text-small text-p4a-muted" data-testid="delta" data-direction={d.direction}
+    <p className={`mt-1 text-small ${tone}`} data-testid="delta" data-direction={d.direction} data-tone={tone === "text-p4a-muted" ? "neutral" : tone === "text-p4a-green" ? "good" : "bad"}
       data-compares={compared.partial ? "partial" : "whole"} title={compared.dates ?? undefined}>
       {text.replace("{previous}", compared.text)}
     </p>
@@ -265,15 +272,15 @@ export function TagTable({ rows, groups, total, group, copy, locale }: {
       <table className="w-full border-collapse text-body leading-table" data-testid="tag-table">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{groupTitle[group]}{hint(groupTitle[group], groupHint[group])}</th>
-            <th className={`${th} text-right`}>{t.conversations}{hint(t.conversations, h.callsConversations)}</th>
+            <th className={th}><HintLabel label={groupTitle[group]}>{hint(groupTitle[group], groupHint[group])}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.conversations}>{hint(t.conversations, h.callsConversations)}</HintLabel></th>
             {table.columns.map((c) => (
               <th key={c.key} className={`${th} text-right`} data-tag={c.key}>
-                {c.name}{hint(c.name, c.isCounted ? h.callsTag : h.callsTagNotCounted)}
+                <HintLabel label={c.name}>{hint(c.name, c.isCounted ? h.callsTag : h.callsTagNotCounted)}</HintLabel>
               </th>
             ))}
-            {table.hasOther ? <th className={`${th} text-right`}>{otherLabel}{hint(otherLabel, h.callsOther)}</th> : null}
-            <th className={`${th} text-right`}>{t.untagged}{hint(t.untagged, h.callsUntagged)}</th>
+            {table.hasOther ? <th className={`${th} text-right`}><HintLabel label={otherLabel}>{hint(otherLabel, h.callsOther)}</HintLabel></th> : null}
+            <th className={`${th} text-right`}><HintLabel label={t.untagged}>{hint(t.untagged, h.callsUntagged)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

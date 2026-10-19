@@ -18,6 +18,7 @@ import type {
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
+  AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport, LineStoredCalls,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -950,6 +951,54 @@ function toOwner(x: OwnerDb): FollowUpOwner {
     ticketsAtRiskOrBreached: x.tickets_at_risk_or_breached, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today,
   };
 }
+// ---- Attempts per deal (addition 0008y): cma.attempts_per_deal_page and attempts_per_person_page answer one JSON object
+// each, snake_case keys, numbers as numbers (the averages and medians as JSON numbers), times as ISO text
+type AttemptFiguresDb = {
+  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; first_reached: number;
+  connected_deals: number; open_deals: number; open_never_attempted: number; won: number; lost: number;
+};
+type AttemptListDb = {
+  connection_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string | null; market: string; created_at: string;
+  closed_at: string | null; is_closed: boolean; outcome: AttemptListRow["outcome"]; attempts: number; connected: number;
+  first_connected_attempt: number | null; last_attempt_at: string | null; business_days_since_last: number | null; since_last_bucket: string | null;
+};
+type AttemptsCommonDb = {
+  markets: string[]; pipelines: { key: string; label: string }[]; history_start: string | null;
+  settings: { max_bucket: number; since_last_buckets: string; pre_window_minutes: number; list_rows: number };
+};
+type AttemptsPageDb = AttemptsCommonDb & {
+  current: AttemptFiguresDb; previous: AttemptFiguresDb;
+  buckets: { bucket: number; label: string; deals: number; first_connected: number; won: number; lost: number }[];
+  groups: (AttemptFiguresDb & { key: string; label: string | null })[];
+  since_last: { buckets: { from: number; to: number | null; label: string; deals: number }[]; no_hours: number };
+  list: { total: number; rows: AttemptListDb[] };
+};
+type AttemptsPersonDb = AttemptsCommonDb & {
+  rows: (AttemptFiguresDb & { user_id: string; display_name: string | null })[];
+  not_linked: (AttemptFiguresDb & { unlinked_owners: number }) | null;
+  total: AttemptFiguresDb;
+};
+/** An instant as ISO text in UTC, from the JSON's timestamptz text */
+const isoOf = (v: string | null): string | null => (v === null ? null : new Date(v).toISOString());
+function toAttemptFigures(x: AttemptFiguresDb): AttemptFigures {
+  return {
+    deals: x.deals, attempted: x.attempted, attempts: x.attempts, avgAttempts: x.avg_attempts === null ? null : Number(x.avg_attempts),
+    medianAttempts: x.median_attempts === null ? null : Number(x.median_attempts), firstReached: x.first_reached, connectedDeals: x.connected_deals,
+    openDeals: x.open_deals, openNeverAttempted: x.open_never_attempted, won: x.won, lost: x.lost,
+  };
+}
+function toAttemptSettings(x: AttemptsCommonDb["settings"]): AttemptSettings {
+  return { maxBucket: x.max_bucket, sinceLastBuckets: x.since_last_buckets, preWindowMinutes: x.pre_window_minutes, listRows: x.list_rows };
+}
+function toAttemptListRow(x: AttemptListDb): AttemptListRow {
+  return {
+    connectionId: x.connection_id, dealSourceId: x.deal_source_id, recordUrl: x.record_url, pipelineLabel: x.pipeline_label, market: x.market,
+    createdAt: isoOf(x.created_at)!, closedAt: isoOf(x.closed_at), isClosed: x.is_closed, outcome: x.outcome, attempts: x.attempts,
+    connected: x.connected, firstConnectedAttempt: x.first_connected_attempt, lastAttemptAt: isoOf(x.last_attempt_at),
+    businessDaysSinceLast: x.business_days_since_last, sinceLastBucket: x.since_last_bucket,
+  };
+}
+
 /** cma.follow_up_page's JSON (addition 0008s): snake_case keys, numbers as numbers, settings as text */
 type FollowUpPageDb = {
   computed_at: string; duration_ms: number; rows: number; summary: SummaryDb; by_owner: OwnerDb[] | null;
@@ -1072,7 +1121,7 @@ export const postgresData: CmaData = {
         // getAccess() computes both from the real permissions and the preview cookie
         preview: null,
         canPreview: false,
-        perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders"),
+        perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders" || k === "attempts"),
       };
     });
   },
@@ -1865,6 +1914,41 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getAttempts(me, range, group, filter): Promise<AttemptsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the group, the scope and the filters first; one pass of cma.attempts_per_deal_of
+      // over the previous span and the period (0008y)
+      const j = one((await q.query<{ j: AttemptsPageDb }>(`select cma.attempts_per_deal_page($1::date, $2::date, $3, $4, $5, $6) as j`,
+        [range.from, range.to, group, filter.market, filter.pipeline, filter.scope])).rows, "attempts_per_deal_page").j;
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      return {
+        ...range, group, filter, current: toAttemptFigures(j.current), previous: toAttemptFigures(j.previous),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstConnected: b.first_connected, won: b.won, lost: b.lost })),
+        groups: j.groups.map((g): AttemptGroupRow => ({ groupKey: g.key, label: g.label, ...toAttemptFigures(g) })),
+        sinceLast: { buckets: j.since_last.buckets, noHours: j.since_last.no_hours },
+        list: { total: j.list.total, rows: j.list.rows.map(toAttemptListRow) },
+        markets: j.markets, pipelines: j.pipelines, historyStart: j.history_start, settings: toAttemptSettings(j.settings),
+      };
+    });
+  },
+
+  async getAttemptsPerAgent(me, range, filter): Promise<AttemptsPerAgent> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team and the tenant's reports.per_person (attempts) first (CMA06)
+      const j = one((await q.query<{ j: AttemptsPersonDb }>(`select cma.attempts_per_person_page($1::date, $2::date, $3, $4, $5) as j`,
+        [range.from, range.to, filter.market, filter.pipeline, filter.scope])).rows, "attempts_per_person_page").j;
+      const rows: AttemptPerson[] = j.rows.map((p) => ({ kind: "person", userId: p.user_id, name: p.display_name, unlinkedOwners: null, ...toAttemptFigures(p) }));
+      if (j.not_linked) rows.push({ kind: "notLinked", userId: null, name: null, unlinkedOwners: j.not_linked.unlinked_owners, ...toAttemptFigures(j.not_linked) });
+      return {
+        ...range, filter, rows, total: { kind: "total", userId: null, name: null, unlinkedOwners: null, ...toAttemptFigures(j.total) },
+        markets: j.markets, pipelines: j.pipelines, historyStart: j.history_start, settings: toAttemptSettings(j.settings),
+      };
+    });
+  },
+
   async getCallbacksKept(me, range): Promise<CallbacksKept> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
@@ -2021,6 +2105,15 @@ export const postgresData: CmaData = {
 
   async setSourceLine(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_number($1::uuid, $2, $3, $4)`, [id, input.lineRef, input.market, input.isCounted]));
+  },
+
+  async getSourceLineStoredCalls(me, id, lineRef): Promise<LineStoredCalls> {
+    return withTenant(ctx(me), async (q) => {
+      // tenant.configure, and CMA02 for a line the tenant does not have (0008y)
+      const r = one((await q.query<{ stored_calls: number; first_started_at: Date | null }>(
+        `select stored_calls, first_started_at from cma.telephony_number_stored_calls($1::uuid, $2)`, [id, lineRef])).rows, "telephony_number_stored_calls");
+      return { storedCalls: r.stored_calls, firstStartedAt: r.first_started_at ? r.first_started_at.toISOString() : null };
+    });
   },
 
   async setSourceTag(me, id, input): Promise<void> {

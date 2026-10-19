@@ -16,6 +16,7 @@ import {
 } from "@/lib/health";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge, Card } from "../primitives";
 import { RefreshButton } from "./RefreshButton";
 import { td, th, tr } from "./tableClasses";
@@ -91,7 +92,7 @@ export function SystemHealth(p: SystemHealthProps) {
             <dt className="text-p4a-muted">{t.version}</dt><dd className="tabular font-semibold">{p.version}</dd>
             <dt className="text-p4a-muted">{t.authMode}</dt><dd>{p.authMode === "iap" ? t.authIap : t.authMock}</dd>
             <dt className="text-p4a-muted">{t.dataMode}</dt><dd>{p.dataMode === "api" ? t.dataApi : t.dataMock}</dd>
-            <dt className="text-p4a-muted">{t.probe}{hint(t.probe, t.probeHint)}</dt>
+            <dt className="text-p4a-muted"><HintLabel label={t.probe}>{hint(t.probe, t.probeHint)}</HintLabel></dt>
             <dd className="flex items-center gap-3">
               <Badge tone={probe === "fast" ? "success" : probe === "slow" ? "warning" : "error"}>
                 {probe === "fast" ? t.probeFast : probe === "slow" ? t.probeSlow : t.probeDown}
@@ -123,7 +124,7 @@ export function SystemHealth(p: SystemHealthProps) {
             <thead className="bg-p4a-bgblue text-small text-p4a-heading">
               <tr>
                 <th className={th}>{t.source}</th>
-                <th className={th}>{t.state}{hint(t.state, t.stateHint)}</th>
+                <th className={th}><HintLabel label={t.state}>{hint(t.state, t.stateHint)}</HintLabel></th>
                 <th className={th}>{t.lastEvent}</th>
                 <th className={`${th} text-right`}>{t.events24h}</th>
                 <th className={th}>{t.lastReadBack}</th>
@@ -163,7 +164,7 @@ export function SystemHealth(p: SystemHealthProps) {
           <table className="w-full border-collapse text-body leading-table" data-testid="health-jobs">
             <thead className="bg-p4a-bgblue text-small text-p4a-heading">
               <tr>
-                <th className={th}>{t.job}{hint(t.job, t.jobsHint)}</th>
+                <th className={th}><HintLabel label={t.job}>{hint(t.job, t.jobsHint)}</HintLabel></th>
                 <th className={th}>{t.source}</th>
                 <th className={th}>{t.lastRun}</th>
                 <th className={`${th} text-right`}>{t.duration}</th>
@@ -257,7 +258,7 @@ export function SystemHealth(p: SystemHealthProps) {
               </tbody>
             </table>
           )}
-          <h3 className="mt-6 text-small font-semibold text-p4a-heading">{t.externalTitle}{hint(t.externalTitle, t.externalHint)}</h3>
+          <h3 className="mt-6 text-small font-semibold text-p4a-heading"><HintLabel label={t.externalTitle}>{hint(t.externalTitle, t.externalHint)}</HintLabel></h3>
           <ul className="mt-2 flex flex-col gap-1 text-body" data-testid="health-external">
             <li>{p.external.gemini ? <a href={p.external.gemini} target="_blank" rel="noreferrer noopener" className="font-semibold text-p4a-deepblue hover:underline">{t.externalGemini}</a> : <span className="text-p4a-muted">{t.externalGemini} · {t.externalNotSet}</span>}</li>
             <li>{p.external.datamap ? <a href={p.external.datamap} target="_blank" rel="noreferrer noopener" className="font-semibold text-p4a-deepblue hover:underline">{t.externalDatamap}</a> : <span className="text-p4a-muted">{t.externalDatamap} · {t.externalNotSet}</span>}</li>

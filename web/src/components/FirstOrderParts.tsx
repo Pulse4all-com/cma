@@ -16,6 +16,7 @@ import { barShare, fmtCount } from "@/lib/reports";
 import { addDays, fmtDate, fmtDateTimeShort, startOfWeek } from "@/lib/time";
 import { Legend, StackedColumns, type Column } from "./EmailParts";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { RecordLink } from "./RecordLink";
 import { Keycap } from "./primitives";
 
@@ -162,20 +163,20 @@ export function FirstOrderTable({ rows, dimension, amounts, hints, testId, title
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{first}{hint(first, dimension === "market" ? hints.foMarket! : dimension === "level" ? hints.foLevel! : hints.foGroup!)}</th>
-            <th className={`${th} text-right`}>{t.orders}{hint(t.orders, hints.foOrders!)}</th>
-            <th className={`${th} text-right`}>{t.callCenterCol}{hint(t.callCenterCol, hints.foCallCenter!)}</th>
-            <th className={`${th} text-right`}>{t.selfServiceCol}{hint(t.selfServiceCol, hints.foSelfService!)}</th>
+            <th className={th}><HintLabel label={first}>{hint(first, dimension === "market" ? hints.foMarket! : dimension === "level" ? hints.foLevel! : hints.foGroup!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.orders}>{hint(t.orders, hints.foOrders!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.callCenterCol}>{hint(t.callCenterCol, hints.foCallCenter!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.selfServiceCol}>{hint(t.selfServiceCol, hints.foSelfService!)}</HintLabel></th>
             {showKinds ? (
               <>
-                <th className={`${th} text-right`}>{t.repeats}{hint(t.repeats, hints.foRepeats!)}</th>
-                <th className={`${th} text-right`}>{t.renewals}{hint(t.renewals, hints.foRenewals!)}</th>
-                <th className={`${th} text-right`}>{t.notFirst}{hint(t.notFirst, hints.foNotFirst!)}</th>
-                <th className={`${th} text-right`}>{t.noContact}{hint(t.noContact, hints.foNoContact!)}</th>
+                <th className={`${th} text-right`}><HintLabel label={t.repeats}>{hint(t.repeats, hints.foRepeats!)}</HintLabel></th>
+                <th className={`${th} text-right`}><HintLabel label={t.renewals}>{hint(t.renewals, hints.foRenewals!)}</HintLabel></th>
+                <th className={`${th} text-right`}><HintLabel label={t.notFirst}>{hint(t.notFirst, hints.foNotFirst!)}</HintLabel></th>
+                <th className={`${th} text-right`}><HintLabel label={t.noContact}>{hint(t.noContact, hints.foNoContact!)}</HintLabel></th>
               </>
             ) : null}
-            <th className={`${th} text-right`}>{t.days}{hint(t.days, hints.foDays!)}</th>
-            {amounts ? <th className={`${th} text-right`}>{t.amount}{hint(t.amount, hints.foAmount!)}</th> : null}
+            <th className={`${th} text-right`}><HintLabel label={t.days}>{hint(t.days, hints.foDays!)}</HintLabel></th>
+            {amounts ? <th className={`${th} text-right`}><HintLabel label={t.amount}>{hint(t.amount, hints.foAmount!)}</HintLabel></th> : null}
           </tr>
         </thead>
         <tbody>
@@ -213,11 +214,11 @@ export function AmountsTable({ amounts, hints, copy, locale }: { amounts: FirstO
       <table className="w-full border-collapse text-body leading-table" data-testid="first-order-amounts">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.currency}{hint(t.currency, hints.foCurrency!)}</th>
-            <th className={`${th} text-right`}>{t.orders}{hint(t.orders, hints.foOrders!)}</th>
-            <th className={`${th} text-right`}>{t.amount}{hint(t.amount, hints.foAmount!)}</th>
-            <th className={`${th} text-right`}>{t.callCenterCol}{hint(t.callCenterCol, hints.foCallCenterAmount!)}</th>
-            <th className={`${th} text-right`}>{t.selfServiceCol}{hint(t.selfServiceCol, hints.foSelfServiceAmount!)}</th>
+            <th className={th}><HintLabel label={t.currency}>{hint(t.currency, hints.foCurrency!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.orders}>{hint(t.orders, hints.foOrders!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.amount}>{hint(t.amount, hints.foAmount!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.callCenterCol}>{hint(t.callCenterCol, hints.foCallCenterAmount!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.selfServiceCol}>{hint(t.selfServiceCol, hints.foSelfServiceAmount!)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>
@@ -248,13 +249,13 @@ export function FirstOrderListTable({ rows, levelOrder, hints, copy, locale, tim
       <table className="w-full border-collapse text-body leading-table" data-testid="first-order-list">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.deal}{hint(t.deal, hints.foDeal!)}</th>
-            <th className={th}>{t.market}{hint(t.market, hints.foMarket!)}</th>
-            <th className={`${th} text-right`}>{t.orderedAt}{hint(t.orderedAt, hints.foOrderedAt!)}</th>
-            <th className={th}>{t.level}{hint(t.level, hints.foLevel!)}</th>
-            <th className={th}>{t.evidence}{hint(t.evidence, hints.foEvidence!)}</th>
-            <th className={`${th} text-right`}>{t.daysCol}{hint(t.daysCol, hints.foDaysCol!)}</th>
-            <th className={`${th} text-right`}>{t.amount}{hint(t.amount, hints.foAmount!)}</th>
+            <th className={th}><HintLabel label={t.deal}>{hint(t.deal, hints.foDeal!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.market}>{hint(t.market, hints.foMarket!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.orderedAt}>{hint(t.orderedAt, hints.foOrderedAt!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.level}>{hint(t.level, hints.foLevel!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.evidence}>{hint(t.evidence, hints.foEvidence!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.daysCol}>{hint(t.daysCol, hints.foDaysCol!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.amount}>{hint(t.amount, hints.foAmount!)}</HintLabel></th>
             <th className={th}><span className="sr-only">{t.open}</span></th>
           </tr>
         </thead>

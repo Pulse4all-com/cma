@@ -19,6 +19,7 @@ import {
 import { countAxis, fmtCount, fmtShare, fmtTalk, weekNumber } from "@/lib/reports";
 import { addDays, dateKeyInZone, fmtDate, fmtDateTimeShort, startOfWeek } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { Keycap } from "./primitives";
 
 /** Day or week as links on the Email report; G moves to the other */
@@ -231,8 +232,8 @@ export function EmailFiguresTable({ rows, dimension, columns, hints, title, test
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{firstLabel}{hint(firstLabel, firstHint)}</th>
-            {columns.map((c) => <th key={c} className={`${th} text-right`}>{head[c][0]}{hint(head[c][0], head[c][1])}</th>)}
+            <th className={th}><HintLabel label={firstLabel}>{hint(firstLabel, firstHint)}</HintLabel></th>
+            {columns.map((c) => <th key={c} className={`${th} text-right`}><HintLabel label={head[c][0]}>{hint(head[c][0], head[c][1])}</HintLabel></th>)}
           </tr>
         </thead>
         <tbody>
@@ -263,13 +264,13 @@ export function WaitingTable({ rows, hints, copy, locale, timeZone }: { rows: Em
       <table className="w-full border-collapse text-body leading-table" data-testid="email-waiting">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.conversation}{hint(t.conversation, hints.emailWaitConversation!)}</th>
-            <th className={th}>{t.inbox}{hint(t.inbox, hints.emailWaitInbox!)}</th>
-            <th className={th}>{t.account}{hint(t.account, hints.emailWaitAccount!)}</th>
-            <th className={th}>{t.market}{hint(t.market, hints.emailWaitMarket!)}</th>
-            <th className={`${th} text-right`}>{t.waitingSince}{hint(t.waitingSince, hints.emailWaitingSince!)}</th>
-            <th className={`${th} text-right`}>{t.waited}{hint(t.waited, hints.emailWaited!)}</th>
-            <th className={`${th} text-right`}>{t.waitedElapsed}{hint(t.waitedElapsed, hints.emailWaitedElapsed!)}</th>
+            <th className={th}><HintLabel label={t.conversation}>{hint(t.conversation, hints.emailWaitConversation!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.inbox}>{hint(t.inbox, hints.emailWaitInbox!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.account}>{hint(t.account, hints.emailWaitAccount!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.market}>{hint(t.market, hints.emailWaitMarket!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.waitingSince}>{hint(t.waitingSince, hints.emailWaitingSince!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.waited}>{hint(t.waited, hints.emailWaited!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.waitedElapsed}>{hint(t.waitedElapsed, hints.emailWaitedElapsed!)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>
@@ -302,12 +303,12 @@ export function NotRespondingTable({ rows, hints, copy, locale, timeZone }: { ro
       <table className="w-full border-collapse text-body leading-table" data-testid="email-not-responding">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.deal}{hint(t.deal, hints.emailNrDeal!)}</th>
-            <th className={th}>{t.pipeline}{hint(t.pipeline, hints.emailNrPipeline!)}</th>
-            <th className={th}>{t.market}{hint(t.market, hints.emailNrMarket!)}</th>
-            <th className={th}>{t.owner}{hint(t.owner, hints.emailNrOwner!)}</th>
-            <th className={`${th} text-right`}>{t.lastEmail}{hint(t.lastEmail, hints.emailNrLastEmail!)}</th>
-            <th className={`${th} text-right`}>{t.daysSince}{hint(t.daysSince, hints.emailNrDays!)}</th>
+            <th className={th}><HintLabel label={t.deal}>{hint(t.deal, hints.emailNrDeal!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.pipeline}>{hint(t.pipeline, hints.emailNrPipeline!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.market}>{hint(t.market, hints.emailNrMarket!)}</HintLabel></th>
+            <th className={th}><HintLabel label={t.owner}>{hint(t.owner, hints.emailNrOwner!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.lastEmail}>{hint(t.lastEmail, hints.emailNrLastEmail!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.daysSince}>{hint(t.daysSince, hints.emailNrDays!)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

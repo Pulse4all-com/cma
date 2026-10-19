@@ -14,6 +14,7 @@ import type { Invitation, InvitationLink } from "@/lib/data";
 import { invitationActionable, sortInvitations } from "@/lib/invitations";
 import { fmtDateTime } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { InviteDialog, type InviteContext, type InviteDialogMode } from "./InviteDialog";
 import { Badge, Button, Notice } from "./primitives";
 
@@ -79,9 +80,9 @@ export function InvitationsSection({ invitations, context, copy }: { invitations
               <tr>
                 <th className={th}>{t.colPerson}</th>
                 <th className={th}>{t.colRole}</th>
-                <th className={th}>{t.colState}<HeaderHint label={copy.hints.about.replace("{label}", t.colState)} text={t.hintState} /></th>
+                <th className={th}><HintLabel label={t.colState}><HeaderHint label={copy.hints.about.replace("{label}", t.colState)} text={t.hintState} /></HintLabel></th>
                 <th className={th}>{t.colSent}</th>
-                <th className={th}>{t.colExpires}<HeaderHint label={copy.hints.about.replace("{label}", t.colExpires)} text={t.hintExpires} /></th>
+                <th className={th}><HintLabel label={t.colExpires}><HeaderHint label={copy.hints.about.replace("{label}", t.colExpires)} text={t.hintExpires} /></HintLabel></th>
                 <th className={th}><span className="sr-only">{t.newLink}</span></th>
               </tr>
             </thead>

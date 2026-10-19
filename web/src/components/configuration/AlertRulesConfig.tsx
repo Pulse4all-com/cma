@@ -15,6 +15,7 @@ import type { Copy, Locale } from "@/lib/copy";
 import type { AlertRule, AlertRuleInput, AlertRulesConfig as Data, AlertTrigger, PermissionInfo } from "@/lib/data";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, recordWord, ruleEffect } from "@/lib/alertRules";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge, Button } from "../primitives";
 import { fmtWhen } from "./SourcesList";
 import { FlagField, FormDialog, SaveNote, field, label, send, th, useSave } from "./shared";
@@ -69,10 +70,10 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr>
               <th className={th}>{t.rule}</th>
-              <th className={th}>{t.trigger}{hint(t.trigger, t.hintTrigger)}</th>
-              <th className={th}>{t.pipelines}{hint(t.pipelines, t.hintPipelines)}</th>
-              <th className={th}>{t.urgency}{hint(t.urgency, `${t.hintUrgency} ${t.hintSound}`)}</th>
-              <th className={`${th} text-right`}>{t.alerts}{hint(t.alerts, t.hintAlerts)}</th>
+              <th className={th}><HintLabel label={t.trigger}>{hint(t.trigger, t.hintTrigger)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.pipelines}>{hint(t.pipelines, t.hintPipelines)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.urgency}>{hint(t.urgency, `${t.hintUrgency} ${t.hintSound}`)}</HintLabel></th>
+              <th className={`${th} text-right`}><HintLabel label={t.alerts}>{hint(t.alerts, t.hintAlerts)}</HintLabel></th>
               <th className={th}></th>
             </tr>
           </thead>

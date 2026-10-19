@@ -7,14 +7,20 @@
  * of Calls in each grouping and every header of Calls per agent, and since addition 0008p every tile and header of
  * Forms, since addition 0008t every tile and header of Email and Email per agent, and since addition 0008u every tile, header and
  * level bar of First orders and every header of Orders per person, and since addition 0008w the Callbacks kept tile and the
- * headers of the callbacks kept per week and per person, carries exactly one info mark: a button with a name, described by a
+ * headers of the callbacks kept per week and per person, and since addition 0008y every tile, header and bar card of
+ * Attempts per deal and every header of Attempts per agent, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
- * a touch screen, and a Dashboard tile still opens its report while its mark does not.
+ * a touch screen, and a Dashboard tile still opens its report while its mark does not. Last, the top bar
+ * never moves on the hints toggle (19 October 2026): the logo, the hints toggle, the inbox, the preview
+ * select, the signed-in name, Log out and every rail item keep their boxes within 0.5 px, hidden and
+ * shown again, toggled and on a fresh load, at 1440 by 900 and 1280 by 800 with the rail open and folded.
  *
- *   BASE=http://localhost:8080 node verify/hints.mjs             expect PASS
- *   BASE=http://localhost:8080 node verify/hints.mjs --provoke   removes one header's mark,
- *       expect FAIL, exit 1
+ *   BASE=http://localhost:8080 node verify/hints.mjs                    expect PASS
+ *   BASE=http://localhost:8080 node verify/hints.mjs --provoke          removes one header's mark and Log out's
+ *       width fix, expect FAIL, exit 1
+ *   BASE=http://localhost:8080 node verify/hints.mjs --provoke-topbar   removes Log out's width fix only (its
+ *       keycap leaves the layout again when the hints hide), expect FAIL on the top bar alone, exit 1
  *
  * Needs the app running in mock mode and Playwright's Chromium installed.
  */
@@ -22,6 +28,7 @@ import { chromium } from "playwright";
 
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const provoke = process.argv.includes("--provoke");
+const provokeTopbar = provoke || process.argv.includes("--provoke-topbar");
 const problems = [];
 /**
  * The mock's urgent fixture message pops up for every identity but the first one to poll the inbox, and
@@ -99,9 +106,9 @@ const cases = [
   ["manager", "/reports/calls?range=month&group=week", 16, 8],
   ["manager", "/reports/calls?range=month&group=market", 16, 8],
   ["manager", "/reports/calls?range=month&group=line", 16, 8],
-  // Calls per agent: the person, eight figures and the first and last call
-  ["manager", "/reports/calls-per-agent?range=month", 10, 0],
-  ["supervisor", "/reports/calls-per-agent?range=week", 10, 0],
+  // Calls per agent: the person, six figures (no total talk time in or out since 19 October 2026) and the first and last call
+  ["manager", "/reports/calls-per-agent?range=month", 8, 0],
+  ["supervisor", "/reports/calls-per-agent?range=week", 8, 0],
   // Follow-up (addition 0008o): eight tiles; the leads' nine, the tickets' nine and the tasks' eight named headers
   // (the link column's header is read out only, so it is not counted here), and the per-person table's seven
   // for performance.team (the reader, with reports.view alone, has no per-person table); Waiting for you
@@ -133,6 +140,15 @@ const cases = [
   ["reader", "/reports/first-orders?range=month&group=level", 27, 4],
   ["manager", "/reports/orders-per-person?range=month", 8, 0],
   ["supervisor", "/reports/orders-per-person?range=week", 8, 0],
+  // Attempts per deal (addition 0008y): five tiles; the table per group (the group and nine figures) and the deal list
+  // (ten named headers; the link column's is read out only), in each grouping; the four bar cards carry their marks
+  // too, checked below. Attempts per agent: the person and six figures
+  ["manager", "/reports/attempts?range=month&group=day", 20, 5],
+  ["manager", "/reports/attempts?range=month&group=week", 20, 5],
+  ["manager", "/reports/attempts?range=month&group=market&scope=counted", 20, 5],
+  ["reader", "/reports/attempts?range=month&group=pipeline", 20, 5],
+  ["manager", "/reports/attempts-per-agent?range=month", 7, 0],
+  ["supervisor", "/reports/attempts-per-agent?range=week", 7, 0],
 ];
 let headers = 0;
 let tiles = 0;
@@ -172,6 +188,28 @@ let levelBars = 0;
     else if (!x.text || /[{}]/.test(x.text)) problems.push(`first orders: level bar ${i + 1}'s hint is empty or unfilled: ${x.text}`);
   });
   levelBars = bars.length;
+  await ctx.close();
+}
+
+// Attempts per deal (addition 0008y): each of the four bar cards names its figure in one described mark at the end of
+// its intro
+let barCards = 0;
+{
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/reports/attempts?range=month");
+  await p.waitForLoadState("networkidle");
+  const intros = await p.evaluate(() => [...document.querySelectorAll("main [data-attempt-intro]")].map((el) => {
+    const marks = el.querySelectorAll("button[data-header-hint]");
+    const panel = marks.length === 1 ? document.getElementById(marks[0].getAttribute("aria-describedby") ?? "") : null;
+    return { marks: marks.length, named: marks.length === 1 && !!marks[0].getAttribute("aria-label"), text: panel?.getAttribute("role") === "tooltip" ? panel.textContent.trim() : "" };
+  }));
+  if (intros.length !== 4) problems.push(`attempts: ${intros.length} bar cards with a mark, expected 4`);
+  intros.forEach((x, i) => {
+    if (x.marks !== 1 || !x.named) problems.push(`attempts: bar card ${i + 1} has ${x.marks} info marks or no name`);
+    else if (!x.text || /[{}]/.test(x.text)) problems.push(`attempts: bar card ${i + 1}'s hint is empty or unfilled: ${x.text}`);
+  });
+  barCards = intros.length;
   await ctx.close();
 }
 
@@ -230,7 +268,8 @@ let levelBars = 0;
   const p = await ctx.newPage();
   await p.goto(BASE + "/reports/speed-to-lead?range=month");
   await p.waitForLoadState("networkidle");
-  const visibleKeycaps = () => p.evaluate(() => [...document.querySelectorAll("kbd")].filter((k) => k.getClientRects().length > 0).length);
+  // Log out's keycap keeps its place in the layout, invisible (19 October 2026), so visible means rendered and not hidden
+  const visibleKeycaps = () => p.evaluate(() => [...document.querySelectorAll("kbd")].filter((k) => k.getClientRects().length > 0 && getComputedStyle(k).visibility !== "hidden").length);
   const before = await visibleKeycaps();
   if (before !== 0) problems.push(`hidden hints: ${before} keycaps still visible`);
   const mark = p.locator('[data-testid="speed-summary"] th button[data-header-hint]').first();
@@ -261,9 +300,85 @@ let levelBars = 0;
   await ctx.close();
 }
 
+// The top bar never moves on the hints toggle (19 October 2026): Log out keeps the width it has with its keycap, so
+// nothing left of it shifts, and the rail's items stay where they are; only the page's content may narrow or widen.
+// For the admin (the preview select shows), at two viewports, with the rail open and folded and the Configuration
+// group open (its keycap hides too): shown on a fresh load, hidden by the toggle, hidden on a fresh load, shown by the
+// toggle, each against the first. --provoke-topbar takes the keycap out of the layout again, as before the fix
+const TOPBAR_SLACK = 0.5;
+let topbarRuns = 0;
+let topbarBoxes = 0;
+for (const [width, height] of [[1440, 900], [1280, 800]]) {
+  for (const rail of ["expanded", "collapsed"]) {
+    const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": "admin" } });
+    const host = new URL(BASE).hostname;
+    await ctx.addCookies([
+      { name: "cma-hints", value: "shown", domain: host, path: "/" },
+      { name: "cma-rail", value: rail, domain: host, path: "/" },
+      { name: "cma-nav-open", value: "configuration", domain: host, path: "/" },
+    ]);
+    const p = await ctx.newPage();
+    const load = async (how) => {
+      if (how === "goto") await p.goto(BASE + "/configuration/statuses");
+      else await p.reload();
+      await p.waitForLoadState("networkidle");
+      if (provokeTopbar) await p.addStyleTag({ content: '[data-hints="hidden"] [data-logout="with-key"] kbd { display: none !important; }' });
+    };
+    const boxes = () => p.evaluate(() => {
+      const out = {};
+      const put = (name, el) => {
+        if (!el || el.getClientRects().length === 0) return;
+        const r = el.getBoundingClientRect();
+        out[name] = [r.x, r.y, r.width, r.height];
+      };
+      put("logo", document.querySelector("header img"));
+      put("hints toggle", document.querySelector('[data-testid="hints-toggle"]'));
+      put("inbox", document.querySelector('[data-testid="inbox-link"]'));
+      put("preview select", document.querySelector('[data-testid="preview-select"]'));
+      put("signed-in name", document.querySelector('header a[href="/account"]'));
+      put("log out", document.querySelector('[data-testid="logout"]'));
+      document.querySelectorAll("nav[data-rail-nav] a, nav[data-rail-nav] button").forEach((el, i) =>
+        put(`rail item ${i + 1} (${el.getAttribute("aria-label") ?? el.textContent.trim()})`, el));
+      return out;
+    });
+    const hintsState = () => p.evaluate(() => document.querySelector("[data-hints]")?.getAttribute("data-hints"));
+    const where = `${width}x${height}, rail ${rail === "expanded" ? "open" : "folded"}`;
+    const toggle = async () => {
+      await p.locator('[data-testid="hints-toggle"]').click();
+      await p.mouse.move(width / 2, height - 10);
+      await p.waitForTimeout(150);
+    };
+    await load("goto");
+    const first = await boxes();
+    for (const k of ["logo", "hints toggle", "inbox", "preview select", "signed-in name", "log out"]) {
+      if (!first[k]) problems.push(`top bar ${where}: no ${k} to measure`);
+    }
+    if (!Object.keys(first).some((k) => k.startsWith("rail item"))) problems.push(`top bar ${where}: no rail item to measure`);
+    const steps = [];
+    await toggle();
+    steps.push(["hidden by the toggle", await hintsState(), "hidden", await boxes()]);
+    await load("reload");
+    steps.push(["hidden on a fresh load", await hintsState(), "hidden", await boxes()]);
+    await toggle();
+    steps.push(["shown by the toggle", await hintsState(), "shown", await boxes()]);
+    for (const [step, state, expected, now] of steps) {
+      if (state !== expected) problems.push(`top bar ${where}, ${step}: the hints are ${state}, expected ${expected}`);
+      for (const [k, a] of Object.entries(first)) {
+        const c = now[k];
+        if (!c) { problems.push(`top bar ${where}, ${step}: ${k} is gone`); continue; }
+        const off = Math.max(...a.map((v, i) => Math.abs(v - c[i])));
+        if (off > TOPBAR_SLACK) problems.push(`top bar ${where}, ${step}: ${k} moved by ${off.toFixed(1)} px (x ${a[0].toFixed(1)} to ${c[0].toFixed(1)}, width ${a[2].toFixed(1)} to ${c[2].toFixed(1)})`);
+      }
+    }
+    topbarRuns++;
+    topbarBoxes += Object.keys(first).length;
+    await ctx.close();
+  }
+}
+
 await b.close();
 for (const x of problems) console.log("  " + x);
 console.log(problems.length === 0
-  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages and ${levelBars} level bars on First orders, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps)`
+  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, ${levelBars} level bars on First orders and ${barCards} bar cards on Attempts per deal, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still within ${TOPBAR_SLACK} px on the toggle, ${topbarBoxes} boxes in ${topbarRuns} runs)`
   : `hints: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

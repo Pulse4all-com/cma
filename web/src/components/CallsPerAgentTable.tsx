@@ -4,7 +4,8 @@
  * Calls per agent's table (addition 0008j, brief B16; Aircall's User Activity view): one row per person,
  * sorted by name and never ranked (README Decision log, 7 and 14 October 2026), the calls of telephony
  * users without a person last as one row with their count (a link to Data quality for those who may open
- * it), and the total. Every figure column carries an inline bar scaled to the column's largest value, in
+ * it), and the total. The total talk time in and out is no column since 19 October 2026 (Martin): the averages
+ * stay. Every figure column carries an inline bar scaled to the column's largest value, in
  * the style's series (docs/style/Pulse4all-Style.md 7.7): inbound Deep Blue, outbound Leaf Green,
  * conversations Light Blue, never with text on it (7.8). A row opens with Enter on its name or a click
  * anywhere on it and shows that person's conversations per counted tag as small horizontal bars with
@@ -19,6 +20,7 @@ import {
   barShare, columnMaxima, fmtCount, fmtShare, fmtTalk, PER_AGENT_BAR_CLASS, personKey, personSplit, TAG_CLASS, UNTAGGED_CLASS, type PerAgentBar,
 } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 
 type Column = { key: PerAgentBar; label: string; hint: string; talk?: boolean };
 
@@ -42,17 +44,15 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
   const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={fill(text)} />;
   const columns: Column[] = [
     { key: "answeredInbound", label: t.answered, hint: h.agentAnswered },
-    { key: "inboundTalkSeconds", label: t.inboundTalk, hint: h.agentInboundTalk, talk: true },
     { key: "inboundTalkAvgSeconds", label: t.inboundAvg, hint: h.agentInboundAvg, talk: true },
     { key: "outboundCalls", label: t.outbound, hint: h.agentOutbound },
     { key: "connectedOutbound", label: t.connected, hint: h.agentConnected },
-    { key: "outboundTalkSeconds", label: t.outboundTalk, hint: h.agentOutboundTalk, talk: true },
     { key: "outboundTalkAvgSeconds", label: t.outboundAvg, hint: h.agentOutboundAvg, talk: true },
     { key: "untaggedConversations", label: t.untagged, hint: h.agentUntagged },
   ];
   const maxima = columnMaxima(rows);
   const value = (p: CallsPerson, c: Column) => (c.talk ? fmtTalk(p[c.key], locale) : n(p[c.key] ?? 0));
-  // headers may wrap onto two lines, so the ten columns fit their card at 1280 px
+  // headers may wrap onto two lines, so the eight columns fit their card at 1280 px
   const th = "h-10 px-1.5 py-1 align-bottom font-semibold";
   const td = "h-10 whitespace-nowrap px-1.5 py-1.5";
   // the name may wrap, so a long name or the not-linked row never widens the table past its card
@@ -97,9 +97,9 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
       <table className="w-full border-collapse text-body leading-table" data-testid="agents-table">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={`${th} w-44`}>{t.agent}{hint(t.agent, h.agentName)}</th>
-            {columns.map((c) => <th key={c.key} className={`${th} text-right`}>{c.label}{hint(c.label, c.hint)}</th>)}
-            <th className={`${th} text-right`}>{t.firstLast}{hint(t.firstLast, h.agentFirstLast)}</th>
+            <th className={`${th} w-44`}><HintLabel label={t.agent}>{hint(t.agent, h.agentName)}</HintLabel></th>
+            {columns.map((c) => <th key={c.key} className={`${th} text-right`}><HintLabel label={c.label}>{hint(c.label, c.hint)}</HintLabel></th>)}
+            <th className={`${th} text-right`}><HintLabel label={t.firstLast}>{hint(t.firstLast, h.agentFirstLast)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

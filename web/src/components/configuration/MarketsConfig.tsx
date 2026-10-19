@@ -16,6 +16,7 @@ import type { Copy } from "@/lib/copy";
 import type { MarketConfig, MarketsConfig as MarketsData, SkillInfo } from "@/lib/data";
 import { effectiveHours, marketFormProblem, normalizeAlias, parseDay, parseOfficeHours, type MarketForm } from "@/lib/sources";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card } from "../primitives";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, useSave } from "./shared";
 
@@ -131,8 +132,8 @@ export function MarketsConfig({ data, skills, copy }: { data: MarketsData; skill
             <tr>
               <th className={th}>{t.sectionMarkets}</th>
               <th className={th}>{t.zoneLanguageCurrency}</th>
-              <th className={th}>{t.languageSkill}{hint(t.languageSkill, t.hintLanguageSkill)}</th>
-              <th className={th}>{t.aliases}{hint(t.aliases, t.hintAliases)}</th>
+              <th className={th}><HintLabel label={t.languageSkill}>{hint(t.languageSkill, t.hintLanguageSkill)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.aliases}>{hint(t.aliases, t.hintAliases)}</HintLabel></th>
               <th className={th}>{t.status}</th>
               <th className={th}></th>
             </tr>
