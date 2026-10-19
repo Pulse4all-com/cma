@@ -1344,7 +1344,7 @@ async function expectFrame() {
     if (r.width !== 64 || r.labelsVisible > 0) problems.push(`rail: with the cookie Inbound renders at ${r.width}px with ${r.labelsVisible} labels, expected 64 and none`);
     const c = await p.evaluate(() => ({ scrollX: document.documentElement.scrollWidth > window.innerWidth, column: Math.round(document.querySelector("main > div:last-child")?.getBoundingClientRect().width ?? 0) }));
     if (c.scrollX) problems.push("rail: folded, Inbound scrolls horizontally at 1280");
-    if (c.column <= 0 || c.column > 1152) problems.push(`rail: folded, the content column is ${c.column}px (max-w-6xl is 1152)`);
+    if (c.column <= 0 || c.column > 1536) problems.push(`rail: folded, the content column is ${c.column}px (max-w-screen-2xl is 1536)`);
     await p.screenshot({ path: `${outDir}/manager-inbound-rail-folded.png` });
     await ctx.close();
   }
