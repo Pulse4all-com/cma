@@ -9,7 +9,11 @@
  *   submissions  per polled, active form (is_polled, whether or not it counts in Intake) GET
  *                /form-integrations/v1/submissions/forms/{guid}, newest first, 50 per page, until the
  *                form's cursor (submittedAt + conversion id); on the first poll of a form, until
- *                intake.start_date
+ *                intake.start_date. A form with nothing new costs one call. Since backlog CMA-069 (18
+ *                October 2026) a counted form is read every minute and a polled-only form every
+ *                forms_poll_interval_minutes (default 5), staggered by form (formsDue, usage.mjs); with
+ *                forms_poll_probe on (default off) one contacts search first decides whether the
+ *                counted forms are read this minute or wait for their own slots
  *   contact      the submitted email (the value of the form definition's email field) is looked up
  *                with a CRM search on that property; one contact → resolved with its id, none →
  *                not_found, several → ambiguous, no email → no_email. The email lives in memory for
@@ -23,7 +27,9 @@
  *                field. A form whose fields the catalog has not described yet keeps no answer
  *
  * A search that fails (429, timeout) stops that form without moving its cursor, so the next run reads
- * the same submissions again (they are idempotent on the conversion id). The cursor moves only when
+ * the same submissions again (they are idempotent on the conversion id). The nightly reconcile reads
+ * every polled form's submissions of its 26 hours again and writes those the CMA does not hold
+ * (reconcileForms, backlog CMA-069): the safety net under the cadence. The cursor moves only when
  * a run reached the old cursor (or the start date), so an interrupted run loses nothing.
  */
 import { createHash } from "node:crypto";
@@ -31,6 +37,7 @@ import { SourceError } from "../../core/http.mjs";
 import { parsePage } from "../../core/page.mjs";
 import { warn } from "../../core/log.mjs";
 import { hubspotClient, tokenOf } from "./read.mjs";
+import { dueInRun, formSlots, probeBody, usageSettings } from "./usage.mjs";
 
 export const CATALOG_STREAM = "forms:catalog";
 export const CATALOG_EVERY_MS = 60 * 60_000;
@@ -44,6 +51,11 @@ export const CHOICE_KINDS = new Set(["dropdown", "radio", "multiple_checkboxes",
 const CHECKBOX_OPTIONS = ["true", "false"];
 
 export const pollStream = (formId) => `forms:${formId}`;
+/** The forms poll's previous run ({ at: ms }), for the cadence of the forms read on one (CMA-069) */
+export const CADENCE_STREAM = "forms:cadence";
+/** The probe's cursor ({ at: ms }): the last run that read every counted form */
+export const PROBE_STREAM = "forms:probe";
+const PROBE_MARGIN_MS = 2 * 60_000;
 export const backfillStream = (formId) => `backfill:forms:${formId}`;
 /**
  * A short key of a form's kept fields, kept in its backfill cursor: a finished backfill from the same date
@@ -264,17 +276,67 @@ async function emailFieldFor(api, formId, fromCatalog, cursor) {
 }
 
 /**
- * The poll of one connection: catalog (hourly), then every polled, active form. Answers
- * { counts, error } for the run's sync_run row; error is the first form's code, the other forms
- * still run.
+ * The probe (forms_poll_probe, off by default): one contacts search for a conversion since the probe's
+ * cursor (the last minute every counted form was read, less PROBE_MARGIN_MS for the search index's
+ * lag). Answers true when it finds one, or when it cannot tell (no cursor yet, a failed search): the
+ * counted forms are read then. A submission whose contact gets no conversion (no email address, so no
+ * contact) is never found: it waits for its form's cadence slot, at the latest one interval.
  */
-export async function pollForms({ connection, store, budget, now = Date.now() }) {
+async function probeFinds(api, store, connectionId) {
+  const cur = await store.cursor(PROBE_STREAM);
+  if (!Number.isFinite(cur?.at)) return true;
+  try {
+    const r = await api.search("contact", probeBody(cur.at - PROBE_MARGIN_MS));
+    return (r?.results ?? []).length > 0 || Number(r?.total) > 0;
+  } catch (err) {
+    if (err?.code === "daily_floor") throw err;
+    warn("forms probe failed; the counted forms are read", { connection: connectionId, code: err?.code ?? "probe_error" });
+    return true;
+  }
+}
+
+/**
+ * Which of the connection's polled, active forms this run reads (backlog CMA-069): every counted form
+ * (speed to lead, Intake), and the polled-only forms whose cadence slot falls in a minute since the
+ * previous run (usage.mjs). With the probe on and no conversion found, the counted forms take their
+ * own cadence slots too. Answers { forms, detail } (detail: counts for the log line).
+ */
+export function formsDue(polled, { every, lastMs, now, countedEveryMinute = true }) {
+  const counted = polled.filter((f) => f.isCounted);
+  const only = polled.filter((f) => !f.isCounted);
+  const onlySlots = formSlots(only.map((f) => f.formId), every);
+  const countedSlots = formSlots(counted.map((f) => f.formId), every);
+  const countedDue = countedEveryMinute ? counted : counted.filter((f) => dueInRun(countedSlots.get(f.formId), every, lastMs, now));
+  const onlyDue = only.filter((f) => dueInRun(onlySlots.get(f.formId), every, lastMs, now));
+  const due = new Set([...countedDue, ...onlyDue].map((f) => f.formId));
+  return {
+    forms: polled.filter((f) => due.has(f.formId)),
+    detail: { counted: counted.length, countedRead: countedDue.length, polledOnly: only.length, polledOnlyRead: onlyDue.length },
+  };
+}
+
+/**
+ * The poll of one connection: catalog (hourly), then the polled, active forms due this minute
+ * (formsDue). Answers { counts, error, detail } for the run's sync_run row and log line; error is the
+ * first form's code, the other forms still run. api: a client to use instead of the connection's (the
+ * verifiers).
+ */
+export async function pollForms({ connection, store, budget, now = Date.now(), api = null }) {
   const counts = { fetched: 0, upserted: 0, stale: 0, skipped: 0, failed: 0 };
-  const api = hubspotClient(await tokenOf(connection), budget);
+  const usage = usageSettings(await store.config());
+  const fallbacks = usage.fallbacks.filter((n) => n === "forms_poll_interval_minutes" || n === "forms_poll_probe");
+  if (fallbacks.length) warn("settings out of range, defaults used", { connection: connection.connectionId, job: "forms_poll", settings: fallbacks });
+  api ??= hubspotClient(await tokenOf(connection), budget);
   const fromCatalog = await refreshCatalog(api, store, now);
   const settings = await store.settings();
   const floor = settings["intake.start_date"] ? (await store.tenantStartOf(settings["intake.start_date"]))?.getTime() ?? null : null;
-  const forms = (await store.forms()).filter((f) => f.status === "active" && f.isPolled);
+  const polled = (await store.forms()).filter((f) => f.status === "active" && f.isPolled);
+  const cadence = await store.cursor(CADENCE_STREAM);
+  const countedEveryMinute = usage.probe ? await probeFinds(api, store, connection.connectionId) : true;
+  const { forms, detail } = formsDue(polled, {
+    every: usage.formsIntervalMinutes, lastMs: Number.isFinite(cadence?.at) ? cadence.at : null, now, countedEveryMinute,
+  });
+  detail.probe = usage.probe ? (countedEveryMinute ? "found" : "none") : "off";
   let error = null;
   const contacts = new Map(); // email (lower case) → resolution, this run only
   for (const form of forms) {
@@ -304,7 +366,59 @@ export async function pollForms({ connection, store, budget, now = Date.now() })
     }
   }
   contacts.clear();
-  return { counts, error };
+  await store.setCursor(CADENCE_STREAM, { at: now });
+  if (usage.probe && countedEveryMinute) await store.setCursor(PROBE_STREAM, { at: now });
+  return { counts, error, detail };
+}
+
+/**
+ * The nightly reconcile of form submissions (backlog CMA-069): every polled, active form's submissions
+ * of the look-back (submitted from sinceMs up to untilMs), newest first. One the CMA does not hold yet is
+ * written as the poll writes it (its contact searched, its kept answers checked); one it holds is
+ * counted as fetched and skipped without a search, as the poll never reads a stored one again. The
+ * poll's cursors are not touched. So the run's upserted count is what the poll missed, a submission
+ * HubSpot listed late or a form whose cadence slot never came, and 0 shows the cadence lost nothing.
+ * A failure stops that form (counted as failed; the first code is the run's error) and the other forms
+ * still run; the daily floor stops the run. api: a client to use instead of the connection's (the verifiers).
+ */
+export async function reconcileForms({ connection, store, budget, sinceMs, untilMs, counts, api = null }) {
+  api ??= hubspotClient(await tokenOf(connection), budget);
+  const forms = (await store.forms()).filter((f) => f.status === "active" && f.isPolled);
+  const contacts = new Map();
+  let error = null;
+  try {
+    for (const form of forms) {
+      try {
+        const emailField = await emailFieldFor(api, form.formId, null, await store.cursor(pollStream(form.formId)));
+        let after;
+        let reached = false;
+        for (let pages = 0; pages < PAGE_CAP && !reached; pages += 1) {
+          const r = await api.submissions(form.formId, after);
+          const take = takeUntil(r?.results ?? [], null, sinceMs);
+          // newer than the run's start: the poll's, not the window's
+          const inWindow = take.fresh.filter((sub) => atOf(sub) <= untilMs);
+          if (inWindow.length) {
+            const held = await store.storedSubmissions(inWindow.map((sub) => String(sub.conversionId)));
+            const missing = inWindow.filter((sub) => !held.has(String(sub.conversionId)));
+            counts.fetched += inWindow.length - missing.length;
+            counts.skipped += inWindow.length - missing.length;
+            if (missing.length) await writePage(api, store, missing, form, emailField, contacts, counts);
+          }
+          after = r?.paging?.next?.after;
+          reached = take.reached || !after;
+        }
+        if (!reached) error ??= "page_cap_backfill_needed";
+      } catch (err) {
+        if (err?.code === "daily_floor") throw err;
+        counts.failed += 1;
+        error ??= err instanceof SourceError ? err.code : (err?.code ?? "forms_error");
+        warn("form reconcile stopped", { connection: connection.connectionId, code: err?.code ?? "forms_error" });
+      }
+    }
+  } finally {
+    contacts.clear();
+  }
+  return error ? { error } : undefined;
 }
 
 /**

@@ -11,6 +11,8 @@
  *                                        objects (crm_email, inbox_thread) only where email_poll is on
  *   backfillObjects, backfill            the backfill job (backfill.mjs); backfillFrom: the email objects'
  *                                        default start (cma.email_start_date_of)
+ *   dailyFloor                           the floor below which a backfill or reconcile pauses: the
+ *                                        connection's api_daily_floor_pct (usage.mjs, backlog CMA-069)
  *   crm                                  contact lookups for another adapter's match (match.mjs: the
  *                                        commerce customer's contact, kept in the CMA, 0008h)
  *   writeContacts                        the outbox job: claimed contact write-backs (write.mjs; generic,
@@ -26,6 +28,8 @@ import { reconcile, RECONCILE_OBJECTS } from "./reconcile.mjs";
 import { backfill, backfillFrom, BACKFILL_OBJECTS } from "./backfill.mjs";
 import { findContactsByEmail, findContactsByProperties, existingContacts } from "./match.mjs";
 import { writeContacts } from "./write.mjs";
+import { usageSettings } from "./usage.mjs";
+import { warn } from "../../core/log.mjs";
 
 export const hubspot = {
   name: "hubspot",
@@ -57,6 +61,14 @@ export const hubspot = {
   backfillObjects: BACKFILL_OBJECTS,
   backfill,
   backfillFrom,
+  /** The connection's floor in percent of HubSpot's daily limit; one log line names a setting out of range */
+  async dailyFloor({ store, connection, job }) {
+    const usage = usageSettings(await store.config());
+    if (usage.fallbacks.includes("api_daily_floor_pct")) {
+      warn("settings out of range, defaults used", { connection: connection.connectionId, job, settings: ["api_daily_floor_pct"] });
+    }
+    return usage.floorPct;
+  },
   crm: { findContactsByEmail, findContactsByProperties, existingContacts },
   writeContacts,
 };

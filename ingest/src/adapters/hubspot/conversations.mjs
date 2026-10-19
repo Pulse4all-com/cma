@@ -19,8 +19,9 @@
  *               originalChannelAccountId, 0008t);
  *               ASSIGNMENT, THREAD_STATUS_CHANGE and THREAD_INBOX_CHANGE → cma.email_thread_event; every
  *               other type (comments, welcome messages) ignored
- *   open check  every ten minutes the source's open threads against the CMA's: a thread closed,
- *               reassigned or moved without a new message is read again, in case such a change does
+ *   open check  every email_open_check_minutes (default 15; ten before backlog CMA-069) the source's
+ *               open threads against the CMA's: a thread closed, reassigned or moved without a new
+ *               message is read again, in case such a change does
  *   gone        a held thread the source no longer has (404, also among archived ones) is a
  *               conversation's deletion at the source: cma.ingest_thread_forget
  *
@@ -37,13 +38,15 @@ import { iso } from "./map.mjs";
 import { activeRules, ruleNeeds, classify, domainOf } from "./rules.mjs";
 import { ownerMap, readMap, writeMap } from "./owners.mjs";
 import { emailSettings, tally, writeContacts } from "./email.mjs";
+import { SETTINGS, openCheckDue } from "./usage.mjs";
 
 export const THREADS_STREAM = "email:threads";
 export const CATALOG_STREAM = "email:catalogs";
 export const ACCOUNTS_STREAM = "email:accounts";
 export const OPEN_CHECK_STREAM = "email:open-check";
 export const CATALOG_EVERY_MS = 60 * 60_000;
-export const OPEN_CHECK_EVERY_MS = 10 * 60_000;
+/** The open check's default interval in minutes; the connection's email_open_check_minutes wins (usage.mjs) */
+export const OPEN_CHECK_EVERY_MINUTES = SETTINGS.email_open_check_minutes.default;
 const PAGE_CAP = 20;
 const MESSAGE_PAGE_CAP = 20;
 const REF = /^[^@\s]{1,100}$/;
@@ -374,7 +377,10 @@ const threadQuery = (fromMs, after) => ({ sort: "latestMessageTimestamp", latest
 
 /**
  * Threads by their latest message from the cursor on, page by page; the cursor (and its ids at the
- * boundary) moves after each page written. untilMs: stop past it (the backfill).
+ * boundary) moves after each page written. untilMs: stop past it (the backfill). The listing is
+ * ascending, so a page holding nothing after the cursor (the threads at its boundary, already written,
+ * or none) ends the walk whatever its paging says: an idle minute costs one call (backlog CMA-069; the
+ * walk followed a next page until its deadline before).
  */
 async function walkThreads(ctx, cursor, { deadline = Number.POSITIVE_INFINITY, untilMs = null, save }) {
   let cur = cursor;
@@ -383,11 +389,12 @@ async function walkThreads(ctx, cursor, { deadline = Number.POSITIVE_INFINITY, u
     // The paging token belongs to the query it came from: the filter stays the walk's start
     const r = await ctx.api.conversations("threads", threadQuery(cursor.at, after));
     const results = (r?.results ?? []).filter((t) => untilMs === null || (ms(t?.latestMessageTimestamp) ?? 0) <= untilMs);
-    await writeThreads(ctx, afterCursor(results, cursor));
+    const fresh = afterCursor(results, cursor);
+    await writeThreads(ctx, fresh);
     cur = advance(cur, results);
     await save(cur);
     after = r?.paging?.next?.after;
-    if (!after || results.length < (r?.results ?? []).length || Date.now() > deadline) return cur;
+    if (!after || !fresh.length || results.length < (r?.results ?? []).length || Date.now() > deadline) return cur;
   }
   return cur;
 }
@@ -400,13 +407,18 @@ export async function pollThreads(ctx, { now, floorMs, deadline }) {
 }
 
 /**
- * Every ten minutes: the source's open threads against the CMA's. A thread the CMA holds whose status,
- * agent, inbox, channel, contact, ticket, spam or archived state differs, or that the CMA holds open
- * while the source does not list it open, is read again with its messages after the mark.
+ * Every email_open_check_minutes (default 15; usage.mjs openCheckDue, backlog CMA-069): the source's
+ * open threads against the CMA's. A thread the CMA holds whose status, agent, inbox, channel, contact,
+ * ticket, spam or archived state differs, or that the CMA holds open while the source does not list it
+ * open, is read again with its messages after the mark. The cursor takes the check's start before it
+ * lists anything, so a check that fails waits for the next one instead of running every minute; the
+ * nightly reconcile reads every thread of the day either way. Answers whether it ran.
  */
-export async function openCheck(ctx, { now }) {
+export async function openCheck(ctx, { now, everyMinutes = OPEN_CHECK_EVERY_MINUTES }) {
   const head = await ctx.store.cursor(OPEN_CHECK_STREAM);
-  if (head?.refreshedAt && now - Date.parse(head.refreshedAt) < OPEN_CHECK_EVERY_MS) return;
+  const last = head?.refreshedAt ? Date.parse(head.refreshedAt) : null;
+  if (!openCheckDue(everyMinutes, last, now)) return false;
+  await ctx.store.setCursor(OPEN_CHECK_STREAM, { refreshedAt: new Date(now).toISOString() });
   const open = new Map((await listAll(ctx.api, "threads", { threadStatus: "OPEN", limit: 100, association: "TICKET" }))
     .filter((t) => REF.test(String(t?.id ?? ""))).map((t) => [String(t.id), t]));
   const states = await ctx.store.threadStates([...open.keys()]);
@@ -421,7 +433,7 @@ export async function openCheck(ctx, { now }) {
     else tally(ctx.counts, ctx.detail, "forgotten", { forgotten: (await ctx.store.threadForget(id))?.threads ?? 0 });
   }
   await writeThreads(ctx, again, { force: true });
-  await ctx.store.setCursor(OPEN_CHECK_STREAM, { refreshedAt: new Date(now).toISOString() });
+  return true;
 }
 
 /** The context the thread functions share: the API, the configuration, the owner and account maps. */

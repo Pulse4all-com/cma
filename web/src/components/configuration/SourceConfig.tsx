@@ -22,8 +22,8 @@ import type {
 } from "@/lib/data";
 import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, parsePipelineSla, unlinkedSkipOf } from "@/lib/follow-up";
 import {
-  coerceSettingValue, emailMarketSteps, formCategoryChoices, formEditProblem, kindChoices, mailboxLabelProblem, recordTypeOfSetting, recordUrlPreview, settingCodes,
-  settingKeyProblem, settingsSize, settingText, sourceSections,
+  POLL_PROBE_SETTING, POLL_SETTINGS, coerceSettingValue, emailMarketSteps, formCategoryChoices, formEditProblem, kindChoices, mailboxLabelProblem, parsePollSetting, pollCadenceOf,
+  recordTypeOfSetting, recordUrlPreview, settingCodes, settingKeyProblem, settingsSize, settingText, sourceSections, type PollSettingName,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
@@ -90,6 +90,11 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
     return out;
   }, [rows, original]);
 
+  // ---- how often the connection is read (backlog CMA-069): three numbers and the probe, settings of the connection
+  const cadence = pollCadenceOf(original);
+  const [pollText, setPollText] = useState<Partial<Record<PollSettingName, string>>>({});
+  const [pollProblem, setPollProblem] = useState<string | null>(null);
+
   // ---- dialogs
   const [formEdit, setFormEdit] = useState<{ form: SourceForm; opened: number } | null>(null);
   const [formDraft, setFormDraft] = useState<{ isCounted: boolean; isPolled: boolean; category: string; leadSource: string; market: string }>(
@@ -135,6 +140,40 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
     if (JSON.stringify(edited) === JSON.stringify(original)) return setSettingsProblemText(t.settingsNoChange);
     await save(() => send("PUT", `${base}/settings`, { settings: edited }), t.settingSecretProblem);
   }
+
+  /** One number of the cadence block: saved on blur or Enter once it is a whole number in range and differs from the stored value */
+  async function savePoll(name: PollSettingName) {
+    const text = pollText[name];
+    if (text === undefined) return;
+    const spec = POLL_SETTINGS[name];
+    const v = parsePollSetting(name, text);
+    if (v === null) return setPollProblem(t.pollProblem.replace("{min}", String(spec.min)).replace("{max}", String(spec.max)));
+    setPollProblem(null);
+    if (original[spec.setting] !== v) await save(() => send("PUT", `${base}/settings`, { settings: { ...original, [spec.setting]: v } }));
+    setPollText((prev) => { const next = { ...prev }; delete next[name]; return next; });
+  }
+
+  /** A sentence of the cadence block with its number field where the copy has {n} */
+  const pollLine = (name: PollSettingName, template: string) => {
+    const [before = "", after = ""] = template.split("{n}");
+    const spec = POLL_SETTINGS[name];
+    const stored = original[spec.setting];
+    return (
+      <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-testid={`poll-${spec.setting}`}>
+        <span>{before.trim()}</span>
+        <input type="text" inputMode="numeric" className={`${field} w-20 text-right tabular-nums`} aria-label={t.pollValue.replace("{label}", template.replace("{n}", "…"))}
+          value={pollText[name] ?? String(cadence[name])} maxLength={5}
+          onChange={(e) => setPollText((prev) => ({ ...prev, [name]: e.target.value }))}
+          onBlur={() => savePoll(name)} onKeyDown={(e) => { if (e.key === "Enter") void savePoll(name); }} />
+        <span>{after.trim()}</span>
+        {cadence.outOfRange.includes(name) ? (
+          <span className="w-full text-caption text-p4a-muted">
+            {t.pollOutOfRange.replace("{value}", String(stored)).replace("{min}", String(spec.min)).replace("{max}", String(spec.max)).replace("{fallback}", String(spec.fallback))}
+          </span>
+        ) : null}
+      </li>
+    );
+  };
 
   function openForm(f: SourceForm) {
     setFormDraft({ isCounted: f.isCounted, isPolled: f.isPolled || f.isCounted, category: f.category ?? "", leadSource: f.leadSource ?? "", market: f.market ?? "" });
@@ -316,6 +355,28 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               <option value={DQ_UNLINKED_SKIP_NONE}>{t.unlinkedAll}</option>
             </select>
           </label>
+        ) : null}
+        {sections.includes("forms") ? (
+          // how often the connection is read and the daily floor (backlog CMA-069): settings of this connection, written with the others
+          <div className="mb-6 max-w-3xl" data-testid="source-cadence">
+            <h3 className="text-body font-semibold text-p4a-heading">{t.pollTitle}</h3>
+            <p className="mb-3 text-small text-p4a-muted">{t.pollIntro}</p>
+            <ul className="space-y-3 text-body">
+              <li data-testid="poll-counted">{cadence.probe ? t.pollCountedProbe.replace("{n}", String(cadence.formsIntervalMinutes)) : t.pollCounted}</li>
+              {pollLine("formsIntervalMinutes", t.pollForms)}
+              {pollLine("openCheckMinutes", t.pollOpenCheck)}
+              {pollLine("floorPct", t.pollFloor)}
+              <li className="flex items-center gap-3">
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" data-testid="poll-probe" checked={cadence.probe}
+                    onChange={(e) => save(() => send("PUT", `${base}/settings`, { settings: { ...original, [POLL_PROBE_SETTING]: e.target.checked } }))} />
+                  <span>{t.pollProbe}</span>
+                </label>
+                {hint(t.pollProbe, t.pollProbeHint.replace("{n}", String(cadence.formsIntervalMinutes)))}
+              </li>
+            </ul>
+            {pollProblem ? <p className="mt-2 text-caption text-p4a-error" role="alert">{pollProblem}</p> : null}
+          </div>
         ) : null}
         <table className="w-full border-collapse text-body leading-table" data-testid="source-settings">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">

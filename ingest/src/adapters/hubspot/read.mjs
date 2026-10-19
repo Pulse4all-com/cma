@@ -25,6 +25,7 @@
 import { getSecret, SecretUnavailable } from "../../core/secrets.mjs";
 import { requestJson, checkedBase, SourceError } from "../../core/http.mjs";
 import { warn } from "../../core/log.mjs";
+import { dailyOf, endpointOf } from "./usage.mjs";
 import {
   API_OBJECT, propertiesFor, recordFromObject, contactFromObject, contactAttributes, callFromObject, primaryContact, associationDiff,
   taskFromObject, firstAssociated, stageOutcome,
@@ -51,13 +52,21 @@ function apiBase() {
  */
 export const RATES = { general: 200, search: 400 };
 
-/** The HubSpot API with a connection's token, every call bound to the budget (and paced by it in a job). */
+/**
+ * The HubSpot API with a connection's token, every call bound to the budget (and paced by it in a job).
+ * In a job the budget also counts each request per endpoint template, takes the daily limit the
+ * response states, and pauses a backfill or reconcile below its floor before the request (usage.mjs,
+ * backlog CMA-069).
+ */
 export function hubspotClient(token, budget) {
   const base = apiBase();
   const headers = { authorization: `Bearer ${token}` };
+  const onHeaders = budget.observeDaily ? (h) => budget.observeDaily(dailyOf(h)) : null;
   const call = async (method, path, body, kind = "general") => {
+    budget.guard?.();
     await budget.pace?.(kind);
-    return requestJson(`${base}${path}`, { method, headers, body, signal: budget.signal(PER_CALL_MS) });
+    budget.count?.(endpointOf(method, path));
+    return requestJson(`${base}${path}`, { method, headers, body, signal: budget.signal(PER_CALL_MS), onHeaders });
   };
   return {
     /** One CRM search page: POST /crm/v3/objects/{type}/search. */

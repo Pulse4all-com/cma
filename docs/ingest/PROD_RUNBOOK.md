@@ -1098,3 +1098,68 @@ select check_key, count(*) from cma.data_quality_of((select id from cma.tenant w
 reset role;
 ```
 Expected: the eight counts as the Live board shows them (the task counts include a task deleted in HubSpot until the task webhooks, CMA-067); the four checks' counts, `telephony_call_unlinked` lower than before 0008o (the skipped outbound calls).
+
+---
+
+# 12. API budget (CMA-069)
+
+Written on 18 October 2026 for night run N19-B, before anything ran in prod. On 18 October 2026 the app CMA ingest prod made 173,444 HubSpot calls in 24 hours, 17% of the portal's daily limit, which Juo, the Shopify connection and the other private apps share; almost all of it polling. After this deploy: counted forms every minute, polled-only forms every 5 minutes, the email poll's open check every 15 minutes, an idle threads walk one call, the nightly reconcile reading the polled forms' submissions as well (the safety net under both cadences), a backfill or reconcile pausing below 25% of the daily limit (never a poll; insurance, as the portal's Enterprise limit leaves ample headroom), and every job run logging its calls per endpoint (`docs/ingest/README.md`, section API budget). No migration, no schema change (the data map's descriptions of `form_submission` and `email_thread` only), no environment variable, no schedule change. N19-A's prod re-reads (contacts, `crm_email`, `inbox_thread`) wait until this runs in prod. The Terminal blocks run from the Chromebook in `~/cma`.
+
+## 12.1 Deploy the ingest from `main`
+
+After the merge. `--front` goes with the service deploy and never with `--jobs` (as 11.2).
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; the jobs on the same image (`no build`), the schedules unchanged (sweep, poll-forms and poll-email every minute, reconcile at 03:30).
+
+**Browser:** Workspace → Configuration → Sources → the HubSpot connection → Settings.
+
+Expected: "How often this connection is read" with "Forms that count in Intake are read every minute", polled-only forms every 5 minutes, inbox conversations every 15 minutes, backfills and the nightly reconcile pausing below 25%, and the search-first box unticked. Nothing to save: these are the defaults.
+
+## 12.2 After one hour: the calls per endpoint
+
+**Terminal** (the jobs' log lines of the last hour; they hold counts, endpoint templates and ids of connections only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND jsonPayload.apiCalls>0' --project=p4a-cma-prod --freshness=1h --limit=20000 --format=json | node -e 'let s="";process.stdin.on("data",(d)=>{s+=d}).on("end",()=>{const e=JSON.parse(s).map((x)=>x.jsonPayload);const per={},job={};let t=0;for(const p of e){t+=p.apiCalls;job[p.message]=(job[p.message]??0)+p.apiCalls;for(const [k,v] of Object.entries(p.api??{}))per[k]=(per[k]??0)+v}console.log("lines",e.length,"calls",t,"per minute",(t/60).toFixed(1));console.log(job);console.table(Object.entries(per).sort((a,b)=>b[1]-a[1]));console.log("daily, newest line:",JSON.stringify(e[0]?.daily))})'
+```
+Expected: about 60 lines each of `poll-forms: connection` and `poll-email: connection`, plus `sweep: connection` lines; about 34 calls a minute when idle (28 counted forms, 4 or 5 polled-only forms, one engagements search, one threads call) plus the sweep's read-backs of webhook events; the endpoint table led by `GET /form-integrations/v1/submissions/forms/{id}`, with `GET /conversations/v3/conversations/threads` near 60 in the hour. The last line answers the headers question: `{"limit":…,"remaining":…}` means HubSpot sends its daily-limit headers to the app and the floor guard works; `"not_received"` means it does not and the guard never pauses. Either way nothing else changes: the guard is insurance (README, Decision log, 18 October 2026); report which it is.
+
+## 12.3 The next day: HubSpot's own count
+
+**Browser:** live portal → Development → Monitoring → the app **CMA ingest prod** → API calls, the last 24 hours.
+
+Expected: under 60,000 a day (the polls about 50,000 at about 34 a minute; the rest the webhooks' read-backs, the hourly catalogs and the nightly reconcile, which now reads the polled forms too, about 50 calls), against 173,444 on 18 October 2026. If it is higher, 12.2's endpoint table shows where the calls go.
+
+## 12.4 The morning after the first night: the same result
+
+The proof that the slower cadences miss nothing. The nightly reconcile reads every polled form's submissions and every email engagement and inbox thread of the last 26 hours and writes only what the polls did not (a form's submissions since 18 October 2026, backlog CMA-069), so its written count is what the polls missed.
+
+**Studio (cma-prod-pg)** (the last night's reconcile of the three objects next to their polls over the same 26 hours; counts only)
+```sql
+set role cma_owner;
+with rec as (
+  select r.tenant_id, r.connection_id, r.stream, r.status, r.error, r.from_at, r.to_at, r.counts,
+         case when r.stream = 'form_submission' then 'forms_poll' else 'email_poll' end as poll_job
+  from cma.sync_run r join cma.tenant t on t.id = r.tenant_id
+  where t.slug = 'pulse4all-subscriptions' and r.job = 'reconcile' and r.stream in ('form_submission', 'crm_email', 'inbox_thread')
+    and r.started_at > now() - interval '20 hours')
+select rec.stream, rec.status, rec.error, rec.from_at, rec.to_at,
+       rec.counts ->> 'fetched' as reconcile_fetched, rec.counts ->> 'upserted' as reconcile_written, rec.counts ->> 'skipped' as reconcile_unchanged,
+       rec.poll_job,
+       (select count(*) from cma.sync_run p where p.tenant_id = rec.tenant_id and p.connection_id = rec.connection_id and p.job = rec.poll_job
+          and p.started_at between rec.from_at and rec.to_at) as poll_runs,
+       (select coalesce(sum((p.counts ->> 'upserted')::int), 0) from cma.sync_run p where p.tenant_id = rec.tenant_id and p.connection_id = rec.connection_id
+          and p.job = rec.poll_job and p.started_at between rec.from_at and rec.to_at) as poll_written
+from rec order by rec.stream;
+reset role;
+```
+Expected: three rows, `crm_email`, `form_submission` and `inbox_thread`, each `succeeded` with no error (or `daily_floor`: the floor paused it, see 12.2's reading); `reconcile_written` 0, or at most a handful (a submission, message or change that arrived during the reconcile itself); for `form_submission` `reconcile_unchanged` equal to `reconcile_fetched` less what it wrote (every submission of the window it already held); `poll_runs` about 1,560 (26 hours of minutes); `poll_written` the polls' own writes over the window, the same on the two email rows (one email poll serves both objects), in the hundreds or more.
+
+## 12.5 When 12.4 is higher
+
+**Browser:** Workspace → Configuration → Sources → the HubSpot connection → Settings → How often this connection is read: set "Forms that don't count in Intake are read every" to `1` and "Inbox conversations closed or reassigned without a new message are checked every" to `1`, each saved with Enter. No deploy: the jobs read the settings every minute.
+
+Expected: "Saved" after each; the settings table below lists `forms_poll_interval_minutes` 1 and `email_open_check_minutes` 1; from the next minute every polled form is read every minute again and the open check runs every minute. Report 12.4's counts (the rows as Studio showed them, no ids) for the follow-up.

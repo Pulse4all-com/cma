@@ -5,6 +5,10 @@
  * a 429 also carries the source's rate-limit headers (names with limit, remaining, reset or retry:
  * counts and times, never data), so an adapter can hold its calls until the source's reset.
  *
+ * onHeaders, when given, receives every response's headers as they arrive (a 429's too), before the
+ * body is read: an adapter's client reads the source's usage headers from them (HubSpot's daily limit,
+ * CMA-069). It is called with the headers only, never with a body.
+ *
  * No redirect is followed (redirect: manual, so a 3xx answer is http_3xx like any other status): the
  * hosts are pinned, and a followed redirect would carry a vendor token to another host. A body is read
  * up to MAX_RESPONSE_BYTES; above that the call fails bad_response instead of filling the instance's
@@ -50,7 +54,7 @@ async function readText(res, maxBytes) {
 }
 
 /** fetch → parsed JSON; throws SourceError. The caller passes the budget's signal. */
-export async function requestJson(url, { method = "GET", headers = {}, body, signal, maxBytes = MAX_RESPONSE_BYTES } = {}) {
+export async function requestJson(url, { method = "GET", headers = {}, body, signal, maxBytes = MAX_RESPONSE_BYTES, onHeaders = null } = {}) {
   let res;
   try {
     res = await fetch(url, {
@@ -64,6 +68,7 @@ export async function requestJson(url, { method = "GET", headers = {}, body, sig
     if (err?.name === "TimeoutError" || err?.name === "AbortError") throw new SourceError("timeout");
     throw new SourceError("unreachable");
   }
+  onHeaders?.(res.headers);
   if (res.status === 429) {
     const rateLimit = Object.fromEntries([...res.headers].filter(([k]) => RATE_HEADER.test(k)).map(([k, v]) => [k.toLowerCase(), String(v).slice(0, 40)]));
     await res.body?.cancel().catch(() => undefined);

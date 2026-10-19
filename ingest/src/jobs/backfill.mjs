@@ -9,6 +9,11 @@
  * moving the start before email.start_date or intake.start_date). One sync_run row (job backfill, stream
  * the object type).
  *
+ * The daily floor (backlog CMA-069): with an adapter that names one (HubSpot: api_daily_floor_pct,
+ * default 25) the run pauses once the source's remaining daily calls fall below it, finishes as
+ * succeeded with error daily_floor, logs "backfill paused" and exits 0; the same command later continues
+ * from the cursor. The log line carries the run's requests per endpoint and the daily limit stated.
+ *
  *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>[,--again]
  */
 import { ADAPTERS } from "../adapters/index.mjs";
@@ -56,12 +61,13 @@ export async function runBackfill({ connectionId, object, from = null, again = f
   if (!date) throw new UsageError("no --from and no intake.start_date setting");
   const fromAt = await store.tenantStartOf(date);
   const untilMs = Date.now();
-  const budget = new JobBudget(adapter.rates);
+  const floorPct = adapter.dailyFloor ? await adapter.dailyFloor({ store, connection: c, job: "backfill" }) : null;
+  const budget = new JobBudget(adapter.rates, undefined, { floorPct });
   const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
     return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
   });
-  const total = { connection: c.connectionId, object, from: date, again, ...r.counts, error: r.error, failed: r.ok ? 0 : 1 };
-  info("backfill", { ...total, ms: Date.now() - started });
+  const total = { connection: c.connectionId, object, from: date, again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
+  info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(), ms: Date.now() - started });
   return total;
 }
