@@ -22,7 +22,7 @@ import {
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   planOutcomeRule, formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
-  formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes,
+  formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -193,6 +193,19 @@ expect("a mailbox label: at most 80 characters, never an address, empty is the s
 expect("the market order in the tenant's order", emailMarketSteps("inbox,contact"), ["inbox", "contact"], ["contact", "form", "record", "inbox"]);
 expect("an unreadable market order falls back to the catalog's steps", [emailMarketSteps(""), emailMarketSteps("contact,contact"), emailMarketSteps(null)],
   [["contact", "form", "record", "inbox"], ["contact", "form", "record", "inbox"], ["contact", "form", "record", "inbox"]], [[""], ["contact", "contact"], []]);
+
+// How often a connection is read and its daily floor (backlog CMA-069), as the ingest applies the settings
+expect("polling: the defaults without settings (5, 15, 25, probe off)", pollCadenceOf({}), { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: [] },
+  { formsIntervalMinutes: 1, openCheckMinutes: 10, floorPct: 0, probe: false, outOfRange: [] });
+expect("polling: stored values in range taken, as numbers or digits",
+  pollCadenceOf({ forms_poll_interval_minutes: 10, email_open_check_minutes: "30", api_daily_floor_pct: 90, forms_poll_probe: true }),
+  { formsIntervalMinutes: 10, openCheckMinutes: 30, floorPct: 90, probe: true, outOfRange: [] }, { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: [] });
+expect("polling: a value out of range gives the default and is named", pollCadenceOf({ forms_poll_interval_minutes: 0, api_daily_floor_pct: 95, email_open_check_minutes: "soon" }),
+  { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: ["formsIntervalMinutes", "openCheckMinutes", "floorPct"] },
+  { formsIntervalMinutes: 0, openCheckMinutes: 15, floorPct: 95, probe: false, outOfRange: [] });
+expect("polling: a typed value is a whole number within its range",
+  [parsePollSetting("formsIntervalMinutes", " 1440 "), parsePollSetting("formsIntervalMinutes", "1441"), parsePollSetting("floorPct", "0"), parsePollSetting("floorPct", "2.5")],
+  [1440, null, null, null], [null, 1441, 0, 2.5]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

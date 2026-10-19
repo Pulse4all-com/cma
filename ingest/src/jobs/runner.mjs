@@ -56,8 +56,18 @@ export function codeOf(err) {
 export const emptyCounts = () => ({ fetched: 0, upserted: 0, stale: 0, skipped: 0, failed: 0 });
 
 /**
+ * A pause, not a failure (backlog CMA-069): a backfill or reconcile stopped by the source's daily floor
+ * (core/budget.mjs). sync_run knows running, succeeded and failed only, so a paused run is finished as
+ * succeeded with this code as its error: the counts show how far it got, System health shows it as OK
+ * with the code beside it, and the job exits 0. The run resumes on the next one: a backfill from its
+ * cursor, a reconcile from the paused run's start (src/jobs/reconcile.mjs).
+ */
+export const PAUSE_CODE = "daily_floor";
+
+/**
  * One sync_run row around fn(counts): started, then finished once as succeeded, or failed with the
- * code of what fn threw (the counts so far are kept). Answers { ok, counts, error }.
+ * code of what fn threw (the counts so far are kept), or as a pause (PAUSE_CODE). Answers
+ * { ok, counts, error, paused }.
  */
 export async function withRun(store, { job, stream = null, from = null, to = null }, fn) {
   const counts = emptyCounts();
@@ -65,12 +75,20 @@ export async function withRun(store, { job, stream = null, from = null, to = nul
   try {
     const r = await fn(counts);
     const err = r?.error ?? null;
+    if (err === PAUSE_CODE) {
+      await store.runFinish(runId, "succeeded", counts, err);
+      return { ok: true, counts, error: err, paused: true };
+    }
     await store.runFinish(runId, err ? "failed" : "succeeded", counts, err);
-    return { ok: !err, counts, error: err };
+    return { ok: !err, counts, error: err, paused: false };
   } catch (e) {
     const code = codeOf(e);
+    if (code === PAUSE_CODE) {
+      await store.runFinish(runId, "succeeded", counts, code).catch(() => undefined);
+      return { ok: true, counts, error: code, paused: true };
+    }
     await store.runFinish(runId, "failed", counts, code).catch(() => undefined);
-    return { ok: false, counts, error: code };
+    return { ok: false, counts, error: code, paused: false };
   }
 }
 

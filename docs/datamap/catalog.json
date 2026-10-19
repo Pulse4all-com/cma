@@ -33,7 +33,7 @@
         {
           "name": "form_submission",
           "what": "Form submissions: form, page, UTM, contact id only, and the answers to the form's kept choice fields (option values only)",
-          "how": "Form poll every minute, every polled form's (counted in Intake or not, addition 0008p); the form backfill fills a stored submission's empty answers once"
+          "how": "Form poll: every counted form every minute, every polled-only form every forms_poll_interval_minutes (default 5, staggered by form; CMA-069), counted in Intake or not (addition 0008p); the nightly reconcile reads every polled form's submissions of the last 26 hours and writes those the poll missed; the form backfill fills a stored submission's empty answers once"
         },
         {
           "name": "crm_task",
@@ -64,7 +64,7 @@
         {
           "name": "email_thread",
           "what": "Inbox conversations: inbox, channel, the mailbox it came in through, open or closed, the current agent, contact and ticket ids, spam",
-          "how": "Email poll every minute (threads whose latest message is newer than its cursor; every ten minutes the open check), the nightly reconcile with the trash check, the backfill; only when the connection's email_poll is on"
+          "how": "Email poll every minute (threads whose latest message is newer than its cursor; the open check every email_open_check_minutes, default 15; CMA-069), the nightly reconcile (last 26 hours) with the trash check, the backfill; only when the connection's email_poll is on"
         },
         {
           "name": "email_thread_event",

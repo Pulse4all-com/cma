@@ -50,7 +50,9 @@ const { JobBudget } = await import("../src/core/budget.mjs");
 
 const rulesConfig = RULES.rules.map((r, i) => ({ id: `r${i}`, ...r }));
 const CONFIG = {
-  settings: { email_poll: true, email_thread_property: "fixture_thread_id", email_origin_property: "fixture_origin", email_automated_origins: "automation_fixture, other_auto" },
+  // email_open_check_minutes: the ten minutes these checks were written for (the default is 15 since CMA-069)
+  settings: { email_poll: true, email_thread_property: "fixture_thread_id", email_origin_property: "fixture_origin", email_automated_origins: "automation_fixture, other_auto",
+    email_open_check_minutes: 10 },
   emailRules: rulesConfig,
   fields: [
     { entity: "contact", field: "country", slot: 1, property: "contact_country" },

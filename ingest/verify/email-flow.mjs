@@ -136,8 +136,9 @@ const conn1 = await asAdmin(t1, async () => {
   await q("select cma.set_market_alias('united kingdom', 'GB')");
   await q("select cma.set_connection_field($1, 'contact', 'country', '', 'contact_country', 1::smallint)", [c.connection_id]);
   await q("select cma.set_connection_field($1, 'contact', 'country', '', 'country_dropdown', 2::smallint)", [c.connection_id]);
+  // email_open_check_minutes: the ten minutes the open check's steps were written for (the default is 15 since CMA-069)
   await q("select cma.set_connection_settings($1, $2::jsonb)", [c.connection_id, JSON.stringify({ email_poll: true, email_thread_property: "fixture_thread_id",
-    email_origin_property: "fixture_origin", email_automated_origins: "automation_fixture" })]);
+    email_origin_property: "fixture_origin", email_automated_origins: "automation_fixture", email_open_check_minutes: 10 })]);
   for (const r of RULES.rules) {
     const [{ id }] = await q("select cma.set_email_rule($1, null, $2, $3, $4, $5, $6) as id", [c.connection_id, r.appliesTo, r.words, r.excludeWords, r.category, r.order]);
     if (r.status !== "active") await q("select cma.set_email_rule_status($1, $2)", [id, r.status]);

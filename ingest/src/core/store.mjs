@@ -16,6 +16,7 @@
  *   cursor(stream), setCursor(stream, value)   cma.ingest_cursor_get / _set
  *   runStart(job, stream, from, to), runFinish(id, status, counts, error)   one sync_run row per run
  *   forms(), upsertForms(items), upsertSubmissions(items)   the form catalog and submissions
+ *   storedSubmissions(ids)      which of these conversion ids the CMA holds (the forms reconcile, CMA-069)
  *   recordsWithoutContact(maxAge)   cma.ingest_records_without_contact (the sweeper's second read)
  *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
@@ -181,6 +182,13 @@ export function storeFor(ctx, connectionId) {
         });
       }
       return counts;
+    },
+    async storedSubmissions(ids) {
+      if (!ids.length) return new Set();
+      return withTenant(ctx, async (q) => new Set((await q.query(
+        `select source_id from cma.form_submission
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])`,
+        [connectionId, ids])).rows.map((r) => r.source_id)));
     },
     async recordsWithoutContact(maxAge = "1 hour") {
       return withTenant(ctx, async (q) => (await q.query(

@@ -10,7 +10,9 @@
  *
  * Email engagements (crm_email) and inbox conversations (inbox_thread), brief B17b: listed for the
  * same look-back and written through the email poll's own path, not as synthetic events (email.mjs,
- * conversations.mjs), so a reconcile writes what the poll would have.
+ * conversations.mjs), so a reconcile writes what the poll would have. Form submissions (form_submission,
+ * backlog CMA-069) likewise: every polled form's submissions of the look-back, those the CMA does not hold
+ * written through the forms poll's path (forms.mjs reconcileForms), the safety net under its cadence.
  *
  * The CRM search answers at most 10,000 results per query; past that a new query starts at the last
  * value seen (an object at the boundary is listed twice and read once: its event key is known).
@@ -20,16 +22,19 @@ import { hubspotClient, tokenOf } from "./read.mjs";
 import { MODIFIED, searchBody, searchPages } from "./search.mjs";
 import { reconcileEmails } from "./email.mjs";
 import { reconcileThreads } from "./conversations.mjs";
+import { reconcileForms } from "./forms.mjs";
 
 export { MODIFIED, searchBody, searchPages };
-// task since addition 0008n: by hs_lastmodifieddate, the existing paging and budget, read back as a webhook's task
-export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact", "task", "crm_email", "inbox_thread"];
+// task since addition 0008n: by hs_lastmodifieddate, the existing paging and budget, read back as a webhook's task;
+// form_submission since backlog CMA-069: every polled form's submissions of the look-back, through the poll's path
+export const RECONCILE_OBJECTS = ["deal", "ticket", "crm_call", "contact", "task", "form_submission", "crm_email", "inbox_thread"];
 
 /** Reconcile of one object type: modified between sinceMs and untilMs → process(items). */
 export async function reconcile({ connection, store, budget, object, sinceMs, untilMs, process, counts }) {
   // The email objects are written by the email poll's own path (email.mjs, conversations.mjs), not as events
   if (object === "crm_email") return reconcileEmails({ connection, store, budget, sinceMs, untilMs, counts });
   if (object === "inbox_thread") return reconcileThreads({ connection, store, budget, sinceMs, untilMs, counts });
+  if (object === "form_submission") return reconcileForms({ connection, store, budget, sinceMs, untilMs, counts });
   if (!MODIFIED[object]) throw new SourceError("object_not_reconciled");
   const api = hubspotClient(await tokenOf(connection), budget);
   for await (const page of searchPages(api, object, MODIFIED[object], sinceMs, untilMs)) {
