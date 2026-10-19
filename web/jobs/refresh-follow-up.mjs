@@ -20,8 +20,14 @@
  * cma.job_run_start() and cma.job_run_finish(), so Configuration → System health shows the job; and one JSON log
  * line: the tenant's id, the rows, duration_ms. Never a name or a record id. Exit code 0 when every tenant was
  * served, 1 when any tenant failed (Cloud Scheduler retries nothing; the next minute does).
+ *
+ * A dropped database connection (jobs/lib/connection.mjs; 18 October 2026): an idle connection's reset is a
+ * warning line, and a tenant's refresh, or the tenant lookup, that fails with a connection error is retried once
+ * on a fresh connection, its run row kept (one row per tenant and run). A second failure fails the tenant and its
+ * run row as before; opening the pool or reading the tenants failing twice is one ERROR line and exit 1.
  */
 import pg from "pg";
+import { codeOf, hearIdleErrors, isMain, retryOnce, withClient } from "./lib/connection.mjs";
 
 const LOGIN_SYSTEM = "scheduler";   // the login id of each tenant's system user, as 0005a writes it
 const LOGIN_ID = "scheduler";
@@ -39,12 +45,17 @@ async function openPool() {
   }
   const { Connector, AuthTypes, IpAddressTypes } = await import("@google-cloud/cloud-sql-connector");
   const connector = new Connector();
-  const opts = await connector.getOptions({
-    instanceConnectionName: required("CMA_DB_INSTANCE"),
-    authType: AuthTypes.IAM,
-    ipType: process.env.CMA_DB_IP === "PRIVATE" ? IpAddressTypes.PRIVATE : IpAddressTypes.PUBLIC,
-  });
-  return { pool: new pg.Pool({ ...opts, user: required("CMA_DB_USER"), ...common, application_name: "cma-refresh-follow-up" }), close: () => connector.close() };
+  try {
+    const opts = await connector.getOptions({
+      instanceConnectionName: required("CMA_DB_INSTANCE"),
+      authType: AuthTypes.IAM,
+      ipType: process.env.CMA_DB_IP === "PRIVATE" ? IpAddressTypes.PRIVATE : IpAddressTypes.PUBLIC,
+    });
+    return { pool: new pg.Pool({ ...opts, user: required("CMA_DB_USER"), ...common, application_name: "cma-refresh-follow-up" }), close: () => connector.close() };
+  } catch (e) {
+    connector.close();
+    throw e;
+  }
 }
 
 function required(name) {
@@ -73,59 +84,87 @@ async function asScheduler(client, tenantId, userId, text, values = []) {
   }
 }
 
-const setRole = process.env.CMA_DB_SET_ROLE;
-if (setRole && setRole !== "cma_app") throw new Error("CMA_DB_SET_ROLE can only be cma_app");
-const { pool, close } = await openPool();
-async function connect() {
-  const client = await pool.connect();
-  if (setRole) await client.query("set role cma_app");
-  return client;
-}
-let failed = 0;
-try {
+/**
+ * Every tenant with a scheduler user, refreshed in turn; connect() gives a client of the pool. Answers
+ * { tenants, failed }. Exported for verify/jobs.mjs, which runs it on a mocked pool.
+ */
+export async function refreshTenants({ connect, log }) {
   // Before a tenant is known: the SECURITY DEFINER lookup, tenant ids only
-  const lookup = await connect();
-  let tenants;
-  try {
-    tenants = (await lookup.query("select tenant_id from cma.find_tenants_for_identity($1, $2)", [LOGIN_SYSTEM, LOGIN_ID])).rows;
-  } finally {
-    lookup.release();
-  }
+  const tenants = await retryOnce(() => withClient(connect, async (client) =>
+    (await client.query("select tenant_id from cma.find_tenants_for_identity($1, $2)", [LOGIN_SYSTEM, LOGIN_ID])).rows), { log, fields: { tenant_id: null, step: "tenants" } });
+  let failed = 0;
   for (const { tenant_id } of tenants) {
-    const client = await connect();
     let runId = null;
     let me = null;
     try {
-      // 1. The scheduler's own user in this tenant, as cma_app under row-level security
-      const who = await asScheduler(client, tenant_id, "",
-        `select u.id from cma.app_user_external_id x join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id
-          where x.tenant_id = cma.current_tenant_id() and x.system = $1 and x.external_id = $2 and u.status = 'active'`, [LOGIN_SYSTEM, LOGIN_ID]);
-      me = who.rows[0]?.id ?? null;
-      if (!me) throw Object.assign(new Error("no active scheduler user"), { code: "NO_SCHEDULER" });
-      // 2. The run row, before the refresh, so a refresh that fails still leaves a failed row
-      runId = (await asScheduler(client, tenant_id, me, "select cma.job_run_start($1) as id", [JOB])).rows[0].id;
-      // 3. The refresh: skipped when another refresh of this tenant holds its lock (a run that overran its minute)
-      const r = (await asScheduler(client, tenant_id, me, "select cma.refresh_follow_up() as r")).rows[0].r;
-      const counts = r.refreshed
-        ? { rows: r.rows, leads: r.leads, tickets: r.tickets, tasks: r.tasks, duration_ms: r.duration_ms, skipped: 0 }
-        : { rows: 0, duration_ms: 0, skipped: 1 };
-      await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
+      // One unit, retried once on a fresh connection after a connection error; what it already did is kept
+      const { r, counts } = await retryOnce(() => withClient(connect, async (client) => {
+        // 1. The scheduler's own user in this tenant, as cma_app under row-level security
+        if (!me) {
+          const who = await asScheduler(client, tenant_id, "",
+            `select u.id from cma.app_user_external_id x join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id
+              where x.tenant_id = cma.current_tenant_id() and x.system = $1 and x.external_id = $2 and u.status = 'active'`, [LOGIN_SYSTEM, LOGIN_ID]);
+          me = who.rows[0]?.id ?? null;
+          if (!me) throw Object.assign(new Error("no active scheduler user"), { code: "NO_SCHEDULER" });
+        }
+        // 2. The run row, before the refresh, so a refresh that fails still leaves a failed row; once per tenant and run
+        if (!runId) runId = (await asScheduler(client, tenant_id, me, "select cma.job_run_start($1) as id", [JOB])).rows[0].id;
+        // 3. The refresh: skipped when another refresh of this tenant holds its lock (a run that overran its minute)
+        const r = (await asScheduler(client, tenant_id, me, "select cma.refresh_follow_up() as r")).rows[0].r;
+        const counts = r.refreshed
+          ? { rows: r.rows, leads: r.leads, tickets: r.tickets, tasks: r.tasks, duration_ms: r.duration_ms, skipped: 0 }
+          : { rows: 0, duration_ms: 0, skipped: 1 };
+        await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'succeeded', $2::jsonb)", [runId, JSON.stringify(counts)]);
+        return { r, counts };
+      }), { log, fields: { tenant_id } });
       log(r.refreshed ? "INFO" : "WARNING", { tenant_id, rows: counts.rows, duration_ms: counts.duration_ms, refreshed: Boolean(r.refreshed),
         ...(r.refreshed ? {} : { reason: r.reason ?? "running" }) });
     } catch (e) {
       failed += 1;
-      log("ERROR", { tenant_id, rows: 0, duration_ms: 0, refreshed: false, error: e.code ?? "error" });
+      log("ERROR", { tenant_id, rows: 0, duration_ms: 0, refreshed: false, error: codeOf(e) });
       if (runId && me) {
-        await asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'failed', '{}'::jsonb, $2)", [runId, e.code ?? "error"])
-          .catch((f) => log("ERROR", { tenant_id, rows: 0, duration_ms: 0, refreshed: false, error: `run row not finished: ${f.code ?? "error"}` }));
+        await retryOnce(() => withClient(connect, (client) =>
+          asScheduler(client, tenant_id, me, "select cma.job_run_finish($1::uuid, 'failed', '{}'::jsonb, $2)", [runId, codeOf(e)])), { log, fields: { tenant_id } })
+          .catch((f) => log("ERROR", { tenant_id, rows: 0, duration_ms: 0, refreshed: false, error: `run row not finished: ${codeOf(f)}` }));
       }
-    } finally {
-      client.release();
     }
   }
   if (tenants.length === 0) log("WARNING", { tenant_id: null, rows: 0, duration_ms: 0, refreshed: false, reason: "no tenant with a scheduler user" });
-} finally {
-  await pool.end();
-  close();
+  return { tenants: tenants.length, failed };
 }
-process.exit(failed === 0 ? 0 : 1);
+
+if (isMain(import.meta.url)) {
+  const setRole = process.env.CMA_DB_SET_ROLE;
+  if (setRole && setRole !== "cma_app") throw new Error("CMA_DB_SET_ROLE can only be cma_app");
+  let opened;
+  try {
+    opened = await retryOnce(openPool, { log, fields: { tenant_id: null, step: "pool" } });
+  } catch (e) {
+    log("ERROR", { tenant_id: null, rows: 0, duration_ms: 0, refreshed: false, error: codeOf(e), reason: "pool not opened" });
+    process.exit(1);
+  }
+  const { pool, close } = opened;
+  hearIdleErrors(pool, (severity, fields) => log(severity, { tenant_id: null, ...fields }));
+  const connect = async () => {
+    const client = await pool.connect();
+    if (setRole) {
+      try {
+        await client.query("set role cma_app");
+      } catch (e) {
+        client.release(e);
+        throw e;
+      }
+    }
+    return client;
+  };
+  let failed = 1;
+  try {
+    ({ failed } = await refreshTenants({ connect, log }));
+  } catch (e) {
+    log("ERROR", { tenant_id: null, rows: 0, duration_ms: 0, refreshed: false, error: codeOf(e), reason: "tenants not read" });
+  } finally {
+    await pool.end();
+    close();
+  }
+  process.exit(failed === 0 ? 0 : 1);
+}
