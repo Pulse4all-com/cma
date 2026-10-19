@@ -1,0 +1,41 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/provoke.sql:51: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+                                              check_name                                               |        result        |                                                       detail                                                        
+-------------------------------------------------------------------------------------------------------+----------------------+---------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008v recorded, after 0008u                                                               | FAIL                 | provoked
+ A2 the journey table: columns, defaults, checks, the unique code and the market's key                 | FAIL                 | 
+ A3 row-level security, the audit trigger, no delete for the application                               | FAIL                 | 
+ A4 the reader view with its exact columns                                                             | FAIL                 | 
+ A5 no address, email, phone, contact or customer in the table, the view and the functions             | FAIL                 | 
+ A6 every function the application's only and in the caller's rights                                   | FAIL                 | 
+ B1 a new journey: a placeholder with the defaults and its texts trimmed                               | FAIL                 | Verify one|-|GB|placeholder|-|0|100
+ B2 a change keeps the status and the sort order; the rest replaced                                    | FAIL                 | Verify one, renamed|Another summary|-|building|https://design.example.invalid/one|First line+Second line|20
+ B3 set_journey's refusals: code, name, summary, link, prerequisites, sort order; an unknown market    | FAIL                 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA02 0
+ B4 the statuses: a status taken; another status, none and an unknown journey refused                  | FAIL                 | ok CMA04 CMA04 CMA02 live
+ B5 the read's order; archived hidden from it and kept in the table; placed back shown                 | FAIL                 | verify-four:placeholder verify-two:placeholder verify-one:live | 4 | verify-four verify-three verify-two verify-one
+ B6 no delete for the application                                                                      | FAIL                 | 42501 1
+ B7 an audit row for every change, naming the person                                                   | FAIL                 | 1/4/t
+ B8 the permissions: the read for reports.view or performance.team; configuration for tenant.configure | FAIL                 | ok/CMA06/CMA06 ok/CMA06/CMA06 ok/CMA06/CMA06 CMA06/CMA06/CMA06 CMA06/CMA06/CMA06 CMA01
+ B9 tenant isolation: the reads, the same code apart, no change across, the other's market refused     | FAIL                 | 0 CMA02 ok CMA02 verify-one:Two's one | Verify one, renamed:live Beta:placeholder
+ B10 a reader scoped to one tenant sees its own journeys only                                          | FAIL                 | 4/1/0 0/1
+ verdict                                                                                               | PROVOKED, NOT A PASS | 0 PASS, 16 FAIL
+(17 rows)
+
+DROP FUNCTION

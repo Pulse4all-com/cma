@@ -138,6 +138,13 @@ On a new machine, one step at a time:
 
    Expected: `function` twice. A tab opened before this step sources the file with `. ~/.cma_helpers.sh`.
 
+   `cma_db: command not found` in a new terminal window: `. ~/.cma_helpers.sh` gets that window going.
+   The Chromebook's terminal opens a login shell, which reads the first of `~/.bash_profile`,
+   `~/.bash_login` and `~/.profile` that exists, never `~/.bashrc` itself. On Martin's machine none of
+   the three existed (19 October 2026); the fix was `cp -n /etc/skel/.profile ~/.profile`, whose bash
+   block sources `~/.bashrc`. Where a `~/.bash_profile` exists, add `[ -f ~/.bashrc ] && . ~/.bashrc`
+   to it instead. Check in a new window: `type cma_db run_migration` prints `function` twice.
+
    The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
    `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one
    line of JSON bare, so `docs/datamap/schema.json` holds that line alone:

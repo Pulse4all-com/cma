@@ -149,6 +149,8 @@ reset role;
 ```
 Expected: the deal pipelines with `is_order` false. Note the connection as `<conn>` and the Self Serve pipeline's id as `<self serve>`. It must be counted (`is_counted` true): an uncounted pipeline's deals are no orders.
 
+Dev's test account has no Self Serve, so dev uses Sales test (`4209185980`), the pipeline that holds the test deals: in dev, `<self serve>` is `4209185980` here and in step 3c; prod keeps Self Serve (step 5).
+
 **Studio (cma-dev-pg)** after the context block
 ```sql
 select cma.set_pipeline_order('<conn>', 'deal', '<self serve>', true);
@@ -200,6 +202,8 @@ Expected:
 - the mailboxes the catalog brought (the poll refreshes the catalog hourly, so 0 until the new image's first refresh), most threads with a mailbox, most contacts with a creation time.
 
 **3c. The stage outcomes**, once the new image has read the pipelines (the catalog refreshes at most hourly). **Studio (cma-dev-pg)**: step 2's stages block again.
+
+Found in dev on 19 October 2026: the pipeline catalog, and so the stage outcomes, refreshes only when the ingest service processes a deal or a ticket, at most once an hour. A backfill of unchanged deals (every one `skipped`) does not trigger it, so in a quiet account the outcomes stay empty until the next deal or ticket the service processes. Dev's result once it had: Sales test's Won `won | source`, Lost `lost | source`.
 
 Expected: the won stage of Self Serve `won | source`, a closed lost one `lost | source`, open ones empty. A stage whose outcome is wrong (a HubSpot stage whose probability is not 1.0 although it means won): after the context block `select cma.set_stage_outcome('<conn>', 'deal', '<self serve>', '<stage id>', 'won');` (or, after step 6, Configuration → Sources → Stage outcomes); it is then the person's and kept over every later read.
 

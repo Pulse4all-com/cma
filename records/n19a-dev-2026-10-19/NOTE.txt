@@ -1,0 +1,1 @@
+82/84/86/88.txt hold a third, accidental run (INSERT 0 0); the first run showed INSERT 0 1 for each, see cma.schema_migration applied_at

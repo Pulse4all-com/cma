@@ -1,0 +1,44 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/provoke.sql:54: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                     check_name                                                     |        result        |                                                        detail                                                         
+--------------------------------------------------------------------------------------------------------------------+----------------------+-----------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008w recorded, after 0008v                                                                            | FAIL                 | provoked
+ A2 every function the application's only and invoker; the readers' function definer, pinned, theirs only           | FAIL                 | 
+ A3 the reader view with its exact columns; no name, address, email or phone                                        | FAIL                 | 
+ B1 the week's callbacks with their states and the call's minutes from the due time                                 | FAIL                 | k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-
+ B2 the window's edges, the earliest call, an inbound call, no removed association                                  | FAIL                 | k10:- k15:13:20 k2:13:00 k3:- k4:11:00
+ B3 the setting tasks.callback_window_minutes moves the window                                                      | FAIL                 | kept not_kept
+ B4 pending while the window is open, not kept once it closed                                                       | FAIL                 | not_kept pending
+ B5 a type not counted, not a callback and a deleted task absent; no due time placed by its creation                | FAIL                 | 0/2026-10-08
+ B6 the figures per ISO week and in total                                                                           | FAIL                 | week:2026-10-05:7/4/3/0/1/1 total:-:7/4/3/0/1/1
+ B7 the previous period like for like: in full after the period, up to the time of day while it runs                | FAIL                 | current:total:7/4/3 previous:total:3/2/1 | current:7/4/1/2 previous:2/1/1/0
+ B8 per person by name with the not-linked row and the total; not for reports.view alone                            | FAIL                 | Anna Verify:3/3/0/1 Bram Verify:3/0/3/0 not_linked(1):1/1/0/0 total:7/4/3/1 CMA06
+ B9 the range and the permissions: the report for reports.view or performance.team, per person for performance.team | FAIL                 | CMA04 ok/CMA06/ok ok/ok/ok ok/ok/ok CMA06/CMA06/CMA06 CMA06/CMA06/CMA06 CMA01
+ B10 a counted callback type or none; the report's zeros without one                                                | FAIL                 | true false 0/0 false
+ B11 tenant isolation for the reads and the configuration                                                           | FAIL                 | CMA02 total:0/0 true
+ B12 a reader scoped to one tenant sees its own callbacks only                                                      | FAIL                 | 12/6 0
+ verdict                                                                                                            | PROVOKED, NOT A PASS | 0 PASS, 15 FAIL
+(16 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
