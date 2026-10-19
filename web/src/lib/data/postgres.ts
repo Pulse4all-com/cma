@@ -333,6 +333,8 @@ type EmailPersonDbRow = {
   row_kind: string; user_id: string | null; display_name: string | null; unlinked_owners: number | null; sent: number; replies: number; threads_closed: number;
   reply_median_seconds: string | null; reply_median_business_seconds: string | null; within_target: number; target_known: number; sent_by_hour: number[];
 };
+/** One row of cma.email_per_person_page: a person's row (part 'person') or a figures row without the filters (part 'dimension') */
+type EmailPersonPageDbRow = EmailPersonDbRow & EmailDbFigures & { part: string; dimension: string; group_key: string | null; group_label: string | null };
 
 function toEmailPerson(x: EmailPersonDbRow): EmailPerson {
   return {
@@ -739,7 +741,7 @@ function toSource(r: SourceDbRow): SourceConnection {
 }
 
 // ---- First orders (addition 0008u): the rows of cma.first_orders_report, first_orders_amounts, first_orders_list
-// and first_orders_per_person; numeric columns arrive as text
+// and first_orders_per_person; the page reads the first three in one (cma.first_orders_page, 0008x); numeric columns arrive as text
 type FirstOrderDbRow = {
   period: string; dimension: string; group_key: string | null; first_orders: number; call_center: number; self_service: number; repeats: number;
   renewals: number; not_first: number; no_contact: number; with_touch: number; days_median: string | null;
@@ -791,6 +793,11 @@ type FirstOrderListDbRow = {
   connection_id: string; deal_source_id: string; market: string; created_at: Date; level: FirstOrderListRow["level"]; attribution: FirstOrderListRow["attribution"];
   lead_deal: boolean; conversation: boolean; email: boolean; phone_match: boolean; attempt: boolean; known_contact: boolean; phone_hashed: boolean;
   has_order: boolean; currency: string | null; amount: string | null; days_from_first_touch: string | null; record_url: string | null; total_rows: number;
+};
+
+/** One row of cma.first_orders_page: part 'report', 'amounts' or 'list'; the columns a part does not use are null */
+type FirstOrderPageDbRow = FirstOrderDbRow & FirstOrderListDbRow & {
+  part: string; orders: number; call_center_amount: string; self_service_amount: string;
 };
 
 function toFirstOrderListRow(x: FirstOrderListDbRow): FirstOrderListRow {
@@ -1732,14 +1739,13 @@ export const postgresData: CmaData = {
   async getEmailReport(me, range, group, filter): Promise<EmailReport> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the group and the filters first; one pass over the period for every section
-      const r = await q.query<EmailDbRow>(`select * from cma.email_report($1::date, $2::date, $3, $4, $5, $6)`,
+      // the function checks the permission, the group and the filters first; one pass over the period and its previous span for
+      // every section, and with a filter set the figures without it (period 'unfiltered', 0008x)
+      const r = await q.query<EmailDbRow>(`select * from cma.email_report_page($1::date, $2::date, $3, $4, $5, $6)`,
         [range.from, range.to, group, filter.market, filter.inbox, filter.account]);
       const filtered = filter.market !== null || filter.inbox !== null || filter.account !== null;
-      // the filter lists come from the period without the filters: the page's own read when it has none
-      const whole = filtered
-        ? (await q.query<EmailDbRow>(`select 'current' as period, * from cma.email_by_dimension($1::date, $2::date, null, null, null)`, [range.from, range.to])).rows
-        : r.rows;
+      // the filter lists come from the period without the filters: the page's own rows when it has none
+      const whole = filtered ? r.rows.filter((x) => x.period === "unfiltered").map((x) => ({ ...x, period: "current" })) : r.rows;
       const has = await readHasEmail(q);
       const history = await q.query<{ history_start: string | null }>(`select cma.email_history_start()::text as history_start`);
       const settings = await emailSettings(q);
@@ -1782,16 +1788,17 @@ export const postgresData: CmaData = {
   async getEmailPerAgent(me, range, filter): Promise<EmailPerAgent> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks performance.team and the tenant's reports.per_person first (CMA06)
-      const r = await q.query<EmailPersonDbRow>(`select * from cma.email_per_person($1::date, $2::date, $3, $4, $5)`,
+      // the function checks performance.team and the tenant's reports.per_person first (CMA06); one pass over the period for
+      // per person (part 'person') and the figures without the filters for the filter lists (part 'dimension', 0008x)
+      const r = await q.query<EmailPersonPageDbRow>(`select * from cma.email_per_person_page($1::date, $2::date, $3, $4, $5)`,
         [range.from, range.to, filter.market, filter.inbox, filter.account]);
-      const whole = await q.query<EmailDbRow>(`select 'current' as period, * from cma.email_by_dimension($1::date, $2::date, null, null, null)`, [range.from, range.to]);
+      const whole = r.rows.filter((x) => x.part === "dimension").map((x): EmailDbRow => ({ ...x, period: "current" }));
       const has = await readHasEmail(q);
       const settings = await emailSettings(q);
-      const rows = r.rows.map(toEmailPerson);
+      const rows = r.rows.filter((x) => x.part === "person").map(toEmailPerson);
       return {
         ...range, filter, email: has, rows: rows.filter((x) => x.kind !== "total"), total: rows.find((x) => x.kind === "total")!,
-        replyTargetMinutes: settings.replyTargetMinutes, ...emailListsOf(whole.rows),
+        replyTargetMinutes: settings.replyTargetMinutes, ...emailListsOf(whole),
       };
     });
   },
@@ -1799,14 +1806,13 @@ export const postgresData: CmaData = {
   async getFirstOrders(me, range, group, filter): Promise<FirstOrdersReport> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the functions check the permission, the group and the filters first
-      const r = await q.query<FirstOrderDbRow>(`select * from cma.first_orders_report($1::date, $2::date, $3, $4, $5)`,
+      // the function checks the permission, the group and the filters first; one pass of cma.first_orders_of for the report
+      // (part 'report'), the amounts (part 'amounts') and the list (part 'list'), each in its read's order (0008x)
+      const page = await q.query<FirstOrderPageDbRow>(`select * from cma.first_orders_page($1::date, $2::date, $3, $4, $5)`,
         [range.from, range.to, group, filter.market, filter.level]);
-      const amounts = await q.query<{ dimension: string; group_key: string | null; currency: string; orders: number; amount: string | null;
-        call_center_amount: string; self_service_amount: string }>(`select * from cma.first_orders_amounts($1::date, $2::date, $3, $4)`,
-        [range.from, range.to, filter.market, filter.level]);
-      const list = await q.query<FirstOrderListDbRow>(`select * from cma.first_orders_list($1::date, $2::date, $3, $4)`,
-        [range.from, range.to, filter.market, filter.level]);
+      const r = { rows: page.rows.filter((x) => x.part === "report") };
+      const amounts = { rows: page.rows.filter((x) => x.part === "amounts") };
+      const list = { rows: page.rows.filter((x) => x.part === "list") };
       const history = await q.query<{ history_start: string | null; phone_start: string | null; connected: boolean }>(
         `select history_start::text, phone_start::text, connected from cma.first_orders_history_start()`);
       const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
