@@ -149,6 +149,8 @@ reset role;
 ```
 Expected: the deal pipelines with `is_order` false. Note the connection as `<conn>` and the Self Serve pipeline's id as `<self serve>`. It must be counted (`is_counted` true): an uncounted pipeline's deals are no orders.
 
+Dev's test account has no Self Serve, so dev uses Sales test (`4209185980`), the pipeline that holds the test deals: in dev, `<self serve>` is `4209185980` here and in step 3c; prod keeps Self Serve (step 5).
+
 **Studio (cma-dev-pg)** after the context block
 ```sql
 select cma.set_pipeline_order('<conn>', 'deal', '<self serve>', true);
