@@ -1,0 +1,8 @@
+DO
+SET
+DO
+DO
+psql:/home/user/cma/db/03_seed_dev_test_data.sql:112: NOTICE:  teams and skills fixture skipped (migration 0004 or the admin user missing)
+DO
+psql:/home/user/cma/db/03_seed_dev_test_data.sql:144: NOTICE:  the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql
+DO

@@ -1,0 +1,39 @@
+DO
+SET
+            create_tenant             
+--------------------------------------
+ 01a1551e-0f48-7a70-955a-cf8dc9218fd3
+(1 row)
+
+            create_tenant             
+--------------------------------------
+ 01a1551e-0f58-7fdf-822d-47c317ca3e93
+(1 row)
+
+INSERT 0 4
+INSERT 0 4
+psql:/home/user/cma/db/02_seed_pulse4all.sql:62: NOTICE:  organisation.timezone does not exist yet (migration 0002): rerun this seed after 05_time_model.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:109: NOTICE:  cma.work_status does not exist yet (migration 0002): rerun this seed after 05_time_model.sql
+DO
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:151: NOTICE:  cma.app_link does not exist yet (addition 0003d): rerun this seed after 17_clock_in_app_links.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:196: NOTICE:  cma.team does not exist yet (migration 0004): rerun this seed after 21_teams_skills.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:226: NOTICE:  the workday window settings do not exist yet (addition 0008b): rerun this seed after 46_workday_window.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:246: NOTICE:  the legacy time import does not exist yet (addition 0008d): rerun this seed after 50_legacy_time_import.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:289: NOTICE:  the missed-reason catalog does not exist yet (addition 0008i): rerun this seed after 60_inbound_service.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:314: NOTICE:  the settings catalog does not exist yet (migration 0003b): rerun this seed after 62_calls_overview.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:341: NOTICE:  the settings catalog does not exist yet (migration 0003b): rerun this seed after 66_invitations.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:371: NOTICE:  the settings catalog does not exist yet (migration 0003b): rerun this seed after 72_follow_up.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:395: NOTICE:  the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql
+DO
+psql:/home/user/cma/db/02_seed_pulse4all.sql:433: NOTICE:  the journeys do not exist yet (addition 0008v): rerun this seed after 86_journeys.sql
+DO

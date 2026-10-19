@@ -1,0 +1,33 @@
+DO
+SET
+CREATE TABLE
+COMMENT
+INSERT 0 5
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE FUNCTION
+CREATE TRIGGER
+psql:/home/user/cma/db/13_tenant_settings.sql:107: NOTICE:  policy "tenant_app" for relation "tenant_setting" does not exist, skipping
+psql:/home/user/cma/db/13_tenant_settings.sql:107: NOTICE:  policy "tenant_readonly" for relation "tenant_setting" does not exist, skipping
+psql:/home/user/cma/db/13_tenant_settings.sql:107: NOTICE:  trigger "audit" for relation "tenant_setting" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+INSERT 0 2
+INSERT 0 1

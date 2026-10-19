@@ -1,0 +1,6 @@
+          slug           | reports_per_person 
+-------------------------+--------------------
+ pulse4all-invest        | 
+ pulse4all-subscriptions | 
+(2 rows)
+

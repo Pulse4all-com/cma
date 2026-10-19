@@ -1,0 +1,32 @@
+npm ci: exit 0 | added 510 packages in 20s
+npm run build: exit 0 | ✓ Running next.config.ts took 34ms ✓ Compiled successfully in 16.1s 
+npm run typecheck: exit 0 | ✓ Types generated successfully
+npm run lint: exit 0 | ✖ 1 problem (0 errors, 1 warning) (/home/user/cma/web/verify/follow-up.mjs)
+verify:copy: exit 0 | copy: PASS (2395 keys, en and nl)
+verify:corrections: exit 0 | ALL 31 PASS
+verify:csv: exit 0 | ALL 18 PASS
+verify:dashboard: exit 0 | ALL 17 PASS
+verify:live: exit 0 | ALL 40 PASS
+verify:team: exit 0 | team: PASS (26 checks)
+verify:roster: exit 0 | roster: PASS (36 checks)
+verify:configuration: exit 0 | ALL 108 PASS
+verify:messages: exit 0 | ALL 24 PASS
+verify:import: exit 0 | ALL 23 PASS
+verify:datamap: exit 1 | datamap: FAIL (2 problems)
+verify:signed-out: exit 0 | signed-out: PASS (16 checks)
+verify:invitations: exit 0 | invitations: PASS (27 checks)
+verify:preview: exit 0 | preview: PASS (18 checks)
+verify:follow-up: exit 0 | follow-up: PASS (34 checks)
+verify:reports: exit 0 | ALL 151 PASS
+verify:health: exit 0 | ALL 39 PASS
+verify:boundaries: exit 0 | boundaries: PASS (284 files)
+verify:jobs: exit 0 | ALL 18 PASS
+verify:reports --provoke: exit 0 | ALL 151 PROVOKED CHECKS FAILED, as they must
+verify:api --attempts (mock): exit 0 | ALL 16 PASS
+verify:api --attempts --provoke (mock): exit 0 | ALL 16 PROVOKED CHECKS FAILED, as they must
+verify:theme: exit 0 | theme: PASS (71 pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, 83 tables per 7.6 and 3.3, a header hint open on 28 report pages)
+verify:theme --provoke: exit 1 | theme: FAIL (10 problems)
+verify:hints: exit 0 | hints: PASS (679 headers and 137 tiles on 42 pages, 7 level bars on First orders and 4 bar cards on Attempts per deal, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still within 0.5 px on the toggle, 78 boxes in 4 runs)
+verify:hints --provoke-topbar: exit 1 | hints: FAIL (40 problems) (40 top-bar lines, 0 others)
+verify:hints --provoke: exit 1 | hints: FAIL (43 problems)
+verify:layout: exit 0 | layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for …
