@@ -138,6 +138,11 @@ On a new machine, one step at a time:
 
    Expected: `function` twice. A tab opened before this step sources the file with `. ~/.cma_helpers.sh`.
 
+   `cma_db: command not found` in a new terminal window: `. ~/.cma_helpers.sh` gets that window going.
+   The usual cause is a `~/.bash_profile`: a login shell that finds it skips `~/.profile`, and with it
+   the line there that sources `~/.bashrc`. The fix is one line in `~/.bash_profile`,
+   `[ -f ~/.bashrc ] && . ~/.bashrc`; every window opened after it has the helpers.
+
    The data map's schema snapshot (`tools/datamap/schema.sql`) runs with `psql -X -qAt`: `-X` skips
    `~/.psqlrc`, `-q` keeps the `SET` of its `set role cma_owner` out of the output, `-At` prints the one
    line of JSON bare, so `docs/datamap/schema.json` holds that line alone:
