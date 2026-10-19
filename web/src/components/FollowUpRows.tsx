@@ -13,14 +13,14 @@ import { Badge, type BadgeTone } from "./primitives";
 import { RecordLink } from "./RecordLink";
 
 /**
- * A cell: text; nothing; { m } Muted text; { e } text in the error colour; { b, v } a badge; { v, t } text with its full
- * form as the cell's title (a compact date, a label that may truncate); { v, tag } text with a badge after it, t its
- * title; { u, l } the record link (u null: none), l its accessible name
+ * A cell: text; nothing; { m } Muted text, t its title (a dash and its reason); { e } text in the error colour; { b, v } a
+ * badge; { v, t } text with its full form as the cell's title (a compact date, a label that may truncate); { v, tag } text
+ * with a badge after it, t its title; { u, l } the record link (u null: none), l its accessible name
  */
 export type Cell =
   | string
   | null
-  | { m: string }
+  | { m: string; t?: string }
   | { e: string }
   | { b: BadgeTone; v: string }
   | { v: string; t: string }

@@ -9,7 +9,8 @@
  * stay here and the rows go to the client body FollowUpRows as short formatted cells, so the page's
  * 10-second refresh carries values rather than every cell's markup. Since 19 October 2026 (Decision log) the tables are
  * narrower and keep their link in view: Created and Due in the compact form with the full date on hover, Pipeline, Stage
- * and Type truncated at 14rem with the full label on hover, and the open-link column pinned right.
+ * and Type truncated at 14rem with the full label on hover, and the open-link column pinned right. A lead without business
+ * hours (no market) shows a Muted dash as its waiting time and age, No business hours on hover; its target badge says it.
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
@@ -198,6 +199,8 @@ function leadRow(l: OpenLead, ctx: TableContext): CellRow {
   const t = copy.followUp;
   const bucket = bucketLabel(l.bucketFrom, l.bucketTo);
   const n = (x: number) => fmtCount(x, locale);
+  // Without business hours (a lead without a market) the waiting time and the age are a dash, the reason on hover
+  const noHours: Cell = { m: "–", t: t.noHours };
   return {
     k: l.dealId,
     c: [
@@ -206,8 +209,8 @@ function leadRow(l: OpenLead, ctx: TableContext): CellRow {
       marketCell(l.market, copy),
       ...(ctx.withOwner ? [ownerCell(l, copy)] : []),
       dateCell(l.createdAt, ctx),
-      fmtBusinessMinutes(l.waitingBusinessSeconds === null ? null : Math.floor(l.waitingBusinessSeconds / 60), locale),
-      bucket === null ? { m: t.noHours } : t.ageDays.replace("{bucket}", bucket),
+      l.waitingBusinessSeconds === null ? noHours : fmtBusinessMinutes(Math.floor(l.waitingBusinessSeconds / 60), locale),
+      bucket === null ? noHours : t.ageDays.replace("{bucket}", bucket),
       l.pastTarget === true ? { b: "error", v: t.pastTarget } : l.pastTarget === false ? { b: "success", v: t.withinTarget } : { b: "neutral", v: t.noHours },
       l.lastCallDays === null ? { m: t.lastCallNone }
         : l.lastCallDays === 0 ? t.lastCallToday : l.lastCallDays === 1 ? t.lastCallDaysOne : t.lastCallDays.replace("{n}", n(l.lastCallDays)),
