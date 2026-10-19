@@ -1,0 +1,12 @@
+  /: content-security-policy is "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'", not "frame-ancestors 'self'"
+  /api/v1/me: content-security-policy is "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'", not "frame-ancestors 'self'"
+  /day: content-security-policy is "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'", not "frame-ancestors 'self'"
+  /: typeface "Georgia" is not Montserrat
+  /: p "provoked" is set in capitals by CSS (style guide rule 4)
+  /: p color #ff0000 is not in the palette
+  /: p borderTopColor #ff0000 is not in the palette
+  /: p outlineColor #ff0000 is not in the palette
+  /reports/data-quality: hint text is #666666, not Inkt Body like the other text
+  /reports/inbound?range=month: inbound-table: cells at line-height 1.60 (7.6, 3.3)
+theme: FAIL (10 problems)
+exit 1

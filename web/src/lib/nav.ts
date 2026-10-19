@@ -20,7 +20,7 @@ export function prefCookie(name: string, value: string): string {
   return `${name}=${value}; path=/; max-age=31536000; samesite=lax; secure`;
 }
 
-export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "gear";
+export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "flag" | "gear";
 export type ShellPage =
   | "welcome"
   /** Messages (migration 0008): the inbox for everyone and the sender's page, both under the rail's Messages item */
@@ -28,6 +28,12 @@ export type ShellPage =
   | "live-board" | "people" | "roster" | "my-day" | "my-hours" | "my-schedule" | "team-hours" | "dashboard"
   /** Intake reports (B11, migration 0007d), Inbound (addition 0008i), Calls and Calls per agent (addition 0008j), Forms (addition 0008p) */
   | "speed-to-lead" | "intake" | "inbound" | "calls" | "calls-per-agent" | "forms" | "data-quality"
+  /** Email and Email per agent (addition 0008t, brief N19-A part 1) */
+  | "email" | "email-per-agent"
+  /** First orders and Orders per person (addition 0008u, brief N19-A part 2) */
+  | "first-orders" | "orders-per-person"
+  /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
+  | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
   | "follow-up" | "my-follow-up"
   | "config-statuses" | "config-teams" | "config-absences" | "config-exports" | "config-app-links"
@@ -40,7 +46,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/data-quality"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
 
@@ -53,6 +59,11 @@ export interface NavItem {
    * one of them (the Team screen: users.manage_agents or users.manage_all, migration 0004).
    */
   permission: string | readonly string[] | null;
+  /**
+   * A per-person report page (addition 0008t): shown only while the tenant's reports.per_person holds this key
+   * (Principal.perPerson), besides the permission; absent otherwise, with its route
+   */
+  perPerson?: "email" | "orders";
 }
 
 /** A page that stands on its own in the rail, with its icon */
@@ -154,7 +165,28 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "calls-per-agent", href: "/reports/calls-per-agent", label: copy.nav.callsPerAgent, permission: "performance.team" },
         // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
         { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
+        // Email (addition 0008t, brief N19-A part 1): received per inbox and mailbox, sent, first replies, as Calls; Email per
+        // agent the same per person, for performance.team while the tenant's reports.per_person holds email (Yordi agreed,
+        // README Decision log, 18 October 2026)
+        { page: "email", href: "/reports/email", label: copy.nav.email, permission: ["reports.view", "performance.team"] },
+        { page: "email-per-agent", href: "/reports/email-per-agent", label: copy.nav.emailPerAgent, permission: "performance.team", perPerson: "email" },
+        // First orders (addition 0008u, brief N19-A part 2): self-service or call center, as Email; Orders per person the
+        // credited first orders per person, for performance.team while the tenant's reports.per_person holds orders
+        // (off for Pulse4all until Yordi confirms it, README Open decisions)
+        { page: "first-orders", href: "/reports/first-orders", label: copy.nav.firstOrders, permission: ["reports.view", "performance.team"] },
+        { page: "orders-per-person", href: "/reports/orders-per-person", label: copy.nav.ordersPerPerson, permission: "performance.team", perPerson: "orders" },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
+      ],
+    },
+    {
+      // Campaigns (addition 0008v, brief N19-A part 3): Campaign monitoring, the journeys as placeholders for the
+      // compliance and campaign monitors, for the report permissions; after Reports, so no key above it moves
+      kind: "group",
+      id: "campaigns",
+      label: copy.nav.campaigns,
+      icon: "flag",
+      items: [
+        { page: "campaigns", href: "/campaigns", label: copy.nav.campaignMonitoring, permission: ["reports.view", "performance.team"] },
       ],
     },
     {
@@ -196,7 +228,7 @@ export function holdsAny(me: Pick<Principal, "permissions">, permission: string 
 }
 
 function mayOpen(me: Principal, item: NavItem): boolean {
-  return holdsAny(me, item.permission);
+  return holdsAny(me, item.permission) && (item.perPerson === undefined || me.perPerson.includes(item.perPerson));
 }
 
 /** A digit key is one keypress: only the first nine numbered pages get one (the IT audit of 17 October 2026) */
@@ -244,7 +276,8 @@ export interface Crumb {
  * page this person may see; no link when they may see none) › the page's label, from the navigation
  * model; a bare page is Welcome › the page. My account and Send a message are no rail items and get
  * their own trail; Welcome shows none. A page's own trail (the connection's name on Sources) is appended,
- * and the page's crumb becomes a link. The last crumb is never a link.
+ * and the page's crumb becomes a link; a journey's page (0008v) is Welcome › Campaigns › the journey. The last
+ * crumb is never a link.
  */
 export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail: Crumb[] = []): Crumb[] {
   if (active === "welcome") return [];
@@ -252,6 +285,8 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
   if (active === "account") own = [{ label: copy.account.title, href: "/account" }];
   else if (active === "my-follow-up") own = [{ label: copy.followUp.myTitle, href: "/me/follow-up" }];
   else if (active === "messages-send") own = [{ label: copy.nav.messages, href: "/messages" }, { label: copy.messages.composeTitle, href: "/messages/send" }];
+  // A journey's page (addition 0008v): Campaigns › the journey's name, the group's one page being the list of journeys
+  else if (active === "campaigns" && trail.length > 0) own = [{ label: copy.nav.campaigns, href: "/campaigns" }];
   else {
     for (const entry of navEntries(copy)) {
       if (entry.kind === "page") {
@@ -260,7 +295,7 @@ export function breadcrumbs(me: Principal, copy: Copy, active: ShellPage, trail:
       }
       const item = entry.items.find((i) => i.page === active);
       if (!item) continue;
-      const first = entry.items.find((i) => holdsAny(me, i.permission));
+      const first = entry.items.find((i) => mayOpen(me, i));
       own = [{ label: entry.label, href: first?.href }, { label: item.label, href: item.href }];
     }
   }

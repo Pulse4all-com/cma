@@ -1,0 +1,5 @@
+SET
+pulse4all-subscriptions|fca-uk-consumers|placeholder||7
+pulse4all-subscriptions|opc|placeholder||1
+pulse4all-subscriptions|exchange|placeholder||1
+pulse4all-subscriptions|reports.per_person|email

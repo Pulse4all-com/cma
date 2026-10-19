@@ -15,7 +15,12 @@
  * of at least 40px, zebra rows). Since addition 0008j Calls (by day as the manager, by market as the
  * analyst, and for a tenant without telephony) and Calls per agent with a person's row and the not-linked
  * row opened, their tables per 7.6 and 3.3 as well. Since addition 0008p Forms (by day as the manager, by week as
- * the analyst), the Sources list with its form categories and the CRM connection's page, their tables too.
+ * the analyst), the Sources list with its form categories and the CRM connection's page, their tables too. Since
+ * addition 0008t Email (by day as the manager, by week as the analyst, and for a tenant without email) and Email
+ * per agent with a person's hours and the not-linked row opened; the CRM connection's page now holds its email
+ * section (inboxes, mailboxes, channels). Since addition 0008u First orders (by day, week, market and level, and for a
+ * tenant without an order pipeline) and Orders per person; the CRM connection's page now holds the order pipeline
+ * switch and the stage outcomes. Since addition 0008v Campaign monitoring and a journey's page with its placeholders.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
@@ -141,6 +146,29 @@ const pages = [
   // forms with their polled and category columns
   { path: "/reports/forms?range=month", subject: "manager", tables: true },
   { path: "/reports/forms?range=month&group=week", subject: "analyst", tables: true },
+  // Email and Email per agent (addition 0008t): the tiles, the received columns per inbox and per mailbox in the
+  // series order, the sent columns, the tables by inbox, mailbox, category and market, waiting and not responding,
+  // by day as the manager and by week as the analyst; the per-person table with a person's hours and the
+  // not-linked row opened; a tenant without email
+  { path: "/reports/email?range=month", subject: "manager", tables: true },
+  { path: "/reports/email?range=month&group=week", subject: "analyst", tables: true },
+  { path: "/reports/email-per-agent?range=month", subject: "manager", tables: true, expand: true },
+  { path: "/reports/email?range=month", subject: "invest-analyst", noHint: true },
+  // First orders and Orders per person (addition 0008u): the tiles, the columns in the series order (call center
+  // Deep Blue, self-service Leaf Green), the level bars, the tables by market and level, the amounts and the order
+  // list with its evidence badges, by day as the manager and by week as the analyst; the per-person table; a tenant
+  // without an order pipeline
+  { path: "/reports/first-orders?range=month", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month&group=week", subject: "analyst", tables: true },
+  { path: "/reports/first-orders?range=month&group=market", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month&group=level", subject: "analyst", tables: true },
+  { path: "/reports/orders-per-person?range=month", subject: "manager", tables: true },
+  { path: "/reports/first-orders?range=month", subject: "invest-analyst", noHint: true },
+  // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
+  // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
+  { path: "/campaigns", subject: "manager" },
+  { path: "/campaigns/fca-uk-consumers", subject: "analyst" },
+  { path: "/campaigns", subject: "invest-analyst" },
   { path: "/configuration/sources", subject: "admin", tables: true },
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c001", subject: "admin", tables: true },
   { path: "/logout" }, { path: "/no-access" },
@@ -170,9 +198,11 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
   await p.waitForLoadState("networkidle");
   // Calls per agent: open the first person's row and the not-linked row, so their splits are checked too
   if (expand) {
-    await p.locator('[data-testid="agent-toggle"]').first().click();
-    await p.locator('[data-testid="agent-not-linked"] [data-testid="agent-toggle"]').click();
-    if (await p.locator('[data-testid="agent-split"]').count() !== 2) problems.push(`${path}: the rows did not open`);
+    // Email per agent (addition 0008t): the same with its own row names and the hours per person
+    const x = path.startsWith("/reports/email-per-agent") ? "email-agent" : "agent";
+    await p.locator(`[data-testid="${x}-toggle"]`).first().click();
+    await p.locator(`[data-testid="${x}-not-linked"] [data-testid="${x}-toggle"]`).click();
+    if (await p.locator(`[data-testid="${x === "agent" ? "agent-split" : "email-agent-hours"}"]`).count() !== 2) problems.push(`${path}: the rows did not open`);
     await p.mouse.move(0, 0);
   }
   // A report page: open one header hint by keyboard focus, so the panel is painted when the colours

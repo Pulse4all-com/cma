@@ -200,6 +200,23 @@ export function NavIconMark({ name }: { name: NavIcon }) {
           <circle cx="10" cy="10" r="2.25" />
         </svg>
       );
+    case "flag":
+      // Campaigns (addition 0008v): a flag on its pole
+      return (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          className="h-5 w-5 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M4.5 17.5v-14" />
+          <path d="M4.5 3.5h9.5l-2 3.25 2 3.25h-9.5" />
+        </svg>
+      );
     case "chart":
       return (
         <svg

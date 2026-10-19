@@ -53,6 +53,12 @@ export interface Principal {
   preview: { roleKey: string; roleName: string } | null;
   /** The real permissions hold users.manage_all, computed before the narrowing, so the control stays while previewing */
   canPreview: boolean;
+  /**
+   * The per-person report pages the tenant switched on (setting reports.per_person, addition 0008t): keys from
+   * email and orders. A page in the list shows to people holding performance.team; one not in it is absent (its
+   * rail item and its route); the database refuses the read as well (CMA06)
+   */
+  perPerson: string[];
 }
 
 /** Outcome of the app_user check for a proven identity */
@@ -100,6 +106,8 @@ export const MOCK_PRINCIPAL: Principal = {
   timeZone: "Europe/Madrid",
   preview: null,
   canPreview: false,
+  // the dev seed (03) switches both on
+  perPerson: ["email", "orders"],
 };
 
 /** The identity proxy.ts attached to this request, or null if it attached none */

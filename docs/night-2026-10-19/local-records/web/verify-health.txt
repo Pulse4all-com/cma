@@ -1,0 +1,45 @@
+
+> cma-web@0.1.0 verify:health
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/health.mjs
+
+PASS  thresholds from settings                                         got {"freshSeconds":180,"lateSeconds":1200}
+PASS  thresholds default without settings                              got {"freshSeconds":120,"lateSeconds":900}
+PASS  thresholds default on an unreadable value                        got 120
+PASS  age in whole seconds, never negative                             got [61,0,null,null]
+PASS  heartbeat fresh below the first threshold                        got "fresh"
+PASS  heartbeat late from the first threshold                          got "late"
+PASS  heartbeat late below the second                                  got "late"
+PASS  heartbeat silent from the second threshold                       got "silent"
+PASS  heartbeat none without a run                                     got "none"
+PASS  the latest heartbeat run                                         got "2026-10-17T11:59:10.000Z"
+PASS  no heartbeat run                                                 got null
+PASS  job ok                                                           got "ok"
+PASS  job failed                                                       got "failed"
+PASS  job running                                                      got "running"
+PASS  job stuck past the task timeout                                  got "stuck"
+PASS  job never without a row                                          got "never"
+PASS  a run's duration                                                 got [100000,null]
+PASS  connection off when switched off                                 got "off"
+PASS  connection failing on a failed last run                          got "failing"
+PASS  connection failing on a stuck run                                got "failing"
+PASS  connection failing when a job never succeeded                    got "failing"
+PASS  connection attention on parked events                            got "attention"
+PASS  connection attention on a failure in 24 hours                    got "attention"
+PASS  connection attention when silent for a day                       got "attention"
+PASS  connection ok                                                    got "ok"
+PASS  connection ok without events yet                                 got "ok"
+PASS  probe fast, slow, down                                           got ["fast","slow","down"]
+PASS  runs grouped per job in the page's order                         got ["link_calls:2","forms_poll:1","email_poll:1","reconcile:2",
+PASS  the latest run first within a job                                got "2026-10-17T11:59:10.000Z"
+PASS  an unknown job sorts after the known ones                        got ["link_calls","zz_new"]
+PASS  the job order names every scheduled job                          got true
+PASS  every allowlisted name is a document name                        got true
+PASS  no separator, dot-dot, case variant or stranger is a document name got []
+PASS  a well-formed manifest parses                                    got ["REPORT.md","FINDINGS.csv"]
+PASS  a manifest naming a file outside the list is refused             got null
+PASS  a manifest with a bad hash is refused                            got null
+PASS  a manifest missing a field is refused                            got [null,null,null,null]
+PASS  an entry by name, none for a name outside this build             got [300,null,null,null]
+PASS  content types: csv and markdown as downloads                     got ["text/csv; charset=utf-8","text/markdown; charset=utf-8"]
+ALL 39 PASS
+exit 0

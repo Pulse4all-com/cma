@@ -15,6 +15,9 @@ import type {
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   DueState, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
+  EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
+  AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
+  Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -254,6 +257,89 @@ function toFormsRow(x: FormsDbRow): FormsRow {
   return {
     groupKey: x.group_key, formKey: `${x.connection_id}:${x.form_id}`, formName: x.form_name, category: x.category, market: x.market,
     submissions: x.submissions, resolved: x.resolved, notFound: x.not_found, ambiguous: x.ambiguous, noEmail: x.no_email, pending: x.pending,
+  };
+}
+
+// ---- Email reports (addition 0008t): the rows as cma.email_report and cma.email_per_person answer them ----
+type EmailDbFigures = {
+  received: number; logged_replies: number; sent_agent: number; sent_automated: number; bounced_failed: number; threads_opened: number;
+  threads_closed: number; replied: number; reply_median_seconds: string | null; reply_median_business_seconds: string | null; within_target: number;
+  target_known: number; no_hours: number; close_median_seconds: string | null; close_median_business_seconds: string | null;
+};
+type EmailDbRow = EmailDbFigures & { period: string; dimension: string; group_key: string | null; group_label: string | null };
+
+const numOrNull = (v: string | number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v));
+
+function toEmailFigures(x: EmailDbFigures): EmailFigures {
+  return {
+    received: x.received, loggedReplies: x.logged_replies, sentAgent: x.sent_agent, sentAutomated: x.sent_automated, bouncedFailed: x.bounced_failed,
+    threadsOpened: x.threads_opened, threadsClosed: x.threads_closed, replied: x.replied, replyMedianSeconds: numOrNull(x.reply_median_seconds),
+    replyMedianBusinessSeconds: numOrNull(x.reply_median_business_seconds), withinTarget: x.within_target, targetKnown: x.target_known, noHours: x.no_hours,
+    closeMedianSeconds: numOrNull(x.close_median_seconds), closeMedianBusinessSeconds: numOrNull(x.close_median_business_seconds),
+  };
+}
+
+function toEmailRow(x: EmailDbRow): EmailRow {
+  return { groupKey: x.group_key ?? "none", groupLabel: x.group_label, ...toEmailFigures(x) };
+}
+
+/** A dimension's rows in the order the screen shows them: 'none' last, else by label (dates by key) */
+function emailRowsOf(rows: EmailDbRow[], dimension: string): EmailRow[] {
+  const dated = dimension === "day" || dimension === "week";
+  return rows.filter((x) => x.period === "current" && x.dimension === dimension).map(toEmailRow)
+    .sort((a, b) => (dated ? a.groupKey.localeCompare(b.groupKey)
+      : Number(a.groupKey === "none") - Number(b.groupKey === "none") || (a.groupLabel ?? "").localeCompare(b.groupLabel ?? "") || a.groupKey.localeCompare(b.groupKey)));
+}
+
+/** The received series of a 'day_inbox'-like dimension: its key is 'date|series key' */
+function emailSeriesOf(rows: EmailDbRow[], dimension: string): EmailSeriesRow[] {
+  return rows.filter((x) => x.period === "current" && x.dimension === dimension && x.received > 0).map((x) => {
+    const [groupKey, ...rest] = (x.group_key ?? "").split("|");
+    return { groupKey: groupKey!, seriesKey: rest.join("|") || "none", seriesLabel: x.group_label, received: x.received };
+  });
+}
+
+/** Whether the tenant has email at all: an inbox in a catalog or a stored email (else "No email connected", never 0) */
+async function readHasEmail(q: Querier): Promise<boolean> {
+  const r = await q.query<{ email: boolean }>(`select exists (select 1 from cma.connection_inbox) or exists (select 1 from cma.email_message) as email`);
+  return r.rows[0]?.email ?? false;
+}
+
+async function emailSettings(q: Querier): Promise<{ replyTargetMinutes: number; noResponseDays: number }> {
+  const r = await q.query<{ key: string; value: string }>(
+    `select key, value from cma.tenant_settings() where key in ('email.reply_target_minutes', 'email.no_response_days')`);
+  // the catalog holds both with their defaults (0008m), so a missing row is a database fault, never a value made up here
+  const of = (k: string) => {
+    const v = r.rows.find((x) => x.key === k)?.value;
+    if (v === undefined) throw new Error(`tenant setting ${k} is missing from the catalog`);
+    return Number(v);
+  };
+  return { replyTargetMinutes: of("email.reply_target_minutes"), noResponseDays: of("email.no_response_days") };
+}
+
+/** The lists for the filters: markets, inboxes and mailboxes with email in the period, without the filters (from the page's own read when unfiltered) */
+function emailListsOf(rows: EmailDbRow[]): { markets: string[]; inboxes: { key: string; name: string }[]; accounts: { key: string; name: string }[] } {
+  const named = (d: string) => rows.filter((x) => x.period === "current" && x.dimension === d && x.group_key !== null && x.group_key !== "none")
+    .map((x) => ({ key: x.group_key!, name: x.group_label ?? x.group_key! })).sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    markets: rows.filter((x) => x.period === "current" && x.dimension === "market").map((x) => x.group_key!)
+      .sort((a, b) => (a === "unknown" ? 1 : b === "unknown" ? -1 : a.localeCompare(b))),
+    inboxes: named("inbox"),
+    accounts: named("account"),
+  };
+}
+
+type EmailPersonDbRow = {
+  row_kind: string; user_id: string | null; display_name: string | null; unlinked_owners: number | null; sent: number; replies: number; threads_closed: number;
+  reply_median_seconds: string | null; reply_median_business_seconds: string | null; within_target: number; target_known: number; sent_by_hour: number[];
+};
+
+function toEmailPerson(x: EmailPersonDbRow): EmailPerson {
+  return {
+    kind: x.row_kind === "not_linked" ? "notLinked" : x.row_kind === "total" ? "total" : "person", userId: x.user_id, name: x.display_name,
+    unlinkedOwners: x.unlinked_owners, sent: x.sent, replies: x.replies, threadsClosed: x.threads_closed, replyMedianSeconds: numOrNull(x.reply_median_seconds),
+    replyMedianBusinessSeconds: numOrNull(x.reply_median_business_seconds), withinTarget: x.within_target, targetKnown: x.target_known,
+    sentByHour: x.sent_by_hour ?? Array(24).fill(0),
   };
 }
 
@@ -652,6 +738,83 @@ function toSource(r: SourceDbRow): SourceConnection {
   };
 }
 
+// ---- First orders (addition 0008u): the rows of cma.first_orders_report, first_orders_amounts, first_orders_list
+// and first_orders_per_person; numeric columns arrive as text
+type FirstOrderDbRow = {
+  period: string; dimension: string; group_key: string | null; first_orders: number; call_center: number; self_service: number; repeats: number;
+  renewals: number; not_first: number; no_contact: number; with_touch: number; days_median: string | null;
+};
+function toFirstOrderFigures(r: FirstOrderDbRow | undefined): FirstOrderFigures {
+  return {
+    firstOrders: r?.first_orders ?? 0, callCenter: r?.call_center ?? 0, selfService: r?.self_service ?? 0, repeats: r?.repeats ?? 0,
+    renewals: r?.renewals ?? 0, notFirst: r?.not_first ?? 0, noContact: r?.no_contact ?? 0, withTouch: r?.with_touch ?? 0, daysMedian: numOrNull(r?.days_median),
+  };
+}
+
+function firstOrderRowsOf(rows: FirstOrderDbRow[], dimension: string): FirstOrderRow[] {
+  return rows.filter((r) => r.period === "current" && r.dimension === dimension && r.group_key !== null)
+    .map((r) => ({ groupKey: r.group_key!, ...toFirstOrderFigures(r) }));
+}
+
+/** The tenant's attribution settings; the catalog holds all five with their defaults (0008u), so a missing row is a database fault */
+async function attributionSettings(q: Querier): Promise<AttributionSettings> {
+  const r = await q.query<{ key: string; value: string }>(`select key, value from cma.tenant_settings() where key like 'attribution.%'`);
+  const of = (k: string) => {
+    const v = r.rows.find((x) => x.key === k)?.value;
+    if (v === undefined) throw new Error(`tenant setting ${k} is missing from the catalog`);
+    return v;
+  };
+  const list = (v: string) => (v === "" ? [] : (v.split(",") as FirstOrderEvidence[]));
+  return {
+    windowDays: Number(of("attribution.window_days")), levelOrder: list(of("attribution.level_order")), assistedLevels: list(of("attribution.assisted_levels")),
+    knownContactMinutes: Number(of("attribution.known_contact_minutes")), orderMatchMinutes: Number(of("attribution.order_match_minutes")),
+  };
+}
+
+/** One row of cma.callbacks_kept_report or its per-person read, as the database answers it */
+interface CallbackKeptDbRow {
+  period?: string; dimension?: string; week_start?: string | null; row_kind?: string; user_id?: string | null; display_name?: string | null;
+  unlinked_owners?: number | null; callbacks: number; kept: number; not_kept: number; pending: number; no_contact: number; no_due?: number;
+}
+
+function toCallbackCounts(r: CallbackKeptDbRow | undefined): CallbackCounts {
+  return { callbacks: r?.callbacks ?? 0, kept: r?.kept ?? 0, notKept: r?.not_kept ?? 0, pending: r?.pending ?? 0, noContact: r?.no_contact ?? 0, noDue: r?.no_due ?? 0 };
+}
+
+/** The tenant's active markets for the filter, then unknown */
+async function marketCodes(q: Querier): Promise<string[]> {
+  const r = await q.query<{ code: string }>(`select code from cma.market where status = 'active' order by sort_order, code`);
+  return [...r.rows.map((x) => x.code), "unknown"];
+}
+
+type FirstOrderListDbRow = {
+  connection_id: string; deal_source_id: string; market: string; created_at: Date; level: FirstOrderListRow["level"]; attribution: FirstOrderListRow["attribution"];
+  lead_deal: boolean; conversation: boolean; email: boolean; phone_match: boolean; attempt: boolean; known_contact: boolean; phone_hashed: boolean;
+  has_order: boolean; currency: string | null; amount: string | null; days_from_first_touch: string | null; record_url: string | null; total_rows: number;
+};
+
+function toFirstOrderListRow(x: FirstOrderListDbRow): FirstOrderListRow {
+  return {
+    connectionId: x.connection_id, dealSourceId: x.deal_source_id, market: x.market, createdAt: x.created_at.toISOString(), level: x.level, attribution: x.attribution,
+    evidence: { lead_deal: x.lead_deal, conversation: x.conversation, email: x.email, phone_match: x.phone_match, attempt: x.attempt, known_contact: x.known_contact },
+    phoneHashed: x.phone_hashed, hasOrder: x.has_order, currency: x.currency, amount: numOrNull(x.amount), daysFromFirstTouch: numOrNull(x.days_from_first_touch),
+    recordUrl: x.record_url,
+  };
+}
+
+type OrderPersonDbRow = {
+  row_kind: string; user_id: string | null; display_name: string | null; unlinked_owners: number | null; orders: number; lead_deal: number;
+  conversation: number; email: number; phone_match: number; other_levels: number; days_median: string | null;
+};
+
+function toOrderPerson(r: OrderPersonDbRow): OrderPerson {
+  return {
+    kind: r.row_kind === "not_linked" ? "notLinked" : r.row_kind === "total" ? "total" : "person", userId: r.user_id, name: r.display_name,
+    unlinkedOwners: r.unlinked_owners, orders: r.orders, leadDeal: r.lead_deal, conversation: r.conversation, email: r.email, phoneMatch: r.phone_match,
+    otherLevels: r.other_levels, daysMedian: numOrNull(r.days_median),
+  };
+}
+
 async function readSource(q: Querier, id: string): Promise<SourceConnection> {
   const r = await q.query<SourceDbRow>(`select * from cma.sources() where connection_id = $1::uuid`, [id]);
   const row = r.rows[0];
@@ -661,7 +824,15 @@ async function readSource(q: Querier, id: string): Promise<SourceConnection> {
 
 type ConfigJson = {
   fields: { entity: string; field: string; refSystem: string | null; slot: number; property: string }[];
-  pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string }[];
+  // additions 0008m and 0008t (a database before 0008t has no inboxAccounts)
+  inboxes?: { inboxId: string; name: string; isCounted: boolean; market: string | null; status: string }[];
+  inboxChannels?: { channelId: string; name: string; kind: string; isCounted: boolean; status: string }[];
+  inboxAccounts?: { accountId: string; name: string; label: string | null; inboxId: string | null; channelId: string | null; isCounted: boolean;
+    market: string | null; status: string }[];
+  pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string;
+    // addition 0008u (a database before it has neither)
+    isOrder?: boolean;
+    stages?: { stageId: string; label: string; order: number; isClosed: boolean; outcome: "won" | "lost" | null; outcomeSource: "source" | "person" | null; status: string }[] }[];
   store: { handle: string; name: string; market: string; currency: string; timeZone: string } | null;
   writeback: { field: string; slot: number; property: string; mode: string; enabled: boolean }[];
 };
@@ -690,7 +861,11 @@ async function readCatalogs(q: Querier, id: string): Promise<CatalogsJson> {
 }
 
 function toPipeline(p: ConfigJson["pipelines"][number], slaMinutes: number | null = null): SourcePipeline {
-  return { recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType, isActive: p.status === "active", slaMinutes };
+  return {
+    recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType,
+    isActive: p.status === "active", slaMinutes, isOrder: p.isOrder ?? false,
+    stages: (p.stages ?? []).map((x) => ({ stageId: x.stageId, label: x.label, isClosed: x.isClosed, outcome: x.outcome, outcomeSource: x.outcomeSource, isActive: x.status === "active" })),
+  };
 }
 
 /** cma.connection_task_catalogs (addition 0008n): the task statuses and types a CRM connection has seen, with the configuration in force */
@@ -847,6 +1022,7 @@ export const postgresData: CmaData = {
         time_zone: string;
         role_key: string | null;
         permissions: string[];
+        per_person: string[] | null;
       }>(
         `select u.id                         as user_id,
                 u.display_name,
@@ -860,7 +1036,9 @@ export const postgresData: CmaData = {
                   where ur.tenant_id = u.tenant_id and ur.user_id = u.id
                   order by ur.granted_at, r.key
                   limit 1)                   as role_key,
-                array(select p from cma.user_permissions(u.id) p order by 1) as permissions
+                array(select p from cma.user_permissions(u.id) p order by 1) as permissions,
+                -- the per-person report pages switched on (addition 0008t); a catalog without the setting reads none
+                (select string_to_array(nullif(s.value, ''), ',') from cma.tenant_settings() s where s.key = 'reports.per_person') as per_person
            from cma.app_user_external_id x
            join cma.app_user u      on u.tenant_id = x.tenant_id and u.id = x.user_id
            join cma.tenant t        on t.id = u.tenant_id
@@ -887,6 +1065,7 @@ export const postgresData: CmaData = {
         // getAccess() computes both from the real permissions and the preview cookie
         preview: null,
         canPreview: false,
+        perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders"),
       };
     });
   },
@@ -1542,7 +1721,213 @@ export const postgresData: CmaData = {
         })),
         taskStatuses: tasks.statuses.map((s) => ({ statusRef: s.statusRef, label: s.label, isDone: s.isDone, seenTasks: s.seenTasks, lastSeenAt: isoAny(s.lastSeenAt) })),
         taskTypes: tasks.types.map((y) => ({ typeRef: y.typeRef, label: y.label, isCallback: y.isCallback, isCounted: y.isCounted, seenTasks: y.seenTasks, openTasks: y.openTasks, lastSeenAt: isoAny(y.lastSeenAt) })),
+        inboxes: crm ? (config.inboxes ?? []).map((b) => ({ inboxId: b.inboxId, name: b.name, isCounted: b.isCounted, market: b.market, isActive: b.status === "active" })) : [],
+        mailboxes: crm ? (config.inboxAccounts ?? []).map((a) => ({ accountId: a.accountId, name: a.name, label: a.label, inboxId: a.inboxId, channelId: a.channelId,
+          isCounted: a.isCounted, market: a.market, isActive: a.status === "active" })) : [],
+        inboxChannels: crm ? (config.inboxChannels ?? []).map((k) => ({ channelId: k.channelId, name: k.name, kind: k.kind, isCounted: k.isCounted, isActive: k.status === "active" })) : [],
       };
+    });
+  },
+
+  async getEmailReport(me, range, group, filter): Promise<EmailReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the group and the filters first; one pass over the period for every section
+      const r = await q.query<EmailDbRow>(`select * from cma.email_report($1::date, $2::date, $3, $4, $5, $6)`,
+        [range.from, range.to, group, filter.market, filter.inbox, filter.account]);
+      const filtered = filter.market !== null || filter.inbox !== null || filter.account !== null;
+      // the filter lists come from the period without the filters: the page's own read when it has none
+      const whole = filtered
+        ? (await q.query<EmailDbRow>(`select 'current' as period, * from cma.email_by_dimension($1::date, $2::date, null, null, null)`, [range.from, range.to])).rows
+        : r.rows;
+      const has = await readHasEmail(q);
+      const history = await q.query<{ history_start: string | null }>(`select cma.email_history_start()::text as history_start`);
+      const settings = await emailSettings(q);
+      const waiting = await q.query<{ connection_id: string; thread_source_id: string; inbox_name: string | null; account_name: string | null; market: string;
+        waiting_since: Date; waited_seconds: number; waited_business_seconds: number | null; record_url: string | null; total_rows: number }>(
+        `select * from cma.email_waiting($1, $2, $3)`, [filter.market, filter.inbox, filter.account]);
+      const nr = await q.query<{ connection_id: string; deal_source_id: string; pipeline_label: string; market: string; owner_user_id: string | null;
+        owner_name: string | null; last_email_at: Date; days_since: number; record_url: string | null; total_rows: number }>(
+        `select r.*, u.display_name as owner_name from cma.email_not_responding($1) r left join cma.app_user u on u.id = r.owner_user_id`, [filter.market]);
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      const total = r.rows.find((x) => x.period === "current" && x.dimension === "total");
+      const previous = r.rows.find((x) => x.period === "previous");
+      return {
+        ...range, group, filter, email: has,
+        rows: emailRowsOf(r.rows, group), total: toEmailFigures(total!), previous: toEmailFigures(previous!),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial, historyStart: history.rows[0]?.history_start ?? null,
+        byInbox: emailRowsOf(r.rows, "inbox"), byAccount: emailRowsOf(r.rows, "account"), byCategory: emailRowsOf(r.rows, "category"),
+        byMarket: emailRowsOf(r.rows, "market"),
+        receivedByInbox: emailSeriesOf(r.rows, `${group}_inbox`), receivedByAccount: emailSeriesOf(r.rows, `${group}_account`),
+        ...settings,
+        waiting: {
+          rows: waiting.rows.map((x): EmailWaitingRow => ({
+            connectionId: x.connection_id, threadId: x.thread_source_id, inboxName: x.inbox_name, accountName: x.account_name, market: x.market,
+            waitingSince: x.waiting_since.toISOString(), waitedSeconds: x.waited_seconds, waitedBusinessSeconds: x.waited_business_seconds, recordUrl: x.record_url,
+          })),
+          total: waiting.rows[0]?.total_rows ?? 0,
+        },
+        notResponding: {
+          rows: nr.rows.map((x): EmailNotRespondingRow => ({
+            connectionId: x.connection_id, dealId: x.deal_source_id, pipelineLabel: x.pipeline_label, market: x.market, ownerUserId: x.owner_user_id,
+            ownerName: x.owner_name, lastEmailAt: x.last_email_at.toISOString(), daysSince: x.days_since, recordUrl: x.record_url,
+          })),
+          total: nr.rows[0]?.total_rows ?? 0,
+        },
+        ...emailListsOf(whole),
+      };
+    });
+  },
+
+  async getEmailPerAgent(me, range, filter): Promise<EmailPerAgent> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team and the tenant's reports.per_person first (CMA06)
+      const r = await q.query<EmailPersonDbRow>(`select * from cma.email_per_person($1::date, $2::date, $3, $4, $5)`,
+        [range.from, range.to, filter.market, filter.inbox, filter.account]);
+      const whole = await q.query<EmailDbRow>(`select 'current' as period, * from cma.email_by_dimension($1::date, $2::date, null, null, null)`, [range.from, range.to]);
+      const has = await readHasEmail(q);
+      const settings = await emailSettings(q);
+      const rows = r.rows.map(toEmailPerson);
+      return {
+        ...range, filter, email: has, rows: rows.filter((x) => x.kind !== "total"), total: rows.find((x) => x.kind === "total")!,
+        replyTargetMinutes: settings.replyTargetMinutes, ...emailListsOf(whole.rows),
+      };
+    });
+  },
+
+  async getFirstOrders(me, range, group, filter): Promise<FirstOrdersReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the functions check the permission, the group and the filters first
+      const r = await q.query<FirstOrderDbRow>(`select * from cma.first_orders_report($1::date, $2::date, $3, $4, $5)`,
+        [range.from, range.to, group, filter.market, filter.level]);
+      const amounts = await q.query<{ dimension: string; group_key: string | null; currency: string; orders: number; amount: string | null;
+        call_center_amount: string; self_service_amount: string }>(`select * from cma.first_orders_amounts($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const list = await q.query<FirstOrderListDbRow>(`select * from cma.first_orders_list($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const history = await q.query<{ history_start: string | null; phone_start: string | null; connected: boolean }>(
+        `select history_start::text, phone_start::text, connected from cma.first_orders_history_start()`);
+      const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
+      const toAmount = (a: (typeof amounts.rows)[number]): FirstOrderAmount => ({
+        market: a.group_key, currency: a.currency === "none" ? null : a.currency, orders: a.orders, amount: numOrNull(a.amount),
+        callCenterAmount: Number(a.call_center_amount), selfServiceAmount: Number(a.self_service_amount),
+      });
+      return {
+        ...range, group, filter, connected: history.rows[0]?.connected ?? false,
+        rows: firstOrderRowsOf(r.rows, group),
+        total: toFirstOrderFigures(r.rows.find((x) => x.period === "current" && x.dimension === "total")),
+        previous: toFirstOrderFigures(r.rows.find((x) => x.period === "previous")),
+        previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+        byLevel: firstOrderRowsOf(r.rows, "level"), byMarket: firstOrderRowsOf(r.rows, "market"),
+        amounts: amounts.rows.filter((a) => a.dimension === "total").map(toAmount),
+        amountsByMarket: amounts.rows.filter((a) => a.dimension === "market").map(toAmount),
+        list: {
+          rows: list.rows.map(toFirstOrderListRow),
+          total: list.rows[0]?.total_rows ?? 0,
+        },
+        historyStart: history.rows[0]?.history_start ?? null, phoneStart: history.rows[0]?.phone_start ?? null,
+        settings: await attributionSettings(q), markets: await marketCodes(q),
+      };
+    });
+  },
+
+  async getFirstOrdersExport(me, range, filter): Promise<FirstOrderListRow[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      const r = await q.query<FirstOrderListDbRow>(`select * from cma.first_orders_list($1::date, $2::date, $3, $4, 500)`,
+        [range.from, range.to, filter.market, filter.level]);
+      return r.rows.map(toFirstOrderListRow);
+    });
+  },
+
+  async getOrdersPerPerson(me, range, filter): Promise<OrdersPerPerson> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team and the tenant's reports.per_person (orders) first (CMA06)
+      const r = await q.query<OrderPersonDbRow>(`select * from cma.first_orders_per_person($1::date, $2::date, $3, $4)`,
+        [range.from, range.to, filter.market, filter.level]);
+      const history = await q.query<{ connected: boolean }>(`select connected from cma.first_orders_history_start()`);
+      const rows = r.rows.map(toOrderPerson);
+      const total = rows.find((x) => x.kind === "total") ?? toOrderPerson({ row_kind: "total", user_id: null, display_name: null, unlinked_owners: null,
+        orders: 0, lead_deal: 0, conversation: 0, email: 0, phone_match: 0, other_levels: 0, days_median: null });
+      return {
+        ...range, filter, connected: history.rows[0]?.connected ?? false, rows: rows.filter((x) => x.kind !== "total"), total,
+        settings: await attributionSettings(q), markets: await marketCodes(q),
+      };
+    });
+  },
+
+  async getCallbacksKept(me, range): Promise<CallbacksKept> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the functions check reports.view or performance.team (CMA06) and the 92 days (CMA04)
+      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_report($1::date, $2::date)`, [range.from, range.to]);
+      const connected = await q.query<{ connected: boolean }>(`select cma.callbacks_kept_connected() as connected`);
+      const win = await q.query<{ value: string }>(`select value from cma.tenant_settings() where key = 'tasks.callback_window_minutes'`);
+      if (win.rows[0] === undefined) throw new Error("tenant setting tasks.callback_window_minutes is missing from the catalog");
+      const current = r.rows.filter((x) => x.period === "current");
+      return {
+        ...range, connected: connected.rows[0]?.connected ?? false,
+        weeks: current.filter((x) => x.dimension === "week" && x.week_start).map((x) => ({ weekStart: x.week_start as string, ...toCallbackCounts(x) })),
+        total: toCallbackCounts(current.find((x) => x.dimension === "total")),
+        previous: toCallbackCounts(r.rows.find((x) => x.period === "previous" && x.dimension === "total")),
+        windowMinutes: Number(win.rows[0].value),
+      };
+    });
+  },
+
+  async getCallbacksPerOwner(me, range): Promise<CallbackOwner[]> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team (CMA06)
+      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_per_owner($1::date, $2::date)`, [range.from, range.to]);
+      return r.rows.map((x) => ({
+        kind: x.row_kind === "person" ? "person" : x.row_kind === "not_linked" ? "notLinked" : "total",
+        userId: x.user_id ?? null, name: x.display_name ?? null, unlinkedOwners: x.unlinked_owners ?? null,
+        callbacks: x.callbacks, kept: x.kept, notKept: x.not_kept, pending: x.pending, noContact: x.no_contact,
+      }));
+    });
+  },
+
+  async getJourneys(me): Promise<Journey[]> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks reports.view or performance.team (CMA06) and leaves the archived journeys out
+      const r = await q.query<{ code: string; name: string; summary: string | null; market: string | null; status: JourneyStatus;
+        design_url: string | null; prerequisites: string[] }>(`select code, name, summary, market, status, design_url, prerequisites from cma.journeys()`);
+      return r.rows.map((x) => ({ code: x.code, name: x.name, summary: x.summary, market: x.market, status: x.status, designUrl: x.design_url,
+        prerequisites: x.prerequisites }));
+    });
+  },
+
+  async setSourceStageOutcome(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_stage_outcome($1::uuid, 'deal', $2, $3, $4)`, [id, input.pipelineId, input.stageId, input.outcome]));
+  },
+
+  async setSourceInbox(me, id, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      // set_inbox takes the work type and channel too: the stored ones travel back unchanged
+      const cur = await q.query<{ work_type: string | null; channel: string | null }>(
+        `select s.key as work_type, ch.key as channel from cma.connection_inbox b
+           left join cma.skill s on s.tenant_id = b.tenant_id and s.id = b.work_type_skill_id
+           left join cma.channel ch on ch.tenant_id = b.tenant_id and ch.id = b.channel_id
+          where b.connection_id = $1::uuid and b.source_inbox_id = $2`, [id, input.inboxId]);
+      await q.query(`select cma.set_inbox($1::uuid, $2, $3, $4, $5, $6)`,
+        [id, input.inboxId, input.isCounted, input.market, cur.rows[0]?.work_type ?? null, cur.rows[0]?.channel ?? null]);
+    });
+  },
+
+  async setSourceMailbox(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_inbox_account($1::uuid, $2, $3, $4, $5)`, [id, input.accountId, input.label, input.isCounted, input.market]));
+  },
+
+  async setSourceInboxChannel(me, id, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      const cur = await q.query<{ channel: string | null }>(
+        `select ch.key as channel from cma.connection_inbox_channel k left join cma.channel ch on ch.tenant_id = k.tenant_id and ch.id = k.channel_id
+          where k.connection_id = $1::uuid and k.source_channel_id = $2`, [id, input.channelId]);
+      await q.query(`select cma.set_inbox_channel($1::uuid, $2, $3, $4)`, [id, input.channelId, cur.rows[0]?.channel ?? null, input.isCounted]);
     });
   },
 
@@ -1587,6 +1972,10 @@ export const postgresData: CmaData = {
       }
       if (!cur || cur.isLead !== input.isLead) {
         await q.query(`select cma.set_pipeline_lead($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.isLead]);
+      }
+      // the order pipeline switch (0008u), when given
+      if (input.isOrder !== undefined && (!cur || (cur.isOrder ?? false) !== input.isOrder)) {
+        await q.query(`select cma.set_pipeline_order($1::uuid, $2, $3, $4)`, [id, input.recordType, input.pipelineId, input.isOrder]);
       }
     });
   },

@@ -20,7 +20,22 @@ import type {
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
   FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
+  EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
+  AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
+  Journey, JourneyStatus, CallbackOwner, CallbacksKept,
 } from "./types";
+import {
+  CALLBACKS_PER_OWNER_PERMISSION, CALLBACKS_PERMISSIONS, callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner,
+  type CallbackCallFixture, type CallbackTaskFixture,
+} from "@/lib/callbacks";
+import {
+  FIRST_ORDER_GROUPS, firstOrderAmounts, firstOrderFigures, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, ordersPerPerson,
+  ORDERS_PER_PERSON_KEY, ORDERS_PER_PERSON_PERMISSION, parseFirstOrderFilter, type OrderDealFixture, type OrderTouch,
+} from "@/lib/first-orders";
+import {
+  EMAIL_GROUPS, EMAIL_PER_AGENT_PERMISSION, EMAIL_PER_PERSON_KEY, emailCloses, emailFigures, emailGroups, emailInPeriod, emailOpenings, emailPerPerson,
+  emailPrevious, emailRecords, emailSeries, emailWaiting, parseEmailFilter, type EmailCatalog, type EmailMessageFixture, type EmailThreadFixture,
+} from "@/lib/email";
 import {
   byOwner, daysSince, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, FOLLOW_UP_SUMMARY_PERMISSIONS, followUpPage, listRowsOf,
   MY_FOLLOW_UP_PERMISSIONS, ownRows, summarise,
@@ -32,7 +47,7 @@ import {
   applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
-  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture,
+  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
 
@@ -120,7 +135,10 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
   const now = Date.now();
   const rows: SpeedToLeadRow[] = [];
   for (const date of datesOf(range, me)) {
-    const deals = Math.floor(hashOf(`${me.tenantId}:${date}:deals`) * 6);
+    // today always holds one deal still waiting for its first call, so the open deals list never depends on the
+    // date's hash (on 15 to 18 October 2026 it held none, the list's table was absent and verify:hints counted 7
+    // headers instead of 12)
+    const deals = Math.max(date === today ? 1 : 0, Math.floor(hashOf(`${me.tenantId}:${date}:deals`) * 6));
     for (let i = 0; i < deals; i++) {
       const h = (k: string) => hashOf(`${me.tenantId}:${date}:${i}:${k}`);
       const market = markets[Math.floor(h("market") * markets.length)]!;
@@ -130,7 +148,7 @@ function mockSpeedRows(me: Principal, range: { from: DateKey; to: DateKey }): Sp
       const createdAt = new Date(createdMs).toISOString();
       const recent = addDays(date, 3) >= today;
       const roll = h("status");
-      const status: SpeedToLeadStatus = roll < 0.72 ? "called" : recent ? "not_called_open" : "not_called_closed";
+      const status: SpeedToLeadStatus = date === today && i === 0 ? "not_called_open" : roll < 0.72 ? "called" : recent ? "not_called_open" : "not_called_closed";
       const called = status === "called";
       const businessMinutes = Math.round(2 + h("speed") ** 2 * 300);
       const businessSeconds = called && known ? businessMinutes * 60 : null;
@@ -402,6 +420,337 @@ function mockFormCategories(me: Principal): FormCategory[] {
     .map((k) => ({ ...k, forms: forms.filter((f) => f.category === k.code).length }));
 }
 
+// ---- Email reports fixture (addition 0008t; brief N19-A part 1) -------------------------------------
+// Fictional conversations and engagements on the test CRM connection, shaped as the email poll stores them:
+// three inboxes (Support with NL as its market, Sales without one, Internal not counted), four mailboxes
+// (one labelled, one whose source name held an address so it shows its id, one labelled GB, one not counted),
+// email and chat channels (chat not counted). Per day a few conversations: the customer writes, a bot answers
+// now and then, an agent replies after a while (sometimes a failed attempt first), some are closed, some
+// reopened after a close, one now and then reopened at the moment it starts (no opening), a few spam, some of
+// an unknown market; the latest ones still waiting. Engagements: agent sends, automations, inbox copies (left
+// out), bounces, logged replies, an owner id nobody holds. Owner ids map to the fixture's people through
+// crmtest_owner. The second tenant has none of it. Everything invented and stable across reads.
+
+const MOCK_EMAIL_SYSTEM = "crmtest";
+const MOCK_EMAIL_INBOXES: Omit<SourceInbox, "isActive">[] = [
+  { inboxId: "1500000001", name: "Support (test)", isCounted: true, market: "NL" },
+  { inboxId: "1500000002", name: "Sales (test)", isCounted: true, market: null },
+  { inboxId: "1500000003", name: "Internal (test)", isCounted: false, market: null },
+];
+const MOCK_EMAIL_ACCOUNTS: Omit<SourceMailbox, "isActive">[] = [
+  { accountId: "1600000001", name: "Support NL (test)", label: null, inboxId: "1500000001", channelId: "1002", isCounted: true, market: null },
+  { accountId: "1600000002", name: "1600000002", label: "Support GB (test)", inboxId: "1500000001", channelId: "1002", isCounted: true, market: "GB" },
+  { accountId: "1600000003", name: "1600000003", label: null, inboxId: "1500000002", channelId: "1002", isCounted: true, market: null },
+  { accountId: "1600000004", name: "Old box (test)", label: null, inboxId: "1500000001", channelId: "1002", isCounted: false, market: null },
+];
+/** Owner ids: two people and the manager hold theirs (crmtest_owner), the last nobody does */
+const MOCK_EMAIL_OWNERS = ["70000001", "70000002", "70000009", "70000004"];
+
+function mockEmailCatalog(me: Principal): EmailCatalog {
+  const crm = seedIntakeConfig(me).sources.find((x) => x.connection.kind === "crm")!;
+  const codes = (k: string) => String(crm.connection.settings[k] ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return {
+    inboxes: crm.inboxes.map((x) => ({ id: x.inboxId, name: x.name, isCounted: x.isCounted, market: x.market })),
+    accounts: crm.mailboxes.map((x) => ({ id: x.accountId, name: x.name, label: x.label, isCounted: x.isCounted, market: x.market })),
+    channels: crm.inboxChannels.map((x) => ({ id: x.channelId, isCounted: x.isCounted })),
+    inboxCopyOrigins: codes("email_inbox_copy_origins"),
+    automatedOrigins: codes("email_automated_origins"),
+    zones: { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin", BE: "Europe/Brussels" },
+    tenantZone: "Europe/Amsterdam",
+    officeHours: { 1: ["09:00", "17:00"], 2: ["09:00", "17:00"], 3: ["09:00", "17:00"], 4: ["09:00", "17:00"], 5: ["09:00", "17:00"] },
+    replyTargetMinutes: mockSettingNumber(me, "email.reply_target_minutes"),
+  };
+}
+
+function mockSettingNumber(_me: Principal, key: string): number {
+  const list = state.config ? state.config.settings : MOCK_SETTINGS;
+  const v = Number(list.find((x) => x.key === key)?.value);
+  if (!Number.isFinite(v) || v <= 0) throw new Error(`mock setting ${key} is missing`);
+  return v;
+}
+
+/** The stored conversations and emails of the main tenant, from the start date up to now */
+function mockEmailStore(me: Principal): { threads: EmailThreadFixture[]; messages: EmailMessageFixture[] } {
+  if (me.tenantId === MOCK_TENANT_2) return { threads: [], messages: [] };
+  const conn = MOCK_CRM_CONNECTION;
+  const now = Date.now();
+  const threads: EmailThreadFixture[] = [];
+  const messages: EmailMessageFixture[] = [];
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const msg = (o: Partial<EmailMessageFixture> & Pick<EmailMessageFixture, "kind" | "direction" | "status" | "at" | "actorKind">): EmailMessageFixture => ({
+    connectionId: conn, sourceSystem: MOCK_EMAIL_SYSTEM, threadId: null, inboxId: null, accountId: null, channelId: null, ownerRef: null, origin: null,
+    category: null, market: null, deleted: false, ...o,
+  });
+  const markets = ["NL", "NL", "GB", "DE", null];
+  for (let date = mockStartDate(me); date <= mockToday(me); date = addDays(date, 1)) {
+    const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+    const n = 2 + Math.floor(mixedHashOf(`${me.tenantId}:email:${date}`) * (weekend ? 2 : 9));
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => mixedHashOf(`${me.tenantId}:email:${date}:${i}:${k}`);
+      const started = localMs(date, `${String(7 + Math.floor(h("hour") * 13)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, "Europe/Amsterdam");
+      if (started > now - 5 * 60_000) continue;
+      const inboxRoll = h("inbox");
+      const inboxId = inboxRoll < 0.62 ? "1500000001" : inboxRoll < 0.92 ? "1500000002" : "1500000003";
+      const accountRoll = h("account");
+      const accountId = inboxId === "1500000002" ? "1600000003" : inboxId === "1500000003" ? null
+        : accountRoll < 0.55 ? "1600000001" : accountRoll < 0.92 ? "1600000002" : "1600000004";
+      const channelId = h("chat") < 0.05 ? "1003" : "1002";
+      const market = markets[Math.floor(h("market") * markets.length)] ?? null;
+      const id = `th-${date.replaceAll("-", "")}-${i}`;
+      const t: EmailThreadFixture = { connectionId: conn, sourceSystem: MOCK_EMAIL_SYSTEM, id, inboxId, accountId, channelId, createdAt: iso(started),
+        status: "open", isSpam: h("spam") < 0.04, category: h("cat") < 0.3 ? "billing" : h("cat") < 0.45 ? "partner" : null, market, events: [] };
+      threads.push(t);
+      const owner = MOCK_EMAIL_OWNERS[Math.floor(h("owner") * MOCK_EMAIL_OWNERS.length * 0.999)]!;
+      const base = { threadId: id, inboxId, accountId, channelId, market, category: t.category };
+      messages.push(msg({ kind: "inbox_message", direction: h("fwd") < 0.05 ? "forwarded" : "in", status: "other", at: iso(started), actorKind: "customer", ...base }));
+      if (h("bot") < 0.2) messages.push(msg({ kind: "inbox_message", direction: "out", status: "sent", at: iso(started + 30_000), actorKind: "bot", ...base }));
+      // the reply after 5 minutes to two working days, most within the morning; recent ones still waiting
+      const replyAfter = Math.round((5 + h("reply") ** 3 * 2400) * 60_000);
+      const replied = started + replyAfter < now - 60_000 && h("noreply") > 0.05;
+      if (replied && h("failed") < 0.04) messages.push(msg({ kind: "inbox_message", direction: "out", status: "failed", at: iso(started + replyAfter - 60_000), actorKind: "agent", ownerRef: owner, ...base }));
+      if (replied) messages.push(msg({ kind: "inbox_message", direction: "out", status: "sent", at: iso(started + replyAfter), actorKind: "agent", ownerRef: owner, ...base }));
+      // a reopen at the moment it starts (no opening), now and then
+      if (h("reopenAtStart") < 0.05) t.events.push({ kind: "reopened", at: iso(started + 1000), actorKind: "system", ownerRef: null });
+      const closeAt = started + replyAfter + Math.round((10 + h("close") * 600) * 60_000);
+      if (replied && closeAt < now - 60_000 && h("closed") < 0.8) {
+        t.events.push({ kind: "closed", at: iso(closeAt), actorKind: h("closer") < 0.85 ? "agent" : "system", ownerRef: h("closer") < 0.85 ? owner : null });
+        t.status = "closed";
+        // reopened after the close by a new message, answered again
+        const again = closeAt + Math.round((60 + h("again") * 1440) * 60_000);
+        if (h("reopen") < 0.15 && again < now - 60_000) {
+          messages.push(msg({ kind: "inbox_message", direction: "in", status: "other", at: iso(again - 1000), actorKind: "customer", ...base }));
+          t.events.push({ kind: "reopened", at: iso(again), actorKind: "system", ownerRef: null });
+          t.status = "open";
+          const second = again + Math.round((5 + h("second") * 300) * 60_000);
+          if (second < now - 60_000) messages.push(msg({ kind: "inbox_message", direction: "out", status: "sent", at: iso(second), actorKind: "agent", ownerRef: owner, ...base }));
+        }
+      }
+    }
+    // engagements of the day: agent sends, automations, inbox copies each way, a bounce, logged replies
+    const m = 4 + Math.floor(mixedHashOf(`${me.tenantId}:engagements:${date}`) * (weekend ? 3 : 16));
+    for (let i = 0; i < m; i++) {
+      const h = (k: string) => mixedHashOf(`${me.tenantId}:engagements:${date}:${i}:${k}`);
+      const at = localMs(date, `${String(8 + Math.floor(h("hour") * 11)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`, "Europe/Amsterdam");
+      if (at > now - 60_000) continue;
+      const roll = h("kind");
+      const market = markets[Math.floor(h("market") * markets.length)] ?? null;
+      const owner = MOCK_EMAIL_OWNERS[Math.floor(h("owner") * MOCK_EMAIL_OWNERS.length * 0.999)]!;
+      const category = h("cat") < 0.25 ? "billing" : null;
+      if (roll < 0.55) messages.push(msg({ kind: "crm_email", direction: "out", status: "sent", at: iso(at), actorKind: owner ? "agent" : "unknown", ownerRef: h("noowner") < 0.05 ? null : owner, origin: "CRM_UI", market, category }));
+      else if (roll < 0.68) messages.push(msg({ kind: "crm_email", direction: "out", status: "sent", at: iso(at), actorKind: "system", origin: "AUTOMATION_PLATFORM", market, category }));
+      else if (roll < 0.8) messages.push(msg({ kind: "crm_email", direction: h("copyIn") < 0.5 ? "out" : "in", status: "sent", at: iso(at), actorKind: "agent", ownerRef: owner, origin: "CONVERSATIONS", market }));
+      else if (roll < 0.84) messages.push(msg({ kind: "crm_email", direction: "out", status: "bounced", at: iso(at), actorKind: "agent", ownerRef: owner, origin: "CRM_UI", market }));
+      else messages.push(msg({ kind: "crm_email", direction: "in", status: "other", at: iso(at), actorKind: "customer", origin: "EMAIL_INTEGRATION", market, category, deleted: h("deleted") < 0.03 }));
+    }
+  }
+  return { threads, messages };
+}
+
+function mockEmailPersonOf(me: Principal) {
+  const accounts = seedIntakeConfig(me).accounts;
+  const names = new Map([...TEAM.map((p) => [p.userId, p.displayName] as const), [MOCK_MANAGER_ID, "Test manager"] as const]);
+  return (system: string, ownerRef: string | null) => {
+    const a = ownerRef === null ? undefined : accounts.find((x) => x.system === `${system}_owner` && x.externalId === ownerRef);
+    return a ? { userId: a.userId, name: names.get(a.userId) ?? a.userId } : null;
+  };
+}
+
+// ---- First orders (addition 0008u): the fixture's won order deals with what the database would find around them.
+// Invented ids; today always holds one first order of every level, a repeat, a renewal, a store repeat, one without
+// a contact, an order without a phone hash and one in pounds, so every page shows each case whatever the date.
+
+/** The tenant's attribution settings as the mock holds them */
+function mockAttribution(): AttributionSettings {
+  const list = (k: string) => (mockSetting(k) === "" ? [] : (mockSetting(k).split(",") as FirstOrderEvidence[]));
+  return {
+    windowDays: Number(mockSetting("attribution.window_days")), levelOrder: list("attribution.level_order"), assistedLevels: list("attribution.assisted_levels"),
+    knownContactMinutes: Number(mockSetting("attribution.known_contact_minutes")), orderMatchMinutes: Number(mockSetting("attribution.order_match_minutes")),
+  };
+}
+
+const MOCK_ORDER_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin" };
+
+function mockOrderDeals(me: Principal): OrderDealFixture[] {
+  if (me.tenantId === MOCK_TENANT_2) return [];
+  const today = mockToday(me);
+  const now = Date.now();
+  const markets = ["NL", "NL", "GB", "DE", "unknown"];
+  const owners = [{ system: "crmtest_owner", ref: "70000001" }, { system: "crmtest_owner", ref: "70000002" }, { system: "crmtest_owner", ref: "70000009" },
+    { system: "crmtest_owner", ref: "70000004" }, { system: "phonetest_user", ref: "900001" }];
+  const out: OrderDealFixture[] = [];
+  const ago = (t: number, days: number) => new Date(t - days * 86_400_000).toISOString();
+  const deal = (id: string, t: number, market: string, o: Partial<OrderDealFixture>): OrderDealFixture => ({
+    connectionId: MOCK_CRM_CONNECTION, dealSourceId: id, createdAt: new Date(t).toISOString(), market, zone: MOCK_ORDER_ZONES[market] ?? me.timeZone,
+    contact: `k-${id}`, earlierOrderDeal: false, storeOrderKind: "first", currency: market === "GB" ? "GBP" : "EUR", amount: 89.95, phoneHashed: true,
+    contactCreatedAt: new Date(t - 10 * 60_000).toISOString(), touches: [], recordUrl: `https://example.com/crm/deal/${id}`, ...o,
+  });
+  const touch = (kind: OrderTouch["kind"], t: number, days: number, owner: number): OrderTouch =>
+    ({ kind, at: ago(t, days), system: owners[owner]!.system, ownerRef: owners[owner]!.ref });
+  for (let date = mockStartDate(me); date <= today; date = addDays(date, 1)) {
+    const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+    const n = Math.floor(hashOf(`${me.tenantId}:orders:${date}`) * (weekend ? 3 : 6));
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => hashOf(`${me.tenantId}:order:${date}:${i}:${k}`);
+      const market = markets[Math.floor(h("market") * markets.length)]!;
+      const t = Math.min(now - 60_000, localMs(date, `${String(8 + Math.floor(h("hour") * 12)).padStart(2, "0")}:${String(Math.floor(h("min") * 60)).padStart(2, "0")}`,
+        MOCK_ORDER_ZONES[market] ?? me.timeZone));
+      const roll = h("kind");
+      const touches: OrderTouch[] = [];
+      if (h("lead") < 0.35) touches.push(touch("lead_deal", t, 1 + h("leadAt") * 20, Math.floor(h("leadOwner") * 4)));
+      if (h("conv") < 0.25) touches.push(touch("conversation", t, 0.5 + h("convAt") * 10, Math.floor(h("convOwner") * 4)));
+      if (h("email") < 0.3) touches.push(touch("email", t, 0.2 + h("emailAt") * 15, Math.floor(h("emailOwner") * 4)));
+      if (h("phone") < 0.12) touches.push(touch("phone_match", t, 1 + h("phoneAt") * 30, 4));
+      if (h("attempt") < 0.15) touches.push(touch("attempt", t, 0.5 + h("attemptAt") * 5, Math.floor(h("attemptOwner") * 4)));
+      out.push(deal(`9${date.replaceAll("-", "").slice(2)}${String(i).padStart(2, "0")}`, t, market, {
+        contact: roll < 0.05 ? null : `k-${date}-${i}`,
+        earlierOrderDeal: roll >= 0.05 && roll < 0.13,
+        storeOrderKind: roll >= 0.13 && roll < 0.18 ? "renewal" : roll >= 0.18 && roll < 0.22 ? "repeat" : h("noOrder") < 0.1 ? null : "first",
+        currency: h("noAmount") < 0.08 ? null : market === "GB" ? "GBP" : "EUR",
+        amount: h("noAmount") < 0.08 ? null : Math.round((49.95 + h("amount") * 250) * 100) / 100,
+        phoneHashed: h("hashed") < 0.7,
+        contactCreatedAt: h("known") < 0.4 ? ago(t, 200) : new Date(t - 10 * 60_000).toISOString(),
+        touches,
+      }));
+    }
+  }
+  // today's fixed cases, a few minutes apart
+  const at = (k: number) => now - (k + 1) * 7 * 60_000;
+  out.push(
+    deal("8100000001", at(0), "NL", { touches: [touch("lead_deal", at(0), 3, 0), touch("email", at(0), 1, 1)] }),
+    deal("8100000002", at(1), "GB", { touches: [touch("conversation", at(1), 2, 1)] }),
+    deal("8100000003", at(2), "NL", { touches: [touch("email", at(2), 1, 3)] }),
+    deal("8100000004", at(3), "DE", { touches: [touch("phone_match", at(3), 6, 4), touch("phone_match", at(3), 9, 2)] }),
+    deal("8100000005", at(4), "NL", { touches: [touch("attempt", at(4), 1, 0)] }),
+    deal("8100000006", at(5), "NL", { contactCreatedAt: ago(at(5), 300), phoneHashed: false }),
+    deal("8100000007", at(6), "unknown", { currency: null, amount: null }),
+    deal("8100000008", at(7), "NL", { contact: null }),
+    deal("8100000009", at(8), "NL", { earlierOrderDeal: true }),
+    deal("8100000010", at(9), "NL", { storeOrderKind: "renewal" }),
+    deal("8100000011", at(10), "GB", { storeOrderKind: "repeat" }),
+  );
+  return out;
+}
+
+/** Whose a linked account is: the person holding it in the fixture's linked accounts */
+function mockOrderPersonOf(me: Principal) {
+  const accounts = seedIntakeConfig(me).accounts;
+  return (system: string, ownerRef: string | null) => {
+    const a = ownerRef === null ? undefined : accounts.find((x) => x.system === system && x.externalId === ownerRef);
+    return a ? { userId: a.userId, name: mockOrderName(a.userId) ?? a.userId } : null;
+  };
+}
+
+/** A credited person's name: the team's, the test manager's */
+function mockOrderName(userId: string): string | null {
+  return mockOwnerName(userId) ?? (userId === MOCK_MANAGER_ID ? "Test manager" : null);
+}
+
+function assertFirstOrders(me: Principal, range: HoursRange, filter: FirstOrderFilter, group: FirstOrderGroup | null, permissions: string[]): void {
+  assertAny(me, permissions);
+  assertReportRange(range);
+  if (group !== null && !FIRST_ORDER_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or level");
+  if (parseFirstOrderFilter(filter.market ?? "", filter.level ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/**
+ * The callback tasks of the fixture and the calls to their contacts (cma.callbacks_kept_of, addition 0008w): two to five
+ * on each weekday from ten weeks back to two days ahead, each with an owner of the fixture's linked accounts (one owner id
+ * nobody holds), a few without a contact or a due time; calls within the window (some without a direction), outside it,
+ * inbound ones and none. Invented ids only; the invest tenant counts no callback type
+ */
+function mockCallbacks(me: Principal): { tasks: CallbackTaskFixture[]; calls: CallbackCallFixture[] } {
+  if (me.tenantId === MOCK_TENANT_2) return { tasks: [], calls: [] };
+  const owners = ["70000001", "70000002", "70000009", "70000004"];
+  const today = mockToday(me);
+  const now = Date.now();
+  const tasks: CallbackTaskFixture[] = [];
+  const calls: CallbackCallFixture[] = [];
+  const call = (contactId: string, at: number, direction: CallbackCallFixture["direction"]) => {
+    if (at < now) calls.push({ contactId, at: new Date(at).toISOString(), direction });
+  };
+  for (let date = addDays(today, -70); date <= addDays(today, 2); date = addDays(date, 1)) {
+    if ([0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay())) continue;
+    const n = 2 + Math.floor(hashOf(`${me.tenantId}:callbacks:${date}`) * 4);
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => hashOf(`${me.tenantId}:callback:${date}:${i}:${k}`);
+      const due = localMs(date, `${String(9 + Math.floor(h("hour") * 8)).padStart(2, "0")}:${h("half") < 0.5 ? "00" : "30"}`, me.timeZone);
+      const roll = h("kind");
+      const contactId = roll < 0.06 ? null : `k-cb-${date}-${i}`;
+      tasks.push({ id: `${date.replaceAll("-", "")}${i}`, ownerRef: owners[Math.floor(h("owner") * owners.length)]!, contactId,
+        dueAt: roll >= 0.06 && roll < 0.1 ? null : new Date(due).toISOString(), createdAt: new Date(due - 86_400_000).toISOString() });
+      if (contactId === null) continue;
+      const c = h("call");
+      if (c < 0.68) call(contactId, due + (h("off") - 0.5) * 400 * 60_000, h("dir") < 0.1 ? "unknown" : "outbound");
+      else if (c < 0.84) call(contactId, due + (300 + h("off") * 300) * 60_000, "outbound");
+      else if (c < 0.92) call(contactId, due + 30 * 60_000, "inbound");
+    }
+  }
+  return { tasks, calls };
+}
+
+function mockCallbackRecords(me: Principal) {
+  const { tasks, calls } = mockCallbacks(me);
+  return callbackRecords(tasks, calls, Number(mockSetting("tasks.callback_window_minutes")), new Date(), me.timeZone);
+}
+
+/**
+ * The journeys of Campaign monitoring (cma.journeys(), addition 0008v): the three of db/02's seed for the first tenant,
+ * one with an invented design link, and an archived one that never shows; the invest tenant has none
+ */
+const MOCK_JOURNEYS: (Omit<Journey, "status"> & { status: JourneyStatus | "archived"; sortOrder: number })[] = [
+  {
+    code: "fca-uk-consumers", name: "FCA · UK consumers", market: "GB", status: "placeholder", sortOrder: 10,
+    summary: "Every UK consumer customer through every required communication and step, with drill-down per customer and an audit pack.",
+    designUrl: "https://design.example.invalid/fca-uk-consumers",
+    prerequisites: ["Consumer or business flag on every GB contact", "Agreement date on the contract", "A call tag that proves the welcome call",
+      "Template ids on the journey's emails", "Call-recording consent decided", "Step list by Gemma and Kira, checked by Yordi",
+      "Drill-down permission and access log agreed with Yordi"],
+  },
+  { code: "opc", name: "OPC", market: null, status: "placeholder", sortOrder: 20, summary: "Steps, coverage and drill-down to be defined with Kira.",
+    designUrl: null, prerequisites: ["Step list and population defined by Kira."] },
+  { code: "exchange", name: "Exchange", market: null, status: "placeholder", sortOrder: 30, summary: "Steps, coverage and drill-down to be defined with Kira.",
+    designUrl: null, prerequisites: ["Step list and population defined by Kira."] },
+  { code: "old-pilot", name: "Old pilot", market: "NL", status: "archived", sortOrder: 5, summary: null, designUrl: null, prerequisites: [] },
+];
+
+/** The open lead deals not responding (cma.email_not_responding): invented deals, ids and ages only */
+function mockNotResponding(me: Principal): EmailNotRespondingRow[] {
+  if (me.tenantId === MOCK_TENANT_2) return [];
+  const days = mockSettingNumber(me, "email.no_response_days");
+  const owners = [TEAM[0]!, TEAM[1]!, null];
+  return [0, 1, 2, 3, 4, 5].map((i) => {
+    const h = (k: string) => mixedHashOf(`${me.tenantId}:noresponse:${i}:${k}`);
+    const since = days + Math.floor(h("days") * 20);
+    const owner = owners[i % owners.length]!;
+    const dealId = String(41_000_500 + i);
+    return {
+      connectionId: MOCK_CRM_CONNECTION, dealId, pipelineLabel: "Sales (test)", market: ["NL", "GB", "DE", "unknown"][i % 4]!,
+      ownerUserId: owner?.userId ?? null, ownerName: owner?.displayName ?? null,
+      lastEmailAt: new Date(Date.now() - since * 86_400_000 - Math.floor(h("h") * 8) * 3_600_000).toISOString(), daysSince: since,
+      recordUrl: `https://crm.example.com/records/100200300/deal/${dealId}`,
+    };
+  }).sort((a, b) => a.lastEmailAt.localeCompare(b.lastEmailAt));
+}
+
+function assertEmail(me: Principal, range: HoursRange, filter: EmailFilter, group: EmailGroup | null, permissions: string[]): void {
+  assertAny(me, permissions);
+  assertReportRange(range);
+  if (group !== null && !EMAIL_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day or week");
+  if (parseEmailFilter(filter.market ?? "", filter.inbox ?? "", filter.account ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/** The mock's lists for the filters: markets, inboxes and mailboxes with email in the period, without the filters */
+function mockEmailLists(records: ReturnType<typeof emailRecords>, from: DateKey, to: DateKey) {
+  const all = emailInPeriod(records, from, to, { market: null, inbox: null, account: null });
+  const named = (pairs: [string | null, string | null][]) => [...new Map(pairs.filter(([k]) => k !== null).map(([k, n]) => [k!, n ?? k!])).entries()]
+    .map(([key, name]) => ({ key, name })).sort((a, b) => a.name.localeCompare(b.name));
+  return {
+    markets: [...new Set(all.map((r) => r.market))].sort((a, b) => (a === "unknown" ? 1 : b === "unknown" ? -1 : a.localeCompare(b))),
+    inboxes: named(all.map((r) => [r.inboxKey, r.inboxName])),
+    accounts: named(all.map((r) => [r.accountKey, r.accountName])),
+  };
+}
+
 const MOCK_FORM_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", BE: "Europe/Brussels", GB: "Europe/London", DE: "Europe/Berlin" };
 
 /**
@@ -653,6 +1002,20 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "tasks.callback_window_minutes", value: "240", isDefault: true },
   // the rows each Follow-up list shows (addition 0008s), at its default
   { key: "follow_up.list_rows", value: "100", isDefault: true },
+  // the email reports (additions 0008m and 0008t): the start date, the first-reply target, the not-responding days and the
+  // market order at their defaults; both
+  // per-person pages switched on, as the dev seed (03) does
+  { key: "email.start_date", value: "", isDefault: true },
+  { key: "email.reply_target_minutes", value: "240", isDefault: true },
+  { key: "email.no_response_days", value: "5", isDefault: true },
+  { key: "email.market_order", value: "contact,form,record,inbox", isDefault: true },
+  { key: "reports.per_person", value: "email,orders", isDefault: false },
+  // first orders (addition 0008u): the attribution settings at their catalog defaults
+  { key: "attribution.window_days", value: "90", isDefault: true },
+  { key: "attribution.level_order", value: "lead_deal,conversation,email,phone_match,attempt,known_contact", isDefault: true },
+  { key: "attribution.assisted_levels", value: "lead_deal,conversation,email,phone_match", isDefault: true },
+  { key: "attribution.known_contact_minutes", value: "60", isDefault: true },
+  { key: "attribution.order_match_minutes", value: "1440", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1154,6 +1517,8 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
+  "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
+  "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1397,7 +1762,7 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
   };
   return {
     tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
-    missedReasons: [], taskStatuses: [], taskTypes: [], ...o,
+    missedReasons: [], taskStatuses: [], taskTypes: [], inboxes: [], mailboxes: [], inboxChannels: [], ...o,
   };
 }
 
@@ -1416,8 +1781,12 @@ const MOCK_FORM_FIELDS = {
   support: [choice("email", "other", []), choice("hs_ticket_category", "multiple_checkboxes", ["Billing (test)", "Device (test)", "Delivery (test)"]), MOCK_COUNTRY],
 };
 const outcome = (outcomeRef: string, label: string, isConnected: boolean): SourceCallOutcome => ({ outcomeRef, label, isConnected, isActive: true });
-const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null): SourcePipeline =>
-  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes });
+const pipeline = (recordType: string, pipelineId: string, label: string, isCounted: boolean, isLead: boolean, slaMinutes: number | null = null,
+  isOrder = false, stages: SourceStage[] = []): SourcePipeline =>
+  ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes, isOrder, stages });
+/** A pipeline stage with its outcome (addition 0008u): the source's unless a person chose it */
+const stage = (stageId: string, label: string, isClosed: boolean, outcome: SourceStage["outcome"] = null, outcomeSource: SourceStage["outcomeSource"] = null): SourceStage =>
+  ({ stageId, label, isClosed, outcome, outcomeSource: outcome === null ? outcomeSource : outcomeSource ?? "source", isActive: true });
 /** The task catalogs of the fixture's CRM connection (addition 0008n), consistent with the follow-up rows below */
 const taskStatus = (statusRef: string, label: string, isDone: boolean, seenTasks: number): SourceTaskStatus =>
   ({ statusRef, label, isDone, seenTasks, lastSeenAt: seenTasks ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null });
@@ -1430,8 +1799,13 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
   if (existing) return existing;
   const t = me.tenantId;
   const crm = mockSource(t, 1, "crmtest", "Customer records (test)", "100200300", "crm", {
-    pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true), pipeline("deal", "p-self-serve", "Web orders (test)", true, false),
-      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true), pipeline("ticket", "p-support", "Support (test)", true, true),
+    // since addition 0008u the deal pipelines carry their stages' outcomes; Web orders is the order pipeline (not for tenant two, which has no shop)
+    pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true, null, false,
+      [stage("s-new", "New (test)", false), stage("s-qualified", "Qualified (test)", false), stage("s-won", "Won (test)", true, "won"), stage("s-lost", "Lost (test)", true, "lost")]),
+      pipeline("deal", "p-self-serve", "Web orders (test)", true, false, null, t !== MOCK_TENANT_2,
+        [stage("s-paid", "Paid (test)", true, "won"), stage("s-refunded", "Refunded (test)", true, "lost", "person")]),
+      pipeline("deal", "p-sandbox", "Sandbox (test)", true, true, null, false, [stage("s-open", "Open (test)", false)]),
+      pipeline("ticket", "p-support", "Support (test)", true, true),
       // Billing keeps its own response time of an hour (addition 0008o); Support follows the tenant default
       pipeline("ticket", "p-billing", "Billing (test)", true, true, 60)],
     taskStatuses: [taskStatus("NOT_STARTED", "Not started", false, 5), taskStatus("IN_PROGRESS", "In progress", false, 0), taskStatus("COMPLETED", "Completed", true, 12)],
@@ -1457,8 +1831,17 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
     writeback: [{ field: "commerce_ref", slot: 1, property: "contact_shop_id_1", mode: "slot", enabled: true },
       { field: "country", slot: 1, property: "contact_country", mode: "if_empty", enabled: true }],
     sampleIds: { deal: "41000123", ticket: "52000456", task: "63000789" },
+    // the conversations' catalog (additions 0008m and 0008t; the second tenant has none: "No email connected")
+    ...(t === MOCK_TENANT_2 ? {} : {
+      inboxes: MOCK_EMAIL_INBOXES.map((x) => ({ ...x, isActive: true })),
+      mailboxes: MOCK_EMAIL_ACCOUNTS.map((x) => ({ ...x, isActive: true })),
+      inboxChannels: [{ channelId: "1002", name: "Email", kind: "email", isCounted: true, isActive: true },
+        { channelId: "1003", name: "Chat", kind: "chat", isCounted: false, isActive: true }],
+    }),
   }, { app_host: "crm.example.com", record_url_deal: "https://{app_host}/records/{account}/deal/{id}", record_url_ticket: "https://{app_host}/records/{account}/ticket/{id}",
-       record_url_task: "https://{app_host}/records/{account}/task/{id}" });
+       record_url_task: "https://{app_host}/records/{account}/task/{id}",
+       ...(t === MOCK_TENANT_2 ? {} : { email_poll: true, email_origin_property: "hs_engagement_source", email_inbox_copy_origins: "CONVERSATIONS",
+         email_automated_origins: "AUTOMATION_PLATFORM", record_url_thread: "https://{app_host}/inbox/{account}/thread/{id}" }) });
   const sources: MockSource[] = [crm];
   if (t !== MOCK_TENANT_2) {
     sources.push(mockSource(t, 2, "phonetest", "Phones (test)", "4400", "telephony", {
@@ -1833,6 +2216,8 @@ export const mockData: CmaData = {
         roleKey: "analytics",
         timeZone: "Europe/Amsterdam",
         permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"],
+        // the second tenant switched no per-person page on: Email per agent is absent there
+        perPerson: [],
       };
     }
     return {
@@ -2715,8 +3100,16 @@ export const mockData: CmaData = {
   async setSourcePipeline(me, id, input) {
     const x = sourceOf(me, id);
     const p = x.pipelines.find((y) => y.recordType === input.recordType && y.pipelineId === input.pipelineId);
-    if (p) Object.assign(p, { isCounted: input.isCounted, isLead: input.isLead });
-    else x.pipelines.push({ ...pipeline(input.recordType, input.pipelineId, input.pipelineId, input.isCounted, input.isLead) });
+    if (input.isOrder && input.recordType !== "deal") throw new CmaDbError("CMA04", "only a deal pipeline can be an order pipeline");
+    if (p) Object.assign(p, { isCounted: input.isCounted, isLead: input.isLead, ...(input.isOrder !== undefined ? { isOrder: input.isOrder } : {}) });
+    else x.pipelines.push({ ...pipeline(input.recordType, input.pipelineId, input.pipelineId, input.isCounted, input.isLead, null, input.isOrder ?? false) });
+  },
+
+  async setSourceStageOutcome(me, id, input) {
+    const x = sourceOf(me, id);
+    const st = x.pipelines.find((p) => p.recordType === "deal" && p.pipelineId === input.pipelineId)?.stages.find((y) => y.stageId === input.stageId);
+    if (!st) throw new CmaDbError("CMA02", "no such stage");
+    Object.assign(st, { outcome: input.outcome === "none" ? null : input.outcome, outcomeSource: "person" });
   },
 
   async setSourceForms(me, id, changes) {
@@ -3162,5 +3555,153 @@ export const mockData: CmaData = {
     const y = x.taskTypes.find((z) => z.typeRef === input.typeRef);
     if (y) Object.assign(y, { label: input.label, isCallback: input.isCallback, isCounted: input.isCounted });
     else x.taskTypes.push(taskType(input.typeRef, input.label, input.isCallback, input.isCounted, 0, 0));
+  },
+  async getEmailReport(me, range, group, filter): Promise<EmailReport> {
+    assertEmail(me, range, filter, group, ["reports.view", "performance.team"]);
+    const c = mockEmailCatalog(me);
+    const { threads, messages } = mockEmailStore(me);
+    const emails = emailRecords(messages, threads, c);
+    const openings = emailOpenings(messages, threads, c);
+    const closes = emailCloses(threads, c);
+    const e = emailInPeriod(emails, range.from, range.to, filter);
+    const o = emailInPeriod(openings, range.from, range.to, filter);
+    const x = emailInPeriod(closes, range.from, range.to, filter);
+    // like for like, as the database: a period that reaches today against the same point in the previous one
+    const prev = previousPeriod(range, mockToday(me));
+    const now = new Date().toISOString();
+    const list = mockSettingNumber(me, "follow_up.list_rows");
+    const keyed = (rows: EmailWaitingRow[]) => rows;
+    const crm = seedIntakeConfig(me).sources.find((s) => s.connection.kind === "crm")!;
+    const waitingAll = emailWaiting(messages, threads.filter((t) =>
+      (filter.inbox === null || `${t.connectionId}:${t.inboxId}` === filter.inbox) && (filter.account === null || `${t.connectionId}:${t.accountId}` === filter.account)), c, now)
+      .filter((w) => filter.market === null || w.market === filter.market)
+      .map((w) => ({ ...w, recordUrl: recordUrlPreview(String(crm.connection.settings.record_url_thread ?? ""), crm.connection.settings, crm.connection.accountId, w.threadId) }));
+    const notResponding = mockNotResponding(me).filter((r) => filter.market === null || r.market === filter.market);
+    return {
+      ...range, group, filter, email: crm.inboxes.length > 0 || messages.length > 0,
+      rows: emailGroups(e, o, x, group), total: emailFigures(e, o, x),
+      previous: emailFigures(emailPrevious(emails, prev, filter, now), emailPrevious(openings, prev, filter, now), emailPrevious(closes, prev, filter, now)),
+      previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+      historyStart: emails.reduce<DateKey | null>((first, r) => (first === null || r.date < first ? r.date : first), null),
+      byInbox: emailGroups(e, o, x, "inbox"), byAccount: emailGroups(e, o, x, "account"), byCategory: emailGroups(e, o, x, "category"), byMarket: emailGroups(e, o, x, "market"),
+      receivedByInbox: emailSeries(e, group, "inbox"), receivedByAccount: emailSeries(e, group, "account"),
+      replyTargetMinutes: c.replyTargetMinutes, noResponseDays: mockSettingNumber(me, "email.no_response_days"),
+      waiting: { rows: keyed(waitingAll.slice(0, list)), total: waitingAll.length },
+      notResponding: { rows: notResponding.slice(0, list), total: notResponding.length },
+      ...mockEmailLists(emails, range.from, range.to),
+    };
+  },
+
+  async getEmailPerAgent(me, range, filter): Promise<EmailPerAgent> {
+    assertEmail(me, range, filter, null, [EMAIL_PER_AGENT_PERMISSION]);
+    if (!me.perPerson.includes(EMAIL_PER_PERSON_KEY)) throw new CmaDbError("CMA06", "per-person figures for email are switched off for this tenant");
+    const c = mockEmailCatalog(me);
+    const { threads, messages } = mockEmailStore(me);
+    const emails = emailRecords(messages, threads, c);
+    const { rows, total } = emailPerPerson(emailInPeriod(emails, range.from, range.to, filter), emailInPeriod(emailOpenings(messages, threads, c), range.from, range.to, filter),
+      emailInPeriod(emailCloses(threads, c), range.from, range.to, filter), mockEmailPersonOf(me));
+    const crm = seedIntakeConfig(me).sources.find((s) => s.connection.kind === "crm")!;
+    return { ...range, filter, email: crm.inboxes.length > 0 || messages.length > 0, rows, total, replyTargetMinutes: c.replyTargetMinutes,
+      ...mockEmailLists(emails, range.from, range.to) };
+  },
+
+  async getFirstOrders(me, range, group, filter): Promise<FirstOrdersReport> {
+    assertFirstOrders(me, range, filter, group, ["reports.view", "performance.team"]);
+    const settings = mockAttribution();
+    const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
+    const rows = firstOrdersInPeriod(records, range.from, range.to, filter);
+    const prev = previousPeriod(range, mockToday(me));
+    const previous = firstOrdersInPeriod(records, prev.from, prev.to, filter, prev.partial ? new Date().toISOString() : null);
+    const firstDate = records.reduce<string | null>((m, r) => (m === null || r.date < m ? r.date : m), null);
+    const phoneDate = records.filter((r) => r.phoneHashed).reduce<string | null>((m, r) => (m === null || r.date < m ? r.date : m), null);
+    const intakeStart = addDays(mockToday(me), -200);
+    const historyStart = firstDate === null ? null : [addDays(intakeStart, settings.windowDays), firstDate].sort()[1]!;
+    return {
+      ...range, group, filter, connected: me.tenantId !== MOCK_TENANT_2,
+      rows: firstOrderGroups(rows, group), total: firstOrderFigures(rows), previous: firstOrderFigures(previous),
+      previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
+      byLevel: firstOrderGroups(rows, "level"), byMarket: firstOrderGroups(rows, "market"),
+      amounts: firstOrderAmounts(rows, false), amountsByMarket: firstOrderAmounts(rows, true),
+      list: firstOrderList(rows, listRowsOf(mockSetting("follow_up.list_rows"))),
+      historyStart, phoneStart: phoneDate, settings, markets: marketsOf(me),
+    };
+  },
+
+  async getFirstOrdersExport(me, range, filter) {
+    assertFirstOrders(me, range, filter, null, ["reports.view", "performance.team"]);
+    const records = firstOrderRecords(mockOrderDeals(me), mockAttribution(), mockOrderPersonOf(me));
+    return firstOrderList(firstOrdersInPeriod(records, range.from, range.to, filter), 500).rows;
+  },
+
+  async getOrdersPerPerson(me, range, filter): Promise<OrdersPerPerson> {
+    assertFirstOrders(me, range, filter, null, [ORDERS_PER_PERSON_PERMISSION]);
+    if (!me.perPerson.includes(ORDERS_PER_PERSON_KEY)) throw new CmaDbError("CMA06", "per-person figures for orders are switched off for this tenant");
+    const settings = mockAttribution();
+    const records = firstOrderRecords(mockOrderDeals(me), settings, mockOrderPersonOf(me));
+    const { rows, total } = ordersPerPerson(firstOrdersInPeriod(records, range.from, range.to, filter), mockOrderName);
+    return { ...range, filter, connected: me.tenantId !== MOCK_TENANT_2, rows, total, settings, markets: marketsOf(me) };
+  },
+
+  async getCallbacksKept(me, range): Promise<CallbacksKept> {
+    assertAny(me, [...CALLBACKS_PERMISSIONS]);
+    assertReportRange(range);
+    const records = mockCallbackRecords(me);
+    const { weeks, total } = callbackFigures(callbacksInPeriod(records, range.from, range.to));
+    // the previous period like for like: the same length before; while the period runs, its last day up to the time now
+    const days = Math.round((Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / 86_400_000) + 1;
+    const today = mockToday(me);
+    const running = range.to >= today;
+    const previous = callbackFigures(callbacksInPeriod(records, addDays(range.from, -days), addDays(running ? today : range.to, -days),
+      running ? timeInZone(new Date().toISOString(), me.timeZone) : null)).total;
+    return { ...range, connected: me.tenantId !== MOCK_TENANT_2, weeks, total, previous, windowMinutes: Number(mockSetting("tasks.callback_window_minutes")) };
+  },
+
+  async getCallbacksPerOwner(me, range): Promise<CallbackOwner[]> {
+    assertAny(me, [CALLBACKS_PER_OWNER_PERMISSION]);
+    assertReportRange(range);
+    const accounts = seedIntakeConfig(me).accounts;
+    const personOf = (ownerRef: string) => {
+      const a = accounts.find((x) => x.system === "crmtest_owner" && x.externalId === ownerRef);
+      return a ? { userId: a.userId, name: mockOrderName(a.userId) ?? a.userId } : null;
+    };
+    const { rows, total } = callbacksPerOwner(callbacksInPeriod(mockCallbackRecords(me), range.from, range.to), personOf);
+    return [...rows, total];
+  },
+
+  async getJourneys(me): Promise<Journey[]> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    if (me.tenantId === MOCK_TENANT_2) return [];
+    return MOCK_JOURNEYS.filter((j) => j.status !== "archived")
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name) || a.code.localeCompare(b.code))
+      .map((j) => ({ code: j.code, name: j.name, summary: j.summary, market: j.market, status: j.status as JourneyStatus, designUrl: j.designUrl,
+        prerequisites: j.prerequisites }));
+  },
+
+  async setSourceInbox(me, id, input) {
+    const x = sourceOf(me, id);
+    if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "email activity belongs to the CRM");
+    if (input.market !== null && !seedIntakeConfig(me).markets.some((m) => m.code === input.market)) throw new CmaDbError("CMA02", "no such market");
+    const y = x.inboxes.find((z) => z.inboxId === input.inboxId);
+    if (y) Object.assign(y, { isCounted: input.isCounted, market: input.market });
+    else x.inboxes.push({ inboxId: input.inboxId, name: input.inboxId, isCounted: input.isCounted, market: input.market, isActive: true });
+  },
+
+  async setSourceMailbox(me, id, input) {
+    const x = sourceOf(me, id);
+    if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "email activity belongs to the CRM");
+    const label = input.label?.trim() || null;
+    if (label !== null && (label.length > 80 || label.includes("@"))) throw new CmaDbError("CMA04", "a mailbox label has 1 to 80 characters and no @");
+    if (input.market !== null && !seedIntakeConfig(me).markets.some((m) => m.code === input.market)) throw new CmaDbError("CMA02", "no such market");
+    const y = x.mailboxes.find((z) => z.accountId === input.accountId);
+    if (y) Object.assign(y, { label, isCounted: input.isCounted, market: input.market });
+    else x.mailboxes.push({ accountId: input.accountId, name: input.accountId, label, inboxId: null, channelId: null, isCounted: input.isCounted, market: input.market, isActive: true });
+  },
+
+  async setSourceInboxChannel(me, id, input) {
+    const x = sourceOf(me, id);
+    if (x.connection.kind === "telephony" || x.connection.kind === "commerce") throw new CmaDbError("CMA04", "email activity belongs to the CRM");
+    const y = x.inboxChannels.find((z) => z.channelId === input.channelId);
+    if (y) y.isCounted = input.isCounted;
+    else x.inboxChannels.push({ channelId: input.channelId, name: input.channelId, kind: "other", isCounted: input.isCounted, isActive: true });
   },
 };

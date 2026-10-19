@@ -23,15 +23,17 @@
  * For the email poll (addition 0008m, brief B17b), each its own short transaction; writes in parts of
  * at most 500, answering the outcomes counted (never an id):
  *   emailStartOf()              cma.email_start_date_of(): email.start_date, else intake.start_date
- *   upsertInboxes(items), upsertInboxChannels(items)   the conversations' catalogs (counts of active)
+ *   upsertInboxes(items), upsertInboxChannels(items), upsertInboxAccounts(items)   the conversations'
+ *                               catalogs, the mailboxes since addition 0008t (counts of active)
  *   upsertEmails(items), upsertThreads(items), upsertThreadEvents(items)
  *   upsertAssociations(items), upsertContacts(items)   0007's writes, outside a read-back unit
  *   threadMarks(ids)            cma.ingest_thread_marks: where each held thread's stored messages stand
  *   threadForget(id)            cma.ingest_thread_forget: a conversation gone at the source
  *   storedContacts(ids)         the contacts with a row in crm_contact (read once when an email points to one)
- *   threadStates(ids)           what the CMA holds of these threads (status, agent, inbox, channel, contact,
- *                               ticket, spam, archived, forgotten), to leave an unchanged one unwritten
- *   emailVersions(kind, ids)    the stored version (source_updated_at) of these emails, likewise
+ *   threadStates(ids)           what the CMA holds of these threads (status, agent, inbox, channel, mailbox,
+ *                               contact, ticket, spam, archived, forgotten), to leave an unchanged one unwritten
+ *   emailVersions(kind, ids)    the stored version (source_updated_at, ms) and origin of these emails, likewise
+ *                               (an engagement held without the origin its read now carries is written again: 0008t)
  *   openThreadIds(), archivedThreadIds()   held threads open, or archived (in the source's trash), not forgotten
  *
  * For a commerce source (migrations 0007b, 0008h):
@@ -213,6 +215,9 @@ export function storeFor(ctx, connectionId) {
     async upsertInboxChannels(items) {
       return withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_inbox_channels($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
     },
+    async upsertInboxAccounts(items) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_inbox_accounts($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
+    },
     async upsertEmails(items) {
       return outcomes(ctx, "select outcome from cma.ingest_upsert_emails($1, $2::jsonb)", connectionId, items);
     },
@@ -256,21 +261,24 @@ export function storeFor(ctx, connectionId) {
     async threadStates(ids) {
       if (!ids.length) return new Map();
       return withTenant(ctx, async (q) => new Map((await q.query(
-        `select source_id, status, owner_ref, inbox_source_id, channel_source_id, contact_source_id, ticket_source_id, is_spam,
+        `select source_id, status, owner_ref, inbox_source_id, channel_source_id, account_ref, contact_source_id, ticket_source_id, is_spam,
                 is_archived, forgotten_at is not null as forgotten
            from cma.email_thread
           where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])`,
         [connectionId, ids])).rows.map((r) => [r.source_id, {
-        status: r.status, ownerRef: r.owner_ref, inboxId: r.inbox_source_id, channelId: r.channel_source_id, contactId: r.contact_source_id,
+        status: r.status, ownerRef: r.owner_ref, inboxId: r.inbox_source_id, channelId: r.channel_source_id, accountId: r.account_ref,
+        contactId: r.contact_source_id,
         ticketId: r.ticket_source_id, isSpam: r.is_spam, isArchived: r.is_archived, forgotten: r.forgotten,
       }])));
     },
     async emailVersions(sourceKind, ids) {
       if (!ids.length) return new Map();
       return withTenant(ctx, async (q) => new Map((await q.query(
-        `select source_id, source_updated_at from cma.email_message
+        `select source_id, source_updated_at, origin from cma.email_message
           where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_kind = $2 and source_id = any ($3::text[])`,
-        [connectionId, sourceKind, ids])).rows.map((r) => [r.source_id, r.source_updated_at ? new Date(r.source_updated_at).getTime() : null])));
+        [connectionId, sourceKind, ids])).rows.map((r) => [r.source_id, {
+        at: r.source_updated_at ? new Date(r.source_updated_at).getTime() : null, origin: r.origin ?? null,
+      }])));
     },
     async openThreadIds(limit = 2000) {
       return withTenant(ctx, async (q) => (await q.query(

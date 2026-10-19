@@ -40,7 +40,24 @@
  * market, category, none and form and the malformed ones refused, the history start; then the screen's
  * arrangement: the lines per form and market, the forms with their markets, the totals per category (the
  * catalog's order, none last) and per market (unknown last), the chart's columns without gaps, the
- * answers per form, the share of contacts found, and no submission, contact or email in an answer.
+ * answers per form, the share of contacts found, and no submission, contact or email in an answer. Since
+ * addition 0008t (brief N19-A part 1) also Email and Email per agent (src/lib/email.ts), on a fixture with the
+ * edges 83 proves in the database: an uncounted inbox and channel, a spam conversation, an inbox copy and an
+ * automated send by origin, a deleted email, a reopen at creation (no opening) and one after a close (an
+ * opening), a first reply in and out of office hours in the market's zone, an unknown market ("No business
+ * hours"), a mailbox's market before its inbox's, an owner without a person (one not-linked row with how many,
+ * never which), the figures and medians, the groups with none last, the received series and its Other, waiting
+ * now, the filters and groups as the database checks them, the per-person switch, and nothing personal in an answer.
+ * Since addition 0008u (brief N19-A part 2) also First orders and Orders per person (src/lib/first-orders.ts), on
+ * 85's own scenario, so the definitions are the ones 85 proves in the database: the kinds (no contact, renewal,
+ * repeat, not first, first), every flag at the window's edges, a known contact at exactly the minutes, the level and
+ * the attribution with the level order and the assisted set changed, the credited person (the latest assisted touch,
+ * through a telephony user, not linked), days from the first touch, the figures per level and market, amounts per
+ * currency never summed across, the list, per person by name with the not-linked row, the filters and groups, and
+ * no name, address or phone number in an answer.
+ * Since addition 0008w (brief N19-A part 4) also Callbacks kept (src/lib/callbacks.ts), on 89's own scenario: the states
+ * and the call's minutes from the due time, the window's edges, an inbound call, the setting moving it, pending while the window is
+ * open, the figures per ISO week and in total, the previous period like for like, per person with the not-linked row.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -54,6 +71,15 @@ import {
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
 import { dateKeyInZone } from "../src/lib/time.ts";
+import {
+  businessSeconds, emailCloses, emailFigures, emailFilterQuery, emailGroups, emailInPeriod, emailOpenings, emailPerPerson, emailPrevious, emailRecords,
+  emailSeries, emailWaiting, nextEmailGroup, parseEmailFilter, parseEmailGroup, perPersonOpen, seriesColumns, withinShare,
+} from "../src/lib/email.ts";
+import {
+  firstOrderAmounts, firstOrderFigures, firstOrderFilterQuery, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, levelsInOrder,
+  nextFirstOrderGroup, ordersPerPerson, parseFirstOrderFilter, parseFirstOrderGroup, callCenterShare,
+} from "../src/lib/first-orders.ts";
+import { callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner, callbackWeeksRange, keptShare } from "../src/lib/callbacks.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -650,6 +676,231 @@ const formsAnswer = { totals, previous: formLines, answers: b13rows };
 const leaks = JSON.stringify(formsAnswer).match(/"(email|contact\w*|submissionId|sourceId|source_id|contactId)"\s*:/gi) ?? [];
 expect("forms: no submission, contact or email address in an answer", leaks, [], ["\"email\":"]);
 
+// ---- Email and Email per agent (addition 0008t) -------------------------------------------------------
+// Fictional ids; a Monday-to-Friday 09:00-17:00 week in October 2026 (summer time until the 25th), NL in
+// Amsterdam's zone, GB in London's
+const EC = "00000000-0000-7000-8000-0000000000c1";
+const emailCatalog = {
+  inboxes: [{ id: "ib1", name: "Inbox A", isCounted: true, market: "NL" }, { id: "ib2", name: "Inbox B", isCounted: true, market: null },
+    { id: "ib3", name: "Inbox C", isCounted: false, market: "NL" }],
+  accounts: [{ id: "ac1", name: "5001", label: "Mailbox A", isCounted: true, market: "GB" }, { id: "ac2", name: "5002", label: null, isCounted: false, market: null }],
+  channels: [{ id: "ch1", isCounted: true }, { id: "ch2", isCounted: false }],
+  inboxCopyOrigins: ["origin_copy"], automatedOrigins: ["origin_auto"],
+  zones: { NL: "Europe/Amsterdam", GB: "Europe/London" }, tenantZone: "Europe/Amsterdam",
+  officeHours: { 1: ["09:00", "17:00"], 2: ["09:00", "17:00"], 3: ["09:00", "17:00"], 4: ["09:00", "17:00"], 5: ["09:00", "17:00"] },
+  replyTargetMinutes: 240,
+};
+const eThread = (id, o) => ({ connectionId: EC, sourceSystem: "hubspot", id, inboxId: "ib1", accountId: null, channelId: "ch1", status: "open", isSpam: false,
+  category: null, market: null, events: [], ...o });
+const eMsg = (o) => ({ kind: "inbox_message", connectionId: EC, sourceSystem: "hubspot", threadId: null, inboxId: "ib1", accountId: null, channelId: "ch1",
+  direction: "in", status: "sent", actorKind: "customer", ownerRef: null, origin: null, category: null, market: null, deleted: false, ...o });
+const eLog = (o) => eMsg({ kind: "crm_email", threadId: null, inboxId: null, channelId: null, direction: "out", actorKind: "agent", ...o });
+const emailThreads = [
+  // reopened after its close: two openings; the reply to the second by an owner id without a person
+  eThread("t1", { createdAt: "2026-10-12T08:00:00Z", category: "billing",
+    events: [{ kind: "closed", at: "2026-10-12T14:00:00Z", actorKind: "agent", ownerRef: "101" }, { kind: "reopened", at: "2026-10-13T08:00:00Z", actorKind: "customer", ownerRef: null }] }),
+  // through a mailbox with its own market (GB) on an inbox without one; a reopen at creation is no opening
+  eThread("t2", { inboxId: "ib2", accountId: "ac1", createdAt: "2026-10-13T16:30:00Z",
+    events: [{ kind: "reopened", at: "2026-10-13T16:31:00Z", actorKind: "system", ownerRef: null }] }),
+  eThread("t3", { createdAt: "2026-10-13T09:00:00Z", isSpam: true }),
+  eThread("t4", { inboxId: "ib3", createdAt: "2026-10-13T09:00:00Z" }),
+  eThread("t5", { channelId: "ch2", createdAt: "2026-10-13T09:00:00Z" }),
+  // no market from the chain, its inbox has none: unknown, no office hours
+  eThread("t6", { inboxId: "ib2", createdAt: "2026-10-14T08:00:00Z" }),
+  // through a mailbox that does not count
+  eThread("t7", { accountId: "ac2", createdAt: "2026-10-13T09:00:00Z" }),
+];
+const emailMessages = [
+  eMsg({ threadId: "t1", at: "2026-10-12T08:00:00Z" }),
+  eMsg({ threadId: "t1", at: "2026-10-12T09:00:00Z", direction: "out", actorKind: "agent", ownerRef: "101" }),
+  eMsg({ threadId: "t1", at: "2026-10-13T08:30:00Z" }),
+  eMsg({ threadId: "t1", at: "2026-10-13T12:00:00Z", direction: "out", actorKind: "agent", ownerRef: "102" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-13T16:30:00Z" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T09:30:00Z", direction: "out", actorKind: "agent", ownerRef: "103" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T10:00:00Z" }),
+  eMsg({ threadId: "t2", inboxId: "ib2", at: "2026-10-14T10:05:00Z", direction: "out", actorKind: "bot" }),
+  eMsg({ threadId: "t3", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t4", inboxId: "ib3", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t5", channelId: "ch2", at: "2026-10-13T09:00:00Z" }),
+  eMsg({ threadId: "t6", inboxId: "ib2", at: "2026-10-14T08:00:00Z" }),
+  eMsg({ threadId: "t6", inboxId: "ib2", at: "2026-10-14T08:30:00Z", direction: "out", actorKind: "agent", ownerRef: "101" }),
+  eMsg({ threadId: "t7", at: "2026-10-13T09:00:00Z" }),
+  eLog({ at: "2026-10-12T10:00:00Z", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:10:00Z", origin: "ORIGIN_AUTO", market: "NL" }),
+  eLog({ at: "2026-10-12T10:20:00Z", origin: "ORIGIN_COPY", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:30:00Z", direction: "in", actorKind: "customer", market: "NL" }),
+  eLog({ at: "2026-10-12T10:40:00Z", status: "bounced", ownerRef: "101", market: "NL" }),
+  eLog({ at: "2026-10-12T10:50:00Z", ownerRef: "101", market: "NL", deleted: true }),
+  eLog({ at: "2026-10-13T11:00:00Z", ownerRef: "999" }),
+];
+const eRecs = emailRecords(emailMessages, emailThreads, emailCatalog);
+const eOpen = emailOpenings(emailMessages, emailThreads, emailCatalog);
+const eClose = emailCloses(emailThreads, emailCatalog);
+const NO_FILTER = { market: null, inbox: null, account: null };
+const eFig = emailFigures(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER));
+expect("email: received, logged replies, agent sends, automated and bounced as cma.email_of flags them (uncounted, spam, inbox copy and deleted out)",
+  `${eFig.received}/${eFig.loggedReplies}/${eFig.sentAgent}/${eFig.sentAutomated}/${eFig.bouncedFailed}`, "5/1/6/2/1", "8/1/7/2/1");
+expect("email: openings at creation and after a close, never a reopen at creation; closes",
+  eOpen.map((o) => `${o.threadId}:${o.kind}`).join(" ") + ` | ${eClose.length}`, "t1:created t1:reopened t2:created t6:created | 1",
+  "t1:created t1:reopened t2:created t2:reopened t6:created | 1");
+expect("email: first replies in business seconds of the market's zone (out of hours, a mailbox's market, unknown has none) and elapsed",
+  eOpen.map((o) => `${o.threadId}:${o.market}:${o.replySeconds}/${o.replyBusinessSeconds ?? "-"}/${o.replyWithinTarget ?? "-"}`).join(" "),
+  "t1:NL:3600/3600/true t1:NL:12600/12600/true t2:GB:61200/5400/true t6:unknown:1800/-/-",
+  "t1:NL:3600/3600/true t1:NL:12600/12600/true t2:NL:61200/1800/true t6:unknown:1800/1800/true");
+expect("email: medians as percentile_cont, within target of those with office hours, no hours apart",
+  `${eFig.replied} ${eFig.replyMedianSeconds} ${eFig.replyMedianBusinessSeconds} ${eFig.withinTarget}/${eFig.targetKnown} ${eFig.noHours} ${withinShare(eFig)}`,
+  "4 8100 5400 3/3 1 1", "4 12600 5400 3/4 0 0.75");
+expect("email: business seconds stop at closing time and skip the weekend; none for an unknown market",
+  [businessSeconds(emailCatalog, "NL", "2026-10-16T14:00:00Z", "2026-10-19T08:00:00Z"), businessSeconds(emailCatalog, "XX", "2026-10-16T14:00:00Z", "2026-10-19T08:00:00Z")],
+  [3600 + 3600, null], [237600, 0]);
+const byInbox = emailGroups(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER), "inbox");
+expect("email: per inbox by name, none (the logged emails) last",
+  byInbox.map((r) => `${r.groupLabel ?? "none"}=${r.received}/${r.sentAgent}/${r.threadsOpened}`), ["Inbox A=2/2/2", "Inbox B=3/2/2", "none=0/2/0"],
+  ["none=0/2/0", "Inbox A=2/2/2", "Inbox B=3/2/2"]);
+expect("email: per market by code, unknown included",
+  emailGroups(eRecs, eOpen, eClose, "market").map((r) => `${r.groupKey}=${r.received + r.loggedReplies}/${r.sentAgent}`), ["GB=2/1", "NL=3/3", "unknown=1/2"],
+  ["NL=3/3", "GB=2/1", "unknown=1/2"]);
+expect("email: a filter narrows every figure alike (the mailbox's GB conversation only)",
+  (() => { const f = { market: "GB", inbox: null, account: `${EC}:ac1` }; const x = emailFigures(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", f), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", f), []); return `${x.received}/${x.sentAgent}/${x.threadsOpened}`; })(),
+  "2/1/1", "5/6/4");
+expect("email: the previous period like for like stops at the time of day on its last date, in each row's zone",
+  emailPrevious(eRecs, { from: "2026-10-12", to: "2026-10-13", partial: true }, NO_FILTER, "2026-10-20T10:00:00Z")
+    .map((r) => `${r.date.slice(8)}T${r.localTime.slice(0, 5)}`).join(" "),
+  "12T10:00 12T11:00 13T10:30 12T12:00 12T12:10 12T12:30 12T12:40", "12T10:00 12T11:00 13T10:30 13T14:00 13T17:30 12T12:00 12T12:10 12T12:30 12T12:40 13T13:00");
+const eSeries = emailSeries(eRecs, "day", "inbox");
+expect("email: received per date and inbox, by name", eSeries.map((r) => `${r.groupKey.slice(8)}:${r.seriesLabel}=${r.received}`),
+  ["12:Inbox A=1", "13:Inbox A=1", "13:Inbox B=1", "14:Inbox B=2"], ["12:Inbox A=1", "13:Inbox B=1", "13:Inbox A=1", "14:Inbox B=2"]);
+const manySeries = Array.from({ length: 8 }, (_, i) => ({ groupKey: "2026-10-12", seriesKey: `k${i}`, seriesLabel: `S${i}`, received: 10 - i }));
+const eCols = seriesColumns(manySeries, "day", "2026-10-12", "2026-10-18", "2026-10-14");
+expect("email: the five largest series in the style's order, the rest as Other; every date up to today",
+  `${eCols.series.map((x) => x.index ?? "other").join(",")} ${eCols.values.get("2026-10-12|other")} ${eCols.keys.map((k) => k.slice(8)).join(",")}`,
+  "0,1,2,3,4,other 12 12,13,14", "0,1,2,3,4,5,6,7 0 12,13,14,15,16,17,18");
+const ePeople = { "101": { userId: "u1", name: "Anna Example" }, "103": { userId: "u3", name: "Bram Example" } };
+const ePerPerson = emailPerPerson(emailInPeriod(eRecs, "2026-10-12", "2026-10-16", NO_FILTER), emailInPeriod(eOpen, "2026-10-12", "2026-10-16", NO_FILTER),
+  emailInPeriod(eClose, "2026-10-12", "2026-10-16", NO_FILTER), (_s, ref) => (ref ? ePeople[ref] ?? null : null));
+expect("email per agent: by name, never ranked; owner ids without a person as one row with how many, last; the total",
+  ePerPerson.rows.map((p) => `${p.name ?? `not linked (${p.unlinkedOwners})`}=${p.sent}/${p.replies}/${p.threadsClosed}`).join(" ")
+    + ` | ${ePerPerson.total.sent}/${ePerPerson.total.replies}/${ePerPerson.total.threadsClosed}`,
+  "Anna Example=3/2/1 Bram Example=1/1/0 not linked (2)=2/1/0 | 6/4/1", "Anna Example=3/2/1 not linked (2)=2/1/0 Bram Example=1/1/0 | 6/4/1");
+expect("email per agent: sends by hour of the day in the email's market zone",
+  ePerPerson.rows[0].sentByHour.map((v, h) => (v ? `${h}:${v}` : "")).filter(Boolean).join(" "), "10:1 11:1 12:1", "8:1 9:1 10:1");
+const eWait = emailWaiting(emailMessages, emailThreads, emailCatalog, "2026-10-14T12:00:00Z");
+expect("email: waiting now since the first incoming message after the last agent reply (a bot's message is no reply), in business time; an uncounted mailbox not",
+  eWait.map((w) => `${w.threadId}:${w.market}:${w.waitedSeconds}/${w.waitedBusinessSeconds}`), ["t2:GB:7200/7200"], ["t2:GB:6900/6900", "t7:NL:97200/28800"]);
+expect("email: groups and filters as the database takes them",
+  [parseEmailGroup("week"), parseEmailGroup("month"), nextEmailGroup("day"), nextEmailGroup("week"),
+    JSON.stringify(parseEmailFilter("NL", `${EC}:ib1`, " ")), parseEmailFilter("nl", null, null).problem, parseEmailFilter(null, "a@b", null).problem,
+    JSON.stringify(emailFilterQuery({ market: "unknown", inbox: null, account: `${EC}:ac1` }))],
+  ["week", null, "week", "day", JSON.stringify({ filter: { market: "NL", inbox: `${EC}:ib1`, account: null }, problem: null }), "market", "inbox",
+    JSON.stringify({ market: "unknown", account: `${EC}:ac1` })],
+  ["week", "month", "day", "week", "", null, null, ""]);
+expect("email per agent: the permission and the tenant's switch, both",
+  [perPersonOpen({ permissions: ["performance.team"], perPerson: ["email"] }, "email"), perPersonOpen({ permissions: ["performance.team"], perPerson: ["orders"] }, "email"),
+    perPersonOpen({ permissions: ["reports.view"], perPerson: ["email"] }, "email")], [true, false, false], [true, true, true]);
+const emailLeaks = JSON.stringify({ rows: ePerPerson.rows, waiting: eWait, groups: byInbox }).match(/"(subject|body|address|from|to|sender|recipient|ownerRef|email|phone)"\s*:/gi) ?? [];
+expect("email: no subject, address, owner id or phone number in an answer", emailLeaks, [], ["\"ownerRef\":"]);
+
+// ---- First orders and Orders per person (addition 0008u) ---------------------------------------------
+// 85's scenario: tenant one's order deals of the week of 5 to 11 October 2026 with what the database finds around
+// them (the touches in the window, the linked order, the contact's creation time); owners 101 Anna and 103 Bram, 102
+// nobody, telephony user u1 Anna
+const FO = "00000000-0000-7000-8000-0000000000c1";
+const foSettings = { windowDays: 90, levelOrder: ["lead_deal", "conversation", "email", "phone_match", "attempt", "known_contact"],
+  assistedLevels: ["lead_deal", "conversation", "email", "phone_match"], knownContactMinutes: 60, orderMatchMinutes: 1440 };
+const foPeople = { "verifycrm_owner:101": { userId: "anna", name: "Anna Verify" }, "verifycrm_owner:103": { userId: "bram", name: "Bram Verify" },
+  "verifytel_user:u1": { userId: "anna", name: "Anna Verify" } };
+const foPersonOf = (system, ref) => foPeople[`${system}:${ref}`] ?? null;
+const foNames = { anna: "Anna Verify", bram: "Bram Verify" };
+const ord = (id, at, market, o = {}) => ({ connectionId: FO, dealSourceId: id, createdAt: at, market, zone: market === "GB" ? "Europe/London" : "Europe/Amsterdam",
+  contact: `k-${id}`, earlierOrderDeal: false, storeOrderKind: null, currency: null, amount: null, phoneHashed: false, contactCreatedAt: null, touches: [],
+  recordUrl: `https://crm.example.invalid/portal-1/deal/${id}`, ...o });
+const tch = (kind, at, system, ownerRef) => ({ kind, at, system, ownerRef });
+const crm = "verifycrm_owner";
+const foDeals = [
+  ord("o1", "2026-10-05T10:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 100, contactCreatedAt: "2026-01-01T00:00:00.000Z",
+    touches: [tch("lead_deal", "2026-10-02T08:00:00.000Z", crm, "101"), tch("email", "2026-10-04T09:00:00.000Z", crm, "103")] }),
+  ord("o2", "2026-10-06T09:00:00.000Z", "GB", { storeOrderKind: "first", currency: "GBP", amount: 50, contactCreatedAt: "2026-10-06T08:30:00.000Z",
+    touches: [tch("conversation", "2026-10-01T08:00:10.000Z", crm, "103")] }),
+  ord("o3", "2026-10-07T12:00:00.000Z", "NL", { currency: "EUR", amount: 70, contactCreatedAt: "2026-10-07T11:30:00.000Z",
+    touches: [tch("email", "2026-10-06T12:00:00.000Z", crm, "102")] }),
+  ord("o4", "2026-10-08T12:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 40, contactCreatedAt: "2025-12-01T00:00:00.000Z" }),
+  ord("o5", "2026-10-08T14:00:00.000Z", "NL", { storeOrderKind: "first", currency: "EUR", amount: 30, phoneHashed: true, contactCreatedAt: "2026-10-08T13:30:00.000Z",
+    touches: [tch("phone_match", "2026-09-28T10:00:00.000Z", crm, "101"), tch("phone_match", "2026-10-07T10:00:00.000Z", "verifytel_user", "u1")] }),
+  ord("o6", "2026-10-09T09:00:00.000Z", "NL", { contactCreatedAt: "2026-10-09T08:30:00.000Z", touches: [tch("attempt", "2026-10-08T09:00:00.000Z", crm, "101")] }),
+  ord("o7", "2026-10-09T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-09T14:00:00.000Z" }),
+  ord("o8", "2026-10-10T10:00:00.000Z", "NL", { contact: null, currency: "EUR", amount: 25 }),
+  ord("o9", "2026-10-10T12:00:00.000Z", "NL", { earlierOrderDeal: true, storeOrderKind: "repeat", currency: "EUR", amount: 20 }),
+  ord("o10", "2026-10-11T09:00:00.000Z", "NL", { storeOrderKind: "renewal", currency: "EUR", amount: 15 }),
+  ord("o11", "2026-10-11T10:00:00.000Z", "NL", { storeOrderKind: "repeat", currency: "EUR", amount: 60 }),
+  // a lead deal exactly at the window's start counts; an email a second before it and one at T do not
+  ord("o13", "2026-10-06T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-06T14:30:00.000Z",
+    touches: [tch("lead_deal", "2026-07-08T15:00:00.000Z", crm, "101"), tch("email", "2026-07-08T14:59:59.000Z", crm, "103"), tch("email", "2026-10-06T15:00:00.000Z", crm, "103")] }),
+  ord("o14", "2026-10-07T15:00:00.000Z", "NL", { contactCreatedAt: "2026-10-07T14:59:00.000Z",
+    touches: [tch("lead_deal", "2026-10-07T15:00:00.000Z", crm, "101"), tch("lead_deal", "2026-07-09T14:59:59.000Z", crm, "101")] }),
+];
+const foRecs = firstOrderRecords(foDeals, foSettings, foPersonOf);
+const foWeek = firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-11", { market: null, level: null });
+const foById = (recs) => [...recs].sort((a, b) => a.dealSourceId.localeCompare(b.dealSourceId));
+expect("first orders: the kinds, as 85 B5 (no contact, repeat, renewal, not first)",
+  foById(foRecs).map((r) => `${r.dealSourceId}:${r.kind}`).join(" "),
+  "o1:first o10:renewal o11:not_first o13:first o14:first o2:first o3:first o4:first o5:first o6:first o7:first o8:no_contact o9:repeat",
+  "o1:first o10:renewal o11:repeat o13:first o14:first o2:first o3:first o4:first o5:first o6:first o7:first o8:first o9:not_first");
+expect("first orders: every flag at the window's edges, a known contact at exactly an hour, as 85 B7",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${["lead_deal", "conversation", "email", "phone_match", "attempt", "known_contact"].map((e) => Number(r.evidence[e])).join("")}`).join(" "),
+  "o1:101001 o13:100000 o14:000000 o2:010000 o3:001000 o4:000001 o5:000100 o6:000010 o7:000001",
+  "o1:101001 o13:101000 o14:100000 o2:010000 o3:001000 o4:000000 o5:000100 o6:000010 o7:000000");
+expect("first orders: the level, the attribution and the credited person (the latest assisted touch, a telephony user, not linked), as 85 B8",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${r.level}:${r.attribution}:${r.creditedUserId ?? (r.creditedOwnerRef ? "not linked" : "-")}`).join(" "),
+  "o1:lead_deal:call_center:bram o13:lead_deal:call_center:anna o14:self_service:self_service:- o2:conversation:call_center:bram o3:email:call_center:not linked "
+    + "o4:known_contact:self_service:- o5:phone_match:call_center:anna o6:attempt:self_service:- o7:known_contact:self_service:-",
+  "o1:lead_deal:call_center:anna o13:lead_deal:call_center:anna o14:self_service:self_service:- o2:conversation:call_center:bram o3:email:call_center:- "
+    + "o4:known_contact:self_service:- o5:phone_match:call_center:anna o6:attempt:call_center:anna o7:known_contact:self_service:-");
+expect("first orders: days from the first touch, as 85 B9",
+  foById(foRecs.filter((r) => r.kind === "first")).map((r) => `${r.dealSourceId}:${r.daysFromFirstTouch ?? "-"}`).join(" "),
+  "o1:3.08 o13:90 o14:- o2:5.04 o3:1 o4:- o5:10.17 o6:1 o7:-", "o1:2.04 o13:90 o14:0 o2:5.04 o3:1 o4:- o5:0.17 o6:1 o7:-");
+const foChanged = firstOrderRecords(foDeals, { ...foSettings, levelOrder: ["email", "lead_deal", "conversation", "phone_match", "attempt", "known_contact"],
+  assistedLevels: ["lead_deal"] }, foPersonOf);
+expect("first orders: the level order and the assisted set are configuration, as 85 B10",
+  foById(foChanged.filter((r) => ["o1", "o2", "o3", "o5", "o13"].includes(r.dealSourceId))).map((r) => `${r.dealSourceId}:${r.level}:${r.attribution}`).join(" "),
+  "o1:email:self_service o13:lead_deal:call_center o2:conversation:self_service o3:email:self_service o5:phone_match:self_service",
+  "o1:lead_deal:call_center o13:lead_deal:call_center o2:conversation:call_center o3:email:call_center o5:phone_match:call_center");
+const foFig = (f) => `${f.firstOrders}:${f.callCenter}/${f.selfService}:${f.repeats}/${f.renewals}/${f.notFirst}/${f.noContact}:${f.daysMedian ?? "-"}`;
+expect("first orders: the total, per level and per market, as 85 B11",
+  [foFig(firstOrderFigures(foWeek)), firstOrderGroups(foWeek, "level").map((r) => `${r.groupKey}=${foFig(r)}`).join(" "),
+    firstOrderGroups(foWeek, "market").map((r) => `${r.groupKey}=${foFig(r)}`).join(" ")],
+  ["9:5/4:1/1/1/1:4.1", "attempt=1:0/1:0/0/0/0:1 conversation=1:1/0:0/0/0/0:5 email=1:1/0:0/0/0/0:1 known_contact=2:0/2:0/0/0/0:- lead_deal=2:2/0:0/0/0/0:46.5 "
+    + "phone_match=1:1/0:0/0/0/0:10.2 self_service=1:0/1:0/0/0/0:-", "GB=1:1/0:0/0/0/0:5 NL=8:4/4:1/1/1/1:3.1"],
+  ["9:5/4:1/1/1/1:4.1", "", ""]);
+expect("first orders: a level filter keeps that level's first orders and nothing counted apart",
+  foFig(firstOrderFigures(firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-11", { market: null, level: "lead_deal" }))), "2:2/0:0/0/0/0:46.5", "2:2/0:1/1/1/1:46.5");
+expect("first orders: amounts per currency, never summed across, as 85 B12",
+  [...firstOrderAmounts(foWeek, false), ...firstOrderAmounts(foWeek, true)].map((a) => `${a.market ?? "*"}/${a.currency ?? "none"}=${a.orders}:${a.amount ?? "-"}:${a.callCenterAmount}:${a.selfServiceAmount}`).join(" "),
+  "*/EUR=4:240:200:40 */GBP=1:50:50:0 */none=4:-:0:0 GB/GBP=1:50:50:0 NL/EUR=4:240:200:40 NL/none=4:-:0:0",
+  "*/EUR=5:290:250:40 */none=4:-:0:0 GB/GBP=1:50:50:0 NL/EUR=4:240:200:40");
+const foList = firstOrderList(foWeek, 2);
+expect("first orders: the list newest first, capped, with the total, as 85 B15",
+  `${foList.rows.map((r) => `${r.dealSourceId}:${r.level}`).join(" ")} ${foList.total}`, "o7:known_contact o6:attempt 9", "o1:lead_deal o2:conversation 9");
+const foPeopleRows = ordersPerPerson(foWeek, (id) => foNames[id] ?? null);
+expect("orders per person: by name, never ranked; the not-linked row; the total, as 85 B16",
+  [...foPeopleRows.rows, foPeopleRows.total].map((p) => `${p.name ?? `${p.kind}(${p.unlinkedOwners ?? "-"})`}:${p.orders}:${p.leadDeal}/${p.conversation}/${p.email}/${p.phoneMatch}:${p.daysMedian ?? "-"}`).join(" "),
+  "Anna Verify:2:1/0/0/1:50.1 Bram Verify:2:1/1/0/0:4.1 notLinked(1):1:0/0/1/0:1 total(-):5:2/1/1/1:5",
+  "Bram Verify:2:1/1/0/0:4.1 Anna Verify:2:1/0/0/1:50.1 total(-):5:2/1/1/1:5");
+expect("first orders: the previous span stops at the time of day on its last date in each deal's zone",
+  firstOrdersInPeriod(foRecs, "2026-10-05", "2026-10-07", { market: null, level: null }, "2026-10-20T13:30:00.000Z").map((r) => r.dealSourceId).join(" "),
+  "o1 o2 o3 o13", "o1 o2 o3 o13 o14");
+expect("first orders: groups, filters and the share as the database takes them",
+  [parseFirstOrderGroup("level"), parseFirstOrderGroup("month"), nextFirstOrderGroup("level"), JSON.stringify(parseFirstOrderFilter("GB", "phone_match")),
+    parseFirstOrderFilter("gb", null).problem, parseFirstOrderFilter(null, "phone").problem, JSON.stringify(firstOrderFilterQuery({ market: "unknown", level: "self_service" })),
+    callCenterShare({ callCenter: 5, firstOrders: 9 }) === 5 / 9, callCenterShare({ callCenter: 0, firstOrders: 0 }),
+    levelsInOrder({ levelOrder: ["email", "lead_deal"] }).join(",")],
+  ["level", null, "day", JSON.stringify({ filter: { market: "GB", level: "phone_match" }, problem: null }), "market", "level",
+    JSON.stringify({ market: "unknown", level: "self_service" }), true, null, "email,lead_deal,conversation,phone_match,attempt,known_contact,self_service"],
+  ["level", "month", "week", "", null, null, "", false, 0, "email,lead_deal"]);
+const foLeaks = JSON.stringify({ list: foList, people: foPeopleRows }).match(/"(name|firstName|lastName|address|email_address|phone|phoneNumber|phoneHash|contact\w*)"\s*:/gi) ?? [];
+expect("first orders: no customer name, address or phone number in an answer (a staff name only)", foLeaks.filter((x) => !/"name"/.test(x)), [], ["\"phone\":"]);
+
 // ---- formats -----------------------------------------------------------------------------------
 expect("business minutes: decimals under an hour, hours from an hour, a dash for none",
   [fmtBusinessMinutes(7.5, "en"), fmtBusinessMinutes(7.5, "nl"), fmtBusinessMinutes(74.8, "en"), fmtBusinessMinutes(null, "en")],
@@ -658,6 +909,58 @@ expect("percentages whole, small shares not zero, a dash for none",
   [fmtPct(40, "en"), fmtPct(66.7, "nl"), fmtPct(0.3, "en"), fmtPct(0, "en"), fmtPct(null, "en")],
   ["40%", "67%", "< 1%", "0%", "–"], ["40%", "66,7%", "0%", "0%", "0%"]);
 expect("counts with the locale's grouping", [fmtCount(1234, "en"), fmtCount(1234, "nl")], ["1,234", "1.234"], ["1234", "1234"]);
+
+// ---- Callbacks kept (addition 0008w, brief N19-A part 4) on 89's own scenario --------------------------
+// The callback tasks of a counted callback type that 89 keeps (k7 of an uncounted type, k8 not a callback and the deleted
+// k9 never reach the definition), the calls with their contacts in either direction (l10's association removed, so no
+// call of c10), the window set to 60 minutes, in Europe/Amsterdam
+const cbTasks = [
+  ["k1", "2026-10-06T10:00:00Z", "c1", "101"], ["k2", "2026-10-06T12:00:00Z", "c2", "101"], ["k3", "2026-10-07T09:00:00Z", "c3", "103"],
+  ["k4", "2026-10-07T12:00:00Z", "c4", "102"], ["k5", "2026-10-08T09:00:00Z", null, "101"], ["k6", null, "c6", "101", "2026-10-08T10:00:00Z"],
+  ["k10", "2026-10-11T21:30:00Z", "c10", "103"], ["k11", "2026-09-30T10:00:00Z", "c11", "101"], ["k12", "2026-10-01T10:00:00Z", "c12", "101"],
+  ["k13", "2026-10-02T08:00:00Z", "c13", "101"], ["k14", "2026-10-09T07:00:00Z", "c14", "103"], ["k15", "2026-10-08T13:00:00Z", "c15", "101"],
+].map(([id, dueAt, contactId, ownerRef, createdAt]) => ({ id, dueAt, contactId, ownerRef, createdAt: createdAt ?? "2026-09-20T09:00:00Z" }));
+const cbCalls = [
+  ["c1", "2026-10-06T10:30:00Z", "outbound"], ["c2", "2026-10-06T13:00:00Z", "unknown"], ["c3", "2026-10-07T10:01:00Z", "outbound"],
+  ["c15", "2026-10-08T13:20:00Z", "inbound"], ["c4", "2026-10-07T11:00:00Z", "outbound"], ["c4", "2026-10-07T11:30:00Z", "outbound"],
+  ["c11", "2026-09-30T10:00:00Z", "outbound"], ["c12", "2026-10-01T12:00:00Z", "outbound"], ["c13", "2026-10-02T08:10:00Z", "outbound"],
+].map(([contactId, at, direction]) => ({ contactId, at, direction }));
+const cbAfter = new Date("2026-10-20T09:00:00Z");
+const cbRunning = new Date("2026-10-09T07:30:00Z");
+const cbRecs = callbackRecords(cbTasks, cbCalls, 60, cbAfter, "Europe/Amsterdam");
+const cbWeek = callbacksInPeriod(cbRecs, "2026-10-05", "2026-10-11");
+expect("callbacks: the week's states and minutes, as 89's B1",
+  [...cbWeek].sort((a, b) => Date.parse(cbTasks.find((t) => t.id === a.id).dueAt ?? cbTasks.find((t) => t.id === a.id).createdAt)
+    - Date.parse(cbTasks.find((t) => t.id === b.id).dueAt ?? cbTasks.find((t) => t.id === b.id).createdAt)).map((r) => `${r.id}:${r.state}:${r.minutesFromDue ?? "-"}`).join(" "),
+  "k1:kept:30 k2:kept:60 k3:not_kept:- k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-",
+  "k1:kept:30 k2:kept:60 k3:kept:61 k4:kept:-60 k5:no_contact:- k6:no_due:- k15:kept:20 k14:not_kept:- k10:not_kept:-");
+expect("callbacks: the window moves with the setting (240: k3 kept), as 89's B3",
+  callbackRecords(cbTasks, cbCalls, 240, cbAfter, "Europe/Amsterdam").find((r) => r.id === "k3").state, "kept", "not_kept");
+expect("callbacks: pending while the window is open, not kept after, as 89's B4",
+  [callbackRecords(cbTasks, cbCalls, 60, cbRunning, "Europe/Amsterdam").find((r) => r.id === "k14").state,
+    callbackRecords(cbTasks, cbCalls, 60, new Date("2026-10-09T08:01:00Z"), "Europe/Amsterdam").find((r) => r.id === "k14").state],
+  ["pending", "not_kept"], ["not_kept", "not_kept"]);
+const cbFig = (c) => `${c.callbacks}/${c.kept}/${c.notKept}/${c.pending}/${c.noContact}/${c.noDue}`;
+const cbFigures = callbackFigures(cbWeek);
+expect("callbacks: per ISO week and in total, as 89's B6 (Sunday 23:30 in Amsterdam in its week)",
+  [cbFigures.weeks.map((w) => `${w.weekStart}:${cbFig(w)}`).join(" "), cbFig(cbFigures.total)],
+  ["2026-10-05:7/4/3/0/1/1", "7/4/3/0/1/1"], ["2026-10-12:1/0/1/0/0/0 2026-10-05:6/4/2/0/1/1", "7/4/3/0/1/1"]);
+const cbRunRecs = callbackRecords(cbTasks, cbCalls, 60, cbRunning, "Europe/Amsterdam");
+expect("callbacks: the previous week in full, and up to the time of day while the period runs, as 89's B7",
+  [cbFig(callbackFigures(callbacksInPeriod(cbRecs, "2026-09-28", "2026-10-04")).total),
+    cbFig(callbackFigures(callbacksInPeriod(cbRunRecs, "2026-10-05", "2026-10-11")).total),
+    cbFig(callbackFigures(callbacksInPeriod(cbRunRecs, "2026-09-28", "2026-10-02", "09:30:00")).total)],
+  ["3/2/1/0/0/0", "7/4/1/2/1/1", "2/1/1/0/0/0"], ["3/2/1/0/0/0", "7/4/1/2/1/1", "3/2/1/0/0/0"]);
+const cbNames = { "101": { userId: "u-anna", name: "Anna Verify" }, "103": { userId: "u-bram", name: "Bram Verify" } };
+const cbOwners = callbacksPerOwner(cbWeek, (ref) => cbNames[ref] ?? null);
+expect("callbacks: per person by name with the not-linked row and the total, as 89's B8",
+  [...cbOwners.rows, cbOwners.total].map((o) => `${o.name ?? o.kind}${o.unlinkedOwners ? `(${o.unlinkedOwners})` : ""}:${o.callbacks}/${o.kept}/${o.notKept}/${o.noContact}`).join(" "),
+  "Anna Verify:3/3/0/1 Bram Verify:3/0/3/0 notLinked(1):1/1/0/0 total:7/4/3/1",
+  "Bram Verify:3/0/3/0 Anna Verify:3/3/0/1 notLinked(1):1/1/0/0 total:7/4/3/1");
+expect("callbacks: the kept share leaves pending out; none decided is no share",
+  [keptShare({ kept: 3, notKept: 1 }), keptShare({ kept: 0, notKept: 0 })], [0.75, null], [0.6, 0]);
+expect("callbacks: Follow-up's span is this week and the seven before",
+  callbackWeeksRange("2026-10-18"), { from: "2026-08-24", to: "2026-10-18" }, { from: "2026-08-31", to: "2026-10-18" });
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

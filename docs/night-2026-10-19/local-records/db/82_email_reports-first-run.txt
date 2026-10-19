@@ -1,0 +1,80 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 1
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/home/user/cma/db/82_email_reports.sql:301: NOTICE:  policy "tenant_app" for relation "connection_inbox_account" does not exist, skipping
+psql:/home/user/cma/db/82_email_reports.sql:301: NOTICE:  policy "tenant_readonly" for relation "connection_inbox_account" does not exist, skipping
+psql:/home/user/cma/db/82_email_reports.sql:301: NOTICE:  trigger "audit" for relation "connection_inbox_account" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+ALTER TABLE
+psql:/home/user/cma/db/82_email_reports.sql:306: NOTICE:  constraint "email_message_account_ref_check" of relation "email_message" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:/home/user/cma/db/82_email_reports.sql:309: NOTICE:  constraint "email_thread_account_ref_check" of relation "email_thread" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+ALTER TABLE
+psql:/home/user/cma/db/82_email_reports.sql:316: NOTICE:  constraint "email_message_origin_check" of relation "email_message" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+UPDATE 0
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+COMMIT
+RESET

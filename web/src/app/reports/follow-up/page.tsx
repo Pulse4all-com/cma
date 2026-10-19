@@ -1,17 +1,19 @@
 import type { ReactNode } from "react";
+import { CallbackOwnersTable, CallbackWeeksTable } from "@/components/CallbacksTables";
 import { FollowUpFilters } from "@/components/FollowUpFilters";
 import { LeadsTable, TasksTable, TicketsTable, type TableContext } from "@/components/FollowUpTables";
 import { HeaderHint } from "@/components/HeaderHint";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { NoReportPermission } from "@/components/ReportParts";
+import { NoReportPermission, NotConnected } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import type { Copy, Locale } from "@/lib/copy";
 import { data, dataIsMock, type FollowUpList, type FollowUpOwner, type FollowUpSummary } from "@/lib/data";
+import { CALLBACKS_PER_OWNER_PERMISSION, CALLBACKS_PERMISSIONS, callbackWeeksRange } from "@/lib/callbacks";
 import { agoText, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, isStale, parseFollowUpFilter } from "@/lib/follow-up";
 import { holdsAny } from "@/lib/nav";
 import { fillHint, fmtCount } from "@/lib/reports";
-import { fmtDateTime } from "@/lib/time";
+import { dateKeyInZone, fmtDateTime, startOfWeek } from "@/lib/time";
 import { resolve } from "../../access";
 
 type TileKey = keyof FollowUpSummary;
@@ -42,6 +44,8 @@ function Tile({ label, info, value, testId }: { label: string; info: { about: st
  * reports.view, performance.team or monitoring.live; the database checks again. Ids, codes, counts and the names
  * of the organisation's own people only: no customer name, number or address, never a task's text. Every header
  * explains itself in a hint (copy.hints), the target and the warning share filled in from the tenant's settings.
+ * Since addition 0008w (brief N19-A part 4) below the lists the callbacks kept of the last eight ISO weeks, per week
+ * for reports.view or performance.team and per person for performance.team, or "No callback type set" in words.
  */
 export default async function FollowUpPage({ searchParams }: PageProps<"/reports/follow-up">) {
   const r = await resolve();
@@ -63,6 +67,10 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
   const page = await data().getFollowUpPage(me, filter);
   // Per person only for performance.team as the page is seen (a preview narrows it); the database decides for the real person
   const byOwner = me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION) ? page.byOwner : null;
+  // Callbacks kept (0008w): the last eight ISO weeks, for the report permissions; per person for performance.team
+  const span = callbackWeeksRange(dateKeyInZone(new Date(), me.timeZone));
+  const callbacks = holdsAny(me, CALLBACKS_PERMISSIONS) ? await data().getCallbacksKept(me, span) : null;
+  const callbackOwners = callbacks?.connected && me.permissions.includes(CALLBACKS_PER_OWNER_PERMISSION) ? await data().getCallbacksPerOwner(me, span) : null;
   const ctx: TableContext = {
     copy, locale: me.locale, timeZone: me.timeZone, withOwner: true,
     targetMinutes: page.settings.targetMinutes, warningPct: page.settings.warningPct,
@@ -124,6 +132,31 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
           <Card title={t.byOwnerTitle}>
             <p className="-mt-2 mb-4 text-caption text-p4a-grey">{t.byOwnerIntro}</p>
             <ByOwnerTable rows={byOwner} copy={copy} ctx={ctx} />
+          </Card>
+        ) : null}
+        {callbacks ? (
+          <section id="callbacks" className="rounded-card border border-p4a-border bg-white p-6" data-testid="callbacks-kept">
+            <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.callbacksTitle}</h2>
+            {!callbacks.connected ? (
+              <p className="text-body" data-testid="callbacks-not-connected">
+                <NotConnected label={copy.reports.noCallbacks} hint={copy.reports.noCallbacksHint} />
+                <span className="ml-2 text-small text-p4a-muted">{copy.reports.noCallbacksHint}</span>
+              </p>
+            ) : (
+              <>
+                <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.callbacksIntro.replace("{minutes}", fmtCount(callbacks.windowMinutes, me.locale))}</p>
+                {callbacks.total.callbacks + callbacks.total.noContact + callbacks.total.noDue === 0 ? <p className="text-body text-p4a-muted">{t.callbacksEmpty}</p> : (
+                  <CallbackWeeksTable weeks={callbacks.weeks} from={span.from} to={startOfWeek(span.to)} total={callbacks.total} minutes={callbacks.windowMinutes}
+                    copy={copy} locale={me.locale} />
+                )}
+              </>
+            )}
+          </section>
+        ) : null}
+        {callbacks && callbackOwners ? (
+          <Card title={t.callbacksByOwnerTitle}>
+            <p className="-mt-2 mb-4 max-w-3xl text-caption text-p4a-grey">{t.callbacksByOwnerIntro}</p>
+            <CallbackOwnersTable rows={callbackOwners} minutes={callbacks.windowMinutes} copy={copy} locale={me.locale} />
           </Card>
         ) : null}
       </div>

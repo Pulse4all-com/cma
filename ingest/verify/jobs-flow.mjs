@@ -24,7 +24,9 @@
  * options only (one left out and counted as dropped), is idempotent across runs,
  * and a failed contact search leaves the cursor for the next run; the backfill starts at
  * intake.start_date by default, resumes after an interruption without reading the first page again,
- * includes deals created earlier and closed since, and paces its searches; the reconcile picks up a
+ * includes deals created earlier and closed since, and paces its searches; a finished backfill with the same
+ * start reads nothing, and with --again walks its streams from the start again, its cursor rewritten as it goes
+ * (an interrupted --again run continues where it stopped); the reconcile picks up a
  * change the webhook missed, leaves a newer row alone, reads only held contacts, honours
  * --lookback-minutes and reads nothing twice; tenant isolation; of two executions of a job started at
  * once the second finds the first one's lock and is skipped with one log line and nothing written, and
@@ -424,6 +426,36 @@ expect("backfill: searches within a run paced (at least 40 ms apart at a pace fa
 n0 = mark();
 await runBackfill({ connectionId: conn1, object: "deal" });
 expect("backfill: a finished backfill with the same start reads nothing again", since(n0).length, 0, 2);
+// --again (the night runbook's re-reads; found in dev on 19 October 2026, where a re-read without --from took the
+// finished backfill's start and fetched 0): a deal changed in HubSpot since (outside the reconcile's window) is not
+// read by a run without it; with it the stream is walked from the start, the changed deal read and written, the others
+// listed and skipped (their versions are known). Interrupted on its second search, the cursor is rewritten at the first
+// page, not done, and the same command continues there; the other stream, finished before, is walked from the start
+fake.objects.deals[4130000002] = { ...fake.objects.deals[4130000002], amount: "222", hs_lastmodifieddate: "2026-10-10T10:00:00.000Z" };
+n0 = mark();
+const bSame = await runBackfill({ connectionId: conn1, object: "deal" });
+expect("backfill: without --again a finished backfill reads nothing, not even a deal changed since",
+  [since(n0).length, bSame.fetched, (await deal(4130000002))?.amount], [0, 0, "200.00"], [2, 2, "222.00"]);
+const dealSearches = () => fake.requests.filter((r) => r.search && r.path === "/crm/v3/objects/deals/search").length;
+fake.searchFailAt = dealSearches() + 2;
+n0 = mark();
+const bAgain = await runBackfill({ connectionId: conn1, object: "deal", again: true });
+const bAgainRun = (await runs("backfill")).at(-1);
+expect("backfill --again: a finished backfill with the same start is walked from the start", since(n0).find((r) => r.search)?.body.filterGroups[0].filters[0].value,
+  String(at("2026-09-30T22:00:00.000Z")), undefined);
+expect("backfill --again: …its first page listed and processed, the changed deal read and written",
+  [bAgain.again, bAgainRun?.counts.fetched, bAgainRun?.counts.upserted, bAgainRun?.counts.skipped, (await deal(4130000002))?.amount], [true, 2, 1, 1, "222.00"], [false, 0, 0, 0, "200.00"]);
+const curAgain = (await q("select cursor from cma.sync_cursor where connection_id = $1 and stream = 'backfill:deal:createdate'", [conn1]))[0]?.cursor;
+expect("backfill --again: interrupted, the cursor is rewritten at the first page, not done", [bAgainRun?.status, bAgainRun?.error, curAgain?.value, curAgain?.done],
+  ["failed", "http_503", at("2026-10-03T09:00:00.000Z"), false], ["succeeded", null, at("2026-10-06T09:00:00.000Z"), true]);
+n0 = mark();
+const bResume = await runBackfill({ connectionId: conn1, object: "deal", again: true });
+const firstOf = (property) => since(n0).find((r) => r.search && r.body.filterGroups[0].filters[0].propertyName === property)?.body.filterGroups[0].filters[0].value;
+expect("backfill --again: the same command continues at the cursor; the closed-date stream walked from the start",
+  [firstOf("createdate"), firstOf("closedate"), bResume.failed, (await runs("backfill")).at(-1)?.status], [String(at("2026-10-03T09:00:00.000Z")), String(at("2026-09-30T22:00:00.000Z")), 0, "succeeded"],
+  [String(at("2026-09-30T22:00:00.000Z")), undefined, 1, "failed"]);
+expect("backfill --again: …both streams' cursors done again", (await q("select stream, cursor->>'done' as done from cma.sync_cursor where connection_id = $1 and stream like 'backfill:deal:%' order by 1", [conn1])).map((r) => [r.stream, r.done]),
+  [["backfill:deal:closedate", "true"], ["backfill:deal:createdate", "true"]], [["backfill:deal:createdate", "false"]]);
 await runBackfill({ connectionId: conn1, object: "form_submission", from: "2026-09-15" });
 expect("backfill: form submissions from an earlier date fill the older one", (await q("select contact_resolution from cma.form_submission where connection_id = $1 and source_id = 'c-0001'", [conn1]))[0]?.contact_resolution, "resolved", null);
 // The support form keeps a second field from now on: the next backfill from the same date reads it again

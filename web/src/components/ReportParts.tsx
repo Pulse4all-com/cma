@@ -9,12 +9,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { CrmRecordsDay, InboundGroup, Intake, SpeedToLeadGroup, SpeedToLeadRow } from "@/lib/data";
+import { keptShare } from "@/lib/callbacks";
+import type { CallbacksKept, CrmRecordsDay, InboundGroup, Intake, SpeedToLeadGroup, SpeedToLeadRow } from "@/lib/data";
 import {
   fillHint, fmtBusinessMinutes, fmtCount, fmtPct, INBOUND_GROUPS, intakeTotals, nextGroup, nextInboundGroup, recordsOfType, SPEED_TO_LEAD_GROUPS,
   speedFigures,
 } from "@/lib/reports";
-import { fmtDate } from "@/lib/time";
+import { fmtDate, fmtPercent } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
 import { Card, Keycap } from "./primitives";
 
@@ -106,7 +107,7 @@ export function InboundGroupSwitch({
 function IntakeTile({
   label, value, hint, info, testId, href, notConnected = false,
 }: {
-  label: string; value: ReactNode; hint: ReactNode; testId: string; href?: "/reports/speed-to-lead" | "/reports/intake";
+  label: string; value: ReactNode; hint: ReactNode; testId: string; href?: "/reports/speed-to-lead" | "/reports/intake" | "/reports/follow-up";
   /** The explanation behind the label's info mark: the accessible name and the text */
   info: { about: string; text: string };
   /** The value is a not-connected state in words, set smaller than a figure */
@@ -130,11 +131,12 @@ function IntakeTile({
  * The Dashboard's Intake row for the selected period: leads (counted form submissions), deals and
  * tickets created (cma.crm_records_per_day, the 0006 Dashboard read), speed to lead over the period's
  * lead deals (median business minutes, % within target, open not called), calls and the shop's
- * orders, or the not-connected state of either.
+ * orders, or the not-connected state of either; since addition 0008w the callbacks kept (KPI 5), or
+ * "No callback type set" while the tenant counts none.
  */
 export function IntakeRow({
-  intake, records, speed, copy, locale, from,
-}: { intake: Intake; records: CrmRecordsDay[]; speed: SpeedToLeadRow[]; copy: Copy; locale: Locale; from: string }) {
+  intake, records, speed, callbacks, copy, locale, from,
+}: { intake: Intake; records: CrmRecordsDay[]; speed: SpeedToLeadRow[]; callbacks: CallbacksKept; copy: Copy; locale: Locale; from: string }) {
   const t = copy.intakeRow;
   const r = copy.reports;
   const totals = intakeTotals(intake.rows, intake.connections);
@@ -143,15 +145,16 @@ export function IntakeRow({
   const muted = (label: string, hint: string) => <NotConnected label={label} hint={hint} />;
   const h = copy.hints;
   const info = (label: string, text: string) => ({
-    about: h.about.replace("{label}", label), text: fillHint(text, { hours: h.officeHours }, locale),
+    about: h.about.replace("{label}", label), text: fillHint(text, { hours: h.officeHours, minutes: callbacks.windowMinutes }, locale),
   });
+  const cb = callbacks.total;
   return (
     <section aria-labelledby="intake-row" className="mb-6" data-testid="intake-row">
       <div className="mb-3 flex items-baseline justify-between gap-4">
         <h2 id="intake-row" className="text-panel font-semibold text-p4a-heading">{t.title}</h2>
         <p className="text-caption text-p4a-grey">{t.hint}</p>
       </div>
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7">
         <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} info={info(t.leads, h.leads)} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
         <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.dealsCreatedClosed)} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
         <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed)} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
@@ -182,6 +185,17 @@ export function IntakeRow({
           hint={intake.connections.commerce
             ? t.shopHint.replace("{customers}", n(totals.newCustomers ?? 0)).replace("{repeat}", n(totals.repeatOrders ?? 0)).replace("{renewals}", n(totals.renewals ?? 0))
             : r.noShopHint}
+        />
+        <IntakeTile
+          testId="intake-callbacks"
+          href="/reports/follow-up"
+          label={t.callbacks}
+          info={info(t.callbacks, h.cbTile)}
+          notConnected={!callbacks.connected}
+          value={callbacks.connected ? fmtPercent(keptShare(cb), locale) : muted(r.noCallbacks, r.noCallbacksHint)}
+          hint={callbacks.connected
+            ? t.callbacksHint.replace("{kept}", n(cb.kept)).replace("{decided}", n(cb.kept + cb.notKept)).replace("{pending}", n(cb.pending))
+            : r.noCallbacksHint}
         />
       </div>
       {intake.startDate && from < intake.startDate ? (

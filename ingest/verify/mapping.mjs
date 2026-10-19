@@ -1,6 +1,8 @@
 /**
  * Verifier: HubSpot payloads → canonical events and objects (src/adapters/hubspot/map.mjs), pure.
- * Fixtures under verify/fixtures/hubspot/ hold invented ids only.
+ * Fixtures under verify/fixtures/hubspot/ hold invented ids only. Since addition 0008u also a contact's
+ * creation time (the object's own, and created_at slots 2 to 9 with the earliest kept by the database) and a
+ * deal stage's outcome from its probability.
  *
  *   node verify/mapping.mjs             every check must PASS
  *   node verify/mapping.mjs --provoke   every check must FAIL
@@ -8,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import {
   mapEvents, propertiesFor, recordFromObject, contactFromObject, primaryContact, associationDiff, keptAssociation,
-  taskFromObject, firstAssociated, TASK_PROPERTIES,
+  taskFromObject, firstAssociated, TASK_PROPERTIES, stageOutcome,
 } from "../src/adapters/hubspot/map.mjs";
 import { expect, verdict, PROVOKE } from "./lib.mjs";
 
@@ -85,6 +87,24 @@ expect("primary contact: else the lowest id", primaryContact([{ toObjectId: 12 }
 const at = "2026-10-10T10:00:00.000Z";
 expect("association diff: new added, gone removed", associationDiff("deal", "1", [{ toType: "contact", toId: "2" }], [{ fromId: "1", toType: "contact", toId: "3" }], ["contact"], at),
   [{ fromType: "deal", fromId: "1", toType: "contact", toId: "2", removed: false, changedAt: at }, { fromType: "deal", fromId: "1", toType: "contact", toId: "3", removed: true, changedAt: at }], []);
+
+// The contact's creation time and a deal stage's outcome (addition 0008u)
+expect("contact → its own createdAt as slot 1, without an extra property", [c.createdAt, c.createdAts, propertiesFor("contact", config).includes("createdate")],
+  [undefined, undefined, false], ["2026-01-01T00:00:00.000Z", undefined, true]);
+const created = contactFromObject({ id: "4300000002", createdAt: "2026-10-01T08:00:00.000Z", updatedAt: "2026-10-10T09:02:00.000Z",
+  properties: { old_crm_created: "2019-03-04", other_created: "" } },
+  { fields: [{ entity: "contact", field: "created_at", slot: 2, property: "old_crm_created" }, { entity: "contact", field: "created_at", slot: 3, property: "other_created" }] });
+expect("contact → createdAts per slot (slot 2 a date property), the database keeps the earliest", [created.createdAts, created.createdAt],
+  [["2026-10-01T08:00:00.000Z", "2019-03-04T00:00:00.000Z", null], undefined], [undefined, "2026-10-01T08:00:00.000Z"]);
+expect("contact → createdAt alone when no slot above 1 is mapped",
+  contactFromObject({ id: "4300000003", createdAt: "2026-10-01T08:00:00.000Z", properties: {} }, { fields: [] }).createdAt, "2026-10-01T08:00:00.000Z", undefined);
+expect("contact → a created_at property is requested only when mapped",
+  propertiesFor("contact", { fields: [{ entity: "contact", field: "created_at", slot: 2, property: "old_crm_created" }] }), ["old_crm_created"], []);
+expect("stage outcome: probability 1.0 won, a closed 0.0 lost, an open 0.0 and 0.5 none, a ticket stage none",
+  [stageOutcome("deal", { metadata: { probability: "1.0", isClosed: "true" } }), stageOutcome("deal", { metadata: { probability: "0.0", isClosed: "true" } }),
+    stageOutcome("deal", { metadata: { probability: "0.0", isClosed: "false" } }), stageOutcome("deal", { metadata: { probability: "0.5", isClosed: "false" } }),
+    stageOutcome("deal", { metadata: { isClosed: "true" } }), stageOutcome("ticket", { metadata: { ticketState: "CLOSED", probability: "1.0" } })],
+  ["won", "lost", null, null, null, null], ["won", "won", "lost", null, "lost", "won"]);
 
 // Tasks (addition 0008n): events of object type 0-27, the association from a contact read back on the task,
 // the eight structural properties and never body or subject, the first associated object

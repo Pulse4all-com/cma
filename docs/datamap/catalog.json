@@ -12,8 +12,8 @@
         },
         {
           "name": "crm_contact",
-          "what": "Thin contact: country with the slot it came from, language, currency, store",
-          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot; re-read every 10 min in its first hour; nightly reconcile"
+          "what": "Thin contact: country with the slot it came from, language, currency, store, and when it was created in the source (0008u)",
+          "how": "Read when a deal, ticket, email or inbox thread points to it (the email poll every minute, once, after the email or thread), every country slot and created-time slot (the object's createdAt and the configured properties, the earliest kept); re-read every 10 min in its first hour; nightly reconcile"
         },
         {
           "name": "crm_contact_ref",
@@ -58,12 +58,12 @@
       "tables": [
         {
           "name": "email_message",
-          "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category",
-          "how": "Email poll every minute (engagements modified since its cursor; inbox messages of changed threads), the nightly reconcile (last 26 hours) and the backfill; only when the connection's email_poll is on"
+          "what": "Emails, metadata only: CRM email engagements and inbox messages kept apart; direction, status, time, actor kind, the agent's owner id, category, the mailbox (channel account) a message went through, an engagement's origin code (inbox copies and automations told apart by the connection's settings)",
+          "how": "Email poll every minute (engagements modified since its cursor, with the origin property the connection names; inbox messages of changed threads, with their mailbox), the nightly reconcile (last 26 hours) and the backfill; only when the connection's email_poll is on"
         },
         {
           "name": "email_thread",
-          "what": "Inbox conversations: inbox, channel, open or closed, the current agent, contact and ticket ids, spam",
+          "what": "Inbox conversations: inbox, channel, the mailbox it came in through, open or closed, the current agent, contact and ticket ids, spam",
           "how": "Email poll every minute (threads whose latest message is newer than its cursor; every ten minutes the open check), the nightly reconcile with the trash check, the backfill; only when the connection's email_poll is on"
         },
         {
@@ -146,13 +146,13 @@
         },
         {
           "name": "connection_pipeline",
-          "what": "CRM pipelines, counted or routed; a ticket pipeline's own SLA in business minutes (0008o)",
-          "how": "Catalog at most hourly; switches and the SLA on Configuration"
+          "what": "CRM pipelines, counted or routed; a ticket pipeline's own SLA in business minutes (0008o); a deal pipeline marked as an order pipeline (0008u)",
+          "how": "Catalog at most hourly; switches (counted, routed, order pipeline) and the SLA on Configuration"
         },
         {
           "name": "connection_stage",
-          "what": "CRM pipeline stages, closed or open",
-          "how": "Catalog at most hourly"
+          "what": "CRM pipeline stages, closed or open; a deal stage's outcome (won, lost or none) and where it came from (0008u)",
+          "how": "Catalog at most hourly, the outcome from the stage's probability (1 won, 0 and closed lost) unless a person set it on Configuration, Sources, which the catalog then keeps"
         },
         {
           "name": "connection_call_outcome",
@@ -176,7 +176,7 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field; a contact's country and refs in ordered slots",
+          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots",
           "how": "Configuration"
         },
         {
@@ -193,6 +193,11 @@
           "name": "connection_inbox_channel",
           "what": "Channels of the CRM's conversations (email, chat, ...): the CMA channel, counted",
           "how": "The email poll's channel catalog hourly (when the connection's email_poll is on); switches on Configuration"
+        },
+        {
+          "name": "connection_inbox_account",
+          "what": "Mailboxes: the channel accounts of the CRM's inboxes (a shared address connected to an inbox); the source's name, or its id when the name holds an address, a label a person sets, counted, market",
+          "how": "The email poll's catalog hourly with the inboxes (when the connection's email_poll is on); label, counted and market on Configuration, Sources"
         },
         {
           "name": "connection_email_rule",
@@ -418,6 +423,11 @@
           "name": "schema_migration",
           "what": "Which migrations ran when",
           "how": "Each migration"
+        },
+        {
+          "name": "journey",
+          "what": "Journeys of Campaign monitoring (0008v): code, name, summary, market, status (placeholder, building, live, archived), design link and prerequisites; placeholders, no steps or customers yet",
+          "how": "Configuration: the customer's seed (02) and cma.set_journey; never deleted, archived hides one"
         }
       ]
     },
@@ -521,6 +531,22 @@
     {
       "name": "connection_pipeline_sla",
       "what": "Per pipeline: its own SLA in business minutes, or null for the tenant default (0008o)"
+    },
+    {
+      "name": "email_waiting",
+      "what": "Open conversations whose latest message is the customer's: inbox, mailbox, market, waiting since, business and elapsed time, the link to the conversation"
+    },
+    {
+      "name": "email_not_responding",
+      "what": "Open lead deals whose contact got an agent email at least email.no_response_days ago with no email, inbox message or connected call back since: deal, pipeline, market, owner, the last email"
+    },
+    {
+      "name": "first_orders",
+      "what": "Per won deal of an order pipeline: market, when, the linked shop order by id, kind (first, repeat, renewal, not first, no contact), currency and amount, the evidence found before it (lead deal, conversation, email, phone match, attempt, known contact), its level, call center or self-service, days from the first touch, the credited person by id (0008u)"
+    },
+    {
+      "name": "callbacks_kept",
+      "what": "Per callback task (a counted callback type) since the intake start: due date, ISO week, the owner's person by id, kept, not kept, pending, without a contact or a due time, the keeping call's time and its minutes from the due time (0008w)"
     }
   ],
   "flows": {

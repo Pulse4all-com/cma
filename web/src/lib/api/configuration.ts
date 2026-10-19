@@ -2,8 +2,8 @@ import "server-only";
 import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
-  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings,
-  SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput,
+  SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
+  SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
 
@@ -158,7 +158,22 @@ export function checkSettingsInput(b: Record<string, unknown>): SourceSettings {
 }
 
 export function checkPipelineInput(b: Record<string, unknown>): SourcePipelineInput {
-  return { recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineId: ref(b.pipelineId, "pipelineId"), isCounted: bool(b, "isCounted"), isLead: bool(b, "isLead") };
+  const input: SourcePipelineInput = {
+    recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineId: ref(b.pipelineId, "pipelineId"), isCounted: bool(b, "isCounted"), isLead: bool(b, "isLead"),
+  };
+  // the order pipeline switch (0008u): optional, a deal pipeline's only
+  if (b.isOrder !== undefined) {
+    input.isOrder = bool(b, "isOrder");
+    if (input.isOrder && input.recordType !== "deal") throw new ApiError(400, "invalid_isOrder", "only a deal pipeline can be an order pipeline");
+  }
+  return input;
+}
+
+/** { pipelineId, stageId, outcome }: a deal stage's outcome as a person sets it (0008u): won, lost or none */
+export function checkStageOutcomeInput(b: Record<string, unknown>): SourceStageOutcomeInput {
+  const outcome = b.outcome;
+  if (outcome !== "won" && outcome !== "lost" && outcome !== "none") throw new ApiError(400, "invalid_outcome", "outcome must be won, lost or none");
+  return { pipelineId: ref(b.pipelineId, "pipelineId"), stageId: ref(b.stageId, "stageId"), outcome };
 }
 
 function list(b: Record<string, unknown>, name: string): Record<string, unknown>[] {
@@ -238,6 +253,25 @@ export function checkTaskStatusInput(b: Record<string, unknown>): SourceTaskStat
 /** { typeRef, label, isCallback, isCounted }: one task type of a CRM connection (0008n) */
 export function checkTaskTypeInput(b: Record<string, unknown>): SourceTaskTypeInput {
   return { typeRef: ref(b.typeRef, "typeRef"), label: text(b, "label", 100), isCallback: flag(b, "isCallback"), isCounted: flag(b, "isCounted") };
+}
+
+/** { inboxId, isCounted, market }: one inbox of a CRM connection's conversations (0008m) */
+export function checkInboxInput(b: Record<string, unknown>): SourceInboxInput {
+  return { inboxId: ref(b.inboxId, "inboxId"), isCounted: flag(b, "isCounted"), market: marketOrNull(b.market, "market") };
+}
+
+/** { accountId, label, isCounted, market }: one mailbox (0008t); a label is 1 to 80 characters without an @ (the CMA keeps no address), or null */
+export function checkMailboxInput(b: Record<string, unknown>): SourceMailboxInput {
+  const label = b.label == null || (typeof b.label === "string" && b.label.trim() === "") ? null : b.label;
+  if (label !== null && (typeof label !== "string" || label.trim().length > 80 || label.includes("@"))) {
+    throw new ApiError(400, "invalid_label", "label must be 1 to 80 characters without an @, or empty");
+  }
+  return { accountId: ref(b.accountId, "accountId"), label: label === null ? null : (label as string).trim(), isCounted: flag(b, "isCounted"), market: marketOrNull(b.market, "market") };
+}
+
+/** { channelId, isCounted }: one channel of a CRM connection's conversations (0008m) */
+export function checkInboxChannelInput(b: Record<string, unknown>): SourceInboxChannelInput {
+  return { channelId: ref(b.channelId, "channelId"), isCounted: flag(b, "isCounted") };
 }
 
 export function checkStoreInput(b: Record<string, unknown>): SourceStore {
