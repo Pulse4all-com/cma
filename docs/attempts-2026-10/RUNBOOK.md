@@ -39,7 +39,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 | 3 | Dev: the earlier verifies again | 15 min (`91` takes about five minutes on dev's shared core) |
 | 4 | Dev: `03` again | 2 min |
 | 5 | The data map: snapshot from dev, rebuild, push | 5 min |
-| 6 | Prod: point-in-time recovery, the lead reads before and after `92`, `92` twice, `41` | 10 min (outside office hours) |
+| 6 | Prod: point-in-time recovery, the order pipelines marked lead, the lead reads before and after `92`, `92` twice, `41` | 10 min (outside office hours) |
 | 7 | Prod: the timings as `cma_app` | 3 min |
 | 8 | Prod: the spot check against HubSpot | 15 min |
 | 9 | Merge, watch the prod build | 10 min |
@@ -250,13 +250,29 @@ git add docs/datamap && git commit -m "Data map: snapshot after 0008y" && git pu
 ```
 Expected: the push names this pull request's branch. `verify:datamap` passes from here on.
 
-## 6. Prod: point-in-time recovery, the lead reads before and after `92`, `92` twice, `41`
+## 6. Prod: point-in-time recovery, the order pipelines marked lead, the lead reads before and after `92`, `92` twice, `41`
 
 **Terminal** (from the Chromebook; point-in-time recovery on, as before every prod migration)
 ```bash
 gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
 ```
 Expected: `True	7`. Anything else: stop.
+
+**Studio (cma-prod-pg)** (read only, before `92`: every deal pipeline that is both a lead and an order pipeline, per tenant. Speed to lead (0007d) still counts such a pipeline, while Attempts per deal leaves it out; README Open decisions)
+```sql
+set role cma_owner;
+select t.slug as tenant, c.name as connection, p.connection_id, p.source_pipeline_id as pipeline_id, p.label, p.is_counted
+from cma.connection_pipeline p
+join cma.tenant t on t.id = p.tenant_id
+join cma.integration_connection c on c.tenant_id = p.tenant_id and c.id = p.connection_id
+where p.record_type = 'deal' and p.is_lead and p.is_order
+order by t.slug, c.name, p.source_pipeline_id;
+reset role;
+```
+Expected: `(0 rows)`.
+- Rows come back: copy them into `records/attempts-prod-<date>/order-pipelines-marked-lead.txt` (**File**) and go on.
+- Nothing changes here: Speed to lead stays as it is, and Open decisions keeps the point with the count you found.
+- Locally, on the dev seed with `reports-fixture.sql`: no rows. A Sales pipeline marked order in a rolled-back transaction came back as one row.
 
 The lead reads before and after `92`, as in step 1, now in prod. Run the block before `92`, then `92`, then the block again, in one sitting outside every market's office hours (for Pulse4all after 17:00 or before 09:00 local time, or at the weekend). `speed_to_lead_rows` holds two figures that count up to now: an open deal's waiting business seconds, and whether a deal was called before the next business noon. Both stand still outside office hours, so the block can hash every column of both reads.
 
