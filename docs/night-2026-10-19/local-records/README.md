@@ -33,6 +33,21 @@ Also measured, not recorded as a file: with 3,040 callback tasks over eight week
 | `lint.txt` | `npm run lint`, exit 0. |
 | `email-flow-local-db.txt` | `verify/email-flow.mjs` against the local database at 0008w and a fake HubSpot: 34 PASS. |
 
+## 19 October 2026: the backfill's `--again`
+
+**Dev, step 3b (written down from Martin's report of 19 October 2026, not a local run).** The three re-reads without `--from` fetched 0: the cursors `backfill:contact`, `backfill:crm_email:hs_timestamp` and `backfill:inbox_thread` stood from 2026-10-01 with `done` true, last updated 15 October 2026, so each run took the same start, found its backfill finished and read nothing. Dev's step 3b then ran with `--from 2026-09-30` instead, before the fix (a new start, so each was walked from it; the email objects therefore from 30 September, a day before dev's start date). The fix is the backfill's flag `--again` (`ingest/src/jobs/backfill.mjs`), which walks a finished backfill from the same start again; the runbook's steps 3b and 7 now use it.
+
+Local runs of the fix in `ingest/again-2026-10-19/` (the database of the night at 0008w):
+
+| File | What |
+|---|---|
+| `npm-test.txt` | `npm test`: fourteen `ALL n PASS` (18, 53, 26, 50, 20, 49, 30, 17, 51, 27, 21, 20, 85, 21), exit 0; `verify/forms.mjs` 48 → 50 with `--again` read as a flag. |
+| `forms-provoked.txt` | `verify/forms.mjs --provoke`: 0 PASS, 50 FAIL. |
+| `lint.txt` | `npm run lint`, exit 0. |
+| `jobs-flow.txt`, `-provoked.txt` | `verify/jobs-flow.mjs`: 88 PASS (82 before; the six new in section C: without `--again` a finished deal backfill reads nothing, not even a deal changed since; with it the stream walked from the start, the changed deal read and written, the cursor rewritten at the first page when interrupted, the same command continuing there, both cursors done again); provoked 0 PASS, 88 FAIL. |
+| `email-flow.txt`, `-provoked.txt` | `verify/email-flow.mjs`: 36 PASS (34 before; E5 the three re-reads again without `--again`, 0 fetched and nothing asked of HubSpot; E6 with it, each walked from its start, `fetched` above 0); provoked 0 PASS, 36 FAIL. |
+| `jobs-flow-without-again.txt`, `email-flow-without-again.txt` | The same with the job ignoring `--again` (the fix taken out for the run, then restored): 4 of 88 and 1 of 36 FAIL, the new checks. |
+
 ## `web/`
 
 The final build of this branch (`build.txt`, exit 0), then every check on it:

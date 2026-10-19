@@ -151,5 +151,7 @@ expect("arguments: --connection must be a uuid", refused(["--connection", "abc"]
 expect("arguments: --from must be a date", refused(["--from", "1 October"], { from: "date" }), true, false);
 expect("arguments: an unknown argument is refused", refused(["--everything", "yes"], { from: "date" }), true, false);
 expect("arguments: --lookback-minutes is a number", parseArgs(["--lookback-minutes", "10"], { "lookback-minutes": "minutes" }), { "lookback-minutes": 10 }, { "lookback-minutes": "10" });
+expect("arguments: --again is a flag, without a value", parseArgs(["--object", "contact", "--again"], { object: "text", again: "flag" }), { object: "contact", again: true }, { object: "contact" });
+expect("arguments: …a value after a flag is refused", refused(["--again", "yes"], { again: "flag" }), true, false);
 
 verdict();

@@ -1,0 +1,54 @@
+verify/forms.mjs  (--provoke: every check must FAIL)
+
+FAIL  host lower-cased, path without query or fragment                 got ["www.example.com","/nl/aed-kopen"], wanted ["WWW.Example.com","/nl/aed-kopen?utm_source=google"]
+FAIL  the five UTM parameters parsed                                   got {"source":"google","medium":"cpc","campaign":"autumn","term":"aed","co, wanted {}
+FAIL  other query parameters (click id, email) dropped                 got false, wanted true
+FAIL  no email anywhere in the parsed page                             got false, wanted true
+FAIL  a UTM value cut at 200 characters                                got 200, wanted 300
+FAIL  an address without UTM: an empty utm and path /                  got {}, wanted {"source":null}
+FAIL  not a URL → nothing                                              got {"host":null,"path":null,"utm":{}}, wanted {"host":"not a url","path":null,"utm":{}}
+FAIL  a javascript: address → nothing                                  got null, wanted "alert(1)"
+FAIL  the email field is the field of type email                       got "work_email", wanted "email"
+FAIL  …else a contact field named email                                got "email", wanted null
+FAIL  …else none                                                       got null, wanted "email"
+FAIL  the catalog item: id, name and the fields (no label; a bad name left out, a name once) got ["11111111-0000-0000-0000-000000000001","Request a quote (test)",["fir, wanted ["11111111-0000-0000-0000-000000000001","Request a quote (test)",["fir
+FAIL  fields: the four choice kinds with their option values (each once), every other field other without options got ["firstname=other:","work_email=other:","product_interest=dropdown:AED, wanted []
+FAIL  no label of an option reaches the catalog                        got false, wanted true
+FAIL  the submitted email, trimmed, for the search                     got "someone.invented@example.com", wanted null
+FAIL  no email field → no email                                        got null, wanted "someone.invented@example.com"
+FAIL  a value that is not an email → no email                          got null, wanted "nope"
+FAIL  answers: choice fields within their options (multiple checkboxes as a sorted list); text, email and a bank field dropped got {"values":{"product_interest":"AED Plus","customer":"No, I'm not a cus, wanted {"values":{"product_interest":"AED Plus","customer":"No, I'm not a cus
+FAIL  an answer no option accounts for is dropped and counted          got {"values":{"product_interest":"AED Plus"},"dropped":2}, wanted {"values":{"customer":"Maybe","topics":["Device","Unknown"],"product_i
+FAIL  multiple checkboxes sent as several values of one name, each once got ["Billing","Device"], wanted ["Device","Billing","Device"]
+FAIL  a missing or empty answer is neither kept nor dropped            got {"values":{},"dropped":0}, wanted {"values":{"customer":""},"dropped":0}
+FAIL  a form not described yet (no fields) keeps no answer: each is dropped got {"values":{},"dropped":6}, wanted {"values":{"product_interest":"AED Plus"},"dropped":0}
+FAIL  the email field is never kept, even when configured and described as a choice got {"values":{},"dropped":0}, wanted {"values":{"work_email":"AED Plus"},"dropped":0}
+FAIL  no kept fields → no answers                                      got {"values":{},"dropped":0}, wanted {"values":{"firstname":"Invented"},"dropped":0}
+FAIL  the item: ids, time, host, path, UTM, contact, answers           got {"item":{"sourceId":"c0000000-0000-0000-0000-000000000001","formId":"1, wanted {}
+FAIL  the item holds no email, no name, no phone number, no bank field got [false,false,false,false,false], wanted [false,true,true,true,true]
+FAIL  an unresolved contact carries its resolution, no id              got "ambiguous", wanted "resolved"
+FAIL  the backfill's key of the kept fields: the same for the same set, another once they change got [true,false], wanted [false,true]
+FAIL  stops at the cursor (time and conversion id)                     got ["c5","c4","c3b"], wanted ["c5","c4","c3b","c3"]
+FAIL  …and says it reached it                                          got true, wanted false
+FAIL  a submission in the cursor's millisecond with another id is new  got ["c5","c4"], wanted ["c5","c4","c3"]
+FAIL  an older submission than the cursor stops too                    got ["c5","c4","c3b","c3"], wanted ["c5"]
+FAIL  the first poll stops at the start date                           got ["c5","c4","c3b","c3","c2"], wanted ["c5","c4","c3b","c3","c2","c1"]
+FAIL  a page entirely newer than the cursor is not reached             got false, wanted true
+FAIL  entries without an id or a time are skipped                      got ["c9"], wanted ["x","c9"]
+FAIL  the new cursor is the newest submission read                     got {"at":1791623100000,"id":"c5"}, wanted {"at":1791622980000,"id":"c3"}
+FAIL  nothing new keeps the old cursor                                 got {"at":1791622980000,"id":"c3"}, wanted null
+FAIL  the search body: modified time between from and to, ascending, ids only got {"filterGroups":[{"filters":[{"propertyName":"hs_lastmodifieddate","op, wanted {}
+FAIL  a backfill body asks the created time and the version (modified time) only got ["createdate","hs_lastmodifieddate"], wanted ["createdate","dealname"]
+FAIL  10,100 results all listed across the 10,000-result window        got 10100, wanted 10000
+FAIL  …by starting a new query at the last value                       got 2, wanted 1
+FAIL  …never asking past result 10,000 in one query                    got true, wanted false
+FAIL  a synthetic event: key by object, id and version; kind changed   got ["sync:deal:4100000001:2026-10-10T09:00:00.000Z","changed","cma.reconc, wanted []
+FAIL  the same object and version give the same key (read once)        got "sync:deal:4100000001:2026-10-10T09:00:00.000Z", wanted "other"
+FAIL  arguments: --connection must be a uuid                           got true, wanted false
+FAIL  arguments: --from must be a date                                 got true, wanted false
+FAIL  arguments: an unknown argument is refused                        got true, wanted false
+FAIL  arguments: --lookback-minutes is a number                        got {"lookback-minutes":10}, wanted {"lookback-minutes":"10"}
+FAIL  arguments: --again is a flag, without a value                    got {"object":"contact","again":true}, wanted {"object":"contact"}
+FAIL  arguments: …a value after a flag is refused                      got true, wanted false
+
+ALL 50 PROVOKED CHECKS FAILED, as they must

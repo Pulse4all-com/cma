@@ -176,9 +176,11 @@ Expected: no `git status` line; the warning naming the branch and the image tag;
 
 **3b. The re-reads**, from `email.start_date` for the email objects and the held contacts again. **Terminal** (`<conn>`: the HubSpot connection's id, `select c.id from cma.integration_connection c join cma.tenant t on t.id = c.tenant_id where t.slug = 'pulse4all-subscriptions' and c.adapter = 'hubspot';` in Studio as the owner)
 ```bash
-for o in contact crm_email inbox_thread; do gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<conn>,--object,$o; done
+for o in contact crm_email inbox_thread; do gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<conn>,--object,$o,--again; done
 ```
-Expected: three times `Execution [ingest-backfill-…] has successfully completed.` A failed execution is run again with the same arguments: it continues where it stopped.
+`--again` because all three were backfilled before from the same start, and a finished backfill with the same start reads nothing (it fetched 0 in dev on 19 October 2026); `--again` walks it from that start once more, never before it.
+
+Expected: three times `Execution [ingest-backfill-…] has successfully completed.` A failed execution is run again with the same arguments: it continues where it stopped. (Dev ran this step on 19 October 2026 with `--from,2026-09-30` instead, before the image knew `--again`: nothing to repeat there; `docs/night-2026-10-19/local-records/README.md`.)
 
 **Studio (cma-dev-pg)** (read only: the runs and what they filled; codes and counts only)
 ```sql
@@ -193,7 +195,7 @@ select (select count(*) from cma.connection_inbox_account) as mailboxes,
 reset role;
 ```
 Expected:
-- `inbox_thread`, `crm_email`, `contact`, each `succeeded`, their counts (fetched, written, skipped), no error;
+- `inbox_thread`, `crm_email`, `contact`, each `succeeded`, their counts (fetched, written, skipped) with `fetched` above 0, no error (`fetched` 0 means the run found its finished backfill: `--again` was left out);
 - the origin codes with their counts: `CONVERSATIONS` (the inbox copies, left out of the reports), `CRM_UI` and the others HubSpot gives; an empty origin only on engagements HubSpot gives none;
 - the mailboxes the catalog brought (the poll refreshes the catalog hourly, so 0 until the new image's first refresh), most threads with a mailbox, most contacts with a creation time.
 
@@ -330,10 +332,12 @@ Expected: the image tag (the merge commit or later); the build `SUCCESS` (or the
 
 **Terminal** (`<conn>`: prod's HubSpot connection id, from Studio as in step 3b)
 ```bash
-for o in contact crm_email inbox_thread; do gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,$o; done
+for o in contact crm_email inbox_thread; do gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,$o,--again; done
 ```
+`--again` as in step 3b: where an earlier backfill of the object from the same start has finished, a run without it reads nothing.
+
 Expected: three times `… has successfully completed.`
 
-**Studio (cma-prod-pg)**: step 3b's read-only block and, an hour later, step 5's last block. Expected: the three runs `succeeded`; the origin codes with `CONVERSATIONS` among them; most threads with a mailbox; most contacts with a creation time; the Self Serve won stage still `won | person`, the other stages `won`, `lost` or empty from the source.
+**Studio (cma-prod-pg)**: step 3b's read-only block and, an hour later, step 5's last block. Expected: the three runs `succeeded`, each with `fetched` above 0 in `counts`; the origin codes with `CONVERSATIONS` among them; most threads with a mailbox; most contacts with a creation time; the Self Serve won stage still `won | person`, the other stages `won`, `lost` or empty from the source.
 
 **Browser** (prod): Configuration → Sources → the HubSpot connection → the email section: the mailboxes (an address-like name shows its id: label it); Reports → Email per mailbox: older conversations now under their mailbox.
