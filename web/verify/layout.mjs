@@ -49,7 +49,7 @@
  * callback type set" for a tenant without one, there and on the Dashboard's Intake row.
  * Attempts per deal and Attempts per agent (addition 0008y) for seven identities: Attempts per deal for reports.view or
  * performance.team, Attempts per agent for performance.team while reports.per_person holds attempts (absent from the rail
- * and not found otherwise), after Email per agent so no one's first nine digit keys move, the keycaps K, P, S and G, five
+ * and not found otherwise), after Speed to lead (analytics' and a reports reader's keys 4 to 9 move), the keycaps K, P, S and G, five
  * tiles, every grouping and the tables inside their cards, the right-most header's hint inside the viewport. The rail as
  * an accordion (19 October 2026): Time then Reports leaves only Reports open with cma-nav-open=reports, the server
  * renders one group open after a reload, a click on the open group closes it, Configuration's letter C opens it alone
@@ -172,28 +172,28 @@ async function expectNavigation() {
     // performance.team) and Orders per person (performance.team, and reports.per_person holding orders, as the dev
     // seed's does) follow Email per agent; since 0008v the Campaigns group (Campaign monitoring, reports.view or
     // performance.team) follows Reports; since 0008y Attempts per deal (reports.view or performance.team) and Attempts per
-    // agent (performance.team, and reports.per_person holding attempts, as the dev seed's does) follow Email per agent, so no
-    // one's first nine pages change their digit key (the analyst's ninth is Calls, the reader's Email)
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders",
+    // agent (performance.team, and reports.per_person holding attempts, as the dev seed's does) follow Speed to lead, so the
+    // analyst's keys 6 to 9 and the reader's 4 to 9 move (accepted during the soft launch, Martin, 19 October 2026)
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up",
+      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders",
       "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent;
     // First orders without Orders per person; Attempts per deal without Attempts per agent
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/email",
-      "/reports/attempts", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/attempts", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms",
+      "/reports/email", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake",
-      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/attempts",
+      "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email",
+      "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
-      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
-      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
-      "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead",
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
+      "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead",
+      "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
+      "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -1468,6 +1468,10 @@ async function expectFrame() {
     // Follow-up and Waiting for you (addition 0008o): a report in its group; the person's own page, no rail item
     ["manager", "/reports/follow-up", ["Welcome", "Reports", "Follow-up"], ["/", "/reports/dashboard", null]],
     ["agent-one", "/me/follow-up", ["Welcome", "Waiting for you"], ["/", null]],
+    // Attempts per deal and Attempts per agent (addition 0008y): reports in their group
+    ["manager", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/dashboard", null]],
+    ["reader", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
+    ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Reports", "Attempts per agent"], ["/", "/reports/dashboard", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -1837,5 +1841,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps, the five tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps, the five tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

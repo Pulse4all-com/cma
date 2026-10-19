@@ -170,6 +170,13 @@ export function navEntries(copy: Copy): NavEntry[] {
         // the same lists as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here,
         // because this module has no runtime imports)
         { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
+        // Attempts per deal (addition 0008y, 19 October 2026): the outbound CRM calls per deal until it is reached, after Speed to
+        // lead with its permissions; Attempts per agent the same per deal owner, for performance.team while the tenant's
+        // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions). The digit keys of the
+        // pages after them move for analytics and a reports reader (4 to 9), accepted during the soft launch before anyone
+        // relies on them (Martin, README Decision log, 19 October 2026)
+        { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
+        { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
         // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, after Speed to lead, for the
         // permissions of cma.open_leads (reports.view, performance.team or monitoring.live); the digit keys of the
         // pages below move by one for everyone who sees the Reports group (README, Decision log)
@@ -188,13 +195,6 @@ export function navEntries(copy: Copy): NavEntry[] {
         // README Decision log, 18 October 2026)
         { page: "email", href: "/reports/email", label: copy.nav.email, permission: ["reports.view", "performance.team"] },
         { page: "email-per-agent", href: "/reports/email-per-agent", label: copy.nav.emailPerAgent, permission: "performance.team", perPerson: "email" },
-        // Attempts per deal (addition 0008y, 19 October 2026): the outbound CRM calls per deal until it is reached, with the
-        // permissions of Speed to lead; Attempts per agent the same per deal owner, for performance.team while the tenant's
-        // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions). After Email per
-        // agent, the first place that moves no digit key of anyone's first nine pages: whoever sees them holds reports.view
-        // (Welcome, Messages and seven reports up to Email) or performance.team (nine reports up to Email)
-        { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
-        { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
         // First orders (addition 0008u, brief N19-A part 2): self-service or call center, as Email; Orders per person the
         // credited first orders per person, for performance.team while the tenant's reports.per_person holds orders
         // (off for Pulse4all until Yordi confirms it, README Open decisions)
