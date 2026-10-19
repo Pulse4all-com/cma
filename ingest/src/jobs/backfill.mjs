@@ -4,14 +4,17 @@
  * HubSpot's crm_email and inbox_thread start at cma.email_start_date_of) up to the run's start, through the adapter's
  * listing and the same read-back as a webhook, paced under half of the source's documented limits,
  * resumable (the adapter keeps where it stands in cma.sync_cursor after every page, and a run with
- * the same start continues there). One sync_run row (job backfill, stream the object type).
+ * the same start continues there). A finished backfill with the same start reads nothing, unless the run
+ * has --again: it then walks the stream from the start again (a re-read after an adapter change, without
+ * moving the start before email.start_date or intake.start_date). One sync_run row (job backfill, stream
+ * the object type).
  *
  * The daily floor (backlog CMA-069): with an adapter that names one (HubSpot: api_daily_floor_pct,
  * default 25) the run pauses once the source's remaining daily calls fall below it, finishes as
  * succeeded with error daily_floor, logs "backfill paused" and exits 0; the same command later continues
  * from the cursor. The log line carries the run's requests per endpoint and the daily limit stated.
  *
- *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
+ *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>[,--again]
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -21,7 +24,29 @@ import { JobBudget } from "../core/budget.mjs";
 import { info } from "../core/log.mjs";
 import { UsageError, withRun } from "./runner.mjs";
 
-export async function runBackfill({ connectionId, object, from = null, adapters = ADAPTERS }) {
+/**
+ * The store as an --again run's adapter sees it: a finished backfill cursor (a stream backfill:…, done) reads
+ * as absent until this run writes that stream, so the adapter walks it from the start. Every adapter reads
+ * its cursor where a stream's walk begins and writes it after every page (done: false), so the same
+ * command run again after a failed --again run continues where that one stopped; a done cursor of
+ * another start is walked from the start by the adapter anyway.
+ */
+export function walkAgain(store) {
+  const written = new Set();
+  return {
+    ...store,
+    async cursor(stream) {
+      const cur = await store.cursor(stream);
+      return stream.startsWith("backfill:") && cur?.done === true && !written.has(stream) ? null : cur;
+    },
+    async setCursor(stream, value) {
+      written.add(stream);
+      return store.setCursor(stream, value);
+    },
+  };
+}
+
+export async function runBackfill({ connectionId, object, from = null, again = false, adapters = ADAPTERS }) {
   if (!connectionId || !object) throw new UsageError("--connection and --object are required");
   const started = Date.now();
   const [c] = await servedConnections({ connectionId, actorLabel: "ingest:backfill" });
@@ -40,9 +65,9 @@ export async function runBackfill({ connectionId, object, from = null, adapters 
   const budget = new JobBudget(adapter.rates, undefined, { floorPct });
   const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
-    return adapter.backfill({ connection: c, store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
+    return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
   });
-  const total = { connection: c.connectionId, object, from: date, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
+  const total = { connection: c.connectionId, object, from: date, again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
   info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(), ms: Date.now() - started });
   return total;
 }

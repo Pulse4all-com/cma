@@ -29,7 +29,7 @@ const ALL = ["workday.own", "workday.team", "workday.export", "roster.view", "ro
 const copy = t("en");
 const principal = (permissions, roleKey = "admin") => ({
   tenantId: "t", tenantName: "Tenant", userId: "u", displayName: "Someone", organisationName: "Org", roleKey,
-  permissions, locale: "en", timeZone: "Europe/Madrid", preview: null, canPreview: false,
+  permissions, locale: "en", timeZone: "Europe/Madrid", preview: null, canPreview: false, perPerson: ["email", "orders"],
 });
 const ADMIN = ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
   "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send"];

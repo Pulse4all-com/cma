@@ -35,7 +35,22 @@
  * Forms (addition 0008p) for seven identities: in the rail for reports.view or performance.team, the keycaps
  * K, Y, F, G and X, four tiles, the forms table and the answers inside their cards, the right-most header's hint
  * inside the viewport, the deltas like for like and "No history to compare yet" before the forms history;
- * Sources with its form categories. Since the IT audit of 17 October 2026: only the first nine pages carry a
+ * Sources with its form categories. Email and Email per agent (addition 0008t) for seven identities: Email for
+ * reports.view or performance.team, Email per agent for performance.team while the tenant's reports.per_person
+ * holds email (absent from the rail and not found otherwise), the keycaps K, I, B and G, the tables inside their
+ * cards, a row's hours opened by Enter, Down to the next person, "No email connected" for a tenant without email.
+ * First orders and Orders per person (addition 0008u) for seven identities: First orders for reports.view or
+ * performance.team, Orders per person for performance.team while reports.per_person holds orders (absent from the
+ * rail and not found otherwise), the keycaps K, V, G and X, four tiles, a bar per level, "History from" in Muted,
+ * every grouping and the tables inside their cards, "No orders connected" for a tenant without an order pipeline.
+ * Callbacks kept (addition 0008w) for five identities: on Follow-up the eight weeks for reports.view or performance.team
+ * and per person for performance.team, both inside their cards, the right-most header hint inside the viewport, "No
+ * callback type set" for a tenant without one, there and on the Dashboard's Intake row.
+ * Campaign monitoring (addition 0008v) for seven identities: in the Campaigns group for reports.view or
+ * performance.team, a card per journey inside the main area (the archived one absent), a journey's Muted banner,
+ * seven dashed placeholders (the drill-down locked), its prerequisites unticked, no figure, the breadcrumbs
+ * Welcome › Campaigns › the journey, an archived or unknown journey not found, no journeys said in words.
+ * Since the IT audit of 17 October 2026: only the first nine pages carry a
  * digit key (no data-shortcut is longer than one character, the later pages have no keycap), every open dialog
  * has an accessible name (aria-labelledby pointing at its title), and the Live board's tiles form a named
  * group. Saves screenshots under records/ for the release note.
@@ -51,7 +66,8 @@
  *       table spill out of its card and expects the expired invitation open, expects the folded rail at
  *       256 px, breadcrumbs on Welcome, a keycap with hidden hints, one crumb fewer everywhere, a shorter
  *       agent rail for the previewing admin and one page fewer for the ignored cookies, lets the forms table
- *       spill out of its card, writes a two-character key on the manager's tenth page, strips the name off
+ *       spill out of its card, lets the first orders list and the callbacks' weeks spill out of their cards, widens the first journey card past the main
+ *       area, writes a two-character key on the manager's tenth page, strips the name off
  *       every dialog before it is read and the role off the tiles, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
@@ -138,21 +154,32 @@ async function expectNavigation() {
     // Since 0008i Inbound follows Intake for the same permissions
     // Since 0008j Calls (reports.view or performance.team) and Calls per agent (performance.team) follow Inbound
     // Since 0008o (16 October 2026) Follow-up follows Speed to lead (reports.view, performance.team or monitoring.live);
-    // since 0008p Forms (reports.view or performance.team) follows Calls per agent, so Data quality moves by one
+    // since 0008p Forms (reports.view or performance.team) follows Calls per agent, so Data quality moves by one;
+    // since 0008t Email (reports.view or performance.team) and Email per agent (performance.team, and the tenant's
+    // reports.per_person holding email, as the dev seed's does) follow Forms; since 0008u First orders (reports.view or
+    // performance.team) and Orders per person (performance.team, and reports.per_person holding orders, as the dev
+    // seed's does) follow Email per agent; since 0008v the Campaigns group (Campaign monitoring, reports.view or
+    // performance.team) follows Reports
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls",
-      "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], false],
-    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/data-quality"], false],
+      "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality",
+      "/campaigns"], false],
+    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent;
+    // First orders without Orders per person
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms", "/reports/email",
+      "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up", "/reports/intake",
-      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms"], true],
+      "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders",
+      "/reports/orders-per-person", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
-      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], true],
+      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/follow-up",
-      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"], true],
+      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent",
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -302,7 +329,8 @@ async function expectReports() {
   }
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
-  for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/data-quality"]) {
+  for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
+    "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -435,6 +463,364 @@ async function expectCalls() {
             if (wrong.length > 0) problems.push(`${where}: ${wrong.length} of the deltas before the telephony history do not say "No history to compare yet" in Muted with the history's first date in the title`);
           }
         }
+      }
+    }
+    await ctx.close();
+  }
+}
+
+// Email and Email per agent (addition 0008t, brief N19-A part 1), per identity at 1280 px: Email in the rail
+// and on the page for reports.view or performance.team, Email per agent for performance.team while the
+// tenant's reports.per_person holds email (the reader sees Email only; the agent gets the no-permission card;
+// the invest tenant, without email and without the switch, sees Email say "No email connected" in words and
+// no Email per agent: absent from the rail, its page not found); the page never scrolls sideways; the
+// keycaps K, I, B (and G on Email) next to the period bar's; the tables end inside their cards (they may
+// scroll inside them); on Email per agent Enter opens the first person's hours, Down moves to the next and
+// a click opens the not-linked row; the right-most header's hint stays inside the viewport. --provoke lets
+// the per-inbox table spill out of its card
+async function expectEmail() {
+  // [subject, sees Email, sees Email per agent, email connected]
+  const cases = [
+    ["manager", true, true, true], ["supervisor", true, true, true], ["admin", true, true, true], ["analyst", true, true, true],
+    ["reader", true, false, true], ["invest-analyst", true, false, false], ["agent-one", false, false, true],
+  ];
+  for (const [subject, email, perAgent, connected] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/email") !== email) problems.push(`${subject}: Email ${email ? "missing from" : "shown in"} the rail`);
+    if (rail.includes("/reports/email-per-agent") !== perAgent) problems.push(`${subject}: Email per agent ${perAgent ? "missing from" : "shown in"} the rail`);
+    for (const [path, may, scroll, table] of [["/reports/email?range=month&group=day", email, "email-by-inbox-scroll", "email-by-inbox"],
+      ["/reports/email-per-agent?range=month", perAgent, "email-agents-scroll", "email-agents-table"]]) {
+      const where = `${subject} ${path.split("?")[0]}`;
+      const r = await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        notConnected: !!document.querySelector('[data-testid="email-not-connected"], [data-testid="email-agents-not-connected"]'),
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        // without the tenant's switch the per-person page does not exist; without the permission it says so
+        if (path.startsWith("/reports/email-per-agent") && subject === "invest-analyst" && r?.status() !== 404) problems.push(`${where}: answers ${r?.status()}, expected 404 without reports.per_person`);
+        if (m.tables > 0 || m.notConnected) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      if (!connected) {
+        if (!m.notConnected || m.tables > 0) problems.push(`${where}: a tenant without email does not say so in words`);
+        continue;
+      }
+      for (const k of ["T", "W", "M", "C", "K", "I", "B", ...(path.startsWith("/reports/email?") ? ["G"] : [])]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (path.startsWith("/reports/email-per-agent")) {
+        const first = p.locator('[data-testid="email-agent-toggle"]').first();
+        await first.focus();
+        await p.keyboard.press("Enter");
+        await p.keyboard.press("ArrowDown");
+        const moved = await p.evaluate(() => document.activeElement?.getAttribute("data-testid") === "email-agent-toggle"
+          && document.activeElement !== document.querySelector('[data-testid="email-agent-toggle"]'));
+        await p.locator('[data-testid="email-agent-not-linked"] td').nth(1).click();
+        const opened = await p.locator('[data-testid="email-agent-hours"]').count();
+        if (await first.getAttribute("aria-expanded") !== "true") problems.push(`${where}: Enter does not open the first row`);
+        if (!moved) problems.push(`${where}: Down does not move to the next person`);
+        if (opened !== 2) problems.push(`${where}: ${opened} rows opened, expected the first and the not-linked one`);
+      }
+      const f = await p.evaluate(([id, spill]) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+        const card = box.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        const main = document.querySelector("main");
+        return { spills: box.getBoundingClientRect().right > edge + 0.5 || (getComputedStyle(box).overflowX === "visible"
+          && [...box.querySelectorAll("tr")].some((row) => row.getBoundingClientRect().right > edge + 0.5)), mainX: main.scrollWidth - main.clientWidth };
+      }, [scroll, provoke && subject === "manager"]);
+      if (!f) problems.push(`${where}: ${scroll} missing`);
+      else {
+        if (f.spills) problems.push(`${where}: its table does not end inside its card at 1280`);
+        if (f.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${f.mainX}px at 1280`);
+      }
+      const mark = p.locator(`[data-testid="${table}"] thead th:last-child button[data-header-hint]`);
+      if (await mark.count() !== 1) problems.push(`${where}: the right-most header's hint is missing`);
+      else {
+        await mark.focus();
+        const inside = await p.evaluate(() => {
+          const el = document.activeElement;
+          const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+          if (!panel || panel.hidden) return null;
+          const rect = panel.getBoundingClientRect();
+          return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight;
+        });
+        if (inside === null) problems.push(`${where}: the right-most header's hint does not show on focus`);
+        else if (!inside) problems.push(`${where}: the right-most header's hint leaves the viewport`);
+      }
+      await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}.png`, fullPage: true });
+    }
+    await ctx.close();
+  }
+}
+
+// First orders and Orders per person (addition 0008u, brief N19-A part 2), per identity at 1280 px: First
+// orders in the rail and on the page for reports.view or performance.team, Orders per person for performance.team
+// while the tenant's reports.per_person holds orders (the reader sees First orders only; the agent gets the
+// no-permission card; the invest tenant, without an order pipeline and without the switch, sees First orders say
+// "No orders connected" in words and no Orders per person: absent from the rail, its page not found); the page never
+// scrolls sideways, in every grouping; the keycaps K, V (and G and X on First orders) next to the period bar's; four
+// tiles, a bar per level and "History from" in Muted; the tables end inside their cards (they may scroll inside
+// them); the right-most header's hint stays inside the viewport. --provoke lets the order list spill out of its card
+async function expectFirstOrders() {
+  // [subject, sees First orders, sees Orders per person, orders connected]
+  const cases = [
+    ["manager", true, true, true], ["supervisor", true, true, true], ["admin", true, true, true], ["analyst", true, true, true],
+    ["reader", true, false, true], ["invest-analyst", true, false, false], ["agent-one", false, false, true],
+  ];
+  for (const [subject, orders, perPerson, connected] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/reports/first-orders") !== orders) problems.push(`${subject}: First orders ${orders ? "missing from" : "shown in"} the rail`);
+    if (rail.includes("/reports/orders-per-person") !== perPerson) problems.push(`${subject}: Orders per person ${perPerson ? "missing from" : "shown in"} the rail`);
+    const pages = [
+      ["/reports/first-orders?range=month&group=day", orders, "first-order-list-scroll", "first-order-list"],
+      ["/reports/first-orders?range=month&group=market", orders, "first-order-by-group-scroll", "first-order-by-group"],
+      ["/reports/first-orders?range=month&group=level", orders, "first-order-by-group-scroll", "first-order-by-group"],
+      ["/reports/orders-per-person?range=month", perPerson, "orders-person-scroll", "orders-person-table"],
+    ];
+    for (const [path, may, scroll, table] of pages) {
+      const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1]})` : ""}`;
+      const firstOrders = path.startsWith("/reports/first-orders");
+      const r = await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        tiles: document.querySelectorAll('[data-testid="first-order-tiles"] > *').length,
+        levels: document.querySelectorAll('[data-testid="first-order-levels"] > li').length,
+        history: (() => {
+          const el = document.querySelector('[data-testid="first-order-history"]');
+          return el ? { text: el.textContent?.trim() ?? "", muted: el.classList.contains("text-p4a-muted") } : null;
+        })(),
+        notConnected: !!document.querySelector('[data-testid="first-orders-not-connected"], [data-testid="orders-person-not-connected"]'),
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        // without the tenant's switch the per-person page does not exist; without the permission it says so
+        if (!firstOrders && subject === "invest-analyst" && r?.status() !== 404) problems.push(`${where}: answers ${r?.status()}, expected 404 without reports.per_person`);
+        if (m.tables > 0 || m.notConnected) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      if (!connected) {
+        if (!m.notConnected || m.tables > 0 || m.tiles > 0) problems.push(`${where}: a tenant without an order pipeline does not say so in words`);
+        continue;
+      }
+      for (const k of ["T", "W", "M", "C", "K", "V", ...(firstOrders ? ["G", "X"] : [])]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (firstOrders) {
+        if (m.tiles !== 4) problems.push(`${where}: ${m.tiles} tiles, expected 4`);
+        if (m.levels < 2) problems.push(`${where}: ${m.levels} level bars, expected one per level`);
+        if (!m.history || !m.history.text.startsWith("History from") || !m.history.muted) problems.push(`${where}: "History from" missing or not in Muted (${JSON.stringify(m.history)})`);
+      }
+      const f = await p.evaluate(([id, spill]) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+        const card = box.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        const main = document.querySelector("main");
+        return { spills: box.getBoundingClientRect().right > edge + 0.5 || (getComputedStyle(box).overflowX === "visible"
+          && [...box.querySelectorAll("tr")].some((row) => row.getBoundingClientRect().right > edge + 0.5)), mainX: main.scrollWidth - main.clientWidth };
+      }, [scroll, provoke && subject === "manager" && scroll === "first-order-list-scroll"]);
+      if (!f) problems.push(`${where}: ${scroll} missing`);
+      else {
+        if (f.spills) problems.push(`${where}: its table does not end inside its card at 1280`);
+        if (f.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${f.mainX}px at 1280`);
+      }
+      // the order list ends on the link column, whose header is a hidden label without a hint: the right-most hint is the amount's
+      const marks = p.locator(`[data-testid="${table}"] thead th button[data-header-hint]`);
+      const mark = marks.last();
+      if (await marks.count() === 0) problems.push(`${where}: the right-most header's hint is missing`);
+      else {
+        await mark.focus();
+        const inside = await p.evaluate(() => {
+          const el = document.activeElement;
+          const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+          if (!panel || panel.hidden) return null;
+          const rect = panel.getBoundingClientRect();
+          return rect.left >= 0 && rect.top >= 0 && rect.right <= window.innerWidth && rect.bottom <= window.innerHeight;
+        });
+        if (inside === null) problems.push(`${where}: the right-most header's hint does not show on focus`);
+        else if (!inside) problems.push(`${where}: the right-most header's hint leaves the viewport`);
+      }
+      const name = path.split("?")[0].split("/").pop() + (path.includes("group=") && !path.includes("group=day") ? `-${path.split("group=")[1]}` : "");
+      await p.screenshot({ path: `${outDir}/${subject}-${name}.png`, fullPage: true });
+    }
+    await ctx.close();
+  }
+}
+
+// Campaign monitoring (addition 0008v, brief N19-A part 3), per identity at 1280 px: in the rail's Campaigns group and
+// on the page for reports.view or performance.team (the agent gets the no-permission card and no journey); a card per
+// journey, the archived one absent, each card inside the main area; the page never scrolls sideways; a journey's page
+// with the Muted banner, seven dashed placeholder cards (the drill-down locked), its prerequisites unticked, the
+// breadcrumbs Welcome › Campaigns › the journey and no figure; an archived or unknown journey not found; a tenant
+// without journeys says so in words. --provoke widens the first card past the main area
+async function expectCampaigns() {
+  // [subject, sees Campaign monitoring, journeys]
+  const cases = [["manager", true, 3], ["supervisor", true, 3], ["admin", true, 3], ["analyst", true, 3], ["reader", true, 3], ["invest-analyst", true, 0],
+    ["agent-one", false, 0]];
+  for (const [subject, may, count] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    if (rail.includes("/campaigns") !== may) problems.push(`${subject}: Campaign monitoring ${may ? "missing from" : "shown in"} the rail`);
+    await p.goto(BASE + "/campaigns");
+    await p.waitForLoadState("networkidle");
+    const m = await p.evaluate((spill) => {
+      const cards = [...document.querySelectorAll('[data-testid="journey-card"]')];
+      if (spill && cards[0]) cards[0].style.minWidth = "1400px";
+      const main = document.querySelector("main");
+      const edge = main.getBoundingClientRect().right;
+      return {
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        codes: cards.map((c) => c.getAttribute("data-code")),
+        outside: cards.filter((c) => c.getBoundingClientRect().right > edge + 0.5).length,
+        empty: !!document.querySelector('[data-testid="journeys-empty"]'),
+        noPermission: !!document.querySelector("main h2") && cards.length === 0 && !document.querySelector('[data-testid="journeys-empty"]'),
+      };
+    }, provoke && subject === "manager");
+    if (m.scrollX) problems.push(`${subject} /campaigns: page scrolls horizontally at 1280`);
+    if (!may) {
+      if (m.codes.length > 0 || !m.noPermission) problems.push(`${subject} /campaigns: journeys shown to someone without the permission`);
+      await ctx.close();
+      continue;
+    }
+    if (m.codes.length !== count) problems.push(`${subject} /campaigns: ${m.codes.length} journeys, expected ${count}`);
+    if (m.codes.includes("old-pilot")) problems.push(`${subject} /campaigns: the archived journey is shown`);
+    if (count === 0 && !m.empty) problems.push(`${subject} /campaigns: a tenant without journeys does not say so in words`);
+    if (m.outside > 0) problems.push(`${subject} /campaigns: ${m.outside} journey cards end outside the main area at 1280`);
+    if (count > 0) {
+      await p.screenshot({ path: `${outDir}/${subject}-campaigns.png`, fullPage: true });
+      await p.locator('[data-testid="journey-card"][data-code="fca-uk-consumers"] h2 a').click();
+      await p.waitForURL("**/campaigns/fca-uk-consumers");
+      await p.waitForLoadState("networkidle");
+      const d = await p.evaluate(() => {
+        const banner = document.querySelector('[data-testid="journey-banner"]');
+        const planned = [...document.querySelectorAll('[data-testid="planned-card"]')];
+        return {
+          scrollX: document.documentElement.scrollWidth > window.innerWidth,
+          banner: banner ? { text: banner.textContent?.trim() ?? "", muted: banner.classList.contains("text-p4a-muted") } : null,
+          planned: planned.map((c) => c.getAttribute("data-plan")),
+          dashed: planned.filter((c) => getComputedStyle(c).borderTopStyle === "dashed").length,
+          locked: !!document.querySelector('[data-plan="drillDown"] svg') && /Locked/.test(document.querySelector('[data-plan="drillDown"]')?.textContent ?? ""),
+          prerequisites: document.querySelectorAll('[data-testid="journey-prerequisite"]').length,
+          ticked: document.querySelectorAll('[data-testid="journey-prerequisites"] input:checked').length,
+          figures: document.querySelectorAll("main table, main [data-tile]").length,
+          design: document.querySelector('[data-testid="journey-design"]')?.getAttribute("target") ?? null,
+        };
+      });
+      const where = `${subject} /campaigns/fca-uk-consumers`;
+      if (d.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!d.banner || !d.banner.text.startsWith("Placeholder: this monitor is not built yet") || !d.banner.muted) problems.push(`${where}: the Muted banner is missing (${JSON.stringify(d.banner)})`);
+      if (JSON.stringify(d.planned) !== JSON.stringify(["coverage", "steps", "workflow", "attention", "drillDown", "life", "audit"]) || d.dashed !== 7) {
+        problems.push(`${where}: placeholder cards ${JSON.stringify(d.planned)}, ${d.dashed} dashed, expected the seven in order, dashed`);
+      }
+      if (!d.locked) problems.push(`${where}: the customer drill-down is not shown as locked`);
+      if (d.prerequisites !== 7 || d.ticked !== 0) problems.push(`${where}: ${d.prerequisites} prerequisites, ${d.ticked} ticked; expected 7, none ticked`);
+      if (d.figures > 0) problems.push(`${where}: a placeholder shows a table or a tile`);
+      if (d.design !== "_blank") problems.push(`${where}: the design link does not open in a new tab`);
+      await p.screenshot({ path: `${outDir}/${subject}-campaign-fca.png`, fullPage: true });
+      for (const code of ["old-pilot", "no-such-journey"]) {
+        const r = await p.goto(BASE + `/campaigns/${code}`);
+        if (r?.status() !== 404) problems.push(`${subject} /campaigns/${code}: answers ${r?.status()}, expected 404`);
+      }
+    }
+    await ctx.close();
+  }
+  // the breadcrumbs of a journey's page: Welcome › Campaigns › the journey (the analyst, whose urgent message is read)
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "analyst" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + "/campaigns/opc");
+  await p.waitForLoadState("networkidle");
+  const crumbs = await p.evaluate(() => [...document.querySelectorAll('[data-testid="breadcrumbs"] li')].map((li) => li.textContent?.trim()));
+  if (JSON.stringify(crumbs) !== JSON.stringify(["Welcome", "Campaigns", "OPC"])) problems.push(`analyst /campaigns/opc: breadcrumbs ${JSON.stringify(crumbs)}, expected Welcome › Campaigns › OPC`);
+  await ctx.close();
+}
+
+// Callbacks kept (addition 0008w, brief N19-A part 4) at 1280 px: on Follow-up below the lists the eight weeks for
+// reports.view or performance.team and the per-person table for performance.team only (the reader sees the weeks; the
+// agent neither); both tables end inside their cards (they may scroll inside them); the weeks' right-most header hint
+// stays inside the viewport; a tenant without a callback type says "No callback type set" in words, on Follow-up and
+// on the Dashboard's Intake row, whose seventh tile it is. --provoke lets the weeks table spill out of its card
+async function expectCallbacks() {
+  // [subject, sees the weeks, sees per person, a callback type counted]
+  const cases = [["manager", true, true, true], ["analyst", true, true, true], ["reader", true, false, true], ["invest-analyst", true, false, false],
+    ["agent-one", false, false, true]];
+  for (const [subject, weeks, owners, connected] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/reports/follow-up");
+    await p.waitForLoadState("networkidle");
+    const where = `${subject} /reports/follow-up`;
+    const m = await p.evaluate(([spill]) => {
+      const inCard = (id) => {
+        const box = document.querySelector(`[data-testid="${id}"]`);
+        if (!box) return null;
+        if (spill) { box.style.overflowX = "visible"; box.querySelector("table")?.setAttribute("style", "min-width: 1400px"); }
+        const card = box.closest("section");
+        const edge = card.getBoundingClientRect().right - parseFloat(getComputedStyle(card).paddingRight);
+        return box.getBoundingClientRect().right > edge + 0.5 || (getComputedStyle(box).overflowX === "visible"
+          && [...box.querySelectorAll("tr")].some((row) => row.getBoundingClientRect().right > edge + 0.5));
+      };
+      const main = document.querySelector("main");
+      return {
+        weeks: document.querySelectorAll('[data-testid="callbacks-weeks"]').length,
+        weekRows: document.querySelectorAll('[data-testid="callbacks-week"]').length,
+        owners: document.querySelectorAll('[data-testid="callbacks-owners"]').length,
+        notConnected: !!document.querySelector('[data-testid="callbacks-not-connected"]'),
+        spills: [inCard("callbacks-weeks-scroll"), inCard("callbacks-owners-scroll")],
+        mainX: main ? main.scrollWidth - main.clientWidth : 0,
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+      };
+    }, [provoke && subject === "manager"]);
+    if (m.scrollX || m.mainX > 0) problems.push(`${where}: the page or the main area scrolls sideways at 1280`);
+    if ((m.weeks === 1) !== (weeks && connected)) problems.push(`${where}: the weeks table ${m.weeks ? "shown" : "missing"}`);
+    if ((m.owners === 1) !== (owners && connected)) problems.push(`${where}: the per-person table ${m.owners ? "shown" : "missing"}`);
+    if (m.notConnected !== (weeks && !connected)) problems.push(`${where}: "No callback type set" ${m.notConnected ? "shown" : "missing"}`);
+    if (weeks && connected && m.weekRows !== 8) problems.push(`${where}: ${m.weekRows} weeks, expected the current one and the seven before`);
+    if (m.spills.some((x) => x === true)) problems.push(`${where}: a callbacks table does not end inside its card at 1280`);
+    if (subject === "manager") {
+      const mark = p.locator('[data-testid="callbacks-weeks"] thead th:last-child button[data-header-hint]');
+      if (await mark.count() !== 1) problems.push(`${where}: the weeks' right-most header hint is missing`);
+      else {
+        await mark.focus();
+        const inside = await p.evaluate(() => {
+          const el = document.activeElement;
+          const panel = el && document.getElementById(el.getAttribute("aria-describedby") ?? "");
+          if (!panel || panel.hidden) return null;
+          const r = panel.getBoundingClientRect();
+          return r.left >= 0 && r.top >= 0 && r.right <= window.innerWidth && r.bottom <= window.innerHeight;
+        });
+        if (inside !== true) problems.push(`${where}: the weeks' right-most header hint ${inside === null ? "does not show on focus" : "leaves the viewport"}`);
+      }
+      await p.screenshot({ path: `${outDir}/${subject}-follow-up-callbacks.png`, fullPage: true });
+    }
+    if (subject === "manager" || subject === "invest-analyst") {
+      await p.goto(BASE + "/reports/dashboard?range=month");
+      await p.waitForLoadState("networkidle");
+      const tile = await p.evaluate(() => {
+        const el = document.querySelector('[data-testid="intake-callbacks"]');
+        return el ? { notConnected: !!el.querySelector('[data-testid="not-connected"]'), text: el.textContent ?? "" } : null;
+      });
+      if (!tile) problems.push(`${subject} /reports/dashboard: the Callbacks kept tile is missing from the Intake row`);
+      else if (tile.notConnected !== !connected || (!connected && !tile.text.includes("No callback type set"))) {
+        problems.push(`${subject} /reports/dashboard: the Callbacks kept tile ${connected ? "says not connected" : "does not say No callback type set"}`);
       }
     }
     await ctx.close();
@@ -1094,9 +1480,10 @@ async function expectFrame() {
     if (after.banner || after.config === 0 || after.allows < 10 || jar["cma-preview-role"]) problems.push(`preview: after Exit ${JSON.stringify({ ...after, cookie: jar["cma-preview-role"] ?? null })}, expected the admin's own view and no cookie`);
     await ctx.close();
   }
-  // the manager's rail holds 18 pages since Follow-up (0008o) and Forms (0008p) joined the Reports group (only the
-  // first nine with a digit key since the IT audit of 17 October 2026, so the pages are counted by their links)
-  for (const [subject, pages] of [["manager", 18], ["agent-one", 5]]) {
+  // the manager's rail holds 23 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
+  // orders and Orders per person (0008u) joined the Reports group and Campaign monitoring (0008v) the Campaigns group
+  // (only the first nine with a digit key since the IT audit of 17 October 2026, so the pages are counted by their links)
+  for (const [subject, pages] of [["manager", 23], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -1119,6 +1506,10 @@ await expectReports();
 await expectLiveBoard();
 await expectCalls();
 await expectForms();
+await expectEmail();
+await expectFirstOrders();
+await expectCampaigns();
+await expectCallbacks();
 await expectIntakeConfiguration();
 await expectInvitations();
 await expectIrreversibleConfirmations();
@@ -1127,5 +1518,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines, Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 6 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

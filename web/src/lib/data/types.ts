@@ -1273,6 +1273,294 @@ export interface FormCategoryInput {
   isActive: boolean;
 }
 
+// ---- Email reports (addition 0008t; brief N19-A part 1, 18 October 2026). Ids, codes, counts and times
+// only: no subject, body, address, name or phone number exists to show. Mailboxes are the inboxes' channel
+// accounts; an engagement's origin tells inbox copies and automations apart, as configuration.
+
+/** How cma.email_report groups the period over time */
+export type EmailGroup = "day" | "week";
+
+/**
+ * The report's filters: a market code ("unknown" for an email without one), an inbox and a mailbox (each
+ * connection id ':' source id); each null for all. An engagement has no inbox or mailbox, so either filter
+ * leaves engagements out
+ */
+export interface EmailFilter {
+  market: string | null;
+  inbox: string | null;
+  account: string | null;
+}
+
+/** The figures of a group, the period or the previous period (cma.email_figures_of) */
+export interface EmailFigures {
+  /** Inbox messages in or forwarded on counted inboxes, mailboxes and channels, spam left out */
+  received: number;
+  /** Engagements in or forwarded (logged replies): a column of their own, never added to received */
+  loggedReplies: number;
+  /** Out and sent by an agent (inbox messages and engagements that are no inbox copy and no automation) */
+  sentAgent: number;
+  /** Out and sent by an automation (the connection's automated origins, or a bot, an AI, the system, an integration) */
+  sentAutomated: number;
+  bouncedFailed: number;
+  /** Conversations created, or reopened after a close */
+  threadsOpened: number;
+  threadsClosed: number;
+  /** Openings with a first agent reply */
+  replied: number;
+  replyMedianSeconds: number | null;
+  /** In the conversation's market's office hours; null when no opening had them */
+  replyMedianBusinessSeconds: number | null;
+  /** Openings replied within email.reply_target_minutes, of those whose market has office hours */
+  withinTarget: number;
+  targetKnown: number;
+  /** Replied openings of an unknown market: no business hours */
+  noHours: number;
+  closeMedianSeconds: number | null;
+  closeMedianBusinessSeconds: number | null;
+}
+
+/** The figures of one group: a date or a week's Monday, a market, an inbox, a mailbox or a category ('none' for an email without one) */
+export interface EmailRow extends EmailFigures {
+  groupKey: string;
+  groupLabel: string | null;
+}
+
+/** Received inbox messages per date (or week) and inbox or mailbox, for the columns */
+export interface EmailSeriesRow {
+  groupKey: DateKey;
+  seriesKey: string;
+  seriesLabel: string | null;
+  received: number;
+}
+
+/** A conversation waiting now: ids, ages and its link only */
+export interface EmailWaitingRow {
+  connectionId: string;
+  threadId: string;
+  inboxName: string | null;
+  accountName: string | null;
+  market: string;
+  waitingSince: Instant;
+  waitedSeconds: number;
+  /** In the market's office hours; null for an unknown market (no business hours) */
+  waitedBusinessSeconds: number | null;
+  recordUrl: string | null;
+}
+
+/** An open lead deal not responding: ids, ages and its link only */
+export interface EmailNotRespondingRow {
+  connectionId: string;
+  dealId: string;
+  pipelineLabel: string;
+  market: string;
+  /** The deal's owner as a person; null when the owner maps to nobody */
+  ownerUserId: string | null;
+  ownerName: string | null;
+  lastEmailAt: Instant;
+  daysSince: number;
+  recordUrl: string | null;
+}
+
+export interface EmailReport {
+  from: DateKey;
+  to: DateKey;
+  group: EmailGroup;
+  filter: EmailFilter;
+  /** False when no source of the tenant has an inbox or an email: the screen says so, never 0 */
+  email: boolean;
+  /** Per date or week */
+  rows: EmailRow[];
+  total: EmailFigures;
+  /** The previous period's total, like for like (as Calls) */
+  previous: EmailFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  /** The business date of the tenant's earliest counted email (cma.email_history_start); null without one */
+  historyStart: DateKey | null;
+  byInbox: EmailRow[];
+  byAccount: EmailRow[];
+  byCategory: EmailRow[];
+  byMarket: EmailRow[];
+  receivedByInbox: EmailSeriesRow[];
+  receivedByAccount: EmailSeriesRow[];
+  /** The tenant's settings the hints name */
+  replyTargetMinutes: number;
+  noResponseDays: number;
+  waiting: { rows: EmailWaitingRow[]; total: number };
+  notResponding: { rows: EmailNotRespondingRow[]; total: number };
+  /** The lists for the filters: markets, inboxes and mailboxes with email in the period */
+  markets: string[];
+  inboxes: { key: string; name: string }[];
+  accounts: { key: string; name: string }[];
+}
+
+/** One row of cma.email_per_person: a person, the not-linked actions, or the total */
+export interface EmailPerson {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** How many owner ids act without a person (kind notLinked); never which */
+  unlinkedOwners: number | null;
+  sent: number;
+  replies: number;
+  threadsClosed: number;
+  replyMedianSeconds: number | null;
+  replyMedianBusinessSeconds: number | null;
+  withinTarget: number;
+  targetKnown: number;
+  /** Agent sends per hour of day (0 to 23), in each email's market zone */
+  sentByHour: number[];
+}
+
+export interface EmailPerAgent {
+  from: DateKey;
+  to: DateKey;
+  filter: EmailFilter;
+  email: boolean;
+  /** People by name, then the not-linked row when there is one */
+  rows: EmailPerson[];
+  total: EmailPerson;
+  replyTargetMinutes: number;
+  markets: string[];
+  inboxes: { key: string; name: string }[];
+  accounts: { key: string; name: string }[];
+}
+
+// ---- First orders (addition 0008u; brief N19-A part 2, 18 October 2026): of the new first orders, which came
+// in by self-service and which through the call center. Ids, codes, counts, amounts and times only: no name,
+// address or phone number exists to show; a phone is "hashed" or not.
+
+/** How cma.first_orders_report groups the period */
+export type FirstOrderGroup = "day" | "week" | "market" | "level";
+
+/** The evidence of a first order, as attribution.level_order names it */
+export type FirstOrderEvidence = "lead_deal" | "conversation" | "email" | "phone_match" | "attempt" | "known_contact";
+
+/** A first order's level: the first evidence in the tenant's level order that holds, else self_service */
+export type FirstOrderLevel = FirstOrderEvidence | "self_service";
+
+/** Where a first order came in: the call center when its level is an assisted one, else self-service */
+export type FirstOrderAttribution = "call_center" | "self_service";
+
+/** The report's filters: a market code ("unknown" for a deal without one) and a level; each null for all */
+export interface FirstOrderFilter {
+  market: string | null;
+  level: FirstOrderLevel | null;
+}
+
+/** The figures of a group, the period or the previous period (cma.first_orders_figures_of) */
+export interface FirstOrderFigures {
+  /** Won order deals whose contact has no earlier one and whose store order is no renewal or repeat */
+  firstOrders: number;
+  callCenter: number;
+  selfService: number;
+  /** Counted apart, never attributed: the contact's later orders, renewals, orders the store counts as repeat, deals without a contact */
+  repeats: number;
+  renewals: number;
+  notFirst: number;
+  noContact: number;
+  /** First orders with a touch in the window, and the median days from the first touch to the order */
+  withTouch: number;
+  daysMedian: number | null;
+}
+
+export interface FirstOrderRow extends FirstOrderFigures {
+  /** A date, a Monday, a market code or a level */
+  groupKey: string;
+}
+
+/** First orders' amounts in one currency (never summed across currencies); currency null for orders without one */
+export interface FirstOrderAmount {
+  market: string | null;
+  currency: string | null;
+  orders: number;
+  amount: number | null;
+  callCenterAmount: number;
+  selfServiceAmount: number;
+}
+
+/** One first order of the list: ids, market, time, level, evidence, the link; no name, address or number */
+export interface FirstOrderListRow {
+  connectionId: string;
+  dealSourceId: string;
+  market: string;
+  createdAt: Instant;
+  level: FirstOrderLevel;
+  attribution: FirstOrderAttribution;
+  evidence: Record<FirstOrderEvidence, boolean>;
+  /** The linked store order or its customer carries a phone hash (phone matching possible) */
+  phoneHashed: boolean;
+  hasOrder: boolean;
+  currency: string | null;
+  amount: number | null;
+  daysFromFirstTouch: number | null;
+  recordUrl: string | null;
+}
+
+/** The tenant's attribution settings, for the hints and the order of the levels */
+export interface AttributionSettings {
+  windowDays: number;
+  levelOrder: FirstOrderEvidence[];
+  assistedLevels: FirstOrderEvidence[];
+  knownContactMinutes: number;
+  orderMatchMinutes: number;
+}
+
+export interface FirstOrdersReport {
+  from: DateKey;
+  to: DateKey;
+  group: FirstOrderGroup;
+  filter: FirstOrderFilter;
+  /** An order pipeline is set (Configuration, Sources); false: "No orders connected", never 0 */
+  connected: boolean;
+  /** Per group of the grouping, in order */
+  rows: FirstOrderRow[];
+  total: FirstOrderFigures;
+  /** The previous period's total, like for like */
+  previous: FirstOrderFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  byLevel: FirstOrderRow[];
+  byMarket: FirstOrderRow[];
+  amounts: FirstOrderAmount[];
+  amountsByMarket: FirstOrderAmount[];
+  list: { rows: FirstOrderListRow[]; total: number };
+  /** The first date whose window the stored data covers; the phone tier's own start */
+  historyStart: DateKey | null;
+  phoneStart: DateKey | null;
+  settings: AttributionSettings;
+  markets: string[];
+}
+
+/** A person's credited first orders (the owner of the latest assisted touch), or the not-linked row, or the total */
+export interface OrderPerson {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** How many owner ids without a person (the not-linked row only), never which */
+  unlinkedOwners: number | null;
+  orders: number;
+  leadDeal: number;
+  conversation: number;
+  email: number;
+  phoneMatch: number;
+  otherLevels: number;
+  daysMedian: number | null;
+}
+
+export interface OrdersPerPerson {
+  from: DateKey;
+  to: DateKey;
+  filter: FirstOrderFilter;
+  connected: boolean;
+  rows: OrderPerson[];
+  total: OrderPerson;
+  settings: AttributionSettings;
+  markets: string[];
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1326,6 +1614,20 @@ export interface SourcePipeline {
   isActive: boolean;
   /** A ticket pipeline's own response time in business minutes (0008o), null for the tenant's tickets.sla_minutes */
   slaMinutes: number | null;
+  /** A deal pipeline whose won deals are orders (0008u) */
+  isOrder: boolean;
+  /** Its stages with their outcome (0008u), in display order */
+  stages: SourceStage[];
+}
+
+/** A pipeline stage (0008u): the source's closed flag and the outcome, from the source or a person's choice */
+export interface SourceStage {
+  stageId: string;
+  label: string;
+  isClosed: boolean;
+  outcome: "won" | "lost" | null;
+  outcomeSource: "source" | "person" | null;
+  isActive: boolean;
 }
 
 export interface SourceForm {
@@ -1477,6 +1779,61 @@ export interface SourceDetail {
   /** A CRM connection's task statuses and types (addition 0008n); empty for another kind */
   taskStatuses: SourceTaskStatus[];
   taskTypes: SourceTaskType[];
+  /** A CRM connection's conversations: inboxes, mailboxes and channels (additions 0008m and 0008t); empty for another kind */
+  inboxes: SourceInbox[];
+  mailboxes: SourceMailbox[];
+  inboxChannels: SourceInboxChannel[];
+}
+
+/** An inbox of a CRM connection's conversations (0008m): name from the source; counted and market as configuration */
+export interface SourceInbox {
+  inboxId: string;
+  name: string;
+  isCounted: boolean;
+  market: string | null;
+  isActive: boolean;
+}
+
+/**
+ * A mailbox (0008t): an inbox's channel account. The name is the source's, or its id when the source's name
+ * holds an address (the CMA keeps no address); the label is a person's and survives every refresh
+ */
+export interface SourceMailbox {
+  accountId: string;
+  name: string;
+  label: string | null;
+  inboxId: string | null;
+  channelId: string | null;
+  isCounted: boolean;
+  market: string | null;
+  isActive: boolean;
+}
+
+/** A channel of a CRM connection's conversations (0008m): name and kind from the source; counted as configuration */
+export interface SourceInboxChannel {
+  channelId: string;
+  name: string;
+  kind: string;
+  isCounted: boolean;
+  isActive: boolean;
+}
+
+export interface SourceInboxInput {
+  inboxId: string;
+  isCounted: boolean;
+  market: string | null;
+}
+
+export interface SourceMailboxInput {
+  accountId: string;
+  label: string | null;
+  isCounted: boolean;
+  market: string | null;
+}
+
+export interface SourceInboxChannelInput {
+  channelId: string;
+  isCounted: boolean;
 }
 
 /** The connection's own fields a person may change; each only when given */
@@ -1491,6 +1848,15 @@ export interface SourcePipelineInput {
   pipelineId: string;
   isCounted: boolean;
   isLead: boolean;
+  /** A deal pipeline whose won deals are orders (0008u); left as it is when not given */
+  isOrder?: boolean;
+}
+
+/** A deal stage's outcome as a person sets it (0008u) */
+export interface SourceStageOutcomeInput {
+  pipelineId: string;
+  stageId: string;
+  outcome: "won" | "lost" | "none";
 }
 
 /** One form's new configuration; its kept fields stay as they are */
@@ -1843,6 +2209,73 @@ export interface DatabaseProbe {
   roundTripMs: number | null;
 }
 
+/** A callback's state (addition 0008w): kept, not kept, pending while its window is open; without a contact or a due time apart */
+export type CallbackState = "kept" | "not_kept" | "pending" | "no_contact" | "no_due";
+
+/** Callbacks counted (cma.callbacks_kept_figures_of): callbacks = kept + notKept + pending; noContact and noDue apart */
+export interface CallbackCounts {
+  callbacks: number;
+  kept: number;
+  notKept: number;
+  pending: number;
+  noContact: number;
+  noDue: number;
+}
+
+/** One ISO week of callbacks, from its Monday */
+export interface CallbackWeek extends CallbackCounts {
+  weekStart: DateKey;
+}
+
+/**
+ * Callbacks kept (cma.callbacks_kept_report, addition 0008w): the period per ISO week and in total, the previous
+ * period's total like for like; connected false while the tenant counts no callback type (said in words, never 0)
+ */
+export interface CallbacksKept {
+  from: DateKey;
+  to: DateKey;
+  connected: boolean;
+  weeks: CallbackWeek[];
+  total: CallbackCounts;
+  previous: CallbackCounts;
+  /** tasks.callback_window_minutes, for the hints */
+  windowMinutes: number;
+}
+
+/** One row of callbacks kept per person (cma.callbacks_kept_per_owner): a person, the owners without one, the total */
+export interface CallbackOwner {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** On the not-linked row: how many owner ids without a person (never which) */
+  unlinkedOwners: number | null;
+  callbacks: number;
+  kept: number;
+  notKept: number;
+  pending: number;
+  noContact: number;
+}
+
+/** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
+export type JourneyStatus = "placeholder" | "building" | "live";
+
+/**
+ * A journey of Campaign monitoring (addition 0008v): a placeholder for a compliance or campaign monitor, as
+ * configuration (cma.journeys()). Code, name, summary and prerequisites as a person set them; no customer data
+ */
+export interface Journey {
+  code: string;
+  name: string;
+  summary: string | null;
+  /** A market code of the catalog, or null */
+  market: string | null;
+  status: JourneyStatus;
+  /** The design's https link, or null until one exists */
+  designUrl: string | null;
+  /** The data prerequisites, in their order */
+  prerequisites: string[];
+}
+
 export interface CmaData {
   /**
    * The app_user check: who may work, with which role, tenant and employer,
@@ -2020,8 +2453,10 @@ export interface CmaData {
   setSourceConnection(me: Principal, id: string, input: SourceConnectionInput): Promise<void>;
   /** Replaces the non-secret settings (set_connection_settings); a secret-looking key CMA04 */
   setSourceSettings(me: Principal, id: string, settings: SourceSettings): Promise<void>;
-  /** Counted (set_connection_pipeline, routed and work type kept) and lead (set_pipeline_lead) of one pipeline */
+  /** Counted (set_connection_pipeline, routed and work type kept), lead (set_pipeline_lead) and, when given, order (set_pipeline_order, 0008u) of one pipeline */
   setSourcePipeline(me: Principal, id: string, input: SourcePipelineInput): Promise<void>;
+  /** A deal stage's outcome, a person's choice kept over every later read (set_stage_outcome, 0008u); an unknown stage CMA02 */
+  setSourceStageOutcome(me: Principal, id: string, input: SourceStageOutcomeInput): Promise<void>;
   /**
    * Several forms in one transaction (set_form, kept fields kept; then set_form_reporting when polled or the
    * category is given, addition 0008p); an unknown market or category CMA02 writes nothing, a counted form
@@ -2046,6 +2481,12 @@ export interface CmaData {
   setSourceTaskStatus(me: Principal, id: string, input: SourceTaskStatusInput): Promise<void>;
   /** One task type of a CRM connection (set_task_type, 0008n) */
   setSourceTaskType(me: Principal, id: string, input: SourceTaskTypeInput): Promise<void>;
+  /** One inbox of a CRM connection (set_inbox, 0008m: counted and market; its work type and channel kept) */
+  setSourceInbox(me: Principal, id: string, input: SourceInboxInput): Promise<void>;
+  /** One mailbox (set_inbox_account, 0008t): label, counted, market; a label with an @ CMA04 */
+  setSourceMailbox(me: Principal, id: string, input: SourceMailboxInput): Promise<void>;
+  /** One channel of the conversations (set_inbox_channel, 0008m: counted; its tenant channel kept) */
+  setSourceInboxChannel(me: Principal, id: string, input: SourceInboxChannelInput): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
   getMarkets(me: Principal): Promise<MarketsConfig>;
   /** Adds or changes a market (upsert_market) and its status (set_market_status) */
@@ -2104,6 +2545,26 @@ export interface CmaData {
   getFormsReport(me: Principal, range: HoursRange, group: FormsGroup, filter: FormsFilter): Promise<FormsReport>;
   /** Submissions per form, market, kept field and value, with the previous period; narrowed by a field and a value. Needs reports.view or performance.team */
   getFormsAnswers(me: Principal, range: HoursRange, filter: FormsFilter, field: string | null, value: string | null): Promise<FormsAnswers>;
+  // ---- Email reports (addition 0008t): the database checks the permission on every call (CMA06); at most 92 days
+  /** Reports → Email: every section of the period in one read, waiting now and not responding. Needs reports.view or performance.team */
+  getEmailReport(me: Principal, range: HoursRange, group: EmailGroup, filter: EmailFilter): Promise<EmailReport>;
+  /** Email per agent: per person, the not-linked actions, the total. Needs performance.team and reports.per_person holding email */
+  getEmailPerAgent(me: Principal, range: HoursRange, filter: EmailFilter): Promise<EmailPerAgent>;
+  // ---- First orders (addition 0008u): the database checks the permission on every call (CMA06); at most 92 days
+  /** Reports → First orders: the period per group, level and market, the previous total, the amounts per currency, the list, the history. Needs reports.view or performance.team */
+  getFirstOrders(me: Principal, range: HoursRange, group: FirstOrderGroup, filter: FirstOrderFilter): Promise<FirstOrdersReport>;
+  /** The first orders of the list for the CSV file, newest first, up to 500. Needs reports.view or performance.team */
+  getFirstOrdersExport(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<FirstOrderListRow[]>;
+  /** Orders per person: the credited first orders per person, the not-linked row, the total. Needs performance.team and reports.per_person holding orders */
+  getOrdersPerPerson(me: Principal, range: HoursRange, filter: FirstOrderFilter): Promise<OrdersPerPerson>;
+  // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days
+  /** The period per ISO week and in total, the previous period's total, whether a callback type counts. Needs reports.view or performance.team */
+  getCallbacksKept(me: Principal, range: HoursRange): Promise<CallbacksKept>;
+  /** Per person by name, the owners without a person as one row, the total. Needs performance.team */
+  getCallbacksPerOwner(me: Principal, range: HoursRange): Promise<CallbackOwner[]>;
+  // ---- Campaign monitoring (addition 0008v): the database checks the permission on every call (CMA06)
+  /** Every journey of the tenant but the archived ones, in their order. Needs reports.view or performance.team */
+  getJourneys(me: Principal): Promise<Journey[]>;
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)

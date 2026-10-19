@@ -20,17 +20,22 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export class UsageError extends Error {}
 
 /**
- * --name value pairs → an object. spec: { name: "uuid" | "date" | "minutes" | "text" }; an unknown
- * argument or a value of the wrong shape is a UsageError.
+ * --name value pairs → an object. spec: { name: "uuid" | "date" | "minutes" | "text" | "flag" }; a flag
+ * takes no value and reads true; an unknown argument or a value of the wrong shape is a UsageError.
  */
 export function parseArgs(argv, spec) {
   const out = {};
-  for (let i = 0; i < argv.length; i += 2) {
+  for (let i = 0; i < argv.length; i += 1) {
     const name = String(argv[i] ?? "").replace(/^--/, "");
-    const value = argv[i + 1];
     if (!String(argv[i]).startsWith("--") || !Object.hasOwn(spec, name)) throw new UsageError(`unknown argument ${argv[i]}`);
-    if (value === undefined) throw new UsageError(`--${name} needs a value`);
     const kind = spec[name];
+    if (kind === "flag") {
+      out[name] = true;
+      continue;
+    }
+    i += 1;
+    const value = argv[i];
+    if (value === undefined) throw new UsageError(`--${name} needs a value`);
     if (kind === "uuid" && !UUID.test(value)) throw new UsageError(`--${name} is not a uuid`);
     if (kind === "date" && (!DATE.test(value) || !Number.isFinite(Date.parse(`${value}T00:00:00Z`)))) throw new UsageError(`--${name} is not a date (YYYY-MM-DD)`);
     if (kind === "minutes" && !(/^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 100_000)) throw new UsageError(`--${name} is not a number of minutes`);

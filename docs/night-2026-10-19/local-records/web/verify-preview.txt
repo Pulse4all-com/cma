@@ -1,0 +1,25 @@
+
+> cma-web@0.1.0 verify:preview
+> node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/preview.mjs
+
+PASS  the narrowing is exactly the intersection, in the real order, each key once got 300
+PASS  a role's permission the person lacks never appears               got ["workday.own"]
+PASS  a key named twice in the real set is kept once                   got ["reports.view"]
+PASS  the admin previewing as agent sees the intersection              got ["workday.own","roster.view"]
+PASS  the preview names the role                                       got {"roleKey":"agent","roleName":"Agent"}
+PASS  canPreview is true while previewing                              got true
+PASS  canPreview is true for the admin without a preview               got true
+PASS  no cookie: the admin keeps every permission                      got ["workday.own","workday.team","workday.export","performance.team","mon
+PASS  an unknown role key is ignored                                   got [null,13]
+PASS  a non-admin's cookie is ignored: permissions unchanged, no preview got [null,["workday.own","workday.team","performance.team","users.manage_a
+PASS  a non-admin cannot preview                                       got [false,false]
+PASS  an empty intersection is allowed                                 got [[],"coach"]
+PASS  with no permission left the person still lands on Welcome, like everyone with a role got ["/",["/","/messages"]]
+PASS  the real principal is not changed by the narrowing               got 13
+PASS  the user and the tenant stay the person's own                    got ["u","t","admin"]
+PASS  the cookie's name and 12 hours                                   got ["cma-preview-role",43200]
+PASS  role keys are lower-case slugs                                   got [true,true,true]
+PASS  anything else is refused                                         got [false,false,false,false,false,false,false]
+
+preview: PASS (18 checks)
+exit 0

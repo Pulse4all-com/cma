@@ -2,7 +2,8 @@
  * HubSpot backfill (DESIGN §2, §5): everything from a start date (`--from`, default the tenant's
  * intake.start_date), through the same read-back as a webhook, paced under half of HubSpot's limits
  * (read.mjs RATES) and resumable: after every page the stream's cursor (cma.sync_cursor) holds where
- * it stands, and a run with the same start continues there.
+ * it stands, and a run with the same start continues there (a finished one is walked again only by a run
+ * with --again, src/jobs/backfill.mjs).
  *
  *   deal            CRM search by createdate, then by closedate (deals created earlier, closed since)
  *   ticket          by createdate, then closed_date

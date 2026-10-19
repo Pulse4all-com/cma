@@ -1,0 +1,5 @@
+  manager /reports/data-quality: header "Check": 0 info marks, expected 1
+  hidden hints: 9 keycaps still visible
+  hidden hints: ? does not show the keycaps again
+hints: FAIL (3 problems)
+exit 1

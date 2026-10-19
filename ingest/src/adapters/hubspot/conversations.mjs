@@ -5,15 +5,18 @@
  * cma.email_start_date_of. Scope conversations.read; paths below /conversations/v3/conversations.
  *
  *   catalogs    hourly per connection: inboxes (id, name) and channels (id, name, a canonical kind) into
- *               cma.connection_inbox and _channel; channel accounts (id → inbox id, kept in the cursors,
- *               owners.mjs; their name and delivery identifier, which holds the mailbox's address,
- *               dropped); the owner map (owners.mjs)
+ *               cma.connection_inbox and _channel; channel accounts, the mailboxes (id, name, inbox,
+ *               channel) into cma.connection_inbox_account (addition 0008t) and as id → inbox id in the
+ *               cursors (owners.mjs); a name that holds an address gives way to the id, and the delivery
+ *               identifier, which holds the mailbox's address, is never read; the owner map (owners.mjs)
  *   threads     GET threads?sort=latestMessageTimestamp&latestMessageTimestampAfter=<cursor>: HubSpot
  *               needs that filter for that sort and then answers ascending (spec
  *               "Conversations Inbox & Messages" v3, the sort parameter). Cursor email:threads
  *               { at, ids }: the newest latestMessageTimestamp written and the threads at it
  *   messages    per changed thread GET threads/{id}/messages, kept only after where the CMA's stored
- *               messages and events stand (cma.ingest_thread_marks): MESSAGE → cma.email_message;
+ *               messages and events stand (cma.ingest_thread_marks): MESSAGE → cma.email_message, with
+ *               the channel account it went through (channelAccountId; a thread's account is its
+ *               originalChannelAccountId, 0008t);
  *               ASSIGNMENT, THREAD_STATUS_CHANGE and THREAD_INBOX_CHANGE → cma.email_thread_event; every
  *               other type (comments, welcome messages) ignored
  *   open check  every email_open_check_minutes (default 15; ten before backlog CMA-069) the source's
@@ -106,6 +109,18 @@ export function accountPairs(accounts) {
   return (accounts ?? []).filter((a) => a?.id !== undefined && a?.inboxId !== undefined).map((a) => [String(a.id), String(a.inboxId)]);
 }
 
+/**
+ * Channel accounts → the mailbox catalog (cma.ingest_upsert_inbox_accounts, addition 0008t): id, name,
+ * inbox and channel. Archived accounts left out; a name that holds an address (the usual name of an
+ * email account is its address) gives way to the id, so a person labels it on Sources; the delivery
+ * identifier is never read.
+ */
+export function accountItems(accounts) {
+  const ref = (v) => (v !== undefined && v !== null && REF.test(String(v)) ? String(v) : null);
+  return (accounts ?? []).filter((a) => a?.id !== undefined && a.archived !== true && REF.test(String(a.id)))
+    .map((a) => ({ accountId: String(a.id), name: catalogName(a.name, a.id), inboxId: ref(a.inboxId), channelId: ref(a.channelId) }));
+}
+
 /** A thread → an ingest_upsert_threads item (readAt: the adapter's version), or null without an id or status. */
 export function threadItem(t, { owners, readAt }) {
   const id = String(t?.id ?? "");
@@ -117,6 +132,7 @@ export function threadItem(t, { owners, readAt }) {
     sourceId: id,
     inboxId: ref(t.inboxId),
     channelId: ref(t.originalChannelId),
+    accountId: ref(t.originalChannelAccountId),
     status,
     createdAt: iso(t.createdAt),
     closedAt: status === "closed" ? iso(t.closedAt) : null,
@@ -132,11 +148,16 @@ export function threadItem(t, { owners, readAt }) {
   };
 }
 
-/** Whether the CMA holds the thread exactly as the item says (then it is not written again). */
-export function threadSame(stored, item) {
+/**
+ * Whether the CMA holds the thread exactly as the item says (then it is not written again). With
+ * account, the mailbox counts too (addition 0008t): writeThreads writes a listed thread whose mailbox the
+ * CMA does not hold yet, without reading its messages; the open check compares as before.
+ */
+export function threadSame(stored, item, { account = false } = {}) {
   if (!stored || stored.forgotten) return Boolean(stored?.forgotten);
   return stored.status === item.status && (stored.ownerRef ?? null) === (item.ownerRef ?? null)
     && (stored.inboxId ?? null) === (item.inboxId ?? stored.inboxId ?? null) && (stored.channelId ?? null) === (item.channelId ?? stored.channelId ?? null)
+    && (!account || (stored.accountId ?? null) === (item.accountId ?? stored.accountId ?? null))
     && (stored.contactId ?? null) === (item.contactId ?? null) && (stored.ticketId ?? null) === (item.ticketId ?? null)
     && stored.isSpam === item.isSpam && stored.isArchived === item.isArchived;
 }
@@ -188,6 +209,7 @@ export function messageRows(messages, { thread, owners, accounts, rules, afterMs
         threadId,
         inboxId: inboxOf(m),
         channelId: REF.test(String(m.channelId ?? "")) ? String(m.channelId) : null,
+        accountId: REF.test(String(m.channelAccountId ?? "")) ? String(m.channelAccountId) : null,
         direction,
         status: statusType === "FAILED" ? "failed" : direction === "out" ? (MESSAGE_STATUS[statusType] ?? "other") : "other",
         occurredAt,
@@ -281,7 +303,7 @@ async function readMessages(api, id) {
   }
 }
 
-/** Catalogs (hourly): inboxes, channels, channel accounts. Answers the account → inbox map. */
+/** Catalogs (hourly): inboxes, channels, channel accounts (the mailboxes). Answers the account → inbox map. */
 export async function refreshCatalogs(api, store, now) {
   const head = await store.cursor(CATALOG_STREAM);
   if (head?.refreshedAt && now - Date.parse(head.refreshedAt) < CATALOG_EVERY_MS) {
@@ -289,10 +311,15 @@ export async function refreshCatalogs(api, store, now) {
   }
   const inboxes = inboxItems(await listAll(api, "inboxes", { limit: 100 }));
   const channels = channelItems(await listAll(api, "channels", { limit: 100 }));
-  const accounts = accountPairs(await listAll(api, "channel-accounts", { limit: 100 }));
-  if (inboxes.length > 500 || channels.length > 500) warn("conversations catalog over 500; the rest is not refreshed", { inboxes: inboxes.length, channels: channels.length });
+  const listed = await listAll(api, "channel-accounts", { limit: 100 });
+  const accounts = accountPairs(listed);
+  const mailboxes = accountItems(listed);
+  if (inboxes.length > 500 || channels.length > 500 || mailboxes.length > 500) {
+    warn("conversations catalog over 500; the rest is not refreshed", { inboxes: inboxes.length, channels: channels.length, mailboxes: mailboxes.length });
+  }
   await store.upsertInboxes(inboxes.slice(0, 500));
   await store.upsertInboxChannels(channels.slice(0, 500));
+  await store.upsertInboxAccounts(mailboxes.slice(0, 500));
   const map = await writeMap(store, ACCOUNTS_STREAM, accounts, now);
   await store.setCursor(CATALOG_STREAM, { refreshedAt: new Date(now).toISOString() });
   return map;
@@ -336,7 +363,7 @@ export async function writeThreads(ctx, threads, { force = false } = {}) {
       events.push(...rows.events);
       counts.skipped += rows.ignored;
     }
-    if (changed || !threadSame(states.get(item.sourceId), item)) items.push(item);
+    if (changed || !threadSame(states.get(item.sourceId), item, { account: true })) items.push(item);
     else counts.skipped += 1;
   }
   if (items.length) tally(counts, detail, "threads", await store.upsertThreads(items));

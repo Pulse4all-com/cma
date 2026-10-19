@@ -49,11 +49,13 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
 
   // The Intake row (B11, migration 0007d and 0006's crm_records_per_day): the tenant's intake for the
   // period, read next to the time per status; the person filter does not apply to it
-  const [all, intake, records, speed] = await Promise.all([
+  // since addition 0008w with the callbacks kept (KPI 5)
+  const [all, intake, records, speed, callbacks] = await Promise.all([
     data().getTeamStatusTime(me, period, null),
     data().getIntake(me, period),
     data().getCrmRecordsPerDay(me, period),
     data().getSpeedToLeadRows(me, period),
+    data().getCallbacksKept(me, period),
   ]);
   const people = peopleOf(all.rows);
   const person = typeof sp.person === "string" && people.some((p) => p.userId === sp.person) ? sp.person : "";
@@ -88,7 +90,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
         </div>
       ) : null}
 
-      <IntakeRow intake={intake} records={records} speed={speed} copy={copy} locale={me.locale} from={period.from} />
+      <IntakeRow intake={intake} records={records} speed={speed} callbacks={callbacks} copy={copy} locale={me.locale} from={period.from} />
 
       <div className="mb-6 flex items-end justify-between gap-4">
         <DashboardFilter people={people} person={person} query={query} copy={copy} />

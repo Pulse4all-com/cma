@@ -205,7 +205,10 @@ function memoryStore(w) {
     async upsertForms(items) { return items.length; },
     async upsertSubmissions(items) { return count(items.map((i) => (s.subs.has(i.sourceId) ? "known" : (s.subs.set(i.sourceId, i), "inserted")))); },
     async storedSubmissions(ids) { return new Set(ids.filter((id) => s.subs.has(id))); },
-    async emailVersions(kind, ids) { return new Map(ids.filter((id) => s.emails.has(`${kind}:${id}`)).map((id) => [id, Date.parse(s.emails.get(`${kind}:${id}`).updatedAt)])); },
+    async emailVersions(kind, ids) {
+      return new Map(ids.filter((id) => s.emails.has(`${kind}:${id}`))
+        .map((id) => [id, { at: Date.parse(s.emails.get(`${kind}:${id}`).updatedAt), origin: s.emails.get(`${kind}:${id}`).origin ?? null }]));
+    },
     async upsertEmails(items) { return count(items.map((i) => put(s.emails, `${i.sourceKind}:${i.sourceId}`, i))); },
     async currentAssociations() { return []; },
     async upsertAssociations(items) { return count(items.map(() => "added")); },
@@ -222,7 +225,7 @@ function memoryStore(w) {
     async threadStates(ids) {
       return new Map(ids.filter((id) => s.threads.has(id)).map((id) => {
         const x = s.threads.get(id);
-        return [id, { status: x.status, ownerRef: x.ownerRef, inboxId: x.inboxId, channelId: x.channelId, contactId: x.contactId, ticketId: x.ticketId,
+        return [id, { status: x.status, ownerRef: x.ownerRef, inboxId: x.inboxId, channelId: x.channelId, accountId: x.accountId, contactId: x.contactId, ticketId: x.ticketId,
           isSpam: x.isSpam, isArchived: x.isArchived, forgotten: false }];
       }));
     },
@@ -230,6 +233,7 @@ function memoryStore(w) {
     async upsertThreadEvents(items) { return count(items.map((i) => put(s.events, i.sourceId, i))); },
     async upsertInboxes(items) { return items.length; },
     async upsertInboxChannels(items) { return items.length; },
+    async upsertInboxAccounts(items) { return items.length; },
     async threadForget() { return { threads: 0, messages: 0 }; },
     async openThreadIds() { return [...s.threads.values()].filter((x) => x.status === "open").map((x) => x.sourceId); },
     async archivedThreadIds() { return []; },

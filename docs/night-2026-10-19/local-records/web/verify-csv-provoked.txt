@@ -1,0 +1,21 @@
+FAIL  missing settings fall back to the catalog defaults   got {"separator":"comma","decimalMark":"point","dateFormat":"yyyy-mm-dd",", wanted {"separator":"semicolon","decimalMark":"point","dateFormat":"yyyy-mm-d
+FAIL  an unknown value is never used                       got "comma", wanted "|"
+FAIL  formula starts get an apostrophe                     got ["'=SUM(A1)","'+31","'-1","'@x","'\tx","Ana"], wanted ["=SUM(A1)","+31","-1","@x","\tx","Ana"]
+FAIL  separator, quote and line break are quoted           got ["\"a;b\"","\"say \"\"hi\"\"\"","\"a\nb\"","a,b"], wanted ["a;b","say \"hi\"","a\nb","\"a,b\""]
+FAIL  date formats                                         got ["2026-10-05","05-10-2026","05/10/2026","10/05/2026"], wanted ["2026-10-05","2026-10-05","2026-10-05","2026-10-05"]
+FAIL  decimal hours with a comma                           got "7,50", wanted "7.50"
+FAIL  hh:mm and minutes                                    got ["7:30","450"], wanted ["7:31","451"]
+FAIL  whole minutes first, as on screen                    got "0.32", wanted "0.33"
+FAIL  times in the day's own zone, 24-hour                 got ["18:30","17:30"], wanted ["16:30","16:30"]
+FAIL  the repeated autumn hour reads twice                 got ["02:30","02:30"], wanted ["02:30","03:30"]
+FAIL  byte order mark and CRLF line ends                   got ["﻿a\r\nb\r\n","a\r\nb\r\n"], wanted ["a\nb\n","a\nb\n"]
+FAIL  hours file in the Dutch format                       got "05-10-2026;'=Ana Ferrer;Newco;Europe/Madrid;08:50;17:30;8,00;8,50;8,5, wanted "2026-10-05,=Ana Ferrer,Newco,Europe/Madrid,06:50,15:30,8.00,8.50,8.50
+FAIL  a decimal comma with a comma separator stays one cell got "05-10-2026,Ana,Newco,UTC,08:00,16:00,\"7,50\",\"7,50\",\"0,00\",No,No, wanted "05-10-2026,Ana,Newco,UTC,08:00,16:00,7,50,7,50,0,00,No,No"
+FAIL  an open stretch has no end and names its source      got "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;;0,25;No;Yes;No;Correc, wanted "05-10-2026;Ana;Newco;Europe/Madrid;Break;11:00;11:15;0,25;No;Yes;No;c
+FAIL  the header is the caller's labels                    got 13, wanted 12
+FAIL  an imported stretch and its gap name the import      got ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,, wanted ["06-03-2026;Ana;Newco;Europe/Amsterdam;Earlier session;08:00;10:00;2,
+FAIL  forms file: header, the period in the tenant's format, names, unknown market and counts got ["﻿From;To;Form;Category;Market;Submissions;Previous period;Contact fo, wanted ["From;To;Form;Category;Market;Submissions;Previous period;Contact fou
+FAIL  first orders file: header, the date and time in the reader's zone, the level in words, yes or no, the decimal comma got ["﻿From;To;Deal;Ordered;Market;Level;Attribution;Lead deal;Conversatio, wanted ["From;To;Deal;Ordered;Market;Level;Attribution;Lead deal;Conversation
+
+ALL 18 PROVOKED CHECKS FAILED, as they must
+exit 0

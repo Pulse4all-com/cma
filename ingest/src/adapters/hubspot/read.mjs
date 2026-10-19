@@ -13,7 +13,8 @@
  *                   read, stored on the task's row
  *   deletions       no read: the record, contact, call or task is marked deleted at the event's time
  *   privacy         contact.privacyDeletion → cma.ingest_contact_forget(), no read
- *   catalogs        pipelines with stages, and the call outcomes, at most hourly per connection
+ *   catalogs        pipelines with stages (a deal stage with its outcome, addition 0008u), and the call
+ *                   outcomes, at most hourly per connection
  *
  * The client also serves the email poll (brief B17b): email engagements (crm_email, through
  * JOB_OBJECT, so their webhooks stay ignored), the conversations API and both owner lists.
@@ -27,7 +28,7 @@ import { warn } from "../../core/log.mjs";
 import { dailyOf, endpointOf } from "./usage.mjs";
 import {
   API_OBJECT, propertiesFor, recordFromObject, contactFromObject, contactAttributes, callFromObject, primaryContact, associationDiff,
-  taskFromObject, firstAssociated,
+  taskFromObject, firstAssociated, stageOutcome,
 } from "./map.mjs";
 
 const BATCH_READ = 100;
@@ -163,6 +164,8 @@ function pipelinesItem(recordType, list) {
       label: String(s.label ?? s.id).slice(0, 200),
       order: Number.isInteger(s.displayOrder) ? s.displayOrder : 0,
       isClosed: String(s.metadata?.isClosed ?? "").toLowerCase() === "true" || String(s.metadata?.ticketState ?? "").toUpperCase() === "CLOSED",
+      // a deal stage's outcome from its probability (addition 0008u); a person's choice on Sources stays in the database
+      ...(recordType === "deal" ? { outcome: stageOutcome(recordType, s) } : {}),
     })),
   }));
 }

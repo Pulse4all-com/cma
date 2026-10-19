@@ -9,7 +9,9 @@
  *                forwarded), status (hs_email_status whose value in lower case is sent, bounced,
  *                failed or scheduled; anything else other), time, the owner, the CRM thread id and
  *                the automation origin when the connection names their properties (settings
- *                email_thread_property, email_origin_property, email_automated_origins), the category
+ *                email_thread_property, email_origin_property, email_automated_origins), the origin's
+ *                code itself (cma.email_message.origin, addition 0008t: the reports leave out the
+ *                origins the setting email_inbox_copy_origins names), the category
  *   associations email → contact, deal, ticket (v4 batch read), stored in their one direction
  *   contacts     the contact the email points to (labelled primary, else the lowest id) read once,
  *                after the email is written (R6: ingest_upsert_contacts holds it only then)
@@ -106,6 +108,7 @@ export function emailFromObject(obj, settings, rules) {
     actorKind,
     ownerRef: actorKind === "agent" ? owner : null,
     category,
+    origin,
     createdAt: iso(p.hs_createdate) ?? iso(obj.createdAt),
     updatedAt: iso(obj.updatedAt) ?? iso(p.hs_lastmodifieddate),
     raw,
@@ -148,13 +151,16 @@ export async function writeEmailPage(api, store, config, objects, counts, detail
   const rules = activeRules(config);
   counts.fetched += objects.length;
   // An email the CMA holds at this version is not written again (every update is an audit row): the
-  // poll's boundary and the nightly reconcile list most emails a second time
+  // poll's boundary and the nightly reconcile list most emails a second time. Except to add the origin
+  // the CMA does not hold yet (addition 0008t): a re-read after the connection named its origin property
+  // fills the engagements stored before it
   const versions = await store.emailVersions("crm_email", objects.map((o) => String(o.id)));
   const items = [];
   for (const o of objects) {
     const item = emailFromObject(o, settings, rules);
     const held = versions.get(String(o?.id));
-    if (!item || (held && item.updatedAt && Date.parse(item.updatedAt) <= held)) counts.skipped += 1;
+    const current = held?.at && item?.updatedAt && Date.parse(item.updatedAt) <= held.at;
+    if (!item || (current && !(item.origin && !held.origin))) counts.skipped += 1;
     else items.push(item);
   }
   if (!items.length) return;

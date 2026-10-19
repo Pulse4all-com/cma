@@ -43,12 +43,20 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   // the form categories (addition 0008p), for a form's category
   const categories = await data().getFormCategories(me);
   // the connected-call threshold (addition 0008j), shown in words on a telephony connection
-  const threshold = (await data().listSettings(me)).find((x) => x.key === "telephony.connected_min_seconds")?.value;
+  const settings = await data().listSettings(me);
+  const threshold = settings.find((x) => x.key === "telephony.connected_min_seconds")?.value;
+  // the tenant's email settings (addition 0008t), shown in words on a CRM connection
+  const valueOf = (key: string) => settings.find((x) => x.key === key)?.value ?? null;
+  const numberOf = (v: string | null) => (v === null || v === "" ? null : Number(v));
+  const email = {
+    startDate: valueOf("email.start_date") || null, replyTargetMinutes: numberOf(valueOf("email.reply_target_minutes")),
+    noResponseDays: numberOf(valueOf("email.no_response_days")), marketOrder: valueOf("email.market_order"),
+  };
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare trail={[{ label: detail.connection.name }]}>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
       <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={copy} locale={me.locale} timeZone={me.timeZone}
-        connectedMinSeconds={threshold === undefined ? null : Number(threshold)} />
+        connectedMinSeconds={threshold === undefined ? null : Number(threshold)} email={email} />
     </ConfigurationPage>
   );
 }

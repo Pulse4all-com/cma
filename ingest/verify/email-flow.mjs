@@ -28,7 +28,8 @@
  * at the source; the reconcile rewrites only a changed email and marks a thread in the trash
  * archived, then forgets it once it is gone; the backfill starts at cma.email_start_date_of, resumes
  * after an interruption, finds what the poll's window does not, and the contact backfill reads every
- * slot again; the shared rule fixtures give the same answers in cma.email_words_match and
+ * slot again; run again with the same start, the contact, crm_email and inbox_thread backfills read nothing
+ * without --again and walk from the start with it; the shared rule fixtures give the same answers in cma.email_words_match and
  * cma.email_category_of as in the ingest's memory; a connection without email_poll is not served;
  * tenant isolation; no row, audit image, cursor or log line holds a name, address, subject, text or
  * raw actor id, and no log line an email, thread or contact id; no row of another tenant was written
@@ -294,6 +295,20 @@ source.contacts["4300000101"] = { ...source.contacts["4300000101"], contact_coun
 await runBackfill({ connectionId: conn1, object: "contact" });
 expect("E4 backfill contact: held contacts read again with every slot (slot 1 now filled)", (await q("select country, country_source from cma.crm_contact where connection_id = $1 and source_id = '4300000101'", [conn1]))[0],
   { country: "GB", country_source: 1 }, { country: "GB", country_source: 2 });
+// The night runbook's re-reads (found in dev on 19 October 2026): run again without --from, each takes its finished
+// backfill's start and reads nothing; with --again each is walked from that start again
+const RE_READS = ["contact", "crm_email", "inbox_thread"];
+const lastRuns = async () => (await q("select stream, status, counts from cma.sync_run where connection_id = $1 and job = 'backfill' order by started_at desc limit 3", [conn1])).reverse();
+n0 = mark();
+for (const o of RE_READS) await runBackfill({ connectionId: conn1, object: o });
+expect("E5 contact, crm_email and inbox_thread again without --again: 0 fetched, nothing asked of HubSpot",
+  [(await lastRuns()).map((r) => [r.stream, r.status, r.counts.fetched]), since(n0).length], [RE_READS.map((o) => [o, "succeeded", 0]), 0], [RE_READS.map((o) => [o, "succeeded", 1]), 3]);
+n0 = mark();
+for (const o of RE_READS) await runBackfill({ connectionId: conn1, object: o, again: true });
+const againGte = Number(since(n0).find((r) => r.path.endsWith("/emails/search"))?.body.filterGroups[0].filters[0].value);
+expect("E6 …with --again: each walked from its start again, fetched above 0 in sync_run.counts",
+  [(await lastRuns()).map((r) => [r.stream, r.status, r.counts.fetched > 0]), againGte === new Date(startAt).getTime()],
+  [RE_READS.map((o) => [o, "succeeded", true]), true], [RE_READS.map((o) => [o, "succeeded", false]), false]);
 
 // ---- F. The shared rule fixtures in the database ----------------------------------------------------------
 const dbWords = [];

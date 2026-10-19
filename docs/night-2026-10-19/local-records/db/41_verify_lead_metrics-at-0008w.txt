@@ -1,0 +1,21 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+DO
+CREATE FUNCTION
+DO
+DO
+DO
+DO
+DO
+DROP FUNCTION
+         tenant          | lead_deals | called | dq_findings | verdict 
+-------------------------+------------+--------+-------------+---------
+ pulse4all-invest        |          0 |      0 |           0 | PASS
+ pulse4all-subscriptions |          0 |      0 |           0 | PASS
+(2 rows)
+

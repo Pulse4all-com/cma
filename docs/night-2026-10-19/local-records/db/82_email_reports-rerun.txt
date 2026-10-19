@@ -1,0 +1,80 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 1
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/home/user/cma/db/82_email_reports.sql:297: NOTICE:  relation "connection_inbox_account" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/home/user/cma/db/82_email_reports.sql:301: NOTICE:  policy "tenant_readonly" for relation "connection_inbox_account" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+psql:/home/user/cma/db/82_email_reports.sql:305: NOTICE:  column "account_ref" of relation "email_message" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:/home/user/cma/db/82_email_reports.sql:308: NOTICE:  column "account_ref" of relation "email_thread" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+psql:/home/user/cma/db/82_email_reports.sql:315: NOTICE:  column "origin" of relation "email_message" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+UPDATE 0
+psql:/home/user/cma/db/82_email_reports.sql:325: NOTICE:  relation "email_message_account_idx" already exists, skipping
+CREATE INDEX
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

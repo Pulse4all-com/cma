@@ -2,8 +2,9 @@
 -- Run as yourself (IAM login) after 01_foundation.sql, in dev and in prod. Safe to rerun.
 -- Customer configuration, not schema: the two tenants, their organisations, their channels, the
 -- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
--- reasons and telephony settings, (after 0008j) the connected-call threshold and (after 0008l) the
--- invitation email domain.
+-- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
+-- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows and
+-- (after 0008v) its journeys of Campaign monitoring.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -366,5 +367,62 @@ begin
   where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
   order by t.slug, s.ord
   on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- The per-person reports per tenant (after addition 0008t; night run N19-A, 18 October 2026): Pulse4all
+-- Subscriptions shows the email figures per person (Reports, Email per agent), as Yordi (compliance) agreed on
+-- 18 October 2026 (README Decision log); orders per agent stays off until he confirms it, and Pulse4all Invest
+-- shows none (the setting's default, empty). Only where the tenant has no value yet, so a change on
+-- Configuration survives a rerun.
+do $$
+begin
+  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'reports.per_person') then
+    raise notice 'the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value)
+  select t.id, 'reports.per_person', 'email'
+  from cma.tenant t
+  where t.slug = 'pulse4all-subscriptions'
+  on conflict (tenant_id, key) do nothing;
+end
+$$;
+
+-- The journeys of Campaign monitoring (after addition 0008v; night run N19-A, 18 October 2026): placeholders for
+-- Pulse4all Subscriptions only, named and described by Martin (README Decision log). The FCA journey for UK consumers
+-- with its data prerequisites, and OPC and Exchange, whose steps and population Kira defines. No design link: Martin
+-- sets it once the design exists. Only journeys the tenant does not have yet are added, so a change on Configuration
+-- (a name, a link, a status) survives a rerun; the market is GB only where the tenant's catalog holds GB.
+do $$
+begin
+  if to_regclass('cma.journey') is null then
+    raise notice 'the journeys do not exist yet (addition 0008v): rerun this seed after 86_journeys.sql';
+    return;
+  end if;
+  insert into cma.journey (tenant_id, code, name, summary, market, prerequisites, sort_order)
+  select t.id, j.code, j.name, j.summary,
+         (select m.code from cma.market m where m.tenant_id = t.id and m.code = j.market), j.prerequisites, j.sort_order
+  from (values
+    ('fca-uk-consumers', 'FCA · UK consumers',
+     'Every UK consumer customer through every required communication and step, with drill-down per customer and an audit pack.',
+     'GB',
+     array['Consumer or business flag on every GB contact',
+           'Agreement date on the contract',
+           'A call tag that proves the welcome call',
+           'Template ids on the journey''s emails',
+           'Call-recording consent decided',
+           'Step list by Gemma and Kira, checked by Yordi',
+           'Drill-down permission and access log agreed with Yordi'],
+     10),
+    ('opc', 'OPC', 'Steps, coverage and drill-down to be defined with Kira.', null,
+     array['Step list and population defined by Kira.'], 20),
+    ('exchange', 'Exchange', 'Steps, coverage and drill-down to be defined with Kira.', null,
+     array['Step list and population defined by Kira.'], 30)
+  ) as j(code, name, summary, market, prerequisites, sort_order)
+  cross join cma.tenant t
+  where t.slug = 'pulse4all-subscriptions'
+  order by j.sort_order
+  on conflict (tenant_id, code) do nothing;
 end
 $$;

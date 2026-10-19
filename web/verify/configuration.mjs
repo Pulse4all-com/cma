@@ -12,7 +12,9 @@
  * cma.connection_settings_ok, the record link preview as cma.record_url builds it, the rules by name for
  * forms and call outcomes (12 October 2026's rules reproduced on fixture names), office hours, the
  * market form, and the alert rules' checks and effect in plain words. Since addition 0008p a form's polled and
- * counted switches, the categories a form may get and the form category catalog's checks.
+ * counted switches, the categories a form may get and the form category catalog's checks. Since addition 0008t the
+ * email section of a customer-records connection: the origin codes as the database reads them, a mailbox's label
+ * and the market order in words.
  */
 import {
   exportPreview, flagsFrozen, levelsText, parseLevels, parseMarkets, parseMinutes, parseTarget, retireProblem, statusFormProblem, targetAt, visibleStatuses,
@@ -20,7 +22,7 @@ import {
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   planOutcomeRule, formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
-  formCategoryChoices, formCategoryProblem, formEditProblem, parsePollSetting, pollCadenceOf,
+  formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -76,8 +78,9 @@ expect("preview with tabs, hh:mm and no mark", exportPreview(tabs, labels), ["no
 expect("preview in minutes with a decimal comma stays one cell", exportPreview([{ key: "export.csv.duration_format", value: "minutes", isDefault: false }, { key: "export.csv.decimal_mark", value: "comma", isDefault: false }], labels)[2], "2026-10-08,A. Example,450", "2026-10-08,A. Example,\"7,5\"");
 
 // ---- Sources (addition 0008e) ----------------------------------------------------------------------
-// since addition 0008n the task statuses and types follow the fields
-expect("a customer-records connection has six sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"], ["lines", "tags"]);
+// since addition 0008n the task statuses and types follow the fields, since 0008t the email section
+expect("a customer-records connection has seven sections", sourceSections("crm", []), ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes", "email"],
+  ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"]);
 expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags", "missedReasons"], ["lines", "tags"]);
 expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
 expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
@@ -181,6 +184,15 @@ expect("a category needs a name and an order from 0 to 9999",
   [formCategoryProblem({ code: "info", name: "  ", sortOrder: "10" }), formCategoryProblem({ code: "info", name: "Info", sortOrder: "10000" }),
     formCategoryProblem({ code: "info", name: "Info", sortOrder: "" }), formCategoryProblem({ code: "info", name: "Info", sortOrder: "0" })],
   ["name", "order", "order", null], [null, null, null, "order"]);
+
+// ---- Sources, email (addition 0008t) ------------------------------------------------------------------
+expect("origin codes: trimmed, empty parts and repeats dropped", settingCodes({ codes: " ALPHA,,beta , ALPHA" }, "codes"), ["ALPHA", "beta"], ["ALPHA", "", "beta", "ALPHA"]);
+expect("origin codes: absent or not text is none", [settingCodes({}, "codes"), settingCodes({ codes: true }, "codes")], [[], []], [["true"], ["true"]]);
+expect("a mailbox label: at most 80 characters, never an address, empty is the source's name",
+  ["Support", "", "a".repeat(80), "a".repeat(81), "team@example.invalid"].map(mailboxLabelProblem), [false, false, false, true, true], [true, true, true, false, false]);
+expect("the market order in the tenant's order", emailMarketSteps("inbox,contact"), ["inbox", "contact"], ["contact", "form", "record", "inbox"]);
+expect("an unreadable market order falls back to the catalog's steps", [emailMarketSteps(""), emailMarketSteps("contact,contact"), emailMarketSteps(null)],
+  [["contact", "form", "record", "inbox"], ["contact", "form", "record", "inbox"], ["contact", "form", "record", "inbox"]], [[""], ["contact", "contact"], []]);
 
 // How often a connection is read and its daily floor (backlog CMA-069), as the ingest applies the settings
 expect("polling: the defaults without settings (5, 15, 25, probe off)", pollCadenceOf({}), { formsIntervalMinutes: 5, openCheckMinutes: 15, floorPct: 25, probe: false, outOfRange: [] },
