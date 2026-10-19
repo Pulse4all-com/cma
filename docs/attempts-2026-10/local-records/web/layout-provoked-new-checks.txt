@@ -1,0 +1,7 @@
+  accordion after Time then Reports: open ["reports"], expected ["time","reports"]
+  manager /reports/follow-up at 1440: the info mark of "DealThe deal's id in its own system. The" wraps apart from its label
+  manager /reports/attempts (day) at 1440: the info mark of "DayThe deals' day of creation, its week," wraps apart from its label
+  manager /reports/attempts (pipeline) at 1440: the info mark of "PipelineThe deals' day of creation, its " wraps apart from its label
+  manager /reports/attempts-per-agent at 1440: the info mark of "PersonThe deal's owner in the customer r" wraps apart from its label
+  manager /reports/attempts (day): the table spills out of its card, the main area scrolls sideways by 207px at 1280
+  lines: while the count loads the dialog shows 1 counting line and the confirm button is disabled, expected one and enabled

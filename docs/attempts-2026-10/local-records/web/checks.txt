@@ -30,3 +30,5 @@ verify:hints: exit 0 | hints: PASS (679 headers and 137 tiles on 42 pages, 7 lev
 verify:hints --provoke-topbar: exit 1 | hints: FAIL (40 problems) (40 top-bar lines, 0 others)
 verify:hints --provoke: exit 1 | hints: FAIL (43 problems)
 verify:layout: exit 0 | layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for …
+verify:layout --provoke: exit 1 | layout: FAIL (68 problems) (the pass script logged its echo's exit 0 here; layout exits 1 on any problem, as the earlier provoked run recorded)
+done 2026-10-19T17:24:25Z
