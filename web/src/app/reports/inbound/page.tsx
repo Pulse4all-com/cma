@@ -179,7 +179,7 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
                 </tfoot>
               </table>
             </div>
-            <p className="mt-4 text-caption text-p4a-grey">{fill(t.slNote)}</p>
+            <p className="mt-4 max-w-3xl text-caption text-p4a-grey">{fill(t.slNote)}</p>
           </>
         )}
       </Card>

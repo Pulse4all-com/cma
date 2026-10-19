@@ -160,7 +160,7 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
                   <h3 id="tag-table-title" className="mb-3 text-body font-semibold text-p4a-heading">{tagTitle[group]}</h3>
                   <TagTable rows={tagUse.rows} groups={overview.rows} total={total} group={group} copy={copy} locale={me.locale} />
                 </section>
-                <p className="text-caption text-p4a-grey">{t.tagNote}</p>
+                <p className="max-w-3xl text-caption text-p4a-grey">{t.tagNote}</p>
               </div>
             )}
           </Card>

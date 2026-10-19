@@ -313,7 +313,7 @@ export function RosterPlanner({
 
       <section className="rounded-card border border-p4a-border bg-white p-6">
         <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.coverage}</h2>
-        <p className="mb-4 text-small text-p4a-muted">{t.coverageIntro}</p>
+        <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.coverageIntro}</p>
         {coverage.length === 0 ? (
           <p className="text-body text-p4a-muted">{t.noCoverage}</p>
         ) : (

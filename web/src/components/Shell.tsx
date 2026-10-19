@@ -46,7 +46,10 @@ export async function Shell({
   copy: Copy;
   me: Principal;
   active: ShellPage;
-  /** Report screens with wide tables; operational screens keep the narrow column */
+  /**
+   * Report and operational screens with wide tables: the width up to 1536 px (max-w-screen-2xl), as Pulse4all-Style
+   * 7.1 allows operational screens (Decision log, 19 October 2026); the other pages keep the narrow column
+   */
   wide?: boolean;
   /** Crumbs a page appends after the derived ones (the connection's name on Sources) */
   trail?: Crumb[];
@@ -218,7 +221,7 @@ export async function Shell({
           </div>
         ) : null}
         {crumbs.length > 0 ? <Breadcrumbs crumbs={crumbs} label={t.breadcrumb} /> : null}
-        <div className={wide ? "max-w-6xl" : "max-w-4xl"}>{children}</div>
+        <div className={wide ? "max-w-screen-2xl" : "max-w-4xl"}>{children}</div>
       </main>
     </div>
   );

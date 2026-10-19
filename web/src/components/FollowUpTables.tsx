@@ -7,19 +7,39 @@
  * (copy.hints). Tables follow docs/style/Pulse4all-Style.md 7.6: rows of at least 40 px, zebra rows, a
  * hover row; the state badges in the palette's tones, no filled red cell. Since addition 0008s the headers
  * stay here and the rows go to the client body FollowUpRows as short formatted cells, so the page's
- * 10-second refresh carries values rather than every cell's markup.
+ * 10-second refresh carries values rather than every cell's markup. Since 19 October 2026 (Decision log) the tables are
+ * narrower and keep their link in view: Created and Due in the compact form with the full date on hover, Pipeline, Stage
+ * and Type truncated at 14rem with the full label on hover, and the open-link column pinned right. A lead without business
+ * hours (no market) shows a Muted dash as its waiting time and age, No business hours on hover; its target badge says it.
  */
 import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
-import type { DueState, OpenLead, OpenTask, OpenTicket, SlaState } from "@/lib/data";
+import type { DueState, Instant, OpenLead, OpenTask, OpenTicket, SlaState } from "@/lib/data";
 import { bucketLabel } from "@/lib/follow-up";
 import { fillHint, fmtBusinessMinutes, fmtCount } from "@/lib/reports";
-import { fmtDateTime } from "@/lib/time";
+import { fmtDateTime, fmtDateTimeShort } from "@/lib/time";
 import { FollowUpRows, type Cell, type CellRow } from "./FollowUpRows";
 import { HeaderHint } from "./HeaderHint";
 import { Badge, type BadgeTone } from "./primitives";
 
 const th = "h-10 px-3 py-1 font-semibold";
+
+/** A column whose long labels end in an ellipsis at 14rem; its cells carry their full text as a title ({ v, t }) */
+const truncated = "max-w-[14rem] overflow-hidden text-ellipsis";
+
+/**
+ * The open-link column, pinned to the right edge of the table's scroll container, so the link stays in view while the
+ * table scrolls sideways. Its cell paints its row's colours opaque, so no cell shows through it: white or Off-white by
+ * the zebra, and on hover the hover row's Background Blue at 50 % over white, as the row shows on the white card.
+ */
+const pinned = "sticky right-0 bg-white group-even:bg-p4a-offwhite group-hover:bg-white group-hover:bg-linear-to-r group-hover:from-p4a-bgblue/50 group-hover:to-p4a-bgblue/50";
+
+/**
+ * Its header cell, pinned alike. Sticky makes it the containing block of the read-out-only name, as relative did, so the
+ * name never escapes the table's scroll container at 1280 px. z-10, the hint marks' own level: as the later element it
+ * covers the marks of the headers scrolled under it, and its own hint's panel stays above the pinned cells below.
+ */
+const pinnedHead = "sticky right-0 z-10 w-12 bg-p4a-bgblue";
 
 export interface TableContext {
   copy: Copy;
@@ -80,6 +100,14 @@ export function dueBadge(state: DueState, copy: Copy): ReactNode {
 
 const badge = ([b, v]: [BadgeTone, string]): Cell => ({ b, v });
 
+// A label that may truncate, with its full text on hover
+const labelCell = (v: string): Cell => ({ v, t: v });
+
+// A date in the compact form (Mon 19 Oct, 14:05), the full one on hover
+function dateCell(instant: Instant, ctx: TableContext): Cell {
+  return { v: fmtDateTimeShort(instant, ctx.timeZone, ctx.locale), t: fmtDateTime(instant, ctx.timeZone, ctx.locale) };
+}
+
 export function LeadsTable({ rows, ctx, empty, testId = "follow-up-leads" }: { rows: OpenLead[]; ctx: TableContext; empty: string; testId?: string }) {
   const t = ctx.copy.followUp;
   const h = ctx.copy.hints;
@@ -98,8 +126,7 @@ export function LeadsTable({ rows, ctx, empty, testId = "follow-up-leads" }: { r
             <th className={th}>{t.age}<Hint ctx={ctx} label={t.age} text={h.fuAge} /></th>
             <th className={th}>{t.target}<Hint ctx={ctx} label={t.target} text={h.fuTarget} /></th>
             <th className={th}>{t.lastCall}<Hint ctx={ctx} label={t.lastCall} text={h.fuLastCall} /></th>
-            {/* relative: the read-out-only name is absolutely positioned and would otherwise escape the table's scroll container at 1280 px */}
-            <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
+            <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
         <FollowUpRows columns={leadColumns(ctx)} rows={rows.map((l) => leadRow(l, ctx))} />
@@ -126,8 +153,7 @@ export function TicketsTable({ rows, ctx, empty, testId = "follow-up-tickets" }:
             <th className={`${th} text-right`}>{t.responseTime}<Hint ctx={ctx} label={t.responseTime} text={h.fuResponseTime} /></th>
             <th className={th}>{t.state}<Hint ctx={ctx} label={t.state} text={h.fuState} /></th>
             <th className={`${th} text-right`}>{t.timeLeft}<Hint ctx={ctx} label={t.timeLeft} text={h.fuTimeLeft} /></th>
-            {/* relative: the read-out-only name is absolutely positioned and would otherwise escape the table's scroll container at 1280 px */}
-            <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
+            <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
         <FollowUpRows columns={ticketColumns(ctx)} rows={rows.map((x) => ticketRow(x, ctx))} />
@@ -153,8 +179,7 @@ export function TasksTable({ rows, ctx, empty, testId = "follow-up-tasks" }: { r
             <th className={th}>{t.due}<Hint ctx={ctx} label={t.due} text={h.fuDue} /></th>
             <th className={th}>{t.when}<Hint ctx={ctx} label={t.when} text={h.fuWhen} /></th>
             <th className={th}>{t.record}<Hint ctx={ctx} label={t.record} text={h.fuRecord} /></th>
-            {/* relative: the read-out-only name is absolutely positioned and would otherwise escape the table's scroll container at 1280 px */}
-            <th className={`${th} relative w-12`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
+            <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
         <FollowUpRows columns={taskColumns(ctx)} rows={rows.map((k) => taskRow(k, ctx))} />
@@ -166,24 +191,26 @@ export function TasksTable({ rows, ctx, empty, testId = "follow-up-tasks" }: { r
 // ---- The cells of each row, in the header's column order ------------------------------------------
 
 function leadColumns(ctx: TableContext): string[] {
-  return ["font-semibold", "", "", ...(ctx.withOwner ? [""] : []), "tabular", "tabular text-right", "", "", "tabular", "text-right"];
+  return ["font-semibold", truncated, "", ...(ctx.withOwner ? [""] : []), "tabular", "tabular text-right", "", "", "tabular", `text-right ${pinned}`];
 }
 
 function leadRow(l: OpenLead, ctx: TableContext): CellRow {
-  const { copy, locale, timeZone } = ctx;
+  const { copy, locale } = ctx;
   const t = copy.followUp;
   const bucket = bucketLabel(l.bucketFrom, l.bucketTo);
   const n = (x: number) => fmtCount(x, locale);
+  // Without business hours (a lead without a market) the waiting time and the age are a dash, the reason on hover
+  const noHours: Cell = { m: "–", t: t.noHours };
   return {
     k: l.dealId,
     c: [
       l.dealSourceId,
-      l.pipelineLabel,
+      labelCell(l.pipelineLabel),
       marketCell(l.market, copy),
       ...(ctx.withOwner ? [ownerCell(l, copy)] : []),
-      fmtDateTime(l.createdAt, timeZone, locale),
-      fmtBusinessMinutes(l.waitingBusinessSeconds === null ? null : Math.floor(l.waitingBusinessSeconds / 60), locale),
-      bucket === null ? { m: t.noHours } : t.ageDays.replace("{bucket}", bucket),
+      dateCell(l.createdAt, ctx),
+      l.waitingBusinessSeconds === null ? noHours : fmtBusinessMinutes(Math.floor(l.waitingBusinessSeconds / 60), locale),
+      bucket === null ? noHours : t.ageDays.replace("{bucket}", bucket),
       l.pastTarget === true ? { b: "error", v: t.pastTarget } : l.pastTarget === false ? { b: "success", v: t.withinTarget } : { b: "neutral", v: t.noHours },
       l.lastCallDays === null ? { m: t.lastCallNone }
         : l.lastCallDays === 0 ? t.lastCallToday : l.lastCallDays === 1 ? t.lastCallDaysOne : t.lastCallDays.replace("{n}", n(l.lastCallDays)),
@@ -193,7 +220,7 @@ function leadRow(l: OpenLead, ctx: TableContext): CellRow {
 }
 
 function ticketColumns(ctx: TableContext): string[] {
-  return ["font-semibold", "", "", "", ...(ctx.withOwner ? [""] : []), "tabular text-right", "tabular text-right", "", "tabular text-right", "text-right"];
+  return ["font-semibold", truncated, truncated, "", ...(ctx.withOwner ? [""] : []), "tabular text-right", "tabular text-right", "", "tabular text-right", `text-right ${pinned}`];
 }
 
 function ticketRow(x: OpenTicket, ctx: TableContext): CellRow {
@@ -204,8 +231,8 @@ function ticketRow(x: OpenTicket, ctx: TableContext): CellRow {
     k: x.ticketId,
     c: [
       x.ticketSourceId,
-      x.pipelineLabel,
-      x.stageLabel ?? { m: "–" },
+      labelCell(x.pipelineLabel),
+      x.stageLabel !== null ? labelCell(x.stageLabel) : { m: "–" },
       marketCell(x.market, copy),
       ...(ctx.withOwner ? [ownerCell(x, copy)] : []),
       fmtBusinessMinutes(x.openBusinessSeconds === null ? null : Math.floor(x.openBusinessSeconds / 60), locale),
@@ -220,21 +247,21 @@ function ticketRow(x: OpenTicket, ctx: TableContext): CellRow {
 }
 
 function taskColumns(ctx: TableContext): string[] {
-  return ["font-semibold", "", "", "", ...(ctx.withOwner ? [""] : []), "tabular", "", "", "text-right"];
+  return ["font-semibold", truncated, "", "", ...(ctx.withOwner ? [""] : []), "tabular", "", "", `text-right ${pinned}`];
 }
 
 function taskRow(k: OpenTask, ctx: TableContext): CellRow {
-  const { copy, locale, timeZone } = ctx;
+  const { copy } = ctx;
   const t = copy.followUp;
   return {
     k: k.taskId,
     c: [
       k.taskSourceId,
-      k.isCallback ? { v: k.typeLabel, tag: ["info", t.callback] } : k.typeLabel,
+      k.isCallback ? { v: k.typeLabel, tag: ["info", t.callback], t: k.typeLabel } : labelCell(k.typeLabel),
       k.priorityRef ?? { m: "–" },
       k.statusLabel,
       ...(ctx.withOwner ? [ownerCell(k, copy)] : []),
-      k.dueAt ? fmtDateTime(k.dueAt, timeZone, locale) : { m: "–" },
+      k.dueAt ? dateCell(k.dueAt, ctx) : { m: "–" },
       badge(dueTone(k.dueState, copy)),
       k.recordType === "deal" ? t.recordDeal.replace("{id}", k.recordSourceId ?? "")
         : k.recordType === "ticket" ? t.recordTicket.replace("{id}", k.recordSourceId ?? "") : { m: t.noRecord },

@@ -139,7 +139,7 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
                   </tr>
                 </tfoot>
               </table>
-              <p className="mt-4 text-caption text-p4a-grey">
+              <p className="mt-4 max-w-3xl text-caption text-p4a-grey">
                 {t.minutesNote.replace("{n}", targetMinutes !== null ? n(targetMinutes) : "–")}
               </p>
             </>
