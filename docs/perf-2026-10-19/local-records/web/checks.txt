@@ -1,0 +1,23 @@
+typecheck -> ✓ Types generated successfully
+lint -> ✖ 1 problem (0 errors, 1 warning)
+prebuild -> documents manifest: 0 document(s)
+build -> ƒ  (Dynamic)  server-rendered on demand
+verify:copy -> copy: PASS (2273 keys, en and nl)
+verify:corrections -> ALL 31 PASS
+verify:csv -> ALL 18 PASS
+verify:dashboard -> ALL 17 PASS
+verify:live -> ALL 40 PASS
+verify:team -> team: PASS (26 checks)
+verify:roster -> roster: PASS (36 checks)
+verify:configuration -> ALL 108 PASS
+verify:messages -> ALL 24 PASS
+verify:import -> ALL 23 PASS
+verify:datamap -> datamap: PASS (81 tables, 110 views, all described; index.html current)
+verify:signed-out -> signed-out: PASS (16 checks)
+verify:invitations -> invitations: PASS (27 checks)
+verify:preview -> preview: PASS (18 checks)
+verify:follow-up -> follow-up: PASS (34 checks)
+verify:reports -> ALL 129 PASS
+verify:health -> ALL 39 PASS
+verify:boundaries -> boundaries: PASS (273 files)
+verify:jobs -> ALL 18 PASS

@@ -1,0 +1,34 @@
+The web's report reads before and after this branch, through the API (19 October 2026, local)
+
+Two standalone builds of web/ in mock sign-in and api data mode (CMA_AUTH_MODE=mock, CMA_DATA_MODE=api,
+CMA_DB_HOST pointing at the local PostgreSQL 16, login cma-web@local.iam in cma_app), one after the other on
+the same database at addition 0008x, as the mock subject `manager` of the local pulse4all-subscriptions
+tenant (invented report data of Part 1: 30k contacts, 2.5k order deals and 15k lead deals, 40k CRM calls,
+40k telephony calls, 15k threads, 75k emails, 4.5k store orders; about 14 times prod's emails):
+
+  old  the web of main (first_orders_report, first_orders_amounts and first_orders_list; email_report and,
+       with a filter, email_by_dimension; email_per_person and email_by_dimension)
+  new  this branch (first_orders_page; email_report_page; email_per_person_page)
+
+Requests, each answered 200 by both builds:
+
+  first-orders  from=2026-10-01 to=2026-10-18 group=day
+  first-orders  from=2026-10-01 to=2026-10-18 group=week
+  first-orders  from=2026-09-01 to=2026-09-30 group=market
+  first-orders  from=2026-10-01 to=2026-10-18 group=level market=NL
+  first-orders  from=2026-10-01 to=2026-10-18 group=day level=conversation
+  email         from=2026-10-01 to=2026-10-18 group=day
+  email         from=2026-10-01 to=2026-10-18 group=week market=NL
+  email         from=2026-09-01 to=2026-09-30 group=day
+  email-per-agent  from=2026-10-01 to=2026-10-18
+  email-per-agent  from=2026-10-01 to=2026-10-18 market=NL
+
+Result: the five First orders bodies and the two Email per agent bodies are byte for byte identical. The
+three Email bodies are identical once waiting.rows[].waitedSeconds and waitedBusinessSeconds are left out:
+those count up to now() and the two builds ran about two minutes apart. The filtered Email page lists all
+four markets, three inboxes and six mailboxes for its filters in both builds (the figures without the
+filter).
+
+Not a timing record: the old build already ran on 0008x's rewritten reads. The page's slowest read on this
+data is cma.email_not_responding (4.0 s as cma_app, 3.3 s as the owner, so volume rather than row-level
+security; 110 ms in prod as the owner, prod-output.txt section 7), which this branch does not change.

@@ -2,9 +2,10 @@
 -- 90_report_speed.sql: addition 0008x, the report functions answer a month in under a second
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
--- 88_callbacks_kept.sql (0008w). Rerunnable, forward-only, in one transaction. Run as your own IAM login,
--- dev first, then prod; then 91_verify_report_speed.sql (dev), then 83_verify_email_reports.sql and
--- 85_verify_first_orders.sql (dev) again (unchanged).
+-- 88_callbacks_kept.sql (0008w). Rerunnable, forward-only, in one transaction. Run as your own IAM login:
+-- dev first, then 91_verify_report_speed.sql and 83_verify_email_reports.sql and 85_verify_first_orders.sql
+-- (unchanged) in dev; then prod, before the web that reads the three page reads is merged (the web before
+-- it runs unchanged on this addition: the earlier reads keep their names, arguments and columns).
 --
 -- Report speed brief (19 October 2026; README Decision log): measured in prod as cma_app in October,
 -- first_orders_report took 26.8 s, first_orders_amounts 20.1 s and first_orders_list 21.1 s (each above the
@@ -1977,7 +1978,7 @@ analyze cma.app_user_external_id;
 -- 7. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008x', 'Report speed: cma.first_orders_of with the touches once per first order and the calls set-based, one pass per First orders page (cma.first_order, the *_from reads, cma.first_orders_page), cma.email_of and email_threads_counted_of with the contact as a plain column and the market steps set-based; the catalogs analyzed')
+values ('0008x', 'Report speed: cma.first_orders_of with the touches once per first order and the calls set-based, one pass per First orders page (cma.first_order, the *_from reads, cma.first_orders_page); cma.email_of and email_threads_counted_of with the contact as a plain column and the market steps set-based, the openings'' business seconds in the query; one pass per Email page and Email per agent (cma.email_fact, the *_from reads, cma.email_report_page, cma.email_per_person_page); the catalogs analyzed; no index, the same figures')
 on conflict (version) do nothing;
 
 commit;
