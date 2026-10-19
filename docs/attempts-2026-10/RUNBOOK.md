@@ -27,18 +27,19 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 **Order matters:**
 - `92` runs in dev and prod **before** the merge. The merge builds and deploys prod's web app, which calls the page reads. Merged first, Reports → Attempts per deal answers an error until `92` runs.
 - The web of `main` runs unchanged on `92`: no read it uses changes its name, arguments or columns.
+- `92` rewrites `cma.lead_deals_of`, which Speed to lead and lead to order read. Steps 1 and 6 prove those reads give the same rows before and after it: a hash of every row for 1 to 19 October, before and after. In prod they run outside office hours. If the hashes differ, stop and do not merge.
 - The data map: `docs/datamap/catalog.json` gains `cma_read.attempts_per_deal`. `verify:datamap` fails on this branch until step 5 refreshes `schema.json` from dev.
 - No ingest change, no `cloudbuild.yaml` change, no record written by Claude Code.
 
 | Step | What | Elapsed |
 |---|---|---|
 | 0 | Review the pull request, build it, check the additions in dev and prod | 10 min |
-| 1 | Dev: `92` twice | 3 min |
+| 1 | Dev: the lead reads before and after `92`, `92` twice | 5 min |
 | 2 | Dev: `93` normal and provoked | 3 min |
 | 3 | Dev: the earlier verifies again | 15 min (`91` takes about five minutes on dev's shared core) |
 | 4 | Dev: `03` again | 2 min |
 | 5 | The data map: snapshot from dev, rebuild, push | 5 min |
-| 6 | Prod: point-in-time recovery, `92` twice, `41` | 5 min |
+| 6 | Prod: point-in-time recovery, the lead reads before and after `92`, `92` twice, `41` | 10 min (outside office hours) |
 | 7 | Prod: the timings as `cma_app` | 3 min |
 | 8 | Prod: the spot check against HubSpot | 15 min |
 | 9 | Merge, watch the prod build | 10 min |
@@ -76,7 +77,64 @@ reset role;
 ```
 Expected on both instances: `0008x` only. Without `0008x`, run `docs/perf-2026-10-19/MORNING_RUNBOOK.md` first. With `0008y` already there, stop and tell me.
 
-## 1. Dev: `92` twice
+## 1. Dev: the lead reads before and after `92`, `92` twice
+
+`92` rewrites `cma.lead_deals_of` on `cma.counted_deals_of`. This step proves, before prod does the same in step 6, that Speed to lead's and lead to order's reads give the same rows afterwards. The block hashes every row of `cma.speed_to_lead_rows` and `cma.lead_to_order_rows` for 1 to 19 October 2026:
+- every column, ordered by tenant and deal;
+- per tenant where your login has a user;
+- as `cma_app` (the usual route: your user, row-level security on).
+
+Run the block before `92`, then `92`, then the block again, in one sitting outside every market's office hours (for Pulse4all after 17:00 or before 09:00 local time, or at the weekend). `speed_to_lead_rows` holds two figures that count up to now: an open deal's waiting business seconds, and whether a deal was called before the next business noon. Both stand still outside office hours, so the block can hash every column of both reads.
+
+**Studio (cma-dev-pg)** (read only, two temporary tables of the session: the lead reads' fingerprint. Ids, counts, hashes and a time only; each read's rows are hashed, never shown)
+```sql
+set time zone 'UTC';
+set role cma_owner;
+drop table if exists pg_temp.lead_reads;
+create temp table lead_reads (tenant text, read text, rows_read bigint, rows_md5 text, newest_change timestamptz);
+grant select, insert on lead_reads to cma_app;
+drop table if exists pg_temp.lead_reads_context;
+create temp table lead_reads_context as
+  select t.slug, t.id as tenant_id, u.id as user_id
+  from cma.tenant t join cma.app_user u on u.tenant_id = t.id and u.email = 'martin@pulse4all.com';
+grant select on lead_reads_context to cma_app;
+set role cma_app;
+do $$
+declare
+  c        record;
+  v_newest timestamptz;
+begin
+  for c in select * from lead_reads_context order by slug loop
+    perform set_config('app.tenant_id', c.tenant_id::text, true);
+    perform set_config('app.user_id', c.user_id::text, true);
+    perform set_config('app.actor_label', 'studio:martin', true);
+    -- the newest change these reads can see, so a difference between two runs can be told apart from new data
+    select greatest((select max(synced_at) from cma.crm_record), (select max(synced_at) from cma.crm_contact),
+                    (select max(synced_at) from cma.crm_call),
+                    (select max(greatest(first_seen_at, removed_at, source_changed_at)) from cma.crm_association),
+                    (select max(synced_at) from cma.telephony_call), (select max(greatest(linked_at, unlinked_at)) from cma.call_link),
+                    (select max(synced_at) from cma.commerce_customer), (select max(synced_at) from cma.commerce_order))
+      into v_newest;
+    insert into lead_reads
+      select c.slug, 'speed_to_lead_rows', count(*),
+             md5(coalesce(string_agg(to_jsonb(r)::text, '|' order by r.tenant_id, r.deal_id), '')), v_newest
+      from cma.speed_to_lead_rows('2026-10-01', '2026-10-19') r;
+    insert into lead_reads
+      select c.slug, 'lead_to_order_rows', count(*),
+             md5(coalesce(string_agg(to_jsonb(r)::text, '|' order by r.tenant_id, r.deal_id), '')), v_newest
+      from cma.lead_to_order_rows('2026-10-01', '2026-10-19') r;
+  end loop;
+end
+$$;
+select tenant, read, rows_read, rows_md5, newest_change from lead_reads order by tenant, read;
+reset role;
+```
+Expected: one pair of rows per tenant where your login has a user, at least `pulse4all-subscriptions`, for `lead_to_order_rows` and `speed_to_lead_rows`. Each row has:
+- `rows_read`: the lead deals of 1 to 19 October;
+- `rows_md5`;
+- `newest_change`: the newest change these reads can see in the CRM, telephony and shop mirror.
+
+Copy the rows into your notes. A tenant without a lead deal in the range shows `0` and `d41d8cd98f00b204e9800998ecf8427e`, the md5 of nothing; there the check proves nothing. No rows at all: your login has no user in dev.
 
 **File:** `db/92_attempts_per_deal.sql`: open it and copy all of it.
 
@@ -86,6 +144,10 @@ Expected:
 - the run ends without an error; Studio's last result is `reset role`;
 - an error shows in red with its message: stop and send it to me;
 - `addition 0008x (90_report_speed.sql) must run before 0008y` means step 0 found no `0008x`.
+
+**Studio (cma-dev-pg):** the lead reads' block above again, at once.
+
+Expected: the same rows as before `92`, the same `rows_read` and `rows_md5` for each tenant and read, `newest_change` included. Locally, on a database at 0008x with `reports-fixture.sql`, as the dev seed's two admins, the two runs were identical (`local-records/db/lead-reads-before-92.txt` and `-after-92.txt`). A difference while `newest_change` stayed the same: stop and send me both outputs. A difference with a later `newest_change`: new data arrived between the runs; send me both outputs.
 
 **Studio (cma-dev-pg)** (read only: the fingerprint of what `92` defines)
 ```sql
@@ -188,7 +250,7 @@ git add docs/datamap && git commit -m "Data map: snapshot after 0008y" && git pu
 ```
 Expected: the push names this pull request's branch. `verify:datamap` passes from here on.
 
-## 6. Prod: point-in-time recovery, `92` twice, `41`
+## 6. Prod: point-in-time recovery, the lead reads before and after `92`, `92` twice, `41`
 
 **Terminal** (from the Chromebook; point-in-time recovery on, as before every prod migration)
 ```bash
@@ -196,9 +258,62 @@ gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value
 ```
 Expected: `True	7`. Anything else: stop.
 
+The lead reads before and after `92`, as in step 1, now in prod. Run the block before `92`, then `92`, then the block again, in one sitting outside every market's office hours (for Pulse4all after 17:00 or before 09:00 local time, or at the weekend). `speed_to_lead_rows` holds two figures that count up to now: an open deal's waiting business seconds, and whether a deal was called before the next business noon. Both stand still outside office hours, so the block can hash every column of both reads.
+
+**Studio (cma-prod-pg)** (read only, two temporary tables of the session: the lead reads' fingerprint. Ids, counts, hashes and a time only; each read's rows are hashed, never shown)
+```sql
+set time zone 'UTC';
+set role cma_owner;
+drop table if exists pg_temp.lead_reads;
+create temp table lead_reads (tenant text, read text, rows_read bigint, rows_md5 text, newest_change timestamptz);
+grant select, insert on lead_reads to cma_app;
+drop table if exists pg_temp.lead_reads_context;
+create temp table lead_reads_context as
+  select t.slug, t.id as tenant_id, u.id as user_id
+  from cma.tenant t join cma.app_user u on u.tenant_id = t.id and u.email = 'martin@pulse4all.com';
+grant select on lead_reads_context to cma_app;
+set role cma_app;
+do $$
+declare
+  c        record;
+  v_newest timestamptz;
+begin
+  for c in select * from lead_reads_context order by slug loop
+    perform set_config('app.tenant_id', c.tenant_id::text, true);
+    perform set_config('app.user_id', c.user_id::text, true);
+    perform set_config('app.actor_label', 'studio:martin', true);
+    -- the newest change these reads can see, so a difference between two runs can be told apart from new data
+    select greatest((select max(synced_at) from cma.crm_record), (select max(synced_at) from cma.crm_contact),
+                    (select max(synced_at) from cma.crm_call),
+                    (select max(greatest(first_seen_at, removed_at, source_changed_at)) from cma.crm_association),
+                    (select max(synced_at) from cma.telephony_call), (select max(greatest(linked_at, unlinked_at)) from cma.call_link),
+                    (select max(synced_at) from cma.commerce_customer), (select max(synced_at) from cma.commerce_order))
+      into v_newest;
+    insert into lead_reads
+      select c.slug, 'speed_to_lead_rows', count(*),
+             md5(coalesce(string_agg(to_jsonb(r)::text, '|' order by r.tenant_id, r.deal_id), '')), v_newest
+      from cma.speed_to_lead_rows('2026-10-01', '2026-10-19') r;
+    insert into lead_reads
+      select c.slug, 'lead_to_order_rows', count(*),
+             md5(coalesce(string_agg(to_jsonb(r)::text, '|' order by r.tenant_id, r.deal_id), '')), v_newest
+      from cma.lead_to_order_rows('2026-10-01', '2026-10-19') r;
+  end loop;
+end
+$$;
+select tenant, read, rows_read, rows_md5, newest_change from lead_reads order by tenant, read;
+reset role;
+```
+Expected: one pair of rows per tenant where your login has a user, at least `pulse4all-subscriptions`: `lead_to_order_rows` and `speed_to_lead_rows`, each with `rows_read` (Subscriptions' lead deals of 1 to 19 October), `rows_md5` and `newest_change`. Copy the rows into `records/attempts-prod-<date>/lead-reads-before-92.txt` (**File**), as Studio shows them.
+
 **Studio (cma-prod-pg):** paste `db/92_attempts_per_deal.sql` and Run.
 
 Expected: the run ends without an error; the last result is `reset role`. Prod's web keeps working throughout: it reads nothing `92` renames.
+
+**Studio (cma-prod-pg):** the lead reads' block above again, at once.
+
+Expected: the same rows as before `92`, the same `rows_read` and `rows_md5` for each tenant and read, `newest_change` included. Copy them into `records/attempts-prod-<date>/lead-reads-after-92.txt` (**File**).
+
+If any `rows_read` or `rows_md5` differs: **stop, do not merge**, and send me both outputs. `newest_change` tells whether new data arrived between the runs (a later time in the second); without a later time the difference is `92`'s.
 
 **Studio (cma-prod-pg):** step 1's fingerprint block. Then `92` again, then the fingerprint block again.
 

@@ -23,6 +23,7 @@ A fresh database built from `00` to `90` in README order (the dev seeds included
 | `volume-timing.sql`, `volume-timing.txt` | Both page reads of October as `cma_app`, best of three, on a throwaway tenant at about twice prod's lead volume of 19 October 2026, rolled back. The tenant holds 3,000 lead deals, 1,500 order deals, 300 renewals, 9,598 CRM calls and 5,929 telephony calls (4,429 linked). The script refuses a Cloud SQL instance. Results: by day 286 ms, by pipeline with every counted deal 325 ms, one market 296 ms, per person 146 ms. |
 | `reports-fixture-load.txt`, `timing-on-reports-fixture.txt` | `web/verify/reports-fixture.sql` loaded on a copy of the database (`fixture written`), then the runbook's step 7 block as the dev seed's admin: 6.9 ms, 6.3 ms and 6.2 ms on the fixture's handful of deals. |
 | `schema_migration.txt` | The additions 0008s to 0008y recorded. |
+| `lead-reads-before-92.txt`, `lead-reads-after-92.txt` | The runbook's lead-reads block (steps 1 and 6). It ran on a second fresh database at 0008x (`00` to `90`, `02` and `03` again, `reports-fixture.sql`) as the dev seed's two admins, before and after `92`. It gives, per tenant, the count and an md5 over every column of `cma.speed_to_lead_rows` and `cma.lead_to_order_rows` for 1 to 19 October 2026, ordered by tenant and deal: 6 and 6 rows for Pulse4all Subscriptions, 2 and 2 for Pulse4all Invest. Before and after are identical. |
 
 ## `web/`
 
