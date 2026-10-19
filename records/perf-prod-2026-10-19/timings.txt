@@ -1,0 +1,14 @@
+Studio (cma-prod-pg), 19 October 2026 11:55, as cma_app, October 2026, best of three (ms, rows)
+first_orders_page, by day                 208  143
+first_orders_page, by level, one market   239  100
+first_orders_report                       184   33
+first_orders_amounts                      135   10
+first_orders_list                         126  100
+first_orders_list, the file (500 rows)    127  161
+first_orders_per_person_of                108   15
+email_report_page, by day                 465  141
+email_report_page, by week, one market    441   53
+email_report                              467  141
+email_per_person_page                     393   33
+email_waiting                              45  100
+email_not_responding                      169   66
