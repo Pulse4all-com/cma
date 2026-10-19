@@ -1,3 +1,6 @@
+  manager /reports/attempts: crumbs ["Welcome","Reports","Attempts per deal"], expected ["Welcome","Reports"]
+  reader /reports/attempts: crumbs ["Welcome","Reports","Attempts per deal"], expected ["Welcome","Reports"]
+  supervisor /reports/attempts-per-agent: crumbs ["Welcome","Reports","Attempts per agent"], expected ["Welcome","Reports"]
   accordion after Time then Reports: open ["reports"], expected ["time","reports"]
   manager /reports/follow-up at 1440: the info mark of "DealThe deal's id in its own system. The" wraps apart from its label
   manager /reports/attempts (day) at 1440: the info mark of "DayThe deals' day of creation, its week," wraps apart from its label
