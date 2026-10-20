@@ -39,10 +39,10 @@
 --                      in the tenant's zone; cma.funnel_rows_of() reads them in one pass with the tenant and the
 --                      instant as literals (as 0008z's cma.attempts_rows_of)
 --   reads              cma.deal_funnel_page(from, to, pipeline, market, source_channel): per stage that reads times,
---                      the deals that entered it in the period, still there now, moved on, the median and 80th
---                      percentile of days in the stage of those that moved on, and the share that reached won; per
---                      pipeline the deals created, won and lost, the win rate by close date, the median days from the
---                      creation to won and to lost; the previous period like for like.
+--                      the deals that entered it in the period, still there now, moved on, the median days in the
+--                      stage of those that moved on (medians only, Decision log, 15 October 2026), and the share that
+--                      reached won; per pipeline the deals created, won and lost, the win rate by close date, the
+--                      median days from the creation to won and to lost; the previous period like for like.
 --                      cma.lost_reasons_page(from, to, pipeline, market, source_channel, group): the lost deals by
 --                      close date per reason, per market (with the top 3), per source channel and per day or ISO week;
 --                      the data-quality reasons apart; no reason as its own row (a KPI 11 figure); the lost deals
@@ -1046,8 +1046,9 @@ $$;
 -- Per stage of the deals' pipelines (and of every active lead pipeline that is no order pipeline, counted, of the
 -- tenant's connections; one pipeline with a pipeline filter), in the pipeline's order: whether its times are read
 -- (cma.read_times_of), and of the deals whose entry falls in the period: entered, still there (their current stage is
--- this one), moved on, the median and 80th percentile of days in the stage of those that moved on (exit after entry),
--- reached won (won now); entered in the previous span like for like. A stage that reads no times has no figures
+-- this one), moved on, the median days in the stage of those that moved on (exit after entry; the median only, as every
+-- report since 15 October 2026), reached won (won now); entered in the previous span like for like. A stage that reads
+-- no times has no figures
 create or replace function cma.funnel_stages_of(p_tenant_id uuid, p_rows cma.funnel_deal[], p_pipeline text, p_from date, p_to date,
                                                 p_prev_from date, p_prev_to date, p_until time)
 returns jsonb
@@ -1095,9 +1096,6 @@ as $$
            percentile_cont(0.5) within group (order by extract(epoch from e.exited_at - e.entered_at) / 86400.0)
              filter (where cma.in_period(e.entered_date, e.entered_time, p_from, p_to, null) and e.current_stage_id is distinct from e.stage_id
                      and e.exited_at >= e.entered_at) as median_days,
-           percentile_cont(0.8) within group (order by extract(epoch from e.exited_at - e.entered_at) / 86400.0)
-             filter (where cma.in_period(e.entered_date, e.entered_time, p_from, p_to, null) and e.current_stage_id is distinct from e.stage_id
-                     and e.exited_at >= e.entered_at) as p80_days,
            count(*) filter (where cma.in_period(e.entered_date, e.entered_time, p_from, p_to, null) and e.current_stage_id is distinct from e.stage_id
                             and e.exited_at >= e.entered_at) as timed,
            count(*) filter (where cma.in_period(e.entered_date, e.entered_time, p_from, p_to, null) and e.stage_outcome = 'won') as reached_won,
@@ -1114,7 +1112,6 @@ as $$
            'moved_on', case when st.reads then coalesce(f.moved_on, 0) end,
            'timed', case when st.reads then coalesce(f.timed, 0) end,
            'median_days', case when st.reads then round(f.median_days::numeric, 1) end,
-           'p80_days', case when st.reads then round(f.p80_days::numeric, 1) end,
            'reached_won', case when st.reads then coalesce(f.reached_won, 0) end,
            'won_share', case when st.reads then round(f.reached_won::numeric / nullif(f.entered, 0), 4) end,
            'entered_previous', case when st.reads then coalesce(f.entered_previous, 0) end)

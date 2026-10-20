@@ -1051,7 +1051,7 @@ type FunnelListsDb = { markets: string[]; pipelines: { key: string; label: strin
 type FunnelStageDb = {
   pipeline: string; pipeline_label: string; stage_id: string; label: string; order: number; is_closed: boolean; outcome: "won" | "lost" | null;
   reads_times: boolean; entered: number | null; still_there: number | null; moved_on: number | null; timed: number | null; median_days: number | null;
-  p80_days: number | null; reached_won: number | null; won_share: number | null; entered_previous: number | null;
+  reached_won: number | null; won_share: number | null; entered_previous: number | null;
 };
 type FunnelPageDb = FunnelListsDb & {
   stages: FunnelStageDb[];
@@ -1099,7 +1099,7 @@ function toFunnelStage(x: FunnelStageDb): FunnelStageRow {
   return {
     pipeline: x.pipeline, pipelineLabel: x.pipeline_label, stageId: x.stage_id, label: x.label, order: x.order, isClosed: x.is_closed, outcome: x.outcome,
     readsTimes: x.reads_times, entered: x.entered, stillThere: x.still_there, movedOn: x.moved_on, timed: x.timed, medianDays: numOrNull(x.median_days),
-    p80Days: numOrNull(x.p80_days), reachedWon: x.reached_won, wonShare: numOrNull(x.won_share), enteredPrevious: x.entered_previous,
+    reachedWon: x.reached_won, wonShare: numOrNull(x.won_share), enteredPrevious: x.entered_previous,
   };
 }
 const toLostFigures = (x: LostFiguresDb): LostFigures => ({ lost: x.lost, withReason: x.with_reason, noReason: x.no_reason, dataQuality: x.data_quality, real: x.real });

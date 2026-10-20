@@ -316,13 +316,12 @@ export function funnelStages(rows: readonly FunnelDeal[], pipelines: readonly Fu
     const moved = cur.filter((e) => e.current !== e.stageId);
     const timed = moved.filter((e) => e.exitedAt !== null && Date.parse(e.exitedAt) >= Date.parse(e.enteredAt));
     const spans = timed.map((e) => days(e.enteredAt, e.exitedAt!));
-    const p80 = percentileCont(spans, 0.8);
     const won = cur.filter((e) => e.outcome === "won").length;
     const figure = (x: number | null) => (reads ? x : null);
     return {
       pipeline: pipeKey(p.connectionId, p.pipelineId), pipelineLabel: p.label, stageId: s.stageId, label: s.label, order: s.order, isClosed: s.isClosed,
       outcome: s.outcome, readsTimes: reads, entered: figure(cur.length), stillThere: figure(cur.length - moved.length), movedOn: figure(moved.length),
-      timed: figure(timed.length), medianDays: figure(median1(spans)), p80Days: figure(p80 === null ? null : round1(p80)), reachedWon: figure(won),
+      timed: figure(timed.length), medianDays: figure(median1(spans)), reachedWon: figure(won),
       wonShare: figure(share4(won, cur.length)),
       enteredPrevious: figure(mine.filter((e) => inPeriod(e.date, e.time, prev.from, prev.to, until)).length),
     };

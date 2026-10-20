@@ -652,22 +652,26 @@ begin
       case when v_txt = 'Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 false'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B9. per stage: entered, still there, moved on, timed, the median and 80th percentile of days, reached won and its share,
-    --     entered in the previous period; a stage that reads no times without figures; the history starts and timed stages
-    select string_agg(format('%s:%s/%s/%s/%s/%s/%s/%s/%s/%s', x ->> 'stage_id', coalesce(x ->> 'entered', '-'), coalesce(x ->> 'still_there', '-'),
-                             coalesce(x ->> 'moved_on', '-'), coalesce(x ->> 'timed', '-'), coalesce(x ->> 'median_days', '-'), coalesce(x ->> 'p80_days', '-'),
+    -- B9. per stage: entered, still there, moved on, timed, the median days, reached won and its share, entered in the
+    --     previous period; a stage that reads no times without figures; the history starts and timed stages. The median
+    --     only: no stage carries an 80th percentile or any other key (Decision log, 15 October 2026)
+    select string_agg(format('%s:%s/%s/%s/%s/%s/%s/%s/%s', x ->> 'stage_id', coalesce(x ->> 'entered', '-'), coalesce(x ->> 'still_there', '-'),
+                             coalesce(x ->> 'moved_on', '-'), coalesce(x ->> 'timed', '-'), coalesce(x ->> 'median_days', '-'),
                              coalesce(x ->> 'reached_won', '-'), coalesce(x ->> 'won_share', '-'), coalesce(x ->> 'entered_previous', '-')), ' ' order by o.n) into v_txt
     from jsonb_array_elements(j -> 'stages') with ordinality o(x, n);
-    v_txt := v_txt || format(' %s/%s %s', j -> 'history_start' ->> 'deals', j -> 'history_start' ->> 'stages', j ->> 'timed_stages');
-    v_rows := v_rows || array['19', 'B9 per stage: entered, still there, moved on, days in stage, reached won, the previous period; a stage off without figures',
-      case when v_txt = 's1:9/3/6/6/1.0/2.0/2/0.2222/2 s2:3/1/2/2/2.6/2.8/1/0.3333/1 sw:3/3/0/0/-/-/3/1.0000/0 sl:-/-/-/-/-/-/-/-/- '
-                        || 'q1:1/1/0/0/-/-/0/0.0000/0 qw:0/0/0/0/-/-/0/-/0 2026-09-29/2026-09-29 6'
+    v_txt := v_txt || format(' %s/%s %s keys:%s', j -> 'history_start' ->> 'deals', j -> 'history_start' ->> 'stages', j ->> 'timed_stages',
+                             (select string_agg(distinct sk, ',' order by sk) from jsonb_array_elements(j -> 'stages') x, jsonb_object_keys(x) sk
+                               where sk not in ('pipeline', 'pipeline_label', 'stage_id', 'label', 'order', 'is_closed', 'outcome', 'reads_times', 'entered',
+                                               'still_there', 'moved_on', 'timed', 'median_days', 'reached_won', 'won_share', 'entered_previous')));
+    v_rows := v_rows || array['19', 'B9 per stage: entered, still there, moved on, the median days in stage, reached won, the previous period; a stage off without figures; no 80th percentile',
+      case when v_txt = 's1:9/3/6/6/1.0/2/0.2222/2 s2:3/1/2/2/2.6/1/0.3333/1 sw:3/3/0/0/-/3/1.0000/0 sl:-/-/-/-/-/-/-/- '
+                        || 'q1:1/1/0/0/-/0/0.0000/0 qw:0/0/0/0/-/0/-/0 2026-09-29/2026-09-29 6 keys:'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B10. the filters: a market (GB), a source channel (DIRECT), a pipeline (Sales two); the filter lists without them
     k := cma.deal_funnel_page_of(v_t1, date '2026-10-05', date '2026-10-11', null, 'GB', null, v_now);
     v_a := pg_temp.v0008zb_fig(k -> 'by_pipeline' -> 'total' -> 'current') || ' '
-           || (select format('%s/%s/%s/%s/%s/%s', x ->> 'entered', x ->> 'still_there', x ->> 'moved_on', x ->> 'median_days', x ->> 'p80_days', x ->> 'won_share')
+           || (select format('%s/%s/%s/%s/%s', x ->> 'entered', x ->> 'still_there', x ->> 'moved_on', x ->> 'median_days', x ->> 'won_share')
                from jsonb_array_elements(k -> 'stages') x where x ->> 'stage_id' = 's1');
     k := cma.deal_funnel_page_of(v_t1, date '2026-10-05', date '2026-10-11', null, null, 'DIRECT', v_now);
     v_a := v_a || ' ' || pg_temp.v0008zb_fig(k -> 'by_pipeline' -> 'total' -> 'current');
@@ -678,7 +682,7 @@ begin
            || ' ' || (k ->> 'source_channels');
     v_txt := v_a;
     v_rows := v_rows || array['20', 'B10 the filters (market, source channel, pipeline) narrow every figure; the filter lists without them',
-      case when v_txt = '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/1.8/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB", "NL"] Sales,Sales two ["DIRECT", "PAID_SEARCH"]'
+      case when v_txt = '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB", "NL"] Sales,Sales two ["DIRECT", "PAID_SEARCH"]'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B11. like for like: a period that reaches today against the same elapsed dates, the last cut at the time of day

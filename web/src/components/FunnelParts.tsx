@@ -118,8 +118,8 @@ function Scroll({ testId, label, children }: { testId: string; label: string; ch
 
 /**
  * One pipeline's stages: the deals that entered each stage in the period as bars, then the table with still there, moved
- * on, the median and 80th percentile of days in the stage, reached won and entered in the previous period. A stage whose
- * times are not read says so instead of figures
+ * on, the median days in the stage (the median only, Decision log, 15 October 2026), reached won and entered in the
+ * previous period. A stage whose times are not read says so instead of figures
  */
 export function StageCard({ stages, hints, copy, locale }: { stages: FunnelStageRow[]; hints: Record<string, string>; copy: Copy; locale: Locale }) {
   const t = copy.funnel;
@@ -132,7 +132,6 @@ export function StageCard({ stages, hints, copy, locale }: { stages: FunnelStage
     [t.colStillThere, hints.fnColStillThere!, (s) => n(s.stillThere)],
     [t.colMovedOn, hints.fnColMovedOn!, (s) => n(s.movedOn)],
     [t.colMedianDays, hints.fnColMedianDays!, (s) => fmtDays(s.medianDays, locale, t)],
-    [t.colP80Days, hints.fnColP80Days!, (s) => fmtDays(s.p80Days, locale, t)],
     [t.colReachedWon, hints.fnColReachedWon!, (s) => (s.reachedWon === null || s.wonShare === null ? "–" : t.reachedValue.replace("{pct}", fmtShare(s.wonShare, locale)).replace("{n}", n(s.reachedWon)))],
     [t.colPrevious, hints.fnColPrevious!, (s) => n(s.enteredPrevious)],
   ];

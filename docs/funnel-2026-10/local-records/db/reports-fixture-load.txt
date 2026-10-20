@@ -2,5 +2,5 @@ SET
 SET
 DO
 SET
-psql:/tmp/runsql-25293.sql:337: NOTICE:  fixture written
+psql:/tmp/runsql-3619.sql:337: NOTICE:  fixture written
 DO

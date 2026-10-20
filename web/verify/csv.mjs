@@ -162,19 +162,19 @@ expect("first orders file: header, the date and time in the reader's zone, the l
 
 // ---- Reports > Funnel and Cancellations (addition 0008zb) ----------------------------------------------------
 const fnLabels = { from: "From", to: "To", pipeline: "Pipeline", stage: "Stage", readsTimes: "Times read", entered: "Entered", stillThere: "Still there",
-  movedOn: "Moved on", medianDays: "Median days", p80Days: "80th percentile days", reachedWon: "Reached won", enteredPrevious: "Entered in the previous period",
+  movedOn: "Moved on", medianDays: "Median days", reachedWon: "Reached won", enteredPrevious: "Entered in the previous period",
   yes: "Yes", no: "No" };
 const fnStage = (o) => ({ pipeline: "c:sales", pipelineLabel: "Sales", stageId: "s1", label: "New", order: 1, isClosed: false, outcome: null, readsTimes: true,
-  entered: 9, stillThere: 3, movedOn: 6, timed: 6, medianDays: 1, p80Days: 2.04, reachedWon: 2, wonShare: 0.2222, enteredPrevious: 2, ...o });
+  entered: 9, stillThere: 3, movedOn: 6, timed: 6, medianDays: 1, reachedWon: 2, wonShare: 0.2222, enteredPrevious: 2, ...o });
 const fnFile = funnelStagesCsv([fnStage({}), fnStage({ stageId: "sl", label: "=Lost", readsTimes: false, entered: null, stillThere: null, movedOn: null, timed: null,
-  medianDays: null, p80Days: null, reachedWon: null, wonShare: null, enteredPrevious: null })], "2026-10-05", "2026-10-11", DUTCH, fnLabels).split("\r\n");
+  medianDays: null, reachedWon: null, wonShare: null, enteredPrevious: null })], "2026-10-05", "2026-10-11", DUTCH, fnLabels).split("\r\n");
 expect("funnel file: header, a stage per row, days with the decimal comma, a stage off with empty figures, a label defused", fnFile.slice(0, 3),
-  ["﻿From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;80th percentile days;Reached won;Entered in the previous period",
-   "05-10-2026;11-10-2026;Sales;New;Yes;9;3;6;1,0;2,0;2;2",
-   "05-10-2026;11-10-2026;Sales;'=Lost;No;;;;;;;"],
-  ["From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;80th percentile days;Reached won;Entered in the previous period",
-   "2026-10-05;2026-10-11;Sales;New;true;9;3;6;1;2.04;2;2",
-   "2026-10-05;2026-10-11;Sales;=Lost;false;0;0;0;0;0;0;0"]);
+  ["﻿From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;Reached won;Entered in the previous period",
+   "05-10-2026;11-10-2026;Sales;New;Yes;9;3;6;1,0;2;2",
+   "05-10-2026;11-10-2026;Sales;'=Lost;No;;;;;;"],
+  ["From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;Reached won;Entered in the previous period",
+   "2026-10-05;2026-10-11;Sales;New;true;9;3;6;1;2;2",
+   "2026-10-05;2026-10-11;Sales;=Lost;false;0;0;0;0;0;0"]);
 const lrLabels = { from: "From", to: "To", reason: "Reason", value: "Value", kind: "Kind", deals: "Lost deals", share: "Share", real: "Real reason",
   dataQuality: "Never a lead", none: "No reason", noReason: "No reason" };
 const lrFile = lostReasonsCsv([{ value: "too_expensive", label: "Too expensive", deals: 3, share: 0.4286 }], [{ value: "duplicate", label: "+Duplicate", deals: 1, share: 0.1 }],

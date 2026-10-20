@@ -1,4 +1,4 @@
-Ingest checks on this branch (Claude Code, 20 October 2026), from ingest/ with its node_modules; the flows on the local database at 0008zb (local-records/db) as a local login holding cma_app.
+Ingest checks on this branch after the fix-up (Claude Code, 20 October 2026), from ingest/ with its node_modules; the flows on the local database at 0008zb (local-records/db) as a local login holding cma_app.
 
 npm test (each pure verifier's last line):
   verify:signature           ALL 18 PASS

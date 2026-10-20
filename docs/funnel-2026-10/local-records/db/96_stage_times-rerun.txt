@@ -2,21 +2,21 @@ DO
 BEGIN
 SET
 DO
-psql:/tmp/runsql-25326.sql:64: NOTICE:  column "read_times" of relation "connection_stage" already exists, skipping
+psql:/tmp/runsql-3652.sql:64: NOTICE:  column "read_times" of relation "connection_stage" already exists, skipping
 ALTER TABLE
 COMMENT
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
-psql:/tmp/runsql-25326.sql:186: NOTICE:  relation "crm_record_stage" already exists, skipping
+psql:/tmp/runsql-3652.sql:186: NOTICE:  relation "crm_record_stage" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
 COMMENT
 COMMENT
-psql:/tmp/runsql-25326.sql:192: NOTICE:  relation "crm_record_stage_entered_idx" already exists, skipping
+psql:/tmp/runsql-3652.sql:192: NOTICE:  relation "crm_record_stage_entered_idx" already exists, skipping
 CREATE INDEX
-psql:/tmp/runsql-25326.sql:193: NOTICE:  policy "tenant_readonly" for relation "crm_record_stage" does not exist, skipping
+psql:/tmp/runsql-3652.sql:193: NOTICE:  policy "tenant_readonly" for relation "crm_record_stage" does not exist, skipping
  setup_tenant_table 
 --------------------
  

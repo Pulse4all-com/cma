@@ -1305,22 +1305,26 @@ expect("funnel: per pipeline and in total, the win rate by close date, the media
     + ` ${fnWeek.previousFrom}..${fnWeek.previousTo} ${fnWeek.previousPartial}`,
   "Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 false",
   "Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 true");
-const fnStageText = (x) => [x.entered, x.stillThere, x.movedOn, x.timed, x.medianDays === null ? null : x.medianDays.toFixed(1), x.p80Days === null ? null : x.p80Days.toFixed(1),
+const fnStageText = (x) => [x.entered, x.stillThere, x.movedOn, x.timed, x.medianDays === null ? null : x.medianDays.toFixed(1),
   x.reachedWon, x.wonShare === null ? null : x.wonShare.toFixed(4), x.enteredPrevious].map((v) => v ?? "-").join("/");
-expect("funnel: per stage entered, still there, moved on, days in stage, reached won, the previous period; a stage off without figures, as 99's B9",
-  `${fnWeek.stages.map((x) => `${x.stageId}:${fnStageText(x)}`).join(" ")} ${fnWeek.historyStart.deals}/${fnWeek.historyStart.stages} ${fnWeek.timedStages}`,
-  "s1:9/3/6/6/1.0/2.0/2/0.2222/2 s2:3/1/2/2/2.6/2.8/1/0.3333/1 sw:3/3/0/0/-/-/3/1.0000/0 sl:-/-/-/-/-/-/-/-/- q1:1/1/0/0/-/-/0/0.0000/0 qw:0/0/0/0/-/-/0/-/0 2026-09-29/2026-09-29 6",
-  "s1:9/3/6/6/1.0/2.0/2/0.2222/2 s2:3/1/2/2/2.6/2.8/1/0.3333/1 sw:3/3/0/0/-/-/3/1.0000/0 sl:0/0/0/0/-/-/0/-/0 q1:1/1/0/0/-/-/0/0.0000/0 qw:0/0/0/0/-/-/0/-/0 2026-09-29/2026-09-29 6");
+// The median only (Decision log, 15 October 2026): a stage carries no 80th percentile, nor any key beyond these
+const FN_STAGE_KEYS = ["pipeline", "pipelineLabel", "stageId", "label", "order", "isClosed", "outcome", "readsTimes", "entered", "stillThere", "movedOn",
+  "timed", "medianDays", "reachedWon", "wonShare", "enteredPrevious"];
+const fnExtraKeys = (stages) => [...new Set(stages.flatMap((x) => Object.keys(x).filter((k) => !FN_STAGE_KEYS.includes(k))))].sort().join(",");
+expect("funnel: per stage entered, still there, moved on, the median days in stage, reached won, the previous period; a stage off without figures; no 80th percentile, as 99's B9",
+  `${fnWeek.stages.map((x) => `${x.stageId}:${fnStageText(x)}`).join(" ")} ${fnWeek.historyStart.deals}/${fnWeek.historyStart.stages} ${fnWeek.timedStages} keys:${fnExtraKeys(fnWeek.stages)}`,
+  "s1:9/3/6/6/1.0/2/0.2222/2 s2:3/1/2/2/2.6/1/0.3333/1 sw:3/3/0/0/-/3/1.0000/0 sl:-/-/-/-/-/-/-/- q1:1/1/0/0/-/0/0.0000/0 qw:0/0/0/0/-/0/-/0 2026-09-29/2026-09-29 6 keys:",
+  "s1:9/3/6/6/1.0/2/0.2222/2 s2:3/1/2/2/2.6/1/0.3333/1 sw:3/3/0/0/-/3/1.0000/0 sl:0/0/0/0/-/0/-/0 q1:1/1/0/0/-/0/0.0000/0 qw:0/0/0/0/-/0/-/0 2026-09-29/2026-09-29 6 keys:p80Days");
 const fnGb = fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, market: "GB" });
 const fnGbS1 = fnGb.stages.find((x) => x.stageId === "s1");
 const fnTwo = fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, pipeline: `${FN}:sales2` });
 expect("funnel: a market, a source channel and a pipeline narrow every figure; the filter lists without them, as 99's B10",
-  `${fnFig(fnGb.byPipeline.total.current)} ${[fnGbS1.entered, fnGbS1.stillThere, fnGbS1.movedOn, d1(fnGbS1.medianDays), d1(fnGbS1.p80Days), fnGbS1.wonShare.toFixed(4)].join("/")}`
+  `${fnFig(fnGb.byPipeline.total.current)} ${[fnGbS1.entered, fnGbS1.stillThere, fnGbS1.movedOn, d1(fnGbS1.medianDays), fnGbS1.wonShare.toFixed(4)].join("/")}`
     + ` ${fnFig(fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, sourceChannel: "DIRECT" }).byPipeline.total.current)}`
     + ` ${fnTwo.byPipeline.rows.map((x) => x.label).join(",")} ${fnTwo.stages.map((x) => x.stageId).join(",")} ${JSON.stringify(fnTwo.markets)}`
     + ` ${fnTwo.pipelines.map((x) => x.label).join(",")} ${JSON.stringify(fnTwo.sourceChannels)}`,
-  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/1.8/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]',
-  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/1.8/0.5000 2/0/2/0.0000/-/3.5 Sales,Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]');
+  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]',
+  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/0.5000 2/0/2/0.0000/-/3.5 Sales,Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]');
 const fnRun = fnPage("2026-10-12", "2026-10-14");
 expect("funnel: like for like, the previous span's last date cut at the time of day, as 99's B11",
   `${fnFig(fnRun.byPipeline.total.current)}|${fnFig(fnRun.byPipeline.total.previous)} ${fnRun.previousFrom}..${fnRun.previousTo} ${fnRun.previousPartial}`
@@ -1445,6 +1449,14 @@ expect("deals per person: 404 while reports.per_person lacks deals, then perform
   [fnPerson.includes('if (!me.perPerson.includes(DEALS_PER_PERSON_KEY)) throw new ApiError(404, "not_found"'), fnPerson.includes("requireAnyPermission(me, [DEALS_PER_PERSON_PERMISSION]);"),
     fnWrites.every((w) => /export async function PUT\(/.test(w) && w.includes("assertSameSiteWrite(request);") && w.includes('requireAnyPermission(me, ["tenant.configure"]);'))],
   [true, true, true], [false, true, true]);
+// The median only (Decision log, 15 October 2026): no 80th percentile of days in stage in the read (98), the type, the data
+// layer, the mirror, the table, the file or the copy, in English or Dutch
+const fnNoP80 = { "db/98_funnel.sql": src("../../db/98_funnel.sql"), "lib/data/types.ts": src("../src/lib/data/types.ts"), "lib/data/postgres.ts": pgLayer,
+  "lib/funnel.ts": src("../src/lib/funnel.ts"), "components/FunnelParts.tsx": src("../src/components/FunnelParts.tsx"), "lib/csv.ts": src("../src/lib/csv.ts"),
+  "lib/copy.ts": src("../src/lib/copy.ts") };
+const P80_IN_FUNNEL = /p80_?days|P80Days|percentile_cont\(0\.8\)|percentileCont\([^)]*0\.8\)|80th percentile days|80e percentiel/i;
+expect("funnel: the median only, no 80th percentile of days in stage in the read, the type, the data layer, the mirror, the table, the file or the copy",
+  Object.entries(fnNoP80).filter(([, text]) => P80_IN_FUNNEL.test(text)).map(([f]) => f), [], ["lib/funnel.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

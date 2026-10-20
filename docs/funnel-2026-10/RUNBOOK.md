@@ -23,7 +23,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 - Ingest: the HubSpot adapter reads the stage times with the deal (the webhook within its 3-second budget, else the next sweep), the reason property's definition hourly, the option value of a dropdown reason; `ingest-backfill` takes `--object deal,ticket` and `--again` re-reads stored records once per run. No `deploy.sh` change; two optional variables with defaults in the code (`INGEST_STAGE_READ_MIN_MS`, `INGEST_STAGE_READ_MAX_PROPERTIES`), set nowhere.
 - Web: Reports → Funnel and Reports → Cancellations after Attempts per agent; on Configuration → Sources a Read times column per deal stage, the Reasons card and the record kind rules on a CRM connection, the record kinds and the cancellation kind on the Sources list.
 - Seeds: `02` does not change and is not run. `03` (dev) switches `deals` on in `reports.per_person`; it runs again in dev after `98` (step 5).
-- No `cloudbuild.yaml` change, no environment variable of the web, no HubSpot app change (unless step 7 finds the property read refused, below).
+- No `cloudbuild.yaml` change, no environment variable of the web, no HubSpot app change: reading a property's definition needs no scope beyond the app's own (`hubspot/README.md`, Scopes).
 
 **Order matters:**
 - The database first, in dev and in prod. `main`'s web and ingest run unchanged on `96` and `98`: `98` adds keys to `cma.connection_config` and accepts more values, and changes nothing either of them reads in shape.
@@ -64,7 +64,7 @@ Expected:
 - under `ingest/`, the HubSpot adapter (`map.mjs`, `read.mjs`, `backfill.mjs`, `index.mjs`, the new `reasons.mjs`), `core/store.mjs`, the backfill job and its entry point, two new verifiers and `jobs-flow.mjs` amended;
 - under `web/`, the Funnel and Cancellations pages, components and routes, the Sources components and routes, `lib/funnel.ts`, the data layer, the copy and the verifiers;
 - `docs/funnel-2026-10/` (this runbook and `local-records/`), the data model, API, features, KPIs, decisions, open decisions, the ingest README, `docs/datamap/catalog.json` and `CHANGELOG.md`;
-- nothing under `cloudbuild.yaml`, `records/` or `hubspot/`.
+- `hubspot/README.md` with one row in Scopes (the property read needs no new scope); nothing under `cloudbuild.yaml`, `records/` or `hubspot/template/`.
 
 **Terminal** (the pull request's number from the page)
 ```bash
@@ -93,15 +93,15 @@ Expected on both instances: `0008z` only. Without `0008z`, run `docs/attempts-20
 
 Expected: per stage of every lead pipeline one property `Date entered "<stage>" (<pipeline>)`, and `Date exited "<stage>" (<pipeline>)` beside it. Open one: its internal name is `hs_v2_date_entered_<stage id>` (`hs_v2_date_exited_<stage id>`), its field type `Date picker`, and it is a calculated HubSpot property (no edit). HubSpot keeps them for every stage it knows. A stage without them (a pipeline created by an integration, say) would give that stage no times: write down which.
 
-**Browser:** the same list, search `Closed lost reason`.
+**Browser:** the same list (Deal properties). Look for a deal property of field type `Dropdown select` that holds the reasons a deal is lost; the field type filter narrows the list. A property of the same meaning as single-line or multi-line text does not count: the CMA refuses free text (Decision log, 20 October 2026).
 
-Expected: two properties.
-- `Closed Lost Reason`, internal name `closed_lost_reason`, field type single-line text: free text. The CMA refuses it (Decision log, 20 October 2026).
-- the dropdown one, internal name `closed_lost_reason__dropdown`, field type `Dropdown select`, with its options. This is the one to map in step 7. Write down its options' labels: the data-quality flags in step 7 go on four of them (KPIs 5: Garbage, Duplicate, Wrong Phone, Accidentally Signed Up).
+Expected: one such property, or none. Open it and write down its internal name (shown in the property's details) and its options' labels. The data-quality flags in step 7 go on the options that say the lead was never a lead (KPIs 5 names Garbage, Duplicate, Wrong Phone and Accidentally Signed Up).
 
-**Browser:** Settings → Properties → Ticket properties, search `Cancellation reason`.
+**Browser:** Settings → Properties → Ticket properties. Look for a ticket property of field type `Dropdown select` that holds the cancellation reason.
 
-Expected: `Cancellation Reason`, internal name `cancellation_reason`, field type `Dropdown select`. Write down which ticket pipeline (and, if any, which category value) holds the cancellation requests: that is the kind's rule in step 7, with Arno (Open decisions).
+Expected: one such property, or none. Write down its internal name. Write down also which ticket pipeline (and, if any, which category value) holds the cancellation requests: that is the kind's rule in step 7, with Arno (Open decisions).
+
+**Where none exists:** Funnel's lost-reasons section and Cancellations' reason column stay empty until Kira or Joshua create one (Open decisions). Nothing else in this runbook waits for it: carry on, and leave out the matching item in steps 7 and 15.
 
 ## 2. Dev: `96` twice with the fingerprint, `97` normal and provoked
 
@@ -162,7 +162,7 @@ Expected: the same row. Locally the two runs gave the same fingerprint (`local-r
 ```bash
 cma_db dev && time psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f db/99_verify_funnel.sql > /tmp/99.txt 2>&1; grep -E "^ *(A|B|C)[0-9]+ |verdict" /tmp/99.txt | cut -c1-160
 ```
-Expected: rows `A1` to `A8`, `B1` to `B23` and `C1` to `C2`, each `PASS`; `verdict | PASS | 33 PASS, 0 FAIL`. C2 names every page read with its milliseconds; each must stay under 1000 (locally: deal_funnel_page 205.3 ms; NL 174.5 ms; pipeline 170.2 ms; source 140.0 ms; lost_reasons_page week 157.4 ms; day GB 144.3 ms; cancellations_page week 104.8 ms; day NL 58.2 ms; deals_per_person_page 141.1 ms; 92 days 181.3 ms; the whole script 12 seconds). Send me C2's line. A `FAIL` in C2 alone on dev's shared core: send it; prod's timings in step 12 decide.
+Expected: rows `A1` to `A8`, `B1` to `B23` and `C1` to `C2`, each `PASS`; `verdict | PASS | 33 PASS, 0 FAIL`. C2 names every page read with its milliseconds; each must stay under 1000 (locally: deal_funnel_page 307.3 ms; NL 245.5 ms; pipeline 259.3 ms; source 245.4 ms; lost_reasons_page week 233.7 ms; day GB 223.3 ms; cancellations_page week 175.8 ms; day NL 109.4 ms; deals_per_person_page 237.2 ms; 92 days 394.4 ms; the whole script 21 seconds). Send me C2's line. A `FAIL` in C2 alone on dev's shared core: send it; prod's timings in step 12 decide.
 
 **Terminal:** the same, provoked:
 ```bash
@@ -212,18 +212,20 @@ Expected: nothing yet (no reason property is mapped until step 7).
 **Browser:** dev's Workspace → Configuration → Sources → the HubSpot connection.
 
 1. **Stage outcomes**, column **Read times**: every stage of the counted pipelines ticked with `Default`; the uncounted pipelines' stages unticked. Untick a stage whose times say nothing (step 1's notes); it then shows `Set here`.
-2. **Reasons → Deals: lost reason**: type `closed_lost_reason__dropdown` and **Save property**. The state reads `Not checked yet`.
-3. **Reasons → Tickets: reason**: `cancellation_reason`, **Save property**.
+2. **Reasons → Deals: lost reason**: type the internal name of the deal property you wrote down in step 1 (the `Dropdown select` property holding the lost reasons) and **Save property**. The state reads `Not checked yet`.
+3. **Reasons → Tickets: reason**: the internal name of the ticket property from step 1 (the `Dropdown select` property holding the cancellation reason), **Save property**.
 
-**Terminal** (two minutes later: the sweep has read both definitions)
+Where none exists, Funnel's lost-reasons section and Cancellations' reason column stay empty until Kira or Joshua create one; nothing else in this runbook waits for it.
+
+**Terminal** (two minutes later: the sweep has read the mapped definitions)
 ```bash
 gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-sweep" AND (jsonPayload.message="hubspot reason properties" OR jsonPayload.message="reason property not read")' --project=p4a-cma-dev --freshness=10m --limit=5 --format='value(jsonPayload.message,jsonPayload.code,jsonPayload.types)'
 ```
-Expected: `hubspot reason properties` with `deal:enumeration`, `ticket:enumeration`. `reason property not read` with `http_403` means the app lacks the scope to read property definitions: stop and tell me (the HubSpot app then needs `crm.schemas.deals.read` and `crm.schemas.tickets.read`, a change in `hubspot/` and an app upload, a separate pull request).
+Expected: `hubspot reason properties` with `deal:enumeration` and `ticket:enumeration` (only the record types you mapped). `reason property not read` with a code instead: send me the line; the sweep reads the definition again on its next run. The read needs no scope beyond the app's own (`hubspot/README.md`, Scopes).
 
 **Browser:** reload the connection's page.
 
-Expected: both reasons `Dropdown` with their options listed (labels and values from HubSpot). Under **Deals: lost reason**, tick **Never a lead** on the data-quality options (KPIs 5: Garbage, Duplicate, Wrong Phone, Accidentally Signed Up, as named in step 1). A text property instead (say `closed_lost_reason`) shows `Refused` with the reason: map the dropdown.
+Expected: each mapped reason `Dropdown` with its options listed (labels and values from HubSpot). Under **Deals: lost reason**, tick **Never a lead** on the data-quality options you noted in step 1. A text property instead shows `Refused` with the reason: map the `Dropdown select` property from step 1.
 
 4. **Record kind rules** need a kind first. **Browser:** Configuration → Sources (the list) → **Record kinds** → **Add kind** (K): key `cancellation`, label `Cancellation request`, record type Tickets. Save. Then, on the HubSpot connection's page, **Record kind rules → Add rule** (R): the kind, the pipeline from step 1 (and the category value, if Arno names one). Save.
 5. **Browser:** the Sources list → **Cancellation requests**: choose `Cancellation request`.
@@ -245,7 +247,7 @@ left join cma.connection_pipeline p on p.tenant_id = s.tenant_id and p.connectio
 where t.slug = 'pulse4all-subscriptions' and s.record_type = 'deal' and s.status = 'active';
 reset role;
 ```
-Expected: `deal | closed_lost_reason__dropdown | enumeration | t` and `ticket | cancellation_reason | enumeration | t`; the options per record type with the four data-quality flags on deals; `cancellation | ticket | active | 1 | t`; the stages reading times out of the deal stages.
+Expected: `deal | <the deal property from step 1> | enumeration | t` and `ticket | <the ticket property from step 1> | enumeration | t`, a row only for a property you mapped; the options per record type, with your data-quality flags on deals; `cancellation | ticket | active | 1 | t`; the stages reading times out of the deal stages.
 
 ## 8. Dev: the backfill with `--again`
 
@@ -359,7 +361,7 @@ $$;
 select read, ms from funnel_timing order by read;
 reset role;
 ```
-Expected: four rows, each under 1000 ms (locally, at about twice prod's volume: deal_funnel_page 205.3 ms, lost_reasons_page week 157.4 ms, cancellations_page week 104.8 ms, deal_funnel_page 92 days 181.3 ms). Send me the rows. `CMA06` means `martin@pulse4all.com` holds neither `reports.view` nor `performance.team`. (`deals_per_person_page` is not timed: `reports.per_person` holds no `deals` in prod.)
+Expected: four rows, each under 1000 ms (locally, at about twice prod's volume: deal_funnel_page 307.3 ms, lost_reasons_page week 233.7 ms, cancellations_page week 175.8 ms, deal_funnel_page 92 days 394.4 ms). Send me the rows. `CMA06` means `martin@pulse4all.com` holds neither `reports.view` nor `performance.team`. (`deals_per_person_page` is not timed: `reports.per_person` holds no `deals` in prod.)
 
 ## 13. Merge and watch the build
 
@@ -377,7 +379,7 @@ Expected: the image tag (the merge commit), `image … exists …; no build` (de
 
 ## 15. Prod: Sources settings
 
-**Browser:** prod's Workspace (`martin@pulse4all.com`) → Configuration → Sources → the HubSpot connection: step 7's items 1 to 3, the sweep's log line (with `--project=p4a-cma-prod`), the data-quality flags, and items 4 and 5 once Arno has named the rule (Open decisions; until then Reports → Cancellations says no kind is chosen). Then step 7's Studio block on **cma-prod-pg**.
+**Browser:** prod's Workspace (`martin@pulse4all.com`) → Configuration → Sources → the HubSpot connection: step 7's items 1 to 3 (items 2 and 3 for the properties step 1 found), the sweep's log line (with `--project=p4a-cma-prod`), the data-quality flags, and items 4 and 5 once Arno has named the rule (Open decisions; until then Reports → Cancellations says no kind is chosen). Then step 7's Studio block on **cma-prod-pg**.
 
 Expected: as in dev.
 
@@ -394,10 +396,10 @@ Expected: as in dev, with prod's counts: about four requests per 100 records, `b
 ## 17. Prod: the hand checks and the request log
 
 **Browser** (as `martin@pulse4all.com`), each with what you should see:
-- Reports → Funnel, This month: six tiles with their changes; Per stage with each lead pipeline's stages, the bars and the table (a stage switched off says `Times not read for this stage`); Per pipeline with `Attempts per deal` opening that pipeline's deals; Lost reasons with four tiles, the reasons as bars, `No reason` below them, Never a lead with the flagged reasons, per market and per source, per week, the lost deals without a reason with their links (each opens the deal in HubSpot); no Deals per person (off in prod).
+- Reports → Funnel, This month: six tiles with their changes; Per stage with each lead pipeline's stages, the bars and the table (a stage switched off says `Times not read for this stage`); Per pipeline with `Attempts per deal` opening that pipeline's deals; Lost reasons with four tiles, the reasons as bars (none while no deal reason property is mapped: the notice says so), `No reason` below them, Never a lead with the flagged reasons, per market and per source, per week, the lost deals without a reason with their links (each opens the deal in HubSpot); no Deals per person (off in prod).
 - G switches week and day; K, P and S filter; X downloads the stages file.
 - Reports → Cancellations, This month: four tiles, per market, reasons, per week and market, the newest requests with their links; without a kind, the notice with the link to Sources.
-- Configuration → Sources: the Read times column, the Reasons card (`Dropdown` twice), the record kind rules; the list's Record kinds with `Counted as cancellations`.
+- Configuration → Sources: the Read times column, the Reasons card (`Dropdown` for each property mapped), the record kind rules; the list's Record kinds with `Counted as cancellations`.
 
 **Terminal** (the request log of the two pages since the merge)
 ```bash

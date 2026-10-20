@@ -3,5 +3,5 @@ SET
 DO
 DO
 DO
-psql:/tmp/runsql-25284.sql:149: NOTICE:  the per-person setting does not take deals yet (addition 0008zb): rerun this seed after 98_funnel.sql
+psql:/tmp/runsql-3610.sql:149: NOTICE:  the per-person setting does not take deals yet (addition 0008zb): rerun this seed after 98_funnel.sql
 DO

@@ -11,7 +11,7 @@ SET
 (1 row)
 
 DO
-psql:/tmp/runsql-25585.sql:66: NOTICE:  schema "pg_temp" does not exist, skipping
+psql:/tmp/runsql-3919.sql:66: NOTICE:  schema "pg_temp" does not exist, skipping
 DROP TABLE
 CREATE TABLE
 CREATE FUNCTION

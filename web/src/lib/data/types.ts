@@ -1845,9 +1845,9 @@ export interface FunnelPipelineRow {
 
 /**
  * One stage of the funnel (cma.funnel_stages_of): of the deals whose entry (crm_record_stage.entered_at) falls in the
- * period, how many entered, are still there now, moved on, the median and 80th percentile of days in the stage of those
- * that moved on (exit after entry), and how many reached won; entered in the previous span. A stage that reads no times
- * has null figures
+ * period, how many entered, are still there now, moved on, the median days in the stage of those that moved on (exit
+ * after entry; the median only, Decision log, 15 October 2026), and how many reached won; entered in the previous span.
+ * A stage that reads no times has null figures
  */
 export interface FunnelStageRow {
   pipeline: string;
@@ -1864,7 +1864,6 @@ export interface FunnelStageRow {
   /** Of those that moved on, the ones with an exit after their entry: what the days count over */
   timed: number | null;
   medianDays: number | null;
-  p80Days: number | null;
   reachedWon: number | null;
   /** Reached won over entered, four decimals; null without an entry */
   wonShare: number | null;

@@ -35,7 +35,7 @@ Files:
 | Scope | Why | Source (2026-09 spec) |
 |---|---|---|
 | `oauth` | the base scope HubSpot's project templates put on every app | project templates |
-| `crm.objects.deals.read` | deals: batch read, search; deal pipelines | Deals, Pipelines |
+| `crm.objects.deals.read` | deals: batch read, search; deal pipelines; since addition 0008zb the reason properties' definitions, deals and tickets (below) | Deals, Pipelines, Properties |
 | `crm.objects.tickets.read` | tickets: batch read, search; their contacts through the associations batch read; the ticket webhook subscriptions | named by HubSpot's refusal of `tickets` (11 October 2026); see below |
 | `crm.objects.contacts.read` | contacts; also **calls**: the calls batch read and search name this scope | Contacts, Calls |
 | `crm.objects.contacts.write` | the contact write-back (DESIGN §4.3a), limited to `writeback_field` in the database and in code | Contacts batch update |
@@ -62,6 +62,8 @@ Things to know:
   | same, 2026-09-beta | `CRM/Pipelines/Rollouts/321972/2026-09-beta/pipelines.json` | 59 | `tickets` or `crm.schemas.tickets.read`, as two of 100 alternatives |
   | `POST /crm/v4/associations/tickets/contacts/batch/read` | `CRM/Associations/Rollouts/130902/v4/associations.json` | 1173 | none outside the sensitive variants; any of 79 alternatives, among them `crm.objects.contacts.read` |
   | ticket webhook subscriptions | `Webhooks/Webhooks/Rollouts/147891/2026-09/webhooks.json` | 248 | none: the subscriptions API takes the developer key; its error format names `missingScopes` (line 2191) |
+  | `GET /crm/v3/properties/{objectType}/{propertyName}`, the reason properties of deals and tickets (addition 0008zb; checked 20 October 2026, commit `7f92ada`) | `CRM/Properties/Rollouts/145899/v3/properties.json` | 1760 | any of 98 alternatives, among them `crm.objects.deals.read` and `crm.objects.contacts.read`, each enough alone; `crm.schemas.tickets.read` is not among them. The same list for every `objectType`, tickets included |
+  | same, 2025-09, 2026-03 and 2026-09 (`/crm/properties/<version>/{objectType}/{propertyName}`) | `CRM/Properties/Rollouts/145899/<version>/properties.json` | 1754 | the same 98 alternatives |
 
   So no spec version lists `crm.schemas.tickets.read` as needed, and it is not requested. If the ticket pipelines read answers 403 at runtime, the ingest logs `catalog refresh skipped` (deal and ticket pipelines are refreshed together) and keeps processing events; then add `crm.schemas.tickets.read`, a read scope the verifier allows once it is in the documented set. Not needed: in dev on 11 October 2026 the pipeline label resolved, so the refresh was not skipped (README Decision log).
 - **`forms` also covers form definitions.** HubSpot has one forms scope: the spec (`Marketing/Forms/Rollouts/144909/v3/forms.json`) names `forms` for reading forms and for creating, updating and deleting them. The CMA only reads the catalog and the submissions.

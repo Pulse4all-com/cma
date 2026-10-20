@@ -252,7 +252,7 @@ export function firstOrdersCsv(rows: FirstOrderListRow[], from: string, to: stri
 
 export interface FunnelFileLabels {
   from: string; to: string; pipeline: string; stage: string; readsTimes: string; entered: string; stillThere: string; movedOn: string; medianDays: string;
-  p80Days: string; reachedWon: string; enteredPrevious: string; yes: string; no: string;
+  reachedWon: string; enteredPrevious: string; yes: string; no: string;
 }
 
 /** A number with the tenant's decimal mark and fixed decimals; empty for none */
@@ -264,16 +264,16 @@ function decimalOf(v: number | null, digits: number, s: Pick<ExportSettings, "de
 
 /**
  * One row per stage, as Reports > Funnel shows it: the period, the pipeline, the stage, whether its times are read, then
- * entered, still there, moved on, the median and 80th percentile of days in the stage, reached won and entered in the
- * previous period; empty figures for a stage whose times are not read. Counts and days only
+ * entered, still there, moved on, the median days in the stage, reached won and entered in the previous period; empty
+ * figures for a stage whose times are not read. Counts and days only
  */
 export function funnelStagesCsv(rows: FunnelStageRow[], from: string, to: string, s: ExportSettings, l: FunnelFileLabels): string {
   const n = (v: number | null) => (v === null ? "" : String(v));
   return toCsv(
-    [l.from, l.to, l.pipeline, l.stage, l.readsTimes, l.entered, l.stillThere, l.movedOn, l.medianDays, l.p80Days, l.reachedWon, l.enteredPrevious],
+    [l.from, l.to, l.pipeline, l.stage, l.readsTimes, l.entered, l.stillThere, l.movedOn, l.medianDays, l.reachedWon, l.enteredPrevious],
     rows.map((r) => [
       formatDate(from, s.dateFormat), formatDate(to, s.dateFormat), safeText(r.pipelineLabel), safeText(r.label), r.readsTimes ? l.yes : l.no,
-      n(r.entered), n(r.stillThere), n(r.movedOn), decimalOf(r.medianDays, 1, s), decimalOf(r.p80Days, 1, s), n(r.reachedWon), n(r.enteredPrevious),
+      n(r.entered), n(r.stillThere), n(r.movedOn), decimalOf(r.medianDays, 1, s), n(r.reachedWon), n(r.enteredPrevious),
     ]),
     s,
   );
