@@ -171,7 +171,7 @@ const pages = [
   // table per group and the deal list with its links, by day as the manager, by pipeline with every counted deal as the
   // analyst; the per-agent table with its bars; a tenant without the per-person switch
   { path: "/reports/attempts?range=month", subject: "manager", tables: true },
-  { path: "/reports/attempts?range=month&group=pipeline&scope=counted", subject: "analyst", tables: true },
+  { path: "/reports/attempts?range=month&group=pipeline&attempted=some&outcome=won", subject: "analyst", tables: true },
   { path: "/reports/attempts-per-agent?range=month", subject: "manager", tables: true },
   { path: "/reports/attempts?range=month", subject: "invest-analyst", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
@@ -201,8 +201,9 @@ for (const { path, subject, start, tables, expand, noHint, cookies } of pages) {
     viewport: { width: 1440, height: 900 },
     extraHTTPHeaders: subject ? { "x-cma-mock-subject": subject } : {},
   });
-  // The frame's preferences and the preview are cookies (16 October 2026)
-  if (cookies) await ctx.addCookies(Object.entries(cookies).map(([name, value]) => ({ name, value, domain: new URL(BASE).hostname, path: "/" })));
+  // The frame's preferences and the preview are cookies (16 October 2026); a signed-in browser carries its session
+  // (Welcome on open, addition 0008z), so a page opened without the verifiers' header opens as asked, not on Welcome
+  await ctx.addCookies(Object.entries({ "cma-session": "1", ...cookies }).map(([name, value]) => ({ name, value, domain: new URL(BASE).hostname, path: "/" })));
   const p = await ctx.newPage();
   await p.goto(BASE + path);
   await p.waitForLoadState("networkidle");

@@ -1,7 +1,8 @@
 /**
- * The Live board's inbound part (addition 0008i, brief B15): today's inbound tiles (inbound, answered,
- * unanswered share, service level, average time to answer, waiting now, longest waiting) and the
- * missed calls not called back, one row per caller, oldest first, with the line, market, reason, the
+ * The Live board's inbound parts (addition 0008i, brief B15): today's inbound tiles (inbound, answered,
+ * unanswered share, service level, average time to answer, waiting now, longest waiting) at the top, and
+ * the missed calls not called back (MissedCallbacks), the board's last section since addition 0008z
+ * (Martin, 20 October 2026), one row per caller, oldest first, with the line, market, reason, the
  * time of the latest missed call, the waiting time in office time of the line's market, how often the
  * caller was missed and a link icon only when the connection has a call link template; then the count
  * of anonymous missed calls. A server component: the page's poll (LiveRefresh) reads it again every 10
@@ -34,7 +35,7 @@ function Tile({ label, info, value, testId }: { label: string; info: { about: st
   );
 }
 
-export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: InboundNow; copy: Copy; locale: Locale; timeZone: string }) {
+export function InboundLive({ inbound, copy, locale }: { inbound: InboundNow; copy: Copy; locale: Locale }) {
   const t = copy.live;
   const h = copy.hints;
   const today = inbound.today;
@@ -42,7 +43,6 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
     hours: h.officeHours, seconds: today?.serviceLevelSeconds ?? null, minutes: today?.waitingMaxMinutes ?? null, days: inbound.lookbackDays,
   }, locale);
   const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
-  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={fill(text)} />;
 
   const tiles: Record<InboundTileKey, { label: string; hint: string }> = {
     offered: { label: t.inboundOffered, hint: h.liveOffered },
@@ -65,14 +65,6 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
     return fmtAnswerSeconds(v.value, locale);
   };
 
-  const todayKey = dateKeyInZone(new Date(), timeZone);
-  const missedAt = (r: MissedCallback) => {
-    const day = dateKeyInZone(r.startedAt, timeZone);
-    return `${day === todayKey ? "" : `${fmtDate(day, locale, "compact")} `}${fmtTime(r.startedAt, timeZone, locale)}`;
-  };
-  const th = "h-10 px-3 py-1 font-semibold";
-  const td = "h-10 whitespace-nowrap px-3";
-
   return (
     <section aria-labelledby="inbound-today" className="flex flex-col gap-4" data-testid="inbound-live">
       <h2 id="inbound-today" className="text-panel font-semibold text-p4a-heading">{t.inboundTitle}</h2>
@@ -84,72 +76,96 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
           </p>
         </Card>
       ) : (
-        <>
-          <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7" data-testid="inbound-tiles">
-            {INBOUND_TILES.map((key) => (
-              <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint)} value={shown(key)} />
-            ))}
-          </div>
-
-          <Card>
-            <h3 className="mb-1 flex items-start text-panel font-semibold text-p4a-heading" data-hint-anchor="">
-              {t.missedTitle}
-              {hint(t.missedTitle, h.missedCallbacks)}
-            </h3>
-            <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
-            {inbound.callbacks.length === 0 ? (
-              <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-body leading-table" data-testid="missed-callbacks">
-                  <thead>
-                    <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                      <th className={th}><HintLabel label={t.missedLine}>{hint(t.missedLine, h.missedLine)}</HintLabel></th>
-                      <th className={th}><HintLabel label={t.missedMarket}>{hint(t.missedMarket, h.missedMarket)}</HintLabel></th>
-                      <th className={th}><HintLabel label={t.missedReason}>{hint(t.missedReason, h.missedReason)}</HintLabel></th>
-                      <th className={th}><HintLabel label={t.missedAt}>{hint(t.missedAt, h.missedAt)}</HintLabel></th>
-                      <th className={`${th} text-right`}><HintLabel label={t.missedWaiting}>{hint(t.missedWaiting, h.missedWaiting)}</HintLabel></th>
-                      <th className={`${th} text-right`}><HintLabel label={t.missedTimes}>{hint(t.missedTimes, h.missedTimes)}</HintLabel></th>
-                      <th className={`${th} w-12`}><span className="sr-only">{t.missedLink}</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inbound.callbacks.map((r) => {
-                      const w = callbackWaiting(r);
-                      return (
-                        <tr key={r.callId} className="border-b border-p4a-border last:border-b-0 odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
-                          <td className={td}>{r.lineName ?? copy.inbound.unknownLine}</td>
-                          <td className={td}>{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
-                          <td className={td}>{r.reasonCode === "unknown" && r.reasonLabel === "unknown" ? copy.inbound.unknownReason : r.reasonLabel}</td>
-                          <td className={`${td} tabular`}>{missedAt(r)}</td>
-                          <td className={`${td} tabular text-right`}>
-                            {w.kind === "business"
-                              ? w.closed
-                                // No office time has passed since the call: the market is closed now, so "0 min" would read as
-                                // "just missed"; the time since the call sits in the title (the IT audit of 17 October 2026)
-                                ? <span className="text-p4a-muted" data-testid="missed-closed" title={t.missedClosedTitle.replace("{time}", fmtBusinessMinutes(Math.floor(r.waitingSeconds / 60), locale))}>{t.missedClosed}</span>
-                                : fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)
-                              : <span className="text-p4a-muted" title={t.missedSinceCall}>{fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)}</span>}
-                          </td>
-                          <td className={`${td} tabular text-right`}>{fmtCount(r.missedCount, locale)}</td>
-                          <td className={`${td} text-right`}>
-                            {r.recordUrl ? <RecordLink url={r.recordUrl} label={t.openCall.replace("{id}", r.sourceId)} /> : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {inbound.anonymousCount > 0 ? (
-              <p className="mt-4 text-small text-p4a-muted" data-testid="missed-anonymous">
-                {fill(t.anonymous.replace("{n}", fmtCount(inbound.anonymousCount, locale)))}
-              </p>
-            ) : null}
-          </Card>
-        </>
+        <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7" data-testid="inbound-tiles">
+          {INBOUND_TILES.map((key) => (
+            <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint)} value={shown(key)} />
+          ))}
+        </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * The missed calls not called back, the Live board's last section (addition 0008z): nothing while the tenant has no
+ * telephony, since the inbound part above already says so
+ */
+export function MissedCallbacks({ inbound, copy, locale, timeZone }: { inbound: InboundNow; copy: Copy; locale: Locale; timeZone: string }) {
+  if (!inbound.telephony) return null;
+  const t = copy.live;
+  const h = copy.hints;
+  const today = inbound.today;
+  const fill = (text: string) => fillHint(text, {
+    hours: h.officeHours, seconds: today?.serviceLevelSeconds ?? null, minutes: today?.waitingMaxMinutes ?? null, days: inbound.lookbackDays,
+  }, locale);
+  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={fill(text)} />;
+  const todayKey = dateKeyInZone(new Date(), timeZone);
+  const missedAt = (r: MissedCallback) => {
+    const day = dateKeyInZone(r.startedAt, timeZone);
+    return `${day === todayKey ? "" : `${fmtDate(day, locale, "compact")} `}${fmtTime(r.startedAt, timeZone, locale)}`;
+  };
+  const th = "h-10 px-3 py-1 font-semibold";
+  const td = "h-10 whitespace-nowrap px-3";
+
+  return (
+    <section aria-labelledby="missed-title" data-testid="missed-live">
+      <Card>
+        <h2 id="missed-title" className="mb-1 flex items-start text-panel font-semibold text-p4a-heading" data-hint-anchor="">
+          {t.missedTitle}
+          {hint(t.missedTitle, h.missedCallbacks)}
+        </h2>
+        <p className="mb-4 text-small text-p4a-muted">{t.missedIntro}</p>
+        {inbound.callbacks.length === 0 ? (
+          <p className="text-body text-p4a-muted">{fill(t.missedEmpty)}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-body leading-table" data-testid="missed-callbacks">
+              <thead>
+                <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
+                  <th className={th}><HintLabel label={t.missedLine}>{hint(t.missedLine, h.missedLine)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.missedMarket}>{hint(t.missedMarket, h.missedMarket)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.missedReason}>{hint(t.missedReason, h.missedReason)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.missedAt}>{hint(t.missedAt, h.missedAt)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.missedWaiting}>{hint(t.missedWaiting, h.missedWaiting)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.missedTimes}>{hint(t.missedTimes, h.missedTimes)}</HintLabel></th>
+                  <th className={`${th} w-12`}><span className="sr-only">{t.missedLink}</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {inbound.callbacks.map((r) => {
+                  const w = callbackWaiting(r);
+                  return (
+                    <tr key={r.callId} className="border-b border-p4a-border last:border-b-0 odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50">
+                      <td className={td}>{r.lineName ?? copy.inbound.unknownLine}</td>
+                      <td className={td}>{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
+                      <td className={td}>{r.reasonCode === "unknown" && r.reasonLabel === "unknown" ? copy.inbound.unknownReason : r.reasonLabel}</td>
+                      <td className={`${td} tabular`}>{missedAt(r)}</td>
+                      <td className={`${td} tabular text-right`}>
+                        {w.kind === "business"
+                          ? w.closed
+                            // No office time has passed since the call: the market is closed now, so "0 min" would read as
+                            // "just missed"; the time since the call sits in the title (the IT audit of 17 October 2026)
+                            ? <span className="text-p4a-muted" data-testid="missed-closed" title={t.missedClosedTitle.replace("{time}", fmtBusinessMinutes(Math.floor(r.waitingSeconds / 60), locale))}>{t.missedClosed}</span>
+                            : fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)
+                          : <span className="text-p4a-muted" title={t.missedSinceCall}>{fmtBusinessMinutes(Math.floor(w.seconds / 60), locale)}</span>}
+                      </td>
+                      <td className={`${td} tabular text-right`}>{fmtCount(r.missedCount, locale)}</td>
+                      <td className={`${td} text-right`}>
+                        {r.recordUrl ? <RecordLink url={r.recordUrl} label={t.openCall.replace("{id}", r.sourceId)} /> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {inbound.anonymousCount > 0 ? (
+          <p className="mt-4 text-small text-p4a-muted" data-testid="missed-anonymous">
+            {fill(t.anonymous.replace("{n}", fmtCount(inbound.anonymousCount, locale)))}
+          </p>
+        ) : null}
+      </Card>
     </section>
   );
 }

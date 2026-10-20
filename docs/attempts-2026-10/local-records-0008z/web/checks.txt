@@ -1,0 +1,25 @@
+npm ci                             exit 0  added 510 packages in 14s
+npm run build                      exit 0  
+npm run typecheck                  exit 0  ✓ Types generated successfully
+npm run lint                       exit 0  ✖ 1 problem (0 errors, 1 warning)
+verify:copy                        exit 0  copy: PASS (2486 keys, en and nl)
+verify:corrections                 exit 0  ALL 31 PASS
+verify:csv                         exit 0  ALL 18 PASS
+verify:dashboard                   exit 0  ALL 17 PASS
+verify:live                        exit 0  ALL 40 PASS
+verify:team                        exit 0  team: PASS (26 checks)
+verify:roster                      exit 0  roster: PASS (36 checks)
+verify:configuration               exit 0  ALL 108 PASS
+verify:messages                    exit 0  ALL 24 PASS
+verify:import                      exit 0  ALL 23 PASS
+verify:datamap                     exit 0  datamap: PASS (81 tables, 111 views, all described; index.html current)
+verify:signed-out                  exit 0  signed-out: PASS (20 checks)
+verify:invitations                 exit 0  invitations: PASS (27 checks)
+verify:preview                     exit 0  preview: PASS (18 checks)
+verify:follow-up                   exit 0  follow-up: PASS (34 checks)
+verify:reports                     exit 0  ALL 156 PASS
+verify:health                      exit 0  ALL 39 PASS
+verify:boundaries                  exit 0  boundaries: PASS (291 files)
+verify:jobs                        exit 0  ALL 18 PASS
+verify:reports --provoke           exit 0  ALL 156 PROVOKED CHECKS FAILED, as they must
+verify:signed-out --provoke        exit 0  signed-out: ALL 20 PROVOKED CHECKS FAILED, as they must

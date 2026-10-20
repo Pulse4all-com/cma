@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * The filters of Reports → Attempts per deal and Attempts per agent (addition 0008y), next to the period bar: market
- * (K), pipeline (P) and which deals (S: the lead pipelines or every counted pipeline). The period bar holds T, W, M and
- * C, the grouping G, the rail its digits and the top bar L. Choosing keeps the period and the grouping and loads the
- * page with the filter.
+ * The filters of Reports → Attempts per deal and Attempts per agent (addition 0008y; 0008z): market (K), pipeline (P, the
+ * lead pipelines only), attempts (A: every deal, the deals with no attempt yet, those with at least one) and outcome (O:
+ * open, won, lost or ordered another way). The period bar holds T, W, M and C, the grouping G, the rail its digits and the
+ * top bar L. Choosing keeps the period and the grouping and loads the page with the filter; the address keys are market,
+ * pipeline, attempted and outcome.
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import type { Copy } from "@/lib/copy";
-import type { AttemptFilter, AttemptScope } from "@/lib/data";
-import { ATTEMPT_SCOPES } from "@/lib/attempts";
+import type { AttemptAttempted, AttemptFilter, AttemptOutcomeFilter } from "@/lib/data";
+import { ATTEMPT_ATTEMPTED, ATTEMPT_OUTCOMES, attemptFilterQuery, type AttemptClientCopy } from "@/lib/attempts";
 import { Keycap } from "./primitives";
 
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
@@ -23,16 +23,16 @@ export function AttemptFilters({ pathname, markets, pipelines, filter, query, co
   filter: AttemptFilter;
   /** The period and grouping part of the query string, kept when a filter changes */
   query: Record<string, string>;
-  copy: Copy;
+  copy: AttemptClientCopy;
 }) {
   const t = copy.attempts;
   const router = useRouter();
   const marketList = filter.market && !markets.includes(filter.market) ? [...markets, filter.market] : markets;
   const pipelineList = filter.pipeline && !pipelines.some((p) => p.key === filter.pipeline) ? [...pipelines, { key: filter.pipeline, label: filter.pipeline }] : pipelines;
+  const outcomeLabel = (o: AttemptOutcomeFilter) => (o === "all" ? t.outcomeAll : t[`outcome_${o}`]);
 
   function go(next: AttemptFilter) {
-    const qs = new URLSearchParams(Object.entries({ ...query, market: next.market, pipeline: next.pipeline, scope: next.scope === "lead" ? null : next.scope })
-      .filter((e): e is [string, string] => e[1] !== null && e[1] !== ""));
+    const qs = new URLSearchParams({ ...query, ...attemptFilterQuery(next) });
     router.push(`${pathname}?${qs.toString()}` as Route);
   }
 
@@ -55,10 +55,17 @@ export function AttemptFilters({ pathname, markets, pipelines, filter, query, co
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
-        <span className="flex items-center gap-2">{t.scopeFilter} <Keycap>S</Keycap></span>
-        <select value={filter.scope} data-shortcut="s" data-testid="attempts-scope" className={select}
-          onChange={(e) => go({ ...filter, scope: e.target.value as AttemptScope, pipeline: null })}>
-          {ATTEMPT_SCOPES.map((s) => <option key={s} value={s}>{t[`scope_${s}`]}</option>)}
+        <span className="flex items-center gap-2">{t.attemptedFilter} <Keycap>A</Keycap></span>
+        <select value={filter.attempted} data-shortcut="a" data-testid="attempts-attempted" className={select}
+          onChange={(e) => go({ ...filter, attempted: e.target.value as AttemptAttempted })}>
+          {ATTEMPT_ATTEMPTED.map((a) => <option key={a} value={a}>{t[`attempted_${a}`]}</option>)}
+        </select>
+      </label>
+      <label className="flex flex-col gap-2 text-small font-semibold">
+        <span className="flex items-center gap-2">{t.outcomeFilter} <Keycap>O</Keycap></span>
+        <select value={filter.outcome} data-shortcut="o" data-testid="attempts-outcome" className={select}
+          onChange={(e) => go({ ...filter, outcome: e.target.value as AttemptOutcomeFilter })}>
+          {ATTEMPT_OUTCOMES.map((o) => <option key={o} value={o}>{outcomeLabel(o)}</option>)}
         </select>
       </label>
     </div>

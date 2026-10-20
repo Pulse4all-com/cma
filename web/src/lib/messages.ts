@@ -15,6 +15,8 @@ export const INBOX_LIMIT_MAX = 200;
 export const TITLE_MAX = 120;
 export const BODY_MAX = 500;
 export const IDS_MAX = 500;
+/** Withdrawing (deleting for everyone) any message, manual or alert (addition 0008z): the default ladder's admin holds it */
+export const WITHDRAW_PERMISSION = "messages.withdraw";
 
 export type Validation<T> = { ok: true; value: T } | { ok: false; code: string; message: string };
 

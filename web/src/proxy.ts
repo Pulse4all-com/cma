@@ -13,6 +13,11 @@
  *            An invalid subject is a 400, never a silent fallback, so a typo
  *            in a test cannot quietly test the wrong user.
  *
+ * Welcome on open (addition 0008z, src/lib/session.ts): once the identity is known, a page opened as a
+ * document without the browser-session cookie cma-session goes to / with a 303 and the cookie; / sets it.
+ * The API, invitations, the Log out pages and No access yet are not redirected; in mock mode neither are
+ * the verifiers' header requests, and ?as= starts the session on its 303 to the same path.
+ *
  * Incoming x-cma-identity-* headers are always removed first, so nothing a
  * client sends can impersonate anyone; the app only ever sees what this file
  * set. IAP's own headers (the assertion and its plain identity headers) are
@@ -28,6 +33,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { config as appConfig } from "@/lib/config";
 import { IDENTITY_HEADERS, MOCK_IDENTITY, mockIdentity, type Identity } from "@/lib/auth/identity";
 import { IapVerifyError, verifyIapJwt } from "@/lib/auth/iap";
+import { onOpen, SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from "@/lib/session";
 
 /** Behind IAP with the Google-managed OAuth client every identity is a Google account */
 const IAP_PROVIDER = "google";
@@ -53,7 +59,7 @@ export async function proxy(request: NextRequest) {
   if (!token) return unauthenticated("missing");
   try {
     const verified = await verifyIapJwt(token, { audience: appConfig.iapAudience, jwksUrl: appConfig.iapJwksUrl });
-    return pass(headers, { provider: IAP_PROVIDER, subject: verified.subject, email: verified.email });
+    return opened(request, headers, { provider: IAP_PROVIDER, subject: verified.subject, email: verified.email }, false);
   } catch (e) {
     // Log the underlying reason (jose error code or fetch failure), never the token
     const cause = e instanceof IapVerifyError && e.cause instanceof Error ? e.cause : undefined;
@@ -73,15 +79,43 @@ function mock(request: NextRequest, headers: Headers) {
     const res = NextResponse.redirect(target, 303);
     res.headers.set("cache-control", "no-store");
     res.cookies.set(MOCK_SUBJECT_COOKIE, fromParam, { httpOnly: true, sameSite: "lax", secure: true, path: "/" });
+    // ?as= is mock mode's sign-in for a browser: it keeps its path (the verifiers rely on it) and starts the session
+    res.cookies.set(SESSION_COOKIE, "1", SESSION_COOKIE_OPTIONS);
     return res;
   }
 
   const fromHeader = request.headers.get(MOCK_SUBJECT_HEADER);
   const fromCookie = request.cookies.get(MOCK_SUBJECT_COOKIE)?.value;
   const subject = fromHeader ?? fromCookie;
-  if (subject === undefined || subject === null) return pass(headers, MOCK_IDENTITY);
+  if (subject === undefined || subject === null) return opened(request, headers, MOCK_IDENTITY, false);
   if (!MOCK_SUBJECT_RE.test(subject)) return badMockSubject();
-  return pass(headers, mockIdentity(subject));
+  return opened(request, headers, mockIdentity(subject), fromHeader !== null);
+}
+
+/** Welcome on open (src/lib/session.ts): a page opened without the browser session goes to /; / starts the session */
+function opened(request: NextRequest, headers: Headers, identity: Identity, mockHeader: boolean) {
+  const decision = onOpen({
+    method: request.method,
+    pathname: request.nextUrl.pathname,
+    fetchDest: request.headers.get("sec-fetch-dest"),
+    accept: request.headers.get("accept"),
+    rsc: request.headers.has("rsc") || request.headers.has("next-router-prefetch"),
+    hasSession: request.cookies.has(SESSION_COOKIE),
+    mockHeader,
+  });
+  if (decision === "welcome") {
+    // Relative, as ?as= above: the visitor never sees the container's host
+    const target = request.nextUrl.clone();
+    target.pathname = "/";
+    target.search = "";
+    const res = NextResponse.redirect(target, 303);
+    res.headers.set("cache-control", "no-store");
+    res.cookies.set(SESSION_COOKIE, "1", SESSION_COOKIE_OPTIONS);
+    return res;
+  }
+  const res = pass(headers, identity);
+  if (decision === "start") res.cookies.set(SESSION_COOKIE, "1", SESSION_COOKIE_OPTIONS);
+  return res;
 }
 
 function pass(headers: Headers, identity: Identity) {

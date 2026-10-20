@@ -1,0 +1,20 @@
+# /reports/attempts outside the database, against /reports/speed-to-lead (20 October 2026, Claude Code's container)
+# Server: the standalone build in api data mode with mock sign-in and CMA_DB_TRACE=1, on a local database at 0008z with a
+# committed copy of db/volume-timing.sql's tenant (4,800 deals, 9,598 CRM calls, 5,929 telephony calls), as its manager.
+# October 1 to 20; 2 warm-up requests, then 10; medians of the request log's totalMs and dbMs, curl's time_total, the
+# HTML's bytes and the bytes of its RSC payload (self.__next_f). dbMs sums every statement, so parallel reads (Speed to
+# lead's page) can exceed totalMs.
+
+## Before: AttemptFilters and AttemptDealList received the whole copy dictionary (about 136 KB, serialized twice)
+route                                n  totalMs     dbMs  total-db  curl ms    bytes   flight
+/reports/attempts                   10    316.4    226.1      90.4    324.7   692408   339538
+/reports/speed-to-lead              10    526.3    839.8    -324.9    529.3   310183   180665
+/api/v1/reports/attempts            10    254.8    250.7       4.5    258.0    78125        0
+/api/v1/reports/speed-to-lead       10    508.2    503.4       3.4    511.3     3939        0
+
+## After: they receive the attempts words, the hint label and the unknown market's name only (attemptClientCopy)
+route                                n  totalMs     dbMs  total-db  curl ms    bytes   flight
+/reports/attempts                   10    319.5    234.4      86.0    322.6   556275   203420
+/reports/speed-to-lead              10    508.0    812.5    -319.6    511.6   310183   180665
+/api/v1/reports/attempts            10    237.4    231.7       4.3    240.0    78125        0
+/api/v1/reports/speed-to-lead       10    480.5    476.1       3.2    483.2     3939        0

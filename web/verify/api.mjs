@@ -27,8 +27,9 @@
  * 0008e (night of 13 October 2026) the Sources, Markets and Alert rules screens and linked accounts on
  * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data),
  * since addition 0008i Inbound and the Live board's inbound part, since addition 0008j Calls and
- * Calls per agent (reads only), since addition 0008k the telephony history start on Calls, and since addition 0008y
- * Attempts per deal, Attempts per agent and a line's stored calls (reads only).
+ * Calls per agent (reads only), since addition 0008k the telephony history start on Calls, since addition 0008y
+ * Attempts per deal, Attempts per agent and a line's stored calls (reads only), and since addition 0008z one deal's
+ * attempts, the attempted and outcome filters, withdrawing the run's message (the admin; dev data) and Welcome on open.
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -221,6 +222,25 @@ const asBad = await plain("/day?as=Bad_Subject");
 expect("an invalid ?as= is a 400", [asBad.status, asBad.headers.get("x-cma-auth")], [400, "bad-mock-subject"], [303, null]);
 expect("the cookie from ?as= is honoured",
   (await plain("/day", { cookie: `cma-mock-subject=${SUPERVISOR}` })).status, 200, 303);
+
+// ---- Welcome on open (addition 0008z), 4 checks ------------------------------------------------------------------
+// A page opened as a document without the browser session goes to Welcome with the session cookie; with it a deep link
+// opens; / starts it; ?as= starts it on its 303 to the same path; the API, a fetch and Log out's pages are never redirected
+const doc = { "sec-fetch-dest": "document", accept: "text/html" };
+const who = `cma-mock-subject=${SUPERVISOR}`;
+const fresh = await plain("/reports/calls?range=week", { ...doc, cookie: who });
+expect("a deep link opened without the browser session goes to Welcome and starts it",
+  [fresh.status, fresh.headers.get("location"), (fresh.headers.get("set-cookie") ?? "").includes("cma-session=1")], [303, "/", true], [200, null, false]);
+const root = await plain("/", { ...doc, cookie: who });
+expect("with the session a deep link opens; / starts the session",
+  [(await plain("/reports/calls?range=week", { ...doc, cookie: `${who}; cma-session=1` })).status, root.status, (root.headers.get("set-cookie") ?? "").includes("cma-session=1")],
+  [200, 200, true], [303, 200, false]);
+expect("?as= keeps its 303 to the same path and starts the session",
+  [asParam.status, (asParam.headers.get("set-cookie") ?? "").includes("cma-session=1")], [303, true], [303, false]);
+expect("the API, a fetch and Log out's pages are never sent to Welcome",
+  [(await plain("/api/v1/me", { ...doc, cookie: who })).status, (await plain("/reports/calls", { "sec-fetch-dest": "empty", cookie: who })).status,
+    (await plain("/logout/done", { ...doc, cookie: who })).status],
+  [200, 200, 200], [303, 303, 303]);
 
 // ---- clock in is an action (increment e, addition 0003d), 7 checks ---------------------------
 // The analyst holds performance.team and no workday.own: a visit to the landing page and to My day
@@ -881,6 +901,27 @@ expect("the stats count the one recipient: delivered, read, acknowledged, not by
   [stat?.recipients, stat?.delivered, stat?.read, stat?.acknowledged, stat?.byRule], [1, 1, 1, 1, false], [1, 0, 0, 0, true]);
 expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/messages/stats?from=${shift(new Date(), -100)}&to=${shift(new Date(), 0)}`)).status, 400, 200);
 
+// ---- withdrawing a message (addition 0008z), 6 checks --------------------------------------------------------------
+// The admin (messages.withdraw) deletes the run's message for everyone: the recipient no longer sees it, the stats mark it
+// withdrawn, a second withdrawal answers the first time; the sender without the permission and an agent are refused, an
+// unknown message is a 404, the request header and same-site rule as every write
+const withdraw = (s, id, headers = { "x-cma-request": "1" }) => post(s, `/api/v1/messages/${id}/withdraw`, headers);
+expect("withdrawing needs messages.withdraw: the sender and an agent are refused; the header and same site as every write",
+  [(await withdraw(SUPERVISOR, mid)).status, (await withdraw(AGENT, mid)).status, (await withdraw(ADMIN, mid, {})).status,
+    (await withdraw(ADMIN, mid, { "x-cma-request": "1", "sec-fetch-site": "cross-site" })).status],
+  [403, 403, 400, 403], [200, 200, 200, 200]);
+expect("an unknown or malformed message is a 404 or a 400", [(await withdraw(ADMIN, NO_MESSAGE)).status, (await withdraw(ADMIN, "not-a-uuid")).status], [404, 400], [200, 200]);
+const w1 = await withdraw(ADMIN, mid);
+const w2 = await withdraw(ADMIN, mid);
+expect("the admin withdraws it; a second time changes nothing and answers the first time",
+  [w1.status, w2.status, !!w1.body?.data?.withdrawnAt, w1.body?.data?.withdrawnAt === w2.body?.data?.withdrawnAt], [200, 200, true, true], [403, 403, false, false]);
+expect("the recipient no longer sees it",
+  (await get(AGENT, "/api/v1/me/messages")).body?.data?.messages?.some((m) => m.id === mid) ?? true, false, true);
+expect("acknowledging or reading it now changes nothing",
+  [(await ackOf(AGENT, mid)).status, (await readIds(AGENT, [mid])).body?.data?.changed], [404, 0], [200, 1]);
+const wstat = (await get(SUPERVISOR, statsPath)).body?.data?.find((x) => x.id === mid);
+expect("the stats keep it, marked withdrawn at that time", [!!wstat, wstat?.withdrawnAt === w1.body?.data?.withdrawnAt], [true, true], [false, false]);
+
 await reportChecks();
 await inboundChecks();
 await callsChecks();
@@ -1514,17 +1555,19 @@ async function attemptsChecks() {
   const both = async (s) => [(await deals(s)).status, (await agents(s)).status];
   expect("attempts: an agent is refused on both routes", await both(AGENT), [403, 403], [200, 200]);
   expect("attempts: the supervisor and the analyst read both", [...(await both(SUPERVISOR)), ...(await both(ANALYST))], [200, 200, 200, 200], [200, 403, 200, 403]);
-  expect("attempts: more than 92 days, a group, a market, a pipeline and a scope outside the catalog are a 400",
+  expect("attempts: more than 92 days, a group, a market, a pipeline, attempted or an outcome outside the catalog, and any scope, are a 400",
     [(await deals(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status, (await agents(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status,
       (await deals(ANALYST, `${range}&group=owner`)).status, (await deals(ANALYST, `${range}&market=nl`)).status,
-      (await agents(ANALYST, `${range}&pipeline=sales`)).status, (await deals(ANALYST, `${range}&scope=all`)).status,
-      (await agents(ANALYST, `${range}&scope=all`)).status],
-    [400, 400, 400, 400, 400, 400, 400], [200, 200, 200, 200, 200, 200, 200]);
+      (await agents(ANALYST, `${range}&pipeline=sales`)).status, (await deals(ANALYST, `${range}&attempted=never`)).status,
+      (await agents(ANALYST, `${range}&outcome=unknown`)).status, (await deals(ANALYST, `${range}&scope=lead`)).status,
+      (await agents(ANALYST, `${range}&scope=counted`)).status],
+    [400, 400, 400, 400, 400, 400, 400, 400, 400], [200, 200, 200, 200, 200, 200, 200, 200, 200]);
   const groups = await Promise.all(["day", "week", "market", "pipeline"].map(async (g) => (await deals(ANALYST, `${range}&group=${g}`)).body?.data));
   const plain = (await get(ANALYST, `/api/v1/reports/attempts?${range}`)).body?.data;
-  expect("attempts: each group answers as itself, none means day; the scope lead unless asked",
-    [...groups.map((d) => d?.group), plain?.group, plain?.filter?.scope, (await deals(ANALYST, `${range}&scope=counted`)).body?.data?.filter?.scope],
-    ["day", "week", "market", "pipeline", "day", "lead", "counted"], ["day", "day", "day", "day", "day", "lead", "lead"]);
+  const filtered = (await deals(ANALYST, `${range}&attempted=some&outcome=won`)).body?.data;
+  expect("attempts: each group answers as itself, none means day; attempted and outcome all unless asked",
+    [...groups.map((d) => d?.group), plain?.group, plain?.filter?.attempted, plain?.filter?.outcome, filtered?.filter?.attempted, filtered?.filter?.outcome, "scope" in (plain?.filter ?? {})],
+    ["day", "week", "market", "pipeline", "day", "all", "all", "some", "won", false], ["day", "day", "day", "day", "day", "all", "all", "all", "all", true]);
   const per = (await agents(SUPERVISOR)).body?.data;
   // a key that names a name other than a person's or a pipeline's own, a phone, an email, an address, a contact or a
   // counterpart; a string of 64 hex characters or an E.164 number
@@ -1535,9 +1578,12 @@ async function attemptsChecks() {
       ...(/hash|phone|e164|email|digits|counterpart|caller|contact|address|street|zip|postal/i.test(k) || (/name/i.test(k) && k !== "name") ? [`${path}.${k}`] : []),
       ...personal(x, `${path}.${k}`)]) : [];
   expect("attempts: no name, address, phone number or hash in any answer", [...groups.flatMap((d) => personal(d)), ...personal(per)], [], ["$.something"]);
-  const FIG = ["deals", "attempted", "attempts", "firstReached", "connectedDeals", "openDeals", "openNeverAttempted", "won", "lost"];
-  const coherent = (f) => !!f && FIG.every((k) => Number.isInteger(f[k]) && f[k] >= 0) && f.attempted <= f.deals && f.firstReached <= f.connectedDeals
-    && f.connectedDeals <= f.attempted && f.openNeverAttempted <= f.openDeals && f.openDeals + f.won + f.lost <= f.deals && f.attempts >= f.attempted
+  const FIG = ["deals", "attempted", "attempts", "reachedDeals", "firstReached", "reachedAttempts", "speedDeals", "noonKnown", "calledBeforeNoon", "openDeals",
+    "openNeverAttempted", "won", "lost", "ordered", "unknown", "talkSecondsTotal", "talkSecondsReached", "attemptsWithoutOutcome", "loggedWithoutAircall"];
+  const coherent = (f) => !!f && FIG.every((k) => Number.isInteger(f[k]) && f[k] >= 0) && f.attempted <= f.deals && f.firstReached <= f.reachedDeals
+    && f.reachedDeals <= f.attempted && f.reachedAttempts <= f.attempts && f.speedDeals <= f.attempted && f.calledBeforeNoon <= f.noonKnown
+    && f.openNeverAttempted <= f.openDeals && f.openDeals + f.won + f.lost + f.ordered + f.unknown === f.deals && f.attempts >= f.attempted
+    && f.talkSecondsReached <= f.talkSecondsTotal && f.attemptsWithoutOutcome <= f.attempts
     && (f.deals === 0 ? f.avgAttempts === null : Math.abs(f.avgAttempts - Math.round((100 * f.attempts) / f.deals) / 100) < 0.006);
   const d = groups[0] ?? {};
   const sum = (rows, k) => (rows ?? []).reduce((n, r) => n + (r[k] ?? 0), 0);
@@ -1548,17 +1594,54 @@ async function attemptsChecks() {
   const edges = String(d.settings?.sinceLastBuckets ?? "").split(",").map(Number);
   expect("attempts: the buckets run 0 to the top setting and hold every deal; time since the last attempt every open deal",
     [Number.isInteger(max) && d.buckets?.length === max + 1 && d.buckets.every((b, i) => b.bucket === i && b.label === (i === max ? `${i}+` : String(i))),
-      sum(d.buckets, "deals") === d.current?.deals, sum(d.buckets, "firstConnected") === d.current?.firstReached + 0 || sum(d.buckets, "firstConnected") === d.current?.connectedDeals,
+      sum(d.buckets, "deals") === d.current?.deals, sum(d.buckets, "firstReached") === d.current?.reachedDeals,
       d.sinceLast?.buckets?.length === edges.length + 1, sum(d.sinceLast?.buckets, "deals") + (d.sinceLast?.noHours ?? 0) === d.current?.openDeals],
     [true, true, true, true, true], [false, true, true, true, true]);
   const rows = d.list?.rows ?? [];
-  const firstClosed = rows.findIndex((r) => r.isClosed);
+  const firstDecided = rows.findIndex((r) => r.outcome !== "open");
   expect("attempts: the list, open deals first and the longest since the last attempt first, capped, with links or none",
     [rows.length <= (d.settings?.listRows ?? 0) && d.list?.total === d.current?.deals,
-      firstClosed === -1 || rows.slice(firstClosed).every((r) => r.isClosed),
-      rows.filter((r) => !r.isClosed).every((r, i, a) => i === 0 || (a[i - 1].businessDaysSinceLast ?? -1) >= (r.businessDaysSinceLast ?? -1)),
-      rows.every((r) => r.recordUrl === null || /^https:\/\//.test(r.recordUrl))],
+      firstDecided === -1 || rows.slice(firstDecided).every((r) => r.outcome !== "open"),
+      rows.filter((r) => r.outcome === "open").every((r, i, a) => i === 0 || (a[i - 1].businessDaysSinceLast ?? -1) >= (r.businessDaysSinceLast ?? -1)),
+      rows.every((r) => r.recordUrl === null || /^https:\/\//.test(r.recordUrl)), rows.every((r) => /^[0-9a-f-]{36}$/.test(r.dealId))],
+    [true, true, true, true, true], [false, true, true, true, true]);
+  const oc = d.outcomes;
+  const sp = d.speedBuckets;
+  const spSum = (k) => sum(sp?.buckets, k) + (sp?.none?.[k] ?? 0);
+  expect("attempts: won against lost holds the period's won and lost, the rest not decided; the win rate by speed holds every decided deal",
+    [oc?.rows?.map((r) => r.outcome).join(","), oc?.rows?.[0]?.deals === d.current?.won && oc?.rows?.[1]?.deals === d.current?.lost,
+      oc?.notDecided === d.current?.openDeals + d.current?.ordered + d.current?.unknown && oc?.open === d.current?.openDeals,
+      spSum("won") + spSum("lost") + (sp?.noHours ?? 0) === d.current?.won + d.current?.lost,
+      sp?.buckets?.length === String(d.settings?.speedBuckets ?? "").split(",").length + 1],
+    ["won,lost", true, true, true, true], ["won,lost", false, true, true, true]);
+  const none = (await deals(ANALYST, `${range}&attempted=none`)).body?.data?.current;
+  const some = (await deals(ANALYST, `${range}&attempted=some`)).body?.data?.current;
+  const won = (await deals(ANALYST, `${range}&outcome=won`)).body?.data?.current;
+  expect("attempts: attempted and outcome narrow every figure: none and some split the deals, won holds won deals only",
+    [none?.attempts === 0 && none?.attempted === 0, some?.attempted === some?.deals, none?.deals + some?.deals === d.current?.deals,
+      won?.deals === won?.won && won?.won === d.current?.won],
     [true, true, true, true], [false, true, true, true]);
+  // One deal's attempts (addition 0008z): the first listed deal with attempts, in order, no call id; refused to an agent,
+  // an unknown deal not found, a malformed id a 400
+  const withAttempts = rows.find((r) => r.attempts > 0);
+  if (withAttempts) {
+    const one = await get(ANALYST, `/api/v1/reports/attempts/deals/${withAttempts.dealId}`);
+    const list = one.body?.data ?? [];
+    expect("attempts: one deal's attempts in order, as many as the list says, reached as the list counts, no call id or number",
+      [one.status, list.length === withAttempts.attempts, list.every((a, i) => a.n === i + 1), list.filter((a) => a.reached).length === withAttempts.reachedAttempts,
+        // exactly these fields: the agent's name is staff data, gated by the database (performance.team and the per-person switch)
+        list.every((a) => Object.keys(a).sort().join() === "agentName,answered,n,outcomeLabel,reached,reachedBy,startedAt,talkSeconds"
+          && (a.reached ? ["outcome", "talk_time"].includes(a.reachedBy) : a.reachedBy === null)),
+        personal(list.map((a) => ({ ...a, agentName: null })))],
+      [200, true, true, true, true, []], [403, false, true, true, true, []]);
+  } else {
+    console.log("note  no deal with an attempt in this period: the check of one deal's attempts is left out");
+  }
+  expect("attempts: one deal's attempts refused to an agent; an unknown deal 404, a malformed id 400",
+    [(await get(AGENT, `/api/v1/reports/attempts/deals/${rows[0]?.dealId ?? "00000000-0000-7000-8000-00000000dead"}`)).status,
+      (await get(ANALYST, "/api/v1/reports/attempts/deals/00000000-0000-7000-8000-00000000dead")).status,
+      (await get(ANALYST, "/api/v1/reports/attempts/deals/not-a-uuid")).status],
+    [403, 404, 400], [200, 200, 200]);
   expect("attempts: the previous period is as long as the period and ends the day before it",
     [Math.round((Date.parse(d.previousTo) - Date.parse(d.previousFrom)) / 86_400_000) === Math.round((Date.parse(d.to) - Date.parse(d.from)) / 86_400_000),
       Math.round((Date.parse(d.from) - Date.parse(d.previousTo)) / 86_400_000) === 1, d.previousPartial === true],
@@ -1585,7 +1668,8 @@ async function attemptsChecks() {
     [[d, plain, per].every((x) => x?.historyStart === d.historyStart) && (d.historyStart === null || /^\d{4}-\d{2}-\d{2}$/.test(d.historyStart)),
       Number.isInteger(d.settings?.maxBucket) && d.settings.maxBucket >= 2 && Number.isInteger(d.settings?.listRows) && d.settings.listRows > 0
         && Number.isInteger(d.settings?.preWindowMinutes) && d.settings.preWindowMinutes >= 0,
-      /^\d+(,\d+)*$/.test(d.settings?.sinceLastBuckets ?? "")],
+      /^\d+(,\d+)*$/.test(d.settings?.sinceLastBuckets ?? "") && /^\d+(,\d+)*$/.test(d.settings?.speedBuckets ?? "")
+        && ["telephony", "crm"].includes(d.settings?.source) && Number.isInteger(d.settings?.reachedMinTalkSeconds)],
     [true, true, true], [false, true, true]);
   // A reports reader without performance.team (the mock fixture and the local fixture; absent in dev)
   if ((await get("reader", "/api/v1/me")).status === 200) {

@@ -4,13 +4,16 @@
  * The inbox (migration 0008): the person's own messages, newest first, unread ones marked. Opening a
  * record link or pressing Acknowledge reads the message; M marks everything read. The desktop
  * notification permission is asked here, from a button, never on load. Refreshes itself when the
- * message centre reports an arrival. References only: a title, a body and a link, never customer data.
+ * message centre reports an arrival. A person holding messages.withdraw deletes a message for everyone from
+ * here (addition 0008z), after a confirmation that opens on Cancel. References only: a title, a body and a
+ * link, never customer data.
  */
 import { useEffect, useState, useSyncExternalStore, useTransition } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { MyMessage, MyMessages } from "@/lib/data";
 import { Badge, Button, Card } from "./primitives";
 import { MESSAGES_ARRIVED_EVENT, MESSAGES_CHANGED_EVENT } from "./MessageCenter";
+import { MessageWithdraw } from "./MessageWithdraw";
 import { fmtDateTimeShort } from "@/lib/time";
 
 const HEADERS = { "content-type": "application/json", "x-cma-request": "1" } as const;
@@ -37,7 +40,11 @@ function fmtWhen(instant: string, timeZone: string, locale: Locale): string {
   return fmtDateTimeShort(instant, timeZone, locale);
 }
 
-export function Inbox({ initial, copy, timeZone, locale }: { initial: MyMessages; copy: Copy["messages"]; timeZone: string; locale: Locale }) {
+export function Inbox({ initial, copy, timeZone, locale, canWithdraw = false }: {
+  initial: MyMessages; copy: Copy["messages"]; timeZone: string; locale: Locale;
+  /** The viewer holds messages.withdraw: each message carries Delete */
+  canWithdraw?: boolean;
+}) {
   const [list, setList] = useState<MyMessage[]>(initial.messages);
   const permission = useSyncExternalStore(permissionStore.subscribe, permissionStore.get, permissionStore.server);
   const [pending, startTransition] = useTransition();
@@ -153,6 +160,9 @@ export function Inbox({ initial, copy, timeZone, locale }: { initial: MyMessages
                         <Button variant="primary" size="sm" onClick={() => acknowledge(m.id)} disabled={pending}>{copy.acknowledge}</Button>
                       ) : isUnread && !m.ref?.url ? (
                         <Button variant="text" size="sm" onClick={() => markRead([m.id])} disabled={pending}>{copy.toastOpen}</Button>
+                      ) : null}
+                      {canWithdraw ? (
+                        <MessageWithdraw id={m.id} title={m.title} copy={copy} onWithdrawn={() => setList((l) => l.filter((x) => x.id !== m.id))} />
                       ) : null}
                     </div>
                   </div>

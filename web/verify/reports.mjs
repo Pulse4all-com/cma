@@ -58,13 +58,15 @@
  * Since addition 0008w (brief N19-A part 4) also Callbacks kept (src/lib/callbacks.ts), on 89's own scenario: the states
  * and the call's minutes from the due time, the window's edges, an inbound call, the setting moving it, pending while the window is
  * open, the figures per ISO week and in total, the previous period like for like, per person with the not-linked row.
- * Since addition 0008y also Attempts per deal and Attempts per agent (src/lib/attempts.ts) on 93's own scenario, so the
- * definitions are the ones 93 proves in the database: the groups and G, the filters and the problems the routes answer
- * with a 400, the attempts per deal (outbound calls up to the close, a second contact's call, the pre-window both ways, a
- * linked telephony call's start), the outcomes, both scopes (the order and uncounted pipelines in neither), the business
- * days since the last attempt across a weekend and a holiday, the buckets with the top at 5 and at 8, the figures, the
- * groups, the previous period like for like, time since the last attempt with the unknown market apart, the list's order
- * and cap, the filters, per person by name with the not-linked row, and nothing personal in an answer.
+ * Since addition 0008y also Attempts per deal and Attempts per agent (src/lib/attempts.ts), since 0008z on 95's own
+ * scenario, so the definitions are the ones 95 proves in the database: the groups and G, the filters (market, pipeline,
+ * attempted, outcome) and the problems the routes answer with a 400, the sales population (no order pipeline, no other
+ * pipeline), the attempts by source (telephony, crm) with reached by the outcome or the talk time and the setting moving
+ * the edge, the window ending at the close or the first order, the ordered deal out of the open figures, one deal's
+ * attempts with the agent only when names are allowed, won against lost, the win rate by attempts and by speed to lead,
+ * the figures and the previous period, the list's order and cap, per person by name with the not-linked row, and nothing
+ * personal in an answer; and, from their source, the routes: the scope and the lists refused with a 400, one deal's
+ * attempts for the report permissions, a message's withdrawal for messages.withdraw only.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -77,10 +79,12 @@ import {
   answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
-import { dateKeyInZone } from "../src/lib/time.ts";
+import { readFileSync } from "node:fs";
+import { addDays, dateKeyInZone } from "../src/lib/time.ts";
+import { WITHDRAW_PERMISSION } from "../src/lib/messages.ts";
 import {
   businessSeconds, emailCloses, emailFigures, emailFilterQuery, emailGroups, emailInPeriod, emailOpenings, emailPerPerson, emailPrevious, emailRecords,
-  emailSeries, emailWaiting, nextEmailGroup, parseEmailFilter, parseEmailGroup, perPersonOpen, seriesColumns, withinShare,
+  emailSeries, emailWaiting, nextEmailGroup, parseEmailFilter, parseEmailGroup, perPersonOpen, seriesColumns, withinShare, zonedInstant,
 } from "../src/lib/email.ts";
 import {
   firstOrderAmounts, firstOrderFigures, firstOrderFilterQuery, firstOrderGroups, firstOrderList, firstOrderRecords, firstOrdersInPeriod, levelsInOrder,
@@ -88,9 +92,10 @@ import {
 } from "../src/lib/first-orders.ts";
 import { callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner, callbackWeeksRange, keptShare } from "../src/lib/callbacks.ts";
 import {
-  ageBucket, attemptBuckets, attemptFigures, attemptFilterQuery, attemptGroups, attemptList, attemptRecords, ATTEMPTS_BAR_CLASS, ATTEMPTS_PER_AGENT_KEY,
-  ATTEMPTS_PER_AGENT_PERMISSION, attemptsInPeriod, attemptsPerPerson, bucketText, businessDays, firstReachShare, fmtAttempts, nextAttemptGroup,
-  parseAttemptFilter, parseAttemptGroup, reachShare, SINCE_LAST_CLASS, sinceLastBuckets, wonRate,
+  ageBucket, attemptBuckets, attemptedShare, attemptFigures, attemptFilterQuery, attemptGroups, attemptList, attemptOutcomes, attemptRecords, ATTEMPTS_BAR_CLASS,
+  ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptSpeedBuckets, attemptsInPeriod, attemptsPerPerson, bucketText, businessDays, dealAttempts,
+  firstReachShare, fmtAttempts, nextAttemptGroup, noonShare, parseAttemptFilter, parseAttemptGroup, reachedShare, reachShare, SINCE_LAST_CLASS, sinceLastBuckets,
+  speedMinutes, withoutOutcomeShare, wonRate,
 } from "../src/lib/attempts.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -974,151 +979,223 @@ expect("callbacks: the kept share leaves pending out; none decided is no share",
 expect("callbacks: Follow-up's span is this week and the seven before",
   callbackWeeksRange("2026-10-18"), { from: "2026-08-24", to: "2026-10-18" }, { from: "2026-08-31", to: "2026-10-18" });
 
-// ---- Attempts per deal and Attempts per agent (addition 0008y) on 93's own scenario ---------------------------------
-// Tenant one's deals of the week of 5 to 11 October 2026 and of the week before, each with the CRM calls the database finds
-// for it (on the deal or one of its contacts, so dK2's call on its second contact is there and the one whose association
-// was removed is not), at their effective start (d7's second call, logged by an answered telephony call, at that call's
-// 10:59:30). The order pipeline's dOrd (marked lead) and the uncounted test pipeline's dTest are here to be left out; the
-// deleted dDel never reaches the definition. NL in Amsterdam, GB in London, dX without a market; offices Monday to Friday
-// with an NL holiday on Tuesday 13 October; owners o-1 Anna and o-2 Bram, o-3 nobody; the pre-window 10 minutes, seen on
-// Wednesday 14 October at 10:00 UTC (and on Friday 9 October at 09:30 in Amsterdam while the week runs)
+// ---- Attempts per deal and Attempts per agent (addition 0008y; for sales since 0008z) on 95's own scenario -------------
+// Tenant one's deals of the week of 5 to 11 October 2026 and dP of the week before, each with the CRM calls the database
+// finds for it (on the deal or its current contacts, so dA's call on the contact no longer associated is not there), the
+// linked telephony call's start (10 seconds before the CRM call), answered and talk time, and its contacts' first orders
+// after its creation (a won order deal at its close, a store order at its creation; dS's test, cancelled and deleted store
+// orders never reach the definition, dB's store order before its creation and dA's order deal on the removed contact do
+// not count). The order pipeline's dOrd, the renewals (counted, no lead pipeline) and the uncounted test pipeline are here
+// to be left out. NL in Amsterdam, offices Monday to Friday 09:00 to 17:00, no holiday; owners o-1 Anna and o-2 Bram, o-3
+// nobody; the pre-window 10 minutes; reached at 30 seconds of talk without an outcome; seen on Wednesday 14 October at
+// 10:00 UTC. Amsterdam is UTC+2 throughout.
 const AT = "00000000-0000-7000-8000-0000000000a7";
 const AMS_AT = "Europe/Amsterdam";
-const atCall = (id, at, connected = false, direction = "outbound") => ({ id, at: `2026-${at}:00Z`, direction, connected });
-const atDeal = (id, pipeline, created, o = {}) => ({
-  connectionId: AT, dealSourceId: id, pipelineId: pipeline, pipelineLabel: { sales: "Sales", renew: "Renewals", orders: "Orders", test: "Test" }[pipeline],
-  isLead: pipeline !== "renew" && pipeline !== "test", isOrder: pipeline === "orders", isCounted: pipeline !== "test",
-  market: "NL", zone: "Europe/Amsterdam", ownerRef: null, createdAt: `2026-${created}:00Z`, isClosed: false, closedAt: null, stageOutcome: null,
-  recordUrl: `https://crm.example.invalid/portal-1/deal/${id}`, calls: [], ...o,
+const AT_PIPES = { sales: "Sales", selfserve: "Self Serve", renew: "Renewals", test: "Test" };
+const atT = (x) => `2026-${x}Z`;
+// a CRM call: [id, CRM time, outcome, linked, talk (null: unanswered), agent]; a linked call starts 10 s earlier
+const atCall = ([id, crmAt, outcome, linked, talk, agent]) => ({
+  id, at: linked ? new Date(Date.parse(atT(crmAt)) - 10_000).toISOString().replace(".000Z", "Z") : atT(crmAt), direction: "outbound", linked,
+  outcome: { connected: "Connected", no_answer: "No answer", voicemail: "Left voicemail" }[outcome] ?? null, outcomeConnected: outcome === "connected",
+  answered: linked && talk !== null, talkSeconds: linked ? talk : null, agentName: linked ? agent : null,
 });
-const closedAt = (at, outcome) => ({ isClosed: true, closedAt: `2026-${at}:00Z`, stageOutcome: outcome });
+const atDeal = (id, pipeline, created, o = {}) => ({
+  dealId: `deal-${id}`, connectionId: AT, dealSourceId: id, pipelineId: pipeline, pipelineLabel: AT_PIPES[pipeline],
+  stageLabel: o.stageOutcome === "won" ? "Won" : o.stageOutcome === "lost" ? "Lost" : o.isClosed ? "Closed" : "Open",
+  isLead: pipeline !== "renew" && pipeline !== "test", isOrder: pipeline === "selfserve", isCounted: pipeline !== "test",
+  market: "NL", zone: AMS_AT, ownerRef: null, createdAt: atT(created), isClosed: false, closedAt: null, stageOutcome: null,
+  recordUrl: `https://crm.example.invalid/portal-1/deal/${id}`, calls: [], orders: [], ...o,
+});
+const atClosed = (when, outcome) => ({ isClosed: true, closedAt: atT(when), stageOutcome: outcome });
+const ANNA = "Anna Verify";
+const BRAM = "Bram Verify";
 const atDeals = [
-  atDeal("d0", "sales", "10-05T08:00", { ownerRef: "o-1" }),
-  atDeal("d1", "sales", "10-05T09:00", { ownerRef: "o-1", calls: [atCall("c1a", "10-05T09:30")] }),
-  atDeal("d3", "sales", "10-06T08:00", { ownerRef: "o-2", ...closedAt("10-08T12:00", "won"),
-    calls: [atCall("c3a", "10-06T09:00"), atCall("c3b", "10-06T10:00"), atCall("c3c", "10-06T11:00", true), atCall("c3d", "10-08T13:00", true)] }),
-  atDeal("d7", "sales", "10-06T09:00", { ownerRef: "o-3", ...closedAt("10-09T15:00", "lost"),
-    calls: [atCall("c7a", "10-06T10:00"), { id: "c7b", at: "2026-10-06T10:59:30Z", direction: "outbound", connected: true }, atCall("c7c", "10-07T09:00"),
-      atCall("c7d", "10-07T10:00"), atCall("c7e", "10-07T11:00"), atCall("c7f", "10-08T09:00"), atCall("c7g", "10-09T09:00")] }),
-  atDeal("dIn", "sales", "10-07T08:00", { calls: [atCall("cin", "10-07T09:00", true, "inbound")] }),
-  atDeal("dK2", "sales", "10-07T09:00", { ownerRef: "o-1", calls: [atCall("ckb", "10-07T10:00")] }),
-  atDeal("dPre", "sales", "10-08T08:00", { ownerRef: "o-2", calls: [atCall("cpr0", "10-08T07:45"), atCall("cpr1", "10-08T07:55")] }),
-  atDeal("dUnk", "sales", "10-08T10:00", closedAt("10-08T11:00", null)),
-  atDeal("dGB", "sales", "10-09T08:00", { ownerRef: "o-2", market: "GB", zone: "Europe/London", calls: [atCall("cgb", "10-09T08:30", true)] }),
-  atDeal("dFri", "sales", "10-09T08:30", { ownerRef: "o-3", calls: [atCall("cfri", "10-09T09:00")] }),
-  atDeal("dX", "sales", "10-09T09:00", { market: "unknown", zone: null, calls: [atCall("cx1", "10-09T10:00"), atCall("cx2", "10-09T11:00")] }),
-  atDeal("dRen", "renew", "10-09T09:15", { ownerRef: "o-1", calls: [atCall("cren", "10-09T09:30")] }),
-  atDeal("dOrd", "orders", "10-09T10:00", { ownerRef: "o-1", ...closedAt("10-09T10:00", "won"), calls: [atCall("cord", "10-09T09:55")] }),
-  atDeal("dTest", "test", "10-07T12:00", { ownerRef: "o-1", calls: [atCall("ctst", "10-07T12:30")] }),
-  atDeal("dP1", "sales", "10-01T08:00", { ownerRef: "o-1", calls: [atCall("cp1a", "10-01T09:00"), atCall("cp1b", "10-01T10:00")] }),
-  atDeal("dP2", "sales", "10-02T06:00", { ownerRef: "o-1" }),
-  atDeal("dP3", "sales", "10-02T09:00", { ownerRef: "o-1", calls: [atCall("cp3", "10-02T10:00")] }),
+  atDeal("dP", "sales", "09-30T08:00:00", { ownerRef: "o-1", ...atClosed("10-01T08:00:00", "won"), calls: [["cp1", "09-30T08:10:00", "connected", true, 60, ANNA]].map(atCall) }),
+  atDeal("dW", "sales", "10-05T08:00:00", { ownerRef: "o-1", ...atClosed("10-08T12:00:00", "won"), calls: [
+    ["cw1", "10-05T08:05:00", "no_answer", true, null, ANNA], ["cw2", "10-05T09:00:00", null, true, 29, ANNA], ["cwh", "10-05T10:00:00", null, false, null, null],
+    ["cw3", "10-06T09:00:00", null, true, 30, ANNA], ["cw4", "10-07T09:00:00", "connected", true, 5, BRAM], ["cw5", "10-09T09:00:00", "connected", true, 60, ANNA]].map(atCall) }),
+  atDeal("dW2", "sales", "10-05T12:00:00", { ownerRef: "o-1", ...atClosed("10-09T10:00:00", "won"), calls: [["cw21", "10-06T07:30:00", "connected", true, 300, ANNA]].map(atCall) }),
+  atDeal("dL", "sales", "10-05T09:00:00", { ownerRef: "o-2", ...atClosed("10-07T15:00:00", "lost"), calls: [
+    ["cl1", "10-05T10:00:00", "voicemail", true, 90, ANNA], ["cl2", "10-06T10:00:00", null, true, 0, ANNA], ["cl3", "10-08T09:00:00", "connected", true, 60, ANNA]].map(atCall),
+    orders: [{ createdAt: atT("10-08T10:00:00"), at: atT("10-08T10:00:00") }] }),
+  atDeal("dL2", "sales", "10-06T12:00:00", { ownerRef: "o-3", ...atClosed("10-08T13:00:00", "lost") }),
+  atDeal("dO", "sales", "10-06T08:00:00", { ownerRef: "o-1", calls: [["co1", "10-06T08:30:00", "connected", true, 60, ANNA], ["co2", "10-08T09:00:00", "connected", true, 60, ANNA]].map(atCall),
+    orders: [{ createdAt: atT("10-07T10:00:00"), at: atT("10-07T10:00:00") }] }),
+  atDeal("dS", "sales", "10-06T09:00:00", { ownerRef: "o-1", calls: [["cs1", "10-07T10:00:00", null, true, 45, ANNA], ["cs2", "10-09T09:00:00", null, true, 45, ANNA]].map(atCall),
+    orders: [{ createdAt: atT("10-08T10:00:00"), at: atT("10-08T10:00:00") }] }),
+  atDeal("dB", "sales", "10-07T08:00:00", { ownerRef: "o-2", calls: [["cb1", "10-08T09:00:00", "no_answer", true, null, ANNA]].map(atCall),
+    orders: [{ createdAt: atT("10-05T10:00:00"), at: atT("10-05T10:00:00") }, { createdAt: atT("10-04T10:00:00"), at: atT("10-04T10:00:00") }] }),
+  atDeal("dA", "sales", "10-07T09:00:00", { ownerRef: "o-2", calls: [["ca1", "10-09T09:00:00", null, true, null, ANNA]].map(atCall) }),
+  atDeal("dT", "sales", "10-08T08:00:00", { calls: [["ct0", "10-08T08:02:00", null, false, null, null], ["ct1", "10-08T09:30:00", null, true, 10, ANNA]].map(atCall) }),
+  atDeal("dN", "sales", "10-09T08:30:00", { ownerRef: "o-3" }),
+  atDeal("dU", "sales", "10-09T09:00:00", { ...atClosed("10-09T11:00:00", null), calls: [["cu1", "10-09T09:30:00", "connected", true, 120, ANNA]].map(atCall) }),
+  atDeal("dOrd", "selfserve", "10-07T10:00:00", { ...atClosed("10-07T10:00:00", "won") }),
+  atDeal("dRen", "renew", "10-06T10:00:00", { ownerRef: "o-1", calls: [["cren", "10-06T11:00:00", "connected", true, 60, ANNA]].map(atCall) }),
+  atDeal("dTest", "test", "10-06T10:00:00", { ownerRef: "o-1", calls: [["ctst", "10-06T11:00:00", "connected", true, 60, ANNA]].map(atCall) }),
 ];
-const atWorking = (market, date) => {
-  const wd = new Date(`${date}T12:00:00Z`).getUTCDay();
-  return wd >= 1 && wd <= 5 && !(market === "NL" && date === "2026-10-13");
+const atHours = { zones: { NL: AMS_AT }, officeHours: { 1: ["09:00", "17:00"], 2: ["09:00", "17:00"], 3: ["09:00", "17:00"], 4: ["09:00", "17:00"], 5: ["09:00", "17:00"] } };
+const atWorking = (market, date) => market === "NL" && Boolean(atHours.officeHours[new Date(`${date}T12:00:00Z`).getUTCDay() || 7]);
+const atNoon = (market, when) => {
+  if (market !== "NL") return null;
+  let d = addDays(dateKeyInZone(when, AMS_AT), 1);
+  while (!atWorking(market, d)) d = addDays(d, 1);
+  return new Date(zonedInstant(d, "12:00", AMS_AT)).toISOString();
 };
 const atOwners = { "o-1": "u-anna", "o-2": "u-bram" };
-const atNames = { "u-anna": "Anna Verify", "u-bram": "Bram Verify" };
+const atNames = { "u-anna": ANNA, "u-bram": BRAM };
 const AT_NOW = "2026-10-14T10:00:00Z";
-const AT_RUNNING = "2026-10-09T07:30:00Z";
-const atRecords = (scope, now = AT_NOW, buckets = "1,2,5") =>
-  attemptRecords(atDeals, { scope, preWindowMinutes: 10, sinceLastBuckets: buckets, now, tenantZone: AMS_AT, working: atWorking, ownerUserOf: (r) => atOwners[r] ?? null });
-const AT_NO_FILTER = { market: null, pipeline: null };
-const atWeek = (scope, filter = AT_NO_FILTER, now = AT_NOW) => attemptsInPeriod(atRecords(scope, now), "2026-10-05", "2026-10-11", filter, null, AMS_AT);
+const atOptions = (o = {}) => ({
+  source: "telephony", preWindowMinutes: 10, reachedMinTalkSeconds: 30, sinceLastBuckets: "1,2,5", now: AT_NOW, tenantZone: AMS_AT, working: atWorking,
+  ownerUserOf: (r) => atOwners[r] ?? null, businessSeconds: (market, from, to) => businessSeconds(atHours, market, from, to), nextNoon: atNoon, ...o,
+});
+const AT_ALL = { market: null, pipeline: null, attempted: "all", outcome: "all" };
+const atWeek = (o = {}, filter = AT_ALL) => attemptsInPeriod(attemptRecords(atDeals, atOptions(o)), "2026-10-05", "2026-10-11", filter, null, AMS_AT);
 const byId = (rows) => [...rows].sort((a, b) => (a.dealSourceId < b.dealSourceId ? -1 : a.dealSourceId > b.dealSourceId ? 1 : 0));
-const atDealText = (rows) => byId(rows).map((r) => `${r.dealSourceId}:${r.attempts}/${r.connected}/${r.firstConnectedAttempt ?? "-"}`).join(" ");
-// as 93's pg_temp.v0008y_fig: deals/attempted/attempts/avg/median/first_reached/connected_deals/open/open_never/won/lost
-const atFig = (f) => `${f.deals}/${f.attempted}/${f.attempts}/${f.avgAttempts === null ? "-" : f.avgAttempts.toFixed(2)}/${f.medianAttempts === null ? "-" : f.medianAttempts.toFixed(1)}`
-  + `/${f.firstReached}/${f.connectedDeals}/${f.openDeals}/${f.openNeverAttempted}/${f.won}/${f.lost}`;
+const atDealOf = (id) => atDeals.find((d) => d.dealSourceId === id);
+const hms = (x) => (x ? `${x.slice(8, 10)} ${x.slice(11, 19)}` : "-");
+// as 95's pg_temp.v0008z_fig
+const atFig = (f) => [f.deals, f.attempted, f.attempts, f.avgAttempts === null ? "-" : f.avgAttempts.toFixed(2), f.medianAttempts === null ? "-" : f.medianAttempts.toFixed(1),
+  f.reachedDeals, f.firstReached, f.medianSpeedSeconds ?? "-", `${f.calledBeforeNoon}of${f.noonKnown}`, f.openDeals, f.openNeverAttempted, f.won, f.lost, f.ordered,
+  f.unknown, f.talkSecondsTotal, f.talkSecondsReached, f.attemptsWithoutOutcome, f.loggedWithoutAircall].join("/");
 
 expect("attempts: the four groups parse, anything else is refused (the routes' 400)",
   ["day", "week", "market", "pipeline", "owner", "", null, "Day"].map(parseAttemptGroup),
   ["day", "week", "market", "pipeline", null, null, null, null], ["day", "week", "market", "pipeline", "owner", null, null, "day"]);
 expect("attempts: G cycles day, week, market, pipeline and back",
   ["day", "week", "market", "pipeline"].map(nextAttemptGroup), ["week", "market", "pipeline", "day"], ["week", "market", "pipeline", "pipeline"]);
-const atParsed = (m, p, s) => { const x = parseAttemptFilter(m, p, s); return `${x.problem ?? "ok"}:${x.filter.market ?? "-"}/${x.filter.pipeline ?? "-"}/${x.filter.scope}`; };
-expect("attempts: the filters as the database checks them; a bad market, pipeline or scope named, so the routes answer 400",
-  [atParsed("NL", `${AT}:sales`, "counted"), atParsed("unknown", "", " "), atParsed("nl", null, null), atParsed(null, "sales", null), atParsed(null, `${AT}:has space`, null),
-    atParsed(null, null, "all"), atParsed("GBR", null, "lead")],
-  [`ok:NL/${AT}:sales/counted`, "ok:unknown/-/lead", "market:-/-/lead", "pipeline:-/-/lead", "pipeline:-/-/lead", "scope:-/-/lead", "market:-/-/lead"],
-  [`ok:NL/${AT}:sales/counted`, "ok:unknown/-/lead", "ok:nl/-/lead", "pipeline:-/-/lead", "pipeline:-/-/lead", "scope:-/-/lead", "market:-/-/lead"]);
-expect("attempts: the filter as a query, the default scope left out; the per-person key and permission",
-  [attemptFilterQuery({ market: "GB", pipeline: null, scope: "lead" }), attemptFilterQuery({ market: null, pipeline: `${AT}:renew`, scope: "counted" }),
+const atParsed = (m, p, a, o) => { const x = parseAttemptFilter(m, p, a, o); return `${x.problem ?? "ok"}:${x.filter.market ?? "-"}/${x.filter.pipeline ?? "-"}/${x.filter.attempted}/${x.filter.outcome}`; };
+expect("attempts: the filters as the database checks them; a bad market, pipeline, attempted or outcome named, so the routes answer 400",
+  [atParsed("NL", `${AT}:sales`, "some", "won"), atParsed("unknown", "", " ", null), atParsed("nl", null, null, null), atParsed(null, "sales", null, null),
+    atParsed(null, null, "never", null), atParsed(null, null, null, "unknown"), atParsed(null, null, "none", "ordered")],
+  [`ok:NL/${AT}:sales/some/won`, "ok:unknown/-/all/all", "market:-/-/all/all", "pipeline:-/-/all/all", "attempted:-/-/all/all", "outcome:-/-/all/all", "ok:-/-/none/ordered"],
+  [`ok:NL/${AT}:sales/some/won`, "ok:unknown/-/all/all", "ok:nl/-/all/all", "pipeline:-/-/all/all", "attempted:-/-/all/all", "outcome:-/-/all/all", "ok:-/-/none/ordered"]);
+expect("attempts: the filter as a query, the defaults left out; the per-person key and permission",
+  [attemptFilterQuery({ market: "GB", pipeline: null, attempted: "all", outcome: "all" }), attemptFilterQuery({ market: null, pipeline: `${AT}:sales`, attempted: "none", outcome: "open" }),
     ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION],
-  [{ market: "GB" }, { pipeline: `${AT}:renew`, scope: "counted" }, "attempts", "performance.team"],
-  [{ market: "GB", scope: "lead" }, { pipeline: `${AT}:renew`, scope: "counted" }, "attempts", "performance.team"]);
-expect("attempts: outbound calls up to the close, connected, the first connected attempt, as 93's B1",
-  atDealText(atWeek("lead")), "d0:0/0/- d1:1/0/- d3:3/1/3 d7:7/1/2 dFri:1/0/- dGB:1/1/1 dIn:0/0/- dK2:1/0/- dPre:1/0/- dUnk:0/0/- dX:2/0/-",
-  "d0:0/0/- d1:1/0/- d3:4/2/3 d7:7/1/2 dFri:1/0/- dGB:1/1/1 dIn:1/1/1 dK2:1/0/- dPre:2/0/- dUnk:0/0/- dX:2/0/-");
-const hm = (iso) => `${iso.slice(8, 10)} ${iso.slice(11, 16)}`;
-expect("attempts: a second contact's call in, the pre-window both ways, the call after the close out, as 93's B2",
-  byId(atWeek("lead").filter((r) => ["dK2", "dPre", "d3", "d7"].includes(r.dealSourceId))).map((r) => `${r.dealSourceId}:${hm(r.firstAttemptAt)}>${hm(r.lastAttemptAt)}`).join(" "),
-  "d3:06 09:00>06 11:00 d7:06 10:00>09 09:00 dK2:07 10:00>07 10:00 dPre:08 07:55>08 07:55",
-  "d3:06 09:00>08 13:00 d7:06 10:00>09 09:00 dK2:07 10:00>07 10:00 dPre:08 07:45>08 07:55");
-expect("attempts: the outcomes won, lost, open and unknown, as 93's B3",
-  byId(atWeek("lead").filter((r) => ["d0", "d3", "d7", "dUnk"].includes(r.dealSourceId))).map((r) => `${r.dealSourceId}:${r.outcome}`).join(" "),
-  "d0:open d3:won d7:lost dUnk:unknown", "d0:open d3:won d7:lost dUnk:open");
-expect("attempts: scope counted adds the renewals; the order pipeline and the uncounted one in neither, as 93's B4",
-  atDealText(atWeek("counted")), "d0:0/0/- d1:1/0/- d3:3/1/3 d7:7/1/2 dFri:1/0/- dGB:1/1/1 dIn:0/0/- dK2:1/0/- dPre:1/0/- dRen:1/0/- dUnk:0/0/- dX:2/0/-",
-  "d0:0/0/- d1:1/0/- d3:3/1/3 d7:7/1/2 dFri:1/0/- dGB:1/1/1 dIn:0/0/- dK2:1/0/- dOrd:1/0/- dPre:1/0/- dRen:1/0/- dTest:1/0/- dUnk:0/0/- dX:2/0/-");
-expect("attempts: business days since the last attempt across a weekend and a holiday, as 93's B5",
-  byId(atWeek("lead")).map((r) => `${r.dealSourceId}:${r.businessDaysSinceLast ?? "-"}:${r.sinceLastBucket ?? "-"}`).join(" "),
-  "d0:6:5+ d1:6:5+ d3:-:- d7:-:- dFri:2:1–2 dGB:3:2–5 dIn:4:2–5 dK2:4:2–5 dPre:3:2–5 dUnk:-:- dX:-:-",
-  "d0:7:5+ d1:7:5+ d3:-:- d7:-:- dFri:3:2–5 dGB:3:2–5 dIn:5:2–5 dK2:5:2–5 dPre:4:2–5 dUnk:-:- dX:-:-");
-const atBucketText = (max) => attemptBuckets(atWeek("lead"), max).map((b) => `${b.label}:${b.deals}/${b.firstConnected}/${b.won}/${b.lost}`).join(" ");
-expect("attempts: the buckets 0 to 5+ with first connected, won and lost; with the top at 8, seven in 7, as 93's B6",
-  [atBucketText(5), attemptBuckets(atWeek("lead"), 8).map((b) => `${b.label}:${b.deals}`).join(" ")],
-  ["0:3/0/0/0 1:5/1/0/0 2:1/1/0/0 3:1/1/1/0 4:0/0/0/0 5+:1/0/0/1", "0:3 1:5 2:1 3:1 4:0 5:0 6:0 7:1 8+:0"],
-  ["0:3/0/0/0 1:5/1/0/0 2:1/1/0/0 3:1/1/1/0 4:0/0/0/0 5+:1/0/0/1", "0:3 1:5 2:1 3:1 4:0 5:0 6:0 7:1 8:0"]);
-expect("attempts: the period's figures, lead and counted, as 93's B7",
-  [atFig(attemptFigures(atWeek("lead"))), atFig(attemptFigures(atWeek("counted")))],
-  ["11/8/17/1.55/1.0/1/3/8/2/1/1", "12/9/18/1.50/1.0/1/3/9/2/1/1"], ["11/8/17/1.55/1.0/1/3/8/2/1/1", "12/9/18/1.50/1.5/1/3/9/2/1/1"]);
-const atGroupText = (rows, group, by = "groupKey") => attemptGroups(rows, group).map((g) => `${by === "label" ? g.label : g.groupKey}=${g.deals}/${g.attempts}`).join(" ");
-expect("attempts: the figures per day, market (unknown its own) and pipeline by label, as 93's B8",
-  [atGroupText(atWeek("lead"), "day"), atGroupText(atWeek("lead"), "market"), atGroupText(atWeek("counted"), "pipeline", "label")],
-  ["2026-10-05=2/1 2026-10-06=2/10 2026-10-07=2/1 2026-10-08=2/1 2026-10-09=3/4", "GB=1/1 NL=9/14 unknown=1/2", "Renewals=1/1 Sales=11/17"],
-  ["2026-10-05=2/1 2026-10-06=2/10 2026-10-07=2/1 2026-10-08=2/1 2026-10-09=3/4", "GB=1/1 NL=9/14 unknown=1/2", "Sales=11/17 Renewals=1/1"]);
-const atPrevAfter = previousPeriod({ from: "2026-10-05", to: "2026-10-11" }, dateKeyInZone(AT_NOW, AMS_AT));
-const atPrevRunning = previousPeriod({ from: "2026-10-05", to: "2026-10-11" }, dateKeyInZone(AT_RUNNING, AMS_AT));
-expect("attempts: the previous period like for like: in full after the period, up to the time of day while it runs, as 93's B9",
-  [atFig(attemptFigures(attemptsInPeriod(atRecords("lead"), atPrevAfter.from, atPrevAfter.to, AT_NO_FILTER, null, AMS_AT))),
-    atFig(attemptFigures(attemptsInPeriod(atRecords("lead", AT_RUNNING), atPrevRunning.from, atPrevRunning.to, AT_NO_FILTER, atPrevRunning.partial ? AT_RUNNING : null, AMS_AT)))],
-  ["3/2/3/1.00/1.0/0/0/3/1/0/0", "2/1/2/1.00/1.0/0/0/2/1/0/0"], ["3/2/3/1.00/1.0/0/0/3/1/0/0", "3/2/3/1.00/1.0/0/0/3/1/0/0"]);
-const atSince = sinceLastBuckets(atWeek("lead"), "1,2,5");
-expect("attempts: the open deals by time since the last attempt, every bucket listed, the unknown market apart, as 93's B10",
-  `${atSince.buckets.map((b) => `${b.label}:${b.deals}`).join(" ")} no_hours:${atSince.noHours}`, "0–1:0 1–2:1 2–5:4 5+:2 no_hours:1", "1–2:1 2–5:4 5+:2 no_hours:1");
-const atList = attemptList(atWeek("lead"), 100);
-const atCapped = attemptList(atWeek("lead"), 4);
-expect("attempts: the list open first, the longest since the last attempt first, then closed by the newest close; capped with the total, as 93's B11",
-  [atList.rows.map((r) => r.dealSourceId).join(" "), `${atCapped.rows.map((r) => r.dealSourceId).join(" ")} of ${atCapped.total}`, atCapped.rows[0].recordUrl],
-  ["d0 d1 dIn dK2 dPre dGB dFri dX d7 d3 dUnk", "d0 d1 dIn dK2 of 11", "https://crm.example.invalid/portal-1/deal/d0"],
-  ["d0 d1 dIn dK2 dPre dGB dFri dX d3 d7 dUnk", "d0 d1 dIn dK2 of 11", "https://crm.example.invalid/portal-1/deal/d0"]);
-expect("attempts: a market and a pipeline narrow every figure, as 93's B12",
-  [atFig(attemptFigures(atWeek("counted", { market: "GB", pipeline: null }))), atFig(attemptFigures(atWeek("counted", { market: null, pipeline: `${AT}:sales` })))],
-  ["1/1/1/1.00/1.0/1/1/1/0/0/0", "11/8/17/1.55/1.0/1/3/8/2/1/1"], ["1/1/1/1.00/1.0/1/1/1/0/0/0", "12/9/18/1.50/1.0/1/3/9/2/1/1"]);
-const atPeople = attemptsPerPerson(atWeek("lead"), (id) => atNames[id] ?? null);
-expect("attempts per agent: by name, never ranked; o-3 and no owner as one not-linked row with one owner id; the total, as 93's B14",
-  [...atPeople.rows, atPeople.total].map((p) => `${p.kind === "person" ? p.name : p.kind === "notLinked" ? `not_linked(${p.unlinkedOwners})` : "total"}:${atFig(p)}`).join(" "),
-  "Anna Verify:3/2/2/0.67/1.0/0/0/3/1/0/0 Bram Verify:3/3/5/1.67/1.0/1/2/2/0/1/0 not_linked(1):5/3/10/2.00/1.0/0/1/3/1/0/1 total:11/8/17/1.55/1.0/1/3/8/2/1/1",
-  "Bram Verify:3/3/5/1.67/1.0/1/2/2/0/1/0 Anna Verify:3/2/2/0.67/1.0/0/0/3/1/0/0 not_linked(1):5/3/10/2.00/1.0/0/1/3/1/0/1 total:11/8/17/1.55/1.0/1/3/8/2/1/1");
+  [{ market: "GB" }, { pipeline: `${AT}:sales`, attempted: "none", outcome: "open" }, "attempts", "performance.team"],
+  [{ market: "GB", attempted: "all" }, { pipeline: `${AT}:sales`, attempted: "none", outcome: "open" }, "attempts", "performance.team"]);
+expect("attempts: only sales deals: an order pipeline, a pipeline that is no lead pipeline and an uncounted one out, as 95's B1",
+  byId(atWeek()).map((r) => r.dealSourceId).join(" "), "dA dB dL dL2 dN dO dS dT dU dW dW2", "dA dB dL dL2 dN dO dOrd dS dT dU dW dW2");
+expect("attempts: telephony: attempts, reached, first reached, talk, without outcome; logged without the telephony call apart, as 95's B2",
+  byId(atWeek()).map((r) => `${r.dealSourceId}:${r.attempts}/${r.reachedAttempts}/${r.firstReachedAttempt ?? "-"}/${r.talkSecondsTotal}/${r.talkSecondsReached}/${r.attemptsWithoutOutcome}/${r.loggedWithoutAircall}`).join(" "),
+  "dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/0/-/90/0/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/2/3/64/35/2/1 dW2:1/1/1/300/300/0/0",
+  "dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:3/1/3/150/60/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:2/2/1/120/120/0/0 dS:2/2/1/90/90/2/0 dT:2/0/-/10/0/2/0 dU:1/1/1/120/120/0/0 dW:5/3/3/124/95/3/0 dW2:1/1/1/300/300/0/0");
+const atSrc = (rows) => byId(rows.filter((r) => ["dT", "dW"].includes(r.dealSourceId)))
+  .map((r) => `${r.dealSourceId}:${r.attempts}/${r.firstReachedAttempt ?? "-"}/${hms(r.firstAttemptAt)}/${r.speedToLeadSeconds}`).join(" ");
+expect("attempts: the source: crm counts every outbound CRM call, telephony only the telephony calls, as 95's B3",
+  `${atSrc(atWeek({ source: "crm" }))} | ${atSrc(atWeek())}`,
+  "dT:2/-/08 08:02:00/120 dW:5/4/05 08:04:50/290 | dT:1/-/08 09:29:50/5390 dW:4/3/05 08:04:50/290",
+  "dT:1/-/08 09:29:50/5390 dW:4/3/05 08:04:50/290 | dT:1/-/08 09:29:50/5390 dW:4/3/05 08:04:50/290");
+expect("attempts: the window ends at the close or the first order (a won order deal, a store order), else now, as 95's B4",
+  byId(atWeek().filter((r) => ["dA", "dB", "dL", "dO", "dS", "dW"].includes(r.dealSourceId)))
+    .map((r) => `${r.dealSourceId}:${r.windowEndReason}/${r.outcome}/${r.orderedAt ? `${r.orderedAt.slice(8, 10)} ${r.orderedAt.slice(11, 16)}` : "-"}/${r.attempts}`).join(" "),
+  "dA:open/open/-/1 dB:open/open/-/1 dL:closed/lost/08 10:00/2 dO:ordered/ordered/07 10:00/1 dS:ordered/ordered/08 10:00/1 dW:closed/won/-/4",
+  "dA:open/open/-/1 dB:ordered/ordered/05 10:00/0 dL:ordered/lost/08 10:00/3 dO:ordered/ordered/07 10:00/1 dS:ordered/ordered/08 10:00/1 dW:closed/won/-/4");
+const atOpen = atWeek();
+expect("attempts: an ordered deal is out of the open figures, without business days since its last attempt, as 95's B5",
+  `${byId(atOpen.filter((r) => ["dA", "dB", "dN", "dO", "dS", "dT"].includes(r.dealSourceId))).map((r) => `${r.dealSourceId}:${r.businessDaysSinceLast ?? "-"}`).join(" ")}`
+    + ` open ${attemptFigures(atOpen).openDeals} never ${attemptFigures(atOpen).openNeverAttempted} since ${sinceLastBuckets(atOpen, "1,2,5").buckets.map((b) => `${b.label}:${b.deals}`).join(" ")}`,
+  "dA:3 dB:4 dN:3 dO:- dS:- dT:4 open 4 never 1 since 0–1:0 1–2:0 2–5:4 5+:0",
+  "dA:3 dB:4 dN:3 dO:4 dS:3 dT:4 open 6 never 1 since 0–1:0 1–2:0 2–5:6 5+:0");
+const atOf = (id, o = {}, names = true) => dealAttempts(atDealOf(id), atOptions(o), names);
+const atAttemptText = (list) => list.map((a) => `${a.n}:${a.answered ? "t" : "f"}/${a.talkSeconds ?? "-"}/${a.reached ? "t" : "f"}/${a.reachedBy ?? "-"}`).join(" ");
+expect("attempts: reached by the outcome first, else 30 s of talk; Left voicemail with 90 s and answered with 0 s not, as 95's B6",
+  `${atAttemptText(atOf("dW"))} | ${atAttemptText(atOf("dL"))}`,
+  "1:f/-/f/- 2:t/29/f/- 3:t/30/t/talk_time 4:t/5/t/outcome | 1:t/90/f/- 2:t/0/f/-",
+  "1:f/-/f/- 2:t/29/t/talk_time 3:t/30/t/talk_time 4:t/5/f/- | 1:t/90/t/talk_time 2:t/0/f/-");
+const atEdge = (min) => { const r = atWeek({ reachedMinTalkSeconds: min }).find((x) => x.dealSourceId === "dW"); return `${min}:${r.reachedAttempts}/${r.firstReachedAttempt}`; };
+expect("attempts: attempts.reached_min_talk_seconds moves the edge, as 95's B7",
+  `${atEdge(29)} ${atEdge(31)}`, "29:3/2 31:1/4", "29:2/3 31:2/3");
+expect("attempts: one deal's attempts in order with the start, the outcome's label and the agent (only with names), as 95's B9 and B10",
+  [atOf("dW").map((a) => `${a.n}|${hms(a.startedAt)}|${a.outcomeLabel ?? "-"}|${a.agentName ?? "-"}`).join(" "), atOf("dW", {}, false).filter((a) => a.agentName !== null).length],
+  ["1|05 08:04:50|No answer|Anna Verify 2|05 08:59:50|-|Anna Verify 3|06 08:59:50|-|Anna Verify 4|07 08:59:50|Connected|Bram Verify", 0],
+  ["1|05 08:04:50|No answer|Anna Verify 2|05 08:59:50|-|Anna Verify 3|06 08:59:50|-|Anna Verify 4|07 08:59:50|Connected|Anna Verify", 4]);
+const atFiltered = (a, o) => {
+  const rows = atWeek({}, { ...AT_ALL, attempted: a, outcome: o });
+  return `${a}:${o}=${rows.length}/${attemptList(rows, 100).total}/${byId(attemptList(rows, 100).rows).map((r) => r.dealSourceId).join(",")}`;
+};
+expect("attempts: the filters attempted and outcome narrow every figure and the list, as 95's B11",
+  [["none", "all"], ["some", "all"], ["all", "open"], ["all", "won"], ["all", "lost"], ["all", "ordered"], ["none", "lost"]].map(([a, o]) => atFiltered(a, o)).join(" "),
+  "none:all=2/2/dL2,dN some:all=9/9/dA,dB,dL,dO,dS,dT,dU,dW,dW2 all:open=4/4/dA,dB,dN,dT all:won=2/2/dW,dW2 all:lost=2/2/dL,dL2 all:ordered=2/2/dO,dS none:lost=1/1/dL2",
+  "none:all=2/2/dL2,dN some:all=9/9/dA,dB,dL,dO,dS,dT,dU,dW,dW2 all:open=6/6/dA,dB,dN,dO,dS,dT all:won=2/2/dW,dW2 all:lost=2/2/dL,dL2 all:ordered=0/0/ none:lost=1/1/dL2");
+const atOc = attemptOutcomes(atWeek());
+expect("attempts: won against lost, the deals not decided counted apart, as 95's B12",
+  `${atOc.rows.map((o) => `${o.outcome}:${o.deals}/${o.avgAttempts.toFixed(2)}/${o.medianAttempts.toFixed(1)}/${o.medianSpeedSeconds ?? "-"}/${o.calledBeforeNoon}of${o.noonKnown}/${o.reachedDeals}/${o.avgTalkReachedSeconds ?? "-"}`).join(" ")}`
+    + ` not_decided:${atOc.notDecided} open:${atOc.open} ordered:${atOc.ordered} unknown:${atOc.unknown}`,
+  "won:2/2.50/2.5/6440/2of2/2/168 lost:2/1.00/1.0/3590/1of2/0/- not_decided:7 open:4 ordered:2 unknown:1",
+  "won:2/2.50/2.5/6440/2of2/2/335 lost:2/1.00/1.0/3590/1of1/0/- not_decided:7 open:4 ordered:2 unknown:1");
+const atSp = attemptSpeedBuckets(atWeek(), "5,15,60,240,1440");
+expect("attempts: the win rate by attempts and by speed to lead with their buckets, as 95's B13",
+  `${attemptBuckets(atWeek(), 5).map((b) => `${b.label}:${b.won}/${b.lost}`).join(" ")} | ${atSp.buckets.map((b) => `${b.label}:${b.won}/${b.lost}`).join(" ")}`
+    + ` none:${atSp.none.won}/${atSp.none.lost} no_hours:${atSp.noHours}`,
+  "0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:1/0 5–15:0/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0",
+  "0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:0/0 5–15:1/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0");
+const atPrev = attemptsInPeriod(attemptRecords(atDeals, atOptions()), "2026-09-28", "2026-10-04", AT_ALL, null, AMS_AT);
+expect("attempts: the figures, the previous period and reached per attempt, as 95's B14",
+  `${atFig(attemptFigures(atWeek()))} | ${atFig(attemptFigures(atPrev))} | ${attemptBuckets(atWeek(), 5).filter((b) => b.bucket > 0).map((b) => `${b.label}:${b.firstReached}`).join(" ")}`,
+  "11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:4 2:0 3:1 4:0 5+:0",
+  "11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 0/0/0/-/-/0/0/-/0of0/0/0/0/0/0/0/0/0/0/0 | 1:4 2:0 3:1 4:0 5+:0");
+const atList = attemptList(atWeek(), 100);
+const atCapped = attemptList(atWeek(), 4);
+expect("attempts: the list's order, its cap and total, the deal's id, the link and the stage, as 95's B15",
+  `${atList.rows.map((r) => r.dealSourceId).join(" ")} | ${atCapped.rows.map((r) => r.dealSourceId).join(" ")} of ${atCapped.total}`
+    + ` ${atCapped.rows[0].recordUrl === "https://crm.example.invalid/portal-1/deal/dB"} ${atCapped.rows[0].dealId === "deal-dB"} ${atCapped.rows[0].stageLabel}`,
+  "dB dT dN dA dU dW2 dL2 dW dS dL dO | dB dT dN dA of 11 true true Open",
+  "dB dT dA dN dU dW2 dL2 dW dS dL dO | dB dT dA dN of 11 true true Open");
+const atPeople = attemptsPerPerson(atWeek(), (id) => atNames[id] ?? null);
+const atNl = atPeople.rows.find((p) => p.kind === "notLinked");
+expect("attempts per agent: by name, never ranked, the not-linked row with one owner id, the total, as 95's B16",
+  `${atPeople.rows.filter((p) => p.kind === "person").map((p) => `${p.name}:${p.deals}/${p.attempts}/${p.reachedDeals}/${p.medianSpeedSeconds ?? "-"}/${p.talkSecondsReached}/${p.openNeverAttempted}`).join(" ")}`
+    + ` not_linked(${atNl.unlinkedOwners}):${atNl.deals}/${atNl.attempts}/${atNl.reachedDeals}/${atNl.medianSpeedSeconds}/${atNl.talkSecondsReached}/${atNl.openNeverAttempted}`
+    + ` total:${atPeople.total.deals}/${atPeople.total.attempts}`,
+  "Anna Verify:4/7/4/7190/440/0 Bram Verify:3/4/0/32390/0/0 not_linked(1):4/2/1/3590/120/1 total:11/13",
+  "Bram Verify:3/4/0/32390/0/0 Anna Verify:4/7/4/7190/440/0 not_linked(1):4/2/1/3590/120/1 total:11/13");
+expect("attempts: the figures per pipeline, the lead pipelines only, as 95's B22",
+  attemptGroups(atWeek(), "pipeline").map((g) => `${g.label}=${g.deals}`).join(","), "Sales=11", "Sales=11,Self Serve=1");
 expect("attempts: the buckets' edges as cma.age_bucket_of places them, spaces ignored; bucket words as Follow-up's",
   [ageBucket(0, "1,2,5"), ageBucket(1, "1,2,5"), ageBucket(2, " 1, 2 ,5"), ageBucket(6, "1,2,5"), ageBucket(null, "1,2,5"), bucketText(2, 5), bucketText(5, null)],
   [{ from: 0, to: 1 }, { from: 0, to: 1 }, { from: 1, to: 2 }, { from: 5, to: null }, null, "2–5", "5+"],
   [{ from: 0, to: 1 }, { from: 1, to: 2 }, { from: 1, to: 2 }, { from: 5, to: null }, null, "2–5", "5+"]);
 expect("attempts: business days count the dates after the first up to the second, none without a zone",
-  [businessDays("NL", "Europe/Amsterdam", "2026-10-09T09:00:00Z", AT_NOW, atWorking), businessDays("GB", "Europe/London", "2026-10-09T09:00:00Z", AT_NOW, atWorking),
-    businessDays("NL", "Europe/Amsterdam", "2026-10-14T06:00:00Z", AT_NOW, atWorking), businessDays("unknown", null, "2026-10-09T09:00:00Z", AT_NOW, atWorking)],
-  [2, 3, 0, null], [3, 3, 0, null]);
+  [businessDays("NL", AMS_AT, "2026-10-09T09:00:00Z", AT_NOW, atWorking), businessDays("NL", AMS_AT, "2026-10-14T06:00:00Z", AT_NOW, atWorking),
+    businessDays("unknown", null, "2026-10-09T09:00:00Z", AT_NOW, atWorking)],
+  [3, 0, null], [4, 0, null]);
 // the screen: the shares, the format, the colours (one series, never a red), and nothing personal in the list or per person
-expect("attempts: the reach and won shares, none without a base; the figures with one decimal in both languages",
-  [firstReachShare(attemptFigures(atWeek("lead"))), reachShare({ firstConnected: 1 }, 8), reachShare({ firstConnected: 1 }, 0), wonRate({ won: 1, lost: 0 }), wonRate({ won: 0, lost: 0 }),
-    fmtAttempts(1.55, "en"), fmtAttempts(1.55, "nl"), fmtAttempts(null, "en")],
-  [0.125, 0.125, null, 1, null, "1.6", "1,6", "–"], [0.125, 0.125, 0, 1, 0, "1.55", "1,6", "0"]);
+const atCur = attemptFigures(atWeek());
+expect("attempts: the shares (attempted, reached, first reach, noon, without an outcome, won), none without a base; one decimal in both languages",
+  [attemptedShare(atCur), reachedShare(atCur), firstReachShare(atCur), noonShare(atCur), withoutOutcomeShare(atCur), reachShare({ firstReached: 1 }, 0),
+    wonRate({ won: 1, lost: 0 }), wonRate({ won: 0, lost: 0 }), fmtAttempts(1.55, "en"), fmtAttempts(1.55, "nl"), fmtAttempts(null, "en"), speedMinutes(290), speedMinutes(null)],
+  [9 / 11, 5 / 11, 4 / 9, 8 / 11, 6 / 13, null, 1, null, "1.6", "1,6", "–", 4.8, null],
+  [9 / 11, 5 / 11, 4 / 9, 8 / 11, 6 / 13, 0, 1, 0, "1.55", "1,6", "0", 4.8, null]);
 expect("attempts: the bars in the series' colours, never a red",
   [ATTEMPTS_BAR_CLASS, SINCE_LAST_CLASS, /red|error|rose/.test(ATTEMPTS_BAR_CLASS + SINCE_LAST_CLASS)], ["bg-p4a-deepblue", "bg-p4a-lightblue", false], ["bg-p4a-error", "bg-p4a-lightblue", false]);
-expect("attempts: no name, address, phone number or hash in the list or per person",
-  [personalDataIn(atList), personalDataIn(atPeople, "$", true)], [[], []], [["$.x"], []]);
+expect("attempts: no name, address, phone number or hash in the list or per person; a deal's attempts carry no call id",
+  [personalDataIn(atList), personalDataIn(atPeople, "$", true), atOf("dW").some((a) => "id" in a || "callId" in a)], [[], [], false], [["$.x"], [], false]);
+
+// the routes (addition 0008z), from their source as the server builds them: the attempts query refuses a scope and an
+// attempted or outcome outside its list with a 400; one deal's attempts for the report permissions, its id a uuid; the
+// withdrawal a same-site POST for messages.withdraw only; the data layer calls the database with the filters, the deal and
+// the message
+const src = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
+const atApi = src("../src/lib/api/attempts.ts");
+const atDealRoute = src("../src/app/api/v1/reports/attempts/deals/[dealId]/route.ts");
+const withdrawRoute = src("../src/app/api/v1/messages/[id]/withdraw/route.ts");
+const pgLayer = src("../src/lib/data/postgres.ts");
+expect("attempts routes: a scope, attempted or outcome outside the lists is a 400; the filters reach the database",
+  [/if \(sp\.has\("scope"\)\) throw new ApiError\(400, "invalid_scope"/.test(atApi), /problem === "attempted"\) throw new ApiError\(400, "invalid_attempted"/.test(atApi),
+    /problem === "outcome"\) throw new ApiError\(400, "invalid_outcome"/.test(atApi),
+    pgLayer.includes("cma.attempts_per_deal_page($1::date, $2::date, $3, $4, $5, $6, $7)") && pgLayer.includes("filter.attempted, filter.outcome]"),
+    pgLayer.includes("cma.attempts_per_person_page($1::date, $2::date, $3, $4, $5, $6)")],
+  [true, true, true, true, true], [false, true, true, true, true]);
+expect("one deal's attempts: GET for the report permissions, the id a uuid, cma.attempts_of_deal",
+  [/export async function GET\(/.test(atDealRoute), atDealRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"),
+    atDealRoute.includes('uuidParam(dealId, "dealId")'), pgLayer.includes("select * from cma.attempts_of_deal($1::uuid)")],
+  [true, true, true, true], [true, false, true, true]);
+expect("withdrawing a message: a same-site POST for messages.withdraw only, cma.withdraw_message",
+  [/export async function POST\(/.test(withdrawRoute), withdrawRoute.includes("assertSameSiteWrite(request);"),
+    withdrawRoute.includes("requireAnyPermission(me, [WITHDRAW_PERMISSION]);"), WITHDRAW_PERMISSION, pgLayer.includes("select cma.withdraw_message($1::uuid) as at"),
+    /export async function (GET|PUT|DELETE|PATCH)\(/.test(withdrawRoute)],
+  [true, true, true, "messages.withdraw", true, false], [true, true, true, "messages.send", true, false]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

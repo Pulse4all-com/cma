@@ -1,5 +1,5 @@
 import { FollowUpLive } from "@/components/FollowUpLive";
-import { InboundLive } from "@/components/InboundLive";
+import { InboundLive, MissedCallbacks } from "@/components/InboundLive";
 import { LiveBoard, type BoardRow } from "@/components/LiveBoard";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { Shell } from "@/components/Shell";
@@ -30,9 +30,10 @@ function shiftLine(
  * manager and analytics in the default ladder); the database checks that permission again on
  * every read (CMA06). Today only, Postgres only (the realtime service comes later): the page
  * reads once and the client re-reads it every 10 seconds while the tab is visible. Staff data,
- * never customer data, and no ranking. Since addition 0008i it opens with today's inbound tiles and
- * the missed calls not called back (InboundLive): line names, codes and counts, never a number,
- * a name or the caller's hash.
+ * never customer data, and no ranking. Since addition 0008i it opens with today's inbound tiles
+ * (InboundLive); the missed calls not called back (MissedCallbacks) close the board since addition
+ * 0008z (Martin, 20 October 2026): line names, codes and counts, never a number, a name or the
+ * caller's hash.
  */
 export default async function LiveBoardPage() {
   const r = await resolve();
@@ -101,7 +102,7 @@ export default async function LiveBoardPage() {
       <LiveRefresh />
 
       <div className="mb-8">
-        <InboundLive inbound={inbound} copy={copy} locale={me.locale} timeZone={me.timeZone} />
+        <InboundLive inbound={inbound} copy={copy} locale={me.locale} />
       </div>
 
       <div className="mb-8">
@@ -123,6 +124,10 @@ export default async function LiveBoardPage() {
           copy={copy}
         />
       )}
+
+      <div className="mt-8">
+        <MissedCallbacks inbound={inbound} copy={copy} locale={me.locale} timeZone={me.timeZone} />
+      </div>
 
       {dataIsMock ? (
         <div className="mt-6">

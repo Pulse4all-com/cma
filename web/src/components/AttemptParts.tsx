@@ -1,21 +1,27 @@
 /**
- * Building blocks of Reports → Attempts per deal (addition 0008y, 19 October 2026): the grouping switch (G), the date
- * line with the history's start, the bars (deals by number of attempts, reach per attempt, won rate by attempts, open
- * deals by time since the last attempt), the figures per group and the list of deals. Server components, plain CSS,
- * no chart library; the figures come from the data layer and lib/attempts arranges them. Pulse4all-Style 7.7: horizontal
- * bars with their values, never a donut or a red stack; the attempt bars in Deep Blue, the time-since-last bars in one
- * neutral hue (Light Blue), never with text on them (7.8); every bar carries its label and value in a title. Tables per
- * 7.6, scrolling sideways inside their card. Ids, codes, counts, links and times only: no customer data.
+ * Building blocks of Reports → Attempts per deal (addition 0008y; for sales since 0008z, 20 October 2026): the grouping switch
+ * (G), the date line with the history's start, won against lost, the bars (the win rate by attempts and by speed to lead,
+ * deals by number of attempts, reached per attempt, open deals by time since the last attempt), how complete the calls are,
+ * and the figures per group. Server components, plain CSS, no chart library; the figures come from the data layer and
+ * lib/attempts arranges them. Pulse4all-Style 7.7: horizontal bars with their values, never a donut or a red stack; the
+ * attempt bars in Deep Blue, the time-since-last bars in one neutral hue (Light Blue), never with text on them (7.8);
+ * every bar carries its label and value in a title. Tables per 7.6, scrolling sideways inside their card. Ids, codes,
+ * counts, links and times only: no customer data. The deals list with each deal's attempts is AttemptDealList.
  */
 import Link from "next/link";
 import type { Copy, Locale } from "@/lib/copy";
-import type { AttemptBucket, AttemptGroup, AttemptGroupRow, AttemptListRow, AttemptOutcome, SinceLastBucket } from "@/lib/data";
-import { ATTEMPT_GROUPS, ATTEMPTS_BAR_CLASS, fmtAttempts, nextAttemptGroup, reachShare, SINCE_LAST_CLASS, wonRate } from "@/lib/attempts";
-import { barShare, fmtCount, fmtShare } from "@/lib/reports";
-import { fmtDate, fmtDateTimeShort } from "@/lib/time";
+import type {
+  AttemptBucket, AttemptFigures, AttemptGroup, AttemptGroupRow, AttemptOutcomeFilter, AttemptOutcomeRow, AttemptsReport, AttemptSpeedBucket,
+  SinceLastBucket,
+} from "@/lib/data";
+import {
+  ATTEMPT_GROUPS, ATTEMPTS_BAR_CLASS, fmtAttempts, nextAttemptGroup, noonShare, reachedShare, reachShare, SINCE_LAST_CLASS, speedMinutes, withoutOutcomeShare,
+  wonRate,
+} from "@/lib/attempts";
+import { barShare, fmtBusinessMinutes, fmtCount, fmtShare, fmtTalk } from "@/lib/reports";
+import { fmtDate } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
-import { RecordLink } from "./RecordLink";
 import { Keycap } from "./primitives";
 
 const th = "h-10 px-2 py-1 align-bottom font-semibold";
@@ -53,15 +59,17 @@ export function AttemptGroupSwitch({ group, query, copy }: { group: AttemptGroup
 }
 
 /** The page's date line: the period and the active filters; under it the history's start in Muted */
-export function AttemptDateLine({ from, to, market, pipelineLabel, counted, historyStart, copy, locale }: {
-  from: string; to: string; market: string | null; pipelineLabel: string | null; counted: boolean; historyStart: string | null; copy: Copy; locale: Locale;
+export function AttemptDateLine({ from, to, market, pipelineLabel, attempted, outcome, historyStart, copy, locale }: {
+  from: string; to: string; market: string | null; pipelineLabel: string | null; attempted: "all" | "none" | "some"; outcome: AttemptOutcomeFilter;
+  historyStart: string | null; copy: Copy; locale: Locale;
 }) {
   const t = copy.attempts;
   const parts = [
     `${fmtDate(from, locale)}${from !== to ? ` – ${fmtDate(to, locale)}` : ""}`,
     ...(market ? [t.activeMarket.replace("{market}", market === "unknown" ? copy.reports.unknownMarket : market)] : []),
     ...(pipelineLabel ? [t.activePipeline.replace("{pipeline}", pipelineLabel)] : []),
-    ...(counted ? [t.activeScope] : []),
+    ...(attempted !== "all" ? [t[`attempted_${attempted}`]] : []),
+    ...(outcome !== "all" ? [t.activeOutcome.replace("{outcome}", t[`outcome_${outcome}`])] : []),
   ];
   return (
     <div className="text-right">
@@ -121,23 +129,44 @@ export function ReachBars({ buckets, attempted, copy, locale }: { buckets: Attem
       bars={tries.map((b) => {
         const share = reachShare(b, attempted);
         const name = t.attemptLabel.replace("{n}", b.label);
-        const value = t.reachValue.replace("{pct}", fmtShare(share, locale)).replace("{n}", fmtCount(b.firstConnected, locale));
+        const value = t.reachValue.replace("{pct}", fmtShare(share, locale)).replace("{n}", fmtCount(b.firstReached, locale));
         return { key: String(b.bucket), label: name, share: share ?? 0, value, title: `${name}: ${value}` };
       })} />
   );
 }
 
-/** Of the closed deals with an outcome, the share won, per number of attempts */
+const wonValue = (b: { won: number; lost: number }, copy: Copy, locale: Locale) => {
+  const rate = wonRate(b);
+  return rate === null ? copy.attempts.noClosed
+    : copy.attempts.wonValue.replace("{pct}", fmtShare(rate, locale)).replace("{won}", fmtCount(b.won, locale)).replace("{closed}", fmtCount(b.won + b.lost, locale));
+};
+
+/** Of the deals won or lost, the share won, per number of attempts */
 export function WonBars({ buckets, copy, locale }: { buckets: AttemptBucket[]; copy: Copy; locale: Locale }) {
-  const t = copy.attempts;
   return (
-    <BarList testId="attempts-won" label={t.wonTitle} className={ATTEMPTS_BAR_CLASS}
+    <BarList testId="attempts-won" label={copy.attempts.wonTitle} className={ATTEMPTS_BAR_CLASS}
       bars={buckets.map((b) => {
-        const rate = wonRate(b);
-        const value = rate === null ? t.noClosed
-          : t.wonValue.replace("{pct}", fmtShare(rate, locale)).replace("{won}", fmtCount(b.won, locale)).replace("{closed}", fmtCount(b.won + b.lost, locale));
-        return { key: String(b.bucket), label: bucketName(b, copy), share: rate ?? 0, value, title: `${bucketName(b, copy)}: ${value}` };
+        const value = wonValue(b, copy, locale);
+        return { key: String(b.bucket), label: bucketName(b, copy), share: wonRate(b) ?? 0, value, title: `${bucketName(b, copy)}: ${value}` };
       })} />
+  );
+}
+
+/** Of the deals won or lost, the share won, per bucket of business minutes to the first attempt; never attempted last, no business hours apart */
+export function SpeedWonBars({ speed, copy, locale }: { speed: AttemptsReport["speedBuckets"]; copy: Copy; locale: Locale }) {
+  const t = copy.attempts;
+  const bars: Bar[] = speed.buckets.map((b: AttemptSpeedBucket) => {
+    const name = t.speedLabel.replace("{bucket}", b.label);
+    const value = wonValue(b, copy, locale);
+    return { key: b.label, label: name, share: wonRate(b) ?? 0, value, title: `${name}: ${value}` };
+  });
+  const never = wonValue(speed.none, copy, locale);
+  bars.push({ key: "never", label: t.speedNever, share: wonRate(speed.none) ?? 0, value: never, title: `${t.speedNever}: ${never}` });
+  return (
+    <>
+      <BarList testId="attempts-speed-won" label={t.speedTitle} className={ATTEMPTS_BAR_CLASS} bars={bars} />
+      {speed.noHours > 0 ? <p className="mt-3 text-small text-p4a-muted" data-testid="attempts-speed-no-hours">{t.speedNoHours.replace("{n}", fmtCount(speed.noHours, locale))}</p> : null}
+    </>
   );
 }
 
@@ -157,6 +186,90 @@ export function SinceLastBars({ buckets, noHours, copy, locale }: { buckets: Sin
   );
 }
 
+/** Speed to lead in business minutes as Speed to lead writes it ("12 min", "2:05"); a dash without */
+export function fmtSpeed(seconds: number | null, locale: Locale): string {
+  return fmtBusinessMinutes(speedMinutes(seconds), locale);
+}
+
+/**
+ * Won against lost (Kira's comparison): one row each with the deals, the average and median attempts, the median speed to
+ * lead, called before the next noon, reached at least once and the average talk time in contact; the deals not decided
+ * beside the table
+ */
+export function OutcomesTable({ outcomes, hints, copy, locale }: {
+  outcomes: AttemptsReport["outcomes"]; hints: Record<string, string>; copy: Copy; locale: Locale;
+}) {
+  const t = copy.attempts;
+  const n = (x: number) => fmtCount(x, locale);
+  const hint = (label: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
+  const share = (part: number, whole: number) => fmtShare(whole === 0 ? null : part / whole, locale);
+  const cols: [string, string, (r: AttemptOutcomeRow) => string][] = [
+    [t.colDeals, hints.atOcDeals!, (r) => n(r.deals)],
+    [t.colAvgAttempts, hints.atOcAvg!, (r) => fmtAttempts(r.avgAttempts, locale)],
+    [t.colMedianAttempts, hints.atOcMedian!, (r) => fmtAttempts(r.medianAttempts, locale)],
+    [t.colMedianSpeed, hints.atOcSpeed!, (r) => fmtSpeed(r.medianSpeedSeconds, locale)],
+    [t.colNoon, hints.atOcNoon!, (r) => share(r.calledBeforeNoon, r.noonKnown)],
+    [t.colReached, hints.atOcReached!, (r) => share(r.reachedDeals, r.deals)],
+    [t.colTalk, hints.atOcTalk!, (r) => fmtTalk(r.avgTalkReachedSeconds, locale)],
+  ];
+  const decided = outcomes.rows.some((r) => r.deals > 0);
+  return (
+    <div className="flex flex-col gap-4">
+      {decided ? (
+        <div className="overflow-x-auto" data-testid="attempts-outcomes-scroll" role="region" aria-label={t.outcomesTitle} tabIndex={0}>
+          <table className="w-full border-collapse text-body leading-table" data-testid="attempts-outcomes">
+            <thead>
+              <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
+                <th className={th}><HintLabel label={t.colOutcome}>{hint(t.colOutcome, hints.atOcOutcome!)}</HintLabel></th>
+                {cols.map(([label, text]) => <th key={label} className={`${th} text-right`}><HintLabel label={label}>{hint(label, text)}</HintLabel></th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {outcomes.rows.map((r) => (
+                <tr key={r.outcome} className={row} data-testid="attempts-outcome-row" data-outcome={r.outcome}>
+                  <td className="h-10 whitespace-nowrap px-2 font-semibold">{t[`outcome_${r.outcome}`]}</td>
+                  {cols.map(([label, , value]) => <td key={label} className={td}>{value(r)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : <p className="text-body text-p4a-muted">{t.noDecided}</p>}
+      <p className="text-small text-p4a-muted" data-testid="attempts-not-decided">
+        <span className="font-semibold text-p4a-body">{t.notDecided.replace("{n}", n(outcomes.notDecided))}</span>
+        {" · "}
+        {t.notDecidedDetail.replace("{open}", n(outcomes.open)).replace("{ordered}", n(outcomes.ordered)).replace("{unknown}", n(outcomes.unknown))}
+      </p>
+    </div>
+  );
+}
+
+/** How complete the calls are: the attempts without an outcome (a share) and the calls logged without a telephony call, each with its hint */
+export function QualityFigures({ figures, hints, copy, locale }: { figures: AttemptFigures; hints: Record<string, string>; copy: Copy; locale: Locale }) {
+  const t = copy.attempts;
+  const about = (label: string) => copy.hints.about.replace("{label}", label);
+  const items: { key: string; label: string; value: string; hint: string }[] = [
+    { key: "without-outcome", label: t.withoutOutcome, hint: hints.atWithoutOutcome!,
+      value: t.withoutOutcomeValue.replace("{pct}", fmtShare(withoutOutcomeShare(figures), locale)).replace("{n}", fmtCount(figures.attemptsWithoutOutcome, locale))
+        .replace("{attempts}", fmtCount(figures.attempts, locale)) },
+    { key: "logged-without", label: t.loggedWithout, hint: hints.atLoggedWithout!,
+      value: t.loggedWithoutValue.replace("{n}", fmtCount(figures.loggedWithoutAircall, locale)) },
+  ];
+  return (
+    <dl className="flex flex-col gap-3" data-testid="attempts-quality">
+      {items.map((i) => (
+        <div key={i.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-p4a-border pb-3 last:border-b-0" data-testid={`attempts-quality-${i.key}`}>
+          <dt className="flex items-start text-small font-semibold text-p4a-body" data-hint-anchor="">
+            {i.label}
+            <HeaderHint label={about(i.label)} text={i.hint} />
+          </dt>
+          <dd className="tabular text-body text-p4a-heading">{i.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** The figures per group: a date, a Monday, a market or a pipeline */
 export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
   rows: AttemptGroupRow[]; group: AttemptGroup; hints: Record<string, string>; copy: Copy; locale: Locale;
@@ -168,9 +281,13 @@ export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
   const labelOf = (r: AttemptGroupRow) => group === "day" ? fmtDate(r.groupKey, locale, "compact")
     : group === "week" ? t.weekLabel.replace("{week}", fmtDate(r.groupKey, locale, "short"))
     : group === "market" ? (r.groupKey === "unknown" ? copy.reports.unknownMarket : r.groupKey) : r.label ?? r.groupKey;
-  const cols: [string, string][] = [[t.deals, hints.atGroupDeals!], [t.attempted, hints.atGroupAttempted!], [t.attemptsCol, hints.atGroupAttempts!],
-    [t.avgCol, hints.atGroupAvg!], [t.medianCol, hints.atGroupMedian!], [t.connectedCol, hints.atGroupFirst!], [t.openNeverCol, hints.atGroupOpenNever!],
-    [t.wonCol, hints.atGroupWon!], [t.lostCol, hints.atGroupLost!]];
+  const cols: [string, string, (r: AttemptGroupRow) => string][] = [
+    [t.deals, hints.atGroupDeals!, (r) => n(r.deals)], [t.attempted, hints.atGroupAttempted!, (r) => n(r.attempted)],
+    [t.attemptsCol, hints.atGroupAttempts!, (r) => n(r.attempts)], [t.avgCol, hints.atGroupAvg!, (r) => fmtAttempts(r.avgAttempts, locale)],
+    [t.medianCol, hints.atGroupMedian!, (r) => fmtAttempts(r.medianAttempts, locale)], [t.reachedCol, hints.atGroupReached!, (r) => n(r.reachedDeals)],
+    [t.firstReachCol, hints.atGroupFirst!, (r) => n(r.firstReached)], [t.openNeverCol, hints.atGroupOpenNever!, (r) => n(r.openNeverAttempted)],
+    [t.wonCol, hints.atGroupWon!, (r) => n(r.won)], [t.lostCol, hints.atGroupLost!, (r) => n(r.lost)], [t.orderedCol, hints.atGroupOrdered!, (r) => n(r.ordered)],
+  ];
   return (
     <div className="overflow-x-auto" data-testid="attempts-groups-scroll" role="region" aria-label={t.byGroup} tabIndex={0}>
       <table className="w-full border-collapse text-body leading-table" data-testid="attempts-groups">
@@ -184,15 +301,7 @@ export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
           {rows.map((r) => (
             <tr key={r.groupKey} className={row}>
               <td className="h-10 max-w-[14rem] overflow-hidden text-ellipsis whitespace-nowrap px-2 font-semibold" title={labelOf(r)}>{labelOf(r)}</td>
-              <td className={td}>{n(r.deals)}</td>
-              <td className={td}>{n(r.attempted)}</td>
-              <td className={td}>{n(r.attempts)}</td>
-              <td className={td}>{fmtAttempts(r.avgAttempts, locale)}</td>
-              <td className={td}>{fmtAttempts(r.medianAttempts, locale)}</td>
-              <td className={td}>{n(r.firstReached)}</td>
-              <td className={td}>{n(r.openNeverAttempted)}</td>
-              <td className={td}>{n(r.won)}</td>
-              <td className={td}>{n(r.lost)}</td>
+              {cols.map(([label, , value]) => <td key={label} className={td}>{value(r)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -201,54 +310,12 @@ export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
   );
 }
 
-const OUTCOME_KEY: Record<AttemptOutcome, "outcome_open" | "outcome_won" | "outcome_lost" | "outcome_unknown"> = {
-  open: "outcome_open", won: "outcome_won", lost: "outcome_lost", unknown: "outcome_unknown",
-};
+/** The reached share of a set of deals, for the tile and per agent */
+export function fmtReachedShare(f: Pick<AttemptFigures, "reachedDeals" | "deals">, locale: Locale): string {
+  return fmtShare(reachedShare(f), locale);
+}
 
-/** The deals of the period in the list's order: the deal, pipeline, market, created, outcome, attempts, the link */
-export function AttemptListTable({ rows, hints, copy, locale, timeZone }: {
-  rows: AttemptListRow[]; hints: Record<string, string>; copy: Copy; locale: Locale; timeZone: string;
-}) {
-  const t = copy.attempts;
-  const n = (x: number) => fmtCount(x, locale);
-  const hint = (label: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
-  const cell = "h-10 whitespace-nowrap px-2";
-  return (
-    <div className="relative overflow-x-auto" data-testid="attempts-list-scroll" role="region" aria-label={t.listTitle} tabIndex={0}>
-      <table className="w-full border-collapse text-body leading-table" data-testid="attempts-list">
-        <thead>
-          <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}><HintLabel label={t.deal}>{hint(t.deal, hints.atDeal!)}</HintLabel></th>
-            <th className={th}><HintLabel label={t.pipeline}>{hint(t.pipeline, hints.atPipeline!)}</HintLabel></th>
-            <th className={th}><HintLabel label={t.market}>{hint(t.market, hints.atMarket!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.created}>{hint(t.created, hints.atCreated!)}</HintLabel></th>
-            <th className={th}><HintLabel label={t.outcome}>{hint(t.outcome, hints.atOutcome!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.attemptsCol}>{hint(t.attemptsCol, hints.atAttempts!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.connected}>{hint(t.connected, hints.atConnected!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.firstConnected}>{hint(t.firstConnected, hints.atFirstConnected!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.lastAttempt}>{hint(t.lastAttempt, hints.atLastAttempt!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.daysSince}>{hint(t.daysSince, hints.atDaysSince!)}</HintLabel></th>
-            <th className={th}><span className="sr-only">{t.open}</span>{hint(t.open, hints.atOpenLink!)}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={`${r.connectionId}:${r.dealSourceId}`} className={row} data-testid="attempts-row" data-outcome={r.outcome}>
-              <td className={`${cell} font-semibold tabular`}>{r.dealSourceId}</td>
-              <td className={`${cell} max-w-[14rem] overflow-hidden text-ellipsis`} title={r.pipelineLabel ?? undefined}>{r.pipelineLabel ?? "–"}</td>
-              <td className={cell}>{r.market === "unknown" ? copy.reports.unknownMarket : r.market}</td>
-              <td className={td} title={fmtDateTimeShort(r.createdAt, timeZone, locale)}>{fmtDateTimeShort(r.createdAt, timeZone, locale)}</td>
-              <td className={cell}>{t[OUTCOME_KEY[r.outcome]]}</td>
-              <td className={td}>{n(r.attempts)}</td>
-              <td className={td}>{n(r.connected)}</td>
-              <td className={td}>{r.firstConnectedAttempt === null ? "–" : n(r.firstConnectedAttempt)}</td>
-              <td className={td}>{r.lastAttemptAt ? fmtDateTimeShort(r.lastAttemptAt, timeZone, locale) : "–"}</td>
-              <td className={td}>{r.isClosed ? "" : r.businessDaysSinceLast === null ? "–" : n(r.businessDaysSinceLast)}</td>
-              <td className="h-10 px-2 text-right"><RecordLink url={r.recordUrl} label={`${t.open} ${r.dealSourceId}`} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+/** Called before the next business noon, of the deals whose answer is known */
+export function fmtNoonShare(f: Pick<AttemptFigures, "calledBeforeNoon" | "noonKnown">, locale: Locale): string {
+  return fmtShare(noonShare(f), locale);
 }

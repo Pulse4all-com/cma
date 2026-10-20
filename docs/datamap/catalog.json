@@ -340,8 +340,8 @@
       "tables": [
         {
           "name": "message",
-          "what": "Messages and alerts, with a link to the record",
-          "how": "Messages screen, or a rule when a lead is assigned"
+          "what": "Messages and alerts, with a link to the record; withdrawn_at and withdrawn_by when one was deleted for everyone, never removed (0008z)",
+          "how": "Messages screen, or a rule when a lead is assigned; Delete on Messages withdraws one (messages.withdraw)"
         },
         {
           "name": "message_delivery",
@@ -550,7 +550,7 @@
     },
     {
       "name": "attempts_per_deal",
-      "what": "Per deal of a counted deal pipeline (no order pipeline) since the intake start, lead pipelines marked: market, pipeline, the owner's person by id, created, closed and its outcome, the outbound CRM calls up to the close (attempts), how many connected (the call's outcome, or the linked Aircall call answered), the first connected attempt, the first and last attempt, and for open deals the business days since the last attempt with its bucket. From HubSpot deals, contacts and calls with the Aircall link; computed on read, so as current as the mirror (0008y)"
+      "what": "Per sales deal (a lead pipeline, never an order pipeline) since the intake start: market, pipeline, stage, the owner's person by id, created, closed, the contacts' first order after the creation (ordered_at) and why the window ended (closed, ordered or open), the outcome (won, lost, ordered, unknown, open), the attempts in the window (outbound Aircall calls on the deal or its contacts; every outbound HubSpot call when attempts.source is crm), those that reached the customer (the outcome, else attempts.reached_min_talk_seconds of talk) and the first that did, talk time in all and in contact, the first and last attempt, the speed to lead in business seconds and called before the next noon, for open deals the business days since the last attempt with its bucket, the attempts without an outcome and the HubSpot calls logged without an Aircall call. From HubSpot deals, contacts and calls, Aircall calls with their link, and shop orders; computed on read, so as current as the mirror (0008y, for sales since 0008z)"
     }
   ],
   "flows": {

@@ -1,0 +1,88 @@
+# tools/drift/functions.sql on a local database at 0008y (cma_y) and one at 0008z (cma_z), then: diff fn-0008y.txt fn-0008z.txt
+# lines: 466 at 0008y, 475 at 0008z
+3c3
+< cma.acknowledge_message(uuid) 69650c0d650ae6d818793aae46c80f0a
+---
+> cma.acknowledge_message(uuid) dfbda9ebca08f31d2ef197e83fe154ab
+23,24c23,25
+< cma.attempts_buckets_from(cma.attempt_deal[],integer) 450e3d0f71b8a54eec8f90af3bf151ee
+< cma.attempts_figures_from(cma.attempt_deal[]) fb189da3264c402f3d7a750e91f02e07
+---
+> cma.attempts_buckets_from(cma.attempt_deal[],integer) feb589504c5a2c21e0b407e4f5904cfe
+> cma.attempts_choices_check(text,text) a994c0d82e83da92179e08634c7de6ba
+> cma.attempts_figures_from(cma.attempt_deal[]) 2642eced688d7f631f4354d0fb93ee14
+29,40c30,43
+< cma.attempts_in_period(cma.attempt_deal[],date,date,text,text,timestamp with time zone,text) 8a765dcde59d2de0f23dd74e683bf576
+< cma.attempts_list_from(cma.attempt_deal[],integer) 7ebf14a7acc55b2e3e01eaadf3898b3a
+< cma.attempts_params_check(uuid,date,date,text,text,text) e93a1b91e49fcb6078fd9b9a203809ce
+< cma.attempts_per_deal_of(uuid,timestamp with time zone,timestamp with time zone,text,timestamp with time zone) a765705383148d4b6dce5b3a3959f73f
+< cma.attempts_per_deal_page(date,date,text,text,text,text,integer) a1408e2fdd4b95a5a56b72ab045c046f
+< cma.attempts_per_deal_page_of(uuid,date,date,text,text,text,text,integer,timestamp with time zone) a81b5288154e62950b12735478c7cba9
+< cma.attempts_per_person_of(uuid,date,date,text,text,text,timestamp with time zone) 7c83e1aa7fbee8bb9bf6c6fa6f116b83
+< cma.attempts_per_person_page(date,date,text,text,text) 2887af9fb114f5db4919a594548f7bd1
+< cma.attempts_rows_of(uuid,date,date,text,timestamp with time zone) 865457da9b771155a1747cf0f892c728
+< cma.attempts_scope_check(text) 060f4a9bddc4bb1acbdb08d6eebe9a12
+< cma.attempts_settings_of(uuid) b7a30320ec1c781bfa5f22ee35ebcf15
+< cma.attempts_since_last_from(cma.attempt_deal[],text) 396ba6aaabaccb87c9b11859bce4c149
+---
+> cma.attempts_in_period(cma.attempt_deal[],date,date,text,text,text,text,timestamp with time zone,text) df214844985a1bbac13c7c80f23be2fe
+> cma.attempts_list_from(cma.attempt_deal[],integer) ed4d255179112029800d167a357bd409
+> cma.attempts_of_deal(uuid) 996d6688b8f72310dfc1eb48d31ed5b0
+> cma.attempts_outcomes_from(cma.attempt_deal[]) 0325fdf49fe1442ab4bf879009da4792
+> cma.attempts_params_check(uuid,date,date,text,text,text,text) e6633d9088b1b2c54232109432797d87
+> cma.attempts_per_deal_of(uuid,timestamp with time zone,timestamp with time zone,timestamp with time zone) b89fac262ccfed9365d794888a970b6e
+> cma.attempts_per_deal_page(date,date,text,text,text,text,text,integer) 201a34322711002942b863dc2dfb6aa3
+> cma.attempts_per_deal_page_of(uuid,date,date,text,text,text,text,text,integer,timestamp with time zone) cdecca2a77eba6c29107cf559aace49c
+> cma.attempts_per_person_of(uuid,date,date,text,text,text,text,timestamp with time zone) da76596e2fefd64cc79d0acf2c388a14
+> cma.attempts_per_person_page(date,date,text,text,text,text) f7d837c304059f19e900e13fddb461f5
+> cma.attempts_rows_of(uuid,date,date,timestamp with time zone) 3b6a3712f927a0940146a57bd5c46e8e
+> cma.attempts_settings_of(uuid) fe3d544f59f2f469253ff503d96e22d5
+> cma.attempts_since_last_from(cma.attempt_deal[],text) 73c62f332f352ae6bb1bcb665ffddcfc
+> cma.attempts_speed_buckets_from(cma.attempt_deal[],text) 9dc6bb4745141b403e25e8215ee92c0d
+74a78
+> cma.check_message_change() 7be327f358b5c96d8161de225e3814ca
+79c83
+< cma.check_tenant_setting() 7d853fad293b076de7ff73443e7ee347
+---
+> cma.check_tenant_setting() e0c80be3e6f82b848da39e1c4914ad2e
+93a98
+> cma.contact_store_orders_of(uuid) 6942dd6ee64776e2790e117a9b629ba3
+111a117,118
+> cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamp with time zone,timestamp with time zone,text,integer) 97568d922af021a7b8a08ef31f499662
+> cma.deal_calls_of(uuid,uuid,text,text,text[],timestamp with time zone) c3539e50f13669081b5c80dee91a7dbb
+278c285
+< cma.lead_calls_of(uuid,uuid,text,text,text[],timestamp with time zone) 16003f74935822835bbd2af890d7eeca
+---
+> cma.lead_calls_of(uuid,uuid,text,text,text[],timestamp with time zone) 0111fdd4e9b5a55ac79257be0dafabf7
+280c287
+< cma.lead_to_order_of(uuid,timestamp with time zone,timestamp with time zone) 6eaa1e4ca862d75e27851b63c1e8b412
+---
+> cma.lead_to_order_of(uuid,timestamp with time zone,timestamp with time zone) 97b4c913ff6a5ddc47a551568f0e3898
+286c293
+< cma.mark_messages_read(uuid[]) be2e5c6dfc1ddbfce0cd368e08b12506
+---
+> cma.mark_messages_read(uuid[]) 3fcdde987356b0e4a83deb0fe3ff07b2
+291c298
+< cma.message_stats(date,date) 7786871c5d56b925e2eaf6b609351a05
+---
+> cma.message_stats(date,date) 65cc9fba16582f87c880e977841ea656
+299c306
+< cma.my_messages(timestamp with time zone,integer) 0e76a2393ee893f171f86a8a15c58882
+---
+> cma.my_messages(timestamp with time zone,integer) aa986ad8130a321a8414545a67389162
+302c309
+< cma.my_unread_count() f7764f455af3a554d3a7f45cc79ca40c
+---
+> cma.my_unread_count() b05ab75c972d9249ee5097a60c7631b2
+354a362
+> cma.sales_deals_of(uuid,timestamp with time zone,timestamp with time zone,timestamp with time zone) 8ac9c80dd6a9a73e59b9b3e517fe1c45
+358c366
+< cma.seed_default_roles(uuid) 58117a0a425d529006330a0517b83aae
+---
+> cma.seed_default_roles(uuid) 2cc8c8ab4c12a943d62074c10a5f8688
+450a459
+> cma.withdraw_message(uuid) 21914a1a01a17b97f79501a461fefcb0
+452c461
+< cma_read.attempts_per_deal_rows() a401814c496e7e31434f850b2818a7d1
+---
+> cma_read.attempts_per_deal_rows() 8e42082fa89c405069a376fc95d73f29

@@ -25,6 +25,10 @@
  * deploy.sh compares it with the live one before the import and stops on a difference or a 412, and the restore
  * command it prints writes the live fingerprint into a copy of the export, since the export's own is stale once the
  * map changes and later gcloud versions refuse a stale one with 412.
+ * Welcome on open (addition 0008z, src/lib/session.ts): a page opened as a document without the browser session goes to
+ * Welcome, / starts the session, a deep link with the session opens as asked, fetches, RSC requests, the API, invitations,
+ * Log out and No access yet are never redirected; the gate applies it after the identity in both modes, ?as= starts the
+ * session, Log out expires the cookie, the manifest's start_url is / and the layout links it with credentials.
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -32,6 +36,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { logoutLocation, parseLogoutTarget, switchAccountHref } from "../src/lib/logout.ts";
+import { isDocumentNavigation, onOpen, SESSION_COOKIE, SESSION_COOKIE_CLEAR } from "../src/lib/session.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const read = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
@@ -52,6 +57,9 @@ let noAccessPage = read("../src/app/no-access/page.tsx");
 let accessSrc = read("../src/app/access.tsx");
 let build = read("../../cloudbuild.yaml");
 let impl = { parseLogoutTarget, logoutLocation, switchAccountHref };
+let session = { onOpen, isDocumentNavigation };
+let manifestRoute = read("../src/app/app.webmanifest/route.ts");
+let layoutSrc = read("../src/app/layout.tsx");
 const appDir = new URL("../src/app/", import.meta.url);
 let routeFiles = readdirSync(appDir, { recursive: true }).map(String);
 let publicSignedOut = existsSync(new URL("../public/signed-out", import.meta.url));
@@ -84,6 +92,13 @@ if (PROVOKE) {
   };
   routeFiles = [...routeFiles, "signed-out/page.tsx"];
   publicSignedOut = true;
+  // Welcome on open undone: every request passes, the gate never asks, Log out keeps the session, the manifest opens elsewhere
+  session = { onOpen: () => "pass", isDocumentNavigation: () => true };
+  proxySrc = proxySrc.replaceAll("return opened(request, headers,", "return passed(request, headers,")
+    .replace('res.cookies.set(SESSION_COOKIE, "1", SESSION_COOKIE_OPTIONS);\n    return res;', "return res;");
+  logoutRoute = logoutRoute.replace("res.headers.append(\"Set-Cookie\", SESSION_COOKIE_CLEAR);", "");
+  manifestRoute = manifestRoute.replace('start_url: "/",', 'start_url: "/reports/dashboard",');
+  layoutSrc = layoutSrc.replace('crossOrigin="use-credentials" ', "");
   // the audit's two findings put back (a role that lists the bucket, one prefix rule with no redirect), and the
   // value on public access prevention that stopped the first --apply in prod
   deploySrc = deploySrc
@@ -225,6 +240,42 @@ check("/signed-out reaching cma-web gets the IAP check: in the matcher, no route
   ...(publicSignedOut ? ["a public file named signed-out"] : []),
   ...(!/if \(!token\) return unauthenticated\("missing"\);/.test(proxySrc) ? ["a missing token is not refused"] : []),
   ...(!/return unauthenticated\("invalid"\);/.test(proxySrc) ? ["an invalid token is not refused"] : []),
+]);
+
+// ---- Welcome on open (addition 0008z) ------------------------------------------------------------------
+const nav = { method: "GET", fetchDest: "document", accept: "text/html", rsc: false, hasSession: false, mockHeader: false };
+check("a page opened without the browser session goes to Welcome; / starts it; with it a deep link opens as asked", [
+  ...(session.onOpen({ ...nav, pathname: "/reports/attempts" }) !== "welcome" ? ["a deep link in a new session is not sent to Welcome"] : []),
+  ...(session.onOpen({ ...nav, pathname: "/live/board", fetchDest: null }) !== "welcome" ? ["a navigation without Sec-Fetch-Dest that asks for HTML is not sent to Welcome"] : []),
+  ...(session.onOpen({ ...nav, pathname: "/" }) !== "start" ? ["/ does not start the session"] : []),
+  ...(session.onOpen({ ...nav, pathname: "/reports/attempts", hasSession: true }) !== "pass" ? ["a deep link while signed in does not open"] : []),
+  ...(session.onOpen({ ...nav, pathname: "/", hasSession: true }) !== "pass" ? ["/ with the session sets the cookie again"] : []),
+]);
+check("never redirected: fetches, RSC, POST, the API, invitations, Log out, No access yet, the verifiers' header", [
+  ...[
+    ["a fetch", { ...nav, pathname: "/reports/attempts", fetchDest: "empty", accept: "*/*" }],
+    ["an RSC request", { ...nav, pathname: "/reports/attempts", rsc: true }],
+    ["a POST", { ...nav, pathname: "/logout/end", method: "POST" }],
+    ["a script without Sec-Fetch-Dest", { ...nav, pathname: "/day", fetchDest: null, accept: "*/*" }],
+    ["the API", { ...nav, pathname: "/api/v1/me" }],
+    ["an invitation", { ...nav, pathname: "/invite/abc" }],
+    ["Log out done", { ...nav, pathname: "/logout/done" }],
+    ["No access yet", { ...nav, pathname: "/no-access" }],
+    ["the verifiers' header", { ...nav, pathname: "/reports/attempts", mockHeader: true }],
+  ].filter(([, r]) => session.onOpen(r) !== "pass").map(([what]) => `${what} is redirected`),
+  ...(!session.isDocumentNavigation({ method: "GET", fetchDest: "document", accept: null, rsc: false }) ? ["a document navigation is not seen"] : []),
+  ...(session.isDocumentNavigation({ method: "GET", fetchDest: "manifest", accept: null, rsc: false }) ? ["the manifest's fetch is taken for a page"] : []),
+]);
+check("the gate asks after the identity in both modes, ?as= starts the session, Log out ends it", [
+  ...((proxySrc.match(/return opened\(request, headers,/g) ?? []).length !== 3 ? ["the gate does not ask onOpen after each identity (IAP, mock default, mock subject)"] : []),
+  ...(!proxySrc.includes("hasSession: request.cookies.has(SESSION_COOKIE),") ? ["the gate does not read the session cookie"] : []),
+  ...(!/res\.cookies\.set\(MOCK_SUBJECT_COOKIE[^\n]*\n[^\n]*\n    res\.cookies\.set\(SESSION_COOKIE, "1", SESSION_COOKIE_OPTIONS\);/.test(proxySrc) ? ["?as= does not start the session"] : []),
+  ...(!logoutRoute.includes('res.headers.append("Set-Cookie", SESSION_COOKIE_CLEAR);') ? ["Log out does not expire the session cookie"] : []),
+  ...(SESSION_COOKIE_CLEAR !== `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax` ? ["the clearing header is not the cookie's own"] : []),
+]);
+check("the manifest opens on Welcome and is linked with credentials", [
+  ...(!manifestRoute.includes('start_url: "/",') ? ["start_url is not /"] : []),
+  ...(!layoutSrc.includes('<link rel="manifest" href="/app.webmanifest" crossOrigin="use-credentials" />') ? ["the layout does not link the manifest with credentials"] : []),
 ]);
 
 // ---- the bucket and the route ----------------------------------------------------------------------

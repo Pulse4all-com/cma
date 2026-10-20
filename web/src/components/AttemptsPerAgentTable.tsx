@@ -1,14 +1,17 @@
 /**
- * Attempts per agent's table (addition 0008y, 19 October 2026): one row per deal owner, sorted by name and never ranked
- * (README Decision log, 7 and 14 October 2026), the deals of owner ids without a person (or without an owner) last as
- * one row with how many owner ids that is, then the total. The attempts carry an inline bar scaled to the column's
+ * Attempts per agent's table (addition 0008y, 19 October 2026; for sales since 0008z, 20 October 2026): one row per deal
+ * owner with their sales deals, the attempts on them (by anyone), the attempts per deal, the share reached at least once,
+ * the median speed to lead, the talk time in contact and the open deals with no attempt yet. Sorted by name and never
+ * ranked (README Decision log, 7 and 14 October 2026), the deals of owner ids without a person (or without an owner) last
+ * as one row with how many owner ids that is, then the total. The attempts carry an inline bar scaled to the column's
  * largest value, in Deep Blue (docs/style/Pulse4all-Style.md 7.7), never with text on it (7.8). Rows follow 7.6. Staff
  * names only: no owner id, no customer.
  */
 import type { Copy, Locale } from "@/lib/copy";
 import type { AttemptPerson } from "@/lib/data";
-import { fmtAttempts, firstReachShare } from "@/lib/attempts";
-import { barShare, fmtCount, fmtShare } from "@/lib/reports";
+import { fmtAttempts, reachedShare } from "@/lib/attempts";
+import { barShare, fmtCount, fmtShare, fmtTalk } from "@/lib/reports";
+import { fmtSpeed } from "./AttemptParts";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
 
@@ -27,7 +30,6 @@ export function AttemptsPerAgentTable({ rows, total, hints, copy, locale }: {
   const cells = (p: AttemptPerson, bar: boolean) => (
     <>
       <td className={td}>{n(p.deals)}</td>
-      <td className={td}>{n(p.attempted)}</td>
       <td className={`${td} ${p.kind === "total" ? "font-semibold" : ""}`}>
         <span className="block">{n(p.attempts)}</span>
         {bar ? (
@@ -37,7 +39,9 @@ export function AttemptsPerAgentTable({ rows, total, hints, copy, locale }: {
         ) : null}
       </td>
       <td className={td}>{fmtAttempts(p.avgAttempts, locale)}</td>
-      <td className={td}>{fmtShare(firstReachShare(p), locale)}</td>
+      <td className={td}>{fmtShare(reachedShare(p), locale)}</td>
+      <td className={td}>{fmtSpeed(p.medianSpeedSeconds, locale)}</td>
+      <td className={td}>{p.reachedDeals === 0 ? "–" : fmtTalk(p.talkSecondsReached, locale)}</td>
       <td className={td}>{n(p.openNeverAttempted)}</td>
     </>
   );
@@ -48,10 +52,11 @@ export function AttemptsPerAgentTable({ rows, total, hints, copy, locale }: {
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
             <th className={`${th} w-56`}><HintLabel label={t.person}>{hint(t.person, hints.atAgentName!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.deals}>{hint(a.deals, hints.atAgentDeals!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={a.attempted}>{hint(a.attempted, hints.atAgentAttempted!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.attemptsCol}>{hint(a.attemptsCol, hints.atAgentAttempts!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.perDeal}>{hint(a.perDeal, hints.atAgentAvg!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={a.firstReach}>{hint(a.firstReach, hints.atAgentFirst!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.reachedShare}>{hint(t.reachedShare, hints.atAgentReached!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={a.speed}>{hint(a.speed, hints.atAgentSpeed!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={a.talkReached}>{hint(a.talkReached, hints.atAgentTalk!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.openNever}>{hint(a.openNever, hints.atAgentOpenNever!)}</HintLabel></th>
           </tr>
         </thead>

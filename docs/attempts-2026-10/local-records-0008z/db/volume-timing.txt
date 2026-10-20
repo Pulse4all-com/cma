@@ -1,0 +1,73 @@
+DO
+SET
+BEGIN
+              set_config              
+--------------------------------------
+ 01a157cf-8995-71a6-bf80-c76906db878f
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+              set_config              
+--------------------------------------
+ 01a157cf-89a6-77f9-b310-9f677aed6913
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 3
+INSERT 0 5
+INSERT 0 2
+INSERT 0 3
+INSERT 0 1
+INSERT 0 3
+INSERT 0 5
+INSERT 0 2
+INSERT 0 3300
+INSERT 0 3000
+INSERT 0 1500
+INSERT 0 300
+INSERT 0 4800
+INSERT 0 300
+INSERT 0 8998
+INSERT 0 8998
+INSERT 0 600
+INSERT 0 600
+INSERT 0 1
+INSERT 0 4429
+INSERT 0 4429
+INSERT 0 1500
+INSERT 0 1
+INSERT 0 412
+INSERT 0 600
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ deals | crm_calls | associations | telephony | links | october_lead_deals 
+-------+-----------+--------------+-----------+-------+--------------------
+  4800 |      9598 |        14698 |      5929 |  4429 |               1532
+(1 row)
+
+SET
+CREATE TABLE
+DO
+                       read                       |  ms   |  n   
+--------------------------------------------------+-------+------
+ attempts_per_deal_page day                       | 273.9 | 1532
+ attempts_per_deal_page pipeline                  | 268.3 | 1532
+ attempts_per_deal_page market NL, no attempt yet | 251.6 |  288
+ attempts_per_deal_page week, outcome won         | 256.0 |  383
+ attempts_per_person_page                         | 123.1 | 1532
+ attempts_of_deal, the slowest of ten deals       |  44.0 |   10
+(6 rows)
+
+ROLLBACK

@@ -98,8 +98,9 @@ const cases = [
   ["manager", "/reports/inbound?range=month&group=market", 13, 0],
   ["manager", "/reports/inbound?range=month&group=line", 13, 0],
   ["manager", "/reports/inbound?range=month&group=hour", 13, 0],
-  // The Live board's inbound part only: its seven tiles and the missed calls' six headers
-  ["supervisor", "/live/board", 6, 7, '[data-testid="inbound-live"]'],
+  // The Live board's inbound part only: its seven tiles; the missed calls' six headers, the board's last section since 0008z
+  ["supervisor", "/live/board", 0, 7, '[data-testid="inbound-live"]'],
+  ["supervisor", "/live/board", 6, 0, '[data-testid="missed-live"]'],
   // Calls (addition 0008j): eight tiles (four with the change, three outbound, the untagged share) and the tag
   // table's headers: the group, conversations, the top twelve tags, Other and Untagged, in each grouping
   ["manager", "/reports/calls?range=month&group=day", 16, 8],
@@ -140,15 +141,16 @@ const cases = [
   ["reader", "/reports/first-orders?range=month&group=level", 27, 4],
   ["manager", "/reports/orders-per-person?range=month", 8, 0],
   ["supervisor", "/reports/orders-per-person?range=week", 8, 0],
-  // Attempts per deal (addition 0008y): five tiles; the table per group (the group and nine figures) and the deal list
-  // (ten named headers; the link column's is read out only), in each grouping; the four bar cards carry their marks
-  // too, checked below. Attempts per agent: the person and six figures
-  ["manager", "/reports/attempts?range=month&group=day", 20, 5],
-  ["manager", "/reports/attempts?range=month&group=week", 20, 5],
-  ["manager", "/reports/attempts?range=month&group=market&scope=counted", 20, 5],
-  ["reader", "/reports/attempts?range=month&group=pipeline", 20, 5],
-  ["manager", "/reports/attempts-per-agent?range=month", 7, 0],
-  ["supervisor", "/reports/attempts-per-agent?range=week", 7, 0],
+  // Attempts per deal (addition 0008y; for sales since 0008z): six tiles; won against lost (the outcome and seven
+  // figures), the table per group (the group and eleven figures) and the deal list (thirteen named headers; the link
+  // column's is read out only), in each grouping and with the filters; the six intro cards and the two quality figures
+  // carry their marks too, checked below. Attempts per agent: the person and seven figures
+  ["manager", "/reports/attempts?range=month&group=day", 33, 6],
+  ["manager", "/reports/attempts?range=month&group=week&outcome=won", 25, 6],
+  ["manager", "/reports/attempts?range=month&group=market&attempted=some", 33, 6],
+  ["reader", "/reports/attempts?range=month&group=pipeline", 33, 6],
+  ["manager", "/reports/attempts-per-agent?range=month", 8, 0],
+  ["supervisor", "/reports/attempts-per-agent?range=week", 8, 0],
 ];
 let headers = 0;
 let tiles = 0;
@@ -191,8 +193,9 @@ let levelBars = 0;
   await ctx.close();
 }
 
-// Attempts per deal (addition 0008y): each of the four bar cards names its figure in one described mark at the end of
-// its intro
+// Attempts per deal (addition 0008y; 0008z): each of the six cards with an intro (won against lost and the five bar cards)
+// names its figure in one described mark at the end of its intro; the two quality figures (attempts without an outcome,
+// calls logged without a telephony call) carry one each; an opened deal's attempts carry one per header
 let barCards = 0;
 {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
@@ -204,12 +207,33 @@ let barCards = 0;
     const panel = marks.length === 1 ? document.getElementById(marks[0].getAttribute("aria-describedby") ?? "") : null;
     return { marks: marks.length, named: marks.length === 1 && !!marks[0].getAttribute("aria-label"), text: panel?.getAttribute("role") === "tooltip" ? panel.textContent.trim() : "" };
   }));
-  if (intros.length !== 4) problems.push(`attempts: ${intros.length} bar cards with a mark, expected 4`);
+  if (intros.length !== 6) problems.push(`attempts: ${intros.length} cards with a mark in the intro, expected 6`);
   intros.forEach((x, i) => {
-    if (x.marks !== 1 || !x.named) problems.push(`attempts: bar card ${i + 1} has ${x.marks} info marks or no name`);
-    else if (!x.text || /[{}]/.test(x.text)) problems.push(`attempts: bar card ${i + 1}'s hint is empty or unfilled: ${x.text}`);
+    if (x.marks !== 1 || !x.named) problems.push(`attempts: card ${i + 1} has ${x.marks} info marks or no name`);
+    else if (!x.text || /[{}]/.test(x.text)) problems.push(`attempts: card ${i + 1}'s hint is empty or unfilled: ${x.text}`);
   });
   barCards = intros.length;
+  // --provoke takes the mark off the first quality figure and, below, off the first header of the opened deal's attempts
+  if (provoke) await p.evaluate(() => document.querySelector('[data-testid="attempts-quality"] dt button[data-header-hint]')?.remove());
+  const quality = await coverage(p, true, '[data-testid="attempts-quality"]');
+  const qualityMarks = await p.evaluate(() => [...document.querySelectorAll('[data-testid="attempts-quality"] dt')].map((dt) => {
+    const marks = dt.querySelectorAll("button[data-header-hint]");
+    const panel = marks.length === 1 ? document.getElementById(marks[0].getAttribute("aria-describedby") ?? "") : null;
+    return marks.length === 1 && !!marks[0].getAttribute("aria-label") && !!panel?.textContent.trim() && !/[{}]/.test(panel.textContent);
+  }));
+  if (qualityMarks.length !== 2 || qualityMarks.some((ok) => !ok)) problems.push(`attempts: the quality figures' marks ${JSON.stringify(qualityMarks)}, expected two described marks`);
+  for (const x of quality.problems) problems.push(`attempts quality: ${x}`);
+  const toggle = p.locator('[data-testid="attempts-row"]:not([data-attempts="0"]) [data-testid="attempts-toggle"]').first();
+  await toggle.focus();
+  await p.keyboard.press("Enter");
+  await p.locator('[data-testid="attempts-detail-table"], [data-testid="attempts-detail-none"]').first().waitFor({ timeout: 5000 }).catch(() => {});
+  if (await p.locator('[data-testid="attempts-detail-table"]').count() > 0) {
+    if (provoke) await p.evaluate(() => document.querySelector('[data-testid="attempts-detail-table"] th button[data-header-hint]')?.remove());
+    const detail = await coverage(p, true, '[data-testid="attempts-detail-table"]');
+    if (detail.headers < 6) problems.push(`attempts: an opened deal has ${detail.headers} headers with a mark, expected at least 6`);
+    for (const x of detail.problems) problems.push(`attempts detail: ${x}`);
+    headers += detail.headers;
+  } else problems.push("attempts: the first deal opened without a table of attempts");
   await ctx.close();
 }
 
