@@ -23,3 +23,6 @@ verify:boundaries                  exit 0  boundaries: PASS (291 files)
 verify:jobs                        exit 0  ALL 18 PASS
 verify:reports --provoke           exit 0  ALL 156 PROVOKED CHECKS FAILED, as they must
 verify:signed-out --provoke        exit 0  signed-out: ALL 20 PROVOKED CHECKS FAILED, as they must
+verify:layout                      exit 0  layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text o
+verify:layout --provoke            exit 1  layout: FAIL (77 problems)
+verify:hints                       exit 0  hints: PASS (739 headers and 141 tiles on 43 pages, 7 level bars on First orders and 6 bar cards on Attempts per deal, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still w
