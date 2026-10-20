@@ -1,0 +1,56 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/runsql-25561.sql:67: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                  check_name                                                   | result |                                                                                                                                                                   detail                                                                                                                                                                    
+---------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008u recorded, after 0008t                                                                       | PASS   | 
+ A2 the order pipeline, the stage outcome, the contact's creation time and their checks                        | PASS   | 
+ A3 the reader views with the new columns last and the first-orders view                                       | PASS   | 
+ A4 no name, address, email address or phone number in the view and the reads                                  | PASS   | 
+ A5 the five attribution settings with their defaults                                                          | PASS   | attribution.assisted_levels=text:lead_deal,conversation,email,phone_match attribution.known_contact_minutes=integer:60 attribution.level_order=text:lead_deal,conversation,email,phone_match,attempt,known_contact attribution.order_match_minutes=integer:1440 attribution.window_days=integer:90
+ A6 every function the application's only and invoker; the readers' function definer, pinned, theirs only      | PASS   | 
+ B1 the settings: defaults, two accepted, eleven refusals, reset to the default                                | PASS   | 90/60/1440 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok ok lead_deal,conversation,email,phone_match,attempt,known_contact
+ B2 stage outcomes from the source, a person's kept, a read without the key kept; the order pipeline; refusals | PASS   | sales/s1=-:- sales/sw=-:person self/lost=lost:source self/won=won:source tp/t1=-:- CMA04 CMA04 CMA04 CMA02 CMA04 CMA06 sales:false:2 self:true:2 tp:false:1
+ B3 the created_at slots: from 2, contiguous, one property each, removed from the end                          | PASS   | CMA04 CMA04 ok CMA03 ok CMA04 CMA04 prop_a@2,prop_b@3 ok ok
+ B4 a contact's creation time: the earliest slot; kept by a read without it; the refusals                      | PASS   | 2025-12-01 CMA04 CMA04
+ B5 the kinds: first, no contact, repeat, renewal, not first; a lost deal no order                             | PASS   | o1:first o2:first o13:first o3:first o14:first o4:first o5:first o6:first o7:first o8:no_contact o9:repeat o10:renewal o11:not_first
+ B6 the linked order: the nearest within the match window; its amount, else the deal's                         | PASS   | o1:or1a:EUR:100.00 o2:or2:GBP:50.00 o3:-:EUR:70.00 o8:-:EUR:25.00 o9:or9:EUR:20.00
+ B7 every flag at its edges; an inbox copy, an automation and a bot no touch                                   | PASS   | o1:101001 o13:100000 o14:000000 o2:010000 o3:001000 o4:000001 o5:000100 o6:000010 o7:000001
+ B8 the level, the attribution and the credited person, through a telephony user too                           | PASS   | o1:lead_deal:call_center:Bram o13:lead_deal:call_center:Anna o14:self_service:self_service:- o2:conversation:call_center:Bram o3:email:call_center:not linked o4:known_contact:self_service:- o5:phone_match:call_center:Anna o6:attempt:self_service:- o7:known_contact:self_service:-
+ B9 days from the first touch                                                                                  | PASS   | o1:3.08 o13:90.00 o14:- o2:5.04 o3:1.00 o4:- o5:10.17 o6:1.00 o7:-
+ B10 the level order and the assisted set changed                                                              | PASS   | o1:email:self_service o13:lead_deal:call_center o2:conversation:self_service o3:email:self_service o5:phone_match:self_service
+ B11 the report: the total, per level and per market; a level filter                                           | PASS   | level/attempt=1:0/1:0/0/0/0:1.0 level/conversation=1:1/0:0/0/0/0:5.0 level/email=1:1/0:0/0/0/0:1.0 level/known_contact=2:0/2:0/0/0/0:- level/lead_deal=2:2/0:0/0/0/0:46.5 level/phone_match=1:1/0:0/0/0/0:10.2 level/self_service=1:0/1:0/0/0/0:- market/GB=1:1/0:0/0/0/0:5.0 market/NL=8:4/4:1/1/1/1:3.1 total/*=9:5/4:1/1/1/1:4.1 | *=2/0
+ B12 amounts per currency, never summed across                                                                 | PASS   | market/GB/GBP=1:50.00:50.00:0 market/NL/EUR=4:240.00:200.00:40.00 market/NL/none=4:-:0:0 total/*/EUR=4:240.00:200.00:40.00 total/*/GBP=1:50.00:50.00:0 total/*/none=4:-:0:0
+ B13 the previous period like for like: up to the time of day while the period runs, whole after               | PASS   | 1 2
+ B14 the history start and the phone tier's start; none without an order pipeline                              | PASS   | 2026-08-30/2026-10-08/t -/-/f
+ B15 the list: newest first, capped, with the total and the link; a level filter                               | PASS   | o7:known_contact:9:https://crm.example.invalid/portal-1/deal/o7 o6:attempt:9:https://crm.example.invalid/portal-1/deal/o6 | o7 o4
+ B16 per person: refused while switched off; by name, the not-linked row, the total                            | PASS   | CMA06 CMA06 Anna Verify:2:1/0/0/1:50.1 Bram Verify:2:1/1/0/0:4.1 not_linked(1):1:0/0/1/0:1.0 total:5:2/1/1/1:5.0
+ B17 the filters, the group and the range refused; unknown and self_service taken                              | PASS   | CMA04 CMA04 CMA04 CMA04 ok
+ B18 the permissions: reports.view or performance.team; an agent and the Ingest user refused                   | PASS   | ok/ok/ok/ok ok/ok/ok/ok CMA06/CMA06/CMA06/CMA06 CMA06/CMA06/CMA06/CMA06 CMA01
+ B19 tenant isolation for the configuration and the reads                                                      | PASS   | CMA02 CMA02 0/0/0
+ B20 a reader scoped to one tenant sees its own rows only                                                      | PASS   | 15/5/1 0/0
+ verdict                                                                                                       | PASS   | 26 PASS, 0 FAIL
+(27 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+RESET

@@ -185,7 +185,6 @@ export function checkStageReadTimesInput(b: Record<string, unknown>): SourceStag
 // ---- Reasons and record kinds (addition 0008zb) --------------------------------------------------------
 const REASON_TYPES = ["deal", "ticket"] as const;
 const KIND_KEY = /^[a-z][a-z0-9_-]{1,40}$/;
-// eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u001f\u007f]/;
 
 function recordTypeOf(v: unknown): "deal" | "ticket" {

@@ -1,0 +1,7 @@
+SET
+ functions |          functions_md5           | views |            views_md5             | tables |                    settings                    | kinds |      additions      
+-----------+----------------------------------+-------+----------------------------------+--------+------------------------------------------------+-------+---------------------
+       515 | e4d706cf8ed27628c1d6577a0bce1fc7 |   126 | e482d4777a38cd3cd46aee9dec8be89f |     85 | reports.cancellation_kind= reports.per_person= |     0 | 0008z 0008za 0008zb
+(1 row)
+
+RESET

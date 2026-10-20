@@ -1,0 +1,7 @@
+SET
+ functions |          functions_md5           | views |            views_md5             | tables |      settings       | kinds | additions 
+-----------+----------------------------------+-------+----------------------------------+--------+---------------------+-------+-----------
+       475 | c2829d302e6e202563cc5045f4751e0a |   120 | c9aea695d4219e2add1eb76a00f4629a |     81 | reports.per_person= |       | 0008z
+(1 row)
+
+RESET

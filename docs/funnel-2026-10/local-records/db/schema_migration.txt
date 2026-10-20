@@ -1,0 +1,16 @@
+SET
+ version | described 
+---------+-----------
+ 0008s   | t
+ 0008t   | t
+ 0008u   | t
+ 0008v   | t
+ 0008w   | t
+ 0008x   | t
+ 0008y   | t
+ 0008z   | t
+ 0008za  | t
+ 0008zb  | t
+(10 rows)
+
+RESET

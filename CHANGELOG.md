@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 20 October 2026: Reports → Funnel (the deals through their stages, lost reasons, deals per person) and Reports → Cancellations, with stage times, reasons and record kinds on Configuration → Sources (additions 0008za and 0008zb, brief N21, #PRNUM): db/96 to 99, ingest, web, docs/architecture/data-model/0008.md, 0001-0005b.md (the db scripts) and planned.md, docs/architecture/api.md and infrastructure.md (Code), docs/product/features.md and kpis.md, docs/decisions.md, docs/open-decisions.md, docs/ingest/README.md, docs/datamap/catalog.json, docs/funnel-2026-10/.
 - 20 October 2026: the data map is republished after a merge that changes docs/datamap/index.html; the PR description carries the reminder (#179): CLAUDE.md (Database), docs/architecture/infrastructure.md (Release flow), docs/datamap/README.md (When it changes, Publishing), docs/decisions.md.
 - 20 October 2026: README.md split into README.md plus docs/ files (README, Documentation map), every section moved verbatim; the README's "Last updated" line is replaced by this changelog; `tools/docs/check-split.mjs` checks the coverage.
 

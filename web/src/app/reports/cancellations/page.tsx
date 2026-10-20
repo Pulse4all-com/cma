@@ -6,7 +6,7 @@ import { FunnelDateLine, FunnelGroupSwitch, FunnelIntro } from "@/components/Fun
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
-import { Card, Notice, PageTitle } from "@/components/primitives";
+import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type FunnelGroup } from "@/lib/data";
 import { fmtDays, funnelClientCopy, parseFunnelFilter, parseFunnelGroup, periodKeys } from "@/lib/funnel";
 import { holdsAny } from "@/lib/nav";
@@ -16,7 +16,7 @@ import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
- * Cancellations (Report, addition 0008zb, 20 October 2026; backlog CMA-049 without CCL; Kira's KPI 5): how many
+ * Cancellations (Report, addition 0008zb, 20 October 2026; backlog CMA-049 without CCL; KPI 4, churn): how many
  * cancellation requests come in per market per week. A request is a record of the kind the tenant's
  * reports.cancellation_kind names (Configuration, Sources: a kind with its rules, a pipeline, a category value or both),
  * of a counted pipeline, by its creation date. It counts the request (the ticket), never the contract: the shop and the
@@ -136,6 +136,10 @@ export default async function CancellationsPage({ searchParams }: PageProps<"/re
         </div>
 
         <Card title={group === "week" ? t.periodCardWeek : t.periodCardDay}>
+          <div className="-mt-2 mb-4 flex justify-end">
+            <LinkButton href={`/api/v1/reports/cancellations/export?${new URLSearchParams({ from: period.from, to: period.to, group, ...marketQuery }).toString()}`}
+              download shortcut="X" data-shortcut="x" title={t.downloadHint} data-testid="cancellations-download">{t.download}</LinkButton>
+          </div>
           <CancellationPeriods byPeriod={report.byPeriod} keys={periodKeys(period.from, period.to, group)} group={group} hints={hints} copy={copy} locale={me.locale} />
         </Card>
 

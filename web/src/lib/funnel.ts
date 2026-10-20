@@ -69,7 +69,6 @@ export function parseFunnelFilter(market: unknown, pipeline: unknown, source: un
   }
   const s = text(source);
   if (s !== null) {
-    // eslint-disable-next-line no-control-regex
     if (s.length <= 100 && !/[\u0000-\u001f\u007f]/.test(s)) filter.sourceChannel = s;
     else problem ??= "source";
   }

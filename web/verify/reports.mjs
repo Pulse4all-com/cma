@@ -67,6 +67,15 @@
  * the figures and the previous period, the list's order and cap, per person by name with the not-linked row, and nothing
  * personal in an answer; and, from their source, the routes: the scope and the lists refused with a 400, one deal's
  * attempts for the report permissions, a message's withdrawal for messages.withdraw only.
+ * Since addition 0008zb also Funnel, lost reasons, Cancellations and deals per person (src/lib/funnel.ts), on 99's own
+ * scenario, so the definitions are the ones 99 proves in the database: the groups and the filters with the problems the
+ * routes answer with a 400, the sales population, per pipeline and in total with the win rate by close date and the
+ * median days, per stage (entered, still there, moved on, days in stage, reached won; a stage off without figures), the
+ * filters narrowing every figure, the previous span like for like, the real reasons and their shares, the data-quality
+ * block, no reason, per market and source with the top 3, per week and day, the list without a reason, the reason states
+ * (enumeration only), the kinds' rules by pipeline and category, the cancellation requests per market and week with the
+ * kind unset and archived, deals per person with the amounts per currency never summed, nothing personal in an answer;
+ * and, from their source, the routes and the Sources writes.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -97,6 +106,11 @@ import {
   firstReachShare, fmtAttempts, nextAttemptGroup, noonShare, parseAttemptFilter, parseAttemptGroup, reachedShare, reachShare, SINCE_LAST_CLASS, sinceLastBuckets,
   speedMinutes, withoutOutcomeShare, wonRate,
 } from "../src/lib/attempts.ts";
+import {
+  cancellationPivot, cancellationRecords, cancellationsReport, DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, dealsPerPerson, FUNNEL_BAR_CLASS,
+  FUNNEL_NEUTRAL_CLASS, funnelDeals, funnelFilter, funnelFilterQuery, funnelPrevious, funnelReport, inPeriod, kindRuleMatches, lostReasonsReport,
+  nextFunnelGroup, parseFunnelFilter, parseFunnelGroup, periodKeys, periodReasonColumns, readTimesOf, reasonStateOf, recordKindsOf, stagesByPipeline,
+} from "../src/lib/funnel.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
 const results = [];
@@ -1196,6 +1210,241 @@ expect("withdrawing a message: a same-site POST for messages.withdraw only, cma.
     withdrawRoute.includes("requireAnyPermission(me, [WITHDRAW_PERMISSION]);"), WITHDRAW_PERMISSION, pgLayer.includes("select cma.withdraw_message($1::uuid) as at"),
     /export async function (GET|PUT|DELETE|PATCH)\(/.test(withdrawRoute)],
   [true, true, true, "messages.withdraw", true, false], [true, true, true, "messages.send", true, false]);
+
+// ---- Funnel, lost reasons, cancellations and deals per person (addition 0008zb) on 99's own scenario ----------------
+// Tenant one's deals as 99's B8 to B22 store them (one CRM connection; Sales with New, Quote, Won and Lost, Lost not
+// reading its times; Sales two with Open and Won; Self Serve the order pipeline; Test not counted), their stage times,
+// the reason catalog after B3's refresh (Garbage and Duplicate data quality), and the tickets with the kinds' rules
+// (Cancellation request: the Cancellations pipeline, or the category Cancellation; Complaint: Support and Complaint).
+// intake.start_date 1 September 2026, NL in EUR and GB in GBP, owners o-1 Anna and o-2 Bram, o-3 nobody; seen on
+// Wednesday 14 October 2026 at 10:00 UTC (12:00 in Amsterdam). Amsterdam is UTC+2 throughout.
+const FN = "00000000-0000-7000-8000-0000000000f1";
+const fnT = (x) => (x === null ? null : `2026-${x}Z`);
+const fnStage = (stageId, label, order, isClosed, outcome = null, readTimes = null) => ({ stageId, label, order, isClosed, outcome, readTimes, isActive: true });
+const fnPipe = (pipelineId, label, o, stages) => ({ connectionId: FN, pipelineId, label, isCounted: true, isLead: true, isOrder: false, isActive: true, stages, ...o });
+const FN_PIPES = [
+  fnPipe("sales", "Sales", {}, [fnStage("s1", "New", 1, false), fnStage("s2", "Quote", 2, false), fnStage("sw", "Won", 8, true, "won"), fnStage("sl", "Lost", 9, true, "lost", false)]),
+  fnPipe("sales2", "Sales two", {}, [fnStage("q1", "Open", 1, false), fnStage("qw", "Won", 8, true, "won")]),
+  fnPipe("selfserve", "Self Serve", { isOrder: true }, [fnStage("o1", "Won", 1, true, "won")]),
+  fnPipe("test", "Test", { isCounted: false }, [fnStage("x1", "Open", 1, false)]),
+];
+const FN_STAGE_TIMES = {
+  dA: [["s1", "10-05T08:00:00", "10-06T08:00:00"], ["s2", "10-06T08:00:00", "10-08T12:00:00"], ["sw", "10-08T12:00:00", null]],
+  dB: [["s1", "10-05T09:00:00", "10-07T09:00:00"], ["sl", "10-07T09:00:00", null]],
+  dC: [["s1", "10-06T10:00:00", "10-09T10:00:00"], ["sl", "10-09T10:00:00", null]],
+  dD: [["s1", "10-06T11:00:00", "10-07T11:00:00"], ["s2", "10-07T11:00:00", "10-10T11:00:00"], ["sl", "10-10T11:00:00", null]],
+  dE: [["s1", "10-07T08:00:00", "10-08T08:00:00"], ["s2", "10-08T08:00:00", null]],
+  dF: [["s1", "10-08T08:00:00", null]],
+  dG: [["s1", "09-29T08:00:00", "10-02T08:00:00"], ["s2", "10-02T08:00:00", "10-06T08:00:00"], ["sw", "10-06T08:00:00", null]],
+  dH: [["s1", "09-30T09:00:00", "10-01T09:00:00"], ["sl", "10-01T09:00:00", null]],
+  dJ: [["s1", "10-09T10:00:00", "10-10T10:00:00"], ["sw", "10-10T10:00:00", null]],
+  dT: [["q1", "10-06T09:00:00", null]], dU: [["s1", "10-11T07:00:00", null]], dV: [["s1", "10-11T12:00:00", null]], dY: [["x1", "10-07T10:00:00", null]],
+};
+// [id, pipeline, stage, owner, market, channel, created, closed, reason, amount, currency], as 99's B8 stores them
+const FN_DEALS = [
+  ["dA", "sales", "sw", "o-1", "NL", "PAID_SEARCH", "10-05T08:00:00", "10-08T12:00:00", null, 100, "EUR"],
+  ["dB", "sales", "sl", "o-2", "GB", "PAID_SEARCH", "10-05T09:00:00", "10-07T09:00:00", "too_expensive", 50, "GBP"],
+  ["dC", "sales", "sl", "o-1", "NL", "DIRECT", "10-06T10:00:00", "10-09T10:00:00", "garbage", null, null],
+  ["dD", "sales", "sl", "o-3", "NL", "DIRECT", "10-06T11:00:00", "10-10T11:00:00", null, null, null],
+  ["dE", "sales", "s2", "o-2", "NL", "PAID_SEARCH", "10-07T08:00:00", null, null, null, null],
+  ["dF", "sales", "s1", "o-1", "NL", "PAID_SEARCH", "10-08T08:00:00", null, null, null, null],
+  ["dG", "sales", "sw", "o-1", "NL", "PAID_SEARCH", "09-29T08:00:00", "10-06T08:00:00", null, 200, null],
+  ["dH", "sales", "sl", "o-2", "NL", "PAID_SEARCH", "09-30T09:00:00", "10-01T09:00:00", "too_expensive", null, null],
+  ["dJ", "sales", "sw", "o-1", "GB", "PAID_SEARCH", "10-09T10:00:00", "10-10T10:00:00", null, 80, "GBP"],
+  ["dM", "sales", "sl", "o-2", "GB", "PAID_SEARCH", "10-08T09:00:00", "10-11T09:00:00", "bad_timing", null, null],
+  ["dN", "sales", "sl", "o-2", "GB", "PAID_SEARCH", "10-08T10:00:00", "10-10T12:00:00", "duplicate", null, null],
+  ["dO", "sales", "sl", "o-1", "NL", "PAID_SEARCH", "10-07T12:00:00", "10-09T12:00:00", "too_expensive", null, null],
+  ["dP", "sales", "sl", "o-1", "NL", "PAID_SEARCH", "10-07T13:00:00", "10-08T13:00:00", "ordered_elsewhere", null, null],
+  ["dQ", "sales", "sl", "o-2", "NL", null, "10-09T07:00:00", "10-09T08:00:00", "bad_timing", null, null],
+  ["dR", "sales", "sl", "o-1", "NL", "PAID_SEARCH", "10-08T11:00:00", "10-11T08:00:00", "too_expensive", null, null],
+  ["dS", "sales", "sl", "o-2", "NL", "PAID_SEARCH", "10-09T11:00:00", "10-10T09:00:00", "bad_fit", null, null],
+  ["dT", "sales2", "q1", "o-1", "NL", "PAID_SEARCH", "10-06T09:00:00", null, null, null, null],
+  ["dU", "sales", "s1", "o-1", "NL", "PAID_SEARCH", "10-11T07:00:00", null, null, null, null],
+  ["dV", "sales", "s1", "o-1", "NL", "PAID_SEARCH", "10-11T12:00:00", null, null, null, null],
+  ["dX", "selfserve", "o1", null, "NL", null, "10-07T10:00:00", "10-07T10:00:00", null, 90, "EUR"],
+  ["dY", "test", "x1", "o-1", "NL", "PAID_SEARCH", "10-07T10:00:00", null, null, null, null],
+  ["dZ", "sales", "sl", "o-1", "NL", "PAID_SEARCH", "08-31T10:00:00", "10-06T10:00:00", "too_expensive", null, null],
+].map(([id, pipelineId, stageId, ownerRef, market, sourceChannel, created, closed, reason, amount, currency]) => ({
+  dealId: `deal-${id}`, connectionId: FN, dealSourceId: id, pipelineId, stageId, market, sourceChannel, reason, ownerRef, createdAt: fnT(created),
+  closedAt: fnT(closed), isClosed: closed !== null, amount, currency, recordUrl: `https://crm.example.invalid/portal-1/deal/${id}`,
+  stages: (FN_STAGE_TIMES[id] ?? []).map(([s, a, b]) => ({ stageId: s, enteredAt: fnT(a), exitedAt: fnT(b) })),
+}));
+const FN_NOW = "2026-10-14T10:00:00Z";
+const FN_OPTIONS = {
+  tenantZone: AMS_AT, startDate: "2026-09-01", now: FN_NOW, ownerUserOf: (r) => ({ "o-1": "u-anna", "o-2": "u-bram" })[r] ?? null,
+  currencyOf: (m) => ({ NL: "EUR", GB: "GBP" })[m] ?? null,
+};
+const FN_REASONS = [["too_expensive", "Too expensive", 9], ["bad_timing", "Bad Timing", 2], ["bad_fit", "Bad Fit", 3], ["ordered_elsewhere", "Ordered Elsewhere", 4],
+  ["garbage", "Garbage", 5, true], ["duplicate", "Duplicate", 6, true], ["wrong_phone", "Wrong Phone", 7, true]]
+  .map(([value, label, sortOrder, dq]) => ({ value, label, sortOrder, isDataQuality: dq === true }));
+const FN_ALL = funnelDeals(FN_DEALS, FN_PIPES, FN_OPTIONS);
+const FN_ENTRIES = FN_DEALS.flatMap((d) => d.stages.map((x) => x.enteredAt));
+const FN_NONE = { market: null, pipeline: null, sourceChannel: null };
+const fnPrev = (from, to) => funnelPrevious(previousPeriod({ from, to }, dateKeyInZone(FN_NOW, AMS_AT)), FN_NOW);
+const fnPage = (from, to, filter = FN_NONE) => funnelReport(FN_ALL, FN_PIPES, FN_OPTIONS, from, to, filter, fnPrev(from, to), FN_ENTRIES);
+const fnLost = (from, to, group = "week", filter = FN_NONE, limit = 100) =>
+  lostReasonsReport(FN_ALL, FN_REASONS, "enumeration", FN_OPTIONS, from, to, group, filter, fnPrev(from, to), limit);
+// as 99's pg_temp.v0008zb_fig: created/won/lost/win rate/median days to won/to lost
+const d1 = (x) => (x === null ? "-" : x.toFixed(1));
+const fnFig = (f) => `${f.created}/${f.won}/${f.lost}/${f.winRate === null ? "-" : f.winRate.toFixed(4)}/${d1(f.medianDaysToWon)}/${d1(f.medianDaysToLost)}`;
+const fnWeek = fnPage("2026-10-05", "2026-10-11");
+
+expect("funnel: week and day parse, anything else is refused (the routes' 400); G cycles",
+  [["week", "day", "month", "", null].map(parseFunnelGroup), ["week", "day"].map(nextFunnelGroup)],
+  [["week", "day", null, null, null], ["day", "week"]], [["week", "day", "month", null, null], ["day", "week"]]);
+const fnParsed = (m, p, s) => { const x = parseFunnelFilter(m, p, s); return `${x.problem ?? "ok"}:${x.filter.market ?? "-"}/${x.filter.pipeline ?? "-"}/${x.filter.sourceChannel ?? "-"}`; };
+expect("funnel: the filters as cma.funnel_filters_check takes them; a bad market, pipeline or source named; the query without the empty ones",
+  [fnParsed("GB", `${FN}:sales`, "PAID_SEARCH"), fnParsed("unknown", "", ""), fnParsed("nl", null, null), fnParsed(null, "sales", null), fnParsed(null, null, "x".repeat(101)),
+    fnParsed(null, null, "a\u0007b"), funnelFilterQuery({ market: "GB", pipeline: null, sourceChannel: "DIRECT" })],
+  [`ok:GB/${FN}:sales/PAID_SEARCH`, "ok:unknown/-/-", "market:-/-/-", "pipeline:-/-/-", "source:-/-/-", "source:-/-/-", { market: "GB", source: "DIRECT" }],
+  [`ok:GB/${FN}:sales/PAID_SEARCH`, "ok:unknown/-/-", "ok:nl/-/-", "pipeline:-/-/-", "source:-/-/-", "source:-/-/-", { market: "GB", source: "DIRECT" }]);
+expect("funnel: the deals are 0008z's sales deals (no order pipeline, no uncounted one, none before the start date), as 99's B22",
+  FN_ALL.map((r) => r.dealSourceId).sort().join(","), "dA,dB,dC,dD,dE,dF,dG,dH,dJ,dM,dN,dO,dP,dQ,dR,dS,dT,dU,dV", "dA,dB,dC,dD,dE,dF,dG,dH,dJ,dM,dN,dO,dP,dQ,dR,dS,dT,dU,dV,dX,dZ");
+expect("funnel: per pipeline and in total, the win rate by close date, the median days, the previous period, as 99's B8",
+  `${fnWeek.byPipeline.rows.map((x) => `${x.label}:${fnFig(x.current)}|${fnFig(x.previous)}`).join(" ")} total:${fnFig(fnWeek.byPipeline.total.current)}|${fnFig(fnWeek.byPipeline.total.previous)}`
+    + ` ${fnWeek.previousFrom}..${fnWeek.previousTo} ${fnWeek.previousPartial}`,
+  "Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 false",
+  "Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 true");
+const fnStageText = (x) => [x.entered, x.stillThere, x.movedOn, x.timed, x.medianDays === null ? null : x.medianDays.toFixed(1), x.p80Days === null ? null : x.p80Days.toFixed(1),
+  x.reachedWon, x.wonShare === null ? null : x.wonShare.toFixed(4), x.enteredPrevious].map((v) => v ?? "-").join("/");
+expect("funnel: per stage entered, still there, moved on, days in stage, reached won, the previous period; a stage off without figures, as 99's B9",
+  `${fnWeek.stages.map((x) => `${x.stageId}:${fnStageText(x)}`).join(" ")} ${fnWeek.historyStart.deals}/${fnWeek.historyStart.stages} ${fnWeek.timedStages}`,
+  "s1:9/3/6/6/1.0/2.0/2/0.2222/2 s2:3/1/2/2/2.6/2.8/1/0.3333/1 sw:3/3/0/0/-/-/3/1.0000/0 sl:-/-/-/-/-/-/-/-/- q1:1/1/0/0/-/-/0/0.0000/0 qw:0/0/0/0/-/-/0/-/0 2026-09-29/2026-09-29 6",
+  "s1:9/3/6/6/1.0/2.0/2/0.2222/2 s2:3/1/2/2/2.6/2.8/1/0.3333/1 sw:3/3/0/0/-/-/3/1.0000/0 sl:0/0/0/0/-/-/0/-/0 q1:1/1/0/0/-/-/0/0.0000/0 qw:0/0/0/0/-/-/0/-/0 2026-09-29/2026-09-29 6");
+const fnGb = fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, market: "GB" });
+const fnGbS1 = fnGb.stages.find((x) => x.stageId === "s1");
+const fnTwo = fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, pipeline: `${FN}:sales2` });
+expect("funnel: a market, a source channel and a pipeline narrow every figure; the filter lists without them, as 99's B10",
+  `${fnFig(fnGb.byPipeline.total.current)} ${[fnGbS1.entered, fnGbS1.stillThere, fnGbS1.movedOn, d1(fnGbS1.medianDays), d1(fnGbS1.p80Days), fnGbS1.wonShare.toFixed(4)].join("/")}`
+    + ` ${fnFig(fnPage("2026-10-05", "2026-10-11", { ...FN_NONE, sourceChannel: "DIRECT" }).byPipeline.total.current)}`
+    + ` ${fnTwo.byPipeline.rows.map((x) => x.label).join(",")} ${fnTwo.stages.map((x) => x.stageId).join(",")} ${JSON.stringify(fnTwo.markets)}`
+    + ` ${fnTwo.pipelines.map((x) => x.label).join(",")} ${JSON.stringify(fnTwo.sourceChannels)}`,
+  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/1.8/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]',
+  '4/1/3/0.2500/1.0/2.1 2/0/2/1.5/1.8/0.5000 2/0/2/0.0000/-/3.5 Sales,Sales two q1,qw ["GB","NL"] Sales,Sales two ["DIRECT","PAID_SEARCH"]');
+const fnRun = fnPage("2026-10-12", "2026-10-14");
+expect("funnel: like for like, the previous span's last date cut at the time of day, as 99's B11",
+  `${fnFig(fnRun.byPipeline.total.current)}|${fnFig(fnRun.byPipeline.total.previous)} ${fnRun.previousFrom}..${fnRun.previousTo} ${fnRun.previousPartial}`
+    + ` s1prev:${fnRun.stages.find((x) => x.stageId === "s1").enteredPrevious}`,
+  "0/0/0/-/-/-|4/1/8/0.1111/1.0/2.5 2026-10-09..2026-10-11 true s1prev:2", "0/0/0/-/-/-|4/1/8/0.1111/1.0/2.5 2026-10-09..2026-10-11 true s1prev:3");
+const fnL = fnLost("2026-10-05", "2026-10-11");
+const lf = (f) => [f.lost, f.withReason, f.noReason, f.dataQuality, f.real].join("/");
+const rs = (list) => list.map((x) => `${x.label}=${x.deals}/${x.share.toFixed(4)}`).join(",");
+expect("lost reasons: the real reasons and their share, the data-quality block, no reason, the previous period, as 99's B12",
+  `${lf(fnL.current)}|${lf(fnL.previous)} ${rs(fnL.reasons)} dq:${rs(fnL.dataQualityReasons)} none:${fnL.noReason.deals}/${fnL.noReason.share.toFixed(4)} ${fnL.reasonState} ${fnL.historyStart}`,
+  "10/9/1/2/7|1/1/0/0/1 Too expensive=3/0.4286,Bad Timing=2/0.2857,Bad Fit=1/0.1429,Ordered Elsewhere=1/0.1429 dq:Duplicate=1/0.1000,Garbage=1/0.1000 none:1/0.1000 enumeration 2026-09-29",
+  "10/9/1/2/7|1/1/0/0/1 Too expensive=3/0.3333,Bad Timing=2/0.2222,Bad Fit=1/0.1111,Ordered Elsewhere=1/0.1111 dq:Duplicate=1/0.1000,Garbage=1/0.1000 none:1/0.1000 enumeration 2026-09-29");
+const grp = (list) => list.map((x) => `${x.key ?? "none"}:${x.lost}/${x.real}/${x.noReason}/${x.dataQuality}[${x.top.map((t) => `${t.label}=${t.deals}`).join(",")}]`).join(" ");
+expect("lost reasons: per market with the top 3 real reasons, per source channel with none last, as 99's B13",
+  `${grp(fnL.byMarket)} | ${grp(fnL.bySource)}`,
+  "GB:3/2/0/1[Bad Timing=1,Too expensive=1] NL:7/5/1/1[Too expensive=2,Bad Fit=1,Bad Timing=1] | DIRECT:2/0/1/1[] PAID_SEARCH:7/6/0/1[Too expensive=3,Bad Fit=1,Bad Timing=1] none:1/1/0/0[Bad Timing=1]",
+  "GB:3/2/0/1[Too expensive=1,Bad Timing=1] NL:7/5/1/1[Too expensive=2,Bad Fit=1,Bad Timing=1] | DIRECT:2/0/1/1[] PAID_SEARCH:7/6/0/1[Too expensive=3,Bad Fit=1,Bad Timing=1] none:1/1/0/0[Bad Timing=1]");
+const fnDay = fnLost("2026-10-05", "2026-10-11", "day");
+const fnLGb = fnLost("2026-10-05", "2026-10-11", "week", { ...FN_NONE, market: "GB" });
+const sortedReasons = (o) => Object.entries(o).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k}:${v}`).join(",");
+expect("lost reasons: per ISO week and per day, the list without a reason with its link, the market filter, as 99's B14",
+  `${fnL.byPeriod.map((x) => `${x.key}:${x.lost}/${x.real}/${x.noReason}/${x.dataQuality}{${sortedReasons(x.reasons)}}`).join(" ")} | `
+    + `${fnDay.byPeriod.map((x) => `${x.key.slice(5)}:${x.lost}/${x.real}/${x.noReason}/${x.dataQuality}`).join(" ")} | `
+    + `${fnL.list.total} ${fnL.list.rows.map((x) => `${x.dealSourceId} ${x.recordUrl}`).join(",")} GB:${fnLGb.current.lost} ${fnLGb.reasons.map((x) => `${x.label}=${x.share.toFixed(4)}`).join(",")}`,
+  "2026-10-05:10/7/1/2{bad_fit:1,bad_timing:2,ordered_elsewhere:1,too_expensive:3} | 10-07:1/1/0/0 10-08:1/1/0/0 10-09:3/2/0/1 10-10:3/1/1/1 10-11:2/2/0/0 | "
+    + "1 dD https://crm.example.invalid/portal-1/deal/dD GB:3 Bad Timing=0.5000,Too expensive=0.5000",
+  "2026-10-05:10/7/1/2{bad_fit:1,bad_timing:2,ordered_elsewhere:1,too_expensive:3} | 10-07:1/1/0/0 10-08:1/1/0/0 10-09:3/2/0/1 10-10:3/1/1/1 10-11:2/2/0/0 | "
+    + "1 dD https://crm.example.invalid/portal-1/deal/dD GB:3 Too expensive=0.5000,Bad Timing=0.5000");
+expect("lost reasons: the list capped, the newest close first; a reason only from an enumeration (cma.reason_state_of)",
+  [fnLost("2026-09-28", "2026-10-11", "week", FN_NONE, 0).list.rows.length, fnLost("2026-09-28", "2026-10-11").list.total,
+    reasonStateOf(null, null), reasonStateOf("lost_dropdown", null), reasonStateOf("lost_dropdown", "enumeration"), reasonStateOf("lost_text", "string")],
+  [0, 1, "none", "unchecked", "enumeration", "refused"], [0, 1, "none", "unchecked", "enumeration", "enumeration"]);
+
+// the tickets and the kinds, as 99's B5 to B7 and B15 store them; each market resolved as 0007d's rule gives it
+const fnTicket = (id, pipelineId, market, category, created, closed, reason, o = {}) => ({
+  recordId: `ticket-${id}`, connectionId: FN, recordType: "ticket", sourceId: id, pipelineId,
+  pipelineLabel: { cancel: "Cancellations", support: "Support", spam: "Spam" }[pipelineId], pipelineCounted: pipelineId !== "spam", category, market, reason,
+  isClosed: closed !== null, createdAt: fnT(created), closedAt: fnT(closed), deletedAt: null, recordUrl: `https://crm.example.invalid/portal-1/ticket/${id}`, ...o,
+});
+const FN_TICKETS = [
+  fnTicket("tA", "cancel", "NL", null, "10-05T08:00:00", "10-07T08:00:00", "price"), fnTicket("tB", "cancel", "GB", null, "10-06T09:00:00", null, "moving"),
+  fnTicket("tC", "support", "NL", "Cancellation", "10-08T10:00:00", "10-08T22:00:00", null), fnTicket("tD", "support", "NL", "Complaint", "10-08T11:00:00", null, null),
+  fnTicket("tE", "spam", "NL", "Cancellation", "10-08T12:00:00", null, null), fnTicket("tF", "cancel", "NL", null, "10-01T08:00:00", null, null),
+  fnTicket("tG", "cancel", "NL", null, "10-12T08:00:00", null, null), fnTicket("tH", "cancel", "unknown", null, "10-09T09:00:00", null, null),
+  fnTicket("tI", "cancel", "NL", null, "10-07T08:00:00", null, null, { deletedAt: fnT("10-07T09:00:00") }),
+];
+const FN_KINDS = [{ key: "cancellation", label: "Cancellation request", recordType: "ticket", status: "active", sortOrder: 10 },
+  { key: "complaint", label: "Complaint", recordType: "ticket", status: "active", sortOrder: 20 }];
+const FN_RULES = [{ connectionId: FN, kindKey: "cancellation", pipelineId: "cancel", category: null, isActive: true },
+  { connectionId: FN, kindKey: "cancellation", pipelineId: null, category: "Cancellation", isActive: true },
+  { connectionId: FN, kindKey: "complaint", pipelineId: "support", category: "Complaint", isActive: true }];
+expect("record kinds: a rule by pipeline, by category and by both; an empty rule matches nothing; archived rules and kinds none, as 99's B6",
+  [kindRuleMatches("cancel", null, "cancel", null), kindRuleMatches(null, "Cancellation", "support", "Cancellation"), kindRuleMatches("support", "Complaint", "support", "Other"),
+    kindRuleMatches(null, null, "cancel", null), FN_TICKETS.map((x) => `${x.sourceId}:${recordKindsOf(FN_KINDS, FN_RULES, x).join("+") || "-"}`).join(" "),
+    recordKindsOf(FN_KINDS.map((k) => ({ ...k, status: "archived" })), FN_RULES, FN_TICKETS[0]).length,
+    recordKindsOf(FN_KINDS, FN_RULES.map((r) => ({ ...r, isActive: false })), FN_TICKETS[0]).length],
+  [true, true, false, false, "tA:cancellation tB:cancellation tC:cancellation tD:complaint tE:cancellation tF:cancellation tG:cancellation tH:cancellation tI:cancellation", 0, 0],
+  [true, true, false, true, "tA:cancellation tB:cancellation tC:cancellation tD:complaint tE:cancellation tF:cancellation tG:cancellation tH:cancellation tI:cancellation", 0, 0]);
+const fnKind = { key: "cancellation", label: "Cancellation request", recordType: "ticket", status: "active" };
+const FN_TICKET_LABELS = new Map([["price", "Price"], ["moving", "Moving"]]);
+const fnCancel = (from, to, group, market, limit, kind = fnKind) => cancellationsReport(cancellationRecords(FN_TICKETS, kind, FN_RULES, "2026-09-01", AMS_AT), kind,
+  "enumeration", FN_TICKET_LABELS, "2026-09-01", AMS_AT, from, to, group, market, fnPrev(from, to), limit);
+const cf = (f) => `${f.requests}/${f.open}/${f.closed}/${d1(f.medianDaysToClose)}`;
+const fnC = fnCancel("2026-10-05", "2026-10-11", "week", null, 3);
+expect("cancellations: the kind's requests (no uncounted pipeline, deleted ticket, other kind), open, closed, days to close, per market and week, reasons, the list, as 99's B15",
+  `${fnC.kind.key}:${fnC.kind.label} ${cf(fnC.current)}|${cf(fnC.previous)} ${fnC.byMarket.map((x) => `${x.market}:${cf(x)}`).join(" ")}`
+    + ` ${fnC.byPeriod.map((x) => `${x.key}/${x.market}=${x.requests}`).join(" ")} ${fnC.reasonState} ${fnC.reasons.map((x) => `${x.label ?? "-"}=${x.requests}`).join(" ")}`
+    + ` ${fnC.list.total}:${fnC.list.rows.map((x) => x.sourceId).join(",")} ${fnC.list.rows[0].recordUrl} ${JSON.stringify(fnC.markets)} ${fnC.historyStart}`,
+  'cancellation:Cancellation request 4/2/2/1.3|1/1/0/- GB:1/1/0/- NL:2/0/2/1.3 unknown:1/1/0/- 2026-10-05/GB=1 2026-10-05/NL=2 2026-10-05/unknown=1 '
+    + 'enumeration Moving=1 Price=1 -=2 4:tH,tC,tB https://crm.example.invalid/portal-1/ticket/tH ["GB","NL","unknown"] 2026-10-01',
+  'cancellation:Cancellation request 5/3/2/1.3|1/1/0/- GB:1/1/0/- NL:3/1/2/1.3 unknown:1/1/0/- 2026-10-05/GB=1 2026-10-05/NL=3 2026-10-05/unknown=1 '
+    + 'enumeration Moving=1 Price=1 -=3 5:tH,tE,tC https://crm.example.invalid/portal-1/ticket/tH ["GB","NL","unknown"] 2026-10-01');
+const fnCNl = fnCancel("2026-10-05", "2026-10-11", "day", "NL", 100);
+const fnCOff = cancellationsReport([], null, "enumeration", FN_TICKET_LABELS, "2026-09-01", AMS_AT, "2026-10-05", "2026-10-11", "week", null, fnPrev("2026-10-05", "2026-10-11"), 100);
+const fnArchived = { ...fnKind, status: "archived" };
+expect("cancellations: by market and day; no kind set (nothing counted, no reason state); the kind archived, as 99's B16",
+  `${fnCNl.current.requests}/${fnCNl.byPeriod.map((x) => `${x.key.slice(5)}=${x.requests}`).join(",")} ${fnCOff.kind ?? "none"}/${fnCOff.current.requests}/${fnCOff.reasonState}`
+    + ` ${fnCancel("2026-10-05", "2026-10-11", "week", null, 100, fnArchived).kind.status}/${fnCancel("2026-10-05", "2026-10-11", "week", null, 100, fnArchived).current.requests}`,
+  "2/10-05=1,10-08=1 none/0/none archived/0", "2/10-05=1,10-08=1 none/0/none archived/4");
+const fnPivot = cancellationPivot(fnC.byPeriod);
+expect("cancellations: the per-week table one row per Monday without gaps, a column per market, unknown last; the period keys",
+  [fnPivot.markets, fnPivot.rows.map((r) => `${r.key}:${r.total}`), periodKeys("2026-10-05", "2026-10-18", "week"), periodKeys("2026-10-09", "2026-10-11", "day")],
+  [["GB", "NL", "unknown"], ["2026-10-05:4"], ["2026-10-05", "2026-10-12"], ["2026-10-09", "2026-10-10", "2026-10-11"]],
+  [["GB", "NL", "unknown"], ["2026-10-05:4"], ["2026-10-05"], ["2026-10-09", "2026-10-10", "2026-10-11"]]);
+const fnPeople = dealsPerPerson(funnelFilter(FN_ALL, FN_NONE), "2026-10-05", "2026-10-11", (id) => ({ "u-anna": "Anna Verify", "u-bram": "Bram Verify" })[id] ?? null);
+const am = (p) => p.amounts.map((a) => `${a.currency} ${a.amount.toFixed(2)} (${a.deals})`).join(",");
+const fnNl = fnPeople.rows.find((p) => p.kind === "notLinked");
+expect("deals per person: won, lost, the amounts per currency never summed, by name; the not-linked owners; the total, as 99's B17",
+  `${fnPeople.rows.filter((p) => p.kind === "person").map((p) => `${p.name}:${p.won}/${p.lost}[${am(p)}]`).join(" ")} not_linked(${fnNl.unlinkedOwners}):${fnNl.won}/${fnNl.lost}`
+    + ` total:${fnPeople.total.won}/${fnPeople.total.lost}[${am(fnPeople.total)}]`,
+  "Anna Verify:3/4[EUR 300.00 (2),GBP 80.00 (1)] Bram Verify:0/5[] not_linked(1):0/1 total:3/10[EUR 300.00 (2),GBP 80.00 (1)]",
+  "Anna Verify:3/4[EUR 380.00 (3)] Bram Verify:0/5[] not_linked(1):0/1 total:3/10[EUR 380.00 (3)]");
+expect("funnel: read_times in force (a person's choice, else the pipeline's counted flag); the business date cut; stages per pipeline; reason columns",
+  [readTimesOf(null, true), readTimesOf(null, false), readTimesOf(false, true), readTimesOf(true, false), readTimesOf(null, null),
+    inPeriod("2026-10-11", "12:00:00", "2026-10-09", "2026-10-11", "12:00:00"), inPeriod("2026-10-11", "12:00:01", "2026-10-09", "2026-10-11", "12:00:00"),
+    stagesByPipeline(fnWeek.stages).map((p) => `${p.label}:${p.stages.length}`), periodReasonColumns(fnL.reasons, 2).other],
+  [true, false, false, true, true, true, false, ["Sales:4", "Sales two:2"], ["bad_fit", "ordered_elsewhere"]],
+  [true, true, false, true, true, true, false, ["Sales:4", "Sales two:2"], ["bad_fit", "ordered_elsewhere"]]);
+expect("funnel: the bars in the series' first colour and one neutral hue, never a red; the per-person key and permission",
+  [FUNNEL_BAR_CLASS, FUNNEL_NEUTRAL_CLASS, /red|error|rose/.test(FUNNEL_BAR_CLASS + FUNNEL_NEUTRAL_CLASS), DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION],
+  ["bg-p4a-deepblue", "bg-p4a-lightblue", false, "deals", "performance.team"], ["bg-p4a-error", "bg-p4a-lightblue", false, "deals", "performance.team"]);
+expect("funnel: no name, address, phone number or hash in the pages; a person's name only per person; no free text (a reason is a value)",
+  [personalDataIn(fnWeek), personalDataIn(fnL), personalDataIn(fnC), personalDataIn(fnPeople, "$", true),
+    [...fnL.list.rows, ...fnC.list.rows].some((r) => "reasonText" in r || "note" in r || "subject" in r)],
+  [[], [], [], [], false], [["$.x"], [], [], [], false]);
+
+// the routes (addition 0008zb), from their source: the funnel query refuses a bad group, market, pipeline or source with a
+// 400, Cancellations takes the market only; Deals per person is not found while reports.per_person lacks deals; the data
+// layer calls the four reads with the filters; the Sources writes are same-site PUTs for tenant.configure
+const fnApi = src("../src/lib/api/funnel.ts");
+const fnPerson = src("../src/app/api/v1/reports/deals-per-person/route.ts");
+const fnCancelRoute = src("../src/app/api/v1/reports/cancellations/route.ts");
+const fnWrites = ["stage-times", "reason-field", "reasons", "kind-rules"].map((x) => src(`../src/app/api/v1/configuration/sources/[id]/${x}/route.ts`))
+  .concat([src("../src/app/api/v1/configuration/record-kinds/route.ts")]);
+expect("funnel routes: the filters and the group as 400s, the market only for cancellations, the reads reach the database with the filters",
+  [/problem === "source"\) throw new ApiError\(400, "invalid_source"/.test(fnApi), /if \(!group\) throw new ApiError\(400, "invalid_group"/.test(fnApi),
+    fnCancelRoute.includes("{ marketOnly: true }"), pgLayer.includes("cma.deal_funnel_page($1::date, $2::date, $3, $4, $5)"),
+    pgLayer.includes("cma.lost_reasons_page($1::date, $2::date, $3, $4, $5, $6)"), pgLayer.includes("cma.cancellations_page($1::date, $2::date, $3, $4)"),
+    pgLayer.includes("cma.deals_per_person_page($1::date, $2::date, $3, $4, $5)")],
+  [true, true, true, true, true, true, true], [true, true, false, true, true, true, true]);
+expect("deals per person: 404 while reports.per_person lacks deals, then performance.team; the Sources writes same-site PUTs for tenant.configure",
+  [fnPerson.includes('if (!me.perPerson.includes(DEALS_PER_PERSON_KEY)) throw new ApiError(404, "not_found"'), fnPerson.includes("requireAnyPermission(me, [DEALS_PER_PERSON_PERMISSION]);"),
+    fnWrites.every((w) => /export async function PUT\(/.test(w) && w.includes("assertSameSiteWrite(request);") && w.includes('requireAnyPermission(me, ["tenant.configure"]);'))],
+  [true, true, true], [false, true, true]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

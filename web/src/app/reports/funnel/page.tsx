@@ -7,7 +7,7 @@ import {
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
-import { Card, Notice, PageTitle } from "@/components/primitives";
+import { Card, LinkButton, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type FunnelGroup } from "@/lib/data";
 import {
   DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, fmtDays, funnelClientCopy, funnelFilterQuery, parseFunnelFilter, parseFunnelGroup, periodKeys,
@@ -20,9 +20,9 @@ import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
- * Funnel (Report, addition 0008zb, 20 October 2026; backlog CMA-043, CMA-048; Kira's KPI 4, KPI 11's lost reason): how the
- * sales deals move through their stages and why they are lost, in two sections. Only the lead pipelines count, never a
- * pipeline of orders (0008z's sales deals). The funnel: the deals created, won and lost with the win rate by close date and
+ * Funnel (Report, addition 0008zb, 20 October 2026; backlog CMA-043, CMA-048; KPI 5, reasons for not buying; KPI 11, the
+ * lost deals without a reason): how the sales deals move through their stages and why they are lost, in two sections.
+ * Only the lead pipelines count, never a pipeline of orders (0008z's sales deals). The funnel: the deals created, won and lost with the win rate by close date and
  * the median days to won and to lost as tiles, each with its change against the previous period like for like; per stage
  * that reads its times (HubSpot's calculated stage properties, switched per stage on Configuration, Sources) the deals that
  * entered it in the period, still there, moved on, the days in the stage and how many reached won; the figures per
@@ -86,6 +86,8 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
     pathname: "/reports/attempts" as const,
     query: { ...periodQuery, ...(filter.market ? { market: filter.market } : {}), ...(pipeline ?? filter.pipeline ? { pipeline: (pipeline ?? filter.pipeline)! } : {}) },
   });
+  // the files (CSV in the tenant's export format): the stages, and the lost reasons
+  const fileQuery = new URLSearchParams({ from: period.from, to: period.to, ...filterQuery }).toString();
   const lc = lost.current;
   const lp = lost.previous;
   const share = (part: number, whole: number) => (whole === 0 ? null : part / whole);
@@ -142,7 +144,11 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
           </div>
 
           <Card title={t.stagesCard}>
-            <FunnelIntro text={t.stagesIntro} label={t.stagesCard} hint={h.fnStages} copy={copy} />
+            <div className="flex items-start justify-between gap-4">
+              <FunnelIntro text={t.stagesIntro} label={t.stagesCard} hint={h.fnStages} copy={copy} />
+              <LinkButton href={`/api/v1/reports/funnel/export?${fileQuery}`} download shortcut="X" data-shortcut="x" title={t.downloadStages}
+                data-testid="funnel-download">{t.download}</LinkButton>
+            </div>
             {funnel.timedStages === 0 ? <div className="mb-4"><Notice tone="info">{t.noTimedStages}</Notice></div>
               : funnel.historyStart.stages === null ? <div className="mb-4"><Notice tone="info">{t.stagesNotYet}</Notice></div> : null}
             {funnel.stages.length === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : (
@@ -185,7 +191,10 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Card title={t.reasonsCard}>
-              <FunnelIntro text={t.reasonsIntro} label={t.reasonsCard} hint={h.fnReasons} copy={copy} />
+              <div className="flex items-start justify-between gap-4">
+                <FunnelIntro text={t.reasonsIntro} label={t.reasonsCard} hint={h.fnReasons} copy={copy} />
+                <LinkButton href={`/api/v1/reports/lost-reasons/export?${fileQuery}`} download title={t.downloadReasons} data-testid="lost-download">{t.download}</LinkButton>
+              </div>
               {lc.lost === 0 ? <p className="text-body text-p4a-muted">{t.noLost}</p>
                 : <ReasonBars reasons={lost.reasons} noReason={lost.noReason} copy={copy} locale={me.locale} />}
             </Card>

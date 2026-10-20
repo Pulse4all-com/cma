@@ -57,6 +57,10 @@
  * retired cma-nav-time and cma-nav-reports cookies are ignored and expired on the first toggle, a digit key opens a page
  * of a closed group and the closed group keeps its pill. No header's info mark wraps apart from its label at 1440 px on
  * Follow-up, Attempts per deal and Attempts per agent, and Attempts per deal never scrolls sideways.
+ * Funnel and Cancellations (addition 0008zb) for seven identities: both for reports.view or performance.team after
+ * Attempts per agent (Attempts per deal for the reader), deals per person on Funnel for performance.team while
+ * reports.per_person holds deals, the keycaps K, P, S, G and X (K, G and X on Cancellations), ten tiles and four, by week
+ * and by day, the tables inside their cards, the page never sideways.
  * Campaign monitoring (addition 0008v) for seven identities: in the Campaigns group for reports.view or
  * performance.team, a card per journey inside the main area (the archived one absent), a journey's Muted banner,
  * seven dashed placeholders (the drill-down locked), its prerequisites unticked, no figure, the breadcrumbs
@@ -80,7 +84,8 @@
  *       spill out of its card, lets the first orders list and the callbacks' weeks spill out of their cards, widens the first journey card past the main
  *       area, writes a two-character key on the manager's tenth page, strips the name off
  *       every dialog before it is read and the role off the tiles, expects Time still open after Reports opens,
- *       breaks the line before one header's mark per page, lets the attempts list spill out of its card, expect FAIL, exit 1
+ *       breaks the line before one header's mark per page, lets the attempts list and the lost deals per period spill out
+ *       of their cards, expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -176,30 +181,32 @@ async function expectNavigation() {
     // analyst's keys 6 to 9 and the reader's 4 to 9 move (accepted during the soft launch, Martin, 19 October 2026). Since
     // 0008z (Martin, 20 October 2026) Reports runs Dashboard, Speed to lead, Calls, Calls per agent, Email, Email per agent,
     // Follow-up, Attempts per deal, Attempts per agent, Forms, Intake, Inbound, First orders, Orders per person, Data quality,
-    // so the digit keys after Speed to lead move for everyone who sees Reports
+    // so the digit keys after Speed to lead move for everyone who sees Reports. Since 0008zb Funnel and Cancellations
+    // (reports.view or performance.team) follow Attempts per agent (Attempts per deal for the reader)
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
-      "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound",
-      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality",
+      "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms",
+      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality",
       "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/forms",
-      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/funnel",
+      "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
       "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent",
-      "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
+      "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
+      "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/data-quality", "/campaigns"], true],
+      "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
+      "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/data-quality", "/campaigns"], true],
+      "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
+      "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -355,8 +362,8 @@ async function expectReports() {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "agent-one" } });
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
-    "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/first-orders", "/reports/orders-per-person",
-    "/reports/data-quality"]) {
+    "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -1554,8 +1561,8 @@ async function expectFrame() {
   // the manager's rail holds 25 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
   // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
-  // 2026, so the pages are counted by their links)
-  for (const [subject, pages] of [["manager", 25], ["agent-one", 5]]) {
+  // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations
+  for (const [subject, pages] of [["manager", 27], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");
@@ -1838,6 +1845,81 @@ async function expectAttempts() {
 
 // A deal's row (addition 0008z): Enter on the deal opens its attempts below it (aria-expanded, the attempts or "No attempt
 // yet" read from the API), inside the card without a sideways scroll; Esc closes it and the focus stays on the deal
+// Funnel and Cancellations (addition 0008zb), per identity at 1280 px: both in the rail and on the page for reports.view
+// or performance.team after Attempts per agent (the agent gets the no-permission card); deals per person on Funnel for
+// performance.team while reports.per_person holds deals (not for the reader, not for the invest tenant without the
+// switch); the page never scrolls sideways, by week and by day; the keycaps K, P, S, G and X on Funnel, K, G and X on
+// Cancellations, next to the period bar's; ten tiles and four; the tables end inside their cards. --provoke lets the
+// lost deals per period spill out of their card
+async function expectFunnel() {
+  // [subject, sees the pages, sees deals per person]
+  const cases = [
+    ["manager", true, true], ["supervisor", true, true], ["admin", true, true], ["analyst", true, true],
+    ["reader", true, false], ["invest-analyst", true, false], ["agent-one", false, false],
+  ];
+  for (const [subject, may, people] of cases) {
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    const rail = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href")));
+    for (const href of ["/reports/funnel", "/reports/cancellations"]) {
+      if (rail.includes(href) !== may) problems.push(`${subject}: ${href} ${may ? "missing from" : "shown in"} the rail`);
+    }
+    if (may && rail.indexOf("/reports/funnel") !== rail.indexOf(subject === "reader" || subject === "invest-analyst" ? "/reports/attempts" : "/reports/attempts-per-agent") + 1) {
+      problems.push(`${subject}: Funnel does not follow Attempts in the rail`);
+    }
+    const pages = [
+      ["/reports/funnel?range=month&group=week", ["funnel-stages", "funnel-by-period", "funnel-by-market"], ["K", "P", "S", "G", "X", "T", "W", "M", "C"], 10],
+      ["/reports/funnel?range=month&group=day", ["funnel-by-period", "funnel-by-source"], ["G"], 10],
+      ["/reports/cancellations?range=month&group=week", ["cancellations-periods", "cancellations-list"], ["K", "G", "X", "T", "W", "M", "C"], 4],
+      ["/reports/cancellations?range=month&group=day", ["cancellations-periods"], ["G"], 4],
+    ];
+    for (const [path, tables, keys, tiles] of pages) {
+      const where = `${subject} ${path.split("?")[0]} (${path.split("group=")[1]})`;
+      await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      const m = await p.evaluate(() => ({
+        scrollX: document.documentElement.scrollWidth > window.innerWidth,
+        keycaps: [...document.querySelectorAll("main kbd")].map((k) => k.textContent?.trim()),
+        tables: document.querySelectorAll("main table").length,
+        tiles: document.querySelectorAll("main [data-tile]").length,
+        people: !!document.querySelector('[data-testid="people-section"]'),
+      }));
+      if (m.scrollX) problems.push(`${where}: page scrolls horizontally at 1280`);
+      if (!may) {
+        if (m.tables > 0) problems.push(`${where}: figures shown to someone without the permission`);
+        continue;
+      }
+      for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+      if (m.tiles !== tiles) problems.push(`${where}: ${m.tiles} tiles, expected ${tiles}`);
+      if (path.startsWith("/reports/funnel") && m.people !== people) problems.push(`${where}: deals per person ${people ? "missing" : "shown"}`);
+      for (const table of tables) {
+        const inside = await p.evaluate(([id, spill]) => {
+          const box = document.querySelector(`[data-testid="${id}-scroll"]`);
+          if (!box) return null;
+          if (spill) {
+            // provoked: the table wider than its card, and the card letting it out
+            box.style.overflowX = "visible";
+            const table = box.querySelector("table");
+            if (table) table.style.minWidth = "2400px";
+          }
+          const main = document.querySelector("main");
+          const card = box.closest("section")?.getBoundingClientRect() ?? box.parentElement.getBoundingClientRect();
+          const r = box.getBoundingClientRect();
+          return { main: main.scrollWidth - main.clientWidth, inCard: r.right <= card.right + 0.5 };
+        }, [table, provoke && subject === "manager" && table === "funnel-by-period"]);
+        if (!inside) problems.push(`${where}: ${table} has no scroll container`);
+        else if (inside.main > 0 || !inside.inCard) problems.push(`${where}: ${table} spills out of its card, the main area scrolls sideways by ${inside.main}px at 1280`);
+      }
+      if (subject === "manager") {
+        await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}-${path.split("group=")[1]}.png`, fullPage: true });
+      }
+    }
+    await ctx.close();
+  }
+}
+
 async function expectDealRow(p, where) {
   const toggle = p.locator('[data-testid="attempts-toggle"]').first();
   if (await toggle.count() === 0) { problems.push(`${where}: no deal to open`); return; }
@@ -1910,6 +1992,7 @@ await expectForms();
 await expectEmail();
 await expectFirstOrders();
 await expectAttempts();
+await expectFunnel();
 await expectWelcomeOnOpen();
 await expectCampaigns();
 await expectCallbacks();
@@ -1921,5 +2004,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

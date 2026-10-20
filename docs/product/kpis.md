@@ -52,14 +52,14 @@ The CMA's assignment, accept click and 5-minute rule (see Speed to lead) are the
 - Negative review flagged within one day (live alert).
 
 ### 4. Churn and contract length
-- Cancellations per country per week, with Cancellation Reason (task for Joshua is on the board). Since brief B17d (addition 0008p) the cancellation forms' submissions per market and week, with the answers of `cancellation_reason`, are on Reports → Forms; cancellations as contract events come with the subscription data later.
+- Cancellations per country per week, with Cancellation Reason (task for Joshua is on the board). Since brief B17d (addition 0008p) the cancellation forms' submissions per market and week, with the answers of `cancellation_reason`, are on Reports → Forms; since addition 0008zb (brief N21) Reports → Cancellations counts the cancellation requests (the tickets of the kind `reports.cancellation_kind` names, by a pipeline or category rule on Configuration → Sources) per market and per ISO week or day, open and closed with the median days to close and the tickets' Cancellation Reason (a dropdown only). It counts requests, not contracts; cancellations as contract events come with the subscription data later.
 - Cancellations before the minimum term, reported separately.
 - Active contracts older than 12, 24 and 36 months.
-- CCL confirmed vs. not confirmed, churn per cohort.
+- CCL confirmed vs. not confirmed (a later phase, split off CMA-049 on 20 October 2026: Decision log), churn per cohort.
 
 ### 5. Reasons for not buying
-- Closed Lost Reason per country, source, agent and week; top 3 per country.
-- Closed Lost Reason mandatory. Garbage, Duplicate, Wrong Phone and Accidentally Signed Up count as data quality, not as lost sales.
+- Closed Lost Reason per country, source, agent and week; top 3 per country. Since addition 0008zb (brief N21) on Reports → Funnel, Lost reasons: the real reasons with their share, per market and per source with the top 3, per ISO week or day, and per deal owner in Deals per person (behind `reports.per_person` holding `deals`, off for Pulse4all until Yordi agrees); the reason from the deals' dropdown property only, never free text. The same page shows how the deals move through their stages (entered, still there, moved on, days in stage, reached won, from HubSpot's own stage history, addition 0008za) and the win rate by close date, with a link per pipeline to Attempts per deal.
+- Closed Lost Reason mandatory (Open decisions). Garbage, Duplicate, Wrong Phone and Accidentally Signed Up count as data quality, not as lost sales: a reason is flagged so on Configuration → Sources and Reports → Funnel shows those deals apart from the real lost reasons.
 - Defined on the scoped result-code catalog (business line, call type, code), so Invest's Sleepnet is never counted as Subs' Nurturing.
 
 Callbacks kept (KPIs and steering, row 5): since the night of 16 October 2026 (addition 0008n) the CRM's tasks reach the Workspace without their text and a task type can be marked a callback on Sources, and `tasks.callback_window_minutes` (240) is a setting (0008o); since the night run N19-A (addition 0008w; merged 19 October 2026 as `997749c`) the figure is computed: a callback kept when a call with the task's contact, in either direction, starts within the window of its due time, on the Dashboard's Intake row and per ISO week and per person on Reports → Follow-up, with the definition proposed in Open decisions for Kira to confirm. Reports → Follow-up shows the open callback tasks with a badge.
@@ -125,6 +125,7 @@ These are prerequisites in HubSpot, Aircall and every source that joins later. W
 - For the first orders (addition 0008u): the Self Serve pipeline marked as the order pipeline on Configuration → Sources; deal stages whose probability says won or lost (a stage set otherwise is corrected there and kept); the old CRM's created date on contacts as a HubSpot property, mapped as a `created_at` slot, so a long-known customer counts as known (Kira); the order's phone on Shopify orders for phone matching (KPIs 2).
 - For email per mailbox (addition 0008t): the conversations' channel accounts named in HubSpot (a name that is an address shows its id until labelled on Sources), and which inboxes, channels and mailboxes count (Arno and Kira).
 - For the callbacks kept (addition 0008w): every callback task typed as a callback in HubSpot, the type marked on Sources, with a due time and the contact associated.
+- For the funnel and the lost reasons (additions 0008za and 0008zb): HubSpot's calculated stage properties present for the counted pipelines' stages; the Closed Lost Reason as a dropdown filled on every lost deal (Reports → Funnel counts the lost deals without a reason, and lists them with their links); the data-quality reasons flagged on Sources; the source channel on the deals. For the cancellations: the rule that marks a cancellation ticket set on Sources, and the tickets' Cancellation Reason filled. Owners: Kira and Joshua; the rule with Arno.
 - For the FCA journey (addition 0008v): a consumer or business flag on every GB contact, the agreement date on the contract, a call tag that proves the welcome call, template ids on the journey's emails, the call-recording consent decided (the journey's prerequisites on Campaign monitoring).
 
 ### 12. Cohorts

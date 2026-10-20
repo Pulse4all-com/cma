@@ -27,7 +27,11 @@ const td = "h-10 whitespace-nowrap px-2 tabular text-right";
 const row = "border-b border-p4a-border odd:bg-white even:bg-p4a-offwhite hover:bg-p4a-bgblue/50";
 
 type Hint = (label: string, text: string) => ReactNode;
-const hintOf = (copy: Copy): Hint => (label, text) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
+function hintOf(copy: Copy): Hint {
+  return function hint(label, text) {
+    return <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text} />;
+  };
+}
 
 /** Week or day as links; G moves to the next */
 export function FunnelGroupSwitch({ pathname, group, query, copy }: {

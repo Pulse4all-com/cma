@@ -1,0 +1,110 @@
+DO
+BEGIN
+SET
+DO
+psql:/tmp/runsql-25406.sql:124: NOTICE:  relation "record_kind" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25406.sql:129: NOTICE:  policy "tenant_readonly" for relation "record_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+psql:/tmp/runsql-25406.sql:146: NOTICE:  relation "connection_record_kind" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25406.sql:151: NOTICE:  policy "tenant_readonly" for relation "connection_record_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:/tmp/runsql-25406.sql:497: NOTICE:  column "source_type" of relation "connection_field" already exists, skipping
+ALTER TABLE
+psql:/tmp/runsql-25406.sql:498: NOTICE:  column "checked_at" of relation "connection_field" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+psql:/tmp/runsql-25406.sql:506: NOTICE:  column "reason" of relation "crm_record" already exists, skipping
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+psql:/tmp/runsql-25406.sql:687: NOTICE:  relation "connection_reason" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25406.sql:692: NOTICE:  policy "tenant_readonly" for relation "connection_reason" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

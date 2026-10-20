@@ -1,0 +1,45 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/runsql-25523.sql:49: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+DO
+DO
+                                                 check_name                                                  | result |                                                                                                                                                                    detail                                                                                                                                                                     
+-------------------------------------------------------------------------------------------------------------+--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008s recorded, after 0008r                                                                     | PASS   | 
+ A2 follow_up.list_rows, a whole number, 100 by default                                                      | PASS   | follow_up.list_rows:integer:100
+ A3 follow_up.refresh on every scheduler role, on no other                                                   | PASS   | 
+ A4 follow_up_snapshot and follow_up_item: columns, RLS, the application's grants, indexes, no audit trigger | PASS   | 
+ A5 the functions: the application's only, in the caller's rights                                            | PASS   | 
+ A6 sync_run: refresh_follow_up on the job list, without a connection                                        | PASS   | CHECK (((connection_id IS NULL) = (job = ANY (ARRAY['close_forgotten_workdays'::text, 'refresh_follow_up'::text])))) | CHECK ((job = ANY (ARRAY['backfill'::text, 'reconcile'::text, 'forms_poll'::text, 'subscriptions_check'::text, 'link_calls'::text, 'email_poll'::text, 'close_forgotten_workdays'::text, 'refresh_follow_up'::text])))
+ B1 the fallback: no snapshot before the first read, the read computes one                                   | PASS   | 0 snapshots before, 1 after; 5 leads
+ B2 the summary and every row in order equal to the live functions'                                          | PASS   | summary equal t; 16 items
+ B3 every row's fields and the figures per person equal to the live functions'                               | PASS   | 0 rows differ; per person equal
+ B4 filtered totals equal to filtering the live sets (market, person, nobody, attention, combined)           | PASS   | 
+ B5 the rows a list shows: 100 by default, honoured, at least 1, at most 500; the setting and its refusals   | PASS   | 100,2:2/2/2,1:1,500 | CMA04,CMA04,CMA04,ok,3:3
+ B6 per person for performance.team, absent without it (monitoring.live alone)                               | PASS   | 3 rows for the manager; watcher null,5,CMA06
+ B7 no row of another tenant: invisible, not refreshable, not on the page                                    | PASS   | 0,0,CMA06,none; tenant two's own page: 1 leads, 1 tasks
+ B8 the refresh holds its tenant's transaction-level advisory lock                                           | PASS   | lock held t
+ B9 the job: the scheduler refreshes and writes its run row once; refusals; System health lists it           | PASS   | true,16,CMA03,CMA04,CMA04,CMA06,CMA06 | succeeded:2:no connection
+ B10 the person's own rows from the snapshot: exactly theirs, with computed_at and their links               | PASS   | d1,d5|x1,x2|k1,k5 | live d1,d5|x1,x2|k1,k5
+ B11 0008o's reads from the snapshot: the summary with computed_at, the lists equal to the live sets         | PASS   | summary t; 0 rows differ
+ B12 a new task: not on the page before the next refresh, counted after it                                   | PASS   | 6/2 -> 7/3
+ B13 the filter choices from every row, the counts before the filters, the links and settings                | PASS   | ["NL", "unknown"]|Verify agent one,Verify agent two|true|{"lead": 5, "task": 7, "ticket": 5}|60|linked
+ verdict                                                                                                     | PASS   | 19 PASS, 0 FAIL
+(20 rows)
+
+DROP FUNCTION
+RESET

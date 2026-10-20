@@ -1,0 +1,112 @@
+DO
+BEGIN
+SET
+DO
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25390.sql:129: NOTICE:  policy "tenant_app" for relation "record_kind" does not exist, skipping
+psql:/tmp/runsql-25390.sql:129: NOTICE:  policy "tenant_readonly" for relation "record_kind" does not exist, skipping
+psql:/tmp/runsql-25390.sql:129: NOTICE:  trigger "audit" for relation "record_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25390.sql:151: NOTICE:  policy "tenant_app" for relation "connection_record_kind" does not exist, skipping
+psql:/tmp/runsql-25390.sql:151: NOTICE:  policy "tenant_readonly" for relation "connection_record_kind" does not exist, skipping
+psql:/tmp/runsql-25390.sql:151: NOTICE:  trigger "audit" for relation "connection_record_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 2
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+psql:/tmp/runsql-25390.sql:499: NOTICE:  constraint "connection_field_source_type_check" of relation "connection_field" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+COMMENT
+ALTER TABLE
+psql:/tmp/runsql-25390.sql:507: NOTICE:  constraint "crm_record_reason_check" of relation "crm_record" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:/tmp/runsql-25390.sql:692: NOTICE:  policy "tenant_app" for relation "connection_reason" does not exist, skipping
+psql:/tmp/runsql-25390.sql:692: NOTICE:  policy "tenant_readonly" for relation "connection_reason" does not exist, skipping
+psql:/tmp/runsql-25390.sql:692: NOTICE:  trigger "audit" for relation "connection_reason" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+COMMIT
+RESET

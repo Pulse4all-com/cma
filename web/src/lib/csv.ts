@@ -11,7 +11,9 @@
  * at the start) gets a leading apostrophe: names are typed by people, and a CSV opened in a
  * spreadsheet program must never run them.
  */
-import type { ExportHoursRow, FirstOrderLevel, FirstOrderListRow, StatusChangeRow, TenantSetting } from "./data/types";
+import type {
+  CancellationsReport, ExportHoursRow, FirstOrderLevel, FirstOrderListRow, FunnelGroup, FunnelStageRow, LostReasonRow, StatusChangeRow, TenantSetting,
+} from "./data/types";
 
 export type Separator = "comma" | "semicolon" | "tab";
 export type DecimalMark = "point" | "comma";
@@ -241,6 +243,78 @@ export function firstOrdersCsv(rows: FirstOrderListRow[], from: string, to: stri
       r.currency ?? "",
       decimal(r.amount),
       decimal(r.daysFromFirstTouch),
+    ]),
+    s,
+  );
+}
+
+// ---- Reports > Funnel and Cancellations (addition 0008zb) --------------------------------------------------
+
+export interface FunnelFileLabels {
+  from: string; to: string; pipeline: string; stage: string; readsTimes: string; entered: string; stillThere: string; movedOn: string; medianDays: string;
+  p80Days: string; reachedWon: string; enteredPrevious: string; yes: string; no: string;
+}
+
+/** A number with the tenant's decimal mark and fixed decimals; empty for none */
+function decimalOf(v: number | null, digits: number, s: Pick<ExportSettings, "decimalMark">): string {
+  if (v === null) return "";
+  const text = v.toFixed(digits);
+  return s.decimalMark === "comma" ? text.replace(".", ",") : text;
+}
+
+/**
+ * One row per stage, as Reports > Funnel shows it: the period, the pipeline, the stage, whether its times are read, then
+ * entered, still there, moved on, the median and 80th percentile of days in the stage, reached won and entered in the
+ * previous period; empty figures for a stage whose times are not read. Counts and days only
+ */
+export function funnelStagesCsv(rows: FunnelStageRow[], from: string, to: string, s: ExportSettings, l: FunnelFileLabels): string {
+  const n = (v: number | null) => (v === null ? "" : String(v));
+  return toCsv(
+    [l.from, l.to, l.pipeline, l.stage, l.readsTimes, l.entered, l.stillThere, l.movedOn, l.medianDays, l.p80Days, l.reachedWon, l.enteredPrevious],
+    rows.map((r) => [
+      formatDate(from, s.dateFormat), formatDate(to, s.dateFormat), safeText(r.pipelineLabel), safeText(r.label), r.readsTimes ? l.yes : l.no,
+      n(r.entered), n(r.stillThere), n(r.movedOn), decimalOf(r.medianDays, 1, s), decimalOf(r.p80Days, 1, s), n(r.reachedWon), n(r.enteredPrevious),
+    ]),
+    s,
+  );
+}
+
+export interface LostReasonsFileLabels {
+  from: string; to: string; reason: string; value: string; kind: string; deals: string; share: string; real: string; dataQuality: string; none: string;
+  noReason: string;
+}
+
+/**
+ * One row per lost reason, as Reports > Funnel shows them: the real reasons with their share of the real lost deals, the
+ * data-quality reasons with their share of every lost deal, then no reason; the share as a fraction with four decimals.
+ * The option's label and value only, never free text
+ */
+export function lostReasonsCsv(reasons: LostReasonRow[], dataQuality: LostReasonRow[], noReason: { deals: number; share: number | null }, from: string, to: string,
+  s: ExportSettings, l: LostReasonsFileLabels): string {
+  const row = (r: LostReasonRow, kind: string) => [formatDate(from, s.dateFormat), formatDate(to, s.dateFormat), safeText(r.label), safeText(r.value), kind,
+    String(r.deals), decimalOf(r.share, 4, s)];
+  return toCsv(
+    [l.from, l.to, l.reason, l.value, l.kind, l.deals, l.share],
+    [...reasons.map((r) => row(r, l.real)), ...dataQuality.map((r) => row(r, l.dataQuality)),
+      [formatDate(from, s.dateFormat), formatDate(to, s.dateFormat), l.noReason, "", l.none, String(noReason.deals), decimalOf(noReason.share, 4, s)]],
+    s,
+  );
+}
+
+export interface CancellationsFileLabels {
+  period: string; day: string; week: string; market: string; requests: string; open: string; closed: string; medianDays: string; unknownMarket: string;
+}
+
+/**
+ * One row per day or week (its Monday) and market, as Reports > Cancellations counts them: the requests created, open and
+ * closed now, the median days to close. It counts requests, never contracts. Counts and days only
+ */
+export function cancellationsCsv(rows: CancellationsReport["byPeriod"], group: FunnelGroup, s: ExportSettings, l: CancellationsFileLabels): string {
+  return toCsv(
+    [l.period, l.market, l.requests, l.open, l.closed, l.medianDays],
+    rows.map((r) => [
+      `${group === "week" ? l.week : l.day} ${formatDate(r.key, s.dateFormat)}`, r.market === "unknown" ? l.unknownMarket : r.market,
+      String(r.requests), String(r.open), String(r.closed), decimalOf(r.medianDaysToClose, 1, s),
     ]),
     s,
   );

@@ -1,0 +1,6 @@
+The lines of the provoked layout run (verify/layout.mjs --provoke) that the new checks give: the funnel's tables widened past their cards by the provoke switch (Claude Code, 20 October 2026). The run's other 80 lines are the earlier checks' own.
+
+  manager /reports/funnel (week): funnel-by-period spills out of its card, the main area scrolls sideways by 1441px at 1280
+  manager /reports/funnel (week): funnel-by-market spills out of its card, the main area scrolls sideways by 1441px at 1280
+  manager /reports/funnel (day): funnel-by-period spills out of its card, the main area scrolls sideways by 1441px at 1280
+  manager /reports/funnel (day): funnel-by-source spills out of its card, the main area scrolls sideways by 1441px at 1280

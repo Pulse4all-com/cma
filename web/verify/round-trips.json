@@ -156,6 +156,42 @@
     "rt": 10
   },
   {
+    "path": "/reports/funnel",
+    "subject": "manager",
+    "tx": 4,
+    "rt": 17
+  },
+  {
+    "path": "/reports/cancellations",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/funnel?from=2026-10-01&to=2026-10-20",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/lost-reasons?from=2026-10-01&to=2026-10-20",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/cancellations?from=2026-10-01&to=2026-10-20",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/deals-per-person?from=2026-10-01&to=2026-10-20",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
     "path": "/messages",
     "subject": "manager",
     "tx": 2,
@@ -230,8 +266,8 @@
   {
     "path": "/configuration/sources",
     "subject": "admin",
-    "tx": 4,
-    "rt": 17
+    "tx": 5,
+    "rt": 21
   },
   {
     "path": "/configuration/markets",
