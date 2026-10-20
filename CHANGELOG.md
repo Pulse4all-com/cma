@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
-- 20 October 2026: two project subagents, cma-reviewer and cma-docs-keeper, in `.claude/agents/`; the review-then-docs order before every code PR (#<PR>): CLAUDE.md (Subagents), docs/decisions.md.
+- 20 October 2026: two project subagents, cma-reviewer and cma-docs-keeper, in `.claude/agents/`; the review-then-docs order before every code PR (#181): CLAUDE.md (Subagents), docs/decisions.md.
 - 20 October 2026: the data map is republished after a merge that changes docs/datamap/index.html; the PR description carries the reminder (#179): CLAUDE.md (Database), docs/architecture/infrastructure.md (Release flow), docs/datamap/README.md (When it changes, Publishing), docs/decisions.md.
 - 20 October 2026: README.md split into README.md plus docs/ files (README, Documentation map), every section moved verbatim; the README's "Last updated" line is replaced by this changelog; `tools/docs/check-split.mjs` checks the coverage.
 
