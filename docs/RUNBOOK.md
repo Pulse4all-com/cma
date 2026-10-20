@@ -569,5 +569,5 @@ Then disable the older versions of the secret (`gcloud secrets versions list cma
 
 - `git status` in `~/cma` is clean, `main` is up to date, open branches are merged or deleted
 - records for anything verified are in `records/<what>-<env>-<date>`
-- a decision or a change in how things work goes into README.md (Decision log, Open decisions, the
-  section concerned, the "Last updated" line)
+- a decision or a change in how things work goes into docs/decisions.md, docs/open-decisions.md, the
+  section concerned (README, Documentation map) and a dated line in CHANGELOG.md
