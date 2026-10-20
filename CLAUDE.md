@@ -28,6 +28,12 @@
 - records/ holds outputs of real runs only. Write a record only when Martin supplies the values from his own runs (ids, counts, times; no keys, secrets or personal data), and say in it that it was written down from his report, as in PRs #120 and #121. Never invent a value, alter what a record already says, or backdate one; a later run is added as its own section or record.
 - Never change cloudbuild.yaml substitutions or environment variables without saying so explicitly in the PR.
 
+## Subagents
+- .claude/agents/ holds two project subagents: cma-reviewer (read-only) and cma-docs-keeper. They start without this conversation, so the delegation message carries the brief's goal, the decisions made (verbatim), the migration number and the verifier results.
+- Every brief that changes code ends in this order: build and run the pure verifiers; delegate to cma-reviewer; fix every Critical, re-run the verifiers and review once more at most; a Critical still open after the second round goes in the PR description as open, never fixed silently; delegate to cma-docs-keeper with the reviewer's verdict; open the PR with the reviewer's three-line summary and the docs keeper's file list.
+- A docs-only change skips cma-reviewer. A brief can say "no subagents" for a trivial change.
+- Subagents never run db/ scripts, never write records/, never reach a database or Google Cloud, and never use connectors.
+
 ## Database (db/)
 - Scripts are numbered and run in order; a change is a new script plus its verify script (for example `32_<name>.sql` and `33_verify_<name>.sql`), not an edit to a script that has run in prod. Every new tenant table gets `cma.setup_tenant_table(table)`.
 - Follow the conventions in docs/architecture/data-model/ and docs/architecture/api.md: error codes, permissions, the provoke switch in verify scripts.
