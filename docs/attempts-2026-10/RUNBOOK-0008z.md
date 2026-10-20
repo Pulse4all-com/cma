@@ -513,4 +513,4 @@ Expected: `475` twice, then `no drift`. A line that differs names the function: 
 
 Send me the outputs of steps 1 to 4 and 7, the rows of steps 8 and 9, the hand checks of step 10 and the table, and step 11's result. A record of them follows from your report (`docs/attempts-2026-10/records/`, written down from it, as in PRs #120 and #121).
 
-**Naming.** 0008z is the last single letter after 0008. The next addition's version is open (README, Open decisions): `0009` for the next addition, or `0008za` keeping the series.
+**Naming.** The addition after 0008z is 0008za, then 0008zb; 0009 stays reserved for Assignments (README, Planned migrations; Decision log, 20 October 2026).
