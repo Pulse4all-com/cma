@@ -44,6 +44,7 @@ datamap: 66 tables, 82 views, all described; index.html current
 - A PR that adds or changes a table, view or column in `cma` or `cma_read` updates `catalog.json`: a `what` and `how` for each new table, an entry under `derived` for each new computed view. Its description says that Martin refreshes `schema.json` from dev on that branch after running the migration there, before merging. Until then `verify:datamap` fails on that branch, naming the new table or view as missing from `schema.json`; that is expected.
 - A change to how or how often a source fills a table (webhooks, job schedules, catalogs) updates that table's `how` in the same PR (and its flow, when the source fills another group or comes in another way), then `node tools/datamap/build.mjs` so `index.html` stays current.
 - Martin refreshes the snapshot and rebuilds the map on the increment's branch, after its migration and verify ran in dev and before the merge (below), so main always passes `verify:datamap`.
+- After the merge of a PR that changed `index.html`, Martin says *republish the data map* in the Claude project (Publishing). The PR description ends with that reminder (CLAUDE.md, Database).
 
 Never put customer data in the catalog: describe what a table holds, never a value from it.
 
@@ -86,3 +87,5 @@ Expected: the push names the increment's branch. The PR now passes `verify:datam
 ## Publishing
 
 The page is republished from the Claude project to one stable link, https://claude.ai/artifact/M2zttYbmezk6xqH55nHppL, after the PR with a rebuilt `index.html` is merged. The link stays the same, so readers keep one bookmark.
+
+Check: the published page's stamp shows the same `latest_migration` as `schema.json` on main. The page was republished on 20 October 2026 at 0008z after it had stayed at 0008l since 15 October.
