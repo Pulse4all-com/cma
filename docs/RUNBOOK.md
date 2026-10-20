@@ -378,8 +378,8 @@ Four rules every addition's runbook follows (since 20 October 2026, `docs/attemp
   ```bash
   cma_db dev && time psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f db/<file> > /tmp/<n>.txt 2>&1; tail -22 /tmp/<n>.txt
   ```
-- **Hash steps run outside every market's office hours** (for Pulse4all after 17:00 or before 09:00 local time, or at
-  the weekend). Speed to lead's rows hold two figures that count up to now (an open deal's waiting business seconds,
+- **Hash steps run outside every market's office hours** (before 09:00 or after 18:00 Amsterdam time, or at the
+  weekend). Speed to lead's rows hold two figures that count up to now (an open deal's waiting business seconds,
   and whether a deal was called before the next business noon); both stand still outside office hours, so a block can
   hash every column. Identical hashes before and after prove the migration changed nothing there. A differing hash with
   an unchanged `newest_change` is the migration's: stop. A differing hash with a later `newest_change` means new data

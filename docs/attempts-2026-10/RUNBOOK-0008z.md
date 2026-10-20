@@ -16,7 +16,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
   cma_db dev && time psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f db/<file> > /tmp/<n>.txt 2>&1; tail -22 /tmp/<n>.txt
   ```
   `<file>` is the script, `<n>` its number. `tail -22` shows the verdict table and the timing.
-- **Hash steps run outside every market's office hours** (for Pulse4all after 17:00 or before 09:00 local time, or at the weekend). `speed_to_lead_rows` holds two figures that count up to now: an open deal's waiting business seconds, and whether a deal was called before the next business noon. Both stand still outside office hours, so the block can hash every column. Identical hashes before and after prove the migration changed nothing there. A differing hash with an unchanged `newest_change` is the migration's: stop. A differing hash with a later `newest_change` means new data arrived between the runs.
+- **Steps 1, 7 and 8 run outside every market's office hours** (before 09:00 or after 18:00 Amsterdam time, or at the weekend): the hashes, `94` in prod, the timings and the merge. `speed_to_lead_rows` holds two figures that count up to now: an open deal's waiting business seconds, and whether a deal was called before the next business noon. Both stand still outside office hours, so the block can hash every column. Identical hashes before and after prove the migration changed nothing there. A differing hash with an unchanged `newest_change` is the migration's: stop. A differing hash with a later `newest_change` means new data arrived between the runs.
 
 **What changes** (README: Data model: attempts per deal; Decision log, 20 October 2026):
 - **0008z** (`94`, `95`): Attempts per deal counts the **sales deals** only: the lead pipelines, never a pipeline of orders. The scope (`lead`, `counted`) is gone.
@@ -33,7 +33,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 - Seeds: none change. `94` itself grants `messages.withdraw` to the admin role of every existing tenant and to the default ladder of a new one, so `02` and `03` need no rerun.
 
 **Order matters:**
-- `94` changes the arguments of the two Attempts page reads (the scope gives way to attempted and outcome). The web of `main` calls them with a scope, so **between `94` in prod and the deploy of this merge, Reports → Attempts per deal answers an error**. Run steps 7 to 9 in one sitting outside office hours, and merge at once after the timings (step 8). The spot check against HubSpot (step 9) reads the database only, so it comes after the merge.
+- `94` changes the arguments of the two Attempts page reads (the scope gives way to attempted and outcome). The web of `main` calls them with a scope, so **between `94` in prod and the deploy of this merge, Reports → Attempts per deal answers an error**. Run steps 7 and 8 in one sitting outside every market's office hours, and merge right after the timings (step 8): the deployed page calls 0008y's arguments until the new build is live. The spot check against HubSpot (step 9) reads the database only, so it comes after the merge.
 - Every other read of `main`'s web runs unchanged on `94` (the message reads keep their columns; the stats gain one).
 - The data map: `docs/datamap/catalog.json` gains the new columns. `verify:datamap` fails on this branch until step 5 refreshes `schema.json` from dev.
 - No ingest change, no `cloudbuild.yaml` change, no environment variable.
@@ -41,14 +41,14 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 | Step | What | Elapsed |
 |---|---|---|
 | 0 | Review the pull request, build it, check the additions in dev and prod | 10 min |
-| 1 | Dev: the lead reads before and after `94`, `94` twice with the fingerprint | 5 min |
+| 1 | Dev: the lead reads before and after `94`, `94` twice with the fingerprint | 5 min (outside office hours) |
 | 2 | Dev: `95` normal and provoked | 3 min |
 | 3 | Dev: `93`, `43` and the earlier verifies again (`91` from the Terminal) | 20 min |
 | 4 | Dev: the permission on the admin roles | 1 min |
 | 5 | The data map: snapshot from dev, rebuild, push | 5 min |
 | 6 | Prod: point-in-time recovery | 1 min |
 | 7 | Prod: the lead reads before and after `94`, `94` twice, `41` | 10 min (outside office hours) |
-| 8 | Prod: the timings as `cma_app`, then merge and watch the build | 15 min |
+| 8 | Prod: the timings as `cma_app`, then merge and watch the build | 15 min (outside office hours) |
 | 9 | Prod: the spot check of ten sales deals against HubSpot | 15 min |
 | 10 | Prod: the hand checks and the request log | 15 min |
 | 11 | Dev and prod: the drift check | 3 min |
@@ -87,11 +87,13 @@ Expected on both instances: `0008y` only. Without `0008y`, run `docs/attempts-20
 
 ## 1. Dev: the lead reads before and after `94`, `94` twice
 
+**Outside every market's office hours: before 09:00 or after 18:00 Amsterdam time.** The hashes below stand still only then (the four rules above).
+
 `94` rewrites `cma.lead_calls_of` and `cma.lead_to_order_of` on the shared definitions. This step proves, before prod does the same in step 7, that Speed to lead's and lead to order's reads give the same rows afterwards. The block hashes every row of `cma.speed_to_lead_rows` and `cma.lead_to_order_rows` for 1 to 20 October 2026:
 - every column, ordered by tenant and deal;
 - as `cma_app` (the usual route: a user, row-level security on).
 
-Run the block before `94`, then `94`, then the block again, in one sitting outside every market's office hours (the four rules above).
+Run the block before `94`, then `94`, then the block again, in one sitting.
 
 **Studio (cma-dev-pg)** (read only, two temporary tables of the session: the lead reads' fingerprint. Ids, counts, hashes and a time only; each read's rows are hashed, never shown. As `admin@example.com`: dev's data is the seed's, and the seed's admin holds the report permissions in Pulse4all Subscriptions)
 ```sql
@@ -289,7 +291,7 @@ Expected: `True	7`. Anything else: stop.
 
 ## 7. Prod: the lead reads before and after `94`, `94` twice, `41`
 
-Steps 7 to 9 run in one sitting outside every market's office hours: from `94` until the deploy of step 8, Attempts per deal answers an error (Order matters, above).
+**Outside every market's office hours: before 09:00 or after 18:00 Amsterdam time.** Steps 7 and 8 run in one sitting: the hashes stand still only then, and from `94` until the deploy of step 8, Attempts per deal answers an error (Order matters, above).
 
 **Studio (cma-prod-pg)** (read only, two temporary tables of the session: the lead reads' fingerprint. Ids, counts, hashes and a time only. As `martin@pulse4all.com`: prod has no seed people, and your own user has the report permissions)
 ```sql
@@ -354,6 +356,8 @@ Expected: one row per tenant, each `PASS`, with the same `lead_deals` and `calle
 
 ## 8. Prod: the timings as `cma_app`, then merge
 
+**Outside every market's office hours: before 09:00 or after 18:00 Amsterdam time.** In the sitting of step 7, with no pause. Merge right after the timings: the deployed page calls 0008y's arguments until the new build is live, so Reports → Attempts per deal answers an error from `94` in prod until then.
+
 **Studio (cma-prod-pg)**: one Run of the whole block.
 - Context: tenant `pulse4all-subscriptions`, as `martin@pulse4all.com` (your own user: prod has no seed people), row-level security on.
 - Each read of October runs three times under `EXPLAIN ANALYZE`; the best execution time is kept.
@@ -413,7 +417,7 @@ If a page read is at 500 ms or above, `attempts_of_deal` at 100 ms or above, or 
 - `CMA06` names a permission your user lacks in this tenant (`reports.view` or `performance.team`).
 - An empty `app.user_id` in the first result means the email in the block is not your user's.
 
-**Terminal** (from the Chromebook: merge at once, so the Attempts pages work again)
+**Terminal** (from the Chromebook: merge right after the timings; the deployed page calls 0008y's arguments until the new build is live)
 ```bash
 cd ~/cma && gh pr merge <number> --squash --delete-branch && git switch main -q && git pull -q && git log --oneline -1
 gcloud builds list --project=p4a-cma-prod --region=europe-west4 --limit=1 --format="table(status,substitutions.SHORT_SHA,createTime.date('%H:%M'))"
