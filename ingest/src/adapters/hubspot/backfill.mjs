@@ -21,6 +21,10 @@
  * Search streams: backfill:<object>:<property> = { from, value, done } (value: the last page's
  * highest property value, ms). A resumed query starts at that value; the objects at the boundary are
  * listed again and read once (their event keys are known).
+ *
+ * --again (since addition 0008za): every object the search streams list gets this run's version (againVersion), so
+ * the stored deals and tickets are read again whether or not they changed, and the read-back writes what the adapter
+ * now reads (their stage times, brief N21); an object both streams list is read once per run.
  */
 import { SourceError } from "../../core/http.mjs";
 import { hubspotClient, tokenOf } from "./read.mjs";
@@ -39,14 +43,24 @@ export async function backfillFrom(object, store) {
   return EMAIL_OBJECTS.has(object) ? store.emailStartOf() : null;
 }
 
-async function backfillSearch({ api, store, object, property, fromMs, untilMs, process }) {
+/**
+ * The version an --again run gives an object (addition 0008za): its modified time and the run, so an unchanged object
+ * is read again by this run (once: its two streams list it with the same version) and by no later listing of it.
+ * At most 40 characters, as every version (core/sync.mjs).
+ */
+export function againVersion(version, runAt) {
+  return `${String(version ?? "unknown").slice(0, 24)}~a${runAt}`.slice(0, 40);
+}
+
+async function backfillSearch({ api, store, object, property, fromMs, untilMs, process, again = false, runAt = untilMs }) {
   const stream = `backfill:${object}:${property}`;
   const cur = await store.cursor(stream);
   if (cur?.from === fromMs && cur.done) return;
   const start = cur?.from === fromMs && Number.isFinite(cur.value) ? Math.max(fromMs, cur.value) : fromMs;
   let last = start;
   for await (const page of searchPages(api, object, property, start, untilMs)) {
-    if (page.items.length) await process(object, page.items);
+    const items = again ? page.items.map((i) => ({ ...i, version: againVersion(i.version, runAt) })) : page.items;
+    if (items.length) await process(object, items);
     if (page.last !== null) last = Math.max(last, page.last);
     await store.setCursor(stream, { from: fromMs, value: last, done: false });
   }
@@ -70,7 +84,7 @@ async function backfillContacts({ store, fromMs, runAt, process }) {
 }
 
 /** The backfill of one object type from fromMs (ms) up to untilMs (the run's start). */
-export async function backfill({ connection, store, budget, object, fromMs, untilMs, process, counts }) {
+export async function backfill({ connection, store, budget, object, fromMs, untilMs, process, counts, again = false, runAt = untilMs }) {
   if (object === "form_submission") {
     await backfillForms({ connection, store, budget, fromMs, counts });
     return;
@@ -81,5 +95,5 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
   const properties = BACKFILL_STREAMS[object];
   if (!properties) throw new SourceError("object_not_backfilled");
   const api = hubspotClient(await tokenOf(connection), budget);
-  for (const property of properties) await backfillSearch({ api, store, object, property, fromMs, untilMs, process });
+  for (const property of properties) await backfillSearch({ api, store, object, property, fromMs, untilMs, process, again, runAt });
 }

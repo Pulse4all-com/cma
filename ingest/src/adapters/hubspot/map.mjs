@@ -16,6 +16,14 @@
  * Since addition 0008u (brief N19-A part 2): a contact gives its creation time (the object's own createdAt,
  * slot 1, so no extra property is read; slots 2 to 9 are created_at properties the connection maps), and a
  * deal stage its outcome from the pipelines read (probability 1.0 won, a closed stage at 0.0 lost).
+ *
+ * Since addition 0008za (brief N21): a deal's or ticket's stage times, from the calculated properties
+ * hs_v2_date_entered_<stage id> and hs_v2_date_exited_<stage id> of the stages that read times, asked for in the same
+ * batch read as the record's other properties and kept out of its raw.
+ *
+ * Since addition 0008zb: a deal's or ticket's reason, from its mapped reason property, only once that property is known
+ * to be an enumeration (the option's internal value, at most 100 characters); reasonItemOf turns the property's
+ * definition into the catalog the database keeps.
  */
 import { hashNumber } from "../../core/hash.mjs";
 
@@ -165,12 +173,54 @@ export const CALL_NUMBER_PROPERTIES = ["hs_call_from_number", "hs_call_to_number
 export const TASK_PROPERTIES = ["hs_timestamp", "hs_task_status", "hs_task_type", "hs_task_priority", "hubspot_owner_id",
   "hs_task_completion_date", "hs_createdate", "hs_lastmodifieddate"];
 
-const RECORD_KEYS = { market: "market", language: "language", currency: "currency", amount: "amount", source_channel: "sourceChannel", category: "category" };
+const RECORD_KEYS = { market: "market", language: "language", currency: "currency", amount: "amount", source_channel: "sourceChannel", category: "category",
+  reason: "reason" };
 const CONTACT_KEYS = { country: "country", language: "language", currency: "currency", store: "store" };
 
-/** The configured fields of one entity (deal, ticket, contact) from cma.connection_config. */
+/**
+ * The configured fields of one entity (deal, ticket, contact) from cma.connection_config. A reason field counts only once
+ * the adapter has read its property as an enumeration (sourceType, addition 0008zb): a property of any other type, or one
+ * not yet read, is never asked for, so free text never reaches the CMA.
+ */
 export function fieldsOf(config, entity) {
-  return (config?.fields ?? []).filter((f) => f.entity === entity && typeof f.property === "string" && f.property);
+  return (config?.fields ?? []).filter((f) => f.entity === entity && typeof f.property === "string" && f.property
+    && (f.field !== "reason" || f.sourceType === "enumeration"));
+}
+
+// ---- Reasons (addition 0008zb) ---------------------------------------------------------------
+
+/** How often a reason property's definition is read again (its type and options), in ms. */
+export const REASON_CHECK_EVERY_MS = 60 * 60_000;
+
+/** The reason fields of deals and tickets, mapped, whatever their state: { recordType, property, sourceType, checkedAt }. */
+export function reasonFieldsOf(config) {
+  return (config?.fields ?? [])
+    .filter((f) => f.field === "reason" && (f.entity === "deal" || f.entity === "ticket") && typeof f.property === "string" && f.property)
+    .map((f) => ({ recordType: f.entity, property: f.property, sourceType: f.sourceType ?? null, checkedAt: f.checkedAt ?? null }));
+}
+
+/** Whether a reason field's property is read now: never read, or read longer ago than everyMs. */
+export function reasonCheckDue(field, nowMs, everyMs = REASON_CHECK_EVERY_MS) {
+  const at = Date.parse(field?.checkedAt ?? "");
+  return !field?.sourceType || !Number.isFinite(at) || nowMs - at >= everyMs;
+}
+
+/**
+ * A property definition (GET /crm/v3/properties/{object}/{name}; null when HubSpot has no such property) → the
+ * cma.ingest_upsert_reasons item: the type in lower case (missing for none), and for an enumeration its options'
+ * internal values with their labels and order (hidden options too: a record can still hold one). Only an enumeration's
+ * values are ever stored; the database refuses the rest.
+ */
+export function reasonItemOf(recordType, property, def) {
+  if (!def) return { recordType, property, type: "missing" };
+  const raw = String(def.type ?? "").toLowerCase().replace(/[^a-z0-9_]/g, "_").slice(0, 40);
+  const type = /^[a-z]/.test(raw) ? raw : "unknown";
+  if (type !== "enumeration") return { recordType, property, type };
+  const options = (Array.isArray(def.options) ? def.options : [])
+    .filter((o) => o && o.value !== undefined && o.value !== null && String(o.value).length >= 1 && String(o.value).length <= 100)
+    .map((o) => ({ value: String(o.value), label: String(o.label ?? o.value).slice(0, 200), order: Number.isInteger(o.displayOrder) ? o.displayOrder : 0 }))
+    .slice(0, 500);
+  return { recordType, property, type, options };
 }
 
 /** The properties a batch read asks for: the structural ones plus the configured ones, nothing else. */
@@ -281,6 +331,79 @@ export function contactFromObject(obj, config) {
   else if (created[0]) c.createdAt = created[0];
   if (Object.keys(refs).length) c.refs = refs;
   return c;
+}
+
+// ---- Stage times (addition 0008za) -----------------------------------------------------------
+
+/**
+ * The name of a stage's calculated time property: hs_v2_date_entered_<stage id> or hs_v2_date_exited_<stage id>.
+ * HubSpot builds the name from the stage id and allows lower-case letters, digits and the underscore in a property
+ * name: a stage id's upper-case letters are lowered and every other character (a hyphen, a dot, a space) becomes an
+ * underscore, as HubSpot writes it (a ticket stage "1" → hs_v2_date_entered_1, a deal stage "quote-sent" →
+ * hs_v2_date_entered_quote_sent).
+ */
+export function stageTimeProperty(kind, stageId) {
+  if (kind !== "entered" && kind !== "exited") throw new Error(`a stage time is entered or exited, not ${kind}`);
+  const id = String(stageId ?? "").toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  return id ? `hs_v2_date_${kind}_${id}` : null;
+}
+
+/**
+ * The stages of a record type whose times are read (connection_stage.read_times, the effective value
+ * cma.connection_config gives as readTimes), active stages of every pipeline of the type, each with its two
+ * property names. Two stage ids that give the same name keep the first (by pipeline, then order).
+ */
+export function timedStagesOf(recordType, config) {
+  const out = [];
+  const seen = new Set();
+  for (const p of config?.pipelines ?? []) {
+    if (p.recordType !== recordType) continue;
+    for (const s of p.stages ?? []) {
+      if (s.readTimes !== true || s.status === "archived") continue;
+      const entered = stageTimeProperty("entered", s.stageId);
+      if (!entered || seen.has(entered)) continue;
+      seen.add(entered);
+      out.push({ pipelineId: String(p.pipelineId), stageId: String(s.stageId), entered, exited: stageTimeProperty("exited", s.stageId) });
+    }
+  }
+  return out;
+}
+
+/** The stage time properties a record type's batch read asks for besides propertiesFor's (sorted; never in raw). */
+export function stagePropertiesFor(recordType, config) {
+  return timedStagesOf(recordType, config).flatMap((s) => [s.entered, s.exited]).sort();
+}
+
+/**
+ * A read record's stage times → the cma.ingest_record_stages answer: { recordType, sourceId, updatedAt, stages:
+ * [{ pipelineId, stageId, enteredAt?, exitedAt? }] }. A time HubSpot answers empty is left out, so the database keeps
+ * the stored one (a read never clears a time); a stage without either time is left out.
+ */
+export function stageTimesFromObject(recordType, obj, config) {
+  const p = obj?.properties ?? {};
+  const stages = [];
+  for (const s of timedStagesOf(recordType, config)) {
+    const item = { pipelineId: s.pipelineId, stageId: s.stageId };
+    const entered = iso(p[s.entered]);
+    const exited = iso(p[s.exited]);
+    if (entered) item.enteredAt = entered;
+    if (exited) item.exitedAt = exited;
+    if (entered || exited) stages.push(item);
+  }
+  return { recordType, sourceId: String(obj.id), updatedAt: iso(obj.updatedAt) ?? iso(p[RECORD_STANDARD[recordType]?.modified]), stages };
+}
+
+/**
+ * Whether a read-back reads the stage times with the record (addition 0008za): always in a job (no deadline); on the
+ * webhook path while the budget has at least minMs left at the record read and the type asks for at most maxProperties
+ * stage properties. Otherwise the stage read moves to the next sweep, with the reason ("budget" or "properties").
+ */
+export function stageReadPlan(remainingMs, propertyCount, { minMs = 1500, maxProperties = 400 } = {}) {
+  if (!propertyCount) return { read: false, reason: null };
+  if (remainingMs === Number.POSITIVE_INFINITY) return { read: true, reason: null };
+  if (propertyCount > maxProperties) return { read: false, reason: "properties" };
+  if (remainingMs < minMs) return { read: false, reason: "budget" };
+  return { read: true, reason: null };
 }
 
 /**

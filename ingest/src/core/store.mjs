@@ -59,6 +59,9 @@
  * Writes: a read-back answers units, one per object it read ({ eventIds, status, error?, writes }); a
  * unit's writes.alerts names the records that arrived by a created event, for cma.ingest_record_alerts;
  * writes.assignments names every record read back, for cma.ingest_assignment_alerts (0008a);
+ * writes.reasons refreshes the reason properties' types and options (cma.ingest_upsert_reasons, addition 0008zb);
+ * writes.recordStages writes a record's stage times after the records (cma.ingest_record_stages, addition 0008za), and
+ * writes.deferredStages records a deferred stage read as an event of the record for the next sweep (writeRecordStages);
  * writes.tasks upserts CRM tasks (cma.ingest_upsert_tasks, addition 0008n; ids and refs, never body or subject),
  * writes.telephonyTags and telephonyNumbers refresh the telephony catalogs (each the whole list),
  * writes.telephonyCalls upserts telephony calls, writes.commerceCustomers and commerceOrders upsert a
@@ -395,6 +398,7 @@ async function outcomes(ctx, sql, connectionId, items) {
 
 const ORDER = [
   ["pipelines", "select cma.ingest_upsert_pipelines($1, $2::jsonb) as n", false],
+  ["reasons", "select cma.ingest_upsert_reasons($1, $2::jsonb) as n", false],
   ["callOutcomes", "select cma.ingest_upsert_call_outcomes($1, $2::jsonb) as n", false],
   ["records", "select outcome from cma.ingest_upsert_records($1, $2::jsonb)", true],
   ["tasks", "select outcome from cma.ingest_upsert_tasks($1, $2::jsonb)", true],
@@ -407,6 +411,32 @@ const ORDER = [
   ["commerceCustomers", "select outcome from cma.ingest_upsert_commerce_customers($1, $2::jsonb)", true],
   ["commerceOrders", "select outcome from cma.ingest_upsert_commerce_orders($1, $2::jsonb)", true],
 ];
+
+/**
+ * A record's stage times (addition 0008za), after the records they belong to: one cma.ingest_record_stages call per
+ * record, counted as stages_<outcome> (written, unchanged, stale, unknown). A deferred stage read becomes an event of
+ * the record (key stages:<type>:<id>:<source time>, source type cma.stage_times, the reason in raw), recorded as
+ * received in the same transaction, so the next sweep reads the record back with its stage times; counted as
+ * stagesDeferred. The same record and source time deferred twice is one event.
+ */
+async function writeRecordStages(q, connectionId, units, counts) {
+  for (const s of units.flatMap((u) => u.writes?.recordStages ?? [])) {
+    const r = await q.query("select outcome from cma.ingest_record_stages($1, $2, $3, $4::jsonb)",
+      [connectionId, s.recordType, s.sourceId, JSON.stringify({ updatedAt: s.updatedAt ?? null, stages: s.stages ?? [] })]);
+    const k = `stages_${r.rows[0]?.outcome ?? "unknown"}`;
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  const deferred = units.flatMap((u) => u.writes?.deferredStages ?? []);
+  for (const part of chunks(deferred)) {
+    const events = part.map((d) => ({
+      key: `stages:${d.recordType}:${d.sourceId}:${d.updatedAt ?? "unknown"}`.slice(0, 200), sourceType: "cma.stage_times", kind: "changed",
+      objectType: d.recordType, objectId: d.sourceId, propertyName: null, occurredAt: d.updatedAt ?? new Date().toISOString(), attempt: 1,
+      raw: { job: "stage_times", deferred: d.reason },
+    }));
+    await q.query("select count(*) from cma.ingest_record_events($1, $2::jsonb)", [connectionId, JSON.stringify(events)]);
+    counts.stagesDeferred = (counts.stagesDeferred ?? 0) + part.length;
+  }
+}
 
 // The links of one batch, the last one per customer: after the customers they belong to (0008h)
 async function writeContactLinks(q, connectionId, units, counts) {
@@ -429,6 +459,7 @@ async function writeAll(q, connectionId, units, counts) {
       if (chunked) for (const row of r.rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
     }
   }
+  await writeRecordStages(q, connectionId, units, counts);
   await writeContactLinks(q, connectionId, units, counts);
   // CRM write-backs (0007c) after the facts they describe; one per contact and reason in this batch
   const seen = new Set();

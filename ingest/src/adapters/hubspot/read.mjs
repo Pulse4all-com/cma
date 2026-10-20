@@ -4,7 +4,11 @@
  *
  *   deals, tickets  CRM v3 batch read (structural and configured properties only), their contacts
  *                   through the v4 associations batch read; the primary contact is read too, and
- *                   gives the record its market and language when no record property is mapped
+ *                   gives the record its market and language when no record property is mapped. Since
+ *                   addition 0008za the same batch read asks for the stage times of the stages that read
+ *                   them (hs_v2_date_entered_<id>, hs_v2_date_exited_<id>), written by
+ *                   cma.ingest_record_stages; a webhook read-back whose budget cannot hold them writes the
+ *                   record and leaves a deferred stage read for the sweep (stageReadPlan), logged with why
  *   calls           CRM v3 batch read; the other party's number hashed with the tenant's pepper and
  *                   dropped; associations to contacts and deals
  *   contacts        CRM v3 batch read, only for contacts the CMA holds (0006: never the contact base)
@@ -28,7 +32,7 @@ import { warn } from "../../core/log.mjs";
 import { dailyOf, endpointOf } from "./usage.mjs";
 import {
   API_OBJECT, propertiesFor, recordFromObject, contactFromObject, contactAttributes, callFromObject, primaryContact, associationDiff,
-  taskFromObject, firstAssociated, stageOutcome,
+  taskFromObject, firstAssociated, stageOutcome, stagePropertiesFor, stageTimesFromObject, stageReadPlan,
 } from "./map.mjs";
 
 const BATCH_READ = 100;
@@ -42,6 +46,19 @@ const catalogsAt = new Map(); // connection id → { pipelines, outcomes } (ms),
 
 function apiBase() {
   return checkedBase(process.env.INGEST_HUBSPOT_API_BASE ?? "https://api.hubapi.com");
+}
+
+/**
+ * The stage read's limits on the webhook path (addition 0008za): the budget left at the record read
+ * (INGEST_STAGE_READ_MIN_MS, default 1500 of the 3-second budget) and the stage properties of one record type
+ * (INGEST_STAGE_READ_MAX_PROPERTIES, default 400: 200 stages). A value out of range takes the default.
+ */
+export function stageReadLimits() {
+  const num = (v, d, lo, hi) => {
+    const n = Number(v);
+    return v !== undefined && Number.isInteger(n) && n >= lo && n <= hi ? n : d;
+  };
+  return { minMs: num(process.env.INGEST_STAGE_READ_MIN_MS, 1500, 0, 20_000), maxProperties: num(process.env.INGEST_STAGE_READ_MAX_PROPERTIES, 400, 2, 2000) };
 }
 
 /**
@@ -116,6 +133,10 @@ export function hubspotClient(token, budget) {
     },
     async pipelines(type) {
       return (await call("GET", `/crm/v3/pipelines/${API_OBJECT[type]}`))?.results ?? [];
+    },
+    /** One property's definition (its type and options; addition 0008zb): GET /crm/v3/properties/{object}/{name}. */
+    async property(type, name) {
+      return call("GET", `/crm/v3/properties/${API_OBJECT[type]}/${encodeURIComponent(name)}`);
     },
     async callOutcomes() {
       const r = await call("GET", "/calling/v1/dispositions");
@@ -276,7 +297,12 @@ export async function readBack({ connection, config, events, store, budget }) {
     if (!list.length) continue;
     try {
       const ids = list.map((g) => g.objectId);
-      const objects = await api.batchRead(recordType, ids, propertiesFor(recordType, config));
+      // The stage times (addition 0008za) in the same batch read, unless the webhook's budget cannot hold them: then
+      // the record is written now and its stage read moves to the next sweep, with the reason
+      const stageProps = stagePropertiesFor(recordType, config);
+      const plan = stageReadPlan(budget.remaining(), stageProps.length, stageReadLimits());
+      if (plan.reason) warn("stage times deferred to the sweep", { connection: connection.connectionId, recordType, records: ids.length, reason: plan.reason });
+      const objects = await api.batchRead(recordType, ids, plan.read ? [...propertiesFor(recordType, config), ...stageProps] : propertiesFor(recordType, config));
       const assoc = await api.associations(recordType, "contact", ids);
       const storedContact = await store.recordContacts(recordType, ids);
       const storedAssoc = await store.currentAssociations(recordType, ids);
@@ -298,6 +324,8 @@ export async function readBack({ connection, config, events, store, budget }) {
         const record = recordFromObject(recordType, obj, config, contactObj ? contactAttributes(contactObj, config) : {});
         if (contactId) record.contactId = contactId;
         let writes = { records: [record] };
+        if (plan.read) writes.recordStages = [stageTimesFromObject(recordType, obj, config)];
+        else if (plan.reason) writes.deferredStages = [{ recordType, sourceId: g.objectId, updatedAt: record.updatedAt, reason: plan.reason }];
         if (contactObj) writes.contacts = [contactFromObject(contactObj, config)];
         const current = (assoc.get(g.objectId) ?? []).map((t) => ({ toType: "contact", toId: String(t.toObjectId) }));
         const diff = associationDiff(recordType, g.objectId, current, storedAssoc, ["contact"], readAt);
