@@ -1,0 +1,79 @@
+DO
+BEGIN
+SET
+DO
+INSERT 0 3
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+psql:db/94_attempts_for_sales.sql:607: NOTICE:  function cma.attempts_scope_check(text) does not exist, skipping
+DROP FUNCTION
+psql:db/94_attempts_for_sales.sql:608: NOTICE:  function cma.attempts_params_check(uuid,date,date,text,text,text) does not exist, skipping
+DROP FUNCTION
+psql:db/94_attempts_for_sales.sql:609: NOTICE:  function cma.attempts_per_deal_page_of(uuid,date,date,text,text,text,text,pg_catalog.int4,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/94_attempts_for_sales.sql:610: NOTICE:  function cma.attempts_per_person_of(uuid,date,date,text,text,text,timestamptz) does not exist, skipping
+DROP FUNCTION
+psql:db/94_attempts_for_sales.sql:611: NOTICE:  function cma.attempts_per_deal_page(date,date,text,text,text,text,pg_catalog.int4) does not exist, skipping
+DROP FUNCTION
+psql:db/94_attempts_for_sales.sql:612: NOTICE:  function cma.attempts_per_person_page(date,date,text,text,text) does not exist, skipping
+DROP FUNCTION
+DROP VIEW
+DROP FUNCTION
+DO
+COMMENT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:db/94_attempts_for_sales.sql:1259: NOTICE:  column "withdrawn_at" of relation "message" already exists, skipping
+ALTER TABLE
+psql:db/94_attempts_for_sales.sql:1260: NOTICE:  column "withdrawn_by" of relation "message" already exists, skipping
+ALTER TABLE
+DO
+COMMENT
+COMMENT
+COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+GRANT
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+INSERT 0 0
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+DO
+CREATE FUNCTION
+DO
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

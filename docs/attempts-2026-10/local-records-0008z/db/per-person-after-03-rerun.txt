@@ -1,0 +1,2 @@
+pulse4all-invest | 
+pulse4all-subscriptions | email,orders,attempts

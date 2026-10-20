@@ -173,27 +173,33 @@ async function expectNavigation() {
     // seed's does) follow Email per agent; since 0008v the Campaigns group (Campaign monitoring, reports.view or
     // performance.team) follows Reports; since 0008y Attempts per deal (reports.view or performance.team) and Attempts per
     // agent (performance.team, and reports.per_person holding attempts, as the dev seed's does) follow Speed to lead, so the
-    // analyst's keys 6 to 9 and the reader's 4 to 9 move (accepted during the soft launch, Martin, 19 October 2026)
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up",
-      "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email", "/reports/email-per-agent", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], false],
-    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Forms after Calls; Email without Email per agent;
-    // First orders without Orders per person; Attempts per deal without Attempts per agent
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/attempts", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/forms",
-      "/reports/email", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
+    // analyst's keys 6 to 9 and the reader's 4 to 9 move (accepted during the soft launch, Martin, 19 October 2026). Since
+    // 0008z (Martin, 20 October 2026) Reports runs Dashboard, Speed to lead, Calls, Calls per agent, Email, Email per agent,
+    // Follow-up, Attempts per deal, Attempts per agent, Forms, Intake, Inbound, First orders, Orders per person, Data quality,
+    // so the digit keys after Speed to lead move for everyone who sees Reports
+    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
+      "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound",
+      "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality",
+      "/campaigns"], false],
+    // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
+    // Attempts per deal without Attempts per agent; First orders without Orders per person
+    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/forms",
+      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/attempts",
-      "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms", "/reports/email",
-      "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
+      "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent",
+      "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead",
-      "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
-      "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead",
-      "/reports/attempts", "/reports/attempts-per-agent", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
-      "/reports/email", "/reports/email-per-agent", "/reports/first-orders", "/reports/orders-per-person", "/reports/data-quality", "/campaigns"], true],
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
+      "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
+      "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
+      "/reports/data-quality", "/campaigns"], true],
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
+      "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
+      "/reports/attempts-per-agent", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
+      "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -220,8 +226,10 @@ async function expectNavigation() {
     // The Configuration group (0005a): unnumbered pages for tenant.configure only (the admin); nobody else sees the group
     const configLinks = await p.evaluate(() => [...(document.querySelector("nav")?.querySelectorAll('a[href^="/configuration/"]') ?? [])].map((a) => [a.getAttribute("data-shortcut"), a.getAttribute("href")]));
     const wantConfig = subject === "admin"
-      ? [["/configuration/statuses"], ["/configuration/teams"], ["/configuration/absences"], ["/configuration/exports"], ["/configuration/app-links"],
-         ["/configuration/sources"], ["/configuration/markets"], ["/configuration/alert-rules"], ["/configuration/health"]].map(([h]) => [null, h])
+      // since 0008z (Martin, 20 October 2026): Team and skills, Statuses, Absences and coverage, Markets, Sources, App links,
+      // Exports, Alert rules, System health
+      ? [["/configuration/teams"], ["/configuration/statuses"], ["/configuration/absences"], ["/configuration/markets"], ["/configuration/sources"],
+         ["/configuration/app-links"], ["/configuration/exports"], ["/configuration/alert-rules"], ["/configuration/health"]].map(([h]) => [null, h])
       : [];
     if (JSON.stringify(configLinks) !== JSON.stringify(wantConfig)) problems.push(`${subject}: configuration pages ${JSON.stringify(configLinks)}, expected ${JSON.stringify(wantConfig)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);
@@ -253,7 +261,8 @@ async function expectReports() {
   // panel must stay inside the viewport) and a tile
   const lastIntakeHeader = '[data-testid="intake-table"] thead tr:nth-child(2) th:last-child button[data-header-hint]';
   const cases = [
-    ["manager", "/reports/speed-to-lead?range=month", ["G", "T", "W", "M", "C"], '[data-testid="speed-summary"]', '[data-testid="speed-summary"] th:nth-child(6) button[data-header-hint]'],
+    ["manager", "/reports/speed-to-lead?range=month", ["G", "T", "W", "M", "C"], '[data-testid="speed-summary"]',
+      '[data-testid="speed-summary"] th:nth-child(6) button[data-header-hint]'],
     ["manager", "/reports/intake?range=month", ["F", "T", "W", "M", "C"], '[data-testid="intake-table"]', lastIntakeHeader],
     ["manager", "/reports/data-quality", [], '[data-testid="data-quality"]', '[data-testid="data-quality"] th:nth-child(2) button[data-header-hint]'],
     ["manager", "/reports/dashboard?range=month", ["P", "T"], '[data-testid="intake-row"]', '[data-testid="intake-speed"] button[data-header-hint]'],
@@ -261,12 +270,14 @@ async function expectReports() {
     ["invest-analyst", "/reports/dashboard?range=month", [], '[data-testid="not-connected"]', '[data-testid="intake-calls"] button[data-header-hint]'],
     // Inbound (addition 0008i): the right-most reason column's hint stays inside the viewport; a tenant
     // without telephony says so in words and has no header to open
-    ["manager", "/reports/inbound?range=month", ["G", "T", "W", "M", "C"], '[data-testid="inbound-table"]', '[data-testid="inbound-table"] thead th:last-child button[data-header-hint]'],
+    ["manager", "/reports/inbound?range=month", ["G", "T", "W", "M", "C"], '[data-testid="inbound-table"]',
+      '[data-testid="inbound-table"] thead th:last-child button[data-header-hint]'],
     ["invest-analyst", "/reports/inbound?range=month", ["G"], '[data-testid="inbound-not-connected"]', null],
     // Follow-up (addition 0008o): the three filters' keycaps, the tickets table's right-most header hint stays
     // inside the viewport; the reader (reports.view alone) gets the lists without the per-person table
     ["manager", "/reports/follow-up", ["K", "O", "S"], '[data-testid="follow-up-by-owner"]', '[data-testid="follow-up-tickets"] thead th:last-child button[data-header-hint]'],
-    ["reader", "/reports/follow-up?state=attention", ["K", "O", "S"], '[data-testid="follow-up-leads"]', '[data-testid="follow-up-tasks"] thead th:last-child button[data-header-hint]'],
+    ["reader", "/reports/follow-up?state=attention", ["K", "O", "S"], '[data-testid="follow-up-leads"]',
+      '[data-testid="follow-up-tasks"] thead th:last-child button[data-header-hint]'],
     ["agent-one", "/me/follow-up", [], '[data-testid="my-leads"]', '[data-testid="my-tickets"] thead th:last-child button[data-header-hint]'],
   ];
   for (const [subject, path, keys, selector, hintMark] of cases) {
@@ -942,6 +953,8 @@ async function expectLiveBoard() {
       continue;
     }
     if (provoke && subject === "supervisor") await p.evaluate(() => { const t = document.querySelector('[data-testid="inbound-tiles"]'); if (t) t.style.width = "2400px"; });
+    // --provoke puts Missed, not called back back above the team (where it sat before 0008z)
+    if (provoke && subject === "analyst") await p.evaluate(() => { const m = document.querySelector('[data-testid="missed-live"]'); const t = document.querySelector('[data-testid="inbound-live"]'); if (m && t) t.after(m); });
     const m = await p.evaluate((strip) => {
       const main = document.querySelector("main");
       // A name on a plain div or span needs a role (the tiles group, the IT audit of 17 October 2026); --provoke strips it
@@ -953,12 +966,15 @@ async function expectLiveBoard() {
         missed: !!document.querySelector('[data-testid="missed-callbacks"]'),
         notConnected: !!document.querySelector('[data-testid="inbound-live"] [data-testid="inbound-not-connected"]'),
         unnamedLabels: [...document.querySelectorAll("main div[aria-label], main span[aria-label]")].filter((el) => !el.getAttribute("role")).length,
+        // Missed, not called back is the board's last section since 0008z: the last heading in main is its own
+        lastHeading: [...document.querySelectorAll("main h2")].at(-1)?.closest('[data-testid="missed-live"]') !== null,
       };
     }, provoke && subject === "manager");
     if (m.unnamedLabels > 0) problems.push(`${subject} /live/board: ${m.unnamedLabels} div or span carries aria-label without a role`);
     if (m.scrollX) problems.push(`${subject} /live/board: page scrolls horizontally at 1280`);
     if (m.mainX > 0) problems.push(`${subject} /live/board: the main area scrolls sideways by ${m.mainX}px at 1280`);
     if (telephony && (m.tiles !== 7 || !m.missed)) problems.push(`${subject} /live/board: ${m.tiles} inbound tiles and ${m.missed ? "a" : "no"} missed-calls table, expected 7 and a table`);
+    if (telephony && !m.lastHeading) problems.push(`${subject} /live/board: Missed, not called back is not the board's last section`);
     if (!telephony && (!m.notConnected || m.tiles > 0)) problems.push(`${subject} /live/board: a tenant without telephony must say so instead of showing tiles`);
     if (telephony) {
       const mark = p.locator('[data-testid="inbound-longestWaiting"] button[data-header-hint]');
@@ -1462,7 +1478,7 @@ async function expectFrame() {
     ["agent-one", "/messages", ["Welcome", "Messages"], ["/", null]],
     ["manager", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/dashboard", null]],
     ["reader", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/speed-to-lead", null]],
-    ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/statuses", "/configuration/sources", null]],
+    ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/teams", "/configuration/sources", null]],
     ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
     ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
     // Follow-up and Waiting for you (addition 0008o): a report in its group; the person's own page, no rail item
@@ -1654,7 +1670,7 @@ async function expectAccordion() {
     expectOpen("after C", g, ["configuration"]);
     agree("after C", g);
     const focus = await p.evaluate(() => document.activeElement?.getAttribute("href"));
-    if (focus !== "/configuration/statuses") problems.push(`accordion: after C the focus is on ${JSON.stringify(focus)}, expected Configuration's first page`);
+    if (focus !== "/configuration/teams") problems.push(`accordion: after C the focus is on ${JSON.stringify(focus)}, expected Configuration's first page`);
     if ((await jarOf(ctx))["cma-nav-open"] !== "configuration") problems.push("accordion: C did not write cma-nav-open=configuration");
     await ctx.close();
   }
@@ -1696,7 +1712,7 @@ async function expectAccordion() {
 // per deal never scrolls sideways there. --provoke breaks the line before one mark per page
 async function expectNoWrappedMarks() {
   for (const [subject, path] of [["manager", "/reports/follow-up"], ["manager", "/reports/attempts?range=month&group=day"],
-    ["manager", "/reports/attempts?range=month&group=pipeline&scope=counted"], ["manager", "/reports/attempts-per-agent?range=month"]]) {
+    ["manager", "/reports/attempts?range=month&group=pipeline&attempted=some"], ["manager", "/reports/attempts-per-agent?range=month"]]) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
     const p = await ctx.newPage();
     await p.goto(BASE + path);
@@ -1732,13 +1748,14 @@ async function expectNoWrappedMarks() {
   }
 }
 
-// Attempts per deal and Attempts per agent (addition 0008y), per identity at 1280 px: Attempts per deal in the rail and on
-// the page for reports.view or performance.team, Attempts per agent for performance.team while the tenant's
-// reports.per_person holds attempts (the reader sees Attempts per deal only; the agent gets the no-permission card; the
-// invest tenant, without the switch, has no Attempts per agent: absent from the rail, its page not found); the page never
-// scrolls sideways, in every grouping and with every deal counted; the keycaps K, P, S (and G on Attempts per deal) next
-// to the period bar's; five tiles; the tables end inside their cards; the right-most header's hint stays inside the
-// viewport. --provoke lets the deal list spill out of its card
+// Attempts per deal and Attempts per agent (addition 0008y; for sales since 0008z), per identity at 1280 px: Attempts per
+// deal in the rail and on the page for reports.view or performance.team, Attempts per agent for performance.team while the
+// tenant's reports.per_person holds attempts (the reader sees Attempts per deal only; the agent gets the no-permission card;
+// the invest tenant, without the switch, has no Attempts per agent: absent from the rail, its page not found); the page
+// never scrolls sideways, in every grouping and with the attempted and outcome filters; the keycaps K, P, A, O (and G on
+// Attempts per deal) next to the period bar's; six tiles; the tables end inside their cards; the right-most header's hint
+// stays inside the viewport; a deal's row opens with Enter to its attempts, inside the card, and closes with Esc, the
+// focus back on the deal. --provoke lets the deal list spill out of its card and swallows Esc
 async function expectAttempts() {
   // [subject, sees Attempts per deal, sees Attempts per agent]
   const cases = [
@@ -1754,11 +1771,11 @@ async function expectAttempts() {
     if (rail.includes("/reports/attempts") !== deals) problems.push(`${subject}: Attempts per deal ${deals ? "missing from" : "shown in"} the rail`);
     if (rail.includes("/reports/attempts-per-agent") !== perAgent) problems.push(`${subject}: Attempts per agent ${perAgent ? "missing from" : "shown in"} the rail`);
     const pages = [
-      ["/reports/attempts?range=month&group=day", deals, "attempts-list-scroll", "attempts-list", ["K", "P", "S", "G", "T", "W", "M", "C"]],
-      ["/reports/attempts?range=month&group=week", deals, "attempts-list-scroll", "attempts-list", ["G"]],
-      ["/reports/attempts?range=month&group=market&scope=counted", deals, "attempts-groups-scroll", "attempts-groups", ["G"]],
+      ["/reports/attempts?range=month&group=day", deals, "attempts-list-scroll", "attempts-list", ["K", "P", "A", "O", "G", "T", "W", "M", "C"]],
+      ["/reports/attempts?range=month&group=week&outcome=open", deals, "attempts-list-scroll", "attempts-list", ["G"]],
+      ["/reports/attempts?range=month&group=market", deals, "attempts-groups-scroll", "attempts-groups", ["G"]],
       ["/reports/attempts?range=month&group=pipeline", deals, "attempts-groups-scroll", "attempts-groups", ["G"]],
-      ["/reports/attempts-per-agent?range=month", perAgent, "attempts-agents-scroll", "attempts-agents-table", ["K", "P", "S", "T", "W", "M", "C"]],
+      ["/reports/attempts-per-agent?range=month", perAgent, "attempts-agents-scroll", "attempts-agents-table", ["K", "P", "A", "O", "T", "W", "M", "C"]],
     ];
     for (const [path, may, scroll, table, keys] of pages) {
       const where = `${subject} ${path.split("?")[0]}${path.includes("group=") ? ` (${path.split("group=")[1].split("&")[0]})` : ""}`;
@@ -1779,7 +1796,7 @@ async function expectAttempts() {
         continue;
       }
       for (const k of keys) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
-      if (perDeal && m.tiles !== 5) problems.push(`${where}: ${m.tiles} tiles, expected 5`);
+      if (perDeal && m.tiles !== 6) problems.push(`${where}: ${m.tiles} tiles, expected 6`);
       if (await p.locator(`[data-testid="${table}"]`).count() === 0) {
         problems.push(`${where}: ${table} missing`);
         continue;
@@ -1813,7 +1830,69 @@ async function expectAttempts() {
         }
         await p.screenshot({ path: `${outDir}/${subject}-${path.split("?")[0].split("/").pop()}-${path.includes("group=") ? path.split("group=")[1].split("&")[0] : "month"}.png`, fullPage: true });
       }
+      if (perDeal && path.includes("group=day") && ["manager", "reader"].includes(subject)) await expectDealRow(p, where);
     }
+    await ctx.close();
+  }
+}
+
+// A deal's row (addition 0008z): Enter on the deal opens its attempts below it (aria-expanded, the attempts or "No attempt
+// yet" read from the API), inside the card without a sideways scroll; Esc closes it and the focus stays on the deal
+async function expectDealRow(p, where) {
+  const toggle = p.locator('[data-testid="attempts-toggle"]').first();
+  if (await toggle.count() === 0) { problems.push(`${where}: no deal to open`); return; }
+  if (provoke) await p.evaluate(() => document.addEventListener("keydown", (e) => { if (e.key === "Escape") e.stopImmediatePropagation(); }, true));
+  await toggle.focus();
+  await p.keyboard.press("Enter");
+  await p.locator('[data-testid="attempt-row"], [data-testid="attempts-detail-none"], [data-testid="attempts-detail-failed"]').first().waitFor({ timeout: 5000 }).catch(() => {});
+  const opened = await p.evaluate(() => {
+    const main = document.querySelector("main");
+    const box = document.querySelector('[data-testid="attempts-list-scroll"]');
+    return {
+      expanded: document.querySelector('[data-testid="attempts-toggle"]')?.getAttribute("aria-expanded"),
+      rows: document.querySelectorAll('[data-testid="attempt-row"]').length,
+      none: !!document.querySelector('[data-testid="attempts-detail-none"]'),
+      failed: !!document.querySelector('[data-testid="attempts-detail-failed"]'),
+      mainX: main.scrollWidth - main.clientWidth,
+      inCard: box ? box.getBoundingClientRect().right <= box.parentElement.getBoundingClientRect().right + 0.5 : false,
+    };
+  });
+  if (opened.expanded !== "true") problems.push(`${where}: Enter on a deal does not open it (aria-expanded ${opened.expanded})`);
+  if (opened.failed) problems.push(`${where}: the deal's attempts could not be loaded`);
+  else if (opened.rows === 0 && !opened.none) problems.push(`${where}: the opened deal shows neither attempts nor "No attempt yet"`);
+  if (opened.mainX > 0 || !opened.inCard) problems.push(`${where}: the opened deal spills out of its card, the main area scrolls sideways by ${opened.mainX}px`);
+  await p.keyboard.press("Escape");
+  const closed = await p.evaluate(() => ({
+    expanded: document.querySelector('[data-testid="attempts-toggle"]')?.getAttribute("aria-expanded"),
+    detail: document.querySelectorAll('[data-testid="attempts-detail"]').length,
+    focus: document.activeElement?.getAttribute("data-testid"),
+  }));
+  if (closed.expanded !== "false" || closed.detail !== 0) problems.push(`${where}: Esc does not close the opened deal`);
+  if (closed.focus !== "attempts-toggle") problems.push(`${where}: after Esc the focus is on ${closed.focus}, expected the deal`);
+}
+
+// Welcome on open (addition 0008z): a browser with an identity and no browser session (a fresh sign-in, a new session) that
+// opens a deep link lands on Welcome; from then on a deep link opens as asked; the API is never redirected. The mock
+// identity travels as the cma-mock-subject cookie here, as a browser after ?as= or IAP's sign-in, not the verifiers' header.
+// --provoke gives the browser a session cookie before its first page, as a remembered last page would
+async function expectWelcomeOnOpen() {
+  for (const subject of ["manager", "agent-one"]) {
+    const host = new URL(BASE).hostname;
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } });
+    await ctx.addCookies([{ name: "cma-mock-subject", value: subject, domain: host, path: "/" },
+      ...(provoke ? [{ name: "cma-session", value: "1", domain: host, path: "/" }] : [])]);
+    const p = await ctx.newPage();
+    const deep = subject === "manager" ? "/reports/attempts?range=month" : "/hours";
+    await p.goto(BASE + deep);
+    await p.waitForLoadState("networkidle");
+    const first = new URL(p.url()).pathname;
+    if (first !== "/") problems.push(`${subject}: a fresh sign-in opening ${deep} landed on ${first}, expected Welcome at /`);
+    const jar = Object.fromEntries((await ctx.cookies()).map((c) => [c.name, c]));
+    if (!provoke && (!jar["cma-session"] || jar["cma-session"].expires !== -1 || !jar["cma-session"].httpOnly)) problems.push(`${subject}: the browser session is not an HttpOnly session cookie`);
+    await p.goto(BASE + deep);
+    await p.waitForLoadState("networkidle");
+    const second = new URL(p.url()).pathname;
+    if (second !== deep.split("?")[0]) problems.push(`${subject}: a deep link while signed in landed on ${second}, expected ${deep.split("?")[0]}`);
     await ctx.close();
   }
 }
@@ -1831,6 +1910,7 @@ await expectForms();
 await expectEmail();
 await expectFirstOrders();
 await expectAttempts();
+await expectWelcomeOnOpen();
 await expectCampaigns();
 await expectCallbacks();
 await expectIntakeConfiguration();
@@ -1841,5 +1921,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps, the five tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport), Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

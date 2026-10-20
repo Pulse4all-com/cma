@@ -1,0 +1,5 @@
+SET
+DO
+SET
+psql:web/verify/reports-fixture.sql:335: NOTICE:  fixture written
+DO

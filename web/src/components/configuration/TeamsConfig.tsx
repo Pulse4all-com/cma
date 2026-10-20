@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Teams and skills: the current teams (add, edit, dissolve) and the skill catalog per dimension
+ * Team and skills: the current teams (add, edit, dissolve) and the skill catalog per dimension
  * with its level scale (add, retire, reactivate, the scale's names). The database keeps the
  * history (a dissolved team's memberships end, a retired skill stays on the people who hold it)
  * and refuses a scale that drops a level someone holds (409). Keyboard: A adds a team, K a skill.

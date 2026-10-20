@@ -1,0 +1,8 @@
+# 43's amended A3 against three breaks of the withdrawal rule, each on a throwaway copy of the local database at 0008z (dropped after);
+# the first ERROR line of each run of 43 (a FAIL stops block A, so A3's line names the break)
+## 1. the application may update a message's title (grant update (title) on cma.message to cma_app)
+ERROR:  FAIL A3: since 0008z a message changes only by its withdrawal: withdrawn_at and withdrawn_by together, once, never cleared
+## 2. withdrawn_at without withdrawn_by allowed (alter table cma.message drop constraint message_withdrawn_check)
+ERROR:  FAIL A3: since 0008z a message changes only by its withdrawal: withdrawn_at and withdrawn_by together, once, never cleared
+## 3. a second withdrawal or a clear allowed (drop trigger check_withdraw_once on cma.message)
+ERROR:  FAIL A3: since 0008z a message changes only by its withdrawal: withdrawn_at and withdrawn_by together, once, never cleared

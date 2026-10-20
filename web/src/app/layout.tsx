@@ -27,6 +27,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang={config.defaultLocale} className={`${montserrat.variable} h-full antialiased`}>
       <body className="h-full font-sans text-body text-p4a-body">
+        {/* The manifest opens an installed Workspace on Welcome (addition 0008z); with credentials, so IAP lets it through */}
+        <link rel="manifest" href="/app.webmanifest" crossOrigin="use-credentials" />
         {/* The error boundary's words (app/error.tsx) travel as a context: Next gives the boundary no props */}
         <ErrorCopyProvider copy={copy.errorPage}>
           <DesktopOnly copy={copy}>{children}</DesktopOnly>

@@ -4,6 +4,7 @@ import { config } from "@/lib/config";
 import { data } from "@/lib/data";
 import { logoutLocation } from "@/lib/logout";
 import { isSameOriginPost } from "@/lib/origin";
+import { SESSION_COOKIE_CLEAR } from "@/lib/session";
 import { dateKeyInZone } from "@/lib/time";
 
 /**
@@ -32,5 +33,7 @@ export async function POST(request: Request) {
   const res = new Response(null, { status: 303, headers: { Location: logoutLocation(config.logoutTarget) } });
   // A preview as role never outlives the session (16 October 2026): Log out clears its cookie with the day
   res.headers.append("Set-Cookie", `${PREVIEW_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  // Welcome on open (addition 0008z): the browser session ends here, so the next sign-in starts on Welcome
+  res.headers.append("Set-Cookie", SESSION_COOKIE_CLEAR);
   return res;
 }

@@ -365,6 +365,42 @@ Database `cma`, IAM database authentication. You log in as yourself (reader by d
 - a new migration: the next free number in `db/`, rerunnable, forward-only, with its verify script; run in
   dev, verify, records, then prod (README, Release flow)
 
+Four rules every addition's runbook follows (since 20 October 2026, `docs/attempts-2026-10/RUNBOOK-0008z.md`):
+- **Whose user.** A block that acts as a person names the email next to it, with the reason. Dev blocks use the dev
+  seed's admin, `admin@example.com`: dev's data is the seed's, and that admin holds every report permission in Pulse4all
+  Subscriptions, while your own login need not be a user there. Prod blocks use `martin@pulse4all.com`: prod has no seed
+  people, and your own user is the one with access.
+- **Provoked runs.** Paste the verify script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that
+  `false` to `true`. Run. Result 1 must read `true`. Never replace the editor's content with one line.
+- **Long verifies run from the Terminal.** Studio stops a statement at 300 seconds, so `91` and any verify that may run
+  longer go through the Auth Proxy (`<file>` the script, `<n>` its number; the last 22 lines hold the verdict table and
+  the timing):
+  ```bash
+  cma_db dev && time psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f db/<file> > /tmp/<n>.txt 2>&1; tail -22 /tmp/<n>.txt
+  ```
+- **Hash steps run outside every market's office hours** (before 09:00 or after 18:00 Amsterdam time, or at the
+  weekend). Speed to lead's rows hold two figures that count up to now (an open deal's waiting business seconds,
+  and whether a deal was called before the next business noon); both stand still outside office hours, so a block can
+  hash every column. Identical hashes before and after prove the migration changed nothing there. A differing hash with
+  an unchanged `newest_change` is the migration's: stop. A differing hash with a later `newest_change` means new data
+  arrived between the runs.
+
+## 7b. Drift between dev and prod
+
+`tools/drift/functions.sql` (addition 0008z) lists every function of `cma` and `cma_read` with an md5 of its definition,
+one line each, sorted bytewise. Read only: signatures and hashes, no data. After both instances ran the same scripts the
+two lists are equal; a line that differs names the function that drifted. Run it after a prod migration, or whenever
+the two might have parted (**Terminal**, from the Chromebook):
+
+```bash
+cd ~/cma && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/drift/functions.sql > /tmp/fn-dev.txt; wc -l < /tmp/fn-dev.txt
+cma_db prod && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/drift/functions.sql > /tmp/fn-prod.txt; wc -l < /tmp/fn-prod.txt
+diff /tmp/fn-dev.txt /tmp/fn-prod.txt && echo "no drift"
+```
+
+Expected: the same count twice (475 at 0008z), then `no drift`. Otherwise `<` lines are dev's, `>` prod's: send them to
+Claude Code; nothing is changed by hand.
+
 ## 7a. Addition 0008s: the follow-up snapshot (18 October 2026)
 
 Reports → Follow-up, the Live board's card and Welcome read a snapshot computed once a minute per tenant by

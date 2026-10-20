@@ -774,6 +774,8 @@ export interface MessageStat {
   read: number;
   acknowledged: number;
   medianSecondsToRead: number | null;
+  /** When it was withdrawn for everyone (0008z); null while it stands */
+  withdrawnAt: Instant | null;
 }
 
 // ---- Intake reports (migration 0007d and 0006; B11, 12 October 2026). Ids, counts and codes only:
@@ -1561,25 +1563,38 @@ export interface OrdersPerPerson {
   markets: string[];
 }
 
-// ---- Attempts per deal (addition 0008y; 19 October 2026): how many outbound CRM calls a deal gets before the
-// customer is reached, how often the first attempt reaches them, whether more attempts win more deals, and how long
-// the open deals have waited since their last attempt. Ids, codes, counts, links and times only; a person's name on
-// Attempts per agent alone, as on every per-person page.
-
-/** Which deals count: the lead pipelines (the default) or every counted deal pipeline; an order pipeline never */
-export type AttemptScope = "lead" | "counted";
+// ---- Attempts per deal (addition 0008y; for sales since 0008z, 20 October 2026): how many attempts a sales deal gets,
+// how often and how soon they reach the customer, won against lost, and how long the open deals have waited since their
+// last attempt. Ids, codes, counts, links and times only; a person's name on Attempts per agent, and on one deal's
+// attempts only while the per-person figures for attempts are on and the reader holds performance.team.
 
 /** How cma.attempts_per_deal_page groups the period */
 export type AttemptGroup = "day" | "week" | "market" | "pipeline";
 
-/** A deal's outcome: won or lost by its stage, else open, or unknown for a closed stage without an outcome */
-export type AttemptOutcome = "open" | "won" | "lost" | "unknown";
+/**
+ * A deal's outcome: won or lost by its stage; ordered when the customer ordered another way while the deal was open and
+ * not won (the window ended at that order); unknown for a closed stage without an outcome; else open
+ */
+export type AttemptOutcome = "open" | "won" | "lost" | "ordered" | "unknown";
 
-/** The filters: a market code ("unknown" for a deal without one), a pipeline ('<connection id>:<pipeline id>'), the scope */
+/** Why a deal's window ended: its close, its contacts' first order, or not yet (now) */
+export type AttemptWindowEnd = "closed" | "ordered" | "open";
+
+/** The attempted filter: every deal, the deals with no attempt yet, the deals with at least one */
+export type AttemptAttempted = "all" | "none" | "some";
+
+/** The outcome filter */
+export type AttemptOutcomeFilter = "all" | "open" | "won" | "lost" | "ordered";
+
+/** What counts as an attempt (attempts.source): an outbound telephony call on the deal's contacts, or every outbound CRM call */
+export type AttemptSource = "telephony" | "crm";
+
+/** The filters: a market code ("unknown" for a deal without one), a lead pipeline ('<connection id>:<pipeline id>'), attempted, outcome */
 export interface AttemptFilter {
   market: string | null;
   pipeline: string | null;
-  scope: AttemptScope;
+  attempted: AttemptAttempted;
+  outcome: AttemptOutcomeFilter;
 }
 
 /** The figures of a set of deals (cma.attempts_figures_from) */
@@ -1591,14 +1606,31 @@ export interface AttemptFigures {
   /** Per deal, never-attempted deals as 0; null without a deal */
   avgAttempts: number | null;
   medianAttempts: number | null;
-  /** Deals whose first attempt connected */
+  /** Deals with at least one attempt that reached the customer */
+  reachedDeals: number;
+  /** Deals whose first attempt reached the customer */
   firstReached: number;
-  /** Deals with any connected attempt */
-  connectedDeals: number;
+  reachedAttempts: number;
+  /** Attempted deals in a market with business hours, and their median business seconds to the first attempt */
+  speedDeals: number;
+  medianSpeedSeconds: number | null;
+  /** Deals whose answer is known, and of them those called before the next business noon */
+  noonKnown: number;
+  calledBeforeNoon: number;
+  /** Open: the outcome open (an ordered deal is not) */
   openDeals: number;
   openNeverAttempted: number;
   won: number;
   lost: number;
+  ordered: number;
+  unknown: number;
+  talkSecondsTotal: number;
+  /** Talk time of the attempts that reached the customer */
+  talkSecondsReached: number;
+  /** Attempts whose CRM call carries no outcome */
+  attemptsWithoutOutcome: number;
+  /** Outbound CRM calls in the windows logged without a telephony call (never an attempt under telephony) */
+  loggedWithoutAircall: number;
 }
 
 export interface AttemptGroupRow extends AttemptFigures {
@@ -1614,9 +1646,33 @@ export interface AttemptBucket {
   label: string;
   /** Deals with that many attempts */
   deals: number;
-  /** Deals first connected on that attempt (none for 0) */
-  firstConnected: number;
-  /** Of the closed deals with an outcome: won and lost */
+  /** Deals first reached on that attempt (none for 0) */
+  firstReached: number;
+  /** Of the decided deals: won and lost */
+  won: number;
+  lost: number;
+}
+
+/** Won or lost, as the won-against-lost card shows it (cma.attempts_outcomes_from) */
+export interface AttemptOutcomeRow {
+  outcome: "won" | "lost";
+  deals: number;
+  avgAttempts: number | null;
+  medianAttempts: number | null;
+  speedDeals: number;
+  medianSpeedSeconds: number | null;
+  noonKnown: number;
+  calledBeforeNoon: number;
+  reachedDeals: number;
+  /** The average talk time in contact of the deals reached at least once */
+  avgTalkReachedSeconds: number | null;
+}
+
+/** One bucket of the win rate by speed to lead, in business minutes ("5–15", "1440+") */
+export interface AttemptSpeedBucket {
+  from: number;
+  to: number | null;
+  label: string;
   won: number;
   lost: number;
 }
@@ -1632,22 +1688,47 @@ export interface SinceLastBucket {
 
 /** One deal of the list: ids, codes, counts, times and the link; no customer data */
 export interface AttemptListRow {
+  /** The CMA's id of the deal, for its attempts */
+  dealId: string;
   connectionId: string;
   dealSourceId: string;
   recordUrl: string | null;
   pipelineLabel: string | null;
+  stageLabel: string | null;
   market: string;
   createdAt: Instant;
   closedAt: Instant | null;
-  isClosed: boolean;
+  orderedAt: Instant | null;
+  windowEndReason: AttemptWindowEnd;
   outcome: AttemptOutcome;
   attempts: number;
-  connected: number;
-  firstConnectedAttempt: number | null;
+  reachedAttempts: number;
+  firstReachedAttempt: number | null;
+  talkSecondsTotal: number;
+  talkSecondsReached: number;
+  firstAttemptAt: Instant | null;
+  /** Business seconds from the creation to the first attempt; null without one or for a market without business hours */
+  speedToLeadSeconds: number | null;
+  calledBeforeNextNoon: boolean | null;
   lastAttemptAt: Instant | null;
   /** Open deals only; null for a market without business hours */
   businessDaysSinceLast: number | null;
   sinceLastBucket: string | null;
+  loggedWithoutAircall: number;
+}
+
+/** One attempt of a deal (cma.attempts_of_deal): never a call id, number, hash or recording */
+export interface DealAttempt {
+  n: number;
+  startedAt: Instant;
+  answered: boolean;
+  talkSeconds: number | null;
+  reached: boolean;
+  reachedBy: "outcome" | "talk_time" | null;
+  /** The outcome's label from the catalog; null without an outcome */
+  outcomeLabel: string | null;
+  /** The agent's name while the per-person figures for attempts are on and the reader holds performance.team; else null */
+  agentName: string | null;
 }
 
 /** The settings the hints name, as their effective values */
@@ -1659,6 +1740,11 @@ export interface AttemptSettings {
   preWindowMinutes: number;
   /** follow_up.list_rows: the list's cap */
   listRows: number;
+  source: AttemptSource;
+  /** attempts.reached_min_talk_seconds: an attempt without an outcome reaches the customer at this much talk time */
+  reachedMinTalkSeconds: number;
+  /** attempts.speed_buckets_business_minutes, such as "5,15,60,240,1440" */
+  speedBuckets: string;
 }
 
 export interface AttemptsReport {
@@ -1673,6 +1759,10 @@ export interface AttemptsReport {
   previousTo: DateKey;
   previousPartial: boolean;
   buckets: AttemptBucket[];
+  /** Won against lost, and the deals not decided (open, ordered, unknown) */
+  outcomes: { rows: AttemptOutcomeRow[]; notDecided: number; open: number; ordered: number; unknown: number };
+  /** The win rate by speed to lead; the decided deals never attempted and those without business hours apart */
+  speedBuckets: { buckets: AttemptSpeedBucket[]; none: { won: number; lost: number }; noHours: number };
   groups: AttemptGroupRow[];
   sinceLast: { buckets: SinceLastBucket[]; noHours: number };
   list: { rows: AttemptListRow[]; total: number };
@@ -2595,6 +2685,11 @@ export interface CmaData {
   sendMessage(me: Principal, input: SendMessageInput): Promise<SentMessage>;
   /** Per message of a business-date range of at most 92 days: recipients, delivered, read, acknowledged. Needs messages.send or performance.team */
   getMessageStats(me: Principal, range: HoursRange): Promise<MessageStat[]>;
+  /**
+   * Withdraws a message for everyone (cma.withdraw_message, 0008z; messages.withdraw), manual or alert: recipients no longer
+   * see it. Answers when it was withdrawn; a second withdrawal changes nothing. CMA02 for a message the tenant does not have
+   */
+  withdrawMessage(me: Principal, id: string): Promise<{ withdrawnAt: Instant }>;
 
   // ---- Sources, markets, alert rules (addition 0008e): the database checks tenant.configure on every call (CMA06)
   /** Every connection of the tenant with its kind, settings and catalog sizes */
@@ -2715,6 +2810,8 @@ export interface CmaData {
   getAttempts(me: Principal, range: HoursRange, group: AttemptGroup, filter: AttemptFilter): Promise<AttemptsReport>;
   /** Reports → Attempts per agent: performance.team and the tenant's reports.per_person holding attempts (CMA06 otherwise) */
   getAttemptsPerAgent(me: Principal, range: HoursRange, filter: AttemptFilter): Promise<AttemptsPerAgent>;
+  /** One sales deal's attempts in time order (cma.attempts_of_deal, 0008z): reports.view or performance.team; CMA02 for a deal that is no sales deal of the tenant */
+  getDealAttempts(me: Principal, dealId: string): Promise<DealAttempt[]>;
   // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days
   /** The period per ISO week and in total, the previous period's total, whether a callback type counts. Needs reports.view or performance.team */
   getCallbacksKept(me: Principal, range: HoursRange): Promise<CallbacksKept>;

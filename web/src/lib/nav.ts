@@ -166,35 +166,35 @@ export function navEntries(copy: Copy): NavEntry[] {
       icon: "chart",
       items: [
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },
-        // The intake reports (B11, 12 October 2026), each with its function's permissions (migration 0007d),
-        // the same lists as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here,
-        // because this module has no runtime imports)
+        // The order since addition 0008z (Martin, README Decision log, 20 October 2026): the reports a team lead reads first,
+        // then the follow-up and the attempts behind them, then intake, inbound and orders, Data quality last. Each report
+        // keeps its own permissions; the digit keys follow the visible order, so they moved for everyone who sees Reports.
+        // The intake reports (B11, 12 October 2026) carry their function's permissions (migration 0007d), the same lists
+        // as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here, because this module has no
+        // runtime imports)
         { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
-        // Attempts per deal (addition 0008y, 19 October 2026): the outbound CRM calls per deal until it is reached, after Speed to
-        // lead with its permissions; Attempts per agent the same per deal owner, for performance.team while the tenant's
-        // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions). The digit keys of the
-        // pages after them move for analytics and a reports reader (4 to 9), accepted during the soft launch before anyone
-        // relies on them (Martin, README Decision log, 19 October 2026)
-        { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
-        { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
-        // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, after Speed to lead, for the
-        // permissions of cma.open_leads (reports.view, performance.team or monitoring.live); the digit keys of the
-        // pages below move by one for everyone who sees the Reports group (README, Decision log)
-        { page: "follow-up", href: "/reports/follow-up", label: copy.nav.followUp, permission: ["reports.view", "performance.team", "monitoring.live"] },
-        { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
-        // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, as Intake
-        { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
-        // Calls (addition 0008j, brief B16): the calls, conversations, talk time and tags, as Inbound; Calls per agent the
-        // same per person, for performance.team only (README Decision log, 14 October 2026)
+        // Calls (addition 0008j, brief B16): the calls, conversations, talk time and tags; Calls per agent the same per
+        // person, for performance.team only (README Decision log, 14 October 2026)
         { page: "calls", href: "/reports/calls", label: copy.nav.calls, permission: ["reports.view", "performance.team"] },
         { page: "calls-per-agent", href: "/reports/calls-per-agent", label: copy.nav.callsPerAgent, permission: "performance.team" },
-        // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
-        { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
         // Email (addition 0008t, brief N19-A part 1): received per inbox and mailbox, sent, first replies, as Calls; Email per
         // agent the same per person, for performance.team while the tenant's reports.per_person holds email (Yordi agreed,
         // README Decision log, 18 October 2026)
         { page: "email", href: "/reports/email", label: copy.nav.email, permission: ["reports.view", "performance.team"] },
         { page: "email-per-agent", href: "/reports/email-per-agent", label: copy.nav.emailPerAgent, permission: "performance.team", perPerson: "email" },
+        // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, for the permissions of cma.open_leads
+        // (reports.view, performance.team or monitoring.live)
+        { page: "follow-up", href: "/reports/follow-up", label: copy.nav.followUp, permission: ["reports.view", "performance.team", "monitoring.live"] },
+        // Attempts per deal (addition 0008y; for sales since 0008z): the attempts on the sales deals until they are won,
+        // lost or ordered another way; Attempts per agent the same per deal owner, for performance.team while the tenant's
+        // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions)
+        { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
+        { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
+        // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
+        { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
+        { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },
+        // Inbound (addition 0008i, brief B15): the service level and the missed calls per reason, as Intake
+        { page: "inbound", href: "/reports/inbound", label: copy.nav.inbound, permission: ["reports.view", "performance.team"] },
         // First orders (addition 0008u, brief N19-A part 2): self-service or call center, as Email; Orders per person the
         // credited first orders per person, for performance.team while the tenant's reports.per_person holds orders
         // (off for Pulse4all until Yordi confirms it, README Open decisions)
@@ -223,14 +223,17 @@ export function navEntries(copy: Copy): NavEntry[] {
       icon: "gear",
       shortcut: "c",
       items: [
-        { page: "config-statuses", href: "/configuration/statuses", label: copy.nav.configStatuses, permission: "tenant.configure" },
+        // The order since addition 0008z (Martin, README Decision log, 20 October 2026): the team and its skills first, then
+        // statuses, absences and coverage, the markets and sources the reports read, app links, exports, alert rules and
+        // System health
         { page: "config-teams", href: "/configuration/teams", label: copy.nav.configTeams, permission: "tenant.configure" },
+        { page: "config-statuses", href: "/configuration/statuses", label: copy.nav.configStatuses, permission: "tenant.configure" },
         { page: "config-absences", href: "/configuration/absences", label: copy.nav.configAbsences, permission: "tenant.configure" },
-        { page: "config-exports", href: "/configuration/exports", label: copy.nav.configExports, permission: "tenant.configure" },
-        { page: "config-app-links", href: "/configuration/app-links", label: copy.nav.configAppLinks, permission: "tenant.configure" },
         // The intake configuration (addition 0008e): what Martin set by SQL on 12 October 2026, now on screens
-        { page: "config-sources", href: "/configuration/sources", label: copy.nav.configSources, permission: "tenant.configure" },
         { page: "config-markets", href: "/configuration/markets", label: copy.nav.configMarkets, permission: "tenant.configure" },
+        { page: "config-sources", href: "/configuration/sources", label: copy.nav.configSources, permission: "tenant.configure" },
+        { page: "config-app-links", href: "/configuration/app-links", label: copy.nav.configAppLinks, permission: "tenant.configure" },
+        { page: "config-exports", href: "/configuration/exports", label: copy.nav.configExports, permission: "tenant.configure" },
         { page: "config-alert-rules", href: "/configuration/alert-rules", label: copy.nav.configAlertRules, permission: "tenant.configure" },
         // System health (addition 0008r): sources, jobs, the heartbeat and the outbox from what the jobs leave behind; the audit documents
         { page: "config-health", href: "/configuration/health", label: copy.nav.configHealth, permission: "tenant.configure" },

@@ -1,0 +1,14 @@
+# The lines of verify:layout --provoke that the 0008z checks give (the rail orders, the Live board's last section, a deal's row, Welcome on open, the attempts list); the full run: layout: FAIL (77 problems)
+  manager: navigation [["1","/",true,"1"],["2","/messages",true,"2"],["3","/live/board",true,"3"],["4","/team/people",true,"4"],["5","/roster/planner",true,"5"],["6","/day",true,"6"],["7","/hours",true,"7"],["8","/schedule",true,"8"],["9","/team/hours",true,"9"],["10","/reports/dashboard",false,null
+  supervisor /reports/attempts-per-agent: crumbs ["Welcome","Reports","Attempts per agent"], expected ["Welcome","Reports"]
+  preview: the admin previewing as agent sees ["/","/messages","/day","/hours","/schedule"] and 0 configuration pages
+  manager /reports/attempts (day) at 1440: the info mark of "OutcomeWon or lost by the deal's stage." wraps apart from its label
+  manager /reports/attempts (pipeline) at 1440: the info mark of "OutcomeWon or lost by the deal's stage." wraps apart from its label
+  manager /reports/attempts-per-agent at 1440: the info mark of "PersonThe deal's owner in the customer r" wraps apart from its label
+  analyst /live/board: Missed, not called back is not the board's last section
+  manager /reports/attempts (day): the table spills out of its card, the main area scrolls sideways by 500px at 1280
+  manager /reports/attempts (day): the opened deal spills out of its card, the main area scrolls sideways by 500px
+  manager /reports/attempts (day): Esc does not close the opened deal
+  reader /reports/attempts (day): Esc does not close the opened deal
+  manager: a fresh sign-in opening /reports/attempts?range=month landed on /reports/attempts, expected Welcome at /
+  agent-one: a fresh sign-in opening /hours landed on /hours, expected Welcome at /

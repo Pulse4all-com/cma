@@ -18,7 +18,8 @@ import type {
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
-  AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport, LineStoredCalls,
+  AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
+  DealAttempt, LineStoredCalls,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -706,6 +707,7 @@ type StatDbRow = {
   message_id: string; kind: MyMessage["kind"]; urgency: MyMessage["urgency"]; title: string;
   ref_system: string | null; ref_type: string | null; ref_id: string | null; rule_id: string | null; sender_user_id: string | null;
   created_at: Date; recipients: number; delivered: number; read: number; acknowledged: number; median_seconds_to_read: number | null;
+  withdrawn_at: Date | null;
 };
 
 function toStat(r: StatDbRow): MessageStat {
@@ -715,6 +717,7 @@ function toStat(r: StatDbRow): MessageStat {
     byRule: r.rule_id !== null, createdAt: r.created_at.toISOString(),
     recipients: Number(r.recipients), delivered: Number(r.delivered), read: Number(r.read), acknowledged: Number(r.acknowledged),
     medianSecondsToRead: r.median_seconds_to_read === null ? null : Number(r.median_seconds_to_read),
+    withdrawnAt: r.withdrawn_at ? r.withdrawn_at.toISOString() : null,
   };
 }
 
@@ -951,24 +954,37 @@ function toOwner(x: OwnerDb): FollowUpOwner {
     ticketsAtRiskOrBreached: x.tickets_at_risk_or_breached, tasksOverdue: x.tasks_overdue, tasksDueToday: x.tasks_due_today,
   };
 }
-// ---- Attempts per deal (addition 0008y): cma.attempts_per_deal_page and attempts_per_person_page answer one JSON object
-// each, snake_case keys, numbers as numbers (the averages and medians as JSON numbers), times as ISO text
+// ---- Attempts per deal (addition 0008y; for sales since 0008z): cma.attempts_per_deal_page and attempts_per_person_page answer one
+// JSON object each, snake_case keys, numbers as numbers (the averages and medians as JSON numbers), times as ISO text
 type AttemptFiguresDb = {
-  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; first_reached: number;
-  connected_deals: number; open_deals: number; open_never_attempted: number; won: number; lost: number;
+  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; reached_deals: number;
+  first_reached: number; reached_attempts: number; speed_deals: number; median_speed_seconds: number | null; noon_known: number;
+  called_before_noon: number; open_deals: number; open_never_attempted: number; won: number; lost: number; ordered: number; unknown: number;
+  talk_seconds_total: number; talk_seconds_reached: number; attempts_without_outcome: number; logged_without_aircall: number;
 };
 type AttemptListDb = {
-  connection_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string | null; market: string; created_at: string;
-  closed_at: string | null; is_closed: boolean; outcome: AttemptListRow["outcome"]; attempts: number; connected: number;
-  first_connected_attempt: number | null; last_attempt_at: string | null; business_days_since_last: number | null; since_last_bucket: string | null;
+  deal_id: string; connection_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string | null; stage_label: string | null;
+  market: string; created_at: string; closed_at: string | null; ordered_at: string | null; window_end_reason: AttemptListRow["windowEndReason"];
+  outcome: AttemptListRow["outcome"]; attempts: number; reached_attempts: number; first_reached_attempt: number | null; talk_seconds_total: number;
+  talk_seconds_reached: number; first_attempt_at: string | null; speed_to_lead_seconds: number | null; called_before_next_noon: boolean | null;
+  last_attempt_at: string | null; business_days_since_last: number | null; since_last_bucket: string | null; logged_without_aircall: number;
 };
 type AttemptsCommonDb = {
   markets: string[]; pipelines: { key: string; label: string }[]; history_start: string | null;
-  settings: { max_bucket: number; since_last_buckets: string; pre_window_minutes: number; list_rows: number };
+  settings: {
+    max_bucket: number; since_last_buckets: string; pre_window_minutes: number; list_rows: number; source: AttemptSettings["source"];
+    reached_min_talk_seconds: number; speed_buckets: string;
+  };
+};
+type AttemptOutcomeDb = {
+  outcome: "won" | "lost"; deals: number; avg_attempts: number | null; median_attempts: number | null; speed_deals: number;
+  median_speed_seconds: number | null; noon_known: number; called_before_noon: number; reached_deals: number; avg_talk_reached_seconds: number | null;
 };
 type AttemptsPageDb = AttemptsCommonDb & {
   current: AttemptFiguresDb; previous: AttemptFiguresDb;
-  buckets: { bucket: number; label: string; deals: number; first_connected: number; won: number; lost: number }[];
+  buckets: { bucket: number; label: string; deals: number; first_reached: number; won: number; lost: number }[];
+  outcomes: { rows: AttemptOutcomeDb[]; not_decided: number; open: number; ordered: number; unknown: number };
+  speed_buckets: { buckets: { from: number; to: number | null; label: string; won: number; lost: number }[]; none: { won: number; lost: number }; no_hours: number };
   groups: (AttemptFiguresDb & { key: string; label: string | null })[];
   since_last: { buckets: { from: number; to: number | null; label: string; deals: number }[]; no_hours: number };
   list: { total: number; rows: AttemptListDb[] };
@@ -978,24 +994,44 @@ type AttemptsPersonDb = AttemptsCommonDb & {
   not_linked: (AttemptFiguresDb & { unlinked_owners: number }) | null;
   total: AttemptFiguresDb;
 };
+type DealAttemptDb = {
+  n: number; started_at: Date; answered: boolean; talk_seconds: number | null; reached: boolean; reached_by: DealAttempt["reachedBy"];
+  outcome_label: string | null; agent_name: string | null;
+};
 /** An instant as ISO text in UTC, from the JSON's timestamptz text */
 const isoOf = (v: string | null): string | null => (v === null ? null : new Date(v).toISOString());
 function toAttemptFigures(x: AttemptFiguresDb): AttemptFigures {
   return {
-    deals: x.deals, attempted: x.attempted, attempts: x.attempts, avgAttempts: x.avg_attempts === null ? null : Number(x.avg_attempts),
-    medianAttempts: x.median_attempts === null ? null : Number(x.median_attempts), firstReached: x.first_reached, connectedDeals: x.connected_deals,
-    openDeals: x.open_deals, openNeverAttempted: x.open_never_attempted, won: x.won, lost: x.lost,
+    deals: x.deals, attempted: x.attempted, attempts: x.attempts, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts),
+    reachedDeals: x.reached_deals, firstReached: x.first_reached, reachedAttempts: x.reached_attempts, speedDeals: x.speed_deals,
+    medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
+    openDeals: x.open_deals, openNeverAttempted: x.open_never_attempted, won: x.won, lost: x.lost, ordered: x.ordered, unknown: x.unknown,
+    talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached, attemptsWithoutOutcome: x.attempts_without_outcome,
+    loggedWithoutAircall: x.logged_without_aircall,
   };
 }
 function toAttemptSettings(x: AttemptsCommonDb["settings"]): AttemptSettings {
-  return { maxBucket: x.max_bucket, sinceLastBuckets: x.since_last_buckets, preWindowMinutes: x.pre_window_minutes, listRows: x.list_rows };
+  return {
+    maxBucket: x.max_bucket, sinceLastBuckets: x.since_last_buckets, preWindowMinutes: x.pre_window_minutes, listRows: x.list_rows, source: x.source,
+    reachedMinTalkSeconds: x.reached_min_talk_seconds, speedBuckets: x.speed_buckets,
+  };
 }
 function toAttemptListRow(x: AttemptListDb): AttemptListRow {
   return {
-    connectionId: x.connection_id, dealSourceId: x.deal_source_id, recordUrl: x.record_url, pipelineLabel: x.pipeline_label, market: x.market,
-    createdAt: isoOf(x.created_at)!, closedAt: isoOf(x.closed_at), isClosed: x.is_closed, outcome: x.outcome, attempts: x.attempts,
-    connected: x.connected, firstConnectedAttempt: x.first_connected_attempt, lastAttemptAt: isoOf(x.last_attempt_at),
-    businessDaysSinceLast: x.business_days_since_last, sinceLastBucket: x.since_last_bucket,
+    dealId: x.deal_id, connectionId: x.connection_id, dealSourceId: x.deal_source_id, recordUrl: x.record_url, pipelineLabel: x.pipeline_label,
+    stageLabel: x.stage_label, market: x.market, createdAt: isoOf(x.created_at)!, closedAt: isoOf(x.closed_at), orderedAt: isoOf(x.ordered_at),
+    windowEndReason: x.window_end_reason, outcome: x.outcome, attempts: x.attempts, reachedAttempts: x.reached_attempts,
+    firstReachedAttempt: x.first_reached_attempt, talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached,
+    firstAttemptAt: isoOf(x.first_attempt_at), speedToLeadSeconds: x.speed_to_lead_seconds, calledBeforeNextNoon: x.called_before_next_noon,
+    lastAttemptAt: isoOf(x.last_attempt_at), businessDaysSinceLast: x.business_days_since_last, sinceLastBucket: x.since_last_bucket,
+    loggedWithoutAircall: x.logged_without_aircall,
+  };
+}
+function toAttemptOutcomeRow(x: AttemptOutcomeDb): AttemptOutcomeRow {
+  return {
+    outcome: x.outcome, deals: x.deals, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts), speedDeals: x.speed_deals,
+    medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
+    reachedDeals: x.reached_deals, avgTalkReachedSeconds: numOrNull(x.avg_talk_reached_seconds),
   };
 }
 
@@ -1733,6 +1769,14 @@ export const postgresData: CmaData = {
     });
   },
 
+  async withdrawMessage(me, id) {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks messages.withdraw (CMA06) and the message (CMA02); a second withdrawal answers the first time
+      const r = await q.query<{ at: Date }>(`select cma.withdraw_message($1::uuid) as at`, [id]);
+      return { withdrawnAt: one(r.rows, "withdraw_message").at.toISOString() };
+    });
+  },
+
   // ---- Sources, markets, alert rules (addition 0008e): every function checks tenant.configure inside (CMA06) ----
 
   async listSources(me): Promise<SourceConnection[]> {
@@ -1917,15 +1961,18 @@ export const postgresData: CmaData = {
   async getAttempts(me, range, group, filter): Promise<AttemptsReport> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the group, the scope and the filters first; one pass of cma.attempts_per_deal_of
-      // over the previous span and the period (0008y)
-      const j = one((await q.query<{ j: AttemptsPageDb }>(`select cma.attempts_per_deal_page($1::date, $2::date, $3, $4, $5, $6) as j`,
-        [range.from, range.to, group, filter.market, filter.pipeline, filter.scope])).rows, "attempts_per_deal_page").j;
+      // the function checks the permission, the group and the filters first; one pass of cma.attempts_per_deal_of over the
+      // previous span and the period (0008y, 0008z)
+      const j = one((await q.query<{ j: AttemptsPageDb }>(`select cma.attempts_per_deal_page($1::date, $2::date, $3, $4, $5, $6, $7) as j`,
+        [range.from, range.to, group, filter.market, filter.pipeline, filter.attempted, filter.outcome])).rows, "attempts_per_deal_page").j;
       const prev = previousPeriod(range, dateKeyInZone(new Date(), me.timeZone));
       return {
         ...range, group, filter, current: toAttemptFigures(j.current), previous: toAttemptFigures(j.previous),
         previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
-        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstConnected: b.first_connected, won: b.won, lost: b.lost })),
+        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstReached: b.first_reached, won: b.won, lost: b.lost })),
+        outcomes: { rows: j.outcomes.rows.map(toAttemptOutcomeRow), notDecided: j.outcomes.not_decided, open: j.outcomes.open, ordered: j.outcomes.ordered,
+          unknown: j.outcomes.unknown },
+        speedBuckets: { buckets: j.speed_buckets.buckets, none: j.speed_buckets.none, noHours: j.speed_buckets.no_hours },
         groups: j.groups.map((g): AttemptGroupRow => ({ groupKey: g.key, label: g.label, ...toAttemptFigures(g) })),
         sinceLast: { buckets: j.since_last.buckets, noHours: j.since_last.no_hours },
         list: { total: j.list.total, rows: j.list.rows.map(toAttemptListRow) },
@@ -1938,14 +1985,25 @@ export const postgresData: CmaData = {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
       // the function checks performance.team and the tenant's reports.per_person (attempts) first (CMA06)
-      const j = one((await q.query<{ j: AttemptsPersonDb }>(`select cma.attempts_per_person_page($1::date, $2::date, $3, $4, $5) as j`,
-        [range.from, range.to, filter.market, filter.pipeline, filter.scope])).rows, "attempts_per_person_page").j;
+      const j = one((await q.query<{ j: AttemptsPersonDb }>(`select cma.attempts_per_person_page($1::date, $2::date, $3, $4, $5, $6) as j`,
+        [range.from, range.to, filter.market, filter.pipeline, filter.attempted, filter.outcome])).rows, "attempts_per_person_page").j;
       const rows: AttemptPerson[] = j.rows.map((p) => ({ kind: "person", userId: p.user_id, name: p.display_name, unlinkedOwners: null, ...toAttemptFigures(p) }));
       if (j.not_linked) rows.push({ kind: "notLinked", userId: null, name: null, unlinkedOwners: j.not_linked.unlinked_owners, ...toAttemptFigures(j.not_linked) });
       return {
         ...range, filter, rows, total: { kind: "total", userId: null, name: null, unlinkedOwners: null, ...toAttemptFigures(j.total) },
         markets: j.markets, pipelines: j.pipelines, historyStart: j.history_start, settings: toAttemptSettings(j.settings),
       };
+    });
+  },
+
+  async getDealAttempts(me, dealId): Promise<DealAttempt[]> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks reports.view or performance.team (CMA06) and the deal (CMA02); the agent's name only when allowed
+      const r = await q.query<DealAttemptDb>(`select * from cma.attempts_of_deal($1::uuid)`, [dealId]);
+      return r.rows.map((x) => ({
+        n: x.n, startedAt: x.started_at.toISOString(), answered: x.answered, talkSeconds: x.talk_seconds, reached: x.reached, reachedBy: x.reached_by,
+        outcomeLabel: x.outcome_label, agentName: x.agent_name,
+      }));
     });
   },
 

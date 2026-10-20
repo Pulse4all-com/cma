@@ -3,7 +3,7 @@
 -- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026); since
 -- addition 0008i also --inbound, on a database at db/61 (the inbound part needs 0008i); since addition
 -- 0008j also --calls, on a database at db/63 (the calls part needs 0008j); since addition 0008y also
--- --attempts, on a database at db/92 (the attempts part needs 0008y)
+-- --attempts, on a database at db/92 (the attempts part needs 0008y; at db/94, 0008z, its calls are linked to Aircall's)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, and it
 -- refuses a database without the dev seed. All ids are invented; nothing personal is written (ids,
@@ -278,9 +278,11 @@ begin
       from (values
         ('9100007', 'sales', 's8', (d - 3)::timestamp + time '09:00', (d - 1)::timestamp + time '12:00'),
         ('9100008', 'renew', 'r1', (d - 2)::timestamp + time '09:15', null::timestamp)) x(id, pipeline, stage, at, closed)));
+    -- each call with an invented 64-hex counterpart hash, so 0008z's telephony calls below are linked to it
     perform cma.ingest_upsert_calls(v_crm, (
       select jsonb_agg(jsonb_build_object('sourceId', c.id, 'occurredAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'direction', 'outbound',
-                                          'ownerRef', 'o-1', 'outcomeRef', c.outcome, 'updatedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+                                          'ownerRef', 'o-1', 'outcomeRef', c.outcome, 'counterpartHash', md5(c.id) || md5(c.id || 'x'),
+                                          'updatedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
       from (values ('8100071', 'no_answer', (d - 3)::timestamp + time '10:00'),
                    ('8100072', 'no_answer', (d - 3)::timestamp + time '14:00'),
                    ('8100073', 'connected', (d - 2)::timestamp + time '09:30'),
@@ -289,6 +291,22 @@ begin
       select jsonb_agg(jsonb_build_object('fromType', 'crm_call', 'fromId', a.call, 'toType', 'contact', 'toId', a.contact, 'removed', false,
                                           'changedAt', to_char((d - 1)::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
       from (values ('8100071', 'k9100007'), ('8100072', 'k9100007'), ('8100073', 'k9100007'), ('8100081', 'k9100008')) a(call, contact)));
+    -- since 0008z an attempt is an outbound telephony call (attempts.source telephony): the Aircall calls that logged the
+    -- three calls of the won deal and the renewal's, 10 seconds earlier on the NL line, the connected one answered with a
+    -- minute of talk, then linked
+    if exists (select 1 from cma.schema_migration where version = '0008z') then
+      perform cma.ingest_upsert_telephony_calls(v_tel, (
+        select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+                 'sourceId', '7' || substr(c.id, 2), 'direction', 'outbound', 'startedAt', to_char(c.at - interval '10 seconds', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                 'answeredAt', case when c.talk is not null then to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') end,
+                 'endedAt', to_char(c.at + make_interval(secs => coalesce(c.talk, 20)), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'numberRef', 'n-nl',
+                 'counterpartHash', md5(c.id) || md5(c.id || 'x'), 'versionAt', to_char(c.at + interval '1 hour', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))))
+        from (values ('8100071', (d - 3)::timestamp + time '10:00', null::integer),
+                     ('8100072', (d - 3)::timestamp + time '14:00', null),
+                     ('8100073', (d - 2)::timestamp + time '09:30', 60),
+                     ('8100081', (d - 2)::timestamp + time '10:00', null)) c(id, at, talk)));
+      perform cma.link_calls((d - 30)::timestamptz);
+    end if;
     perform set_config('app.user_id', v_admin::text, true);
     perform cma.set_pipeline_lead(v_crm, 'deal', 'renew', false);
     perform cma.set_call_outcome(v_crm, 'connected', true);

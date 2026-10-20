@@ -1,0 +1,21 @@
+SET
+SET
+psql:/tmp/claude-0/-home-user-cma/5f72d33d-8b7b-50b7-9a2c-992ac7d9f2b1/scratchpad/lead-reads.sql:3: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+psql:/tmp/claude-0/-home-user-cma/5f72d33d-8b7b-50b7-9a2c-992ac7d9f2b1/scratchpad/lead-reads.sql:6: NOTICE:  table "lead_reads_context" does not exist, skipping
+DROP TABLE
+SELECT 2
+GRANT
+SET
+DO
+         tenant          |        read        | rows_read |             rows_md5             |         newest_change         
+-------------------------+--------------------+-----------+----------------------------------+-------------------------------
+ pulse4all-invest        | lead_to_order_rows |         2 | 804d4f836d5ba2ebf12bf6abaf1f1c5c | 2026-10-20 05:23:42.583699+00
+ pulse4all-invest        | speed_to_lead_rows |         2 | 885418e38ffeb9e45184ebc30e16390b | 2026-10-20 05:23:42.583699+00
+ pulse4all-subscriptions | lead_to_order_rows |         7 | ad15ccd072fc036321683d75b38925e1 | 2026-10-20 05:23:42.583699+00
+ pulse4all-subscriptions | speed_to_lead_rows |         7 | 523032172c51093b998685ff2a10dbd0 | 2026-10-20 05:23:42.583699+00
+(4 rows)
+
+RESET

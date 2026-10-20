@@ -23,11 +23,12 @@ import type {
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
   Journey, JourneyStatus, CallbackOwner, CallbacksKept,
-  AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport,
+  AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
 } from "./types";
 import {
-  ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptRecords,
-  attemptsInPeriod, attemptsPerPerson, parseAttemptFilter, sinceLastBuckets, type AttemptCallFixture, type AttemptDealFixture, type WorkingDay,
+  ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
+  attemptRecords, attemptSpeedBuckets, attemptsInPeriod, attemptsPerPerson, dealAttempts, parseAttemptFilter, sinceLastBuckets,
+  type AttemptCallFixture, type AttemptDealFixture, type AttemptOptions, type WorkingDay,
 } from "@/lib/attempts";
 import {
   CALLBACKS_PER_OWNER_PERMISSION, CALLBACKS_PERMISSIONS, callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner,
@@ -636,21 +637,37 @@ function mockOrderDeals(me: Principal): OrderDealFixture[] {
   return out;
 }
 
-// ---- Attempts per deal (addition 0008y): the fixture's deals with the CRM calls the database would find for them (each
-// call at its effective start, outbound or inbound, connected or not). Invented ids; from the start date to today, more on
-// weekdays, the lead pipeline Sales and the counted Renewals, owners of the linked accounts (one owner id nobody holds and
-// deals without an owner), a share closed won, lost or without an outcome, and today's fixed cases: never attempted, a
-// call in the pre-window, seven attempts, an inbound call only, a deal of an unknown market. The invest tenant's deals
-// have no call.
+// ---- Attempts per deal (addition 0008y; for sales since 0008z): the fixture's deals with the CRM calls the database would find
+// for them (each call at its effective start, outbound or inbound; linked to a telephony call with its answer and talk time, or
+// logged without one; with an outcome from the catalog or none) and their contacts' orders. Invented ids; from the start date
+// to today, more on weekdays, the lead pipeline Sales and the counted Renewals (never counted since 0008z), owners of the
+// linked accounts (one owner id nobody holds and deals without an owner), a share closed won, lost or without an outcome, a
+// share ordered another way, and today's fixed cases: never attempted, a call in the pre-window, seven attempts, an inbound
+// call only, a deal of an unknown market, a call logged without a telephony call. The invest tenant's deals have no call.
 
 const MOCK_ATTEMPT_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin" };
 const MOCK_TENANT_ZONE = "Europe/Amsterdam";
+const MOCK_NO_ATTEMPT_FILTER: AttemptFilter = { market: null, pipeline: null, attempted: "all", outcome: "all" };
+/** The fixture's call outcomes (the CRM's catalog): label and whether it counts as connected (Pulse4all: Connected, Meeting booked) */
+const MOCK_OUTCOMES: { label: string; connected: boolean }[] = [
+  { label: "Connected", connected: true }, { label: "Meeting booked", connected: true }, { label: "No answer", connected: false },
+  { label: "Left voicemail", connected: false }, { label: "Busy", connected: false },
+];
 
 function mockAttemptSettings(): AttemptSettings {
   return {
     maxBucket: Number(mockSetting("attempts.max_bucket")), sinceLastBuckets: mockSetting("attempts.since_last_buckets_business_days"),
     preWindowMinutes: Number(mockSetting("speed_to_lead.pre_window_minutes")), listRows: Number(mockSetting("follow_up.list_rows")),
+    source: mockSetting("attempts.source") === "crm" ? "crm" : "telephony", reachedMinTalkSeconds: Number(mockSetting("attempts.reached_min_talk_seconds")),
+    speedBuckets: mockSetting("attempts.speed_buckets_business_minutes"),
   };
+}
+
+/** A stable uuid-shaped id for a fixture deal (the CMA's deal id), from its source id */
+function mockDealId(me: Principal, sourceId: string): string {
+  const hex = (k: string) => Math.floor(mixedHashOf(`${me.tenantId}:deal-id:${sourceId}:${k}`) * 0xffffffff).toString(16).padStart(8, "0");
+  const x = `${hex("a")}${hex("b")}${hex("c")}${hex("d")}`;
+  return `${x.slice(0, 8)}-${x.slice(8, 12)}-7${x.slice(13, 16)}-8${x.slice(17, 20)}-${x.slice(20, 32)}`;
 }
 
 function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
@@ -659,14 +676,18 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
   const invest = me.tenantId === MOCK_TENANT_2;
   const markets = invest ? ["NL", "NL", "unknown"] : ["NL", "NL", "GB", "DE", "unknown"];
   const owners: (string | null)[] = ["70000001", "70000002", "70000009", "70000004", null];
+  const agents = ["Agent One", "Agent Two", "Test supervisor", null];
   const out: AttemptDealFixture[] = [];
   const deal = (id: string, t: number, market: string, o: Partial<AttemptDealFixture>): AttemptDealFixture => ({
-    connectionId: MOCK_CRM_CONNECTION, dealSourceId: id, pipelineId: "p-sales", pipelineLabel: "Sales (test)", isLead: true, isOrder: false, isCounted: true,
-    market, zone: MOCK_ATTEMPT_ZONES[market] ?? null, ownerRef: owners[0]!, createdAt: new Date(t).toISOString(), isClosed: false, closedAt: null,
-    stageOutcome: null, recordUrl: `https://crm.example.com/records/100200300/deal/${id}`, calls: [], ...o,
+    dealId: mockDealId(me, id), connectionId: MOCK_CRM_CONNECTION, dealSourceId: id, pipelineId: "p-sales", pipelineLabel: "Sales (test)",
+    stageLabel: "Open", isLead: true, isOrder: false, isCounted: true, market, zone: MOCK_ATTEMPT_ZONES[market] ?? null, ownerRef: owners[0]!,
+    createdAt: new Date(t).toISOString(), isClosed: false, closedAt: null, stageOutcome: null,
+    recordUrl: `https://crm.example.com/records/100200300/deal/${id}`, calls: [], orders: [], ...o,
   });
-  const call = (id: string, t: number, direction: AttemptCallFixture["direction"], connected: boolean): AttemptCallFixture =>
-    ({ id, at: new Date(t).toISOString(), direction, connected });
+  const call = (id: string, t: number, o: Partial<AttemptCallFixture> = {}): AttemptCallFixture => ({
+    id, at: new Date(t).toISOString(), direction: "outbound", linked: true, outcome: "No answer", outcomeConnected: false, answered: false,
+    talkSeconds: null, agentName: "Agent One", ...o,
+  });
   for (let date = mockStartDate(me); date <= today; date = addDays(date, 1)) {
     const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
     const n = 1 + Math.floor(hashOf(`${me.tenantId}:attempts:${date}`) * (weekend ? 2 : 7));
@@ -679,22 +700,31 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
       const tries = invest ? 0 : [0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 8][Math.floor(h("tries") * 11)]!;
       const calls: AttemptCallFixture[] = [];
       let at = t + (5 + h("first") * 120) * 60_000;
-      let reached = false;
       for (let k = 0; k < tries && at < now; k++) {
-        const connected: boolean = !reached && h(`c${k}`) < 0.28;
-        reached ||= connected;
-        calls.push(call(`c-${id}-${k}`, at, "outbound", connected));
+        const g = (x: string) => h(`c${k}${x}`);
+        const answered = g("answered") < 0.45;
+        const talk = answered ? Math.floor(g("talk") ** 2 * 600) : null;
+        // a third of the calls carry no outcome (the agent did not set one), the rest one from the catalog
+        const outcome = g("outcome") < 0.33 ? null : answered && talk! > 20 ? MOCK_OUTCOMES[Math.floor(g("which") * 2)]! : MOCK_OUTCOMES[2 + Math.floor(g("which") * 3)]!;
+        calls.push(call(`c-${id}-${k}`, at, {
+          linked: g("linked") >= 0.08, answered, talkSeconds: talk, outcome: outcome?.label ?? null, outcomeConnected: outcome?.connected ?? false,
+          agentName: agents[Math.floor(g("agent") * agents.length)]!,
+        }));
         at += (2 + h(`gap${k}`) * 30) * 3_600_000;
       }
-      if (!invest && h("inbound") < 0.15) calls.push(call(`c-${id}-in`, t + 90 * 60_000, "inbound", true));
+      if (!invest && h("inbound") < 0.15) calls.push(call(`c-${id}-in`, t + 90 * 60_000, { direction: "inbound", outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 120 }));
       const roll = h("close");
       const closedAt = t + (1 + h("closeAt") * 6) * 86_400_000;
       const closed = roll < 0.42 && closedAt < now;
+      const ordered = !invest && h("order") < 0.12 ? t + (0.5 + h("orderAt") * 5) * 86_400_000 : null;
+      const renewal = h("pipeline") < 0.12;
       out.push(deal(id, t, market, {
-        pipelineId: h("pipeline") < 0.12 ? "p-renewal" : "p-sales", pipelineLabel: h("pipeline") < 0.12 ? "Renewals (test)" : "Sales (test)",
-        isLead: h("pipeline") >= 0.12, ownerRef: owners[Math.floor(h("owner") * owners.length)]!,
+        pipelineId: renewal ? "p-renewal" : "p-sales", pipelineLabel: renewal ? "Renewals (test)" : "Sales (test)", isLead: !renewal,
+        ownerRef: owners[Math.floor(h("owner") * owners.length)]!,
         isClosed: closed, closedAt: closed ? new Date(closedAt).toISOString() : null,
-        stageOutcome: closed ? (roll < 0.2 ? "won" : roll < 0.37 ? "lost" : null) : null, calls,
+        stageOutcome: closed ? (roll < 0.2 ? "won" : roll < 0.37 ? "lost" : null) : null,
+        stageLabel: closed ? (roll < 0.2 ? "Closed won" : roll < 0.37 ? "Closed lost" : "Closed") : "Open", calls,
+        orders: ordered === null ? [] : [{ createdAt: new Date(ordered).toISOString(), at: new Date(ordered).toISOString() }],
       }));
     }
   }
@@ -703,12 +733,15 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
   const at = (k: number) => now - (k + 2) * 60 * 60_000;
   out.push(
     deal("4100000001", at(0), "NL", { ownerRef: "70000001" }),
-    deal("4100000002", at(1), "NL", { ownerRef: "70000002", calls: [call("c-41-2a", at(1) - 5 * 60_000, "outbound", false)] }),
-    deal("4100000003", at(2), "GB", { ownerRef: "70000009", calls: Array.from({ length: 7 }, (_, k) => call(`c-41-3-${k}`, at(2) + (k + 1) * 6 * 60_000, "outbound", k === 6)) }),
-    deal("4100000004", at(3), "DE", { ownerRef: null, calls: [call("c-41-4in", at(3) + 10 * 60_000, "inbound", true)] }),
-    deal("4100000005", at(4), "unknown", { ownerRef: "70000004", calls: [call("c-41-5a", at(4) + 15 * 60_000, "outbound", true)] }),
-    deal("4100000006", at(5), "NL", { pipelineId: "p-self-serve", pipelineLabel: "Web orders (test)", isLead: false, isOrder: true, isClosed: true,
-      closedAt: new Date(at(5)).toISOString(), stageOutcome: "won", calls: [call("c-41-6a", at(5) + 60_000, "outbound", true)] }),
+    deal("4100000002", at(1), "NL", { ownerRef: "70000002", calls: [call("c-41-2a", at(1) - 5 * 60_000)] }),
+    deal("4100000003", at(2), "GB", { ownerRef: "70000009", calls: Array.from({ length: 7 }, (_, k) => call(`c-41-3-${k}`, at(2) + (k + 1) * 6 * 60_000,
+      k === 6 ? { outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 240 } : k === 4 ? { outcome: null, answered: true, talkSeconds: 12 } : {})) }),
+    deal("4100000004", at(3), "DE", { ownerRef: null, calls: [call("c-41-4in", at(3) + 10 * 60_000, { direction: "inbound", outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 60 })] }),
+    deal("4100000005", at(4), "unknown", { ownerRef: "70000004", calls: [call("c-41-5a", at(4) + 15 * 60_000, { outcome: null, answered: true, talkSeconds: 95 })] }),
+    deal("4100000007", at(6), "NL", { ownerRef: "70000001", calls: [call("c-41-7a", at(6) + 3 * 60_000, { linked: false, outcome: null }),
+      call("c-41-7b", at(6) + 40 * 60_000, { outcome: "Left voicemail", answered: true, talkSeconds: 85 })] }),
+    deal("4100000006", at(5), "NL", { pipelineId: "p-self-serve", pipelineLabel: "Web orders (test)", stageLabel: "Won", isLead: false, isOrder: true, isClosed: true,
+      closedAt: new Date(at(5)).toISOString(), stageOutcome: "won", calls: [call("c-41-6a", at(5) + 60_000, { outcome: "Connected", outcomeConnected: true })] }),
   );
   return out;
 }
@@ -724,14 +757,29 @@ function mockWorkingDay(me: Principal): WorkingDay {
   };
 }
 
-function mockAttemptRecords(me: Principal, scope: AttemptFilter["scope"]) {
+/** What the definition reads besides the deals, as the fixture holds it: the settings, the working days, the office time */
+function mockAttemptOptions(me: Principal): AttemptOptions {
   const s = mockAttemptSettings();
   const accounts = seedIntakeConfig(me).accounts;
-  return attemptRecords(mockAttemptDeals(me), {
-    scope, preWindowMinutes: s.preWindowMinutes, sinceLastBuckets: s.sinceLastBuckets, now: new Date().toISOString(), tenantZone: MOCK_TENANT_ZONE,
-    working: mockWorkingDay(me),
+  const working = mockWorkingDay(me);
+  return {
+    source: s.source, preWindowMinutes: s.preWindowMinutes, reachedMinTalkSeconds: s.reachedMinTalkSeconds, sinceLastBuckets: s.sinceLastBuckets,
+    now: new Date().toISOString(), tenantZone: MOCK_TENANT_ZONE, working,
     ownerUserOf: (ref) => (ref === null ? null : accounts.find((x) => x.system === "crmtest_owner" && x.externalId === ref)?.userId ?? null),
-  });
+    businessSeconds: (market, from, to) => (Date.parse(to) <= Date.parse(from) ? (MOCK_ATTEMPT_ZONES[market] ? 0 : null) : mockBusinessSeconds(market, from, Date.parse(to))),
+    nextNoon: (market, at) => {
+      const zone = MOCK_ATTEMPT_ZONES[market];
+      if (!zone) return null;
+      for (let i = 1, d = addDays(dateKeyInZone(at, zone), 1); i <= 31; i += 1, d = addDays(d, 1)) {
+        if (working(market, d)) return new Date(localMs(d, "12:00", zone)).toISOString();
+      }
+      return null;
+    },
+  };
+}
+
+function mockAttemptRecords(me: Principal) {
+  return attemptRecords(mockAttemptDeals(me), mockAttemptOptions(me));
 }
 
 /** The filter lists of the period without the filters: markets (unknown last) and pipelines by label */
@@ -752,7 +800,7 @@ function assertAttempts(me: Principal, range: HoursRange, filter: AttemptFilter,
   assertAny(me, permissions);
   assertReportRange(range);
   if (group !== null && !ATTEMPT_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day, week, market or pipeline");
-  if (parseAttemptFilter(filter.market ?? "", filter.pipeline ?? "", filter.scope).problem) throw new CmaDbError("CMA04", "invalid filter");
+  if (parseAttemptFilter(filter.market ?? "", filter.pipeline ?? "", filter.attempted, filter.outcome).problem) throw new CmaDbError("CMA04", "invalid filter");
 }
 
 /** Whose a linked account is: the person holding it in the fixture's linked accounts */
@@ -1144,6 +1192,10 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // speed-to-lead pre-window they share with 0007d
   { key: "attempts.max_bucket", value: "5", isDefault: true },
   { key: "attempts.since_last_buckets_business_days", value: "1,2,5", isDefault: true },
+  // attempts per deal for sales (addition 0008z): telephony attempts, reached at 30 s of talk without an outcome, the speed buckets
+  { key: "attempts.source", value: "telephony", isDefault: true },
+  { key: "attempts.reached_min_talk_seconds", value: "30", isDefault: true },
+  { key: "attempts.speed_buckets_business_minutes", value: "5,15,60,240,1440", isDefault: true },
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
 ];
 
@@ -1168,6 +1220,8 @@ type MockConfig = {
 type MockDelivery = { deliveredAt: Instant | null; readAt: Instant | null; acknowledgedAt: Instant | null };
 type MockMessage = Omit<MyMessage, "deliveredAt" | "readAt" | "acknowledgedAt"> & {
   tenantId: string; everyone: boolean; users: Set<string>; byRule: boolean; deliveries: Map<string, MockDelivery>;
+  /** When a person holding messages.withdraw withdrew it for everyone (0008z); recipients no longer see it */
+  withdrawnAt?: Instant | null;
 };
 type MockState = {
   store: Map<Key, Workday>; teamStore: Map<string, Map<DateKey, TimeEvent[]>>; teamSeeded: boolean; people: Map<string, DirectoryPerson> | null;
@@ -1516,7 +1570,7 @@ const MOCK_ROLES: Omit<RoleInfo, "assignable">[] = [
   { key: "analytics", name: "Analytics", isSystem: true, isManaging: false, permissions: ["reports.view", "performance.team", "monitoring.live", "quality.manage"] },
   { key: "supervisor", name: "Supervisor", isSystem: true, isManaging: false, permissions: ["workday.own", "roster.view", "workday.team", "performance.team", "monitoring.live", "messages.send"] },
   { key: "manager", name: "Call center manager", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "workday.export"] },
-  { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export"] },
+  { key: "admin", name: "Administrator", isSystem: true, isManaging: true, permissions: ["workday.own", "workday.team", "roster.manage", "skills.manage", "users.manage_agents", "users.manage_all", "tenant.configure", "workday.export", "messages.withdraw"] },
 ];
 
 function mockSkill(key: string, level: number | null): DirectoryPerson["skills"][number] {
@@ -1611,7 +1665,7 @@ const MOCK_ABSENCES: AbsenceType[] = [
 const MOCK_PERMISSIONS = [
   "workday.own", "workday.team", "workday.export", "roster.view", "roster.manage", "skills.manage", "leads.accept", "leads.manage",
   "performance.own", "performance.team", "monitoring.live", "messages.send", "quality.manage", "reports.view",
-  "users.manage_agents", "users.manage_all", "tenant.configure",
+  "users.manage_agents", "users.manage_all", "tenant.configure", "messages.withdraw",
 ].map((key) => ({ key, description: key }));
 
 /** Same answer as the database for a caller without tenant.configure (migration 0005a) */
@@ -1648,6 +1702,8 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "follow_up.list_rows": "100",
   "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
+  "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
+  "attempts.reached_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -1816,11 +1872,11 @@ function isExpired(m: MockMessage, now: Instant): boolean {
   return m.expiresAt !== null && Date.parse(m.expiresAt) <= Date.parse(now);
 }
 
-/** The caller's own rows, newest first, as cma.my_messages lists them (expired ones left out) */
+/** The caller's own rows, newest first, as cma.my_messages lists them (expired and withdrawn ones left out) */
 function ownMessages(me: Principal, now: Instant): { m: MockMessage; d: MockDelivery }[] {
   const out: { m: MockMessage; d: MockDelivery }[] = [];
   for (const m of state.messages.values()) {
-    if (isExpired(m, now)) continue;
+    if (isExpired(m, now) || m.withdrawnAt) continue;
     const d = deliveryOf(m, me);
     if (d) out.push({ m, d });
   }
@@ -2298,7 +2354,8 @@ export const mockData: CmaData = {
           : ["workday.own", "workday.team", "performance.team", "monitoring.live", "roster.view", "messages.send"],
       };
     }
-    // The admin (0004): everything the manager has plus configuration and user management for everyone
+    // The admin (0004): everything the manager has plus configuration and user management for everyone; since addition
+    // 0008z also withdrawing any message (messages.withdraw, the default ladder's admin)
     if (identity.provider === MOCK_IDENTITY.provider && identity.subject === "admin") {
       return {
         ...MOCK_PRINCIPAL,
@@ -2307,7 +2364,8 @@ export const mockData: CmaData = {
         organisationName: "Pulse4all",
         roleKey: "admin",
         permissions: ["workday.own", "workday.team", "workday.export", "performance.team", "monitoring.live", "reports.view",
-                      "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send"],
+                      "users.manage_agents", "users.manage_all", "tenant.configure", "skills.manage", "roster.manage", "roster.view", "messages.send",
+                      "messages.withdraw"],
       };
     }
     // An analytics user as in the default ladder: reports and the Dashboard, no clock, no corrections
@@ -3142,7 +3200,7 @@ export const mockData: CmaData = {
     let n = 0;
     for (const id of ids) {
       const m = state.messages.get(id);
-      const d = m ? deliveryOf(m, me) : null;
+      const d = m && !m.withdrawnAt ? deliveryOf(m, me) : null;
       if (!d || d.readAt !== null) continue;
       d.deliveredAt ??= now;
       d.readAt = now;
@@ -3154,7 +3212,7 @@ export const mockData: CmaData = {
   async acknowledgeMessage(me, id): Promise<void> {
     const now = new Date().toISOString();
     const m = state.messages.get(id);
-    const d = m ? deliveryOf(m, me) : null;
+    const d = m && !m.withdrawnAt ? deliveryOf(m, me) : null;
     if (!d) throw new CmaDbError("CMA02", "not found");
     if (d.acknowledgedAt !== null) return;
     d.deliveredAt ??= now;
@@ -3187,9 +3245,17 @@ export const mockData: CmaData = {
       out.push({ id: m.id, kind: m.kind, urgency: m.urgency, title: m.title, ref: m.ref ? { system: m.ref.system, type: m.ref.type, id: m.ref.id } : null,
         byRule: m.byRule, createdAt: m.createdAt, recipients: ds.length, delivered: ds.filter((d) => d.deliveredAt).length,
         read: reads.length, acknowledged: ds.filter((d) => d.acknowledgedAt).length,
-        medianSecondsToRead: reads.length ? Math.round(reads[Math.floor((reads.length - 1) / 2)]!) : null });
+        medianSecondsToRead: reads.length ? Math.round(reads[Math.floor((reads.length - 1) / 2)]!) : null, withdrawnAt: m.withdrawnAt ?? null });
     }
     return out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  },
+
+  async withdrawMessage(me, id) {
+    if (!me.permissions.includes("messages.withdraw")) throw new CmaDbError("CMA06", "not permitted");
+    const m = state.messages.get(id);
+    if (!m || m.tenantId !== me.tenantId) throw new CmaDbError("CMA02", "not found");
+    m.withdrawnAt ??= new Date().toISOString();
+    return { withdrawnAt: m.withdrawnAt };
   },
 
   // ---- Sources, markets, alert rules (addition 0008e): the same refusals as the database functions ----
@@ -3785,16 +3851,17 @@ export const mockData: CmaData = {
   async getAttempts(me, range, group, filter): Promise<AttemptsReport> {
     assertAttempts(me, range, filter, group, ["reports.view", "performance.team"]);
     const settings = mockAttemptSettings();
-    const records = mockAttemptRecords(me, filter.scope);
+    const records = mockAttemptRecords(me);
     const rows = attemptsInPeriod(records, range.from, range.to, filter, null, MOCK_TENANT_ZONE);
     const prev = previousPeriod(range, mockToday(me));
     const previous = attemptsInPeriod(records, prev.from, prev.to, filter, prev.partial ? new Date().toISOString() : null, MOCK_TENANT_ZONE);
     return {
       ...range, group, filter, current: attemptFigures(rows), previous: attemptFigures(previous),
       previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
-      buckets: attemptBuckets(rows, settings.maxBucket), groups: attemptGroups(rows, group), sinceLast: sinceLastBuckets(rows, settings.sinceLastBuckets),
+      buckets: attemptBuckets(rows, settings.maxBucket), outcomes: attemptOutcomes(rows), speedBuckets: attemptSpeedBuckets(rows, settings.speedBuckets),
+      groups: attemptGroups(rows, group), sinceLast: sinceLastBuckets(rows, settings.sinceLastBuckets),
       list: attemptList(rows, listRowsOf(mockSetting("follow_up.list_rows"))),
-      ...mockAttemptLists(attemptsInPeriod(records, range.from, range.to, { market: null, pipeline: null }, null, MOCK_TENANT_ZONE)),
+      ...mockAttemptLists(attemptsInPeriod(records, range.from, range.to, MOCK_NO_ATTEMPT_FILTER, null, MOCK_TENANT_ZONE)),
       historyStart: mockAttemptsHistory(me, records), settings,
     };
   },
@@ -3802,11 +3869,19 @@ export const mockData: CmaData = {
   async getAttemptsPerAgent(me, range, filter): Promise<AttemptsPerAgent> {
     assertAttempts(me, range, filter, null, [ATTEMPTS_PER_AGENT_PERMISSION]);
     if (!me.perPerson.includes(ATTEMPTS_PER_AGENT_KEY)) throw new CmaDbError("CMA06", "per-person figures for attempts are switched off for this tenant");
-    const records = mockAttemptRecords(me, filter.scope);
-    const period = attemptsInPeriod(records, range.from, range.to, { market: null, pipeline: null }, null, MOCK_TENANT_ZONE);
+    const records = mockAttemptRecords(me);
+    const period = attemptsInPeriod(records, range.from, range.to, MOCK_NO_ATTEMPT_FILTER, null, MOCK_TENANT_ZONE);
     const { rows, total } = attemptsPerPerson(attemptsInPeriod(records, range.from, range.to, filter, null, MOCK_TENANT_ZONE), mockOrderName);
     return { ...range, filter, rows, total, ...mockAttemptLists(period), historyStart: mockAttemptsHistory(me, records), settings: mockAttemptSettings() };
   },
+
+  async getDealAttempts(me, dealId): Promise<DealAttempt[]> {
+    assertAny(me, ["reports.view", "performance.team"]);
+    const d = mockAttemptDeals(me).find((x) => x.dealId === dealId && x.isCounted && x.isLead && !x.isOrder);
+    if (!d) throw new CmaDbError("CMA02", `no sales deal ${dealId}`);
+    return dealAttempts(d, mockAttemptOptions(me), me.perPerson.includes(ATTEMPTS_PER_AGENT_KEY) && me.permissions.includes("performance.team"));
+  },
+
 
   async getCallbacksKept(me, range): Promise<CallbacksKept> {
     assertAny(me, [...CALLBACKS_PERMISSIONS]);

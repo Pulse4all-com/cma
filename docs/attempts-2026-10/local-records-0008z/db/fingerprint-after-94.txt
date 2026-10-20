@@ -1,0 +1,7 @@
+SET
+ functions |          functions_md5           | views |            views_md5             |                                                                                       attempt_settings                                                                                        | withdraw_grants |              addition               
+-----------+----------------------------------+-------+----------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------+-------------------------------------
+       475 | c2829d302e6e202563cc5045f4751e0a |   120 | c9aea695d4219e2add1eb76a00f4629a | attempts.max_bucket=5 attempts.reached_min_talk_seconds=30 attempts.since_last_buckets_business_days=1,2,5 attempts.source=telephony attempts.speed_buckets_business_minutes=5,15,60,240,1440 |               2 | 0008z 2026-10-20 05:23:42.845857+00
+(1 row)
+
+RESET
