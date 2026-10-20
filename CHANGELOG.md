@@ -2,6 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map). Newest first, one dated line per change.
 
+- 20 October 2026: the data map is republished after a merge that changes docs/datamap/index.html; the PR description carries the reminder (#179): CLAUDE.md (Database), docs/architecture/infrastructure.md (Release flow), docs/datamap/README.md (When it changes, Publishing), docs/decisions.md.
 - 20 October 2026: README.md split into README.md plus docs/ files (README, Documentation map), every section moved verbatim; the README's "Last updated" line is replaced by this changelog; `tools/docs/check-split.mjs` checks the coverage.
 
 ## Before 20 October 2026 (the README's last pass line)
