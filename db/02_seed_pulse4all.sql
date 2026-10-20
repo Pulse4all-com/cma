@@ -377,7 +377,12 @@ $$;
 -- Configuration survives a rerun.
 do $$
 begin
-  if to_regclass('cma.setting') is null or not exists (select 1 from cma.setting where key = 'reports.per_person') then
+  -- two steps: PL/pgSQL plans an IF's whole expression, so a lookup in the catalog fails before 13 creates it
+  if to_regclass('cma.setting') is null then
+    raise notice 'the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql';
+    return;
+  end if;
+  if not exists (select 1 from cma.setting where key = 'reports.per_person') then
     raise notice 'the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql';
     return;
   end if;

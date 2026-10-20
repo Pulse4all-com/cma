@@ -1,4 +1,5 @@
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { MarketFilter } from "@/components/MarketFilter";
 import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission, NotConnected } from "@/components/ReportParts";
@@ -119,17 +120,17 @@ export default async function IntakePage({ searchParams }: PageProps<"/reports/i
               <thead>
                 <tr className="text-left text-caption text-p4a-grey">
                   <th className="px-2" colSpan={3} />
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}>{t.sourceCrm}{hint(t.sourceCrm, h.sourceCrm)}</th>
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}>{t.sourceTelephony}{hint(t.sourceTelephony, h.sourceTelephony)}</th>
-                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}>{t.sourceShop}{hint(t.sourceShop, h.sourceShop)}</th>
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={CRM_FIELDS.length}><HintLabel label={t.sourceCrm}>{hint(t.sourceCrm, h.sourceCrm)}</HintLabel></th>
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={TELEPHONY_FIELDS.length}><HintLabel label={t.sourceTelephony}>{hint(t.sourceTelephony, h.sourceTelephony)}</HintLabel></th>
+                  <th className={`px-2 pb-1 font-semibold ${sep}`} colSpan={COMMERCE_FIELDS.length}><HintLabel label={t.sourceShop}>{hint(t.sourceShop, h.sourceShop)}</HintLabel></th>
                 </tr>
                 <tr className="bg-p4a-bgblue text-left text-p4a-heading">
-                  <th className={th}>{copy.reports.date}{hint(copy.reports.date, h.date)}</th>
-                  <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.intakeMarket)}</th>
-                  <th className={`${th} w-24`}>{t.volume}{hint(t.volume, h.volume)}</th>
-                  {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
-                  {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
-                  {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}>{labels[f]}{hint(labels[f], hints[f])}</th>)}
+                  <th className={th}><HintLabel label={copy.reports.date}>{hint(copy.reports.date, h.date)}</HintLabel></th>
+                  <th className={th}><HintLabel label={copy.reports.market}>{hint(copy.reports.market, h.intakeMarket)}</HintLabel></th>
+                  <th className={`${th} w-24`}><HintLabel label={t.volume}>{hint(t.volume, h.volume)}</HintLabel></th>
+                  {CRM_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
+                  {TELEPHONY_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
+                  {COMMERCE_FIELDS.map((f, i) => <th key={f} className={`${th} text-right ${i === 0 ? sep : ""}`}><HintLabel label={labels[f]}>{hint(labels[f], hints[f])}</HintLabel></th>)}
                 </tr>
               </thead>
               <tbody>

@@ -29,6 +29,7 @@ import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card, Keycap } from "../primitives";
 import { FormRuleDialog, OutcomeRuleDialog } from "./SourceRules";
 import { kindLabel } from "./SourcesList";
@@ -105,8 +106,13 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
   const [store, setStore] = useState<SourceStore>(detail.store ?? { handle: "", name: "", market: marketCodes[0] ?? "", currency: "", timeZone: "" });
   const [storeProblem, setStoreProblem] = useState<string | null>(null);
   // switching a line off removes its stored calls (addition 0008f), so it asks first, on Cancel (an irreversible
-  // confirmation); the box stays ticked until the save is confirmed; switching on does not ask
+  // confirmation); the box stays ticked until the save is confirmed; switching on does not ask. Since addition 0008y
+  // (backlog CMA-020) the question names how many stored calls it removes and the first one's date, read when the dialog
+  // opens: the confirm button waits for the count, and a failed read says so instead of guessing a number
   const [lineOff, setLineOff] = useState<SourceLine | null>(null);
+  const [lineCount, setLineCount] = useState<{ state: "loading" } | { state: "failed" } | { state: "ready"; storedCalls: number; firstStartedAt: string | null }>(
+    { state: "loading" });
+  const lineCountRead = useRef(0);
   // a missed-call reason's label (addition 0008i); its two switches save at once from the table
   const [reasonEdit, setReasonEdit] = useState<{ reason: SourceMissedReason; opened: number } | null>(null);
   const [reasonLabel, setReasonLabel] = useState("");
@@ -117,6 +123,34 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
   const [mailboxProblem, setMailboxProblem] = useState<string | null>(null);
   // the two email numbers (0008t), each saved on blur once it parses, as a pipeline's response time
   const [emailText, setEmailText] = useState<Partial<Record<keyof typeof EMAIL_NUMBER_KEYS, string>>>({});
+
+  function openLineOff(l: SourceLine) {
+    const read = ++lineCountRead.current;
+    setLineOff(l);
+    setLineCount({ state: "loading" });
+    fetch(`${base}/lines/stored-calls?lineRef=${encodeURIComponent(l.lineRef)}`, { headers: { accept: "application/json" } })
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`stored calls: ${r.status}`);
+        const j = (await r.json()) as { data: { storedCalls: number; firstStartedAt: string | null } };
+        if (read === lineCountRead.current) setLineCount({ state: "ready", storedCalls: j.data.storedCalls, firstStartedAt: j.data.firstStartedAt });
+      })
+      .catch(() => { if (read === lineCountRead.current) setLineCount({ state: "failed" }); });
+  }
+
+  /** The switch-off question with the line's stored calls, or the reading and failed states */
+  function lineOffText(l: SourceLine | null) {
+    const lineName = l?.name ?? "";
+    if (lineCount.state === "loading") return <p role="status" data-testid="line-off-counting">{t.lineOffCounting.replace("{name}", lineName)}</p>;
+    if (lineCount.state === "failed") return <p role="alert" className="text-p4a-error" data-testid="line-off-failed">{t.lineOffCountFailed.replace("{name}", lineName)}</p>;
+    const date = lineCount.firstStartedAt ? fmtDate(dateKeyInZone(lineCount.firstStartedAt, timeZone), locale) : "";
+    const text = lineCount.storedCalls === 0 ? t.lineOffConfirmNone : lineCount.storedCalls === 1 ? t.lineOffConfirmOne : t.lineOffConfirm;
+    return (
+      <p data-testid="line-off-count" data-stored-calls={lineCount.storedCalls}>
+        {text.replace("{name}", lineName).replace("{count}", new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB").format(lineCount.storedCalls))
+          .replace("{date}", date)}
+      </p>
+    );
+  }
 
   async function rename() {
     const v = name.trim();
@@ -320,11 +354,11 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               ? <Button variant="destructive" size="sm" onClick={() => setConfirmOff(true)}>{t.switchOff}</Button>
               : <Button variant="outlined" size="sm" onClick={() => save(() => send("PUT", base, { isActive: true }))}>{t.switchOn}</Button>}
           </dd>
-          <dt className="font-semibold">{t.addressKey}{hint(t.addressKey, t.addressKeyHint)}</dt>
+          <dt className="font-semibold"><HintLabel label={t.addressKey}>{hint(t.addressKey, t.addressKeyHint)}</HintLabel></dt>
           <dd className="break-all text-small">{conn.key}</dd>
-          <dt className="font-semibold">{t.signingSecret}{hint(t.signingSecret, t.secretHint)}</dt>
+          <dt className="font-semibold"><HintLabel label={t.signingSecret}>{hint(t.signingSecret, t.secretHint)}</HintLabel></dt>
           <dd className="text-small">{conn.signingSecretName ?? t.noSecret}</dd>
-          <dt className="font-semibold">{t.tokenSecret}{hint(t.tokenSecret, t.secretHint)}</dt>
+          <dt className="font-semibold"><HintLabel label={t.tokenSecret}>{hint(t.tokenSecret, t.secretHint)}</HintLabel></dt>
           <dd className="text-small">{conn.tokenSecretName ?? t.noSecret}</dd>
           {sections.includes("missedReasons") ? (
             <>
@@ -348,7 +382,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
         {sections.includes("missedReasons") ? (
           // the unlinked-calls check (data quality, 0008o): one setting of this connection, written with the others
           <label className={`${label} mb-4 max-w-3xl`}>
-            <span className="flex items-center">{t.unlinkedCheck}{hint(t.unlinkedCheck, t.unlinkedHint)}</span>
+            <span className="flex items-center"><HintLabel label={t.unlinkedCheck}>{hint(t.unlinkedCheck, t.unlinkedHint)}</HintLabel></span>
             <select className={field} data-testid="source-unlinked-check" value={unlinkedSkipOf(original, conn.kind)}
               onChange={(e) => save(() => send("PUT", `${base}/settings`, { settings: { ...original, [DQ_UNLINKED_SKIP_KEY]: e.target.value } }))}>
               <option value={DQ_UNLINKED_SKIP_DEFAULT}>{t.unlinkedSkip}</option>
@@ -422,10 +456,10 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                 <tr>
                   <th className={th}>{t.recordType}</th>
                   <th className={th}>{t.pipeline}</th>
-                  <th className={th}>{t.counted}{hint(t.counted, t.hintCounted)}</th>
-                  <th className={th}>{t.lead}{hint(t.lead, t.hintLead)}</th>
-                  <th className={th}>{t.orderPipeline}{hint(t.orderPipeline, t.hintOrderPipeline)}</th>
-                  <th className={th}>{t.responseTime}{hint(t.responseTime, t.hintResponseTime)}</th>
+                  <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintCounted)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.lead}>{hint(t.lead, t.hintLead)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.orderPipeline}>{hint(t.orderPipeline, t.hintOrderPipeline)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.responseTime}>{hint(t.responseTime, t.hintResponseTime)}</HintLabel></th>
                 </tr>
               </thead>
               <tbody>
@@ -480,7 +514,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                   <tr>
                     <th className={th}>{t.pipeline}</th>
                     <th className={th}>{t.stage}</th>
-                    <th className={th}>{t.stageOutcome}{hint(t.stageOutcome, t.hintStageOutcome)}</th>
+                    <th className={th}><HintLabel label={t.stageOutcome}>{hint(t.stageOutcome, t.hintStageOutcome)}</HintLabel></th>
                     <th className={th}><span className="sr-only">{t.outcomeFromSource}</span></th>
                   </tr>
                 </thead>
@@ -520,11 +554,11 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.form}</th>
-                  <th className={th}>{t.polled}{hint(t.polled, t.hintFormPolled)}</th>
-                  <th className={th}>{t.counted}{hint(t.counted, t.hintFormCounted)}</th>
-                  <th className={th}>{t.category}{hint(t.category, t.hintFormCategory)}</th>
-                  <th className={th}>{t.leadSource}{hint(t.leadSource, t.hintLeadSource)}</th>
-                  <th className={th}>{t.market}{hint(t.market, t.hintFormMarket)}</th>
+                  <th className={th}><HintLabel label={t.polled}>{hint(t.polled, t.hintFormPolled)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintFormCounted)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.category}>{hint(t.category, t.hintFormCategory)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.leadSource}>{hint(t.leadSource, t.hintLeadSource)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.market}>{hint(t.market, t.hintFormMarket)}</HintLabel></th>
                   <th className={th}></th>
                 </tr>
               </thead>
@@ -556,7 +590,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
           {detail.callOutcomes.length === 0 ? <p className="text-body text-p4a-muted">{t.outcomesEmpty}</p> : (
             <table className="w-full border-collapse text-body leading-table" data-testid="source-outcomes">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-                <tr><th className={th}>{t.outcome}</th><th className={th}>{t.connected}{hint(t.connected, t.hintConnected)}</th></tr>
+                <tr><th className={th}>{t.outcome}</th><th className={th}><HintLabel label={t.connected}>{hint(t.connected, t.hintConnected)}</HintLabel></th></tr>
               </thead>
               <tbody>
                 {detail.callOutcomes.map((o) => (
@@ -581,7 +615,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
           {detail.fields.length === 0 ? <p className="text-body text-p4a-muted">{t.fieldsEmpty}</p> : (
             <table className="w-full border-collapse text-body leading-table" data-testid="source-fields">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-                <tr><th className={th}>{t.entity}</th><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}>{t.property}{hint(t.property, t.hintProperty)}</th></tr>
+                <tr><th className={th}>{t.entity}</th><th className={th}>{t.field}</th><th className={`${th} text-right`}>{t.slot}</th><th className={th}><HintLabel label={t.property}>{hint(t.property, t.hintProperty)}</HintLabel></th></tr>
               </thead>
               <tbody>
                 {detail.fields.map((f) => (
@@ -628,10 +662,10 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             <table className="w-full border-collapse text-body leading-table" data-testid="source-task-statuses">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
-                  <th className={th}>{t.taskStatus}{hint(t.taskStatus, t.hintTaskStatus)}</th>
-                  <th className={th}>{t.taskLabel}{hint(t.taskLabel, t.hintTaskLabel)}</th>
-                  <th className={th}>{t.taskDone}{hint(t.taskDone, t.hintTaskDone)}</th>
-                  <th className={`${th} text-right`}>{t.taskSeen}{hint(t.taskSeen, t.hintTaskSeen)}</th>
+                  <th className={th}><HintLabel label={t.taskStatus}>{hint(t.taskStatus, t.hintTaskStatus)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.taskLabel}>{hint(t.taskLabel, t.hintTaskLabel)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.taskDone}>{hint(t.taskDone, t.hintTaskDone)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.taskSeen}>{hint(t.taskSeen, t.hintTaskSeen)}</HintLabel></th>
                   <th className={th}>{t.taskLastSeen}</th>
                   <th className={th}><span className="sr-only">{t.editTaskStatus}</span></th>
                 </tr>
@@ -666,11 +700,11 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             <table className="w-full border-collapse text-body leading-table" data-testid="source-task-types">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
-                  <th className={th}>{t.taskType}{hint(t.taskType, t.hintTaskType)}</th>
-                  <th className={th}>{t.taskLabel}{hint(t.taskLabel, t.hintTaskTypeLabel)}</th>
-                  <th className={th}>{t.taskCallback}{hint(t.taskCallback, t.hintTaskCallback)}</th>
-                  <th className={th}>{t.taskCounted}{hint(t.taskCounted, t.hintTaskCounted)}</th>
-                  <th className={`${th} text-right`}>{t.taskSeen}{hint(t.taskSeen, t.hintTaskOpen)}</th>
+                  <th className={th}><HintLabel label={t.taskType}>{hint(t.taskType, t.hintTaskType)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.taskLabel}>{hint(t.taskLabel, t.hintTaskTypeLabel)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.taskCallback}>{hint(t.taskCallback, t.hintTaskCallback)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.taskCounted}>{hint(t.taskCounted, t.hintTaskCounted)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.taskSeen}>{hint(t.taskSeen, t.hintTaskOpen)}</HintLabel></th>
                   <th className={`${th} text-right`}>{t.taskOpenCount}</th>
                   <th className={th}>{t.taskLastSeen}</th>
                   <th className={th}><span className="sr-only">{t.editTaskType}</span></th>
@@ -761,8 +795,8 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                 <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                   <tr>
                     <th className={th}>{t.emailInbox}</th>
-                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailInboxCounted)}</th>
-                    <th className={th}>{t.market}{hint(t.market, t.hintEmailInboxMarket)}</th>
+                    <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintEmailInboxCounted)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.market}>{hint(t.market, t.hintEmailInboxMarket)}</HintLabel></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -793,10 +827,10 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               <table className="w-full border-collapse text-body leading-table" data-testid="source-mailboxes">
                 <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                   <tr>
-                    <th className={th}>{t.emailMailbox}{hint(t.emailMailbox, t.hintEmailMailbox)}</th>
+                    <th className={th}><HintLabel label={t.emailMailbox}>{hint(t.emailMailbox, t.hintEmailMailbox)}</HintLabel></th>
                     <th className={th}>{t.emailInbox}</th>
-                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailMailboxCounted)}</th>
-                    <th className={th}>{t.market}{hint(t.market, t.hintEmailMailboxMarket)}</th>
+                    <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintEmailMailboxCounted)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.market}>{hint(t.market, t.hintEmailMailboxMarket)}</HintLabel></th>
                     <th className={th}><span className="sr-only">{t.editMailbox}</span></th>
                   </tr>
                 </thead>
@@ -840,7 +874,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                   <tr>
                     <th className={th}>{t.emailChannel}</th>
                     <th className={th}>{t.emailChannelKind}</th>
-                    <th className={th}>{t.counted}{hint(t.counted, t.hintEmailChannelCounted)}</th>
+                    <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintEmailChannelCounted)}</HintLabel></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -870,9 +904,9 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
                   <th className={th}>{t.line}</th>
-                  <th className={th}>{t.number}{hint(t.number, t.hintNumber)}</th>
-                  <th className={th}>{t.market}{hint(t.market, t.hintLineMarket)}</th>
-                  <th className={th}>{t.counted}{hint(t.counted, t.hintLineCounted)}</th>
+                  <th className={th}><HintLabel label={t.number}>{hint(t.number, t.hintNumber)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.market}>{hint(t.market, t.hintLineMarket)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintLineCounted)}</HintLabel></th>
                 </tr>
               </thead>
               <tbody>
@@ -891,7 +925,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                       <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${l.name}`} checked={l.isCounted}
                         onChange={(e) => e.target.checked
                           ? save(() => send("PUT", `${base}/lines`, { lineRef: l.lineRef, market: l.market, isCounted: true }))
-                          : setLineOff(l)} />
+                          : openLineOff(l)} />
                     </td>
                   </tr>
                 ))}
@@ -908,7 +942,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
           {detail.tags.length === 0 ? <p className="text-body text-p4a-muted">{t.tagsEmpty}</p> : (
             <table className="w-full border-collapse text-body leading-table" data-testid="source-tags">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-                <tr><th className={th}>{t.tag}</th><th className={th}>{t.counted}{hint(t.counted, t.hintTagCounted)}</th></tr>
+                <tr><th className={th}>{t.tag}</th><th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintTagCounted)}</HintLabel></th></tr>
               </thead>
               <tbody>
                 {detail.tags.map((x) => (
@@ -936,11 +970,11 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             <table className="w-full border-collapse text-body leading-table" data-testid="source-missed-reasons">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
                 <tr>
-                  <th className={th}>{t.reasonCode}{hint(t.reasonCode, t.hintReasonCode)}</th>
-                  <th className={th}>{t.reasonLabel}{hint(t.reasonLabel, t.hintReasonLabel)}</th>
-                  <th className={thWrap}>{t.reasonInServiceLevel}{hint(t.reasonInServiceLevel, t.hintReasonInServiceLevel)}</th>
-                  <th className={thWrap}>{t.reasonNeedsCallback}{hint(t.reasonNeedsCallback, t.hintReasonNeedsCallback)}</th>
-                  <th className={`${th} text-right`}>{t.reasonSeen}{hint(t.reasonSeen, t.hintReasonSeen)}</th>
+                  <th className={th}><HintLabel label={t.reasonCode}>{hint(t.reasonCode, t.hintReasonCode)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.reasonLabel}>{hint(t.reasonLabel, t.hintReasonLabel)}</HintLabel></th>
+                  <th className={thWrap}><HintLabel label={t.reasonInServiceLevel}>{hint(t.reasonInServiceLevel, t.hintReasonInServiceLevel)}</HintLabel></th>
+                  <th className={thWrap}><HintLabel label={t.reasonNeedsCallback}>{hint(t.reasonNeedsCallback, t.hintReasonNeedsCallback)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.reasonSeen}>{hint(t.reasonSeen, t.hintReasonSeen)}</HintLabel></th>
                   <th className={th}>{t.reasonLastSeen}</th>
                   <th className={th}><span className="sr-only">{t.editReason}</span></th>
                 </tr>
@@ -1132,11 +1166,12 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
       </ConfirmDialog>
 
       <ConfirmDialog open={lineOff !== null} title={t.lineOff} confirmLabel={t.lineOff} cancelLabel={c.cancel} busy={state.kind === "saving"} irreversible
+        confirmDisabled={lineCount.state !== "ready"}
         onCancel={() => setLineOff(null)}
         onConfirm={async () => {
           if (lineOff && await save(() => send("PUT", `${base}/lines`, { lineRef: lineOff.lineRef, market: lineOff.market, isCounted: false }))) setLineOff(null);
         }}>
-        {t.lineOffConfirm.replace("{name}", lineOff?.name ?? "")}
+        {lineOffText(lineOff)}
       </ConfirmDialog>
     </>
   );

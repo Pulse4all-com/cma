@@ -10,6 +10,7 @@ import type { OrderPerson } from "@/lib/data";
 import { fmtDays } from "@/lib/first-orders";
 import { barShare, fmtCount } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 
 export function OrdersPerPersonTable({ rows, total, hints, copy, locale }: {
   rows: OrderPerson[]; total: OrderPerson; hints: Record<string, string>; copy: Copy; locale: Locale;
@@ -47,14 +48,14 @@ export function OrdersPerPersonTable({ rows, total, hints, copy, locale }: {
       <table className="w-full border-collapse text-body leading-table" data-testid="orders-person-table">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={`${th} w-48`}>{t.person}{hint(t.person, hints.foPerson!)}</th>
-            <th className={`${th} text-right`}>{t.orders}{hint(t.orders, hints.foPersonOrders!)}</th>
-            <th className={`${th} text-right`}>{f.level_lead_deal}{hint(f.level_lead_deal, hints.foPersonLevel!)}</th>
-            <th className={`${th} text-right`}>{f.level_conversation}{hint(f.level_conversation, hints.foPersonLevel!)}</th>
-            <th className={`${th} text-right`}>{f.level_email}{hint(f.level_email, hints.foPersonLevel!)}</th>
-            <th className={`${th} text-right`}>{f.level_phone_match}{hint(f.level_phone_match, hints.foPersonLevel!)}</th>
-            <th className={`${th} text-right`}>{t.other}{hint(t.other, hints.foPersonLevel!)}</th>
-            <th className={`${th} text-right`}>{f.days}{hint(f.days, hints.foPersonDays!)}</th>
+            <th className={`${th} w-48`}><HintLabel label={t.person}>{hint(t.person, hints.foPerson!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.orders}>{hint(t.orders, hints.foPersonOrders!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={f.level_lead_deal}>{hint(f.level_lead_deal, hints.foPersonLevel!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={f.level_conversation}>{hint(f.level_conversation, hints.foPersonLevel!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={f.level_email}>{hint(f.level_email, hints.foPersonLevel!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={f.level_phone_match}>{hint(f.level_phone_match, hints.foPersonLevel!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.other}>{hint(t.other, hints.foPersonLevel!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={f.days}>{hint(f.days, hints.foPersonDays!)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

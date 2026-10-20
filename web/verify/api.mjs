@@ -27,7 +27,8 @@
  * 0008e (night of 13 October 2026) the Sources, Markets and Alert rules screens and linked accounts on
  * People (every write undone at the end; one switched-off rule "API verifier rule" stays, dev data),
  * since addition 0008i Inbound and the Live board's inbound part, since addition 0008j Calls and
- * Calls per agent (reads only), and since addition 0008k the telephony history start on Calls.
+ * Calls per agent (reads only), since addition 0008k the telephony history start on Calls, and since addition 0008y
+ * Attempts per deal, Attempts per agent and a line's stored calls (reads only).
  */
 const BASE = process.env.BASE ?? "http://localhost:8080";
 const PROVOKE = process.argv.includes("--provoke");
@@ -54,6 +55,11 @@ const ONLY_INBOUND = process.argv.includes("--inbound");
  * so they run against dev, a local database with reports-fixture.sql or a cma-web in mock data mode alike.
  */
 const ONLY_CALLS = process.argv.includes("--calls");
+/**
+ * --attempts runs only the checks of Attempts per deal, Attempts per agent and a line's stored calls (addition 0008y).
+ * They read only, so they run against dev, a local database with reports-fixture.sql or a cma-web in mock data mode alike.
+ */
+const ONLY_ATTEMPTS = process.argv.includes("--attempts");
 /**
  * --invitations runs only the checks of invitations by email (addition 0008l, night of 15 October 2026), and
  * only on request: they are not part of the full run. An invitation is never deleted and an accepted one makes
@@ -148,7 +154,7 @@ function expect(name, actual, expected, provoked) {
 console.log(`verify/api.mjs against ${BASE}${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
 const health = await get(AGENT, "/api/health");
-const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_INVITATIONS || ONLY_PREVIEW || ONLY_FOLLOW_UP;
+const ONLY_GROUP = ONLY_REPORTS || ONLY_SOURCES || ONLY_INBOUND || ONLY_CALLS || ONLY_ATTEMPTS || ONLY_INVITATIONS || ONLY_PREVIEW || ONLY_FOLLOW_UP;
 if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data === "api" || (ONLY_GROUP && health.body?.data === "mock"))) {
   console.error(`Not a mock-auth, ${ONLY_GROUP ? "api- or mock-data" : "api-data"} cma-web at ${BASE}: ${JSON.stringify(health.body)}`);
   process.exit(2);
@@ -163,6 +169,10 @@ if (ONLY_SOURCES) {
 }
 if (ONLY_CALLS) {
   await callsChecks();
+  verdict();
+}
+if (ONLY_ATTEMPTS) {
+  await attemptsChecks();
   verdict();
 }
 if (ONLY_INBOUND) {
@@ -874,6 +884,7 @@ expect("a stats range over 92 days is a 400", (await get(SUPERVISOR, `/api/v1/me
 await reportChecks();
 await inboundChecks();
 await callsChecks();
+await attemptsChecks();
 verdict();
 
 async function followUpChecks() {
@@ -1486,6 +1497,127 @@ async function callsChecks() {
       [false, 0, 0, false, 0], [true, 0, 0, true, 0]);
   } else {
     console.log(`note  ${INVEST} has no access here: the check of a tenant without telephony is left out`);
+  }
+}
+
+// ---- Attempts per deal, Attempts per agent and a line's stored calls (addition 0008y), 12 checks, 16 with the reader, the
+// tenant without the per-person switch and a telephony line (the mock fixture has all three; dev has neither identity) ----
+// Reads only. Attempts per deal for reports.view or performance.team, Attempts per agent for performance.team while the
+// tenant's reports.per_person holds attempts (a 404 otherwise, as the page), a line's stored calls for tenant.configure.
+// Ids, codes, counts, links and times only in every answer.
+async function attemptsChecks() {
+  const tz = (await get(ANALYST, "/api/v1/me")).body?.data?.timeZone ?? "Europe/Amsterdam";
+  const day = (n) => dateKey(new Date(Date.now() + n * 86_400_000), tz);
+  const range = `from=${day(-27)}&to=${day(0)}`;
+  const deals = (s, q = `${range}&group=day`) => get(s, `/api/v1/reports/attempts?${q}`);
+  const agents = (s, q = range) => get(s, `/api/v1/reports/attempts-per-agent?${q}`);
+  const both = async (s) => [(await deals(s)).status, (await agents(s)).status];
+  expect("attempts: an agent is refused on both routes", await both(AGENT), [403, 403], [200, 200]);
+  expect("attempts: the supervisor and the analyst read both", [...(await both(SUPERVISOR)), ...(await both(ANALYST))], [200, 200, 200, 200], [200, 403, 200, 403]);
+  expect("attempts: more than 92 days, a group, a market, a pipeline and a scope outside the catalog are a 400",
+    [(await deals(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status, (await agents(ANALYST, `from=${day(-92)}&to=${day(0)}`)).status,
+      (await deals(ANALYST, `${range}&group=owner`)).status, (await deals(ANALYST, `${range}&market=nl`)).status,
+      (await agents(ANALYST, `${range}&pipeline=sales`)).status, (await deals(ANALYST, `${range}&scope=all`)).status,
+      (await agents(ANALYST, `${range}&scope=all`)).status],
+    [400, 400, 400, 400, 400, 400, 400], [200, 200, 200, 200, 200, 200, 200]);
+  const groups = await Promise.all(["day", "week", "market", "pipeline"].map(async (g) => (await deals(ANALYST, `${range}&group=${g}`)).body?.data));
+  const plain = (await get(ANALYST, `/api/v1/reports/attempts?${range}`)).body?.data;
+  expect("attempts: each group answers as itself, none means day; the scope lead unless asked",
+    [...groups.map((d) => d?.group), plain?.group, plain?.filter?.scope, (await deals(ANALYST, `${range}&scope=counted`)).body?.data?.filter?.scope],
+    ["day", "week", "market", "pipeline", "day", "lead", "counted"], ["day", "day", "day", "day", "day", "lead", "lead"]);
+  const per = (await agents(SUPERVISOR)).body?.data;
+  // a key that names a name other than a person's or a pipeline's own, a phone, an email, an address, a contact or a
+  // counterpart; a string of 64 hex characters or an E.164 number
+  const personal = (v, path = "$") => typeof v === "string"
+    ? (/^[0-9a-f]{64}$/i.test(v) || /^\+[1-9][0-9]{6,14}$/.test(v.replace(/[\s().-]/g, "")) ? [path] : [])
+    : Array.isArray(v) ? v.flatMap((x, i) => personal(x, `${path}[${i}]`))
+    : v && typeof v === "object" ? Object.entries(v).flatMap(([k, x]) => [
+      ...(/hash|phone|e164|email|digits|counterpart|caller|contact|address|street|zip|postal/i.test(k) || (/name/i.test(k) && k !== "name") ? [`${path}.${k}`] : []),
+      ...personal(x, `${path}.${k}`)]) : [];
+  expect("attempts: no name, address, phone number or hash in any answer", [...groups.flatMap((d) => personal(d)), ...personal(per)], [], ["$.something"]);
+  const FIG = ["deals", "attempted", "attempts", "firstReached", "connectedDeals", "openDeals", "openNeverAttempted", "won", "lost"];
+  const coherent = (f) => !!f && FIG.every((k) => Number.isInteger(f[k]) && f[k] >= 0) && f.attempted <= f.deals && f.firstReached <= f.connectedDeals
+    && f.connectedDeals <= f.attempted && f.openNeverAttempted <= f.openDeals && f.openDeals + f.won + f.lost <= f.deals && f.attempts >= f.attempted
+    && (f.deals === 0 ? f.avgAttempts === null : Math.abs(f.avgAttempts - Math.round((100 * f.attempts) / f.deals) / 100) < 0.006);
+  const d = groups[0] ?? {};
+  const sum = (rows, k) => (rows ?? []).reduce((n, r) => n + (r[k] ?? 0), 0);
+  expect("attempts: every group, the period and the previous period are coherent; the groups add up to the period",
+    [[...groups.flatMap((g) => [...(g?.groups ?? []), g?.current, g?.previous])].every(coherent),
+      groups.every((g) => FIG.every((k) => sum(g?.groups, k) === g?.current?.[k]))], [true, true], [false, true]);
+  const max = d.settings?.maxBucket;
+  const edges = String(d.settings?.sinceLastBuckets ?? "").split(",").map(Number);
+  expect("attempts: the buckets run 0 to the top setting and hold every deal; time since the last attempt every open deal",
+    [Number.isInteger(max) && d.buckets?.length === max + 1 && d.buckets.every((b, i) => b.bucket === i && b.label === (i === max ? `${i}+` : String(i))),
+      sum(d.buckets, "deals") === d.current?.deals, sum(d.buckets, "firstConnected") === d.current?.firstReached + 0 || sum(d.buckets, "firstConnected") === d.current?.connectedDeals,
+      d.sinceLast?.buckets?.length === edges.length + 1, sum(d.sinceLast?.buckets, "deals") + (d.sinceLast?.noHours ?? 0) === d.current?.openDeals],
+    [true, true, true, true, true], [false, true, true, true, true]);
+  const rows = d.list?.rows ?? [];
+  const firstClosed = rows.findIndex((r) => r.isClosed);
+  expect("attempts: the list, open deals first and the longest since the last attempt first, capped, with links or none",
+    [rows.length <= (d.settings?.listRows ?? 0) && d.list?.total === d.current?.deals,
+      firstClosed === -1 || rows.slice(firstClosed).every((r) => r.isClosed),
+      rows.filter((r) => !r.isClosed).every((r, i, a) => i === 0 || (a[i - 1].businessDaysSinceLast ?? -1) >= (r.businessDaysSinceLast ?? -1)),
+      rows.every((r) => r.recordUrl === null || /^https:\/\//.test(r.recordUrl))],
+    [true, true, true, true], [false, true, true, true]);
+  expect("attempts: the previous period is as long as the period and ends the day before it",
+    [Math.round((Date.parse(d.previousTo) - Date.parse(d.previousFrom)) / 86_400_000) === Math.round((Date.parse(d.to) - Date.parse(d.from)) / 86_400_000),
+      Math.round((Date.parse(d.from) - Date.parse(d.previousTo)) / 86_400_000) === 1, d.previousPartial === true],
+    [true, true, true], [false, true, true]);
+  const market = groups[2]?.groups?.[0];
+  const pipeline = groups[3]?.groups?.[0];
+  const byMarket = market ? (await deals(ANALYST, `${range}&group=day&market=${encodeURIComponent(market.groupKey)}`)).body?.data : null;
+  const byPipeline = pipeline ? (await deals(ANALYST, `${range}&group=day&pipeline=${encodeURIComponent(pipeline.groupKey)}`)).body?.data : null;
+  const perMarket = market ? (await agents(SUPERVISOR, `${range}&market=${encodeURIComponent(market.groupKey)}`)).body?.data : null;
+  expect("attempts: a market and a pipeline narrow the figures as their group; the filter lists stay the period's",
+    [byMarket === null || (byMarket.current.deals === market.deals && byMarket.current.attempts === market.attempts && byMarket.list.rows.every((r) => r.market === market.groupKey)),
+      byPipeline === null || (byPipeline.current.deals === pipeline.deals && byPipeline.current.attempts === pipeline.attempts),
+      byMarket === null || JSON.stringify(byMarket.markets) === JSON.stringify(d.markets),
+      perMarket === null || (perMarket.total.deals === market.deals && perMarket.total.attempts === market.attempts)],
+    [true, true, true, true], [false, true, true, true]);
+  const persons = (per?.rows ?? []).filter((r) => r.kind === "person");
+  expect("attempts per agent: people by name, never ranked; the not-linked row last; the total equals Attempts per deal's",
+    [persons.every((r, i, a) => i === 0 || a[i - 1].name.localeCompare(r.name) <= 0),
+      (per?.rows ?? []).findIndex((r) => r.kind === "notLinked") === -1 || (per?.rows ?? []).at(-1)?.kind === "notLinked",
+      (per?.rows ?? []).every((r) => r.kind === "person" ? r.unlinkedOwners === null && r.userId && r.name : r.unlinkedOwners >= 0 && r.userId === null && r.name === null),
+      FIG.every((k) => per?.total?.[k] === plain?.current?.[k] && sum(per?.rows, k) === per?.total?.[k])],
+    [true, true, true, true], [false, true, true, true]);
+  expect("attempts: the history start one date or none, the settings whole numbers and the bucket edges",
+    [[d, plain, per].every((x) => x?.historyStart === d.historyStart) && (d.historyStart === null || /^\d{4}-\d{2}-\d{2}$/.test(d.historyStart)),
+      Number.isInteger(d.settings?.maxBucket) && d.settings.maxBucket >= 2 && Number.isInteger(d.settings?.listRows) && d.settings.listRows > 0
+        && Number.isInteger(d.settings?.preWindowMinutes) && d.settings.preWindowMinutes >= 0,
+      /^\d+(,\d+)*$/.test(d.settings?.sinceLastBuckets ?? "")],
+    [true, true, true], [false, true, true]);
+  // A reports reader without performance.team (the mock fixture and the local fixture; absent in dev)
+  if ((await get("reader", "/api/v1/me")).status === 200) {
+    expect("attempts: reports.view alone reads Attempts per deal, not Attempts per agent", await both("reader"), [200, 403], [200, 200]);
+  } else {
+    console.log("note  reader has no access here: the check of reports.view without performance.team is left out");
+  }
+  // A tenant whose reports.per_person does not hold attempts (the mock fixture's invest tenant; absent in dev)
+  if ((await get(INVEST, "/api/v1/me")).status === 200) {
+    expect("attempts per agent: not there (404) while reports.per_person does not hold attempts; Attempts per deal is", await both(INVEST), [200, 404], [200, 200]);
+  } else {
+    console.log(`note  ${INVEST} has no access here: the check of the per-person switch is left out`);
+  }
+  // A line's stored calls (backlog CMA-020), which the switch-off dialog shows: the admin only
+  // the list counts a connection's lines; its detail lists them
+  const listed = ((await get(ADMIN, "/api/v1/configuration/sources")).body?.data ?? []).find((x) => x.lines > 0);
+  const tel = listed ? { id: listed.id, lines: (await get(ADMIN, `/api/v1/configuration/sources/${listed.id}`)).body?.data?.lines ?? [] } : null;
+  if (!tel || tel.lines.length === 0) {
+    console.log("note  no telephony line in this tenant: the 2 checks of a line's stored calls are left out");
+  } else {
+    const path = (ref) => `/api/v1/configuration/sources/${tel.id}/lines/stored-calls?lineRef=${encodeURIComponent(ref)}`;
+    const line = tel.lines[0];
+    const read = await get(ADMIN, path(line.lineRef));
+    expect("stored calls: the admin reads a line's count and first start; the manager and an agent are refused",
+      [read.status, Number.isInteger(read.body?.data?.storedCalls) && read.body.data.storedCalls >= 0,
+        read.body?.data?.firstStartedAt === null || !Number.isNaN(Date.parse(read.body?.data?.firstStartedAt)),
+        Object.keys(read.body?.data ?? {}).sort().join(","), (await get(MANAGER, path(line.lineRef))).status, (await get(AGENT, path(line.lineRef))).status],
+      [200, true, true, "firstStartedAt,storedCalls", 403, 403], [403, true, true, "firstStartedAt,storedCalls", 403, 403]);
+    expect("stored calls: no line is a 400, an unknown line a 404, an unknown connection a 404",
+      [(await get(ADMIN, `/api/v1/configuration/sources/${tel.id}/lines/stored-calls`)).status, (await get(ADMIN, path("verify-no-such-line"))).status,
+        (await get(ADMIN, `/api/v1/configuration/sources/00000000-0000-7000-8000-00000000dead/lines/stored-calls?lineRef=x`)).status],
+      [400, 404, 404], [200, 200, 200]);
   }
 }
 

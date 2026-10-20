@@ -8,7 +8,13 @@
 import type { Principal } from "@/lib/auth/identity";
 import type { Copy } from "@/lib/copy";
 
-/** Cookie name prefix for the left navigation's groups; the value is "open" or "closed" */
+/**
+ * Cookie of the rail's open group (19 October 2026): the open group's id, or empty while none is open. At most one
+ * group is open (an accordion). It replaces the per-group cookies `cma-nav-<id>` ("open" or "closed", 7 October
+ * 2026), which are ignored and expired on the first toggle
+ */
+export const NAV_OPEN_COOKIE = "cma-nav-open";
+/** The name prefix of the retired per-group cookies, so the first toggle can expire them */
 export const NAV_COOKIE_PREFIX = "cma-nav-";
 /** Cookie of the left rail's fold (16 October 2026): "expanded" (the default) or "collapsed" */
 export const RAIL_COOKIE = "cma-rail";
@@ -18,6 +24,16 @@ export const HINTS_COOKIE = "cma-hints";
 /** A browser preference written as the nav groups write theirs: path /, one year, no personal data */
 export function prefCookie(name: string, value: string): string {
   return `${name}=${value}; path=/; max-age=31536000; samesite=lax; secure`;
+}
+
+/** The same cookie expired at once (max-age=0), for a retired preference */
+export function expiredCookie(name: string): string {
+  return `${name}=; path=/; max-age=0; samesite=lax; secure`;
+}
+
+/** The open group of the rail from the cookie's value: a group the person sees, else none */
+export function openGroupOf(value: string | undefined, groupIds: readonly string[]): string | null {
+  return value && groupIds.includes(value) ? value : null;
 }
 
 export type NavIcon = "home" | "inbox" | "live" | "people" | "clock" | "chart" | "flag" | "gear";
@@ -32,6 +48,8 @@ export type ShellPage =
   | "email" | "email-per-agent"
   /** First orders and Orders per person (addition 0008u, brief N19-A part 2) */
   | "first-orders" | "orders-per-person"
+  /** Attempts per deal and Attempts per agent (addition 0008y, 19 October 2026) */
+  | "attempts" | "attempts-per-agent"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
@@ -45,7 +63,7 @@ export type ShellPage =
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
-  | "/reports/speed-to-lead" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
+  | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
@@ -63,7 +81,7 @@ export interface NavItem {
    * A per-person report page (addition 0008t): shown only while the tenant's reports.per_person holds this key
    * (Principal.perPerson), besides the permission; absent otherwise, with its route
    */
-  perPerson?: "email" | "orders";
+  perPerson?: "email" | "orders" | "attempts";
 }
 
 /** A page that stands on its own in the rail, with its icon */
@@ -152,6 +170,13 @@ export function navEntries(copy: Copy): NavEntry[] {
         // the same lists as REPORT_PERMISSIONS and DATA_QUALITY_PERMISSIONS in lib/reports (written out here,
         // because this module has no runtime imports)
         { page: "speed-to-lead", href: "/reports/speed-to-lead", label: copy.nav.speedToLead, permission: ["reports.view", "performance.team"] },
+        // Attempts per deal (addition 0008y, 19 October 2026): the outbound CRM calls per deal until it is reached, after Speed to
+        // lead with its permissions; Attempts per agent the same per deal owner, for performance.team while the tenant's
+        // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions). The digit keys of the
+        // pages after them move for analytics and a reports reader (4 to 9), accepted during the soft launch before anyone
+        // relies on them (Martin, README Decision log, 19 October 2026)
+        { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
+        { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
         // Follow-up (addition 0008o, 16 October 2026): what is waiting right now, after Speed to lead, for the
         // permissions of cma.open_leads (reports.view, performance.team or monitoring.live); the digit keys of the
         // pages below move by one for everyone who sees the Reports group (README, Decision log)

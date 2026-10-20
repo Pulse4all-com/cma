@@ -1,0 +1,66 @@
+DO
+SET
+BEGIN
+              set_config              
+--------------------------------------
+ 01a15522-2fc7-77b7-911e-38dbe4231099
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+              set_config              
+--------------------------------------
+ 01a15522-2fe4-745f-a0ec-89dc78fb614c
+(1 row)
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 3
+INSERT 0 5
+INSERT 0 2
+INSERT 0 3
+INSERT 0 1
+INSERT 0 3
+INSERT 0 5
+INSERT 0 2
+INSERT 0 3300
+INSERT 0 3000
+INSERT 0 1500
+INSERT 0 300
+INSERT 0 4800
+INSERT 0 300
+INSERT 0 8998
+INSERT 0 8998
+INSERT 0 600
+INSERT 0 600
+INSERT 0 1
+INSERT 0 4429
+INSERT 0 4429
+INSERT 0 1500
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+ deals | crm_calls | associations | telephony | links | october_lead_deals 
+-------+-----------+--------------+-----------+-------+--------------------
+  4800 |      9598 |        14698 |      5929 |  4429 |               1532
+(1 row)
+
+SET
+CREATE TABLE
+DO
+                  read                   |  ms   |  n   
+-----------------------------------------+-------+------
+ attempts_per_deal_page day              | 286.3 | 1532
+ attempts_per_deal_page pipeline counted | 324.5 | 1686
+ attempts_per_deal_page market NL        | 295.8 |  485
+ attempts_per_person_page                | 146.1 | 1532
+(4 rows)
+
+ROLLBACK

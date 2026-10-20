@@ -1,4 +1,5 @@
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { PeriodBar } from "@/components/PeriodBar";
 import { InboundGroupSwitch, NoReportPermission, NotConnected } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -144,14 +145,14 @@ export default async function InboundPage({ searchParams }: PageProps<"/reports/
               <table className="w-full border-collapse text-body leading-table" data-testid="inbound-table">
                 <thead>
                   <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                    <th className={th}>{t[group]}{hint(t[group], groupHint[group])}</th>
-                    <th className={`${th} w-28`}>{t.calls}{hint(t.calls, h.inboundBar)}</th>
-                    <th className={`${th} text-right`}>{t.offered}{hint(t.offered, h.offered)}</th>
-                    <th className={`${th} text-right`}>{t.answered}{hint(t.answered, h.answered)}</th>
-                    <th className={`${th} text-right`}>{t.unansweredPct}{hint(t.unansweredPct, h.unansweredPct)}</th>
-                    <th className={`${th} text-right`}>{t.serviceLevel}{hint(t.serviceLevel, h.serviceLevel)}</th>
-                    <th className={`${th} text-right`}>{t.avgAnswer}{hint(t.avgAnswer, h.avgAnswer)}</th>
-                    {showWaiting ? <th className={`${th} text-right`}>{t.waiting}{hint(t.waiting, h.inboundWaiting)}</th> : null}
+                    <th className={th}><HintLabel label={t[group]}>{hint(t[group], groupHint[group])}</HintLabel></th>
+                    <th className={`${th} w-28`}><HintLabel label={t.calls}>{hint(t.calls, h.inboundBar)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.offered}>{hint(t.offered, h.offered)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.answered}>{hint(t.answered, h.answered)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.unansweredPct}>{hint(t.unansweredPct, h.unansweredPct)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.serviceLevel}>{hint(t.serviceLevel, h.serviceLevel)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.avgAnswer}>{hint(t.avgAnswer, h.avgAnswer)}</HintLabel></th>
+                    {showWaiting ? <th className={`${th} text-right`}><HintLabel label={t.waiting}>{hint(t.waiting, h.inboundWaiting)}</HintLabel></th> : null}
                     {columns.map((c, i) => (
                       <th key={c.code} className={`${th} text-right ${i === 0 ? sep : ""}`} data-reason={c.code}>
                         <span className="inline-flex items-center gap-1">

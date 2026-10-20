@@ -9,6 +9,7 @@ import type { SourceConnection } from "@/lib/data";
 import type { Locale } from "@/lib/copy";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge } from "../primitives";
 import { td, th, tr } from "./tableClasses";
 
@@ -30,7 +31,7 @@ export function SourcesList({ sources, copy, locale, timeZone }: { sources: Sour
       <thead className="bg-p4a-bgblue text-small text-p4a-heading">
         <tr>
           <th className={th}>{t.connection}</th>
-          <th className={th}>{t.kind}{hint(t.kind, t.kindHint)}</th>
+          <th className={th}><HintLabel label={t.kind}>{hint(t.kind, t.kindHint)}</HintLabel></th>
           <th className={th}>{t.account}</th>
           <th className={th}>{t.status}</th>
           <th className={`${th} text-right`}>{t.events}</th>

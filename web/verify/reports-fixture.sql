@@ -2,7 +2,8 @@
 -- verify/reports-fixture.sql: a small intake fixture for running verify/api.mjs --reports (and the
 -- full API verifier) against a LOCAL database built from db/00 to db/51 (B11, 12 October 2026); since
 -- addition 0008i also --inbound, on a database at db/61 (the inbound part needs 0008i); since addition
--- 0008j also --calls, on a database at db/63 (the calls part needs 0008j)
+-- 0008j also --calls, on a database at db/63 (the calls part needs 0008j); since addition 0008y also
+-- --attempts, on a database at db/92 (the attempts part needs 0008y)
 -- =============================================================================================
 -- Never for dev or prod: it refuses to run unless the session sets the local switch first, and it
 -- refuses a database without the dev seed. All ids are invented; nothing personal is written (ids,
@@ -32,7 +33,12 @@
 --                            and unanswered outbound calls and one at exactly the threshold, tagged,
 --                            untagged and only-uncounted-tag conversations, a call on the line that
 --                            does not count (skipped), calls of the previous period, and the mock
---                            identity reader (reports.view without performance.team)
+--                            identity reader (reports.view without performance.team); since 0008y
+--                            for Attempts per deal and Attempts per agent: a deal won after three
+--                            attempts (the third connected by its outcome), a renewal pipeline that
+--                            counts but is no lead pipeline with a deal called once, the outcome
+--                            catalog, and reports.per_person holding attempts (the invest tenant's
+--                            does not, so its Attempts per agent is not found)
 --   pulse4all-invest         a CRM connection only, two deals and a form submission, and the mock
 --                            identity invest-analyst (analytics), so a tenant without telephony or
 --                            a shop can be read
@@ -250,6 +256,45 @@ begin
     perform set_config('role', 'cma_app', true);
   else
     raise notice 'addition 0008j is not there: the calls part of the fixture is left out';
+  end if;
+
+  -- ---- pulse4all-subscriptions, attempts per deal (addition 0008y) ------------------------------
+  if exists (select 1 from cma.schema_migration where version = '0008y') then
+    perform set_config('app.tenant_id', v_subs::text, true);
+    perform set_config('app.user_id', v_ing::text, true);
+    -- Sales gains a won stage (no earlier deal is in it); Renewals counts but is no lead pipeline (set below)
+    perform cma.ingest_upsert_pipelines(v_crm, '[
+      {"recordType": "deal", "pipelineId": "sales", "label": "Sales", "stages": [
+         {"stageId": "s1", "label": "Open", "order": 1, "isClosed": false}, {"stageId": "s8", "label": "Won", "order": 8, "isClosed": true, "outcome": "won"},
+         {"stageId": "s9", "label": "Lost", "order": 9, "isClosed": true}]},
+      {"recordType": "deal", "pipelineId": "renew", "label": "Renewals", "stages": [{"stageId": "r1", "label": "Open", "order": 1, "isClosed": false}]}]');
+    perform cma.ingest_upsert_call_outcomes(v_crm, '[{"outcomeRef": "connected", "label": "Connected"}, {"outcomeRef": "no_answer", "label": "No answer"}]');
+    perform cma.ingest_upsert_records(v_crm, (
+      select jsonb_agg(jsonb_strip_nulls(jsonb_build_object('recordType', 'deal', 'sourceId', x.id, 'pipelineId', x.pipeline, 'stageId', x.stage,
+                                                            'ownerRef', 'o-1', 'contactId', 'k' || x.id, 'market', 'NL',
+                                                            'createdAt', to_char(x.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                                                            'closedAt', to_char(x.closed, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+                                                            'updatedAt', to_char(coalesce(x.closed, x.at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"'))))
+      from (values
+        ('9100007', 'sales', 's8', (d - 3)::timestamp + time '09:00', (d - 1)::timestamp + time '12:00'),
+        ('9100008', 'renew', 'r1', (d - 2)::timestamp + time '09:15', null::timestamp)) x(id, pipeline, stage, at, closed)));
+    perform cma.ingest_upsert_calls(v_crm, (
+      select jsonb_agg(jsonb_build_object('sourceId', c.id, 'occurredAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"'), 'direction', 'outbound',
+                                          'ownerRef', 'o-1', 'outcomeRef', c.outcome, 'updatedAt', to_char(c.at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+      from (values ('8100071', 'no_answer', (d - 3)::timestamp + time '10:00'),
+                   ('8100072', 'no_answer', (d - 3)::timestamp + time '14:00'),
+                   ('8100073', 'connected', (d - 2)::timestamp + time '09:30'),
+                   ('8100081', 'no_answer', (d - 2)::timestamp + time '10:00')) c(id, outcome, at)));
+    perform cma.ingest_upsert_associations(v_crm, (
+      select jsonb_agg(jsonb_build_object('fromType', 'crm_call', 'fromId', a.call, 'toType', 'contact', 'toId', a.contact, 'removed', false,
+                                          'changedAt', to_char((d - 1)::timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')))
+      from (values ('8100071', 'k9100007'), ('8100072', 'k9100007'), ('8100073', 'k9100007'), ('8100081', 'k9100008')) a(call, contact)));
+    perform set_config('app.user_id', v_admin::text, true);
+    perform cma.set_pipeline_lead(v_crm, 'deal', 'renew', false);
+    perform cma.set_call_outcome(v_crm, 'connected', true);
+    perform cma.set_tenant_setting('reports.per_person', 'email,orders,attempts');
+  else
+    raise notice 'addition 0008y is not there: the attempts part of the fixture is left out';
   end if;
 
   -- ---- pulse4all-invest: a CRM only ------------------------------------------------------------

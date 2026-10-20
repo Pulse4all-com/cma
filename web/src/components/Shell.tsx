@@ -26,8 +26,8 @@ import type { Copy } from "@/lib/copy";
 import { config } from "@/lib/config";
 import { requestDbTrace } from "@/lib/data";
 import { Keycap, Notice } from "./primitives";
-import { breadcrumbs, HINTS_COOKIE, NAV_COOKIE_PREFIX, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
-import { NavGroup, NavIconMark } from "./NavGroup";
+import { breadcrumbs, HINTS_COOKIE, NAV_OPEN_COOKIE, openGroupOf, RAIL_COOKIE, visibleNav, type Crumb, type ShellPage } from "@/lib/nav";
+import { NavAccordion, NavGroup, NavIconMark } from "./NavGroup";
 import { Shortcuts } from "./Shortcuts";
 import { MessageCenter } from "./MessageCenter";
 import { HintsToggle, RailToggle } from "./ShellPrefs";
@@ -58,9 +58,10 @@ export async function Shell({
   // Screens check a permission, never a role key; the database checks again on every call.
   // Keys follow the visible order across all groups (lib/nav).
   const nav = visibleNav(me, copy);
-  // Groups start closed; each browser remembers per group whether it was left open (a cookie,
-  // so the page renders in that state without a flicker); the rail's fold and the hints alike
+  // At most one group is open (19 October 2026): the browser remembers which in one cookie, so the page renders
+  // with it open and never flickers (the retired per-group cookies are ignored); the rail's fold and the hints alike
   const jar = await cookies();
+  const openGroup = openGroupOf(jar.get(NAV_OPEN_COOKIE)?.value, nav.flatMap((e) => (e.kind === "group" ? [e.id] : [])));
   const collapsed = jar.get(RAIL_COOKIE)?.value === "collapsed";
   const hintsHidden = jar.get(HINTS_COOKIE)?.value === "hidden";
   const crumbs = breadcrumbs(me, copy, active, trail);
@@ -117,20 +118,29 @@ export async function Shell({
             </Link>
             <span className="text-p4a-muted"> · {me.organisationName}</span>
           </span>
+          {/* Log out keeps the width it has with its keycap when the hints hide (19 October 2026), so nothing in the
+              top bar moves: the label with the keycap and the label alone share one grid cell, the wider one sets
+              the width and the one shown is centred in it (globals.css, data-logout) */}
           <Link
             href="/logout"
             prefetch={false}
             data-shortcut="l"
             aria-keyshortcuts="L"
-            className="inline-flex h-8 items-center gap-2 rounded-button border border-p4a-deepblue px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue"
+            aria-label={copy.nav.logOut}
+            data-testid="logout"
+            className="inline-grid h-8 place-items-center rounded-button border border-p4a-deepblue px-3 font-semibold text-p4a-deepblue hover:bg-p4a-bgblue"
           >
-            {copy.nav.logOut}
-            <Keycap>L</Keycap>
+            <span data-logout="with-key" className="col-start-1 row-start-1 inline-flex items-center gap-2">
+              {copy.nav.logOut}
+              <Keycap>L</Keycap>
+            </span>
+            <span data-logout="bare" aria-hidden="true" className="invisible col-start-1 row-start-1">{copy.nav.logOut}</span>
           </Link>
         </div>
       </header>
 
       <nav aria-label={copy.app.name} data-rail-nav className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
+        <NavAccordion initial={openGroup}>
         <ul className="flex flex-col gap-2">
           {nav.map((entry) => {
             if (entry.kind === "page") {
@@ -165,7 +175,6 @@ export async function Shell({
                 id={entry.id}
                 label={entry.label}
                 icon={entry.icon}
-                defaultOpen={jar.get(`${NAV_COOKIE_PREFIX}${entry.id}`)?.value === "open"}
                 current={entry.items.some((i) => i.page === active)}
                 shortcut={entry.shortcut}
               >
@@ -196,6 +205,7 @@ export async function Shell({
             );
           })}
         </ul>
+        </NavAccordion>
         <div className="mt-auto flex flex-col gap-2 text-caption text-p4a-grey">
           {/* The shortcuts line and the version hide with the fold; the shortcuts line also with the hints */}
           <div data-rail-text className="flex flex-col gap-2">

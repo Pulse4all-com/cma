@@ -12,6 +12,7 @@ import type { Copy } from "@/lib/copy";
 import type { FormCategory } from "@/lib/data";
 import { formCategoryProblem } from "@/lib/sources";
 import { HeaderHint } from "../HeaderHint";
+import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card } from "../primitives";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
@@ -48,11 +49,11 @@ export function FormCategories({ categories, copy }: { categories: FormCategory[
         <table className="w-full border-collapse text-body leading-table" data-testid="form-categories">
           <thead className="bg-p4a-bgblue text-small text-p4a-heading">
             <tr>
-              <th className={th}>{t.categoryName}{hint(t.categoryName, t.hintCategoryName)}</th>
-              <th className={th}>{t.categoryCode}{hint(t.categoryCode, t.hintCategoryCode)}</th>
-              <th className={`${th} text-right`}>{t.categoryOrder}{hint(t.categoryOrder, t.hintCategoryOrder)}</th>
-              <th className={`${th} text-right`}>{t.categoryForms}{hint(t.categoryForms, t.hintCategoryForms)}</th>
-              <th className={th}>{t.categoryActive}{hint(t.categoryActive, t.hintCategoryActive)}</th>
+              <th className={th}><HintLabel label={t.categoryName}>{hint(t.categoryName, t.hintCategoryName)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.categoryCode}>{hint(t.categoryCode, t.hintCategoryCode)}</HintLabel></th>
+              <th className={`${th} text-right`}><HintLabel label={t.categoryOrder}>{hint(t.categoryOrder, t.hintCategoryOrder)}</HintLabel></th>
+              <th className={`${th} text-right`}><HintLabel label={t.categoryForms}>{hint(t.categoryForms, t.hintCategoryForms)}</HintLabel></th>
+              <th className={th}><HintLabel label={t.categoryActive}>{hint(t.categoryActive, t.hintCategoryActive)}</HintLabel></th>
               <th className={th}></th>
             </tr>
           </thead>

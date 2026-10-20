@@ -1,4 +1,5 @@
 import { HeaderHint } from "@/components/HeaderHint";
+import { HintLabel } from "@/components/HintLabel";
 import { PeriodBar } from "@/components/PeriodBar";
 import { GroupSwitch, NoReportPermission, RecordLink } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
@@ -105,13 +106,13 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
               <table className="w-full border-collapse text-body" data-testid="speed-summary">
                 <thead>
                   <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                    <th className={th}>{t[group]}{hint(t[group], groupHint[group])}</th>
-                    <th className={`${th} text-right`}>{t.deals}{hint(t.deals, h.deals)}</th>
-                    <th className={`${th} text-right`}>{t.called}{hint(t.called, h.called)}</th>
-                    <th className={`${th} text-right`}>{t.median}{hint(t.median, h.median)}</th>
-                    <th className={`${th} text-right`}>{t.withinTarget}{hint(t.withinTarget, h.withinTarget)}</th>
-                    <th className={`${th} text-right`}>{t.beforeNoon}{hint(t.beforeNoon, h.beforeNoon)}</th>
-                    <th className={`${th} text-right`}>{t.openNotCalled}{hint(t.openNotCalled, h.openNotCalled)}</th>
+                    <th className={th}><HintLabel label={t[group]}>{hint(t[group], groupHint[group])}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.deals}>{hint(t.deals, h.deals)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.called}>{hint(t.called, h.called)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.median}>{hint(t.median, h.median)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.withinTarget}>{hint(t.withinTarget, h.withinTarget)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.beforeNoon}>{hint(t.beforeNoon, h.beforeNoon)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.openNotCalled}>{hint(t.openNotCalled, h.openNotCalled)}</HintLabel></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -154,11 +155,11 @@ export default async function SpeedToLeadPage({ searchParams }: PageProps<"/repo
             <table className="w-full border-collapse text-body" data-testid="open-not-called">
               <thead>
                 <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                  <th className={th}>{t.deal}{hint(t.deal, h.deal)}</th>
-                  <th className={th}>{t.created}{hint(t.created, h.created)}</th>
-                  <th className={th}>{copy.reports.market}{hint(copy.reports.market, h.market)}</th>
-                  <th className={th}>{t.pipeline}{hint(t.pipeline, h.pipeline)}</th>
-                  <th className={`${th} text-right`}>{t.waiting}{hint(t.waiting, h.waiting)}</th>
+                  <th className={th}><HintLabel label={t.deal}>{hint(t.deal, h.deal)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.created}>{hint(t.created, h.created)}</HintLabel></th>
+                  <th className={th}><HintLabel label={copy.reports.market}>{hint(copy.reports.market, h.market)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.pipeline}>{hint(t.pipeline, h.pipeline)}</HintLabel></th>
+                  <th className={`${th} text-right`}><HintLabel label={t.waiting}>{hint(t.waiting, h.waiting)}</HintLabel></th>
                   <th className={`${th} w-12`}><span className="sr-only">{t.openTitle}</span></th>
                 </tr>
               </thead>

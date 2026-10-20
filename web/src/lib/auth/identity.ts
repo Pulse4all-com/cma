@@ -55,7 +55,7 @@ export interface Principal {
   canPreview: boolean;
   /**
    * The per-person report pages the tenant switched on (setting reports.per_person, addition 0008t): keys from
-   * email and orders. A page in the list shows to people holding performance.team; one not in it is absent (its
+   * email, orders and (since addition 0008y) attempts. A page in the list shows to people holding performance.team; one not in it is absent (its
    * rail item and its route); the database refuses the read as well (CMA06)
    */
   perPerson: string[];
@@ -106,8 +106,8 @@ export const MOCK_PRINCIPAL: Principal = {
   timeZone: "Europe/Madrid",
   preview: null,
   canPreview: false,
-  // the dev seed (03) switches both on
-  perPerson: ["email", "orders"],
+  // the dev seed (03) switches the three on (attempts since addition 0008y)
+  perPerson: ["email", "orders", "attempts"],
 };
 
 /** The identity proxy.ts attached to this request, or null if it attached none */

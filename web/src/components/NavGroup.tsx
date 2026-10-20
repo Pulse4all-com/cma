@@ -1,24 +1,47 @@
 "use client";
 
 /**
- * A group in the left navigation (Time, Reports, later Roster, Messages, …): one button that opens and
- * closes its pages. Closed by default; the browser remembers the choice per group in a cookie
- * (no personal data, one year), so every page renders the group as it was left. A closed group
- * that holds the current page is highlighted, so the person still sees where they are. The pages
- * keep their own digit keys whether the group is open or closed. In the folded rail (16 October 2026)
- * the button shows its icon only, named by title and aria-label; it then unfolds the rail and opens the
- * group, writing both cookies, and a folded group that holds the current page keeps its white pill.
+ * A group in the left navigation (Live, Team, Time, Reports, Campaigns, Configuration): one button that opens and
+ * closes its pages. The rail is an accordion (19 October 2026): at most one group is open, opening a group closes
+ * the open one, and a click on the open group closes it, so none is open. NavAccordion, around the rail's list,
+ * holds the open group's id and writes it to the cookie cma-nav-open (an empty value for none; Shell reads it on
+ * the server, so a page renders with that group open and never flickers); the retired per-group cookies
+ * cma-nav-<id> are expired on the first toggle. A closed group that holds the current page is highlighted, so the
+ * person still sees where they are. The pages keep their own digit keys whether a group is open or closed. A
+ * group's letter (Configuration's C) is a click on its button and focuses the first page once it opens. In the
+ * folded rail (16 October 2026) the button shows its icon only, named by title and aria-label; it then unfolds the
+ * rail and opens its group (closing the other), and a folded group that holds the current page keeps its white pill.
  */
-import { useRef, useState, type ReactNode } from "react";
-import { NAV_COOKIE_PREFIX, prefCookie, type NavIcon } from "@/lib/nav";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { expiredCookie, NAV_COOKIE_PREFIX, NAV_OPEN_COOKIE, prefCookie, type NavIcon } from "@/lib/nav";
 import { Keycap } from "./primitives";
 import { railCollapsed, setRailCollapsed } from "./ShellPrefs";
+
+const OpenGroup = createContext<{ open: string | null; setOpen: (id: string | null) => void }>({ open: null, setOpen: () => {} });
+
+/** The rail's open group, for the groups inside it; `initial` is the cookie's group as Shell read it */
+export function NavAccordion({ initial, children }: { initial: string | null; children: ReactNode }) {
+  const [open, setState] = useState<string | null>(initial);
+  const retired = useRef(false);
+  const setOpen = useCallback((id: string | null) => {
+    setState(id);
+    document.cookie = prefCookie(NAV_OPEN_COOKIE, id ?? "");
+    if (!retired.current) {
+      // the per-group cookies of 7 October 2026: ignored since the accordion, expired once
+      retired.current = true;
+      for (const part of document.cookie.split(";")) {
+        const name = part.split("=")[0]?.trim() ?? "";
+        if (name.startsWith(NAV_COOKIE_PREFIX) && name !== NAV_OPEN_COOKIE) document.cookie = expiredCookie(name);
+      }
+    }
+  }, []);
+  return <OpenGroup.Provider value={{ open, setOpen }}>{children}</OpenGroup.Provider>;
+}
 
 export function NavGroup({
   id,
   label,
   icon,
-  defaultOpen,
   current,
   shortcut,
   children,
@@ -26,31 +49,26 @@ export function NavGroup({
   id: string;
   label: string;
   icon: NavIcon;
-  defaultOpen: boolean;
   /** One of the group's pages is the current page */
   current: boolean;
   /** A letter that opens the group and focuses its first page (an unnumbered group, 0005a) */
   shortcut?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const accordion = useContext(OpenGroup);
+  const open = accordion.open === id;
   const list = useRef<HTMLUListElement>(null);
 
   function toggle() {
     if (railCollapsed()) {
-      // Folded: unfold the rail and open this group (both cookies), never fold a group from here
+      // Folded: unfold the rail and open this group, closing the other; never close a group from here
       setRailCollapsed(false);
-      if (!open) {
-        setOpen(true);
-        document.cookie = prefCookie(`${NAV_COOKIE_PREFIX}${id}`, "open");
-      }
+      if (!open) accordion.setOpen(id);
       return;
     }
-    const next = !open;
-    setOpen(next);
-    document.cookie = prefCookie(`${NAV_COOKIE_PREFIX}${id}`, next ? "open" : "closed");
+    accordion.setOpen(open ? null : id);
     // Opened by its letter: the first page gets the focus, so Enter opens it and the arrows move
-    if (next && shortcut) requestAnimationFrame(() => list.current?.querySelector<HTMLAnchorElement>("a")?.focus());
+    if (!open && shortcut) requestAnimationFrame(() => list.current?.querySelector<HTMLAnchorElement>("a")?.focus());
   }
   const name = shortcut ? `${label} (${shortcut.toUpperCase()})` : label;
   return (
@@ -62,6 +80,7 @@ export function NavGroup({
         data-shortcut={shortcut}
         aria-keyshortcuts={shortcut ? shortcut.toUpperCase() : undefined}
         data-current={current}
+        data-nav-group={id}
         title={name}
         aria-label={name}
         onClick={toggle}

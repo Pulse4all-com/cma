@@ -115,9 +115,24 @@ body {
 
 /* Keyboard hints hidden (cookie cma-hints, backlog CMA-004): every keycap and the rail's shortcuts
    line; nothing changes for the keys, which the hook reads from data-shortcut */
-[data-hints="hidden"] kbd,
-[data-hints="hidden"] [data-shortcuts-hint] {
+[data-hints="hidden"] kbd {
   display: none;
+}
+/* The shortcuts line keeps its space (19 October 2026), so the rail toggle under it stays put when the rail
+   is taller than the window and its foot no longer sits at the bottom */
+[data-hints="hidden"] [data-shortcuts-hint] {
+  visibility: hidden;
+}
+/* The top bar never moves on the toggle (19 October 2026): Log out keeps its width with the keycap. Its label with
+   the keycap stays in the layout, invisible, and the bare label in the same grid cell shows instead, centred */
+[data-hints="hidden"] [data-logout="with-key"] {
+  visibility: hidden;
+}
+[data-hints="hidden"] [data-logout="with-key"] kbd {
+  display: inline-flex;
+}
+[data-hints="hidden"] [data-logout="bare"] {
+  visibility: visible;
 }
 
 /* Section 7.2: focus ring 2px Light Blue, offset 2px, on everything interactive */

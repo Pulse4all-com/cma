@@ -16,6 +16,7 @@ import type { EmailPerson } from "@/lib/data";
 import { withinShare } from "@/lib/email";
 import { barShare, fmtCount, fmtShare, fmtTalk } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 
 type Bar = "sent" | "replies" | "threadsClosed";
 const BAR_CLASS: Record<Bar, string> = { sent: "bg-p4a-deepblue", replies: "bg-p4a-green", threadsClosed: "bg-p4a-lightblue" };
@@ -87,12 +88,12 @@ export function EmailPerAgentTable({ rows, total, hints, copy, locale }: {
       <table className="w-full border-collapse text-body leading-table" data-testid="email-agents-table">
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={`${th} w-48`}>{t.agent}{hint(t.agent, hints.emailAgentName!)}</th>
-            <th className={`${th} text-right`}>{t.sent}{hint(t.sent, hints.emailAgentSent!)}</th>
-            <th className={`${th} text-right`}>{t.replies}{hint(t.replies, hints.emailAgentReplies!)}</th>
-            <th className={`${th} text-right`}>{t.medianReply}{hint(t.medianReply, hints.emailAgentMedian!)}</th>
-            <th className={`${th} text-right`}>{t.within}{hint(t.within, hints.emailAgentWithin!)}</th>
-            <th className={`${th} text-right`}>{t.closed}{hint(t.closed, hints.emailAgentClosed!)}</th>
+            <th className={`${th} w-48`}><HintLabel label={t.agent}>{hint(t.agent, hints.emailAgentName!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.sent}>{hint(t.sent, hints.emailAgentSent!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.replies}>{hint(t.replies, hints.emailAgentReplies!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.medianReply}>{hint(t.medianReply, hints.emailAgentMedian!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.within}>{hint(t.within, hints.emailAgentWithin!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.closed}>{hint(t.closed, hints.emailAgentClosed!)}</HintLabel></th>
           </tr>
         </thead>
         <tbody>

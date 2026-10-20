@@ -1,0 +1,20 @@
+SET
+psql:/tmp/claude-0/-home-user-cma/3d1988c6-3bd5-57ff-b3af-a94e496bcb73/scratchpad/timing-block.sql:2: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+GRANT
+              set_config              |              set_config              |  set_config   
+--------------------------------------+--------------------------------------+---------------
+ 01a1551e-0f48-7a70-955a-cf8dc9218fd3 | 01a1551e-0fa0-7f28-bc80-bcfdbf3bf394 | studio:martin
+(1 row)
+
+SET
+DO
+                          read                           | best_ms 
+---------------------------------------------------------+---------
+ attempts_per_deal_page, by day                          |     6.9
+ attempts_per_deal_page, by pipeline, every counted deal |     6.3
+ attempts_per_person_of (the per-agent page's read)      |     6.2
+(3 rows)
+
+RESET

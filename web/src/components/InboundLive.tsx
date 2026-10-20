@@ -18,6 +18,7 @@ import { callbackWaiting, fmtSeconds, INBOUND_TILES, inboundTileValue, type Inbo
 import { fillHint, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { NotConnected, RecordLink } from "./ReportParts";
 import { Card } from "./primitives";
 
@@ -103,12 +104,12 @@ export function InboundLive({ inbound, copy, locale, timeZone }: { inbound: Inbo
                 <table className="w-full border-collapse text-body leading-table" data-testid="missed-callbacks">
                   <thead>
                     <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-                      <th className={th}>{t.missedLine}{hint(t.missedLine, h.missedLine)}</th>
-                      <th className={th}>{t.missedMarket}{hint(t.missedMarket, h.missedMarket)}</th>
-                      <th className={th}>{t.missedReason}{hint(t.missedReason, h.missedReason)}</th>
-                      <th className={th}>{t.missedAt}{hint(t.missedAt, h.missedAt)}</th>
-                      <th className={`${th} text-right`}>{t.missedWaiting}{hint(t.missedWaiting, h.missedWaiting)}</th>
-                      <th className={`${th} text-right`}>{t.missedTimes}{hint(t.missedTimes, h.missedTimes)}</th>
+                      <th className={th}><HintLabel label={t.missedLine}>{hint(t.missedLine, h.missedLine)}</HintLabel></th>
+                      <th className={th}><HintLabel label={t.missedMarket}>{hint(t.missedMarket, h.missedMarket)}</HintLabel></th>
+                      <th className={th}><HintLabel label={t.missedReason}>{hint(t.missedReason, h.missedReason)}</HintLabel></th>
+                      <th className={th}><HintLabel label={t.missedAt}>{hint(t.missedAt, h.missedAt)}</HintLabel></th>
+                      <th className={`${th} text-right`}><HintLabel label={t.missedWaiting}>{hint(t.missedWaiting, h.missedWaiting)}</HintLabel></th>
+                      <th className={`${th} text-right`}><HintLabel label={t.missedTimes}>{hint(t.missedTimes, h.missedTimes)}</HintLabel></th>
                       <th className={`${th} w-12`}><span className="sr-only">{t.missedLink}</span></th>
                     </tr>
                   </thead>

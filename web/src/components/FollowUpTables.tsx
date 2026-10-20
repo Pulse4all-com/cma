@@ -20,6 +20,7 @@ import { fillHint, fmtBusinessMinutes, fmtCount } from "@/lib/reports";
 import { fmtDateTime, fmtDateTimeShort } from "@/lib/time";
 import { FollowUpRows, type Cell, type CellRow } from "./FollowUpRows";
 import { HeaderHint } from "./HeaderHint";
+import { HintLabel } from "./HintLabel";
 import { Badge, type BadgeTone } from "./primitives";
 
 const th = "h-10 px-3 py-1 font-semibold";
@@ -117,15 +118,15 @@ export function LeadsTable({ rows, ctx, empty, testId = "follow-up-leads" }: { r
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.deal}<Hint ctx={ctx} label={t.deal} text={h.fuDeal} /></th>
-            <th className={th}>{t.pipeline}<Hint ctx={ctx} label={t.pipeline} text={h.fuPipeline} /></th>
-            <th className={th}>{t.market}<Hint ctx={ctx} label={t.market} text={h.fuMarket} /></th>
-            {ctx.withOwner ? <th className={th}>{t.owner}<Hint ctx={ctx} label={t.owner} text={h.fuOwner} /></th> : null}
-            <th className={th}>{t.created}<Hint ctx={ctx} label={t.created} text={h.fuCreated} /></th>
-            <th className={`${th} text-right`}>{t.waiting}<Hint ctx={ctx} label={t.waiting} text={h.fuWaiting} /></th>
-            <th className={th}>{t.age}<Hint ctx={ctx} label={t.age} text={h.fuAge} /></th>
-            <th className={th}>{t.target}<Hint ctx={ctx} label={t.target} text={h.fuTarget} /></th>
-            <th className={th}>{t.lastCall}<Hint ctx={ctx} label={t.lastCall} text={h.fuLastCall} /></th>
+            <th className={th}><HintLabel label={t.deal}><Hint ctx={ctx} label={t.deal} text={h.fuDeal} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.pipeline}><Hint ctx={ctx} label={t.pipeline} text={h.fuPipeline} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.market}><Hint ctx={ctx} label={t.market} text={h.fuMarket} /></HintLabel></th>
+            {ctx.withOwner ? <th className={th}><HintLabel label={t.owner}><Hint ctx={ctx} label={t.owner} text={h.fuOwner} /></HintLabel></th> : null}
+            <th className={th}><HintLabel label={t.created}><Hint ctx={ctx} label={t.created} text={h.fuCreated} /></HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.waiting}><Hint ctx={ctx} label={t.waiting} text={h.fuWaiting} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.age}><Hint ctx={ctx} label={t.age} text={h.fuAge} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.target}><Hint ctx={ctx} label={t.target} text={h.fuTarget} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.lastCall}><Hint ctx={ctx} label={t.lastCall} text={h.fuLastCall} /></HintLabel></th>
             <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
@@ -144,15 +145,15 @@ export function TicketsTable({ rows, ctx, empty, testId = "follow-up-tickets" }:
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.ticket}<Hint ctx={ctx} label={t.ticket} text={h.fuTicket} /></th>
-            <th className={th}>{t.pipeline}<Hint ctx={ctx} label={t.pipeline} text={h.fuTicketPipeline} /></th>
-            <th className={th}>{t.stage}<Hint ctx={ctx} label={t.stage} text={h.fuStage} /></th>
-            <th className={th}>{t.market}<Hint ctx={ctx} label={t.market} text={h.fuTicketMarket} /></th>
-            {ctx.withOwner ? <th className={th}>{t.owner}<Hint ctx={ctx} label={t.owner} text={h.fuTicketOwner} /></th> : null}
-            <th className={`${th} text-right`}>{t.openFor}<Hint ctx={ctx} label={t.openFor} text={h.fuOpenFor} /></th>
-            <th className={`${th} text-right`}>{t.responseTime}<Hint ctx={ctx} label={t.responseTime} text={h.fuResponseTime} /></th>
-            <th className={th}>{t.state}<Hint ctx={ctx} label={t.state} text={h.fuState} /></th>
-            <th className={`${th} text-right`}>{t.timeLeft}<Hint ctx={ctx} label={t.timeLeft} text={h.fuTimeLeft} /></th>
+            <th className={th}><HintLabel label={t.ticket}><Hint ctx={ctx} label={t.ticket} text={h.fuTicket} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.pipeline}><Hint ctx={ctx} label={t.pipeline} text={h.fuTicketPipeline} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.stage}><Hint ctx={ctx} label={t.stage} text={h.fuStage} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.market}><Hint ctx={ctx} label={t.market} text={h.fuTicketMarket} /></HintLabel></th>
+            {ctx.withOwner ? <th className={th}><HintLabel label={t.owner}><Hint ctx={ctx} label={t.owner} text={h.fuTicketOwner} /></HintLabel></th> : null}
+            <th className={`${th} text-right`}><HintLabel label={t.openFor}><Hint ctx={ctx} label={t.openFor} text={h.fuOpenFor} /></HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.responseTime}><Hint ctx={ctx} label={t.responseTime} text={h.fuResponseTime} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.state}><Hint ctx={ctx} label={t.state} text={h.fuState} /></HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.timeLeft}><Hint ctx={ctx} label={t.timeLeft} text={h.fuTimeLeft} /></HintLabel></th>
             <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
@@ -171,14 +172,14 @@ export function TasksTable({ rows, ctx, empty, testId = "follow-up-tasks" }: { r
       <table className="w-full border-collapse text-body leading-table" data-testid={testId}>
         <thead>
           <tr className="bg-p4a-bgblue text-left text-small text-p4a-heading">
-            <th className={th}>{t.task}<Hint ctx={ctx} label={t.task} text={h.fuTask} /></th>
-            <th className={th}>{t.type}<Hint ctx={ctx} label={t.type} text={h.fuType} /></th>
-            <th className={th}>{t.priority}<Hint ctx={ctx} label={t.priority} text={h.fuPriority} /></th>
-            <th className={th}>{t.status}<Hint ctx={ctx} label={t.status} text={h.fuStatus} /></th>
-            {ctx.withOwner ? <th className={th}>{t.owner}<Hint ctx={ctx} label={t.owner} text={h.fuTaskOwner} /></th> : null}
-            <th className={th}>{t.due}<Hint ctx={ctx} label={t.due} text={h.fuDue} /></th>
-            <th className={th}>{t.when}<Hint ctx={ctx} label={t.when} text={h.fuWhen} /></th>
-            <th className={th}>{t.record}<Hint ctx={ctx} label={t.record} text={h.fuRecord} /></th>
+            <th className={th}><HintLabel label={t.task}><Hint ctx={ctx} label={t.task} text={h.fuTask} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.type}><Hint ctx={ctx} label={t.type} text={h.fuType} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.priority}><Hint ctx={ctx} label={t.priority} text={h.fuPriority} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.status}><Hint ctx={ctx} label={t.status} text={h.fuStatus} /></HintLabel></th>
+            {ctx.withOwner ? <th className={th}><HintLabel label={t.owner}><Hint ctx={ctx} label={t.owner} text={h.fuTaskOwner} /></HintLabel></th> : null}
+            <th className={th}><HintLabel label={t.due}><Hint ctx={ctx} label={t.due} text={h.fuDue} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.when}><Hint ctx={ctx} label={t.when} text={h.fuWhen} /></HintLabel></th>
+            <th className={th}><HintLabel label={t.record}><Hint ctx={ctx} label={t.record} text={h.fuRecord} /></HintLabel></th>
             <th className={`${th} ${pinnedHead}`}><span className="sr-only">{t.open}</span><Hint ctx={ctx} label={t.open} text={h.fuOpenLink} /></th>
           </tr>
         </thead>
