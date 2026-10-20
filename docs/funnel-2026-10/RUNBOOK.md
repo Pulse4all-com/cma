@@ -74,7 +74,7 @@ Expected:
 - `found 0 vulnerabilities`, or the known advisories of Open decisions;
 - `build exit: 0`;
 - `✓ Types generated successfully`;
-- `ALL 177 PASS`;
+- `ALL 178 PASS`;
 - the ingest's `npm ci` line, then `16` (one `ALL n PASS` per pure verifier, `funnel-mapping` the new one).
 
 **Do not merge yet.**
