@@ -4,6 +4,7 @@ import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
   SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
+  RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
 
@@ -174,6 +175,63 @@ export function checkStageOutcomeInput(b: Record<string, unknown>): SourceStageO
   const outcome = b.outcome;
   if (outcome !== "won" && outcome !== "lost" && outcome !== "none") throw new ApiError(400, "invalid_outcome", "outcome must be won, lost or none");
   return { pipelineId: ref(b.pipelineId, "pipelineId"), stageId: ref(b.stageId, "stageId"), outcome };
+}
+
+/** { pipelineId, stageId, readTimes }: whether a deal stage's times are read (addition 0008za) */
+export function checkStageReadTimesInput(b: Record<string, unknown>): SourceStageReadTimesInput {
+  return { pipelineId: ref(b.pipelineId, "pipelineId"), stageId: ref(b.stageId, "stageId"), readTimes: flag(b, "readTimes") };
+}
+
+// ---- Reasons and record kinds (addition 0008zb) --------------------------------------------------------
+const REASON_TYPES = ["deal", "ticket"] as const;
+const KIND_KEY = /^[a-z][a-z0-9_-]{1,40}$/;
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
+
+function recordTypeOf(v: unknown): "deal" | "ticket" {
+  if (v !== "deal" && v !== "ticket") throw new ApiError(400, "invalid_recordType", `recordType must be ${REASON_TYPES.join(" or ")}`);
+  return v;
+}
+
+/** Text of 1 to max characters without control characters, or null when empty */
+function textOrNull(v: unknown, name: string, max: number): string | null {
+  if (v == null || (typeof v === "string" && v.trim() === "")) return null;
+  if (typeof v !== "string" || v.trim().length > max || CONTROL.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be 1 to ${max} characters, or empty`);
+  return v.trim();
+}
+
+/** { recordType, property }: the property a record type's reason comes from; empty or null removes the mapping */
+export function checkReasonFieldInput(b: Record<string, unknown>): SourceReasonFieldInput {
+  const property = b.property == null || b.property === "" ? null : ref(b.property, "property");
+  return { recordType: recordTypeOf(b.recordType), property };
+}
+
+/** { recordType, value, isDataQuality }: a person's data-quality flag on a reason option */
+export function checkReasonFlagInput(b: Record<string, unknown>): SourceReasonFlagInput {
+  const value = textOrNull(b.value, "value", 100);
+  if (value === null) throw new ApiError(400, "invalid_value", "value must be 1 to 100 characters");
+  return { recordType: recordTypeOf(b.recordType), value, isDataQuality: flag(b, "isDataQuality") };
+}
+
+/** { key, label, recordType, sortOrder?, isActive? }: a record kind; isActive, when given, switches it on or off */
+export function checkRecordKindInput(b: Record<string, unknown>): RecordKindInput {
+  if (typeof b.key !== "string" || !KIND_KEY.test(b.key)) throw new ApiError(400, "invalid_key", "key must be 2 to 41 lower-case letters, digits, underscores or hyphens, starting with a letter");
+  const sortOrder = b.sortOrder ?? null;
+  if (sortOrder !== null && (typeof sortOrder !== "number" || !Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000)) {
+    throw new ApiError(400, "invalid_sort_order", "sortOrder must be a whole number from 0 to 10000");
+  }
+  if (b.isActive !== undefined && typeof b.isActive !== "boolean") throw new ApiError(400, "invalid_isActive", "isActive must be true or false");
+  return { key: b.key, label: text(b, "label", 80), recordType: recordTypeOf(b.recordType), sortOrder: sortOrder as number | null,
+    isActive: b.isActive === undefined ? null : (b.isActive as boolean) };
+}
+
+/** { kindKey, pipelineId, category, active }: a connection's rule for a kind; a pipeline, a category value or both */
+export function checkRecordKindRuleInput(b: Record<string, unknown>): RecordKindRuleInput {
+  if (typeof b.kindKey !== "string" || !KIND_KEY.test(b.kindKey)) throw new ApiError(400, "invalid_kindKey", "kindKey must be a record kind's key");
+  const pipelineId = b.pipelineId == null || b.pipelineId === "" ? null : ref(b.pipelineId, "pipelineId");
+  const category = textOrNull(b.category, "category", 100);
+  if (pipelineId === null && category === null) throw new ApiError(400, "invalid_rule", "a rule needs a pipeline, a category value or both");
+  return { kindKey: b.kindKey, pipelineId, category, active: flag(b, "active") };
 }
 
 function list(b: Record<string, unknown>, name: string): Record<string, unknown>[] {

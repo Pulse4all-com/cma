@@ -24,6 +24,7 @@ import type {
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
   Journey, JourneyStatus, CallbackOwner, CallbacksKept,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
+  CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
 } from "./types";
 import {
   ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
@@ -56,6 +57,11 @@ import {
   type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
+import {
+  cancellationRecords, cancellationsReport, DEALS_PER_PERSON_KEY, DEALS_PER_PERSON_PERMISSION, dealsPerPerson, FUNNEL_GROUPS, funnelDeals, funnelFilter,
+  funnelLists, funnelPrevious, funnelReport, lostReasonsReport, parseFunnelFilter, reasonStateOf, type CancellationTicketFixture, type FunnelDeal,
+  type FunnelDealFixture, type FunnelOptions, type FunnelPipelineFixture, type FunnelReasonOption, type KindRuleFixture,
+} from "@/lib/funnel";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -803,6 +809,128 @@ function assertAttempts(me: Principal, range: HoursRange, filter: AttemptFilter,
   if (parseAttemptFilter(filter.market ?? "", filter.pipeline ?? "", filter.attempted, filter.outcome).problem) throw new CmaDbError("CMA04", "invalid filter");
 }
 
+// ---- Funnel, lost reasons and cancellations (addition 0008zb): the attempts fixture's sales deals with a stage history
+// (each entered New at its creation, then Qualified and Quote sent a few days apart; a won or lost deal entered Won or Lost
+// at its close), a source channel, a lost reason from the CRM connection's catalog (a share without one) and an amount on
+// a share of the won deals; the CRM connection's tickets, one to three a weekday, in the Cancellations pipeline and some in
+// Support with the category Cancellation (test) (the kind's two rules), others not of the kind. Invented ids and values.
+
+const MOCK_SOURCE_CHANNELS = ["paid_search", "organic", "direct", "referral", null];
+const MOCK_LOST_REASONS = ["too_expensive", "bad_timing", "chose_other", "no_budget", "duplicate", "wrong_number", null, null];
+
+/** The CRM connection's deal pipelines as the funnel reads them (the stages' read_times in force unless a person chose) */
+function mockFunnelPipelines(me: Principal): FunnelPipelineFixture[] {
+  const crm = seedIntakeConfig(me).sources.find((x) => x.connection.adapter === "crmtest")!;
+  return crm.pipelines.filter((p) => p.recordType === "deal").map((p) => ({
+    connectionId: crm.connection.id, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isLead: p.isLead, isOrder: p.isOrder, isActive: p.isActive,
+    stages: p.stages.map((x, i) => ({ stageId: x.stageId, label: x.label, order: i + 1, isClosed: x.isClosed, outcome: x.outcome,
+      readTimes: x.readTimesSet ? x.readTimes : null, isActive: x.isActive })),
+  }));
+}
+
+/** The CRM connection's reason field state and options of a record type */
+function mockReasonsOf(me: Principal, recordType: "deal" | "ticket"): { state: ReturnType<typeof reasonStateOf>; options: FunnelReasonOption[] } {
+  const crm = seedIntakeConfig(me).sources.find((x) => x.connection.adapter === "crmtest")!;
+  const f = crm.fields.find((x) => x.entity === recordType && x.field === "reason");
+  return {
+    state: reasonStateOf(f?.property ?? null, f?.sourceType ?? null),
+    options: crm.reasons.filter((x) => x.recordType === recordType)
+      .map((x) => ({ value: x.value, label: x.label, isDataQuality: x.isDataQuality, sortOrder: x.order })),
+  };
+}
+
+function mockFunnelOptions(me: Principal): FunnelOptions {
+  const markets = seedIntakeConfig(me).markets;
+  return {
+    tenantZone: MOCK_TENANT_ZONE, startDate: mockStartDate(me), now: new Date().toISOString(), ownerUserOf: mockAttemptOptions(me).ownerUserOf,
+    currencyOf: (m) => markets.find((x) => x.code === m)?.currency ?? null,
+  };
+}
+
+function mockFunnelFixtures(me: Principal): FunnelDealFixture[] {
+  const now = Date.now();
+  const reasonsOn = mockReasonsOf(me, "deal").state === "enumeration";
+  return mockAttemptDeals(me).map((d): FunnelDealFixture => {
+    const h = (k: string) => mixedHashOf(`${me.tenantId}:funnel:${d.dealSourceId}:${k}`);
+    const t0 = Date.parse(d.createdAt);
+    const end = d.isClosed && d.closedAt ? Date.parse(d.closedAt) : now;
+    const qualified = t0 + (0.2 + h("q") * 2) * 86_400_000;
+    const quote = qualified + (0.5 + h("o") * 3) * 86_400_000;
+    const path: { stageId: string; at: number }[] = [{ stageId: d.isOrder ? "s-paid" : "s-new", at: t0 }];
+    if (!d.isOrder) {
+      const reach = d.stageOutcome === "won" ? 2 : h("reach") < 0.55 ? 1 : h("reach") < 0.8 ? 2 : 0;
+      if (reach >= 1 && qualified < end) path.push({ stageId: "s-qualified", at: qualified });
+      if (reach >= 2 && quote < end) path.push({ stageId: "s-quote", at: quote });
+      if (d.isClosed) path.push({ stageId: d.stageOutcome === "won" ? "s-won" : d.stageOutcome === "lost" ? "s-lost" : "s-closed", at: end });
+    }
+    const iso = (x: number) => new Date(x).toISOString();
+    const won = d.stageOutcome === "won";
+    return {
+      dealId: d.dealId, connectionId: d.connectionId, dealSourceId: d.dealSourceId, pipelineId: d.pipelineId, stageId: path.at(-1)!.stageId, market: d.market,
+      sourceChannel: MOCK_SOURCE_CHANNELS[Math.floor(h("channel") * MOCK_SOURCE_CHANNELS.length)]!,
+      reason: reasonsOn && d.stageOutcome === "lost" ? MOCK_LOST_REASONS[Math.floor(h("reason") * MOCK_LOST_REASONS.length)]! : null,
+      ownerRef: d.ownerRef, createdAt: d.createdAt, closedAt: d.closedAt, isClosed: d.isClosed,
+      amount: won && h("amount") < 0.8 ? Math.round(400 + h("value") * 1600) : null, currency: null, recordUrl: d.recordUrl,
+      stages: path.map((x, i) => ({ stageId: x.stageId, enteredAt: iso(x.at), exitedAt: path[i + 1] ? iso(path[i + 1]!.at) : null })),
+    };
+  });
+}
+
+function mockFunnelDeals(me: Principal): { deals: FunnelDeal[]; entries: Instant[] } {
+  const fixtures = mockFunnelFixtures(me);
+  return {
+    deals: funnelDeals(fixtures, mockFunnelPipelines(me), mockFunnelOptions(me)),
+    entries: fixtures.flatMap((d) => d.stages.flatMap((x) => (x.enteredAt ? [x.enteredAt] : []))),
+  };
+}
+
+function assertFunnel(me: Principal, range: HoursRange, filter: FunnelFilter, group: FunnelGroup | null, permissions: string[]): void {
+  assertAny(me, permissions);
+  assertReportRange(range);
+  if (group !== null && !FUNNEL_GROUPS.includes(group)) throw new CmaDbError("CMA04", "group by day or week");
+  if (parseFunnelFilter(filter.market ?? "", filter.pipeline ?? "", filter.sourceChannel ?? "").problem) throw new CmaDbError("CMA04", "invalid filter");
+}
+
+/** The tickets of the CRM connection (record kinds, 0008zb): the Cancellations pipeline, Support with a category, a deleted one */
+function mockTickets(me: Principal): CancellationTicketFixture[] {
+  const today = mockToday(me);
+  const now = Date.now();
+  const crm = seedIntakeConfig(me).sources.find((x) => x.connection.adapter === "crmtest")!;
+  const reasonsOn = mockReasonsOf(me, "ticket").state === "enumeration";
+  const markets = me.tenantId === MOCK_TENANT_2 ? ["NL", "BE", "unknown"] : ["NL", "NL", "GB", "DE", "unknown"];
+  const label = (id: string) => crm.pipelines.find((p) => p.recordType === "ticket" && p.pipelineId === id);
+  const out: CancellationTicketFixture[] = [];
+  for (let date = mockStartDate(me); date <= today; date = addDays(date, 1)) {
+    const weekend = [0, 6].includes(new Date(`${date}T12:00:00Z`).getUTCDay());
+    const n = weekend ? 0 : 1 + Math.floor(hashOf(`${me.tenantId}:tickets:${date}`) * 3);
+    for (let i = 0; i < n; i++) {
+      const h = (k: string) => mixedHashOf(`${me.tenantId}:ticket:${date}:${i}:${k}`);
+      const market = markets[Math.floor(h("market") * markets.length)]!;
+      const t = Math.min(now - 20 * 60_000, localMs(date, `${String(8 + Math.floor(h("hour") * 9)).padStart(2, "0")}:15`, MOCK_TENANT_ZONE));
+      const id = `5${date.replaceAll("-", "").slice(2)}${String(i).padStart(2, "0")}`;
+      const roll = h("pipeline");
+      const pipelineId = roll < 0.6 ? "p-cancel" : "p-support";
+      const category = pipelineId === "p-support" ? (roll < 0.8 ? "Cancellation (test)" : "Complaint (test)") : null;
+      const closedAt = t + (0.2 + h("close") * 5) * 86_400_000;
+      const closed = h("closed") < 0.65 && closedAt < now;
+      const p = label(pipelineId);
+      out.push({
+        recordId: mockDealId(me, id), connectionId: crm.connection.id, recordType: "ticket", sourceId: id, pipelineId, pipelineLabel: p?.label ?? pipelineId,
+        pipelineCounted: p ? p.isCounted : null, category, market, reason: reasonsOn ? ["moving", "price", "other", null][Math.floor(h("reason") * 4)]! : null,
+        isClosed: closed, createdAt: new Date(t).toISOString(), closedAt: closed ? new Date(closedAt).toISOString() : null,
+        deletedAt: h("deleted") < 0.03 ? new Date(t + 3_600_000).toISOString() : null, recordUrl: `https://crm.example.com/records/100200300/ticket/${id}`,
+      });
+    }
+  }
+  return out;
+}
+
+/** The tenant's record kinds and the CRM connection's rules (cma.record_kind, cma.connection_record_kind) */
+function mockKinds(me: Principal): { kinds: (RecordKind & { sortOrder: number })[]; rules: KindRuleFixture[] } {
+  const c = seedIntakeConfig(me);
+  return { kinds: c.kinds, rules: c.kindRules };
+}
+
 /** Whose a linked account is: the person holding it in the fixture's linked accounts */
 function mockOrderPersonOf(me: Principal) {
   const accounts = seedIntakeConfig(me).accounts;
@@ -1181,7 +1309,9 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "email.reply_target_minutes", value: "240", isDefault: true },
   { key: "email.no_response_days", value: "5", isDefault: true },
   { key: "email.market_order", value: "contact,form,record,inbox", isDefault: true },
-  { key: "reports.per_person", value: "email,orders,attempts", isDefault: false },
+  { key: "reports.per_person", value: "email,orders,attempts,deals", isDefault: false },
+  // the cancellation requests (addition 0008zb): the fixture's kind, as Configuration → Sources sets it
+  { key: "reports.cancellation_kind", value: "cancellation", isDefault: false },
   // first orders (addition 0008u): the attribution settings at their catalog defaults
   { key: "attribution.window_days", value: "90", isDefault: true },
   { key: "attribution.level_order", value: "lead_deal,conversation,email,phone_match,attempt,known_contact", isDefault: true },
@@ -1698,7 +1828,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
   "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
-  "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
+  "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
   "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
@@ -1935,6 +2065,9 @@ type MockIntakeConfig = {
   holidays: MarketHoliday[];
   rules: AlertRule[];
   accounts: LinkedAccount[];
+  /** The tenant's record kinds and the rules that give records a kind (addition 0008zb) */
+  kinds: (RecordKind & { sortOrder: number })[];
+  kindRules: KindRuleFixture[];
 };
 
 function mockSource(tenantId: string, n: number, adapter: string, name: string, accountId: string, kind: SourceKind | null, o: Partial<SourceDetail> = {}, settings: SourceConnection["settings"] = {}): MockSource {
@@ -1947,7 +2080,7 @@ function mockSource(tenantId: string, n: number, adapter: string, name: string, 
   };
   return {
     tenantId, connection, pipelines: [], forms: [], callOutcomes: [], lines: [], tags: [], fields: [], writeback: [], store: null, sampleIds: {},
-    missedReasons: [], taskStatuses: [], taskTypes: [], inboxes: [], mailboxes: [], inboxChannels: [], ...o,
+    missedReasons: [], taskStatuses: [], taskTypes: [], inboxes: [], mailboxes: [], inboxChannels: [], reasons: [], ...o,
   };
 }
 
@@ -1971,7 +2104,14 @@ const pipeline = (recordType: string, pipelineId: string, label: string, isCount
   ({ recordType, pipelineId, label, isCounted, isRouted: false, isLead, workType: null, isActive: true, slaMinutes, isOrder, stages });
 /** A pipeline stage with its outcome (addition 0008u): the source's unless a person chose it */
 const stage = (stageId: string, label: string, isClosed: boolean, outcome: SourceStage["outcome"] = null, outcomeSource: SourceStage["outcomeSource"] = null): SourceStage =>
-  ({ stageId, label, isClosed, outcome, outcomeSource: outcome === null ? outcomeSource : outcomeSource ?? "source", isActive: true });
+  ({ stageId, label, isClosed, outcome, outcomeSource: outcome === null ? outcomeSource : outcomeSource ?? "source", isActive: true, readTimes: true, readTimesSet: false });
+/** A field mapping (0008e); the reason field with its data type as the adapter read it (0008zb) */
+const mapped = (entity: string, field: string, property: string, refSystem: string | null = null, sourceType: string | null = null): SourceField =>
+  ({ entity, field, refSystem, slot: 1, property, sourceType, checkedAt: sourceType ? new Date(Date.now() - 50 * 60_000).toISOString() : null,
+     state: field === "reason" ? reasonStateOf(property, sourceType) : null });
+/** A reason option of the CRM connection's catalog (0008zb): invented values and labels */
+const reason = (recordType: SourceReason["recordType"], value: string, label: string, order: number, isDataQuality = false): SourceReason =>
+  ({ recordType, value, label, order, isDataQuality, isActive: true });
 /** The task catalogs of the fixture's CRM connection (addition 0008n), consistent with the follow-up rows below */
 const taskStatus = (statusRef: string, label: string, isDone: boolean, seenTasks: number): SourceTaskStatus =>
   ({ statusRef, label, isDone, seenTasks, lastSeenAt: seenTasks ? new Date(Date.now() - 3 * 3_600_000).toISOString() : null });
@@ -1985,14 +2125,17 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
   const t = me.tenantId;
   const crm = mockSource(t, 1, "crmtest", "Customer records (test)", "100200300", "crm", {
     // since addition 0008u the deal pipelines carry their stages' outcomes; Web orders is the order pipeline (not for tenant two, which has no shop)
+    // since addition 0008zb Sales has a Quote sent stage and a closed stage without an outcome, and the tickets a Cancellations pipeline
     pipelines: [pipeline("deal", "p-sales", "Sales (test)", true, true, null, false,
-      [stage("s-new", "New (test)", false), stage("s-qualified", "Qualified (test)", false), stage("s-won", "Won (test)", true, "won"), stage("s-lost", "Lost (test)", true, "lost")]),
+      [stage("s-new", "New (test)", false), stage("s-qualified", "Qualified (test)", false), stage("s-quote", "Quote sent (test)", false),
+        stage("s-won", "Won (test)", true, "won"), stage("s-lost", "Lost (test)", true, "lost"), stage("s-closed", "Closed other (test)", true)]),
       pipeline("deal", "p-self-serve", "Web orders (test)", true, false, null, t !== MOCK_TENANT_2,
         [stage("s-paid", "Paid (test)", true, "won"), stage("s-refunded", "Refunded (test)", true, "lost", "person")]),
       pipeline("deal", "p-sandbox", "Sandbox (test)", true, true, null, false, [stage("s-open", "Open (test)", false)]),
       pipeline("ticket", "p-support", "Support (test)", true, true),
       // Billing keeps its own response time of an hour (addition 0008o); Support follows the tenant default
-      pipeline("ticket", "p-billing", "Billing (test)", true, true, 60)],
+      pipeline("ticket", "p-billing", "Billing (test)", true, true, 60),
+      pipeline("ticket", "p-cancel", "Cancellations (test)", true, false)],
     taskStatuses: [taskStatus("NOT_STARTED", "Not started", false, 5), taskStatus("IN_PROGRESS", "In progress", false, 0), taskStatus("COMPLETED", "Completed", true, 12)],
     taskTypes: [taskType("CALL", "Call", false, true, 3, 3), taskType("CALLBACK", "Callback", true, true, 1, 1), taskType("EMAIL", "Email", false, true, 1, 1),
       taskType("INTERNAL", "Internal note", false, false, 2, 0)],
@@ -2009,10 +2152,14 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       form("f-108", "BE Quote form (test)", true, "quote", "BE", { category: "quote", keptFields: ["product_interest"], fields: MOCK_FORM_FIELDS.quote })],
     callOutcomes: [outcome("o-1", "Connected", true), outcome("o-2", "Not reached", true), outcome("o-3", "Voicemail", true), outcome("o-4", "Busy", false),
       outcome("o-5", "Wrong number", false), outcome("o-6", "Left live message", true), outcome("o-7", "Do not call or email", false)],
-    fields: [{ entity: "contact", field: "country", refSystem: null, slot: 1, property: "contact_country" },
-      { entity: "contact", field: "language", refSystem: null, slot: 1, property: "contact_language" },
-      { entity: "contact", field: "ref", refSystem: "shoptest", slot: 1, property: "contact_shop_id_1" },
-      { entity: "deal", field: "market", refSystem: null, slot: 1, property: "deal_country" }],
+    fields: [mapped("contact", "country", "contact_country"), mapped("contact", "language", "contact_language"),
+      mapped("contact", "ref", "contact_shop_id_1", "shoptest"), mapped("deal", "market", "deal_country"),
+      // the reasons (addition 0008zb): the deal's lost reason from a dropdown, the ticket's cancellation reason likewise
+      mapped("deal", "reason", "lost_reason_dropdown", null, "enumeration"), mapped("ticket", "reason", "cancel_reason_dropdown", null, "enumeration")],
+    reasons: [reason("deal", "too_expensive", "Too expensive (test)", 1), reason("deal", "bad_timing", "Bad timing (test)", 2),
+      reason("deal", "chose_other", "Chose another supplier (test)", 3), reason("deal", "no_budget", "No budget (test)", 4),
+      reason("deal", "duplicate", "Duplicate (test)", 5, true), reason("deal", "wrong_number", "Wrong number (test)", 6, true),
+      reason("ticket", "moving", "Moving (test)", 1), reason("ticket", "price", "Price (test)", 2), reason("ticket", "other", "Other (test)", 3)],
     writeback: [{ field: "commerce_ref", slot: 1, property: "contact_shop_id_1", mode: "slot", enabled: true },
       { field: "country", slot: 1, property: "contact_country", mode: "if_empty", enabled: true }],
     sampleIds: { deal: "41000123", ticket: "52000456", task: "63000789" },
@@ -2077,6 +2224,14 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       { userId: "00000000-0000-7000-8000-000000000202", system: "crmtest_owner", externalId: "70000002" },
       { userId: MOCK_MANAGER_ID, system: "crmtest_owner", externalId: "70000009" },
     ],
+    // the record kinds (addition 0008zb): a cancellation request is a ticket of the Cancellations pipeline or one with the
+    // category Cancellation (test); a complaint kind with one rule, and an archived kind
+    kinds: [{ key: "cancellation", label: "Cancellation request (test)", recordType: "ticket", status: "active", sortOrder: 10 },
+      { key: "complaint", label: "Complaint (test)", recordType: "ticket", status: "active", sortOrder: 20 },
+      { key: "old-callback", label: "Old callback (test)", recordType: "deal", status: "archived", sortOrder: 90 }],
+    kindRules: [{ connectionId: crm.connection.id, kindKey: "cancellation", pipelineId: "p-cancel", category: null, isActive: true },
+      { connectionId: crm.connection.id, kindKey: "cancellation", pipelineId: null, category: "Cancellation (test)", isActive: true },
+      { connectionId: crm.connection.id, kindKey: "complaint", pipelineId: "p-support", category: "Complaint (test)", isActive: true }],
   };
   all.set(t, cfg);
   return cfg;
@@ -3307,6 +3462,79 @@ export const mockData: CmaData = {
     Object.assign(st, { outcome: input.outcome === "none" ? null : input.outcome, outcomeSource: "person" });
   },
 
+  async setSourceStageReadTimes(me, id, input) {
+    const x = sourceOf(me, id);
+    const st = x.pipelines.find((p) => p.recordType === "deal" && p.pipelineId === input.pipelineId)?.stages.find((y) => y.stageId === input.stageId);
+    if (!st) throw new CmaDbError("CMA02", "no such stage");
+    Object.assign(st, { readTimes: input.readTimes, readTimesSet: true });
+  },
+
+  async setSourceReasonField(me, id, input) {
+    const x = sourceOf(me, id);
+    const property = input.property?.trim() ?? "";
+    const i = x.fields.findIndex((f) => f.entity === input.recordType && f.field === "reason");
+    if (property === "") {
+      if (i >= 0) x.fields.splice(i, 1);
+      return;
+    }
+    // as cma.set_connection_field: a changed property loses its checked data type until the next sweep reads it; the mock's
+    // sweep never comes, so a property named *_text stays refused and any other reads as an enumeration at once
+    const sourceType = property.endsWith("_text") ? "string" : "enumeration";
+    const f: SourceField = { entity: input.recordType, field: "reason", refSystem: null, slot: 1, property, sourceType, checkedAt: new Date().toISOString(),
+      state: reasonStateOf(property, sourceType) };
+    if (i >= 0) x.fields[i] = f;
+    else x.fields.push(f);
+  },
+
+  async setSourceReasonDataQuality(me, id, input) {
+    const x = sourceOf(me, id);
+    const r = x.reasons.find((y) => y.recordType === input.recordType && y.value === input.value);
+    if (!r) throw new CmaDbError("CMA02", "no such reason option");
+    r.isDataQuality = input.isDataQuality;
+  },
+
+  async getRecordKinds(me): Promise<RecordKindConfig[]> {
+    assertConfigure(me);
+    const c = seedIntakeConfig(me);
+    const key = mockSetting("reports.cancellation_kind");
+    const crm = c.sources.find((x) => x.connection.adapter === "crmtest");
+    return [...c.kinds].sort((a, b) => (a.status === b.status ? 0 : a.status === "active" ? -1 : 1) || a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+      .map((k) => ({
+        ...k, isCancellationKind: k.key === key,
+        rules: c.kindRules.filter((r) => r.kindKey === k.key).map((r) => ({
+          connectionId: r.connectionId, pipelineId: r.pipelineId, category: r.category, isActive: r.isActive,
+          pipelineLabel: crm?.pipelines.find((p) => p.recordType === k.recordType && p.pipelineId === r.pipelineId)?.label ?? null,
+        })),
+      }));
+  },
+
+  async setRecordKind(me, input) {
+    assertConfigure(me);
+    if (!/^[a-z][a-z0-9_-]{1,40}$/.test(input.key)) throw new CmaDbError("CMA04", "a kind's key is 2 to 41 lower-case characters");
+    if (input.label.trim().length < 1 || input.label.trim().length > 80) throw new CmaDbError("CMA04", "a kind's label has 1 to 80 characters");
+    if (input.sortOrder !== null && (input.sortOrder < 0 || input.sortOrder > 10000)) throw new CmaDbError("CMA04", "a sort order is 0 to 10000");
+    const c = seedIntakeConfig(me);
+    const k = c.kinds.find((x) => x.key === input.key);
+    if (k && k.recordType !== input.recordType) throw new CmaDbError("CMA03", "a kind's record type stays");
+    const status = input.isActive === null ? undefined : input.isActive ? "active" as const : "archived" as const;
+    if (k) Object.assign(k, { label: input.label.trim(), sortOrder: input.sortOrder ?? k.sortOrder, ...(status ? { status } : {}) });
+    else c.kinds.push({ key: input.key, label: input.label.trim(), recordType: input.recordType, status: status ?? "active", sortOrder: input.sortOrder ?? 100 });
+  },
+
+  async setRecordKindRule(me, id, input) {
+    const x = sourceOf(me, id);
+    const c = seedIntakeConfig(me);
+    const k = c.kinds.find((y) => y.key === input.kindKey);
+    if (!k) throw new CmaDbError("CMA02", "no such record kind");
+    const pipelineId = input.pipelineId?.trim() || null;
+    const category = input.category?.trim() || null;
+    if (pipelineId === null && category === null) throw new CmaDbError("CMA04", "a rule needs a pipeline, a category value or both");
+    if (pipelineId !== null && !x.pipelines.some((p) => p.recordType === k.recordType && p.pipelineId === pipelineId)) throw new CmaDbError("CMA02", "no such pipeline");
+    const r = c.kindRules.find((y) => y.connectionId === id && y.kindKey === k.key && y.pipelineId === pipelineId && y.category === category);
+    if (r) r.isActive = input.active;
+    else if (input.active) c.kindRules.push({ connectionId: id, kindKey: k.key, pipelineId, category, isActive: true });
+  },
+
   async setSourceForms(me, id, changes) {
     const x = sourceOf(me, id);
     const categories = seedIntakeConfig(me).categories;
@@ -3880,6 +4108,42 @@ export const mockData: CmaData = {
     const d = mockAttemptDeals(me).find((x) => x.dealId === dealId && x.isCounted && x.isLead && !x.isOrder);
     if (!d) throw new CmaDbError("CMA02", `no sales deal ${dealId}`);
     return dealAttempts(d, mockAttemptOptions(me), me.perPerson.includes(ATTEMPTS_PER_AGENT_KEY) && me.permissions.includes("performance.team"));
+  },
+
+  async getFunnel(me, range, filter): Promise<FunnelReport> {
+    assertFunnel(me, range, filter, null, ["reports.view", "performance.team"]);
+    const { deals, entries } = mockFunnelDeals(me);
+    const prev = funnelPrevious(previousPeriod(range, mockToday(me)), new Date().toISOString());
+    return funnelReport(deals, mockFunnelPipelines(me), mockFunnelOptions(me), range.from, range.to, filter, prev, entries);
+  },
+
+  async getLostReasons(me, range, group, filter): Promise<LostReasonsReport> {
+    assertFunnel(me, range, filter, group, ["reports.view", "performance.team"]);
+    const { state, options } = mockReasonsOf(me, "deal");
+    const prev = funnelPrevious(previousPeriod(range, mockToday(me)), new Date().toISOString());
+    return lostReasonsReport(mockFunnelDeals(me).deals, options, state, mockFunnelOptions(me), range.from, range.to, group, filter, prev,
+      listRowsOf(mockSetting("follow_up.list_rows")));
+  },
+
+  async getCancellations(me, range, group, market): Promise<CancellationsReport> {
+    assertFunnel(me, range, { market, pipeline: null, sourceChannel: null }, group, ["reports.view", "performance.team"]);
+    const { kinds, rules } = mockKinds(me);
+    const key = mockSetting("reports.cancellation_kind");
+    const k = kinds.find((x) => x.key === key);
+    const kind: RecordKind | null = k ? { key: k.key, label: k.label, recordType: k.recordType, status: k.status } : null;
+    const { state, options } = mockReasonsOf(me, kind?.recordType ?? "ticket");
+    const requests = cancellationRecords(mockTickets(me), kind, rules, mockStartDate(me), MOCK_TENANT_ZONE);
+    const prev = funnelPrevious(previousPeriod(range, mockToday(me)), new Date().toISOString());
+    return cancellationsReport(requests, kind, state, new Map(options.map((x) => [x.value, x.label])), mockStartDate(me), MOCK_TENANT_ZONE,
+      range.from, range.to, group, market, prev, listRowsOf(mockSetting("follow_up.list_rows")));
+  },
+
+  async getDealsPerPerson(me, range, filter): Promise<DealsPerPerson> {
+    assertFunnel(me, range, filter, null, [DEALS_PER_PERSON_PERMISSION]);
+    if (!me.perPerson.includes(DEALS_PER_PERSON_KEY)) throw new CmaDbError("CMA06", "per-person figures for deals are switched off for this tenant");
+    const { deals } = mockFunnelDeals(me);
+    const { rows, total } = dealsPerPerson(funnelFilter(deals, filter), range.from, range.to, mockOrderName);
+    return { ...range, filter, rows, total, ...funnelLists(deals) };
   },
 
 
