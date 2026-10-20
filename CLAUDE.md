@@ -1,7 +1,7 @@
 # CLAUDE.md: working rules for Claude Code in this repository
 
 ## Source of truth
-- README.md is the source of truth for scope, architecture, source-of-truth rules, roles, features, KPIs, roadmap, Decision log and Open decisions. It is large: read the sections relevant to the task, and refer to them by name. Treat its decisions as settled unless asked to reopen one.
+- README.md and the files in its Documentation map are the source of truth for scope, architecture, source-of-truth rules, roles, features, KPIs, roadmap, Decision log (docs/decisions.md) and Open decisions (docs/open-decisions.md). Read README.md first, then the files the task touches; refer to sections by name. Treat decisions as settled unless asked to reopen one.
 - docs/RUNBOOK.md describes how changes are built, merged, released and verified.
 - web/CLAUDE.md and web/AGENTS.md hold the Next.js rules for web/. Read them before touching web/.
 - Write everything in English: code, comments, SQL, docs, commit messages and PR descriptions.
@@ -30,7 +30,7 @@
 
 ## Database (db/)
 - Scripts are numbered and run in order; a change is a new script plus its verify script (for example `32_<name>.sql` and `33_verify_<name>.sql`), not an edit to a script that has run in prod. Every new tenant table gets `cma.setup_tenant_table(table)`.
-- Follow the conventions in README (Architecture, Data model sections): error codes, permissions, the provoke switch in verify scripts.
+- Follow the conventions in docs/architecture/data-model/ and docs/architecture/api.md: error codes, permissions, the provoke switch in verify scripts.
 - A PR that adds or changes a table, view or column in cma or cma_read updates docs/datamap/catalog.json (a `what` and `how` for each new table, an entry for each new computed view) and says in its description that Martin refreshes docs/datamap/schema.json from dev on this branch after running the migration there, before merging; until then verify:datamap fails on this branch, which is expected. A change to how or how often a source fills a table (webhooks, job schedules, catalogs) updates that table's `how` in the same PR.
 
 ## Ingest (ingest/, docs/ingest/)
@@ -44,4 +44,4 @@
 ## Instructions for Martin
 - Every command block in a PR description or reply is labelled with where it runs: **Studio** (SQL in Cloud SQL Studio, naming the instance cma-dev-pg or cma-prod-pg), **Terminal** (Martin's own Linux terminal: Chromebook Linux or his Linux machine, in ~/cma unless stated), **Browser** (a page or click path) or **File** (a repository path). Never mix SQL and shell in one block. A query that returns customer rows is a Studio block, never Terminal (README, Where a command runs).
 - Give one step at a time and state the expected output.
-- When a decision is made or something changes, update README.md in the same PR (Decision log entry, affected sections, the "Last updated" pass line).
+- When a decision is made or something changes, update in the same PR: a row in docs/decisions.md (at most two sentences, naming the PR), the affected sections in whichever file holds them, and one dated line at the top of CHANGELOG.md. Reference sections get no history (counts over time, earlier values, records paths): that belongs in records/, CHANGELOG.md or the PR. Keep README.md under 80 KB.
