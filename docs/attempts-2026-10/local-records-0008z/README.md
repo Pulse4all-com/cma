@@ -37,8 +37,9 @@ A fresh database built from `00` to `92` in README order (the dev seeds included
 
 | File | What |
 |---|---|
-| `checks.txt` | The last line of each check on this branch, in one pass from `npm ci`: build, typecheck, lint (0 errors; the one warning is in `web/verify/follow-up.mjs`, unchanged from `main`), the nineteen pure verifiers and `verify:reports` and `verify:signed-out` provoked; then, against the mock server, `layout`, `hints` and `theme`, each normal and provoked; then `verify:api` in full against the server in api data mode on a second fresh database (built to `94`, the seeds, `reports-fixture.sql` with its calls linked to Aircall's), normal and provoked. |
+| `checks.txt` | The last line of each check on this branch, in one pass from `npm ci`: build, typecheck, lint (0 errors; the one warning is in `web/verify/follow-up.mjs`, unchanged from `main`), the nineteen pure verifiers and `verify:reports` and `verify:signed-out` provoked; then, against the mock server, `layout`, `hints` and `theme`, each normal and provoked; then `verify:api` in full against the server in api data mode on a second fresh database (built to `94`, the seeds, `reports-fixture.sql` with its calls linked to Aircall's), normal and provoked: ALL 311 PASS and all 311 FAIL provoked (0008y's count on such a database was 297). Its first run in this pass failed one check, which read the agent's name as personal data; the check was fixed and both runs repeated, as the file says. |
 | `build.txt` | The output of that `npm run build`. |
+| `layout-provoked-new-checks.txt` | The lines of the provoked layout run that the new checks give: the Live board's last section, the deal list and an opened deal spilling out of their card, Esc swallowed, a fresh sign-in kept on the deep link. |
 | `measurement.txt` | `/reports/attempts` outside the database, against `/reports/speed-to-lead`, on a committed copy of the volume tenant served in api data mode (medians of ten requests; below). |
 
 ### The measurement

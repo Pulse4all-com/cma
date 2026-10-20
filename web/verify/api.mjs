@@ -1632,7 +1632,7 @@ async function attemptsChecks() {
         // exactly these fields: the agent's name is staff data, gated by the database (performance.team and the per-person switch)
         list.every((a) => Object.keys(a).sort().join() === "agentName,answered,n,outcomeLabel,reached,reachedBy,startedAt,talkSeconds"
           && (a.reached ? ["outcome", "talk_time"].includes(a.reachedBy) : a.reachedBy === null)),
-        personal(list.map((a) => ({ ...a, agentName: null })))],
+        personal(list.map((a) => Object.fromEntries(Object.entries(a).filter(([k]) => k !== "agentName"))))],
       [200, true, true, true, true, []], [403, false, true, true, true, []]);
   } else {
     console.log("note  no deal with an attempt in this period: the check of one deal's attempts is left out");

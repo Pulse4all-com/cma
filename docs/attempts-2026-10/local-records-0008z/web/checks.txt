@@ -1,5 +1,5 @@
 npm ci                             exit 0  added 510 packages in 14s
-npm run build                      exit 0  
+npm run build                      exit 0  ƒ  (Dynamic)  server-rendered on demand
 npm run typecheck                  exit 0  ✓ Types generated successfully
 npm run lint                       exit 0  ✖ 1 problem (0 errors, 1 warning)
 verify:copy                        exit 0  copy: PASS (2486 keys, en and nl)
@@ -26,3 +26,10 @@ verify:signed-out --provoke        exit 0  signed-out: ALL 20 PROVOKED CHECKS FA
 verify:layout                      exit 0  layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text o
 verify:layout --provoke            exit 1  layout: FAIL (77 problems)
 verify:hints                       exit 0  hints: PASS (739 headers and 141 tiles on 43 pages, 7 level bars on First orders and 6 bar cards on Attempts per deal, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still w
+verify:hints --provoke             exit 1  hints: FAIL (45 problems)
+verify:theme                       exit 0  theme: PASS (71 pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, 86 tables per 7.6 and 3.3, a header hint open on 28 report pages)
+verify:theme --provoke             exit 1  theme: FAIL (10 problems)
+verify:api (local database)        exit 1  1 of 311 FAILED  (the deal-attempts check read agentName, a staff name, as personal data; fixed in verify/api.mjs, rerun below)
+verify:api (rerun after the fix)   exit 0  ALL 311 PASS
+verify:api --provoke (local db)    exit 0  ALL 311 PROVOKED CHECKS FAILED, as they must
+verify:api --provoke (rerun)       exit 0  ALL 311 PROVOKED CHECKS FAILED, as they must
