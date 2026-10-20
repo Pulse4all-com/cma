@@ -27,7 +27,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
   - One deal's attempts (`cma.attempts_of_deal`, `/api/v1/reports/attempts/deals/{dealId}`).
   - The reader view `cma_read.attempts_per_deal` with the new columns.
   - Messages: `withdrawn_at` and `withdrawn_by` on the message, the permission `messages.withdraw` on the admin role of every tenant, `cma.withdraw_message`. No row is ever deleted.
-- `cma.lead_calls_of` and `cma.lead_to_order_of` are rewritten on the shared definitions (`cma.deal_calls_of`, `cma.contact_store_orders_of`), the same rows (`95` B21 proves it against 0007d's bodies). That is why `41`, `61`, `69`, `73`, `75`, `77`, `81`, `83`, `85`, `89` and `91` run again, and why the lead reads are hashed before and after `94`.
+- `cma.lead_calls_of` and `cma.lead_to_order_of` are rewritten on the shared definitions (`cma.deal_calls_of`, `cma.contact_store_orders_of`), the same rows (`95` B21 proves it against 0007d's bodies). That is why `41`, `61`, `69`, `73`, `75`, `77`, `81`, `83`, `85`, `89` and `91` run again, and why the lead reads are hashed before and after `94`. `43` (messaging) runs again too, amended for the withdrawal.
 - Web: the Attempts pages for sales (six tiles, won against lost, the deal's attempts on Enter); Delete on Messages for `messages.withdraw`; the Reports and Configuration order; Missed, not called back at the bottom of the Live board; Welcome on open.
 - `tools/drift/functions.sql`: a read-only list of every function's signature and definition hash, to diff dev against prod (step 11).
 - Seeds: none change. `94` itself grants `messages.withdraw` to the admin role of every existing tenant and to the default ladder of a new one, so `02` and `03` need no rerun.
@@ -43,7 +43,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 | 0 | Review the pull request, build it, check the additions in dev and prod | 10 min |
 | 1 | Dev: the lead reads before and after `94`, `94` twice with the fingerprint | 5 min |
 | 2 | Dev: `95` normal and provoked | 3 min |
-| 3 | Dev: `93` and the earlier verifies again (`91` from the Terminal) | 20 min |
+| 3 | Dev: `93`, `43` and the earlier verifies again (`91` from the Terminal) | 20 min |
 | 4 | Dev: the permission on the admin roles | 1 min |
 | 5 | The data map: snapshot from dev, rebuild, push | 5 min |
 | 6 | Prod: point-in-time recovery | 1 min |
@@ -193,7 +193,7 @@ Expected: rows `A1` to `A7`, `B1` to `B22` and `C1` to `C7`, each `PASS`, and th
 
 Expected: every row `FAIL`, and `verdict | PROVOKED, NOT A PASS | 0 PASS, 36 FAIL`. Nothing stays behind: blocks B and C roll back.
 
-## 3. Dev: `93` and the earlier verifies again
+## 3. Dev: `93`, `43` and the earlier verifies again
 
 `93` (0008y's verify) is amended for the sales population: its header names the checks that changed and why (A2, A3, B1, B4, B6, B7, B8, B12, B13, B14, B18, B19). Its tenant sets `attempts.source` to `crm`, so its CRM calls stay attempts.
 
@@ -202,6 +202,14 @@ Expected: every row `FAIL`, and `verdict | PROVOKED, NOT A PASS | 0 PASS, 36 FAI
 **Studio (cma-dev-pg):** paste and Run. Expected: `verdict | PASS | 25 PASS, 0 FAIL`.
 
 **Studio (cma-dev-pg):** paste `93` again, Ctrl+F `'verify.provoke', 'false'`, change only that `false` to `true`, Run; Result 1 reads `true`. Expected: `verdict | PROVOKED, NOT A PASS | 0 PASS, 25 FAIL`.
+
+`43` (0008's messaging verify) is amended for the withdrawal (Martin, 20 October 2026); its header names the change and why. Once `0008z` is recorded, its check A3 asserts that a message changes only by its withdrawal (`withdrawn_at` and `withdrawn_by` set together, once, never cleared; the application may update exactly those two columns), and A5 that `cma_read.message` ends with both columns. Before `0008z` both assert what they always did, and every other check of `43` is unchanged.
+
+**File:** `db/43_verify_messaging.sql`: copy all of it.
+
+**Studio (cma-dev-pg):** paste and Run. Expected: no error in red; the last result one row per active tenant, each `PASS` (locally: `local-records-0008z/db/43_verify_messaging-at-0008z.txt`). A red `FAIL …` line: send it to me.
+
+**Studio (cma-dev-pg):** paste `43` again, Ctrl+F `'verify.provoke', 'false'`, change only that `false` to `true`, Run; Result 1 reads `true`. Expected: the run stops in red at `FAIL A1: migration 0008 not recorded` (Studio stops at the first error; locally, where the run goes on, every block A to E fails and the verdict reads `PROVOKED, NOT A PASS`, `-provoked.txt`). Nothing stays behind: blocks B to E roll back.
 
 `94` rewrote `cma.lead_calls_of` and `cma.lead_to_order_of` (the same rows), so every verify that reads them runs again. Each is one step:
 - **File:** copy the script.

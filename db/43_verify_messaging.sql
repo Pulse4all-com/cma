@@ -16,6 +16,14 @@
 --      read and acknowledge on own rows only, times never move back, no acting user
 --   D  manual messages: every target, onlyClockedIn, the refusals, the permission; the stats
 --   E  permissions (ingest versus configuration versus reading) and tenant isolation, no deletes
+-- Amended for addition 0008z (Martin, 20 October 2026: an admin withdraws a message for everyone, README Decision log):
+-- 0008z gives cma_app the update of cma.message's withdrawn_at and withdrawn_by, so check A3 no longer asserts that the
+-- application cannot update a message at all. Once 0008z is recorded it asserts the rule 95 proves by behaviour (C6, C7):
+-- a message is never updated except withdrawn_at and withdrawn_by, both set together (message_withdrawn_check), once and
+-- never cleared (the trigger check_withdraw_once on cma.check_message_change); the application may update exactly those
+-- two columns. Before 0008z it asserts what it always did. Every other assertion of A3 is unchanged. Check A5 follows for
+-- the same reason (found once A3 held, since a FAIL stops block A): once 0008z is recorded, cma_read.message ends with
+-- withdrawn_at and withdrawn_by. Every other check is unchanged.
 -- Provoke: set provoke below to true; every block must then stop with FAIL, and the verdict
 -- (reached only when the run does not stop on errors) says PROVOKED instead of PASS.
 -- =============================================================================================
@@ -55,16 +63,33 @@ begin
     end if;
   end loop;
 
-  -- A3. the app inserts but never deletes; a message is never updated; a delivery only in its three
-  --     times; a rule is updated (disabled), not deleted
+  -- A3. the app inserts but never deletes; a message is never updated (since 0008z: except its withdrawal, both columns
+  --     set together, once, never cleared); a delivery only in its three times; a rule is updated (disabled), not deleted
   foreach v_t in array array['message_rule', 'message', 'message_delivery'] loop
     if has_table_privilege('cma_app', 'cma.' || v_t, 'delete') or not has_table_privilege('cma_app', 'cma.' || v_t, 'insert') then
       raise exception 'FAIL A3: cma_app must insert into and never delete from cma.%', v_t;
     end if;
   end loop;
+  if exists (select 1 from cma.schema_migration where version = '0008z') then
+    -- the update of exactly withdrawn_at and withdrawn_by; both or neither (the check); once, never cleared, nothing else
+    -- changing (the row trigger before update)
+    if coalesce((select string_agg(column_name, ',' order by column_name) from information_schema.column_privileges
+                 where table_schema = 'cma' and table_name = 'message' and grantee = 'cma_app' and privilege_type = 'UPDATE'), '')
+         <> 'withdrawn_at,withdrawn_by'
+       or (select pg_get_constraintdef(c.oid) from pg_constraint c
+           where c.conrelid = 'cma.message'::regclass and c.conname = 'message_withdrawn_check')
+         is distinct from 'CHECK (((withdrawn_at IS NULL) = (withdrawn_by IS NULL)))'
+       or not exists (select 1 from pg_trigger g
+                      where g.tgrelid = 'cma.message'::regclass and g.tgname = 'check_withdraw_once' and not g.tgisinternal
+                        and g.tgenabled = 'O' and g.tgtype & 31 = 1 + 2 + 16   -- for each row, before, update only
+                        and g.tgfoid = 'cma.check_message_change()'::regprocedure) then
+      raise exception 'FAIL A3: since 0008z a message changes only by its withdrawal: withdrawn_at and withdrawn_by together, once, never cleared';
+    end if;
+  elsif exists (select 1 from information_schema.column_privileges
+                where table_schema = 'cma' and table_name = 'message' and grantee = 'cma_app' and privilege_type = 'UPDATE') then
+    raise exception 'FAIL A3: a message must be immutable, a delivery updatable in its times only, a rule updatable';
+  end if;
   if has_table_privilege('cma_app', 'cma.message', 'update')
-     or exists (select 1 from information_schema.column_privileges
-                where table_schema = 'cma' and table_name = 'message' and grantee = 'cma_app' and privilege_type = 'UPDATE')
      or has_table_privilege('cma_app', 'cma.message_delivery', 'update')
      or has_column_privilege('cma_app', 'cma.message_delivery', 'message_id', 'update')
      or has_column_privilege('cma_app', 'cma.message_delivery', 'user_id', 'update')
@@ -116,6 +141,8 @@ begin
         group by table_name) x;
   if v_cols is distinct from
      'message:id,tenant_id,kind,urgency,title,body,ref_system,ref_type,ref_id,ref_url,rule_id,target,sender_user_id,created_at,expires_at'
+     -- since 0008z the message view carries its withdrawal last
+     || coalesce((select ',withdrawn_at,withdrawn_by' from cma.schema_migration where version = '0008z'), '')
      || ' | message_delivery:tenant_id,message_id,user_id,created_at,delivered_at,read_at,acknowledged_at'
      || ' | message_rule:id,tenant_id,name,trigger,record_type,pipeline_ids,audience_permission,match_language,only_clocked_in,fallback_permission,urgency,enabled,max_age_minutes,created_at,updated_at' then
     raise exception 'FAIL A5: the reporting views expose [%]', v_cols;

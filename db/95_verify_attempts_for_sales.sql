@@ -7,7 +7,7 @@
 -- nothing of the seed is used; adapters, pipelines, deals, contacts, calls, lines, orders, owners and messages are
 -- invented data values, and no row carries a name of a customer, an address or a phone number. Every check writes one
 -- row, PASS or FAIL, and the last result lists them with the verdict, because Cloud SQL Studio shows no notices. Run
--- as your own IAM login in dev, after 94_attempts_for_sales.sql; then 93, 41, 61, 69, 73, 75, 77, 81, 83, 85, 89 and
+-- as your own IAM login in dev, after 94_attempts_for_sales.sql; then 93, 43, 41, 61, 69, 73, 75, 77, 81, 83, 85, 89 and
 -- 91 again (91 from the Terminal: it runs longer than Studio's 300 seconds on dev's shared core).
 --   A  structure and privileges: the addition row after 0008y; every function the application's only and in the
 --      caller's rights, the readers' function definer, the owner's, its search path pinned with pg_temp last, the
