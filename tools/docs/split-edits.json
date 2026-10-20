@@ -1,0 +1,8 @@
+[
+  {
+    "file": "README.md",
+    "section": "How we work",
+    "old": "- **Open to the team.** This README is the shared record of scope, decisions and status, kept in the repository next to the code (`Pulse4all-com/cma`). Dev and prod in Google Cloud are visible to everyone in the build group `cma@pulse4all.com`, and every change in prod is traceable in the audit log and in `records/`.",
+    "new": "- **Open to the team.** This README and the files in its Documentation map are the shared record of scope, decisions and status, kept in the repository next to the code (`Pulse4all-com/cma`). Dev and prod in Google Cloud are visible to everyone in the build group `cma@pulse4all.com`, and every change in prod is traceable in the audit log and in `records/`."
+  }
+]
