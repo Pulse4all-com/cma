@@ -27,30 +27,31 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 
 **Order matters:**
 - The database first, in dev and in prod. `main`'s web and ingest run unchanged on `96` and `98`: `98` adds keys to `cma.connection_config` and accepts more values, and changes nothing either of them reads in shape.
-- Then this branch's ingest image in dev (step 6), the Sources settings and the backfill in dev (steps 7 and 8). The new ingest calls `cma.ingest_record_stages` and `cma.ingest_upsert_reasons`, so it needs `96` and `98` first.
-- The reasons are stored only once the sweep has read the mapped property and found a dropdown. So: map the property on Sources, wait for the sweep (step 7 shows the state), then the backfill with `--again` (step 8), which fills both the stage times and the reasons of the stored deals.
+- Then this branch's ingest image in dev (step 6), the configuration and the backfill in dev (steps 7 and 8). The new ingest calls `cma.ingest_record_stages` and `cma.ingest_upsert_reasons`, so it needs `96` and `98` first.
+- Dev runs `main`'s web image (`docs/RUNBOOK.md`, section 4), and its HubSpot connection is the developer test account `CMA dev`, not the live portal. So steps 7 and 8 configure and read dev in Studio, with two HubSpot default dropdowns standing in for the live portal's reason properties, and this branch's pages are first seen in prod after the merge (steps 15 and 17).
+- The reasons are stored only once the sweep has read the mapped property and found a dropdown. So: map the property (in Studio in dev, step 7; on Sources in prod, step 15), wait for the sweep, then the backfill with `--again` (steps 8 and 16), which fills both the stage times and the reasons of the stored records.
 - In prod: `96` and `98` (steps 10 and 11), the timings (step 12), then the merge (the web deploys, step 13), then the ingest from `main` (step 14), the Sources settings and the backfill (steps 15 and 16).
 - The data map: `docs/datamap/catalog.json` gains the new tables, views and columns. `verify:datamap` fails on this branch until step 9 refreshes `schema.json` from dev.
 
 | Step | What | Elapsed |
 |---|---|---|
 | 0 | Review the pull request, build it, check the additions | 10 min |
-| 1 | HubSpot: the stage properties and the reason properties (Browser) | 10 min |
+| 1 | HubSpot: the stage properties and the reason properties (done 21 October 2026) | – |
 | 2 | Dev: `96` twice with the fingerprint, `97` normal and provoked | 5 min |
 | 3 | Dev: `98` twice with the fingerprint | 3 min |
 | 4 | Dev: `99` normal and provoked (Terminal), the earlier verifies again | 25 min |
 | 5 | Dev: `03` again, deals per person | 2 min |
 | 6 | Dev: the ingest image from the branch | 10 min |
-| 7 | Dev: Sources settings (read times, reasons, data quality, the cancellation kind) | 10 min |
-| 8 | Dev: the backfill with `--again` | 10 to 30 min |
+| 7 | Dev: the configuration in Studio (stand-in reasons, data quality, the cancellation kind) | 10 min |
+| 8 | Dev: the backfill with `--again`, the figures in Studio | 10 to 30 min |
 | 9 | The data map: snapshot from dev, rebuild, push | 5 min |
 | 10 | Prod: point-in-time recovery, the additions | 2 min |
 | 11 | Prod: `96` twice, `98` twice | 5 min |
 | 12 | Prod: the timings as `cma_app` | 5 min |
 | 13 | Merge and watch the build | 15 min |
 | 14 | Prod: the ingest from `main` | 10 min |
-| 15 | Prod: Sources settings | 10 min |
-| 16 | Prod: the backfill with `--again` | 30 to 90 min |
+| 15 | Prod: Sources settings in the web UI, its first look | 10 min |
+| 16 | Prod: the backfill with `--again`, the figures in Studio | 30 to 90 min |
 | 17 | Prod: the hand checks and the request log | 15 min |
 
 ---
@@ -87,21 +88,17 @@ reset role;
 ```
 Expected on both instances: `0008z` only. Without `0008z`, run `docs/attempts-2026-10/RUNBOOK-0008z.md` first. With `0008za` already there, stop and tell me.
 
-## 1. HubSpot: the stage properties and the reason properties
+## 1. HubSpot: the stage properties and the reason properties (done 21 October 2026)
 
-**Browser:** HubSpot (the Subscriptions portal) → Settings → Data Management → Properties → Deal properties. Search `Date entered`.
+Done by Martin on 21 October 2026 in the live portal (147946837), Settings → Data Management → Properties:
+- **Stage times:** per stage a calculated HubSpot property `hs_v2_date_entered_<stage id>` with `hs_v2_date_exited_<stage id>` beside it (for example `hs_v2_date_entered_closedwon`), field type `Date and time picker`, not editable. The ticket pipeline `Cancellation` has 20 of them enabled; `Operations Pipeline` and `Incidents` have none, so their stages get no times. Which stages of the counted pipelines lack times is no longer checked by hand: the gap query of step 8 (dev) and step 16 (prod) lists them.
+- **The deals' lost reason:** `closed_lost_reason__dropdown`, field type `Dropdown select`, 13 options, among them the four data-quality ones (KPIs 5): `Garbage`, `Duplicate`, `Wrong Phone` and `Accidentally Signed Up`.
+- **The tickets' cancellation reason:** `cancellation_reason`, field type `Dropdown select`, 11 options.
+- **The cancellation requests:** the dedicated ticket pipeline `Cancellation`.
 
-Expected: per stage of every lead pipeline one property `Date entered "<stage>" (<pipeline>)`, and `Date exited "<stage>" (<pipeline>)` beside it. Open one: its internal name is `hs_v2_date_entered_<stage id>` (`hs_v2_date_exited_<stage id>`), its field type `Date picker`, and it is a calculated HubSpot property (no edit). HubSpot keeps them for every stage it knows. A stage without them (a pipeline created by an integration, say) would give that stage no times: write down which.
+These are the live portal's names, and steps 15 to 17 use them. Dev's HubSpot connection is the developer test account `CMA dev`, which has none of them: step 7 maps two HubSpot default dropdowns in their place.
 
-**Browser:** the same list (Deal properties). Look for a deal property of field type `Dropdown select` that holds the reasons a deal is lost; the field type filter narrows the list. A property of the same meaning as single-line or multi-line text does not count: the CMA refuses free text (Decision log, 20 October 2026).
-
-Expected: one such property, or none. Open it and write down its internal name (shown in the property's details) and its options' labels. The data-quality flags in step 7 go on the options that say the lead was never a lead (KPIs 5 names Garbage, Duplicate, Wrong Phone and Accidentally Signed Up).
-
-**Browser:** Settings → Properties → Ticket properties. Look for a ticket property of field type `Dropdown select` that holds the cancellation reason.
-
-Expected: one such property, or none. Write down its internal name. Write down also which ticket pipeline (and, if any, which category value) holds the cancellation requests: that is the kind's rule in step 7, with Arno (Open decisions).
-
-**Where none exists:** Funnel's lost-reasons section and Cancellations' reason column stay empty until Kira or Joshua create one (Open decisions). Nothing else in this runbook waits for it: carry on, and leave out the matching item in steps 7 and 15.
+Nothing to run in this step.
 
 ## 2. Dev: `96` twice with the fingerprint, `97` normal and provoked
 
@@ -207,28 +204,99 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 Expected: nothing yet (no reason property is mapped until step 7).
 
-## 7. Dev: Sources settings
+## 7. Dev: the configuration in Studio (stand-in reasons, data quality, the cancellation kind)
 
-**Browser:** dev's Workspace → Configuration → Sources → the HubSpot connection.
+Dev's `cma-web` runs `main`'s image (`docs/RUNBOOK.md`, section 4), so this branch's Sources page is not in dev; prod shows it first, after the merge (step 15). Dev's HubSpot connection is the developer test account `CMA dev`, which has neither the live portal's reason properties nor its `Cancellation` pipeline. So this step sets dev in Studio, through the database functions the Sources page calls, and maps two HubSpot default properties as stand-ins:
+- deals: `dealtype` (Deal Type), an enumeration with the options `newbusiness` (New Business) and `existingbusiness` (Existing Business);
+- tickets: `hs_ticket_priority` (Priority), an enumeration with `LOW`, `MEDIUM`, `HIGH` and `URGENT`.
 
-1. **Stage outcomes**, column **Read times**: every stage of the counted pipelines ticked with `Default`; the uncounted pipelines' stages unticked. Untick a stage whose times say nothing (step 1's notes); it then shows `Set here`.
-2. **Reasons → Deals: lost reason**: type the internal name of the deal property you wrote down in step 1 (the `Dropdown select` property holding the lost reasons) and **Save property**. The state reads `Not checked yet`.
-3. **Reasons → Tickets: reason**: the internal name of the ticket property from step 1 (the `Dropdown select` property holding the cancellation reason), **Save property**.
+Both are HubSpot's own default properties, present in every portal. Their type and options were read from HubSpot's properties API on 21 October 2026 (the live portal): both answer `"type": "enumeration"`. HubSpot's documentation sites (`knowledge.hubspot.com`, `developers.hubspot.com`) were not reachable from Claude Code's session, so this rests on the API's answer, not on the documentation; the published API specs name both as default properties but give no field type. The test account's option lists may differ from the live portal's; that changes nothing here. The read times keep their defaults (every stage of a counted pipeline), so nothing is set for them.
 
-Where none exists, Funnel's lost-reasons section and Cancellations' reason column stay empty until Kira or Joshua create one; nothing else in this runbook waits for it.
-
-**Terminal** (two minutes later: the sweep has read the mapped definitions)
-```bash
-gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-sweep" AND (jsonPayload.message="hubspot reason properties" OR jsonPayload.message="reason property not read")' --project=p4a-cma-dev --freshness=10m --limit=5 --format='value(jsonPayload.message,jsonPayload.code,jsonPayload.types)'
+**Studio (cma-dev-pg)** (writes configuration as `admin@example.com`, the dev seed's admin, who holds `tenant.configure`; the audit names `studio:martin`. Rerunnable: run it now and once more after the sweep)
+```sql
+set role cma_owner;
+drop table if exists pg_temp.dev_ctx;
+create temp table dev_ctx as
+  select t.id as tenant_id,
+         (select u.id from cma.app_user u where u.tenant_id = t.id and u.email = 'admin@example.com') as user_id,
+         (select (array_agg(c.id))[1] from cma.integration_connection c where c.tenant_id = t.id and c.adapter = 'hubspot') as connection_id,
+         (select count(*) from cma.integration_connection c where c.tenant_id = t.id and c.adapter = 'hubspot') as connections
+  from cma.tenant t where t.slug = 'pulse4all-subscriptions';
+drop table if exists pg_temp.dev_result;
+create temp table dev_result (n int, item text, outcome text);
+grant select on dev_ctx to cma_app;
+grant select, insert on dev_result to cma_app;
+set role cma_app;
+do $$
+declare
+  c          record;
+  v_pipeline text;
+  v_label    text;
+  v_option   text;
+  v_type     text;
+begin
+  select * into c from dev_ctx;
+  if c.user_id is null then
+    raise exception 'no admin@example.com in pulse4all-subscriptions: run this block on cma-dev-pg';
+  end if;
+  if c.connections <> 1 then
+    raise exception 'pulse4all-subscriptions has % HubSpot connections; this block expects one', c.connections;
+  end if;
+  perform set_config('app.tenant_id', c.tenant_id::text, true);
+  perform set_config('app.user_id', c.user_id::text, true);
+  perform set_config('app.actor_label', 'studio:martin', true);
+  -- the reasons: two HubSpot default enumerations as stand-ins (dev's test account has the live portal's properties not)
+  perform cma.set_connection_field(c.connection_id, 'deal', 'reason', '', 'dealtype', 1::smallint);
+  perform cma.set_connection_field(c.connection_id, 'ticket', 'reason', '', 'hs_ticket_priority', 1::smallint);
+  insert into dev_result values (1, 'deal reason', 'dealtype'), (2, 'ticket reason', 'hs_ticket_priority');
+  -- the kind, and its rule on the test account's ticket pipeline (the first by label)
+  perform cma.set_record_kind('cancellation', 'Cancellation request', 'ticket', null);
+  select p.source_pipeline_id, p.label into v_pipeline, v_label
+  from cma.connection_pipeline p
+  where p.tenant_id = c.tenant_id and p.connection_id = c.connection_id and p.record_type = 'ticket' and p.status = 'active'
+  order by p.label, p.source_pipeline_id
+  limit 1;
+  if v_pipeline is null then
+    raise exception 'the HubSpot connection holds no active ticket pipeline';
+  end if;
+  perform cma.set_record_kind_rule(c.connection_id, 'cancellation', v_pipeline, null, true);
+  insert into dev_result values (3, 'kind cancellation, its rule on the ticket pipeline', v_label);
+  -- the kind Reports, Cancellations counts
+  perform cma.set_tenant_setting('reports.cancellation_kind', 'cancellation');
+  insert into dev_result values (4, 'reports.cancellation_kind', 'cancellation');
+  -- one dealtype option as data quality, once the sweep has read dealtype (existingbusiness when HubSpot has it)
+  select f.source_type into v_type
+  from cma.connection_field f
+  where f.tenant_id = c.tenant_id and f.connection_id = c.connection_id and f.entity = 'deal' and f.field = 'reason';
+  select cr.value into v_option
+  from cma.connection_reason cr
+  where cr.tenant_id = c.tenant_id and cr.connection_id = c.connection_id and cr.record_type = 'deal' and cr.status = 'active'
+  order by cr.value = 'existingbusiness' desc, cr.sort_order desc, cr.value
+  limit 1;
+  if v_type is null then
+    insert into dev_result values (5, 'data quality', 'not yet: the sweep has not read dealtype; run this block again in two minutes');
+  elsif v_type <> 'enumeration' or v_option is null then
+    insert into dev_result values (5, 'data quality', 'none: dealtype is ' || v_type || ' with no option; send me this row');
+  else
+    perform cma.set_reason_data_quality(c.connection_id, 'deal', v_option, true);
+    insert into dev_result values (5, 'data quality', v_option);
+  end if;
+end
+$$;
+select n, item, outcome from dev_result order by n;
+reset role;
 ```
-Expected: `hubspot reason properties` with `deal:enumeration` and `ticket:enumeration` (only the record types you mapped). `reason property not read` with a code instead: send me the line; the sweep reads the definition again on its next run. The read needs no scope beyond the app's own (`hubspot/README.md`, Scopes).
+Expected: five rows: `1 | deal reason | dealtype`, `2 | ticket reason | hs_ticket_priority`, `3 | kind cancellation, its rule on the ticket pipeline | <the test account's ticket pipeline, the first by label>`, `4 | reports.cancellation_kind | cancellation` and `5 | data quality | not yet: the sweep has not read dealtype; run this block again in two minutes`. The data-quality flag waits for the sweep because a flag goes on an option the CMA has read from HubSpot. `no admin@example.com in pulse4all-subscriptions` means the instance is not dev's. `… HubSpot connections; this block expects one` or `… holds no active ticket pipeline`: send me the message.
 
-**Browser:** reload the connection's page.
+**Terminal** (two minutes later: the sweep has read both definitions)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-sweep" AND (jsonPayload.message="hubspot reason properties" OR jsonPayload.message="reason property not read")' --project=p4a-cma-dev --freshness=10m --limit=5 --format='value(jsonPayload.message,jsonPayload.code,jsonPayload.types,jsonPayload.options)'
+```
+Expected: `hubspot reason properties` with `deal:enumeration` and `ticket:enumeration`, and 6 options (2 for `dealtype`, 4 for `hs_ticket_priority`; the test account's own lists may give another count). `reason property not read` with a code instead: send me the line; the sweep reads the definition again on its next run. The read needs no scope beyond the app's own (`hubspot/README.md`, Scopes).
 
-Expected: each mapped reason `Dropdown` with its options listed (labels and values from HubSpot). Under **Deals: lost reason**, tick **Never a lead** on the data-quality options you noted in step 1. A text property instead shows `Refused` with the reason: map the `Dropdown select` property from step 1.
+**Studio (cma-dev-pg):** the block above again.
 
-4. **Record kind rules** need a kind first. **Browser:** Configuration → Sources (the list) → **Record kinds** → **Add kind** (K): key `cancellation`, label `Cancellation request`, record type Tickets. Save. Then, on the HubSpot connection's page, **Record kind rules → Add rule** (R): the kind, the pipeline from step 1 (and the category value, if Arno names one). Save.
-5. **Browser:** the Sources list → **Cancellation requests**: choose `Cancellation request`.
+Expected: rows 1 to 4 as before and `5 | data quality | existingbusiness`: that option now stands in for Never a lead. `none: dealtype is …`: send me the row.
 
 **Studio (cma-dev-pg)** (read only: the configuration as stored; labels of options and kinds, counts)
 ```sql
@@ -247,9 +315,9 @@ left join cma.connection_pipeline p on p.tenant_id = s.tenant_id and p.connectio
 where t.slug = 'pulse4all-subscriptions' and s.record_type = 'deal' and s.status = 'active';
 reset role;
 ```
-Expected: `deal | <the deal property from step 1> | enumeration | t` and `ticket | <the ticket property from step 1> | enumeration | t`, a row only for a property you mapped; the options per record type, with your data-quality flags on deals; `cancellation | ticket | active | 1 | t`; the stages reading times out of the deal stages.
+Expected: `deal | dealtype | enumeration | t` and `ticket | hs_ticket_priority | enumeration | t`; `deal | 2 | 1` and `ticket | 4 | 0` (the test account's option counts); `cancellation | ticket | active | 1 | t`; the stages reading times are the counted pipelines' deal stages, out of every deal stage.
 
-## 8. Dev: the backfill with `--again`
+## 8. Dev: the backfill with `--again`, the figures in Studio
 
 The stored deals and tickets have no stage times and no reasons yet: a backfill with `--again` reads each of them once more (the API budget's daily floor, backlog CMA-069, stops it in time; the same command continues later).
 
@@ -279,19 +347,104 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 Expected: one `backfill` line per object (`deal`, `ticket`) with `fetched` above 0, `apiCalls` near the estimate, the endpoints with their counts, `daily` with HubSpot's remaining requests; `backfill paused` means the daily floor stopped it (run the same command later).
 
-**Studio (cma-dev-pg)** (read only: what it filled; counts only)
+**Studio (cma-dev-pg)** (read only: per pipeline what the run filled; labels of pipelines, counts)
 ```sql
 set role cma_owner;
-select (select count(distinct (rs.connection_id, rs.source_id)) from cma.crm_record_stage rs join cma.tenant t on t.id = rs.tenant_id where t.slug = 'pulse4all-subscriptions') as deals_with_stage_times,
-       (select count(*) from cma.crm_record_stage rs join cma.tenant t on t.id = rs.tenant_id where t.slug = 'pulse4all-subscriptions') as stage_times,
-       (select count(*) from cma.crm_record r join cma.tenant t on t.id = r.tenant_id where t.slug = 'pulse4all-subscriptions' and r.record_type = 'deal' and r.reason is not null) as deals_with_reason,
-       (select count(*) from cma.crm_record r join cma.tenant t on t.id = r.tenant_id where t.slug = 'pulse4all-subscriptions' and r.record_type = 'ticket' and r.reason is not null) as tickets_with_reason;
-select stream, status, counts, error from cma.sync_run where job = 'backfill' order by started_at desc limit 2;
+select r.record_type, p.label as pipeline, p.is_counted as counted, count(*) as records,
+       count(*) filter (where exists (select 1 from cma.crm_record_stage rs
+                                      where rs.tenant_id = r.tenant_id and rs.connection_id = r.connection_id
+                                        and rs.record_type = r.record_type and rs.source_id = r.source_id)) as with_stage_times,
+       (select count(*) from cma.crm_record_stage rs
+        where rs.tenant_id = r.tenant_id and rs.connection_id = r.connection_id and rs.record_type = r.record_type
+          and rs.source_pipeline_id = r.pipeline_id) as stage_times,
+       count(*) filter (where r.reason is not null) as with_reason
+from cma.crm_record r
+join cma.tenant t on t.id = r.tenant_id
+join cma.integration_connection c on c.id = r.connection_id and c.adapter = 'hubspot'
+left join cma.connection_pipeline p
+  on p.tenant_id = r.tenant_id and p.connection_id = r.connection_id and p.record_type = r.record_type and p.source_pipeline_id = r.pipeline_id
+where t.slug = 'pulse4all-subscriptions' and r.record_type in ('deal', 'ticket') and r.source_deleted_at is null
+group by r.tenant_id, r.connection_id, r.record_type, r.pipeline_id, p.label, p.is_counted
+order by 1, 2;
+select s.stream, s.status, s.counts, s.error
+from cma.sync_run s join cma.tenant t on t.id = s.tenant_id
+where t.slug = 'pulse4all-subscriptions' and s.job = 'backfill'
+order by s.started_at desc limit 2;
 reset role;
 ```
-Expected: most deals with stage times; the deals with a lost reason and the tickets with a cancellation reason; both runs `succeeded`, no error.
+Expected: one row per pipeline of deals and tickets that holds records: `records`; `with_stage_times`, most of a counted pipeline's records; `stage_times`; `with_reason`, the deals with a Deal type and the tickets with a Priority. Then the two backfill runs (`deal`, `ticket`), `succeeded`, no error.
 
-**Browser:** dev's Workspace → Reports → Funnel and Reports → Cancellations, This month. Expected: figures (dev's data), no error; Deals per person under the lost reasons for the manager.
+**Studio (cma-dev-pg)** (read only: the stages of the counted pipelines that have no time at all; labels of pipelines and stages, counts)
+```sql
+set role cma_owner;
+select g.record_type, g.pipeline, g.stage, g.records_now_in_stage,
+       case when g.records_now_in_stage > 0 then 'gap: records sit in it, none has its entry time'
+            else 'no record has entered it yet' end as verdict
+from (
+  select s.record_type, p.label as pipeline, s.label as stage, s.display_order,
+         (select count(*) from cma.crm_record r
+          where r.tenant_id = s.tenant_id and r.connection_id = s.connection_id and r.record_type = s.record_type
+            and r.pipeline_id = s.source_pipeline_id and r.stage_id = s.source_stage_id and r.source_deleted_at is null) as records_now_in_stage,
+         (select count(*) from cma.crm_record_stage rs
+          where rs.tenant_id = s.tenant_id and rs.connection_id = s.connection_id and rs.record_type = s.record_type
+            and rs.source_pipeline_id = s.source_pipeline_id and rs.source_stage_id = s.source_stage_id
+            and rs.entered_at is not null) as with_entry_time
+  from cma.connection_stage s
+  join cma.tenant t on t.id = s.tenant_id
+  join cma.integration_connection c on c.id = s.connection_id and c.adapter = 'hubspot'
+  join cma.connection_pipeline p
+    on p.tenant_id = s.tenant_id and p.connection_id = s.connection_id and p.record_type = s.record_type
+   and p.source_pipeline_id = s.source_pipeline_id
+  where t.slug = 'pulse4all-subscriptions' and s.status = 'active' and p.status = 'active' and coalesce(p.is_counted, true)
+    and cma.read_times_of(s.read_times, p.is_counted)
+) g
+where g.with_entry_time = 0
+order by g.record_type, g.pipeline, g.display_order, g.stage;
+reset role;
+```
+Expected: a row only for a stage without a single entry time. `no record has entered it yet` is fine. `gap: records sit in it, none has its entry time` means HubSpot gives that stage no calculated property, or the backfill has not reached its records yet: if the backfill paused, run it again first; otherwise send me the rows. This query replaces checking the stages one by one in HubSpot; step 16 runs it in prod.
+
+**Studio (cma-dev-pg)** (the two page reads as `admin@example.com`, who holds the report permissions; counts only, the answers are discarded)
+```sql
+set role cma_owner;
+drop table if exists pg_temp.dev_ctx;
+create temp table dev_ctx as
+  select t.id as tenant_id, u.id as user_id, (now() at time zone t.timezone)::date as today
+  from cma.tenant t join cma.app_user u on u.tenant_id = t.id
+  where t.slug = 'pulse4all-subscriptions' and u.email = 'admin@example.com';
+drop table if exists pg_temp.dev_pages;
+create temp table dev_pages (n int, read text, figures text);
+grant select on dev_ctx to cma_app;
+grant select, insert on dev_pages to cma_app;
+set role cma_app;
+do $$
+declare
+  c record;
+  j jsonb;
+begin
+  select * into c from dev_ctx;
+  if c.user_id is null then
+    raise exception 'the block''s user is not in pulse4all-subscriptions: check the email and the instance';
+  end if;
+  perform set_config('app.tenant_id', c.tenant_id::text, true);
+  perform set_config('app.user_id', c.user_id::text, true);
+  perform set_config('app.actor_label', 'studio:martin', true);
+  j := cma.deal_funnel_page(c.today - 91, c.today);
+  insert into dev_pages values (1, 'deal_funnel_page, the last 92 days',
+    format('created %s, won %s, lost %s; stages on the page %s; deal stages reading times %s; entries in the period %s',
+           j -> 'by_pipeline' -> 'total' -> 'current' ->> 'created', j -> 'by_pipeline' -> 'total' -> 'current' ->> 'won',
+           j -> 'by_pipeline' -> 'total' -> 'current' ->> 'lost', jsonb_array_length(j -> 'stages'), j ->> 'timed_stages',
+           (select coalesce(sum((x ->> 'entered')::int), 0) from jsonb_array_elements(j -> 'stages') x)));
+  j := cma.cancellations_page(c.today - 91, c.today, null, 'week');
+  insert into dev_pages values (2, 'cancellations_page, the last 92 days',
+    format('requests %s, open %s, closed %s; markets %s', j -> 'current' ->> 'requests', j -> 'current' ->> 'open',
+           j -> 'current' ->> 'closed', jsonb_array_length(j -> 'by_market')));
+end
+$$;
+select read, figures from dev_pages order by n;
+reset role;
+```
+Expected: two rows. `deal_funnel_page, the last 92 days`: the test account's deals created, won and lost in that time, the stages on the page, the deal stages reading times, and the stage entries in that time (above 0 once the test account's deals moved through stages). `cancellations_page, the last 92 days`: the requests (the tickets of step 7's pipeline created in that time), open and closed, and the markets they fall in. Send me the two rows. `CMA06` means the user lacks `reports.view` and `performance.team`.
 
 ## 9. The data map: snapshot from dev, rebuild, push
 
@@ -377,29 +530,128 @@ cd ~/cma && git switch main -q && git pull -q --ff-only && git log -1 --format=%
 ```
 Expected: the image tag (the merge commit), `image … exists …; no build` (dev built it in step 6 from the same tree) or `SUCCESS`, `health: {"ok":true,"version":"<sha>"}`, the jobs and their schedules as before.
 
-## 15. Prod: Sources settings
+## 15. Prod: Sources settings in the web UI, its first look
 
-**Browser:** prod's Workspace (`martin@pulse4all.com`) → Configuration → Sources → the HubSpot connection: step 7's items 1 to 3 (items 2 and 3 for the properties step 1 found), the sweep's log line (with `--project=p4a-cma-prod`), the data-quality flags, and items 4 and 5 once Arno has named the rule (Open decisions; until then Reports → Cancellations says no kind is chosen). Then step 7's Studio block on **cma-prod-pg**.
+This branch's Sources page is first seen here: dev runs `main`'s image, so steps 7 and 8 went through Studio. Check the web UI first in prod, after the merge (step 13) and the ingest (step 14).
 
-Expected: as in dev.
+**Browser:** prod's Workspace (`martin@pulse4all.com`) → Configuration → Sources → the HubSpot connection:
+1. **Stage outcomes**, column **Read times**: every stage of the counted deal pipelines ticked with `Default`, the uncounted pipelines' stages unticked.
+2. **Reasons → Deals: lost reason**: `closed_lost_reason__dropdown`, **Save property**. The state reads `Not checked yet`.
+3. **Reasons → Tickets: reason**: `cancellation_reason`, **Save property**.
+4. Configuration → Sources (the list) → **Record kinds** → **Add kind** (K): key `cancellation`, label `Cancellation request`, record type Tickets. Save. Then, on the HubSpot connection's page, **Record kind rules → Add rule** (R): the kind `Cancellation request`, the pipeline `Cancellation`, no category value. Save.
+5. The Sources list → **Cancellation requests**: choose `Cancellation request`.
 
-## 16. Prod: the backfill with `--again`
+Expected: each save keeps the new value on the page, with no message under the card.
 
-Step 8 on prod: the count block on **cma-prod-pg**, then
+**If a save fails** (a red message under the card, the input kept): do not repeat it. Write down the message, set the same configuration in Studio with the block below (it calls the database functions the page calls), and send me the message and the block's rows; the page is fixed in a separate pull request.
+
+**Studio (cma-prod-pg)** (only after a failed save; writes configuration as `martin@pulse4all.com`, the prod user with `tenant.configure`; the audit names `studio:martin`; rerunnable)
+```sql
+set role cma_owner;
+drop table if exists pg_temp.prod_ctx;
+create temp table prod_ctx as
+  select t.id as tenant_id,
+         (select u.id from cma.app_user u where u.tenant_id = t.id and u.email = 'martin@pulse4all.com') as user_id,
+         (select (array_agg(c.id))[1] from cma.integration_connection c where c.tenant_id = t.id and c.adapter = 'hubspot') as connection_id,
+         (select count(*) from cma.integration_connection c where c.tenant_id = t.id and c.adapter = 'hubspot') as connections
+  from cma.tenant t where t.slug = 'pulse4all-subscriptions';
+drop table if exists pg_temp.prod_result;
+create temp table prod_result (n int, item text, outcome text);
+grant select on prod_ctx to cma_app;
+grant select, insert on prod_result to cma_app;
+set role cma_app;
+do $$
+declare
+  c           record;
+  o           record;
+  v_pipeline  text;
+  v_pipelines integer;
+  v_type      text;
+  v_flagged   integer := 0;
+begin
+  select * into c from prod_ctx;
+  if c.user_id is null then
+    raise exception 'no martin@pulse4all.com in pulse4all-subscriptions: run this block on cma-prod-pg';
+  end if;
+  if c.connections <> 1 then
+    raise exception 'pulse4all-subscriptions has % HubSpot connections; this block expects one', c.connections;
+  end if;
+  perform set_config('app.tenant_id', c.tenant_id::text, true);
+  perform set_config('app.user_id', c.user_id::text, true);
+  perform set_config('app.actor_label', 'studio:martin', true);
+  -- the reasons: the live portal's two Dropdown select properties
+  perform cma.set_connection_field(c.connection_id, 'deal', 'reason', '', 'closed_lost_reason__dropdown', 1::smallint);
+  perform cma.set_connection_field(c.connection_id, 'ticket', 'reason', '', 'cancellation_reason', 1::smallint);
+  insert into prod_result values (1, 'deal reason', 'closed_lost_reason__dropdown'), (2, 'ticket reason', 'cancellation_reason');
+  -- the kind, and its rule on the ticket pipeline Cancellation
+  perform cma.set_record_kind('cancellation', 'Cancellation request', 'ticket', null);
+  select count(*), (array_agg(p.source_pipeline_id))[1] into v_pipelines, v_pipeline
+  from cma.connection_pipeline p
+  where p.tenant_id = c.tenant_id and p.connection_id = c.connection_id and p.record_type = 'ticket' and p.status = 'active'
+    and p.label = 'Cancellation';
+  if v_pipelines <> 1 then
+    raise exception '% active ticket pipelines labelled Cancellation; this block expects one', v_pipelines;
+  end if;
+  perform cma.set_record_kind_rule(c.connection_id, 'cancellation', v_pipeline, null, true);
+  insert into prod_result values (3, 'kind cancellation, its rule on the ticket pipeline', 'Cancellation');
+  -- the kind Reports, Cancellations counts
+  perform cma.set_tenant_setting('reports.cancellation_kind', 'cancellation');
+  insert into prod_result values (4, 'reports.cancellation_kind', 'cancellation');
+  -- the four data-quality options, once the sweep has read closed_lost_reason__dropdown
+  select f.source_type into v_type
+  from cma.connection_field f
+  where f.tenant_id = c.tenant_id and f.connection_id = c.connection_id and f.entity = 'deal' and f.field = 'reason';
+  if v_type is null then
+    insert into prod_result values (5, 'data quality', 'not yet: the sweep has not read the property; run this block again in two minutes');
+  elsif v_type <> 'enumeration' then
+    insert into prod_result values (5, 'data quality', 'refused: the property is ' || v_type || ', not a dropdown; send me this row');
+  else
+    for o in select cr.value from cma.connection_reason cr
+             where cr.tenant_id = c.tenant_id and cr.connection_id = c.connection_id and cr.record_type = 'deal' and cr.status = 'active'
+               and lower(btrim(cr.label)) in ('garbage', 'duplicate', 'wrong phone', 'accidentally signed up') loop
+      perform cma.set_reason_data_quality(c.connection_id, 'deal', o.value, true);
+      v_flagged := v_flagged + 1;
+    end loop;
+    insert into prod_result values (5, 'data quality, of Garbage, Duplicate, Wrong Phone, Accidentally Signed Up', v_flagged || ' of 4 flagged');
+  end if;
+end
+$$;
+select n, item, outcome from prod_result order by n;
+reset role;
+```
+Expected: `1 | deal reason | closed_lost_reason__dropdown`, `2 | ticket reason | cancellation_reason`, `3 | kind cancellation, its rule on the ticket pipeline | Cancellation`, `4 | reports.cancellation_kind | cancellation`, and on the first run `5 | data quality | not yet: …`. Run it again after the sweep (below): `5 | … | 4 of 4 flagged`. `… active ticket pipelines labelled Cancellation; this block expects one`: send me the message.
+
+**Terminal** (two minutes later: the sweep has read both definitions)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-sweep" AND (jsonPayload.message="hubspot reason properties" OR jsonPayload.message="reason property not read")' --project=p4a-cma-prod --freshness=10m --limit=5 --format='value(jsonPayload.message,jsonPayload.code,jsonPayload.types,jsonPayload.options)'
+```
+Expected: `hubspot reason properties` with `deal:enumeration` and `ticket:enumeration`, and 24 options (13 and 11).
+
+**Browser:** reload the connection's page. Expected: `closed_lost_reason__dropdown` as `Dropdown` with 13 options, `cancellation_reason` as `Dropdown` with 11. Under **Deals: lost reason**, tick **Never a lead** on `Garbage`, `Duplicate`, `Wrong Phone` and `Accidentally Signed Up` (after a failed save, the Studio block's second run has flagged them).
+
+**Studio (cma-prod-pg):** step 7's read-only check query.
+
+Expected: `deal | closed_lost_reason__dropdown | enumeration | t` and `ticket | cancellation_reason | enumeration | t`; `deal | 13 | 4` and `ticket | 11 | 0`; `cancellation | ticket | active | 1 | t`; the stages reading times are the counted pipelines' deal stages.
+
+## 16. Prod: the backfill with `--again`, the figures in Studio
+
+Step 8 on prod, every block on **cma-prod-pg** and every command with `--project=p4a-cma-prod`: the count block, then
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,deal,ticket,--again
 ```
-then the log line with `--project=p4a-cma-prod` and the filled block on **cma-prod-pg**.
+then the log line, the per-pipeline block, the gap query, and the page reads with `admin@example.com` changed to `martin@pulse4all.com` (Ctrl+F: the block names the email once).
 
-Expected: as in dev, with prod's counts: about four requests per 100 records, `backfill paused` if the daily floor is reached (the same command continues the next day). Send me the two `backfill` log lines' counts and `apiCalls`, and the filled block's row.
+Expected: as in dev, with prod's counts: about four requests per 100 records, `backfill paused` if the daily floor is reached (the same command continues the next day). In the gap query, the stages of `Operations Pipeline` and `Incidents` if they count (step 1: they have no stage properties); any other row with `gap`: send it. `cancellations_page` counts the tickets of the pipeline `Cancellation`. Send me the two `backfill` log lines' counts and `apiCalls`, the per-pipeline rows, the gap rows and the two page rows.
 
 ## 17. Prod: the hand checks and the request log
 
+These are the first checks of this branch's pages anywhere: dev ran `main`'s image throughout.
+
 **Browser** (as `martin@pulse4all.com`), each with what you should see:
-- Reports → Funnel, This month: six tiles with their changes; Per stage with each lead pipeline's stages, the bars and the table (a stage switched off says `Times not read for this stage`); Per pipeline with `Attempts per deal` opening that pipeline's deals; Lost reasons with four tiles, the reasons as bars (none while no deal reason property is mapped: the notice says so), `No reason` below them, Never a lead with the flagged reasons, per market and per source, per week, the lost deals without a reason with their links (each opens the deal in HubSpot); no Deals per person (off in prod).
+- Reports → Funnel, This month: six tiles with their changes; Per stage with each lead pipeline's stages, the bars and the table (a stage switched off says `Times not read for this stage`); Per pipeline with `Attempts per deal` opening that pipeline's deals; Lost reasons with four tiles, the real reasons as bars with the labels of `closed_lost_reason__dropdown`'s options, `No reason` below them, Never a lead with `Garbage`, `Duplicate`, `Wrong Phone` and `Accidentally Signed Up`, per market and per source, per week, the lost deals without a reason with their links (each opens the deal in HubSpot); no Deals per person (off in prod).
 - G switches week and day; K, P and S filter; X downloads the stages file.
-- Reports → Cancellations, This month: four tiles, per market, reasons, per week and market, the newest requests with their links; without a kind, the notice with the link to Sources.
-- Configuration → Sources: the Read times column, the Reasons card (`Dropdown` for each property mapped), the record kind rules; the list's Record kinds with `Counted as cancellations`.
+- Reports → Cancellations, This month: four tiles counting the requests of the ticket pipeline `Cancellation`, per market, the reasons with the labels of `cancellation_reason`'s options, per week and market, the newest requests with their links.
+- Configuration → Sources: the Read times column, the Reasons card (`closed_lost_reason__dropdown` and `cancellation_reason`, both `Dropdown`), the record kind rule on `Cancellation`; the list's Record kinds with `Counted as cancellations`.
 
 **Terminal** (the request log of the two pages since the merge)
 ```bash
