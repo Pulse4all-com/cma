@@ -1,0 +1,6 @@
+SET
+SET
+DO
+SET
+psql:/tmp/runsql-3619.sql:337: NOTICE:  fixture written
+DO

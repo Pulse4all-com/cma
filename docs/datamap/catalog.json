@@ -7,8 +7,13 @@
       "tables": [
         {
           "name": "crm_record",
-          "what": "Deals and tickets: pipeline, stage, owner, market, closed",
+          "what": "Deals and tickets: pipeline, stage, owner, market, closed; the reason's option value from the mapped dropdown property, never free text (0008zb)",
           "how": "HubSpot webhook, read back within seconds; nightly reconcile 02:30"
+        },
+        {
+          "name": "crm_record_stage",
+          "what": "A deal's latest entry into and exit from each pipeline stage that reads its times: pipeline, stage, entered, exited (0008za)",
+          "how": "HubSpot's own stage history (the calculated hs_v2_date_entered and hs_v2_date_exited properties of each stage that reads times), read with the deal on the webhook's read-back within seconds, else by the next sweep; nightly reconcile 02:30; backfill --again"
         },
         {
           "name": "crm_contact",
@@ -151,8 +156,8 @@
         },
         {
           "name": "connection_stage",
-          "what": "CRM pipeline stages, closed or open; a deal stage's outcome (won, lost or none) and where it came from (0008u)",
-          "how": "Catalog at most hourly, the outcome from the stage's probability (1 won, 0 and closed lost) unless a person set it on Configuration, Sources, which the catalog then keeps"
+          "what": "CRM pipeline stages, closed or open; a deal stage's outcome (won, lost or none) and where it came from (0008u); whether its entry and exit times are read (0008za)",
+          "how": "Catalog at most hourly, the outcome from the stage's probability (1 won, 0 and closed lost) unless a person set it on Configuration, Sources, which the catalog then keeps; read times on for a counted pipeline's stage unless a person switched it on Configuration, Sources"
         },
         {
           "name": "connection_call_outcome",
@@ -176,8 +181,18 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots",
-          "how": "Configuration"
+          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb)",
+          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb)"
+        },
+        {
+          "name": "connection_reason",
+          "what": "The options of a connection's reason property per record type (a deal's lost reason, a ticket's reason): value, label, order, whether a person marked it data quality, active or archived (0008zb)",
+          "how": "The sweep reads the mapped dropdown property's options from HubSpot hourly, or at once while its type is unchecked; an option gone is archived, never deleted; the data-quality flag is set on Configuration, Sources and kept by every refresh"
+        },
+        {
+          "name": "connection_record_kind",
+          "what": "The rules that give a connection's records a kind: the kind, a pipeline, a category value or both, active or archived (0008zb)",
+          "how": "Configuration, Sources, on the connection's page"
         },
         {
           "name": "writeback_field",
@@ -428,6 +443,11 @@
           "name": "journey",
           "what": "Journeys of Campaign monitoring (0008v): code, name, summary, market, status (placeholder, building, live, archived), design link and prerequisites; placeholders, no steps or customers yet",
           "how": "Configuration: the customer's seed (02) and cma.set_journey; never deleted, archived hides one"
+        },
+        {
+          "name": "record_kind",
+          "what": "The tenant's kinds of CRM records the reports count, such as a cancellation request: key, label, record type, order, active or archived (0008zb)",
+          "how": "Configuration, Sources; none seeded"
         }
       ]
     },
@@ -494,7 +514,7 @@
     },
     {
       "name": "crm_record_detail",
-      "what": "Amount, currency, channel and category of deals and tickets"
+      "what": "Amount, currency, channel, category and the reason's option value of deals and tickets"
     },
     {
       "name": "workday_summary",
@@ -551,6 +571,14 @@
     {
       "name": "attempts_per_deal",
       "what": "Per sales deal (a lead pipeline, never an order pipeline) since the intake start: market, pipeline, stage, the owner's person by id, created, closed, the contacts' first order after the creation (ordered_at) and why the window ended (closed, ordered or open), the outcome (won, lost, ordered, unknown, open), the attempts in the window (outbound Aircall calls on the deal or its contacts; every outbound HubSpot call when attempts.source is crm), those that reached the customer (the outcome, else attempts.reached_min_talk_seconds of talk) and the first that did, talk time in all and in contact, the first and last attempt, the speed to lead in business seconds and called before the next noon, for open deals the business days since the last attempt with its bucket, the attempts without an outcome and the HubSpot calls logged without an Aircall call. From HubSpot deals, contacts and calls, Aircall calls with their link, and shop orders; computed on read, so as current as the mirror (0008y, for sales since 0008z)"
+    },
+    {
+      "name": "deal_funnel_rows",
+      "what": "Per sales deal (a lead pipeline, never an order pipeline) since the intake start and per stage with a stored time: the deal's ids, pipeline, current stage and its outcome, the outcome, the reason's option value, market, created and closed, and the stage with its entry and exit; a deal without any stage time as one row without a stage. From HubSpot deals and their stage history; computed on read, so as current as the mirror (0008zb)"
+    },
+    {
+      "name": "cancellation_rows",
+      "what": "Per record of the tenant's cancellation kind (reports.cancellation_kind, matched by its rules) since the intake start: the kind, ids, pipeline, stage, created, open or closed, closed, the reason's option value and the market (the record's, else its contact's country). Requests, never contracts; computed on read (0008zb)"
     }
   ],
   "flows": {

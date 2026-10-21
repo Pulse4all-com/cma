@@ -8,7 +8,8 @@
  * Forms, since addition 0008t every tile and header of Email and Email per agent, and since addition 0008u every tile, header and
  * level bar of First orders and every header of Orders per person, and since addition 0008w the Callbacks kept tile and the
  * headers of the callbacks kept per week and per person, and since addition 0008y every tile, header and bar card of
- * Attempts per deal and every header of Attempts per agent, carries exactly one info mark: a button with a name, described by a
+ * Attempts per deal and every header of Attempts per agent, and since addition 0008zb every tile, header and intro card of
+ * Funnel and Cancellations, carries exactly one info mark: a button with a name, described by a
  * role=tooltip panel with text whose braces were all filled in. Then the behaviour: the panel
  * opens on keyboard focus and on hover, Esc closes it, a tap opens and a second tap closes it on
  * a touch screen, and a Dashboard tile still opens its report while its mark does not. Last, the top bar
@@ -151,6 +152,16 @@ const cases = [
   ["reader", "/reports/attempts?range=month&group=pipeline", 33, 6],
   ["manager", "/reports/attempts-per-agent?range=month", 8, 0],
   ["supervisor", "/reports/attempts-per-agent?range=week", 8, 0],
+  // Funnel (addition 0008zb): ten tiles (six of the funnel, four of the lost reasons); per pipeline's stages the stage
+  // and seven figures, per pipeline eight, per market and per source six each, per week or day the period, four figures
+  // and the reason columns, the list without a reason five named headers, and deals per person five for
+  // performance.team while reports.per_person holds deals (the reader has no per-person table). Cancellations: four
+  // tiles, per market five, per week or day the period, a column per market and the total, the list seven named headers.
+  // The intro cards carry their marks too, checked below
+  ["manager", "/reports/funnel?range=month&group=week", 50, 10],
+  ["reader", "/reports/funnel?range=month&group=day", 45, 10],
+  ["manager", "/reports/cancellations?range=month", 15, 4],
+  ["reader", "/reports/cancellations?range=week&group=day", 15, 4],
 ];
 let headers = 0;
 let tiles = 0;
@@ -234,6 +245,29 @@ let barCards = 0;
     for (const x of detail.problems) problems.push(`attempts detail: ${x}`);
     headers += detail.headers;
   } else problems.push("attempts: the first deal opened without a table of attempts");
+  await ctx.close();
+}
+
+// Funnel and Cancellations (addition 0008zb): each card with an intro (per stage, per pipeline, why deals are lost and
+// never a lead; per market and the reasons) names its figure in one described mark at the end of its intro
+let funnelIntros = 0;
+for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2]]) {
+  const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+  const p = await ctx.newPage();
+  await p.goto(BASE + path);
+  await p.waitForLoadState("networkidle");
+  if (provoke && path.startsWith("/reports/cancellations")) await p.evaluate(() => document.querySelector("[data-funnel-intro] button[data-header-hint]")?.remove());
+  const intros = await p.evaluate(() => [...document.querySelectorAll("[data-funnel-intro]")].map((el) => {
+    const marks = el.querySelectorAll("button[data-header-hint]");
+    const panel = marks.length === 1 ? document.getElementById(marks[0].getAttribute("aria-describedby") ?? "") : null;
+    return { marks: marks.length, named: marks.length === 1 && !!marks[0].getAttribute("aria-label"), text: panel?.getAttribute("role") === "tooltip" ? panel.textContent.trim() : "" };
+  }));
+  if (intros.length !== want) problems.push(`${path}: ${intros.length} cards with a mark in the intro, expected ${want}`);
+  intros.forEach((x, i) => {
+    if (x.marks !== 1 || !x.named) problems.push(`${path}: card ${i + 1} has ${x.marks} info marks or no name`);
+    else if (!x.text || /[{}]/.test(x.text)) problems.push(`${path}: card ${i + 1}'s hint is empty or unfilled: ${x.text}`);
+  });
+  funnelIntros += intros.length;
   await ctx.close();
 }
 
@@ -403,6 +437,6 @@ for (const [width, height] of [[1440, 900], [1280, 800]]) {
 await b.close();
 for (const x of problems) console.log("  " + x);
 console.log(problems.length === 0
-  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, ${levelBars} level bars on First orders and ${barCards} bar cards on Attempts per deal, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still within ${TOPBAR_SLACK} px on the toggle, ${topbarBoxes} boxes in ${topbarRuns} runs)`
+  ? `hints: PASS (${headers} headers and ${tiles} tiles on ${cases.length} pages, ${levelBars} level bars on First orders and ${barCards} bar cards on Attempts per deal and ${funnelIntros} intro cards on Funnel and Cancellations, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still within ${TOPBAR_SLACK} px on the toggle, ${topbarBoxes} boxes in ${topbarRuns} runs)`
   : `hints: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);

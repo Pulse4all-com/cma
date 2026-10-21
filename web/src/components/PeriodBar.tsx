@@ -17,7 +17,8 @@ export function PeriodBar({
   keep = {},
 }: {
   pathname: "/hours" | "/team/hours" | "/reports/dashboard" | "/reports/speed-to-lead" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/forms"
-    | "/reports/calls-per-agent" | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/attempts" | "/reports/attempts-per-agent";
+    | "/reports/calls-per-agent" | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/attempts" | "/reports/attempts-per-agent"
+    | "/reports/funnel" | "/reports/cancellations";
   range: Range;
   period: HoursRange;
   today: string;

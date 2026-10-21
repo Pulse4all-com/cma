@@ -114,7 +114,9 @@ $$;
 -- The per-person reports on in dev (after addition 0008t; night run N19-A, 18 October 2026), so Email per
 -- agent and Orders per person can be tried on the dev data before a decision for prod: the seed sets it, since
 -- 02 writes Pulse4all's own value (email) first. Attempts per agent joins them once addition 0008y lets the
--- setting hold attempts (19 October 2026); before it, a rerun after 92_attempts_per_deal.sql adds it.
+-- setting hold attempts (19 October 2026); before it, a rerun after 92_attempts_per_deal.sql adds it. Deals per
+-- person (Reports, Funnel) joins them once addition 0008zb lets it hold deals (20 October 2026; off for Pulse4all
+-- until Yordi agrees); before it, a rerun after 98_funnel.sql adds it.
 do $$
 declare
   v_value text;
@@ -128,7 +130,10 @@ begin
     raise notice 'the per-person setting does not exist yet (addition 0008t): rerun this seed after 82_email_reports.sql';
     return;
   end if;
-  if cma.is_per_person_list('email,orders,attempts') then
+  if cma.is_per_person_list('email,orders,attempts,deals') then
+    v_value := 'email,orders,attempts,deals';
+  elsif cma.is_per_person_list('email,orders,attempts') then
+    raise notice 'the per-person setting does not take deals yet (addition 0008zb): rerun this seed after 98_funnel.sql';
     v_value := 'email,orders,attempts';
   else
     raise notice 'the per-person setting does not take attempts yet (addition 0008y): rerun this seed after 92_attempts_per_deal.sql';

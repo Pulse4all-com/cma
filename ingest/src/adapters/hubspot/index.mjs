@@ -3,6 +3,8 @@
  *
  *   authenticate, mapRequest, readBack   the webhook path (brief B7)
  *   holdsRecords                         the sweeper reads records without a contact again
+ *   refreshCatalogs                      the sweep: the mapped reason properties' types and options, at most hourly
+ *                                        each (reasons.mjs, addition 0008zb)
  *   rates                                the jobs' pacing (read.mjs RATES)
  *   pollForms                            the poll-forms job (forms.mjs)
  *   pollEmail, emailPollEnabled          the poll-email job (email-poll.mjs: engagements in email.mjs,
@@ -26,6 +28,7 @@ import { pollForms } from "./forms.mjs";
 import { pollEmail, emailPollEnabled } from "./email-poll.mjs";
 import { reconcile, RECONCILE_OBJECTS } from "./reconcile.mjs";
 import { backfill, backfillFrom, BACKFILL_OBJECTS } from "./backfill.mjs";
+import { refreshReasons } from "./reasons.mjs";
 import { findContactsByEmail, findContactsByProperties, existingContacts } from "./match.mjs";
 import { writeContacts } from "./write.mjs";
 import { usageSettings } from "./usage.mjs";
@@ -49,6 +52,7 @@ export const hubspot = {
 
   holdsRecords: true,
   rates: RATES,
+  refreshCatalogs: refreshReasons,
   pollForms,
   pollEmail,
   emailPollEnabled,

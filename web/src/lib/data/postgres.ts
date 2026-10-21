@@ -20,6 +20,8 @@ import type {
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls,
+  CancellationFigures, CancellationsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
+  LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
 import { OUTBOX_LATE_MINUTES, applyConnections, previousPeriod, rangeProblem, withOutboxPending, type IntakeCounts } from "@/lib/reports";
@@ -834,7 +836,10 @@ async function readSource(q: Querier, id: string): Promise<SourceConnection> {
 }
 
 type ConfigJson = {
-  fields: { entity: string; field: string; refSystem: string | null; slot: number; property: string }[];
+  fields: { entity: string; field: string; refSystem: string | null; slot: number; property: string;
+    // addition 0008zb (a database before it has none of them)
+    sourceType?: string | null; checkedAt?: string | null; state?: ReasonState }[];
+  reasons?: { recordType: "deal" | "ticket"; value: string; label: string; order: number; isDataQuality: boolean; status: string }[];
   // additions 0008m and 0008t (a database before 0008t has no inboxAccounts)
   inboxes?: { inboxId: string; name: string; isCounted: boolean; market: string | null; status: string }[];
   inboxChannels?: { channelId: string; name: string; kind: string; isCounted: boolean; status: string }[];
@@ -843,7 +848,9 @@ type ConfigJson = {
   pipelines: { recordType: string; pipelineId: string; label: string; isCounted: boolean; isRouted: boolean; isLead: boolean; workType: string | null; status: string;
     // addition 0008u (a database before it has neither)
     isOrder?: boolean;
-    stages?: { stageId: string; label: string; order: number; isClosed: boolean; outcome: "won" | "lost" | null; outcomeSource: "source" | "person" | null; status: string }[] }[];
+    stages?: { stageId: string; label: string; order: number; isClosed: boolean; outcome: "won" | "lost" | null; outcomeSource: "source" | "person" | null; status: string;
+      // addition 0008za
+      readTimes?: boolean; readTimesSet?: boolean }[] }[];
   store: { handle: string; name: string; market: string; currency: string; timeZone: string } | null;
   writeback: { field: string; slot: number; property: string; mode: string; enabled: boolean }[];
 };
@@ -875,7 +882,8 @@ function toPipeline(p: ConfigJson["pipelines"][number], slaMinutes: number | nul
   return {
     recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted, isRouted: p.isRouted, isLead: p.isLead, workType: p.workType,
     isActive: p.status === "active", slaMinutes, isOrder: p.isOrder ?? false,
-    stages: (p.stages ?? []).map((x) => ({ stageId: x.stageId, label: x.label, isClosed: x.isClosed, outcome: x.outcome, outcomeSource: x.outcomeSource, isActive: x.status === "active" })),
+    stages: (p.stages ?? []).map((x) => ({ stageId: x.stageId, label: x.label, isClosed: x.isClosed, outcome: x.outcome, outcomeSource: x.outcomeSource, isActive: x.status === "active",
+      readTimes: x.readTimes ?? false, readTimesSet: x.readTimesSet ?? false })),
   };
 }
 
@@ -1035,6 +1043,74 @@ function toAttemptOutcomeRow(x: AttemptOutcomeDb): AttemptOutcomeRow {
   };
 }
 
+// ---- Funnel, lost reasons and cancellations (addition 0008zb): the pages' JSON, snake_case keys, numbers as numbers
+type FunnelFiguresDb = {
+  created: number; won: number; lost: number; win_rate: number | null; median_days_to_won: number | null; median_days_to_lost: number | null;
+};
+type FunnelListsDb = { markets: string[]; pipelines: { key: string; label: string }[]; source_channels: string[] };
+type FunnelStageDb = {
+  pipeline: string; pipeline_label: string; stage_id: string; label: string; order: number; is_closed: boolean; outcome: "won" | "lost" | null;
+  reads_times: boolean; entered: number | null; still_there: number | null; moved_on: number | null; timed: number | null; median_days: number | null;
+  reached_won: number | null; won_share: number | null; entered_previous: number | null;
+};
+type FunnelPageDb = FunnelListsDb & {
+  stages: FunnelStageDb[];
+  by_pipeline: { rows: { key: string; label: string; current: FunnelFiguresDb; previous: FunnelFiguresDb }[];
+    total: { current: FunnelFiguresDb; previous: FunnelFiguresDb } };
+  previous_from: string; previous_to: string; previous_partial: boolean;
+  history_start: { deals: string | null; stages: string | null }; timed_stages: number;
+};
+type LostFiguresDb = { lost: number; with_reason: number; no_reason: number; data_quality: number; real: number };
+type LostReasonDb = { value: string; label: string; deals: number; share: number | null };
+type LostGroupDb = { lost: number; real: number; no_reason: number; data_quality: number; top: { value: string; label: string; deals: number }[] };
+type LostPageDb = FunnelListsDb & {
+  current: LostFiguresDb; previous: LostFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
+  reason_state: ReasonState; history_start: string | null;
+  reasons: LostReasonDb[]; data_quality_reasons: LostReasonDb[]; no_reason: { deals: number; share: number | null };
+  by_market: (LostGroupDb & { market: string })[]; by_source: (LostGroupDb & { source_channel: string | null })[];
+  by_period: { key: string; lost: number; real: number; no_reason: number; data_quality: number; reasons: Record<string, number> }[];
+  list: { total: number; rows: { deal_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string; market: string;
+    created_at: string; closed_at: string }[] };
+};
+type CancellationFiguresDb = { requests: number; open: number; closed: number; median_days_to_close: number | null };
+type CancellationsPageDb = {
+  kind: { key: string; label: string; record_type: RecordKind["recordType"]; status: RecordKind["status"] } | null;
+  current: CancellationFiguresDb; previous: CancellationFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
+  by_market: (CancellationFiguresDb & { market: string })[]; by_period: (CancellationFiguresDb & { key: string; market: string })[];
+  reason_state: ReasonState; reasons: { value: string | null; label: string | null; requests: number }[];
+  list: { total: number; rows: { record_id: string; source_id: string; record_url: string | null; pipeline_label: string | null; market: string;
+    is_closed: boolean; created_at: string; closed_at: string | null; reason: string | null }[] };
+  markets: string[]; history_start: string | null;
+};
+type DealFiguresDb = { won: number; lost: number; won_without_amount: number; amounts: { currency: string | null; amount: number | string; deals: number }[] };
+type DealsPerPersonDb = FunnelListsDb & {
+  rows: (DealFiguresDb & { user_id: string; display_name: string | null })[];
+  not_linked: (DealFiguresDb & { unlinked_owners: number }) | null;
+  total: DealFiguresDb;
+};
+const funnelListsOf = (x: FunnelListsDb): FunnelLists => ({ markets: x.markets, pipelines: x.pipelines, sourceChannels: x.source_channels });
+function toFunnelFigures(x: FunnelFiguresDb): FunnelFigures {
+  return {
+    created: x.created, won: x.won, lost: x.lost, winRate: numOrNull(x.win_rate), medianDaysToWon: numOrNull(x.median_days_to_won),
+    medianDaysToLost: numOrNull(x.median_days_to_lost),
+  };
+}
+function toFunnelStage(x: FunnelStageDb): FunnelStageRow {
+  return {
+    pipeline: x.pipeline, pipelineLabel: x.pipeline_label, stageId: x.stage_id, label: x.label, order: x.order, isClosed: x.is_closed, outcome: x.outcome,
+    readsTimes: x.reads_times, entered: x.entered, stillThere: x.still_there, movedOn: x.moved_on, timed: x.timed, medianDays: numOrNull(x.median_days),
+    reachedWon: x.reached_won, wonShare: numOrNull(x.won_share), enteredPrevious: x.entered_previous,
+  };
+}
+const toLostFigures = (x: LostFiguresDb): LostFigures => ({ lost: x.lost, withReason: x.with_reason, noReason: x.no_reason, dataQuality: x.data_quality, real: x.real });
+const toLostGroup = (key: string | null, x: LostGroupDb): LostGroupRow => ({ key, lost: x.lost, real: x.real, noReason: x.no_reason, dataQuality: x.data_quality, top: x.top });
+const toCancellationFigures = (x: CancellationFiguresDb): CancellationFigures =>
+  ({ requests: x.requests, open: x.open, closed: x.closed, medianDaysToClose: numOrNull(x.median_days_to_close) });
+const toDealFigures = (x: DealFiguresDb): DealPersonFigures => ({
+  won: x.won, lost: x.lost, wonWithoutAmount: x.won_without_amount,
+  amounts: x.amounts.map((a) => ({ currency: a.currency, amount: Number(a.amount), deals: a.deals })),
+});
+
 /** cma.follow_up_page's JSON (addition 0008s): snake_case keys, numbers as numbers, settings as text */
 type FollowUpPageDb = {
   computed_at: string; duration_ms: number; rows: number; summary: SummaryDb; by_owner: OwnerDb[] | null;
@@ -1157,7 +1233,7 @@ export const postgresData: CmaData = {
         // getAccess() computes both from the real permissions and the preview cookie
         preview: null,
         canPreview: false,
-        perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders" || k === "attempts"),
+        perPerson: (row.per_person ?? []).filter((k) => k === "email" || k === "orders" || k === "attempts" || k === "deals"),
       };
     });
   },
@@ -1811,7 +1887,10 @@ export const postgresData: CmaData = {
         callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
         lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
         tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, isActive: t.status === "active" })),
-        fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property })),
+        fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property,
+          sourceType: f.sourceType ?? null, checkedAt: isoAny(f.checkedAt), state: f.state ?? null })),
+        reasons: (config.reasons ?? []).map((x) => ({ recordType: x.recordType, value: x.value, label: x.label, order: x.order, isDataQuality: x.isDataQuality,
+          isActive: x.status === "active" })),
         writeback: config.writeback.map((w) => ({ field: w.field, slot: w.slot, property: w.property, mode: w.mode, enabled: w.enabled })),
         store: config.store,
         sampleIds: { ...(cat.sampleIds ?? {}), ...(reasons.sampleCallId ? { call: reasons.sampleCallId } : {}), ...(tasks.sampleTaskId ? { task: tasks.sampleTaskId } : {}) },
@@ -2007,6 +2086,82 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getFunnel(me, range, filter): Promise<FunnelReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days and the filters first; one pass of cma.funnel_rows_of (0008zb)
+      const j = one((await q.query<{ j: FunnelPageDb }>(`select cma.deal_funnel_page($1::date, $2::date, $3, $4, $5) as j`,
+        [range.from, range.to, filter.pipeline, filter.market, filter.sourceChannel])).rows, "deal_funnel_page").j;
+      return {
+        ...range, filter, stages: j.stages.map(toFunnelStage),
+        byPipeline: {
+          rows: j.by_pipeline.rows.map((p) => ({ key: p.key, label: p.label, current: toFunnelFigures(p.current), previous: toFunnelFigures(p.previous) })),
+          total: { current: toFunnelFigures(j.by_pipeline.total.current), previous: toFunnelFigures(j.by_pipeline.total.previous) },
+        },
+        previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial, historyStart: j.history_start,
+        timedStages: j.timed_stages, ...funnelListsOf(j),
+      };
+    });
+  },
+
+  async getLostReasons(me, range, group, filter): Promise<LostReasonsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days, the group and the filters first; the list capped by follow_up.list_rows
+      const j = one((await q.query<{ j: LostPageDb }>(`select cma.lost_reasons_page($1::date, $2::date, $3, $4, $5, $6) as j`,
+        [range.from, range.to, filter.pipeline, filter.market, filter.sourceChannel, group])).rows, "lost_reasons_page").j;
+      return {
+        ...range, group, filter, current: toLostFigures(j.current), previous: toLostFigures(j.previous),
+        previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial, reasonState: j.reason_state, historyStart: j.history_start,
+        reasons: j.reasons, dataQualityReasons: j.data_quality_reasons, noReason: j.no_reason,
+        byMarket: j.by_market.map((m) => toLostGroup(m.market, m)), bySource: j.by_source.map((c) => toLostGroup(c.source_channel, c)),
+        byPeriod: j.by_period.map((p) => ({ key: p.key, lost: p.lost, real: p.real, noReason: p.no_reason, dataQuality: p.data_quality, reasons: p.reasons })),
+        list: {
+          total: j.list.total,
+          rows: j.list.rows.map((r) => ({ dealId: r.deal_id, dealSourceId: r.deal_source_id, recordUrl: r.record_url, pipelineLabel: r.pipeline_label, market: r.market,
+            createdAt: isoOf(r.created_at)!, closedAt: isoOf(r.closed_at)! })),
+        },
+        ...funnelListsOf(j),
+      };
+    });
+  },
+
+  async getCancellations(me, range, group, market): Promise<CancellationsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days, the group and the market first; the list capped by follow_up.list_rows
+      const j = one((await q.query<{ j: CancellationsPageDb }>(`select cma.cancellations_page($1::date, $2::date, $3, $4) as j`,
+        [range.from, range.to, market, group])).rows, "cancellations_page").j;
+      return {
+        ...range, group, market,
+        kind: j.kind ? { key: j.kind.key, label: j.kind.label, recordType: j.kind.record_type, status: j.kind.status } : null,
+        current: toCancellationFigures(j.current), previous: toCancellationFigures(j.previous),
+        previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
+        byMarket: j.by_market.map((m) => ({ ...toCancellationFigures(m), market: m.market })),
+        byPeriod: j.by_period.map((p) => ({ ...toCancellationFigures(p), key: p.key, market: p.market })),
+        reasonState: j.reason_state, reasons: j.reasons,
+        list: {
+          total: j.list.total,
+          rows: j.list.rows.map((r) => ({ recordId: r.record_id, sourceId: r.source_id, recordUrl: r.record_url, pipelineLabel: r.pipeline_label ?? "", market: r.market,
+            isClosed: r.is_closed, createdAt: isoOf(r.created_at)!, closedAt: isoOf(r.closed_at), reason: r.reason })),
+        },
+        markets: j.markets, historyStart: j.history_start,
+      };
+    });
+  },
+
+  async getDealsPerPerson(me, range, filter): Promise<DealsPerPerson> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks performance.team and the tenant's reports.per_person (deals) first (CMA06)
+      const j = one((await q.query<{ j: DealsPerPersonDb }>(`select cma.deals_per_person_page($1::date, $2::date, $3, $4, $5) as j`,
+        [range.from, range.to, filter.pipeline, filter.market, filter.sourceChannel])).rows, "deals_per_person_page").j;
+      const rows: DealPerson[] = j.rows.map((p) => ({ kind: "person", userId: p.user_id, name: p.display_name, unlinkedOwners: null, ...toDealFigures(p) }));
+      if (j.not_linked) rows.push({ kind: "notLinked", userId: null, name: null, unlinkedOwners: j.not_linked.unlinked_owners, ...toDealFigures(j.not_linked) });
+      return { ...range, filter, rows, total: { kind: "total", userId: null, name: null, unlinkedOwners: null, ...toDealFigures(j.total) }, ...funnelListsOf(j) };
+    });
+  },
+
   async getCallbacksKept(me, range): Promise<CallbacksKept> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
@@ -2051,6 +2206,43 @@ export const postgresData: CmaData = {
 
   async setSourceStageOutcome(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_stage_outcome($1::uuid, 'deal', $2, $3, $4)`, [id, input.pipelineId, input.stageId, input.outcome]));
+  },
+
+  async setSourceStageReadTimes(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_stage_read_times($1::uuid, 'deal', $2, $3, $4)`, [id, input.pipelineId, input.stageId, input.readTimes]));
+  },
+
+  async setSourceReasonField(me, id, input): Promise<void> {
+    // an empty property removes the mapping; a changed one loses its checked data type until the next sweep reads it
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_connection_field($1::uuid, $2, 'reason', '', $3, 1::smallint)`, [id, input.recordType, input.property ?? ""]));
+  },
+
+  async setSourceReasonDataQuality(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_reason_data_quality($1::uuid, $2, $3, $4)`, [id, input.recordType, input.value, input.isDataQuality]));
+  },
+
+  async getRecordKinds(me): Promise<RecordKindConfig[]> {
+    return withTenant(ctx(me), async (q) => {
+      type KindDb = { key: string; label: string; recordType: RecordKind["recordType"]; status: RecordKind["status"]; sortOrder: number; isCancellationKind: boolean;
+        rules: { connectionId: string; pipelineId: string | null; pipelineLabel: string | null; category: string | null; status: string }[] };
+      // the function checks tenant.configure (CMA06)
+      const k = one((await q.query<{ k: KindDb[] }>(`select cma.record_kinds() as k`)).rows, "record_kinds").k;
+      return k.map((x) => ({
+        key: x.key, label: x.label, recordType: x.recordType, status: x.status, sortOrder: x.sortOrder, isCancellationKind: x.isCancellationKind,
+        rules: x.rules.map((r) => ({ connectionId: r.connectionId, pipelineId: r.pipelineId, pipelineLabel: r.pipelineLabel, category: r.category, isActive: r.status === "active" })),
+      }));
+    });
+  },
+
+  async setRecordKind(me, input): Promise<void> {
+    await withTenant(ctx(me), async (q) => {
+      await q.query(`select cma.set_record_kind($1, $2, $3, $4)`, [input.key, input.label, input.recordType, input.sortOrder]);
+      if (input.isActive !== null) await q.query(`select cma.set_record_kind_status($1, $2)`, [input.key, input.isActive ? "active" : "archived"]);
+    });
+  },
+
+  async setRecordKindRule(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_record_kind_rule($1::uuid, $2, $3, $4, $5)`, [id, input.kindKey, input.pipelineId, input.category, input.active]));
   },
 
   async setSourceInbox(me, id, input): Promise<void> {

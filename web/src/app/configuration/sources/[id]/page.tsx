@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { SourceConfig } from "@/components/configuration/SourceConfig";
+import { SourceKindRules } from "@/components/configuration/SourceKindRules";
+import { SourceReasons } from "@/components/configuration/SourceReasons";
 import { Card } from "@/components/primitives";
 import { data } from "@/lib/data";
 import { CmaDbError } from "@/lib/data/errors";
+import { sourceSections } from "@/lib/sources";
 import { resolve } from "../../../access";
 import { ConfigurationPage, mayConfigure } from "../../gate";
 
@@ -10,7 +13,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /**
  * One connection (Configuration → Sources, addition 0008e): its own fields, settings and the sections its
- * kind has. An id that is not a connection of the tenant shows a calm page, never another tenant's data.
+ * kind has. An id that is not a connection of the tenant shows a calm page, never another tenant's data. Since addition
+ * 0008zb a connection with customer records shows its reasons and its record kind rules after its sections
  */
 export default async function SourcePage({ params }: { params: Promise<{ id: string }> }) {
   const r = await resolve();
@@ -52,11 +56,16 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     startDate: valueOf("email.start_date") || null, replyTargetMinutes: numberOf(valueOf("email.reply_target_minutes")),
     noResponseDays: numberOf(valueOf("email.no_response_days")), marketOrder: valueOf("email.market_order"),
   };
+  // the reasons and the record kind rules (addition 0008zb), for a connection with customer records
+  const crm = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("fields");
+  const kinds = crm ? await data().getRecordKinds(me) : [];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare trail={[{ label: detail.connection.name }]}>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
       <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={copy} locale={me.locale} timeZone={me.timeZone}
         connectedMinSeconds={threshold === undefined ? null : Number(threshold)} email={email} />
+      {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={copy} /> : null}
+      {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={copy} /> : null}
     </ConfigurationPage>
   );
 }

@@ -1,0 +1,44 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/runsql-3829.sql:49: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                  check_name                                                  | result |                                                          detail                                                           
+--------------------------------------------------------------------------------------------------------------+--------+---------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008za recorded, after 0008z                                                                     | PASS   | 
+ A2 the stage times table: columns, the key, the record's foreign key, the entered index                      | PASS   | 
+ A3 row-level security, the audit trigger, no delete for the application, nothing for the readers             | PASS   | 
+ A4 every function the application's only and in the caller's rights                                          | PASS   | 
+ A5 read_times nullable without a default; the reader view's columns; cma_read.connection_stage as before     | PASS   | 
+ B1 read_times defaults: on for a counted pipeline's stages, off for an uncounted one's                       | PASS   | sales/s1=true sales/quote-sent=true sales/sw=true test/x1=false support/1=true support/4=true
+ B2 a person's choice kept by a pipelines read; null the default again, which follows the pipeline            | PASS   | s1=true quote-sent=true sw=false* x1=true* | s1=false quote-sent=false sw=false* x1=false
+ B3 read_times refused for an unknown stage, another record type, another tenant, an analyst, the Ingest user | PASS   | CMA02 CMA02 CMA02 CMA06 CMA06 ok
+ B4 the write inserts the stages the answer gives a time; a stage without one writes nothing                  | PASS   | written/2 quote-sent:06 09:00/- s1:05 08:00/06 09:00
+ B5 the same answer again changes nothing and writes no audit row                                             | PASS   | unchanged/0 audit+0
+ B6 a missing or empty time leaves the stored one; a newer entry replaces it                                  | PASS   | written/1 quote-sent:06 09:00/07 09:30 s1:05 08:00/06 09:00 | written/1 quote-sent:08 09:00/07 09:30 s1:05 08:00/06 09:00
+ B7 the stale guard: an older or missing source time writes nothing, an equal one writes                      | PASS   | stale/0 stale/0 written/1 quote-sent:08 09:00/07 09:30 s1:05 08:00/06 09:00 s1:05 09:00/-
+ B8 an unknown record, the malformed answers, a person without ingest.write                                   | PASS   | unknown/0 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06
+ B9 the audit rows of the stage times name the Ingest user                                                    | PASS   | 5/5
+ B10 row-level security: each tenant sees and writes its own stage times only                                 | PASS   | 1/0 CMA02 3/0
+ B11 no delete for the application                                                                            | PASS   | 42501 3
+ B12 the reader view equals the table for a reader scoped to one tenant                                       | PASS   | 3/0/true 0
+ verdict                                                                                                      | PASS   | 17 PASS, 0 FAIL
+(18 rows)
+
+DROP FUNCTION
+DROP FUNCTION

@@ -516,6 +516,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                     <th className={th}>{t.stage}</th>
                     <th className={th}><HintLabel label={t.stageOutcome}>{hint(t.stageOutcome, t.hintStageOutcome)}</HintLabel></th>
                     <th className={th}><span className="sr-only">{t.outcomeFromSource}</span></th>
+                    <th className={th}><HintLabel label={t.readTimes}>{hint(t.readTimes, t.hintReadTimes)}</HintLabel></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -533,6 +534,15 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                         </select>
                       </td>
                       <td className={`${td} text-caption text-p4a-muted`}>{st.outcomeSource === "person" ? t.outcomeByPerson : st.outcomeSource === "source" ? t.outcomeFromSource : ""}</td>
+                      <td className={td}>
+                        {/* whether the adapter reads the stage's entry and exit times (addition 0008za): on for a counted pipeline's stage until a person chooses */}
+                        <span className="flex items-center gap-2">
+                          <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.readTimes}: ${p.label}, ${st.label}`} checked={st.readTimes}
+                            data-testid={`stage-read-times-${p.pipelineId}-${st.stageId}`}
+                            onChange={(e) => save(() => send("PUT", `${base}/stage-times`, { pipelineId: p.pipelineId, stageId: st.stageId, readTimes: e.target.checked }))} />
+                          <span className="text-caption text-p4a-muted">{st.readTimesSet ? t.readTimesByPerson : t.readTimesDefault}</span>
+                        </span>
+                      </td>
                     </tr>
                   )))}
                 </tbody>
