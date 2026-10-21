@@ -299,7 +299,7 @@ if [ "$JOBS" = 1 ]; then
   echo
   echo "== jobs on ${IMAGE}"
   echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args=--connection,<id>,--object,<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order>,--from,<YYYY-MM-DD>"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0
