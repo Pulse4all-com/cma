@@ -2759,7 +2759,7 @@ sum over cma.intake_per_day rows of form_submissions (intakeTotals); counts only
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -2820,7 +2820,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'deal') = sum of records over cma.crm
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/ReportParts.tsx; `recordsOfType` in src/lib/reports.ts
 
@@ -2878,7 +2878,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'ticket') = sum of records over cma.c
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.crm_records_per_day` (0006); `IntakeRow` in src/components/ReportParts.tsx; `recordsOfType` in src/lib/reports.ts
 
@@ -2946,7 +2946,7 @@ value = round1(percentileCont(businessSeconds of the rows, 0.5) / 60) over getSp
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.speed_to_lead_rows` (0007d); `cma.speed_to_lead_of` (0007d); `speedFigures` in src/lib/reports.ts; `percentileCont` in src/lib/reports.ts; `IntakeRow` in src/components/ReportParts.tsx
 
@@ -3049,7 +3049,7 @@ value = (totals.callsIn ?? 0) + (totals.callsOut ?? 0) over cma.intake_per_day, 
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -3120,7 +3120,7 @@ value = totals.firstOrders over cma.intake_per_day when connections.commerce; hi
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
 **Computed in** `cma.intake_per_day` (0007d); `cma.intake_per_day_of` (0008p); `IntakeRow` in src/components/ReportParts.tsx; `intakeTotals` in src/lib/reports.ts
 
@@ -3190,9 +3190,9 @@ value = keptShare(total) = kept / (kept + not_kept), null (dash) when none decid
 
 **Who may see it** `performance.team`
 
-**Refresh** on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
+**Refresh** on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling
 
-**Computed in** `cma.callbacks_kept_report` (0008w); `cma.callbacks_kept_report_of` (0008w); `cma.callbacks_kept_figures_of` (0008w); `cma.callbacks_kept_of` (0008w); `cma.callbacks_kept_connected` (0008w); `keptShare` in src/lib/callbacks.ts; `IntakeRow` in src/components/ReportParts.tsx; `getCallbacksKept` in src/lib/data/postgres.ts
+**Computed in** `cma.callbacks_kept_report` (0008w); `cma.callbacks_kept_report_of` (0008w); `cma.callbacks_kept_figures_of` (0008w); `cma.callbacks_kept_of` (0008w); `cma.callbacks_kept_connected` (0008w); `keptShare` in src/lib/callbacks.ts; `IntakeRow` in src/components/ReportParts.tsx; `getDashboard` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

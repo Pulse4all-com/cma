@@ -2816,6 +2816,27 @@ export interface CallbackOwner {
   noContact: number;
 }
 
+/** The callbacks kept getFollowUpPage reads with the page (addition 0008w): the span, and per person too (performance.team) */
+export interface FollowUpCallbacksRequest {
+  range: HoursRange;
+  perOwner: boolean;
+}
+
+/** The callbacks kept read with the Follow-up page: null when not asked; the per-person rows null until a callback type counts */
+export interface FollowUpCallbacks {
+  callbacks: CallbacksKept | null;
+  callbackOwners: CallbackOwner[] | null;
+}
+
+/** Reports → Dashboard in one read: the time per status of the period, the Intake row's reads and the callbacks kept */
+export interface DashboardData {
+  time: TeamStatusTime;
+  intake: Intake;
+  records: CrmRecordsDay[];
+  speed: SpeedToLeadRow[];
+  callbacks: CallbacksKept;
+}
+
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
 export type JourneyStatus = "placeholder" | "building" | "live";
 
@@ -2880,6 +2901,11 @@ export interface CmaData {
   exportStatusChanges(me: Principal, range: HoursRange, userId: string | null): Promise<Export<StatusChangeRow>>;
   /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
+  /**
+   * Reports → Dashboard in one transaction: getTeamStatusTime for everyone, getIntake, getCrmRecordsPerDay, getSpeedToLeadRows and
+   * getCallbacksKept of the period, the same reads one after the other. Needs performance.team (CMA06); at most 92 days (CMA04)
+   */
+  getDashboard(me: Principal, range: HoursRange): Promise<DashboardData>;
   /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
   listAppLinks(me: Principal): Promise<AppLink[]>;
   /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */
@@ -3162,8 +3188,13 @@ export interface CmaData {
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)
-  /** Reports → Follow-up in one read: the counts, per person (performance.team), the filter choices, the three lists after the filter. Needs reports.view, performance.team or monitoring.live */
-  getFollowUpPage(me: Principal, filter: { market: string | null; owner: string | null; state: "attention" | null }): Promise<FollowUpPage>;
+  /**
+   * Reports → Follow-up in one read: the counts, per person (performance.team), the filter choices, the three lists after the filter.
+   * Needs reports.view, performance.team or monitoring.live. With callbacks, the callbacks kept of its span in the same statement
+   * (getCallbacksKept, and getCallbacksPerOwner when perOwner: reports.view or performance.team, per person performance.team)
+   */
+  getFollowUpPage(me: Principal, filter: { market: string | null; owner: string | null; state: "attention" | null },
+    callbacks: FollowUpCallbacksRequest | null): Promise<FollowUpPage & FollowUpCallbacks>;
   /** Every open lead deal not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */
   getOpenLeads(me: Principal): Promise<FollowUpRowsAt<OpenLead>>;
   /** Every open ticket of a counted pipeline against its response time, the least time left first. The same permissions */
