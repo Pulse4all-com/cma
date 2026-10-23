@@ -220,6 +220,7 @@ README, `db/` and `records/` changes do not build.
 
 Claude Code on the web (claude.ai/code) works on a branch and opens a pull request; it never merges.
 It has already run the build, typecheck, lint and the pure verifiers; you run the rest and merge.
+Before it opens the pull request, the two project subagents run: cma-reviewer and cma-docs-keeper (CLAUDE.md, Subagents).
 
 ```bash
 cd ~/cma && gh pr checkout <number>
