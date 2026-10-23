@@ -94,13 +94,16 @@ with its verify), and the five-minute check of `docs/OPERATIONS.md` section 2 pa
 
 ### 3.3 Console-only gates: Martin's steps
 
-**S3, the alert set.** Owner of the one existing policy: `docs/ingest/alert.sh`.
+**S3, the alert set.** Owner of `cma-ingest 429`: `docs/ingest/alert.sh`.
+
+Status: four policies since 18 October 2026, `cma-ingest 429` and the three `docs/OPERATIONS.md` section 9 lists beside it, each enabled, each to the channel "CMA ingest alerts" (`records/console-2026-10-18`); steps 2 and 3 done, step 4 open.
 
 1. **Terminal**
    ```bash
    gcloud monitoring policies list --project=p4a-cma-prod --format='table(displayName,enabled)'
    ```
-   Expected: `cma-ingest 429  True` and nothing else.
+   Expected: four rows, each `True`: `cma-ingest 429`, `cma-prod-pg connections above 75 of 93`,
+   `cma-web more than 5 server errors in 5 minutes` and `Cloud Run job failed (any job)`.
 2. **Browser:** Console → Monitoring → Alerting → Create policy, one policy at a time from the table in
    `docs/OPERATIONS.md` section 9 (metric, filter, condition, documentation text, the channel "CMA ingest
    alerts"). Expected after each Save: the policy listed and enabled; no incident open.
@@ -134,6 +137,8 @@ with its verify), and the five-minute check of `docs/OPERATIONS.md` section 2 pa
 
 **Logging retention and the invitation token in request logs.** No script owns it (audit finding WEB-02,
 already open in README).
+
+Status: the retention is met, 30 days decided with Yordi (Decision log, 12 October 2026). The buckets' location, `global`, is open (Open decisions, Cloud Logging location in `p4a-cma-prod`). Steps 2 and 3 (WEB-02) are unchanged.
 
 1. **Terminal**
    ```bash
