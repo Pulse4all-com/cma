@@ -63,7 +63,7 @@
         },
         "unit": {
           "description": "The brief's base units plus the ones the figures needed: days, business_days, date, average, text and flag",
-          "enum": ["count", "share", "seconds", "minutes", "business_minutes", "currency", "percentile", "median", "time_of_day", "days", "business_days", "date", "average", "text", "flag"]
+          "enum": ["count", "share", "seconds", "milliseconds", "minutes", "business_minutes", "currency", "percentile", "median", "time_of_day", "days", "business_days", "date", "average", "text", "flag"]
         },
         "grain": {
           "description": "One or more grains; the brief's base list plus the dimensions the figures needed",

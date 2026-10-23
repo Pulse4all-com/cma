@@ -6,9 +6,21 @@ import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
 import { data, dataIsMock, type TeamNowPerson, type TodayShift } from "@/lib/data";
 import { employersOf, liveRows, teamKeysByUser, teamsOf, tiles } from "@/lib/live";
+import { type FollowUpTileKey } from "@/lib/follow-up";
+import { metricsMore } from "@/lib/metrics";
 import { adherence, cellLabel } from "@/lib/roster";
 import { dateKeyInZone, fmtDate, fmtTime, fmtZoneShort, sameOffset } from "@/lib/time";
 import { resolve } from "../../access";
+
+/** The Follow-up now strip's entries in the metric catalog, per tile */
+const STRIP_METRIC: Record<FollowUpTileKey, string> = {
+  leadsOpenNotCalled: "leads_open_not_called",
+  leadsPastTarget: "leads_past_target",
+  ticketsAtRisk: "tickets_at_risk",
+  ticketsBreached: "tickets_breached",
+  tasksOverdue: "tasks_overdue",
+  tasksDueToday: "tasks_due_today",
+};
 
 /** The planned shift and the flag next to it, from today's published entry and the day's clock */
 function shiftLine(
@@ -107,7 +119,8 @@ export default async function LiveBoardPage() {
 
       <div className="mb-8">
         <FollowUpLive summary={followUp} copy={copy} locale={me.locale}
-          targetMinutes={numberSetting("speed_to_lead.target_minutes")} warningPct={numberSetting("tickets.sla_warning_pct")} />
+          targetMinutes={numberSetting("speed_to_lead.target_minutes")} warningPct={numberSetting("tickets.sla_warning_pct")}
+          moreOf={(key) => metricsMore(me.permissions, `live.follow_up_now.${STRIP_METRIC[key]}`, copy.hints.howComputed)} />
       </div>
 
       <h2 className="mb-4 text-panel font-semibold text-p4a-heading">{t.teamTitle}</h2>

@@ -121,9 +121,11 @@ say(`sql objects: ${new Set(sqlRefs).size} referenced, ${unknownSql.length} unkn
 // ---------------------------------------------------------------------------------------------
 // 4. Every settings key exists in the settings catalog (the cma.setting inserts)
 // ---------------------------------------------------------------------------------------------
+// A settings catalog row is "( 'the.key', '<value type>', ..." wherever its insert statement sits
+// (a description may hold a semicolon, so the rows are matched, not the statements)
 const settingKeys = new Set();
-for (const stmt of dbSql.matchAll(/insert into cma\.setting[^;]+;/gi)) {
-  for (const row of stmt[0].matchAll(/\(\s*'([a-z0-9_.]+)'/g)) settingKeys.add(row[1]);
+for (const row of dbSql.matchAll(/\(\s*'([a-z0-9_.]+)'\s*,\s*'(?:text|integer|boolean|date|time|number)'/g)) {
+  settingKeys.add(row[1]);
 }
 const settingRefs = catalog.entries.flatMap((e) => e.settings.map((s) => s.key));
 const unknownSettings = [...new Set(settingRefs.filter((k) => !settingKeys.has(k)))];
