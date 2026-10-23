@@ -337,9 +337,9 @@ Expected: the deals and tickets since the start date, and the connection's id (`
 
 **Terminal**
 ```bash
-gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args=--connection,<conn>,--object,deal,ticket,--again
+gcloud run jobs execute ingest-backfill --project=p4a-cma-dev --region=europe-west4 --wait --args='^;^--connection;<conn>;--object;deal,ticket;--again'
 ```
-Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed or paused execution runs again with the same arguments: it continues where it stopped.
+Expected: `Execution [ingest-backfill-…] has successfully completed.` A failed or paused execution runs again with the same arguments: it continues where it stopped. The `^;^` at the start is gcloud's alternate delimiter (`gcloud topic escaping`): gcloud splits `--args` on every comma, so `--args=--connection,<conn>,--object,deal,ticket,--again` hands the job `ticket` as a stray argument and it exits with code 2; with `^;^` the arguments are separated by `;` and `deal,ticket` stays one (21 October 2026: dev `ingest-backfill-dzcmr` and prod `ingest-backfill-j9cgv` succeeded so).
 
 **Terminal** (the run's log line: counts and requests per endpoint)
 ```bash
@@ -637,9 +637,9 @@ Expected: `deal | closed_lost_reason__dropdown | enumeration | t` and `ticket | 
 
 Step 8 on prod, every block on **cma-prod-pg** and every command with `--project=p4a-cma-prod`: the count block, then
 ```bash
-gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<conn>,--object,deal,ticket,--again
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<conn>;--object;deal,ticket;--again'
 ```
-then the log line, the per-pipeline block, the gap query, and the page reads with `admin@example.com` changed to `martin@pulse4all.com` (Ctrl+F: the block names the email once).
+(the `^;^` form, as in step 8), then the log line, the per-pipeline block, the gap query, and the page reads with `admin@example.com` changed to `martin@pulse4all.com` (Ctrl+F: the block names the email once).
 
 Expected: as in dev, with prod's counts: about four requests per 100 records, `backfill paused` if the daily floor is reached (the same command continues the next day). In the gap query, the stages of `Operations Pipeline` and `Incidents` if they count (step 1: they have no stage properties); any other row with `gap`: send it. `cancellations_page` counts the tickets of the pipeline `Cancellation`. Send me the two `backfill` log lines' counts and `apiCalls`, the per-pipeline rows, the gap rows and the two page rows.
 

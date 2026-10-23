@@ -21,7 +21,7 @@
  * time is unchanged is read again too: that is what fills a stored record's stage times after the adapter learned to
  * read them (a run-specific version, as the contact backfill always had; one read per object and run).
  *
- *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>[,<type>…],--from,<date>[,--again]
+ *   gcloud run jobs execute ingest-backfill --args='^;^--connection;<id>;--object;<type>[,<type>…];--from;<date>[;--again]'
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
