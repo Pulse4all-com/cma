@@ -1803,6 +1803,248 @@ export interface LineStoredCalls {
   firstStartedAt: Instant | null;
 }
 
+// ---- Funnel, lost reasons and cancellations (addition 0008zb, 20 October 2026; backlog CMA-043, CMA-048, CMA-049 without CCL) ----
+
+/** How the lost reasons and the cancellations are grouped in time: a business date, or an ISO week by its Monday */
+export type FunnelGroup = "day" | "week";
+
+/** The funnel's filters (cma.funnel_filters_check): a market code or unknown, a pipeline (connection id and pipeline id joined by ':'), a source channel; null for all */
+export interface FunnelFilter {
+  market: string | null;
+  pipeline: string | null;
+  sourceChannel: string | null;
+}
+
+/**
+ * The state of a connection's reason field for a record type (cma.reason_state_of): none (not mapped), unchecked (mapped,
+ * its data type not read yet), enumeration (its option values are stored) or refused (another data type: nothing is
+ * stored, since free text can hold personal data)
+ */
+export type ReasonState = "none" | "unchecked" | "enumeration" | "refused";
+
+/** A set of sales deals' figures (cma.funnel_figures_from): created by the creation's business date, won and lost by the close's */
+export interface FunnelFigures {
+  created: number;
+  won: number;
+  lost: number;
+  /** Won over won and lost, of the deals closed in the period, four decimals; null without one */
+  winRate: number | null;
+  /** The median days from the creation to won and to lost, one decimal; null without one */
+  medianDaysToWon: number | null;
+  medianDaysToLost: number | null;
+}
+
+/** One pipeline's figures in the period and in the previous span, like for like */
+export interface FunnelPipelineRow {
+  /** '<connection id>:<pipeline id>' */
+  key: string;
+  label: string;
+  current: FunnelFigures;
+  previous: FunnelFigures;
+}
+
+/**
+ * One stage of the funnel (cma.funnel_stages_of): of the deals whose entry (crm_record_stage.entered_at) falls in the
+ * period, how many entered, are still there now, moved on, the median days in the stage of those that moved on (exit
+ * after entry; the median only, Decision log, 15 October 2026), and how many reached won; entered in the previous span.
+ * A stage that reads no times has null figures
+ */
+export interface FunnelStageRow {
+  pipeline: string;
+  pipelineLabel: string;
+  stageId: string;
+  label: string;
+  order: number;
+  isClosed: boolean;
+  outcome: "won" | "lost" | null;
+  readsTimes: boolean;
+  entered: number | null;
+  stillThere: number | null;
+  movedOn: number | null;
+  /** Of those that moved on, the ones with an exit after their entry: what the days count over */
+  timed: number | null;
+  medianDays: number | null;
+  reachedWon: number | null;
+  /** Reached won over entered, four decimals; null without an entry */
+  wonShare: number | null;
+  enteredPrevious: number | null;
+}
+
+/** The filter lists, from the sales deals without the filters */
+export interface FunnelLists {
+  markets: string[];
+  pipelines: { key: string; label: string }[];
+  sourceChannels: string[];
+}
+
+export interface FunnelReport extends FunnelLists {
+  from: DateKey;
+  to: DateKey;
+  filter: FunnelFilter;
+  stages: FunnelStageRow[];
+  byPipeline: { rows: FunnelPipelineRow[]; total: { current: FunnelFigures; previous: FunnelFigures } };
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  /** The deals' history (the later of intake.start_date and the first sales deal) and the stage times' (the first stored entry; null before one) */
+  historyStart: { deals: DateKey | null; stages: DateKey | null };
+  /** How many active deal stages read their times (connection_stage.read_times, 0008za) */
+  timedStages: number;
+}
+
+/** A set of lost deals' figures (cma.lost_figures_from) */
+export interface LostFigures {
+  lost: number;
+  withReason: number;
+  noReason: number;
+  /** A reason the catalog flags as data quality: the lead was never a lead */
+  dataQuality: number;
+  /** A reason that is no data-quality reason */
+  real: number;
+}
+
+/** A reason option with its lost deals; share of the real lost deals (a real reason) or of every lost deal (a data-quality reason) */
+export interface LostReasonRow {
+  /** The option's internal value */
+  value: string;
+  /** The option's label from the catalog, else the value */
+  label: string;
+  deals: number;
+  share: number | null;
+}
+
+/** The lost deals of a market or a source channel (null: none) with the top 3 real reasons */
+export interface LostGroupRow {
+  key: string | null;
+  lost: number;
+  real: number;
+  noReason: number;
+  dataQuality: number;
+  top: { value: string; label: string; deals: number }[];
+}
+
+/** The lost deals of a business date or ISO week (its Monday), each real reason's count by value */
+export interface LostPeriodRow {
+  key: DateKey;
+  lost: number;
+  real: number;
+  noReason: number;
+  dataQuality: number;
+  reasons: Record<string, number>;
+}
+
+/** A lost deal without a reason: ids, the pipeline, the market, times and the link only */
+export interface LostListRow {
+  dealId: string;
+  dealSourceId: string;
+  recordUrl: string | null;
+  pipelineLabel: string;
+  market: string;
+  createdAt: Instant;
+  closedAt: Instant;
+}
+
+export interface LostReasonsReport extends FunnelLists {
+  from: DateKey;
+  to: DateKey;
+  group: FunnelGroup;
+  filter: FunnelFilter;
+  current: LostFigures;
+  previous: LostFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  reasonState: ReasonState;
+  historyStart: DateKey | null;
+  reasons: LostReasonRow[];
+  dataQualityReasons: LostReasonRow[];
+  noReason: { deals: number; share: number | null };
+  byMarket: LostGroupRow[];
+  bySource: LostGroupRow[];
+  byPeriod: LostPeriodRow[];
+  list: { rows: LostListRow[]; total: number };
+}
+
+/** A set of cancellation requests' figures (cma.cancellation_figures_from): by the creation's business date; open and closed now */
+export interface CancellationFigures {
+  requests: number;
+  open: number;
+  closed: number;
+  /** The median days from the creation to the close of the closed ones, one decimal; null without one */
+  medianDaysToClose: number | null;
+}
+
+/** A cancellation request (a ticket of the kind): ids, the pipeline, the market, the state, times, the reason's value and the link */
+export interface CancellationListRow {
+  recordId: string;
+  sourceId: string;
+  recordUrl: string | null;
+  pipelineLabel: string;
+  market: string;
+  isClosed: boolean;
+  createdAt: Instant;
+  closedAt: Instant | null;
+  reason: string | null;
+}
+
+/** A record kind (cma.record_kind): configuration, never a vendor's or a tenant's name in code */
+export interface RecordKind {
+  key: string;
+  label: string;
+  recordType: "deal" | "ticket";
+  status: "active" | "archived";
+}
+
+export interface CancellationsReport {
+  from: DateKey;
+  to: DateKey;
+  group: FunnelGroup;
+  market: string | null;
+  /** The kind reports.cancellation_kind names; null while none is set */
+  kind: RecordKind | null;
+  current: CancellationFigures;
+  previous: CancellationFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  byMarket: (CancellationFigures & { market: string })[];
+  byPeriod: (CancellationFigures & { key: DateKey; market: string })[];
+  reasonState: ReasonState;
+  /** Per reason value (null: none) with the catalog's label */
+  reasons: { value: string | null; label: string | null; requests: number }[];
+  list: { rows: CancellationListRow[]; total: number };
+  markets: string[];
+  /** The later of intake.start_date and the first request's date; null without a request */
+  historyStart: DateKey | null;
+}
+
+/** The decided deals' figures (cma.deal_person_figures_from): the amount won per currency, never summed across currencies */
+export interface DealPersonFigures {
+  won: number;
+  lost: number;
+  /** Won deals without an amount: counted, adding nothing */
+  wonWithoutAmount: number;
+  amounts: { currency: string | null; amount: number; deals: number }[];
+}
+
+/** A deal owner's figures, the not-linked row (owner ids without a person, or no owner) or the total */
+export interface DealPerson extends DealPersonFigures {
+  kind: "person" | "notLinked" | "total";
+  userId: string | null;
+  name: string | null;
+  /** How many owner ids without a person (the not-linked row only), never which */
+  unlinkedOwners: number | null;
+}
+
+export interface DealsPerPerson extends FunnelLists {
+  from: DateKey;
+  to: DateKey;
+  filter: FunnelFilter;
+  /** By name, never ranked; the not-linked row last when there is one */
+  rows: DealPerson[];
+  total: DealPerson;
+}
+
 // ---- Sources, markets, alert rules and linked accounts (addition 0008e, night of 13 October 2026) ----
 
 /**
@@ -1870,6 +2112,10 @@ export interface SourceStage {
   outcome: "won" | "lost" | null;
   outcomeSource: "source" | "person" | null;
   isActive: boolean;
+  /** The adapter reads the stage's entry and exit times (0008za): a person's choice, else on for a counted pipeline's stage */
+  readTimes: boolean;
+  /** A person chose readTimes; false while the default applies */
+  readTimesSet: boolean;
 }
 
 export interface SourceForm {
@@ -1974,13 +2220,28 @@ export interface SourceTaskType {
   lastSeenAt: Instant | null;
 }
 
-/** Which source property feeds which canonical field (read only in this increment) */
+/** Which source property feeds which canonical field (read only, but for the reason field since 0008zb) */
 export interface SourceField {
   entity: string;
   field: string;
   refSystem: string | null;
   slot: number;
   property: string;
+  /** The property's data type as the adapter last read it, and when (0008zb); null until read */
+  sourceType: string | null;
+  checkedAt: Instant | null;
+  /** The reason field's state (0008zb); null for another field */
+  state: ReasonState | null;
+}
+
+/** An option of a connection's reason property (cma.connection_reason, 0008zb): value and label from the source, the data-quality flag a person's */
+export interface SourceReason {
+  recordType: "deal" | "ticket";
+  value: string;
+  label: string;
+  order: number;
+  isDataQuality: boolean;
+  isActive: boolean;
 }
 
 /** A field written back to the CRM (0007c; read only here) */
@@ -2009,6 +2270,8 @@ export interface SourceDetail {
   lines: SourceLine[];
   tags: SourceTag[];
   fields: SourceField[];
+  /** The reason properties' options per record type (0008zb); empty until the adapter reads an enumeration */
+  reasons: SourceReason[];
   writeback: SourceWriteback[];
   store: SourceStore | null;
   /**
@@ -2099,6 +2362,61 @@ export interface SourceStageOutcomeInput {
   pipelineId: string;
   stageId: string;
   outcome: "won" | "lost" | "none";
+}
+
+/** Whether a deal stage's times are read (cma.set_stage_read_times, 0008za) */
+export interface SourceStageReadTimesInput {
+  pipelineId: string;
+  stageId: string;
+  readTimes: boolean;
+}
+
+/** The property a record type's reason comes from (cma.set_connection_field, field reason; 0008zb); null or empty removes the mapping */
+export interface SourceReasonFieldInput {
+  recordType: "deal" | "ticket";
+  property: string | null;
+}
+
+/** A person's data-quality flag on a reason option (cma.set_reason_data_quality, 0008zb) */
+export interface SourceReasonFlagInput {
+  recordType: "deal" | "ticket";
+  value: string;
+  isDataQuality: boolean;
+}
+
+/** A rule that gives a connection's records a kind: a pipeline, a category value or both (cma.connection_record_kind, 0008zb) */
+export interface RecordKindRule {
+  connectionId: string;
+  pipelineId: string | null;
+  pipelineLabel: string | null;
+  category: string | null;
+  isActive: boolean;
+}
+
+/** A record kind with its rules, for Configuration → Sources (cma.record_kinds) */
+export interface RecordKindConfig extends RecordKind {
+  sortOrder: number;
+  /** The tenant's reports.cancellation_kind names it */
+  isCancellationKind: boolean;
+  rules: RecordKindRule[];
+}
+
+/** Adds a kind or changes its label and order (cma.set_record_kind); its record type is set once */
+export interface RecordKindInput {
+  key: string;
+  label: string;
+  recordType: "deal" | "ticket";
+  sortOrder: number | null;
+  /** Switches the kind on or off (cma.set_record_kind_status) in the same transaction; null leaves it */
+  isActive: boolean | null;
+}
+
+/** Adds a rule or puts it back (active), or archives it (cma.set_record_kind_rule) */
+export interface RecordKindRuleInput {
+  kindKey: string;
+  pipelineId: string | null;
+  category: string | null;
+  active: boolean;
 }
 
 /** One form's new configuration; its kept fields stay as they are */
@@ -2704,6 +3022,18 @@ export interface CmaData {
   setSourcePipeline(me: Principal, id: string, input: SourcePipelineInput): Promise<void>;
   /** A deal stage's outcome, a person's choice kept over every later read (set_stage_outcome, 0008u); an unknown stage CMA02 */
   setSourceStageOutcome(me: Principal, id: string, input: SourceStageOutcomeInput): Promise<void>;
+  /** Whether the adapter reads a deal stage's times (set_stage_read_times, 0008za); an unknown stage CMA02 */
+  setSourceStageReadTimes(me: Principal, id: string, input: SourceStageReadTimesInput): Promise<void>;
+  /** The property a record type's reason comes from (set_connection_field, 0008zb); its data type is read by the next sweep */
+  setSourceReasonField(me: Principal, id: string, input: SourceReasonFieldInput): Promise<void>;
+  /** A reason option's data-quality flag, kept by every refresh (set_reason_data_quality, 0008zb); an option not read CMA02 */
+  setSourceReasonDataQuality(me: Principal, id: string, input: SourceReasonFlagInput): Promise<void>;
+  /** The tenant's record kinds with their rules (cma.record_kinds, 0008zb) */
+  getRecordKinds(me: Principal): Promise<RecordKindConfig[]>;
+  /** Adds a kind or changes its label and order (set_record_kind), then on or off when given (set_record_kind_status), in one transaction; a malformed key CMA04, a changed record type CMA03 */
+  setRecordKind(me: Principal, input: RecordKindInput): Promise<void>;
+  /** A connection's rule for a kind (set_record_kind_rule); an unknown kind or pipeline CMA02, neither value CMA04 */
+  setRecordKindRule(me: Principal, id: string, input: RecordKindRuleInput): Promise<void>;
   /**
    * Several forms in one transaction (set_form, kept fields kept; then set_form_reporting when polled or the
    * category is given, addition 0008p); an unknown market or category CMA02 writes nothing, a counted form
@@ -2812,6 +3142,15 @@ export interface CmaData {
   getAttemptsPerAgent(me: Principal, range: HoursRange, filter: AttemptFilter): Promise<AttemptsPerAgent>;
   /** One sales deal's attempts in time order (cma.attempts_of_deal, 0008z): reports.view or performance.team; CMA02 for a deal that is no sales deal of the tenant */
   getDealAttempts(me: Principal, dealId: string): Promise<DealAttempt[]>;
+  // ---- Funnel, lost reasons and cancellations (addition 0008zb): the database checks the permission on every call (CMA06); at most 92 days
+  /** Reports → Funnel, the funnel: per stage and per pipeline (cma.deal_funnel_page). Needs reports.view or performance.team */
+  getFunnel(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<FunnelReport>;
+  /** Reports → Funnel, lost reasons (cma.lost_reasons_page). Needs reports.view or performance.team */
+  getLostReasons(me: Principal, range: HoursRange, group: FunnelGroup, filter: FunnelFilter): Promise<LostReasonsReport>;
+  /** Reports → Cancellations: the requests of reports.cancellation_kind (cma.cancellations_page). Needs reports.view or performance.team */
+  getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
+  /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
+  getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;
   // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days
   /** The period per ISO week and in total, the previous period's total, whether a callback type counts. Needs reports.view or performance.team */
   getCallbacksKept(me: Principal, range: HoursRange): Promise<CallbacksKept>;

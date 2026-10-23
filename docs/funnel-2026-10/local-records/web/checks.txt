@@ -1,0 +1,57 @@
+Web checks on this branch after the fix-up (Claude Code, 20 October 2026): one pass from npm ci, then the mock-server checks; the api-mode checks from the run before the fix-up (21c3f81), which changes no route, read, budget or API check.
+The lint warning is in web/verify/follow-up.mjs, unchanged from main. verify:datamap fails as expected until Martin refreshes schema.json from dev (../datamap-check.txt).
+
+npm ci                             exit 0  added 510 packages in 43s
+npm run build                      exit 0  ƒ  (Dynamic)  server-rendered on demand
+npm run typecheck                  exit 0  ✓ Types generated successfully
+npm run lint                       exit 0  ✖ 1 problem (0 errors, 1 warning)
+verify:copy                        exit 0  copy: PASS (2814 keys, en and nl)
+verify:corrections                 exit 0  ALL 31 PASS
+verify:csv                         exit 0  ALL 21 PASS
+verify:dashboard                   exit 0  ALL 17 PASS
+verify:live                        exit 0  ALL 40 PASS
+verify:team                        exit 0  team: PASS (26 checks)
+verify:roster                      exit 0  roster: PASS (36 checks)
+verify:configuration               exit 0  ALL 108 PASS
+verify:messages                    exit 0  ALL 24 PASS
+verify:import                      exit 0  ALL 23 PASS
+verify:datamap                     exit 1  datamap: FAIL (7 problems)
+verify:signed-out                  exit 0  signed-out: PASS (20 checks)
+verify:invitations                 exit 0  invitations: PASS (27 checks)
+verify:preview                     exit 0  preview: PASS (18 checks)
+verify:follow-up                   exit 0  follow-up: PASS (34 checks)
+verify:reports                     exit 0  ALL 178 PASS
+verify:health                      exit 0  ALL 39 PASS
+verify:boundaries                  exit 0  boundaries: PASS (313 files)
+verify:jobs                        exit 0  ALL 18 PASS
+verify:reports --provoke           exit 0  ALL 178 PROVOKED CHECKS FAILED, as they must
+verify:csv --provoke               exit 0  ALL 21 PROVOKED CHECKS FAILED, as they must
+verify:boundaries --provoke        exit 1  boundaries: FAIL (5 problems)
+verify:signed-out --provoke        exit 0  signed-out: ALL 20 PROVOKED CHECKS FAILED, as they must
+verify:copy --provoke              exit 1  copy: FAIL (5 problems)
+
+Against the standalone server of this branch in mock data mode (BASE=http://localhost:8080):
+verify:layout                      exit 0  layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports,  …
+verify:layout --provoke            exit 1  layout: FAIL (81 problems)
+verify:hints                       exit 0  hints: PASS (873 headers and 169 tiles on 47 pages, 7 level bars on First orders and 6 bar cards on Attempts per deal and 6 intro cards on Funnel and Cancellations, each with one described mark; focus, hover, Esc, Tab, tap and the tile links; the hints with hidden keycaps; the top bar and the rail still within 0.5 px on the toggle, 78 boxes in 4 runs)
+verify:hints --provoke             exit 1  hints: FAIL (46 problems)
+verify:theme                       exit 0  theme: PASS (75 pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, 111 tables per 7.6 and 3.3, a header hint open on 32 report pages)
+verify:theme --provoke             exit 1  theme: FAIL (10 problems)
+(hints: 873 headers, 4 fewer than before the fix-up: the 80th percentile column of the stage tables. theme: 111 tables against 112 in the first pass; the build of 21c3f81, before the fix-up, counts 111 too at the same hour, so the difference is the mock data's time of day, not the fix-up.)
+
+From the run before the fix-up (21c3f81):
+Against the same build in api data mode on a second fresh database (00 to 98, 02 and 03 again, web/verify/reports-fixture.sql):
+verify:api                         exit 0  ALL 311 PASS
+verify:api --provoke               exit 0  ALL 311 PROVOKED CHECKS FAILED, as they must
+(A first run on a database without 02 run again failed 11 checks of teams, rosters, app links and the workday window; with 02 run again, as above, all 311 pass. 0008z's count was 311.)
+
+Against the same build in api data mode on a third fresh database (00 to 98, 02 and 03 again, web/verify/round-trips-fixture.sql):
+verify:round-trips                 exit 1  round-trips: FAIL (6 problems)
+      manager /reports/dashboard: 6 transactions, budget 5
+      manager /reports/dashboard: 29 statements, budget 23
+      manager /reports/follow-up: 3 transactions, budget 2
+      manager /reports/follow-up: 15 statements, budget 9
+      supervisor /reports/dashboard: 6 transactions, budget 5
+      supervisor /reports/dashboard: 29 statements, budget 23
+verify:round-trips --provoke       exit 1  round-trips: FAIL (104 problems)
+main's build (0e871a2) on the same database, with main's round-trips.json: the same six problems, so they come from the local setup and not from this branch (their cause was not pursued here; refreshing the follow-up snapshots first changed nothing). Every row costs the same on both builds except the new rows and /configuration/sources (round-trips-observed.txt).

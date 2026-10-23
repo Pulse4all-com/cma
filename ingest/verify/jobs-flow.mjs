@@ -25,8 +25,8 @@
  * and a failed contact search leaves the cursor for the next run; the backfill starts at
  * intake.start_date by default, resumes after an interruption without reading the first page again,
  * includes deals created earlier and closed since, and paces its searches; a finished backfill with the same
- * start reads nothing, and with --again walks its streams from the start again, its cursor rewritten as it goes
- * (an interrupted --again run continues where it stopped); the reconcile picks up a
+ * start reads nothing, and with --again walks its streams from the start again, its cursor rewritten as it goes, every
+ * listed object read again (since addition 0008za; an interrupted --again run continues where it stopped); the reconcile picks up a
  * change the webhook missed, leaves a newer row alone, reads only held contacts, honours
  * --lookback-minutes and reads nothing twice; tenant isolation; of two executions of a job started at
  * once the second finds the first one's lock and is skipped with one log line and nothing written, and
@@ -430,9 +430,11 @@ await runBackfill({ connectionId: conn1, object: "deal" });
 expect("backfill: a finished backfill with the same start reads nothing again", since(n0).length, 0, 2);
 // --again (the night runbook's re-reads; found in dev on 19 October 2026, where a re-read without --from took the
 // finished backfill's start and fetched 0): a deal changed in HubSpot since (outside the reconcile's window) is not
-// read by a run without it; with it the stream is walked from the start, the changed deal read and written, the others
-// listed and skipped (their versions are known). Interrupted on its second search, the cursor is rewritten at the first
-// page, not done, and the same command continues there; the other stream, finished before, is walked from the start
+// read by a run without it; with it the stream is walked from the start and every deal it lists is read and written,
+// the changed one and the unchanged one alike (since addition 0008za an --again run gives each object a version of its
+// own, so the stored records get what the adapter now reads, their stage times: brief N21; before, the unchanged deal
+// was listed and skipped). Interrupted on its second search, the cursor is rewritten at the first page, not done, and
+// the same command continues there; the other stream, finished before, is walked from the start
 fake.objects.deals[4130000002] = { ...fake.objects.deals[4130000002], amount: "222", hs_lastmodifieddate: "2026-10-10T10:00:00.000Z" };
 n0 = mark();
 const bSame = await runBackfill({ connectionId: conn1, object: "deal" });
@@ -445,8 +447,8 @@ const bAgain = await runBackfill({ connectionId: conn1, object: "deal", again: t
 const bAgainRun = (await runs("backfill")).at(-1);
 expect("backfill --again: a finished backfill with the same start is walked from the start", since(n0).find((r) => r.search)?.body.filterGroups[0].filters[0].value,
   String(at("2026-09-30T22:00:00.000Z")), undefined);
-expect("backfill --again: …its first page listed and processed, the changed deal read and written",
-  [bAgain.again, bAgainRun?.counts.fetched, bAgainRun?.counts.upserted, bAgainRun?.counts.skipped, (await deal(4130000002))?.amount], [true, 2, 1, 1, "222.00"], [false, 0, 0, 0, "200.00"]);
+expect("backfill --again: …its first page listed and both deals read again, the changed one written",
+  [bAgain.again, bAgainRun?.counts.fetched, bAgainRun?.counts.upserted, bAgainRun?.counts.skipped, (await deal(4130000002))?.amount], [true, 2, 2, 0, "222.00"], [false, 0, 0, 0, "200.00"]);
 const curAgain = (await q("select cursor from cma.sync_cursor where connection_id = $1 and stream = 'backfill:deal:createdate'", [conn1]))[0]?.cursor;
 expect("backfill --again: interrupted, the cursor is rewritten at the first page, not done", [bAgainRun?.status, bAgainRun?.error, curAgain?.value, curAgain?.done],
   ["failed", "http_503", at("2026-10-03T09:00:00.000Z"), false], ["succeeded", null, at("2026-10-06T09:00:00.000Z"), true]);

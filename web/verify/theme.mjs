@@ -22,7 +22,9 @@
  * tenant without an order pipeline) and Orders per person; the CRM connection's page now holds the order pipeline
  * switch and the stage outcomes. Since addition 0008v Campaign monitoring and a journey's page with its placeholders. Since
  * addition 0008y Attempts per deal (by day as the manager, by pipeline as the analyst, and for the invest tenant) and
- * Attempts per agent, their tables too.
+ * Attempts per agent, their tables too. Since addition 0008zb Funnel (by week as the manager, by day as the reader) and
+ * Cancellations, their bars and tables; the Sources list now holds the record kinds, and the CRM connection's page the
+ * stages' read times, the reasons with their data-quality flags and the record kind rules.
  * On those report pages one header hint is opened by keyboard focus first, so the hint panel is
  * checked with the rest (palette, Montserrat), and its text must be Inkt Body on white like the
  * body text (12 October 2026). Since 16 October 2026 the rail folded to icons (cookie cma-rail) on
@@ -174,6 +176,14 @@ const pages = [
   { path: "/reports/attempts?range=month&group=pipeline&attempted=some&outcome=won", subject: "analyst", tables: true },
   { path: "/reports/attempts-per-agent?range=month", subject: "manager", tables: true },
   { path: "/reports/attempts?range=month", subject: "invest-analyst", tables: true },
+  // Funnel and Cancellations (addition 0008zb): the tiles with their deltas, the stage bars (Deep Blue), the real reasons
+  // and the no-reason and data-quality bars (Light Blue), the tables per stage, pipeline, market, source and week or day,
+  // the list without a reason and deals per person, by week as the manager and by day as the reader; the requests per
+  // market, reasons and week, the newest requests with their badges
+  { path: "/reports/funnel?range=month", subject: "manager", tables: true },
+  { path: "/reports/funnel?range=month&group=day", subject: "reader", tables: true },
+  { path: "/reports/cancellations?range=month", subject: "manager", tables: true },
+  { path: "/reports/cancellations?range=month&group=day", subject: "analyst", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
   { path: "/campaigns", subject: "manager" },

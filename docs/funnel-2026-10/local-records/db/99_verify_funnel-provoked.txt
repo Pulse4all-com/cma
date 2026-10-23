@@ -1,0 +1,68 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/runsql-3750.sql:61: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+DO
+                                                                        check_name                                                                         |        result        |                                                                                                                                                                    detail                                                                                                                                                                    
+-----------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zb recorded, after 0008za                                                                                                                 | FAIL                 | provoked
+ A2 the kind, rule and reason tables: columns, keys, checks and foreign keys                                                                               | FAIL                 | 
+ A3 row-level security, the audit trigger, no delete for the application, nothing for the readers                                                          | FAIL                 | 
+ A4 the reason field for deals and tickets, its checked type, the record's reason                                                                          | FAIL                 | 
+ A5 every function the application's only and invoker; the readers' functions definer, the owner's, pinned, theirs only                                    | FAIL                 | 
+ A6 the reporting views' exact columns; no name, address, email, phone, hash or raw                                                                        | FAIL                 | 
+ A7 the two settings, the row type's 24 fields, nothing twice, the per-person list takes deals                                                             | FAIL                 | 
+ A8 written once: 0008z's sales deals, the kind rule, the period cut, the enumeration rule                                                                 | FAIL                 | 
+ B1 a text property refused: its type read, the state refused, no reason stored, no catalog                                                                | FAIL                 | lost_text/string/refused none 0
+ B2 an enumeration: unchecked until read, then its options and values stored                                                                               | FAIL                 | unchecked deal:enumeration ticket:enumeration 9 bad_fit 100
+ B3 the data-quality flag kept by a refresh, an option gone archived; the flag's refusals                                                                  | FAIL                 | garbage=Garbage/5/true/active too_expensive=Too expensive/9/false/active wrong_phone=Wrong Phone/7/true/archived CMA06 CMA02 CMA04 CMA02 CMA06
+ B4 reason for deals and tickets only; malformed reason properties and a person without ingest.write refused                                               | FAIL                 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA06
+ B5 the kinds' refusals: key, label, record type, a changed type, status, a rule's values, kind and pipeline, the permission                               | FAIL                 | CMA04 CMA04 CMA04 CMA03 CMA04 CMA02 CMA04 CMA02 CMA02 CMA02 CMA06 CMA06
+ B6 a record's kinds by pipeline, category and both; archived rules and kinds match nothing; the read                                                      | FAIL                 | cancellation cancellation complaint cancellation [] [] [] | [][]complaint | cancellation:Cancellation request:ticket:true:2 complaint:Complaint:ticket:false:1
+ B7 reports.cancellation_kind trimmed; an unknown, an archived and another tenant's kind refused                                                           | FAIL                 | cancellation CMA04 CMA04 ok CMA04 0
+ B8 per pipeline: created, won, lost, the win rate by close date, the median days to won and to lost, the previous period                                  | FAIL                 | Sales:16/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 Sales two:1/0/0/-/-/-|0/0/0/-/-/- total:17/3/10/0.2308/3.2/2.0|2/0/1/0.0000/-/1.0 2026-09-28..2026-10-04 false
+ B9 per stage: entered, still there, moved on, the median days in stage, reached won, the previous period; a stage off without figures; no 80th percentile | FAIL                 | s1:9/3/6/6/1.0/2/0.2222/2 s2:3/1/2/2/2.6/1/0.3333/1 sw:3/3/0/0/-/3/1.0000/0 sl:-/-/-/-/-/-/-/- q1:1/1/0/0/-/0/0.0000/0 qw:0/0/0/0/-/0/-/0 2026-09-29/2026-09-29 6 keys:
+ B10 the filters (market, source channel, pipeline) narrow every figure; the filter lists without them                                                     | FAIL                 | 4/1/3/0.2500/1.0/2.1 2/0/2/1.5/0.5000 2/0/2/0.0000/-/3.5 Sales two q1,qw ["GB", "NL"] Sales,Sales two ["DIRECT", "PAID_SEARCH"]
+ B11 like for like: the previous span's last date cut at the time of day                                                                                   | FAIL                 | 0/0/0/-/-/-|4/1/8/0.1111/1.0/2.5 2026-10-09..2026-10-11 true s1prev:2
+ B12 lost reasons: the real reasons and their share, the data-quality block, no reason, the previous period                                                | FAIL                 | 10/9/1/2/7|1/1/0/0/1 Too expensive=3/0.4286,Bad Timing=2/0.2857,Bad Fit=1/0.1429,Ordered Elsewhere=1/0.1429 dq:Duplicate=1/0.1000,Garbage=1/0.1000 none:1/0.1000 enumeration 2026-09-29
+ B13 per market with the top 3 real reasons, per source channel                                                                                            | FAIL                 | GB:3/2/0/1[Bad Timing=1,Too expensive=1] NL:7/5/1/1[Too expensive=2,Bad Fit=1,Bad Timing=1] | DIRECT:2/0/1/1[] PAID_SEARCH:7/6/0/1[Too expensive=3,Bad Fit=1,Bad Timing=1] none:1/1/0/0[Bad Timing=1]
+ B14 lost per ISO week and per day; the list without a reason with its link; the market filter                                                             | FAIL                 | 2026-10-05:10/7/1/2{"bad_fit": 1, "bad_timing": 2, "too_expensive": 3, "ordered_elsewhere": 1} | 10-07:1/1/0/0 10-08:1/1/0/0 10-09:3/2/0/1 10-10:3/1/1/1 10-11:2/2/0/0 | 1 dD https://crm.example.invalid/portal-1/deal/dD GB:3 Bad Timing=0.5000,Too expensive=0.5000
+ B15 cancellations: the kind's requests, open, closed, days to close, per market and week, reasons, the list, the history start                            | FAIL                 | cancellation:Cancellation request 4/2/2/1.3|1/1/0/- GB:1/1/0/- NL:2/0/2/1.3 unknown:1/1/0/- 2026-10-05/GB=1 2026-10-05/NL=2 2026-10-05/unknown=1 enumeration Moving=1 Price=1 -=2 4:tH,tC,tB https://crm.example.invalid/portal-1/ticket/tH ["GB", "NL", "unknown"] 2026-10-01
+ B16 cancellations by market and day; no kind set; the kind archived                                                                                       | FAIL                 | 2/10-05=1,10-08=1 none/0/none archived/0
+ B17 per person: won, lost, amounts per currency never summed; the not-linked owners; the total                                                            | FAIL                 | Anna Verify:3/4[EUR 300.00 (2),GBP 80.00 (1)] Bram Verify:0/5[] not_linked(1):0/1 total:3/10[EUR 300.00 (2),GBP 80.00 (1)]
+ B18 per person for performance.team with deals in reports.per_person; off hides it                                                                        | FAIL                 | ok CMA06 CMA06 ok CMA04
+ B19 the parameters refused; the pages for reports.view or performance.team only                                                                           | FAIL                 | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA06 CMA06 CMA06 CMA01 ok ok ok
+ B20 the reporting views equal the application's rows for a reader scoped to one tenant                                                                    | FAIL                 | 30/19/true 6/true 9/2/3/too_expensive 0/0/1
+ B21 tenant isolation for the funnel, the reasons and the deals                                                                                            | FAIL                 | 1/1/none t 1/0/1/0.0000/-/1.0 0 19 1
+ B22 the funnel's deals are 0008z's sales deals with their outcome                                                                                         | FAIL                 | 19/0/0 dA
+ B23 the audit names the admin for the kinds, rules and flags and the Ingest user for the options                                                          | FAIL                 | 2/3/3/9
+ C1 the volume tenant: twice prod's deals, with stage times, order deals, tickets and store orders                                                         | FAIL                 | 4000 sales deals, 3500 order deals, 12200 stage times, 8000 tickets (2600 cancellations), 6000 contacts, 2000 store orders
+ C2 every page read of a month as the application under 1000 ms (best of three)                                                                            | FAIL                 | deal_funnel_page 345.9 ms; deal_funnel_page NL 261.5 ms; deal_funnel_page pipeline 282.3 ms; deal_funnel_page source 288.8 ms; lost_reasons_page week 241.6 ms; lost_reasons_page day GB 226.4 ms; cancellations_page week 201.5 ms; cancellations_page day NL 119.8 ms; deals_per_person_page 237.3 ms; deal_funnel_page 92 days 413.5 ms; 
+ verdict                                                                                                                                                   | PROVOKED, NOT A PASS | 0 PASS, 33 FAIL
+(34 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION

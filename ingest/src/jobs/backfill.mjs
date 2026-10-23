@@ -14,7 +14,14 @@
  * succeeded with error daily_floor, logs "backfill paused" and exits 0; the same command later continues
  * from the cursor. The log line carries the run's requests per endpoint and the daily limit stated.
  *
- *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>[,--again]
+ * Since addition 0008za (brief N21) --object takes a comma-separated list (deal,ticket): the objects run one after
+ * the other on one budget (the daily floor's reading carries over), each its own sync_run row and its own log line
+ * with its requests per endpoint; a pause stops the objects after it, which the same command continues later. An
+ * --again run gives every object it lists a version of this run (the adapter's runAt), so an object whose modified
+ * time is unchanged is read again too: that is what fills a stored record's stage times after the adapter learned to
+ * read them (a run-specific version, as the contact backfill always had; one read per object and run).
+ *
+ *   gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>[,<type>…],--from,<date>[,--again]
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -46,7 +53,30 @@ export function walkAgain(store) {
   };
 }
 
-export async function runBackfill({ connectionId, object, from = null, again = false, adapters = ADAPTERS }) {
+/**
+ * The objects of one command (--object deal,ticket) one after the other, on one budget: the per-object totals, and a
+ * pause stops the rest (their totals say skipped_after_pause). Answers { objects: [...totals], failed }.
+ */
+export async function runBackfills({ connectionId, objects, from = null, again = false, adapters = ADAPTERS }) {
+  const list = String(objects ?? "").split(",").map((o) => o.trim()).filter(Boolean);
+  if (!connectionId || !list.length) throw new UsageError("--connection and --object are required");
+  if (new Set(list).size !== list.length) throw new UsageError("--object names an object twice");
+  const out = [];
+  let budget = null;
+  let paused = false;
+  for (const object of list) {
+    if (paused) {
+      out.push({ connection: connectionId, object, error: "skipped_after_pause", failed: 0 });
+      continue;
+    }
+    const total = await runBackfill({ connectionId, object, from, again, adapters, budget: budget ?? undefined, onBudget: (b) => { budget = b; } });
+    out.push(total);
+    paused = Boolean(total.paused);
+  }
+  return { objects: out, failed: out.reduce((n, t) => n + (t.failed ?? 0), 0) };
+}
+
+export async function runBackfill({ connectionId, object, from = null, again = false, adapters = ADAPTERS, budget: given = null, onBudget = null }) {
   if (!connectionId || !object) throw new UsageError("--connection and --object are required");
   const started = Date.now();
   const [c] = await servedConnections({ connectionId, actorLabel: "ingest:backfill" });
@@ -62,12 +92,15 @@ export async function runBackfill({ connectionId, object, from = null, again = f
   const fromAt = await store.tenantStartOf(date);
   const untilMs = Date.now();
   const floorPct = adapter.dailyFloor ? await adapter.dailyFloor({ store, connection: c, job: "backfill" }) : null;
-  const budget = new JobBudget(adapter.rates, undefined, { floorPct });
+  const budget = given ?? new JobBudget(adapter.rates, undefined, { floorPct });
+  onBudget?.(budget);
+  const mark = budget.mark();
   const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
-    return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts });
+    return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts,
+      again, runAt: untilMs });
   });
   const total = { connection: c.connectionId, object, from: date, again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
-  info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(), ms: Date.now() - started });
+  info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(mark), ms: Date.now() - started });
   return total;
 }

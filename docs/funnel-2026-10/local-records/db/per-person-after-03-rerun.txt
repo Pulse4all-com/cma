@@ -1,0 +1,8 @@
+SET
+          slug           |         per_person          | cancellation_kind 
+-------------------------+-----------------------------+-------------------
+ pulse4all-invest        |                             | 
+ pulse4all-subscriptions | email,orders,attempts,deals | 
+(2 rows)
+
+RESET

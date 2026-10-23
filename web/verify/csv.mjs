@@ -9,10 +9,14 @@
  * the autumn clock change, the settings fallback, and who entered a stretch, an import included
  * (addition 0008d). Since addition 0008p the Reports > Forms file: one row per form and market with the
  * period, the category's name (the code when the catalog lacks it, "No category" for none), Unknown market,
- * the previous period and the resolution split, a form name a spreadsheet would run as a formula defused.
+ * the previous period and the resolution split, a form name a spreadsheet would run as a formula defused. Since addition
+ * 0008zb the Reports > Funnel files (the stages: a stage whose times are not read with empty figures, days with the decimal
+ * mark; the lost reasons: real, data quality and no reason with the share as a fraction, a label a spreadsheet would run
+ * as a formula defused) and the Reports > Cancellations file (per week or day and market, Unknown market).
  */
 import {
-  exportSettingsFrom, firstOrdersCsv, formatDate, formatDuration, formatTime, formsCsv, hoursCsv, quote, safeText, statusChangesCsv, toCsv,
+  cancellationsCsv, exportSettingsFrom, firstOrdersCsv, formatDate, formatDuration, formatTime, formsCsv, funnelStagesCsv, hoursCsv, lostReasonsCsv, quote,
+  safeText, statusChangesCsv, toCsv,
 } from "../src/lib/csv.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -155,6 +159,38 @@ expect("first orders file: header, the date and time in the reader's zone, the l
   ["From;To;Deal;Ordered;Market;Level;Attribution;Lead deal;Conversation;Email;Phone match;Call attempt;Known contact;Currency;Amount;Days from first touch",
    "2026-10-05;2026-10-11;4100000001;2026-10-05 22:30;NL;lead_deal;call_center;true;false;true;false;false;true;EUR;1234.5;3.08",
    "2026-10-05;2026-10-11;4100000002;2026-10-06 09:00;unknown;self_service;self_service;false;false;false;false;false;false;;;"]);
+
+// ---- Reports > Funnel and Cancellations (addition 0008zb) ----------------------------------------------------
+const fnLabels = { from: "From", to: "To", pipeline: "Pipeline", stage: "Stage", readsTimes: "Times read", entered: "Entered", stillThere: "Still there",
+  movedOn: "Moved on", medianDays: "Median days", reachedWon: "Reached won", enteredPrevious: "Entered in the previous period",
+  yes: "Yes", no: "No" };
+const fnStage = (o) => ({ pipeline: "c:sales", pipelineLabel: "Sales", stageId: "s1", label: "New", order: 1, isClosed: false, outcome: null, readsTimes: true,
+  entered: 9, stillThere: 3, movedOn: 6, timed: 6, medianDays: 1, reachedWon: 2, wonShare: 0.2222, enteredPrevious: 2, ...o });
+const fnFile = funnelStagesCsv([fnStage({}), fnStage({ stageId: "sl", label: "=Lost", readsTimes: false, entered: null, stillThere: null, movedOn: null, timed: null,
+  medianDays: null, reachedWon: null, wonShare: null, enteredPrevious: null })], "2026-10-05", "2026-10-11", DUTCH, fnLabels).split("\r\n");
+expect("funnel file: header, a stage per row, days with the decimal comma, a stage off with empty figures, a label defused", fnFile.slice(0, 3),
+  ["﻿From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;Reached won;Entered in the previous period",
+   "05-10-2026;11-10-2026;Sales;New;Yes;9;3;6;1,0;2;2",
+   "05-10-2026;11-10-2026;Sales;'=Lost;No;;;;;;"],
+  ["From;To;Pipeline;Stage;Times read;Entered;Still there;Moved on;Median days;Reached won;Entered in the previous period",
+   "2026-10-05;2026-10-11;Sales;New;true;9;3;6;1;2;2",
+   "2026-10-05;2026-10-11;Sales;=Lost;false;0;0;0;0;0;0"]);
+const lrLabels = { from: "From", to: "To", reason: "Reason", value: "Value", kind: "Kind", deals: "Lost deals", share: "Share", real: "Real reason",
+  dataQuality: "Never a lead", none: "No reason", noReason: "No reason" };
+const lrFile = lostReasonsCsv([{ value: "too_expensive", label: "Too expensive", deals: 3, share: 0.4286 }], [{ value: "duplicate", label: "+Duplicate", deals: 1, share: 0.1 }],
+  { deals: 1, share: 0.1 }, "2026-10-05", "2026-10-11", DUTCH, lrLabels).split("\r\n");
+expect("lost reasons file: real, data quality and no reason, the share as a fraction with the decimal comma, a label defused", lrFile.slice(0, 4),
+  ["﻿From;To;Reason;Value;Kind;Lost deals;Share", "05-10-2026;11-10-2026;Too expensive;too_expensive;Real reason;3;0,4286",
+   "05-10-2026;11-10-2026;'+Duplicate;duplicate;Never a lead;1;0,1000", "05-10-2026;11-10-2026;No reason;;No reason;1;0,1000"],
+  ["From;To;Reason;Value;Kind;Lost deals;Share", "2026-10-05;2026-10-11;Too expensive;too_expensive;real;3;42.86%",
+   "2026-10-05;2026-10-11;+Duplicate;duplicate;data_quality;1;10%", "2026-10-05;2026-10-11;;;none;1;10%"]);
+const cnLabels = { period: "Period", day: "Day", week: "Week of", market: "Market", requests: "Requests", open: "Open", closed: "Closed",
+  medianDays: "Median days to close", unknownMarket: "Unknown market" };
+const cnFile = cancellationsCsv([{ key: "2026-10-05", market: "NL", requests: 2, open: 0, closed: 2, medianDaysToClose: 1.25 },
+  { key: "2026-10-05", market: "unknown", requests: 1, open: 1, closed: 0, medianDaysToClose: null }], "week", DUTCH, cnLabels).split("\r\n");
+expect("cancellations file: a row per week and market, Unknown market, the median with the decimal comma, empty without one", cnFile.slice(0, 3),
+  ["﻿Period;Market;Requests;Open;Closed;Median days to close", "Week of 05-10-2026;NL;2;0;2;1,3", "Week of 05-10-2026;Unknown market;1;1;0;"],
+  ["Period;Market;Requests;Open;Closed;Median days to close", "2026-10-05;NL;2;0;2;1.25", "2026-10-05;unknown;1;1;0;0"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

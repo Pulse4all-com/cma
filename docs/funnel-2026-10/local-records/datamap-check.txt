@@ -1,0 +1,18 @@
+The data map check against a snapshot of the local throwaway database at 0008zb (Claude Code, 20 October 2026).
+Not dev's or prod's snapshot: docs/datamap/schema.json on this branch stays as it is until Martin refreshes it from dev (RUNBOOK.md, step 9).
+
+Snapshot: tools/datamap/schema.sql on the local database after 96 and 98 (latest_migration 0008zb), with this branch's catalog.json and template.html, in a copy outside the repository.
+
+$ node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
+datamap: wrote docs/datamap/index.html (85 tables, 117 views)
+datamap: 85 tables, 117 views, all described; index.html current
+
+On this branch, with main's schema.json (at 0008z), npm run verify:datamap (from web/) fails as expected until step 9:
+  catalog crm_record_stage: not a table in cma in schema.json
+  catalog connection_reason: not a table in cma in schema.json
+  catalog connection_record_kind: not a table in cma in schema.json
+  catalog record_kind: not a table in cma in schema.json
+  catalog deal_funnel_rows: derived, not a view in cma_read in schema.json
+  catalog cancellation_rows: derived, not a view in cma_read in schema.json
+  index.html: differs from a fresh build; run node tools/datamap/build.mjs
+datamap: FAIL (7 problems)

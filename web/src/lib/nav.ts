@@ -50,6 +50,8 @@ export type ShellPage =
   | "first-orders" | "orders-per-person"
   /** Attempts per deal and Attempts per agent (addition 0008y, 19 October 2026) */
   | "attempts" | "attempts-per-agent"
+  /** Funnel and Cancellations (addition 0008zb): the deals through their stages with the lost reasons, and the cancellation requests */
+  | "funnel" | "cancellations"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
@@ -63,7 +65,7 @@ export type ShellPage =
   | "account";
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
-  | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
+  | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
@@ -81,7 +83,7 @@ export interface NavItem {
    * A per-person report page (addition 0008t): shown only while the tenant's reports.per_person holds this key
    * (Principal.perPerson), besides the permission; absent otherwise, with its route
    */
-  perPerson?: "email" | "orders" | "attempts";
+  perPerson?: "email" | "orders" | "attempts" | "deals";
 }
 
 /** A page that stands on its own in the rail, with its icon */
@@ -190,6 +192,11 @@ export function navEntries(copy: Copy): NavEntry[] {
         // reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions)
         { page: "attempts", href: "/reports/attempts", label: copy.nav.attempts, permission: ["reports.view", "performance.team"] },
         { page: "attempts-per-agent", href: "/reports/attempts-per-agent", label: copy.nav.attemptsPerAgent, permission: "performance.team", perPerson: "attempts" },
+        // Funnel and Cancellations (addition 0008zb, Kira's KPIs 4 and 5): the sales deals through their stages with why they are
+        // lost (deals per person on the page for performance.team while reports.per_person holds deals), and the cancellation
+        // requests of the tenant's cancellation kind per market and week
+        { page: "funnel", href: "/reports/funnel", label: copy.nav.funnel, permission: ["reports.view", "performance.team"] },
+        { page: "cancellations", href: "/reports/cancellations", label: copy.nav.cancellations, permission: ["reports.view", "performance.team"] },
         // Forms (addition 0008p, brief B17d): every polled form's submissions per form and market, as Calls
         { page: "forms", href: "/reports/forms", label: copy.nav.forms, permission: ["reports.view", "performance.team"] },
         { page: "intake", href: "/reports/intake", label: copy.nav.intake, permission: ["reports.view", "performance.team"] },

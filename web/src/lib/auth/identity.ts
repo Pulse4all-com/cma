@@ -106,8 +106,8 @@ export const MOCK_PRINCIPAL: Principal = {
   timeZone: "Europe/Madrid",
   preview: null,
   canPreview: false,
-  // the dev seed (03) switches the three on (attempts since addition 0008y)
-  perPerson: ["email", "orders", "attempts"],
+  // the dev seed (03) switches the four on (attempts since addition 0008y, deals since 0008zb)
+  perPerson: ["email", "orders", "attempts", "deals"],
 };
 
 /** The identity proxy.ts attached to this request, or null if it attached none */
