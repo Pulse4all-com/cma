@@ -300,6 +300,12 @@
     "rt": 18
   },
   {
+    "path": "/configuration/metrics",
+    "subject": "admin",
+    "tx": 3,
+    "rt": 13
+  },
+  {
     "path": "/configuration/health",
     "subject": "admin",
     "tx": 7,

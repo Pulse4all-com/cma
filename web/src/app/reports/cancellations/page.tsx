@@ -13,6 +13,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fmtCount, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -55,7 +56,9 @@ export default async function CancellationsPage({ searchParams }: PageProps<"/re
   const h = copy.hints;
   const n = (x: number) => fmtCount(x, me.locale);
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("cn")));
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const cur = report.current;
   const prev = report.previous;
   const delta = (current: number | null, previous: number | null, better?: "up" | "down") =>
@@ -112,12 +115,12 @@ export default async function CancellationsPage({ searchParams }: PageProps<"/re
 
       <div className="flex flex-col gap-6">
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label={t.title} data-testid="cancellations-tiles">
-          <CallsTile testId="cancellations-requests" label={t.requests} value={n(cur.requests)} info={info(t.requests, h.cnRequests)} detail={t.requestsDetail}
+          <CallsTile testId="cancellations-requests" label={t.requests} value={n(cur.requests)} info={info(t.requests, h.cnRequests, "cancellations.requests")} detail={t.requestsDetail}
             delta={delta(cur.requests, prev.requests)} />
-          <CallsTile testId="cancellations-open" label={t.open} value={n(cur.open)} info={info(t.open, h.cnOpen)} detail={t.openDetail} delta={delta(cur.open, prev.open)} />
-          <CallsTile testId="cancellations-closed" label={t.closed} value={n(cur.closed)} info={info(t.closed, h.cnClosed)} detail={t.closedDetail}
+          <CallsTile testId="cancellations-open" label={t.open} value={n(cur.open)} info={info(t.open, h.cnOpen, "cancellations.open")} detail={t.openDetail} delta={delta(cur.open, prev.open)} />
+          <CallsTile testId="cancellations-closed" label={t.closed} value={n(cur.closed)} info={info(t.closed, h.cnClosed, "cancellations.closed")} detail={t.closedDetail}
             delta={delta(cur.closed, prev.closed)} />
-          <CallsTile testId="cancellations-days" label={t.daysToClose} value={fmtDays(cur.medianDaysToClose, me.locale, copy.funnel)} info={info(t.daysToClose, h.cnDays)}
+          <CallsTile testId="cancellations-days" label={t.daysToClose} value={fmtDays(cur.medianDaysToClose, me.locale, copy.funnel)} info={info(t.daysToClose, h.cnDays, "cancellations.median_days_to_close")}
             detail={t.daysToCloseDetail} delta={delta(cur.medianDaysToClose, prev.medianDaysToClose, "down")} />
         </section>
 

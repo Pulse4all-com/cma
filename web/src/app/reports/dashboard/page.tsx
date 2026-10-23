@@ -10,6 +10,7 @@ import { byDay, byPerson, byStatus, peopleOf, share, summarise } from "@/lib/das
 import { data, dataIsMock } from "@/lib/data";
 import { resolvePeriod } from "@/lib/period";
 import { dateKeyInZone, fmtDate, fmtMinutes, fmtPercent } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /** team_status_time answers at most 92 days per request */
@@ -68,7 +69,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
   const persons = byPerson(rows);
   const query: Record<string, string> =
     range === "custom" && !invalid ? { range, from: period.from, to: period.to } : { range };
-  const info = (label: string, text: string) => ({ about: copy.hints.about.replace("{label}", label), text });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: copy.hints.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, copy.hints.howComputed) : undefined });
 
   return (
     <Shell copy={copy} me={me} active="dashboard" wide>
@@ -90,7 +93,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
         </div>
       ) : null}
 
-      <IntakeRow intake={intake} records={records} speed={speed} callbacks={callbacks} copy={copy} locale={me.locale} from={period.from} />
+      <IntakeRow intake={intake} records={records} speed={speed} callbacks={callbacks} copy={copy} locale={me.locale} from={period.from}
+        canOpenMetrics={me.permissions.includes("tenant.configure")} />
 
       <div className="mb-6 flex items-end justify-between gap-4">
         <DashboardFilter people={people} person={person} query={query} copy={copy} />
@@ -113,17 +117,17 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
           ) : null}
 
           <div className="grid grid-cols-4 gap-4">
-            <Tile label={t.worked} info={info(t.worked, copy.hints.worked)} value={fmtMinutes(summary.workedMinutes)} hint={t.workedHint} />
-            <Tile label={t.paid} info={info(t.paid, copy.hints.paid)} value={fmtMinutes(summary.paidMinutes)} hint={t.paidHint} />
+            <Tile label={t.worked} info={info(t.worked, copy.hints.worked, "dashboard.time.worked_minutes")} value={fmtMinutes(summary.workedMinutes)} hint={t.workedHint} />
+            <Tile label={t.paid} info={info(t.paid, copy.hints.paid, "dashboard.time.paid_minutes")} value={fmtMinutes(summary.paidMinutes)} hint={t.paidHint} />
             <Tile
               label={t.productive}
-              info={info(t.productive, copy.hints.productive)}
+              info={info(t.productive, copy.hints.productive, "dashboard.time.productive_share")}
               value={fmtPercent(share(summary.productiveSeconds, summary.workedSeconds), me.locale)}
               hint={t.productiveHint.replace("{time}", fmtMinutes(Math.floor(summary.productiveSeconds / 60)))}
             />
             <Tile
               label={t.people}
-              info={info(t.people, copy.hints.people)}
+              info={info(t.people, copy.hints.people, "dashboard.time.people")}
               value={String(summary.people)}
               hint={summary.personDays === 1 ? t.peopleHintOne : t.peopleHint.replace("{n}", String(summary.personDays))}
             />

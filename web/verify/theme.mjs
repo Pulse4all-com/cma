@@ -120,6 +120,8 @@ const pages = [
   { path: "/configuration/sources/00000000-0000-7000-8000-00000000c003", subject: "admin" },
   { path: "/configuration/markets", subject: "admin" },
   { path: "/configuration/alert-rules", subject: "admin" },
+  // The metric catalog (Configuration → Metrics): the page as the admin
+  { path: "/configuration/metrics", subject: "admin" },
   // System health (addition 0008r), as the admin
   { path: "/configuration/health", subject: "admin" },
   // The intake reports (B11): as the manager (every figure), and the tenant without telephony or a shop

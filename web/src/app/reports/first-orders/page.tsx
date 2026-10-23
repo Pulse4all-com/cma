@@ -13,6 +13,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fillHint, fmtCount, fmtShare, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -61,7 +62,9 @@ export default async function FirstOrdersPage({ searchParams }: PageProps<"/repo
   const words = (list: readonly FirstOrderLevel[]) => list.map((l) => t[`level_${l}`].toLowerCase()).join(", ");
   const fill = (text: string) => fillHint(text.replaceAll("{assisted}", words(report.settings.assistedLevels)).replaceAll("{levels}", words(report.settings.levelOrder)),
     { hours: h.officeHours, days: report.settings.windowDays, minutes: report.settings.knownContactMinutes }, me.locale);
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text: fill(text), more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("fo")).map(([k, v]) => [k, fill(v)]));
   const levelHints = {
     lead_deal: hints.foLeadDeal!, conversation: hints.foConversation!, email: hints.foEmail!, phone_match: hints.foPhoneMatch!, attempt: hints.foAttempt!,
@@ -123,16 +126,16 @@ export default async function FirstOrdersPage({ searchParams }: PageProps<"/repo
       ) : (
         <div className="flex flex-col gap-6">
           <section className="grid grid-cols-4 gap-4" aria-label={t.title} data-testid="first-order-tiles">
-            <CallsTile testId="first-order-total" label={t.firstOrders} value={n(total.firstOrders)} info={info(t.firstOrders, h.foOrders)}
+            <CallsTile testId="first-order-total" label={t.firstOrders} value={n(total.firstOrders)} info={info(t.firstOrders, h.foOrders, "first_orders.total")}
               detail={t.firstOrdersDetail.replace("{repeats}", n(total.repeats)).replace("{renewals}", n(total.renewals)).replace("{notFirst}", n(total.notFirst))
                 .replace("{noContact}", n(total.noContact))}
               delta={delta(total.firstOrders, report.previous.firstOrders)} />
-            <CallsTile testId="first-order-call-center" label={t.callCenter} value={n(total.callCenter)} info={info(t.callCenter, h.foCallCenter)}
+            <CallsTile testId="first-order-call-center" label={t.callCenter} value={n(total.callCenter)} info={info(t.callCenter, h.foCallCenter, "first_orders.call_center")}
               detail={t.shareDetail.replace("{pct}", fmtShare(share, me.locale))} delta={delta(total.callCenter, report.previous.callCenter)} />
-            <CallsTile testId="first-order-self-service" label={t.selfService} value={n(total.selfService)} info={info(t.selfService, h.foSelfService)}
+            <CallsTile testId="first-order-self-service" label={t.selfService} value={n(total.selfService)} info={info(t.selfService, h.foSelfService, "first_orders.self_service")}
               detail={t.shareDetail.replace("{pct}", fmtShare(share === null ? null : 1 - share, me.locale))}
               delta={delta(total.selfService, report.previous.selfService)} />
-            <CallsTile testId="first-order-days" label={t.days} value={fmtDays(total.daysMedian, me.locale)} info={info(t.days, h.foDays)}
+            <CallsTile testId="first-order-days" label={t.days} value={fmtDays(total.daysMedian, me.locale)} info={info(t.days, h.foDays, "first_orders.days_median")}
               detail={total.withTouch === 0 ? t.daysNone : t.daysDetail.replace("{n}", n(total.withTouch))} />
           </section>
 

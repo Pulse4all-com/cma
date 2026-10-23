@@ -19,39 +19,49 @@ import { callbackWaiting, fmtSeconds, INBOUND_TILES, inboundTileValue, type Inbo
 import { fillHint, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct } from "@/lib/reports";
 import { dateKeyInZone, fmtDate, fmtTime } from "@/lib/time";
 import { HeaderHint } from "./HeaderHint";
+import { metricsHref } from "@/lib/metrics";
 import { HintLabel } from "./HintLabel";
 import { NotConnected, RecordLink } from "./ReportParts";
 import { Card } from "./primitives";
 
-function Tile({ label, info, value, testId }: { label: string; info: { about: string; text: string }; value: ReactNode; testId: string }) {
+function Tile({ label, info, value, testId }: {
+  label: string;
+  /** The hint behind the info mark; more: "How this is computed" to the figure's catalog entry, for tenant.configure only */
+  info: { about: string; text: string; more?: { href: string; label: string } }; value: ReactNode; testId: string;
+}) {
   return (
     <div className="rounded-card border border-p4a-border bg-white p-6" data-testid={testId} data-tile="">
       <p className="flex items-start text-small text-p4a-muted" data-hint-anchor="">
         {label}
-        <HeaderHint label={info.about} text={info.text} />
+        <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       <div className="tabular mt-1 whitespace-nowrap text-title font-bold text-p4a-heading">{value}</div>
     </div>
   );
 }
 
-export function InboundLive({ inbound, copy, locale }: { inbound: InboundNow; copy: Copy; locale: Locale }) {
+export function InboundLive({ inbound, copy, locale, canOpenMetrics = false }: {
+  inbound: InboundNow; copy: Copy; locale: Locale;
+  /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration -> Metrics */
+  canOpenMetrics?: boolean;
+}) {
   const t = copy.live;
   const h = copy.hints;
   const today = inbound.today;
   const fill = (text: string) => fillHint(text, {
     hours: h.officeHours, seconds: today?.serviceLevelSeconds ?? null, minutes: today?.waitingMaxMinutes ?? null, days: inbound.lookbackDays,
   }, locale);
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text: fill(text), more: key && canOpenMetrics ? { href: metricsHref(key), label: h.howComputed } : undefined });
 
-  const tiles: Record<InboundTileKey, { label: string; hint: string }> = {
-    offered: { label: t.inboundOffered, hint: h.liveOffered },
-    answered: { label: t.inboundAnswered, hint: h.liveAnswered },
-    unansweredPct: { label: t.inboundUnanswered, hint: h.unansweredPct },
-    serviceLevel: { label: t.inboundServiceLevel, hint: h.serviceLevel },
-    avgAnswer: { label: t.inboundAvgAnswer, hint: h.avgAnswer },
-    waitingNow: { label: t.inboundWaitingNow, hint: h.liveWaitingNow },
-    longestWaiting: { label: t.inboundLongestWaiting, hint: h.liveLongestWaiting },
+  const tiles: Record<InboundTileKey, { label: string; hint: string; metric: string }> = {
+    offered: { label: t.inboundOffered, hint: h.liveOffered, metric: "live.inbound.offered" },
+    answered: { label: t.inboundAnswered, hint: h.liveAnswered, metric: "live.inbound.answered" },
+    unansweredPct: { label: t.inboundUnanswered, hint: h.unansweredPct, metric: "live.inbound.unanswered_share" },
+    serviceLevel: { label: t.inboundServiceLevel, hint: h.serviceLevel, metric: "live.inbound.service_level" },
+    avgAnswer: { label: t.inboundAvgAnswer, hint: h.avgAnswer, metric: "live.inbound.avg_answer" },
+    waitingNow: { label: t.inboundWaitingNow, hint: h.liveWaitingNow, metric: "live.inbound.waiting_now" },
+    longestWaiting: { label: t.inboundLongestWaiting, hint: h.liveLongestWaiting, metric: "live.inbound.longest_waiting" },
   };
   const shown = (key: InboundTileKey): ReactNode => {
     if (!today) return "–";
@@ -78,7 +88,7 @@ export function InboundLive({ inbound, copy, locale }: { inbound: InboundNow; co
       ) : (
         <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7" data-testid="inbound-tiles">
           {INBOUND_TILES.map((key) => (
-            <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint)} value={shown(key)} />
+            <Tile key={key} testId={`inbound-${key}`} label={tiles[key].label} info={info(tiles[key].label, tiles[key].hint, tiles[key].metric)} value={shown(key)} />
           ))}
         </div>
       )}

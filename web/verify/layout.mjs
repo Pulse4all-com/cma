@@ -240,7 +240,7 @@ async function expectNavigation() {
       // since 0008z (Martin, 20 October 2026): Team and skills, Statuses, Absences and coverage, Markets, Sources, App links,
       // Exports, Alert rules, System health
       ? [["/configuration/teams"], ["/configuration/statuses"], ["/configuration/absences"], ["/configuration/markets"], ["/configuration/sources"],
-         ["/configuration/app-links"], ["/configuration/exports"], ["/configuration/alert-rules"], ["/configuration/health"]].map(([h]) => [null, h])
+         ["/configuration/app-links"], ["/configuration/exports"], ["/configuration/alert-rules"], ["/configuration/metrics"], ["/configuration/health"]].map(([h]) => [null, h])
       : [];
     if (JSON.stringify(configLinks) !== JSON.stringify(wantConfig)) problems.push(`${subject}: configuration pages ${JSON.stringify(configLinks)}, expected ${JSON.stringify(wantConfig)}`);
     if (hasClockIn !== clock) problems.push(`${subject}: Clock in ${hasClockIn ? "shown" : "missing"} on Welcome, expected ${clock ? "shown" : "missing"}`);

@@ -15,6 +15,7 @@ import {
   parseFormsFilter, parseFormsGroup, REPORT_PERMISSIONS, resolvedShare,
 } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -81,7 +82,9 @@ export default async function FormsPage({ searchParams }: PageProps<"/reports/fo
   })).sort((a, b) => a.field.localeCompare(b.field));
 
   const h = copy.hints;
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const n = (x: number) => fmtCount(x, me.locale);
   const delta = (current: number, previous: number) =>
     <DeltaLine current={current} previous={previous} compared={prevLabel} previousFrom={report.previousFrom} historyStart={report.historyStart}
@@ -136,13 +139,13 @@ export default async function FormsPage({ searchParams }: PageProps<"/reports/fo
       ) : (
         <div className="flex flex-col gap-6">
           <section className="grid grid-cols-4 gap-4" aria-label={t.title} data-testid="forms-tiles">
-            <CallsTile testId="forms-submissions" label={t.submissions} value={n(sum.submissions)} info={info(t.submissions, h.formsSubmissions)}
+            <CallsTile testId="forms-submissions" label={t.submissions} value={n(sum.submissions)} info={info(t.submissions, h.formsSubmissions, "forms.submissions")}
               detail={t.submissionsDetail.replace("{forms}", n(formsNow)).replace("{markets}", n(marketsNow))} delta={delta(sum.submissions, previousSubmissions)} />
-            <CallsTile testId="forms-forms" label={t.formsWithSubmissions} value={n(formsNow)} info={info(t.formsWithSubmissions, h.formsForms)}
+            <CallsTile testId="forms-forms" label={t.formsWithSubmissions} value={n(formsNow)} info={info(t.formsWithSubmissions, h.formsForms, "forms.forms_with_submissions")}
               detail={t.formsDetail.replace("{categories}", n(categoriesNow))} delta={delta(formsNow, formsBefore)} />
-            <CallsTile testId="forms-resolved" label={t.resolved} value={fmtPct(share === null ? null : share * 100, me.locale)} info={info(t.resolved, h.formsResolvedShare)}
+            <CallsTile testId="forms-resolved" label={t.resolved} value={fmtPct(share === null ? null : share * 100, me.locale)} info={info(t.resolved, h.formsResolvedShare, "forms.contact_found_share")}
               detail={t.resolvedDetail.replace("{resolved}", n(sum.resolved)).replace("{submissions}", n(sum.submissions))} />
-            <CallsTile testId="forms-without-market" label={t.withoutMarket} value={n(unknown)} info={info(t.withoutMarket, h.formsWithoutMarket)}
+            <CallsTile testId="forms-without-market" label={t.withoutMarket} value={n(unknown)} info={info(t.withoutMarket, h.formsWithoutMarket, "forms.without_market")}
               detail={t.withoutMarketDetail.replace("{unknown}", n(unknown)).replace("{submissions}", n(sum.submissions))} />
           </section>
 

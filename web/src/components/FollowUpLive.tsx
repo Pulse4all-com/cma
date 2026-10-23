@@ -12,8 +12,10 @@ import { FOLLOW_UP_TILES, type FollowUpTileKey } from "@/lib/follow-up";
 import { fillHint, fmtCount } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
 
-export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct }: {
+export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct, moreOf }: {
   summary: FollowUpSummary; copy: Copy; locale: Locale; targetMinutes: number | null; warningPct: number | null;
+  /** "How this is computed" per tile, to the figure's catalog entry; given only for tenant.configure */
+  moreOf?: (key: FollowUpTileKey) => { href: string; label: string } | undefined;
 }) {
   const t = copy.followUp;
   const h = copy.hints;
@@ -37,7 +39,7 @@ export function FollowUpLive({ summary, copy, locale, targetMinutes, warningPct 
           <div key={key} className="rounded-card border border-p4a-border bg-white p-6" data-testid={`follow-up-${key}`} data-tile="">
             <p className="flex items-start text-small text-p4a-muted" data-hint-anchor="">
               {labels[key].label}
-              <HeaderHint label={h.about.replace("{label}", labels[key].label)} text={fillHint(labels[key].hint, { hours: h.officeHours, target: targetMinutes, warning: warningPct }, locale)} />
+              <HeaderHint label={h.about.replace("{label}", labels[key].label)} text={fillHint(labels[key].hint, { hours: h.officeHours, target: targetMinutes, warning: warningPct }, locale)} more={moreOf?.(key)} />
             </p>
             <div className="tabular mt-1 whitespace-nowrap text-title font-bold text-p4a-heading">{fmtCount(summary[key], locale)}</div>
           </div>

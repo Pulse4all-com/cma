@@ -15,17 +15,22 @@ import { agoText, FOLLOW_UP_BY_OWNER_PERMISSION, FOLLOW_UP_PERMISSIONS, isStale,
 import { holdsAny } from "@/lib/nav";
 import { fillHint, fmtCount } from "@/lib/reports";
 import { dateKeyInZone, fmtDateTime, startOfWeek } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 type TileKey = keyof FollowUpSummary;
 const TILES: readonly TileKey[] = ["leadsOpenNotCalled", "leadsPastTarget", "ticketsAtRisk", "ticketsBreached", "ticketsWithoutOwner", "tasksOverdue", "tasksDueToday", "tasksUnmappedOwner"];
 
-function Tile({ label, info, value, testId }: { label: string; info: { about: string; text: string }; value: ReactNode; testId: string }) {
+function Tile({ label, info, value, testId }: {
+  label: string;
+  /** The hint behind the info mark; more: "How this is computed" to the figure's catalog entry, for tenant.configure only */
+  info: { about: string; text: string; more?: { href: string; label: string } }; value: ReactNode; testId: string;
+}) {
   return (
     <div className="rounded-card border border-p4a-border bg-white p-5" data-testid={testId} data-tile="">
       <p className="flex items-start text-small text-p4a-muted" data-hint-anchor="">
         {label}
-        <HeaderHint label={info.about} text={info.text} />
+        <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       <div className="tabular mt-1 whitespace-nowrap text-title font-bold text-p4a-heading">{value}</div>
     </div>
@@ -82,15 +87,15 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
   const stale = isStale(page.computedAt, now);
   const h = copy.hints;
   const fill = (text: string) => fillHint(text, { hours: h.officeHours, target: ctx.targetMinutes, warning: ctx.warningPct }, me.locale);
-  const tileCopy: Record<TileKey, { label: string; hint: string }> = {
-    leadsOpenNotCalled: { label: t.tileLeadsOpen, hint: h.fuLeadsOpen },
-    leadsPastTarget: { label: t.tileLeadsPast, hint: h.fuLeadsPast },
-    ticketsAtRisk: { label: t.tileTicketsAtRisk, hint: h.fuTicketsAtRisk },
-    ticketsBreached: { label: t.tileTicketsBreached, hint: h.fuTicketsBreached },
-    ticketsWithoutOwner: { label: t.tileTicketsNoOwner, hint: h.fuTicketsNoOwner },
-    tasksOverdue: { label: t.tileTasksOverdue, hint: h.fuTasksOverdue },
-    tasksDueToday: { label: t.tileTasksToday, hint: h.fuTasksToday },
-    tasksUnmappedOwner: { label: t.tileTasksUnmapped, hint: h.fuTasksUnmapped },
+  const tileCopy: Record<TileKey, { label: string; hint: string; metric: string }> = {
+    leadsOpenNotCalled: { label: t.tileLeadsOpen, hint: h.fuLeadsOpen, metric: "follow_up.leads_open_not_called" },
+    leadsPastTarget: { label: t.tileLeadsPast, hint: h.fuLeadsPast, metric: "follow_up.leads_past_target" },
+    ticketsAtRisk: { label: t.tileTicketsAtRisk, hint: h.fuTicketsAtRisk, metric: "follow_up.tickets_at_risk" },
+    ticketsBreached: { label: t.tileTicketsBreached, hint: h.fuTicketsBreached, metric: "follow_up.tickets_breached" },
+    ticketsWithoutOwner: { label: t.tileTicketsNoOwner, hint: h.fuTicketsNoOwner, metric: "follow_up.tickets_without_owner" },
+    tasksOverdue: { label: t.tileTasksOverdue, hint: h.fuTasksOverdue, metric: "follow_up.tasks_overdue" },
+    tasksDueToday: { label: t.tileTasksToday, hint: h.fuTasksToday, metric: "follow_up.tasks_due_today" },
+    tasksUnmappedOwner: { label: t.tileTasksUnmapped, hint: h.fuTasksUnmapped, metric: "follow_up.tasks_unmapped_owner" },
   };
   const empty = (all: number, text: string) => (all === 0 ? text : t.filteredEmpty);
 
@@ -108,7 +113,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
       <div className="mb-6 grid grid-cols-4 gap-4 2xl:grid-cols-8" data-testid="follow-up-summary">
         {TILES.map((key) => (
           <Tile key={key} testId={`follow-up-tile-${key}`} label={tileCopy[key].label}
-            info={{ about: h.about.replace("{label}", tileCopy[key].label), text: fill(tileCopy[key].hint) }} value={fmtCount(summary[key], me.locale)} />
+            info={{ about: h.about.replace("{label}", tileCopy[key].label), text: fill(tileCopy[key].hint), more: metricsMore(me.permissions, tileCopy[key].metric, h.howComputed) }} value={fmtCount(summary[key], me.locale)} />
         ))}
       </div>
 

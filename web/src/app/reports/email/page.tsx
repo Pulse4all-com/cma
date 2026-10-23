@@ -13,6 +13,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fillHint, fmtCount, fmtShare, fmtTalk, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -58,7 +59,9 @@ export default async function EmailPage({ searchParams }: PageProps<"/reports/em
   const n = (x: number) => fmtCount(x, me.locale);
   const values = { hours: h.officeHours, target: report.replyTargetMinutes, days: report.noResponseDays };
   const fill = (text: string) => fillHint(text, values, me.locale);
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text: fill(text), more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("email")).map(([k, v]) => [k, fill(v)]));
   const delta = (current: number, previous: number) =>
     <DeltaLine current={current} previous={previous} compared={prevLabel} previousFrom={report.previousFrom} historyStart={report.historyStart}
@@ -111,17 +114,17 @@ export default async function EmailPage({ searchParams }: PageProps<"/reports/em
       ) : (
         <div className="flex flex-col gap-6">
           <section className="grid grid-cols-5 gap-4" aria-label={t.title} data-testid="email-tiles">
-            <CallsTile testId="email-received" label={t.received} value={n(total.received)} info={info(t.received, h.emailReceived)}
+            <CallsTile testId="email-received" label={t.received} value={n(total.received)} info={info(t.received, h.emailReceived, "email.received")}
               detail={t.receivedDetail.replace("{logged}", n(total.loggedReplies))} delta={delta(total.received, report.previous.received)} />
-            <CallsTile testId="email-sent" label={t.sent} value={n(total.sentAgent)} info={info(t.sent, h.emailSent)}
+            <CallsTile testId="email-sent" label={t.sent} value={n(total.sentAgent)} info={info(t.sent, h.emailSent, "email.sent_agent")}
               detail={t.sentDetail.replace("{automated}", n(total.sentAutomated)).replace("{failed}", n(total.bouncedFailed))}
               delta={delta(total.sentAgent, report.previous.sentAgent)} />
-            <CallsTile testId="email-opened" label={t.opened} value={n(total.threadsOpened)} info={info(t.opened, h.emailOpened)}
+            <CallsTile testId="email-opened" label={t.opened} value={n(total.threadsOpened)} info={info(t.opened, h.emailOpened, "email.conversations_opened")}
               detail={t.openedDetail.replace("{closed}", n(total.threadsClosed))} delta={delta(total.threadsOpened, report.previous.threadsOpened)} />
-            <CallsTile testId="email-first-reply" label={t.firstReply} value={fmtTalk(total.replyMedianBusinessSeconds, me.locale)} info={info(t.firstReply, h.emailFirstReply)}
+            <CallsTile testId="email-first-reply" label={t.firstReply} value={fmtTalk(total.replyMedianBusinessSeconds, me.locale)} info={info(t.firstReply, h.emailFirstReply, "email.first_reply_median_business")}
               detail={total.replied === 0 ? t.firstReplyNone : total.targetKnown === 0 ? t.firstReplyNoHours.replace("{n}", n(total.noHours))
                 : t.firstReplyDetail.replace("{pct}", fmtShare(share, me.locale)).replace("{target}", n(report.replyTargetMinutes))} />
-            <CallsTile testId="email-to-close" label={t.toClose} value={fmtTalk(total.closeMedianBusinessSeconds, me.locale)} info={info(t.toClose, h.emailToClose)}
+            <CallsTile testId="email-to-close" label={t.toClose} value={fmtTalk(total.closeMedianBusinessSeconds, me.locale)} info={info(t.toClose, h.emailToClose, "email.time_to_close_median_business")}
               detail={t.toCloseDetail.replace("{elapsed}", fmtTalk(total.closeMedianSeconds, me.locale))} />
           </section>
 
