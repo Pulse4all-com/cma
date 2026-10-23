@@ -1008,8 +1008,9 @@ async function expectLiveBoard() {
 // The frame is exactly the viewport (23 October 2026): main and the rail are the only scroll containers, and main is the
 // containing block of the absolutely positioned content in it (the sr-only labels in table headers once stretched the
 // document and showed an empty area below the frame). At 1280x800 and 1920x1080 on the Live board (with the fixture's missed
-// calls), Speed to lead and Follow-up: after the wheel takes main to its bottom and End is pressed, the document is exactly the
-// window and never scrolled; a page longer than the window still scrolls in main, down to its last line; a fixed element in
+// calls), Speed to lead and Follow-up: after the wheel over main and End, with main at its bottom, the document is exactly the
+// window and never scrolled; a page longer than main still scrolls in main by the wheel, down to its last line (the Live board
+// is that page at 1280x800); a fixed element in
 // the top bar (the toasts) and in main (the header hints) still sits against the window. At 1280x800 the rail's foot sits at
 // its bottom; at 1280x600 with the longest group open the page stays put and the rail toggle is reached by scrolling the rail.
 // --provoke puts the frame of before back (rows that grow with the rail, main not positioned, the rail not a scroll container)
@@ -1044,6 +1045,8 @@ async function expectFrameFixed() {
       await p.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height, height - box.y) / 2);
       await p.mouse.wheel(0, 20000);
       await p.waitForTimeout(300);
+      // what the wheel moved on its own, before main is set to its very bottom for End
+      const wheeled = await p.evaluate(() => document.querySelector("main").scrollTop);
       await p.evaluate(() => { const main = document.querySelector("main"); main.scrollTop = main.scrollHeight; });
       await p.keyboard.press("End");
       await p.waitForTimeout(400);
@@ -1063,7 +1066,6 @@ async function expectFrameFixed() {
         return {
           scrollHeight: main.scrollHeight,
           clientHeight: main.clientHeight,
-          scrollTop: main.scrollTop,
           lastBottom: main.lastElementChild.getBoundingClientRect().bottom,
           mainBottom: Math.min(r.bottom, window.innerHeight),
           probes,
@@ -1072,8 +1074,9 @@ async function expectFrameFixed() {
       const doc = await docOf(p);
       if (doc.height !== doc.inner) problems.push(`${where}: the document is ${doc.height}px tall in a ${doc.inner}px window, so the page scrolls below the frame`);
       if (doc.y !== 0) problems.push(`${where}: the wheel and End scrolled the page by ${doc.y}px`);
+      if (path === "/live/board" && tag === "1280x800" && natural <= m.clientHeight) problems.push(`${where}: the board fits in main (${Math.round(natural)}px in ${m.clientHeight}px), so the check has no page longer than the window`);
       if (natural > m.clientHeight) {
-        if (m.scrollHeight <= m.clientHeight || m.scrollTop <= 0) problems.push(`${where}: the content is ${Math.round(natural)}px in a ${m.clientHeight}px main, which does not scroll (scrollHeight ${m.scrollHeight}, scrollTop ${m.scrollTop})`);
+        if (m.scrollHeight <= m.clientHeight || wheeled <= 0) problems.push(`${where}: the content is ${Math.round(natural)}px in a ${m.clientHeight}px main, which the wheel does not scroll (scrollHeight ${m.scrollHeight}, moved ${wheeled}px)`);
         if (m.lastBottom > m.mainBottom + 1) problems.push(`${where}: at the bottom of main its last line ends at ${Math.round(m.lastBottom)}px, below main's ${Math.round(m.mainBottom)}px`);
       }
       if (m.probes.some((ok) => !ok)) problems.push(`${where}: a fixed element in the ${m.probes[0] ? "content" : "top bar"} no longer sits 24px from the window's bottom right`);
