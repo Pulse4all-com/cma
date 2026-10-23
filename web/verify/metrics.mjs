@@ -163,7 +163,9 @@ const gateWant = { admin: 200, manager: 403, analyst: 403, agent: 403, reader: 4
 for (const [who, want] of Object.entries(gateWant)) {
   if (gate[who] !== want) problems.push(`gate: ${who} answers ${gate[who]}, expected ${want}`);
 }
-say(`page /configuration/metrics: ${Object.entries(gate).map(([w, s]) => `${w} ${s}`).join(", ")}`);
+// 403 is the gate's decision (the no-permission card, nothing read, no rail item); the response's
+// own status line is 200 on every configuration page, so the summary says "refused", not a status
+say(`page /configuration/metrics: ${Object.entries(gate).map(([w, s]) => `${w} ${s === 403 ? "refused" : s}`).join(", ")}`);
 
 // ---------------------------------------------------------------------------------------------
 if (PROVOKE) {

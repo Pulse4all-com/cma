@@ -144,7 +144,7 @@ function SettingsTable({ entry, t, current }: { entry: MetricEntry; t: Chrome; c
 function CardBody({ entry, t, current, datamap }: { entry: MetricEntry; t: Chrome; current: Current; datamap: string | null }) {
   return (
     <div className="flex flex-col gap-4 border-t border-p4a-border px-4 py-4">
-      <Field label={t.formula}><pre className="whitespace-pre-wrap rounded-button bg-p4a-bgblue/40 p-2 font-mono text-caption text-p4a-body">{entry.formula}</pre></Field>
+      <Field label={t.formula}><pre className="tabular overflow-x-auto whitespace-pre rounded-button bg-p4a-bgblue/40 p-2 font-sans text-caption text-p4a-body">{entry.formula}</pre></Field>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Field label={t.unit}>{entry.unit}</Field>
         <Field label={t.grain}>{entry.grain.join(", ")}</Field>
@@ -167,15 +167,15 @@ function CardBody({ entry, t, current, datamap }: { entry: MetricEntry; t: Chrom
       {entry.settings.length > 0 ? <Field label={t.settingsTitle}><SettingsTable entry={entry} t={t} current={current} /></Field> : null}
       <Field label={t.computedTitle}>
         <ul className="list-disc pl-5">
-          {entry.computed_in.sql.map((s) => <li key={s.object}><code>{s.object}</code> ({s.migration})</li>)}
-          {entry.computed_in.ts.map((x) => <li key={`${x.file}:${x.export}`}><code>{x.export}</code> in {x.file}</li>)}
+          {entry.computed_in.sql.map((s) => <li key={s.object}><code className="font-sans">{s.object}</code> ({s.migration})</li>)}
+          {entry.computed_in.ts.map((x) => <li key={`${x.file}:${x.export}`}><code className="font-sans">{x.export}</code> in {x.file}</li>)}
         </ul>
       </Field>
       <Field label={t.verifyTitle}>
         {entry.verify_sql ? (
           <div data-verify-sql="">
             <p className="mb-1 text-caption text-p4a-grey">{t.verifyHint}</p>
-            <pre className="overflow-x-auto rounded-button bg-p4a-inkt p-3 font-mono text-caption text-p4a-bgblue-dark"><code>{entry.verify_sql}</code></pre>
+            <pre className="tabular overflow-x-auto whitespace-pre rounded-button bg-p4a-inkt p-3 font-sans text-caption text-p4a-bgblue-dark"><code className="font-sans">{entry.verify_sql}</code></pre>
             <CopyQueryButton text={entry.verify_sql} label={t.copyQuery} copied={t.copied} />
           </div>
         ) : (
@@ -214,7 +214,7 @@ function MetricCard({ entry, t, current, datamap, open, onToggle }: {
     >
       <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] items-start gap-x-4 gap-y-1 rounded-card px-4 py-3 hover:bg-p4a-bgblue/50 [&::-webkit-details-marker]:hidden">
         <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <code className="text-small font-semibold text-p4a-deepblue">{entry.key}</code>
+          <code className="font-sans text-small font-semibold text-p4a-deepblue">{entry.key}</code>
           {entry.tile
             ? <span className="text-small font-semibold text-p4a-body">{entry.tile}</span>
             : <span className="text-caption text-p4a-muted">{entry.surface === "export" ? t.exportColumn : t.apiOnly}</span>}
