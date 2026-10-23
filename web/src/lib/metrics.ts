@@ -28,7 +28,8 @@ export interface MetricEntry {
   filters: readonly string[];
   time: string;
   comparison: string | null;
-  settings: readonly { key: string; default: string; pulse4all: string }[];
+  /** pulse4all (the seed value) lives in docs/metrics/catalog.json only: the web copy strips it, so one tenant's configuration never ships to another's browser */
+  settings: readonly { key: string; default: string; pulse4all?: string }[];
   permissions: { anyOf: readonly string[]; perPerson: "email" | "orders" | "attempts" | "deals" | null };
   refresh: string;
   computed_in: {
