@@ -100,8 +100,8 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | **Authentication** | README.md (this file) |
 | **Roadmap** | [docs/product/roadmap.md](docs/product/roadmap.md) |
 | **Out of scope** | [docs/product/roadmap.md](docs/product/roadmap.md) |
-| Metric catalog | [docs/metrics/METRICS.md](docs/metrics/METRICS.md) |
-| Metric audit | [docs/metrics/AUDIT-2026-10-23.md](docs/metrics/AUDIT-2026-10-23.md) |
+| **Metric catalog** | [docs/metrics/METRICS.md](docs/metrics/METRICS.md) |
+| **Metric audit** | [docs/metrics/AUDIT-2026-10-23.md](docs/metrics/AUDIT-2026-10-23.md) |
 | **Decision log** | [docs/decisions.md](docs/decisions.md) |
 | **Open decisions** | [docs/open-decisions.md](docs/open-decisions.md) |
 
