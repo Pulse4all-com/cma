@@ -82,7 +82,7 @@ with its verify), and the five-minute check of `docs/OPERATIONS.md` section 2 pa
 |---|---|---|---|
 | S1 Plan B for the agents | call center manager (content), CMA owner | `docs/PLAN_B.md`; the agents' short copy in their language; one dry run of the sheet on a quiet day | met by this report PR for the document; the agents' copy and the dry run open |
 | S2 Rollback runbook | CMA owner | `docs/RUNBOOK.md` section 10 (web) and `docs/OPERATIONS.md` section 3 (ingest, jobs, scheduler job); the ingest commands run once in dev as the dry run | met by this report PR for the document; the dev dry run open |
-| S3 Alert set | CMA owner | the policies of OPERATIONS section 9 listed by `gcloud monitoring policies list` in `p4a-cma-prod`; one test incident closed | open (Console only; steps in 3.3) |
+| S3 Alert set | CMA owner | the policies of OPERATIONS section 9 listed by `gcloud monitoring policies list` in `p4a-cma-prod`; one test incident closed; met by the real incident of 18 October 2026 (Decision log, 23 October 2026) | open (Console only; steps in 3.3) |
 | S4 2-Step Verification enforced for the agents' unit | Workspace administrator (CMA owner) | the Admin console shows enforcement on for the unit; a Decision log row with the date | open (Console only; steps in 3.3) |
 | S5 System health page | CMA owner | #152 and #153 merged; 0008r run in dev and prod with `79` passing; the page green in prod; the two `health.link_*` settings filled | met by #152 and #153 once merged and run |
 | S6 Database hardening 0008q | CMA owner | #151 merged; `76` and `77` run in dev and prod, `77` passing and failing under provoke; the records | met by #151 once merged and run |
@@ -94,13 +94,16 @@ with its verify), and the five-minute check of `docs/OPERATIONS.md` section 2 pa
 
 ### 3.3 Console-only gates: Martin's steps
 
-**S3, the alert set.** Owner of the one existing policy: `docs/ingest/alert.sh`.
+**S3, the alert set.** Owner of `cma-ingest 429`: `docs/ingest/alert.sh`.
+
+Status: four policies since 18 October 2026, `cma-ingest 429` and the three `docs/OPERATIONS.md` section 9 lists beside it, each enabled, each to the channel "CMA ingest alerts" (`records/console-2026-10-18`); steps 2 and 3 done, step 4 open.
 
 1. **Terminal**
    ```bash
    gcloud monitoring policies list --project=p4a-cma-prod --format='table(displayName,enabled)'
    ```
-   Expected: `cma-ingest 429  True` and nothing else.
+   Expected: four rows, each `True`: `cma-ingest 429`, `cma-prod-pg connections above 75 of 93`,
+   `cma-web more than 5 server errors in 5 minutes` and `Cloud Run job failed (any job)`.
 2. **Browser:** Console → Monitoring → Alerting → Create policy, one policy at a time from the table in
    `docs/OPERATIONS.md` section 9 (metric, filter, condition, documentation text, the channel "CMA ingest
    alerts"). Expected after each Save: the policy listed and enabled; no incident open.
@@ -134,6 +137,8 @@ with its verify), and the five-minute check of `docs/OPERATIONS.md` section 2 pa
 
 **Logging retention and the invitation token in request logs.** No script owns it (audit finding WEB-02,
 already open in README).
+
+Status: the retention is met, 30 days decided with Yordi (Decision log, 12 October 2026). The buckets' location, `global`, is open (Open decisions, Cloud Logging location in `p4a-cma-prod`). Steps 2 and 3 (WEB-02) are unchanged.
 
 1. **Terminal**
    ```bash
