@@ -2822,7 +2822,7 @@ export interface FollowUpCallbacksRequest {
   perOwner: boolean;
 }
 
-/** The callbacks kept read with the Follow-up page: null when not asked; the per-person rows null until a callback type counts */
+/** The callbacks kept read with the Follow-up page: null when not asked; the per-person rows null when not asked or until a callback type counts */
 export interface FollowUpCallbacks {
   callbacks: CallbacksKept | null;
   callbackOwners: CallbackOwner[] | null;
