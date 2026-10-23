@@ -4,7 +4,7 @@ Part of the CMA documentation (README.md, Documentation map). Moved verbatim fro
 
 ## KPIs and steering for the Head of Call Center
 
-This section is Pulse4all's configuration of the metric catalog: deal stages, closed-lost reasons, markets and GB rules are tenant settings, not product rules. Another customer defines its own.
+This section is Pulse4all's configuration of the metric catalog: deal stages, closed-lost reasons, markets and GB rules are tenant settings, not product rules. Another customer defines its own. The as-built definition of every figure the Workspace shows (the formula as the code computes it, its sources, time rules and settings) is in the metric catalog, docs/metrics/METRICS.md, shown on Configuration → Metrics.
 
 Kira steers the call center on six outcomes: **conversion (speed to lead), indirect sales, reviews as high as possible, churn as low as possible, and complaints and vulnerability in the UK**. The metrics below are what she needs to steer on. Each area is tagged with where it lives:
 

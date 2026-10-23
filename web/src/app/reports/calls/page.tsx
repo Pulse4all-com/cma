@@ -11,6 +11,7 @@ import {
   chartGroups, fillHint, filterQuery, fmtCount, fmtPct, fmtTalk, MAX_REPORT_DAYS, parseCallsFilter, parseCallsGroup, REPORT_PERMISSIONS, untaggedPct,
 } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -64,7 +65,9 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
 
   const h = copy.hints;
   const fill = (text: string) => fillHint(text, { hours: h.officeHours, threshold: overview.connectedMinSeconds }, me.locale);
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key: string) =>
+    ({ about: h.about.replace("{label}", label), text: fill(text), more: metricsMore(me.permissions, key, h.howComputed) });
   const n = (x: number) => fmtCount(x, me.locale);
   const delta = (current: number | null, prev: number | null) =>
     <DeltaLine current={current} previous={prev} compared={prevLabel} previousFrom={overview.previousFrom} historyStart={overview.historyStart}
@@ -115,13 +118,13 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
       ) : (
         <div className="flex flex-col gap-6">
           <section className="grid grid-cols-4 gap-4" aria-label={t.title} data-testid="calls-tiles">
-            <CallsTile testId="calls-total" label={t.calls} value={n(total.calls)} info={info(t.calls, h.callsTotal)}
+            <CallsTile testId="calls-total" label={t.calls} value={n(total.calls)} info={info(t.calls, h.callsTotal, "calls.total")}
               detail={t.callsDetail.replace("{conversations}", n(total.conversations))} delta={delta(total.calls, previous.calls)} />
-            <CallsTile testId="calls-inbound" label={t.inbound} value={n(total.inbound)} info={info(t.inbound, h.callsInbound)}
+            <CallsTile testId="calls-inbound" label={t.inbound} value={n(total.inbound)} info={info(t.inbound, h.callsInbound, "calls.inbound")}
               detail={t.inboundDetail.replace("{answered}", n(total.answeredInbound))} delta={delta(total.inbound, previous.inbound)} />
-            <CallsTile testId="calls-outbound" label={t.outbound} value={n(total.outbound)} info={info(t.outbound, h.callsOutbound)}
+            <CallsTile testId="calls-outbound" label={t.outbound} value={n(total.outbound)} info={info(t.outbound, h.callsOutbound, "calls.outbound")}
               detail={t.outboundDetail.replace("{connected}", n(total.connectedOutbound))} delta={delta(total.outbound, previous.outbound)} />
-            <CallsTile testId="calls-avg-talk" label={t.avgTalk} value={fmtTalk(total.talkAvgSeconds, me.locale)} info={info(t.avgTalk, h.callsAvgTalk)}
+            <CallsTile testId="calls-avg-talk" label={t.avgTalk} value={fmtTalk(total.talkAvgSeconds, me.locale)} info={info(t.avgTalk, h.callsAvgTalk, "calls.avg_talk")}
               detail={t.avgTalkDetail.replace("{total}", fmtTalk(total.talkSeconds, me.locale))} delta={delta(total.talkAvgSeconds, previous.talkAvgSeconds)} />
           </section>
 
@@ -136,11 +139,11 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
 
           <Card title={t.outboundTitle}>
             <div className="grid grid-cols-3 gap-4" data-testid="calls-outbound-tiles">
-              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connectedOutbound)} info={info(t.connected, h.callsConnected)}
+              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connectedOutbound)} info={info(t.connected, h.callsConnected, "calls.outbound_connected")}
                 detail={fill(t.connectedNote)} />
-              <CallsTile testId="outbound-connected-pct" label={t.connectedPct} value={fmtPct(total.connectedPct, me.locale)} info={info(t.connectedPct, h.callsConnectedPct)}
+              <CallsTile testId="outbound-connected-pct" label={t.connectedPct} value={fmtPct(total.connectedPct, me.locale)} info={info(t.connectedPct, h.callsConnectedPct, "calls.outbound_connected_share")}
                 detail={t.connectedPctDetail.replace("{outbound}", n(total.outbound))} />
-              <CallsTile testId="outbound-talk" label={t.outboundTalk} value={fmtTalk(total.outboundTalkSeconds, me.locale)} info={info(t.outboundTalk, h.callsOutboundTalk)}
+              <CallsTile testId="outbound-talk" label={t.outboundTalk} value={fmtTalk(total.outboundTalkSeconds, me.locale)} info={info(t.outboundTalk, h.callsOutboundTalk, "calls.outbound_talk")}
                 detail={t.outboundTalkDetail.replace("{avg}", fmtTalk(total.outboundTalkAvgSeconds, me.locale))} />
             </div>
           </Card>
@@ -149,7 +152,7 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
             {total.conversations === 0 ? <p className="text-body text-p4a-muted">{t.noConversations}</p> : (
               <div className="flex flex-col gap-6">
                 <div className="grid grid-cols-4 gap-4">
-                  <CallsTile testId="calls-untagged" label={t.untagged} value={fmtPct(untaggedPct(total), me.locale)} info={info(t.untagged, h.callsUntaggedPct)}
+                  <CallsTile testId="calls-untagged" label={t.untagged} value={fmtPct(untaggedPct(total), me.locale)} info={info(t.untagged, h.callsUntaggedPct, "calls.untagged_share")}
                     detail={t.untaggedDetail.replace("{untagged}", n(total.untaggedConversations)).replace("{conversations}", n(total.conversations))} />
                 </div>
                 <section aria-labelledby="tag-bars-title">

@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workspace.pulse4all.app/docs/metrics/schema.json",
+  "title": "CMA metric catalog",
+  "description": "One entry per figure the Workspace shows: every tile, count, column, bar and exported column, on every page and in the JSON API. The catalog describes the code as it is; a difference from the docs or the intended definition is reported in the entry's status and notes and in docs/metrics/AUDIT-2026-10-23.md, never fixed here. METRICS.md is generated from catalog.json by web/scripts/metrics-doc.mjs and never edited by hand; web/verify/metrics.mjs validates this file against this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["_about", "entries"],
+  "properties": {
+    "_about": { "type": "string", "minLength": 1 },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key", "surface", "page", "tile", "title", "definition", "formula", "unit", "grain",
+        "sources", "filters", "time", "comparison", "settings", "permissions", "refresh",
+        "computed_in", "verify_sql", "fixture_check", "prerequisites", "docs", "status", "notes"
+      ],
+      "properties": {
+        "key": {
+          "description": "Stable dotted key, e.g. calls.outbound_connected_share; the page's anchor (#key)",
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$"
+        },
+        "surface": {
+          "description": "Where the figure lives; a figure an API answers that no page shows is api; configuration covers the Configuration group's own figures (System health)",
+          "enum": ["welcome", "live", "dashboard", "report", "configuration", "agent", "export", "api"]
+        },
+        "page": {
+          "description": "The route that shows the figure, or the API route or download route that answers it",
+          "type": "string",
+          "pattern": "^/"
+        },
+        "tile": {
+          "description": "The label as shown on screen (tile, column header or chart title), or the column name in a file; null for a figure no page shows",
+          "type": ["string", "null"]
+        },
+        "title": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["en", "nl"],
+          "properties": {
+            "en": { "type": "string", "minLength": 1 },
+            "nl": { "description": "Only where the app's i18n already gives one; null otherwise", "type": ["string", "null"] }
+          }
+        },
+        "definition": {
+          "description": "Plain words: what the number means to Kira or Arno",
+          "type": "string",
+          "minLength": 1
+        },
+        "formula": {
+          "description": "The formula as the code computes it, in SQL-like pseudo or the exact expression; numerator and denominator named; what is excluded",
+          "type": "string",
+          "minLength": 1
+        },
+        "unit": {
+          "description": "The brief's base units plus the ones the figures needed: days, business_days, date, average, text and flag",
+          "enum": ["count", "share", "seconds", "minutes", "business_minutes", "currency", "percentile", "median", "time_of_day", "days", "business_days", "date", "average", "text", "flag"]
+        },
+        "grain": {
+          "description": "One or more grains; the brief's base list plus the dimensions the figures needed",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": ["period", "now", "per_day", "per_iso_week", "per_person", "per_market", "per_line", "per_pipeline", "per_form", "per_inbox", "per_mailbox", "per_tag", "per_stage", "per_level", "per_currency", "per_status", "per_reason", "per_hour", "per_check", "per_message", "per_record", "per_group", "per_category", "per_source", "per_attempt", "per_caller", "per_team", "per_skill", "per_question"]
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["table", "columns", "owner", "fed_by", "cadence"],
+            "properties": {
+              "table": { "description": "schema.table, e.g. cma.telephony_call", "type": "string", "pattern": "^[a-z_]+\\.[a-z0-9_]+$" },
+              "columns": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+              "owner": { "enum": ["HubSpot", "Aircall", "Shopify", "CMA", "HubSpot forms", "HubSpot conversations"] },
+              "fed_by": { "description": "The exact path: webhook event name → ingest service → function, or poll name → function, or scheduler job → function, or the Workspace's own write path", "type": "string", "minLength": 1 },
+              "cadence": { "description": "seconds, \"every minute\", \"every 10 s while the tab is open\", \"on page load\", or \"configured outside the repo: <where>, to confirm\"", "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "filters": {
+          "description": "Everything the code applies: tenant (RLS), counted lines, counted forms, counted mailboxes, pipelines, test exclusions, period boundaries",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "time": {
+          "description": "The zone the business date uses, the business hours source, the ISO week rule, how now is defined, how a running period is handled",
+          "type": "string",
+          "minLength": 1
+        },
+        "comparison": {
+          "description": "The previous-period rule, the history-start rule, when \"No history to compare yet\" shows; null for a figure without a comparison",
+          "type": ["string", "null"]
+        },
+        "settings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "default", "pulse4all"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "default": { "description": "The catalog default as the migration seeds it", "type": "string" },
+              "pulse4all": { "description": "The Pulse4all value from the seeds (02 for prod; the dev value from 03 named when it differs)", "type": "string" }
+            }
+          }
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anyOf", "perPerson"],
+          "properties": {
+            "anyOf": { "description": "Permission keys; holding any one of them shows the figure", "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "perPerson": { "description": "The reports.per_person key that must also be on for the tenant, where it applies", "enum": ["email", "orders", "attempts", "deals", null] }
+          }
+        },
+        "refresh": {
+          "description": "How the page gets the figure (on load, 10 s poll, snapshot age) and the snapshot's cadence where one exists",
+          "type": "string",
+          "minLength": 1
+        },
+        "computed_in": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sql", "ts"],
+          "properties": {
+            "sql": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["object", "migration"],
+                "properties": {
+                  "object": { "description": "Function or view name, e.g. cma.calls_overview", "type": "string", "pattern": "^(cma|cma_read)\\.[a-z0-9_]+$" },
+                  "migration": { "description": "Migration or addition number, e.g. 0008j", "type": "string", "pattern": "^000[0-9][a-z]?[a-z]?$" }
+                }
+              }
+            },
+            "ts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["file", "export"],
+                "properties": {
+                  "file": { "description": "Path from web/, e.g. src/lib/reports.ts", "type": "string", "minLength": 1 },
+                  "export": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        "verify_sql": {
+          "description": "A Studio query, parameterised with :tenant_id and the period's :from and :to as business dates, that recomputes the figure from the base tables in cma without the function or view the page uses; null only with a note saying why a faithful independent recomputation is not possible and what the closest check is",
+          "type": ["string", "null"]
+        },
+        "fixture_check": {
+          "description": "Whether verify_sql was run against the local volume fixture or the mock data and whether the value matched the page's; or why it was not run here (Martin runs it in Studio)",
+          "type": "string",
+          "minLength": 1
+        },
+        "prerequisites": {
+          "description": "The Data first items (kpis.md 11) the figure depends on, each with the data-quality check that exposes it, null when no check does",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["item", "check"],
+            "properties": {
+              "item": { "type": "string", "minLength": 1 },
+              "check": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "docs": {
+          "description": "The sections in features.md, kpis.md, api.md and the data-model file that describe the figure",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "status": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["verified", "discrepancy", "ambiguous", "prerequisite_missing", "cadence_unconfirmed"] }
+        },
+        "notes": {
+          "description": "Everything the reviewer needs: where code and docs differ, where two pages compute the same figure differently, zero and empty states, silent assumptions",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

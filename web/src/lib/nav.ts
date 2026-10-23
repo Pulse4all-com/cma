@@ -61,6 +61,8 @@ export type ShellPage =
   | "config-sources" | "config-markets" | "config-alert-rules"
   /** System health (addition 0008r, the IT audit of 17 October 2026) */
   | "config-health"
+  /** Metrics (the metric catalog): every figure the Workspace shows, as the code computes it */
+  | "config-metrics"
   /** My account (0005b): opened from the name in the top bar, never a rail item */
   | "account";
 export type NavHref =
@@ -68,7 +70,7 @@ export type NavHref =
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
   | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
-  | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/health";
+  | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
 
 export interface NavItem {
   page: ShellPage;
@@ -242,6 +244,9 @@ export function navEntries(copy: Copy): NavEntry[] {
         { page: "config-app-links", href: "/configuration/app-links", label: copy.nav.configAppLinks, permission: "tenant.configure" },
         { page: "config-exports", href: "/configuration/exports", label: copy.nav.configExports, permission: "tenant.configure" },
         { page: "config-alert-rules", href: "/configuration/alert-rules", label: copy.nav.configAlertRules, permission: "tenant.configure" },
+        // The metric catalog: every figure the Workspace shows, as the code computes it, rendered from
+        // docs/metrics/catalog.json at build time; before System health, so the two reference pages sit together last
+        { page: "config-metrics", href: "/configuration/metrics", label: copy.nav.configMetrics, permission: "tenant.configure" },
         // System health (addition 0008r): sources, jobs, the heartbeat and the outbox from what the jobs leave behind; the audit documents
         { page: "config-health", href: "/configuration/health", label: copy.nav.configHealth, permission: "tenant.configure" },
       ],

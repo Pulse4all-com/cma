@@ -108,8 +108,8 @@ function IntakeTile({
   label, value, hint, info, testId, href, notConnected = false,
 }: {
   label: string; value: ReactNode; hint: ReactNode; testId: string; href?: "/reports/speed-to-lead" | "/reports/intake" | "/reports/follow-up";
-  /** The explanation behind the label's info mark: the accessible name and the text */
-  info: { about: string; text: string };
+  /** The explanation behind the label's info mark: the accessible name, the text and, for tenant.configure, "How this is computed" */
+  info: { about: string; text: string; more?: { href: string; label: string } };
   /** The value is a not-connected state in words, set smaller than a figure */
   notConnected?: boolean;
 }) {
@@ -119,7 +119,7 @@ function IntakeTile({
     <div className={`relative rounded-card border border-p4a-border bg-white p-5 ${href ? "hover:border-p4a-deepblue" : ""}`} data-testid={testId} data-tile="">
       <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
         {href ? <Link href={href} className="after:absolute after:inset-0 after:rounded-card">{label}</Link> : label}
-        <HeaderHint label={info.about} text={info.text} />
+        <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       <div className={notConnected ? "mt-2 text-body font-semibold" : "tabular mt-1 text-title font-bold text-p4a-heading"}>{value}</div>
       <div className="mt-1 text-small text-p4a-muted">{hint}</div>

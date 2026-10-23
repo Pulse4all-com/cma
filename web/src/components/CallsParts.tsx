@@ -112,13 +112,15 @@ export function DeltaLine({ current, previous, compared, previousFrom, historySt
 
 /** A tile: the label with its hint, the figure, a detail line and, when given, the change against the previous period */
 export function CallsTile({ label, value, detail, info, delta, testId }: {
-  label: string; value: string; detail: ReactNode; info: { about: string; text: string }; delta?: ReactNode; testId: string;
+  label: string; value: string; detail: ReactNode;
+  /** The hint behind the info mark; more: "How this is computed" to the figure's catalog entry, for tenant.configure only */
+  info: { about: string; text: string; more?: { href: string; label: string } }; delta?: ReactNode; testId: string;
 }) {
   return (
     <div className="rounded-card border border-p4a-border bg-white p-5" data-tile="" data-testid={testId}>
       <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
         {label}
-        <HeaderHint label={info.about} text={info.text} />
+        <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       <p className="tabular mt-1 text-title font-bold text-p4a-heading">{value}</p>
       <p className="mt-1 text-small text-p4a-muted">{detail}</p>

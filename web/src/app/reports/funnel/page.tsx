@@ -17,6 +17,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fmtCount, fmtShare, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -66,7 +67,9 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
   const h = copy.hints;
   const n = (x: number) => fmtCount(x, me.locale);
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("fn")));
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text, more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const cur = funnel.byPipeline.total.current;
   const prev = funnel.byPipeline.total.previous;
   const delta = (current: number | null, previous: number | null, better?: "up" | "down") =>
@@ -131,15 +134,15 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
         <section className="flex flex-col gap-6" aria-labelledby="funnel-section" data-testid="funnel-section">
           <h2 id="funnel-section" className="text-title font-semibold text-p4a-heading">{t.funnelTitle}</h2>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3" data-testid="funnel-tiles">
-            <CallsTile testId="funnel-created" label={t.created} value={n(cur.created)} info={info(t.created, h.fnCreated)} detail={t.createdDetail}
+            <CallsTile testId="funnel-created" label={t.created} value={n(cur.created)} info={info(t.created, h.fnCreated, "funnel.created")} detail={t.createdDetail}
               delta={delta(cur.created, prev.created)} />
-            <CallsTile testId="funnel-won" label={t.won} value={n(cur.won)} info={info(t.won, h.fnWon)} detail={t.wonDetail} delta={delta(cur.won, prev.won)} />
-            <CallsTile testId="funnel-lost" label={t.lost} value={n(cur.lost)} info={info(t.lost, h.fnLost)} detail={t.lostDetail} delta={delta(cur.lost, prev.lost)} />
-            <CallsTile testId="funnel-win-rate" label={t.winRate} value={fmtShare(cur.winRate, me.locale)} info={info(t.winRate, h.fnWinRate)}
+            <CallsTile testId="funnel-won" label={t.won} value={n(cur.won)} info={info(t.won, h.fnWon, "funnel.won")} detail={t.wonDetail} delta={delta(cur.won, prev.won)} />
+            <CallsTile testId="funnel-lost" label={t.lost} value={n(cur.lost)} info={info(t.lost, h.fnLost, "funnel.lost")} detail={t.lostDetail} delta={delta(cur.lost, prev.lost)} />
+            <CallsTile testId="funnel-win-rate" label={t.winRate} value={fmtShare(cur.winRate, me.locale)} info={info(t.winRate, h.fnWinRate, "funnel.win_rate")}
               detail={t.winRateDetail.replace("{won}", n(cur.won)).replace("{closed}", n(cur.won + cur.lost))} delta={delta(cur.winRate, prev.winRate, "up")} />
-            <CallsTile testId="funnel-days-won" label={t.daysToWon} value={fmtDays(cur.medianDaysToWon, me.locale, t)} info={info(t.daysToWon, h.fnDaysToWon)}
+            <CallsTile testId="funnel-days-won" label={t.daysToWon} value={fmtDays(cur.medianDaysToWon, me.locale, t)} info={info(t.daysToWon, h.fnDaysToWon, "funnel.median_days_to_won")}
               detail={t.daysToWonDetail} delta={delta(cur.medianDaysToWon, prev.medianDaysToWon, "down")} />
-            <CallsTile testId="funnel-days-lost" label={t.daysToLost} value={fmtDays(cur.medianDaysToLost, me.locale, t)} info={info(t.daysToLost, h.fnDaysToLost)}
+            <CallsTile testId="funnel-days-lost" label={t.daysToLost} value={fmtDays(cur.medianDaysToLost, me.locale, t)} info={info(t.daysToLost, h.fnDaysToLost, "funnel.median_days_to_lost")}
               detail={t.daysToLostDetail} delta={delta(cur.medianDaysToLost, prev.medianDaysToLost)} />
           </div>
 
@@ -178,14 +181,14 @@ export default async function FunnelPage({ searchParams }: PageProps<"/reports/f
           </div>
           {reasonNotice ? <Notice tone={lost.reasonState === "refused" ? "warning" : "info"}>{reasonNotice}</Notice> : null}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4" data-testid="lost-tiles">
-            <CallsTile testId="lost-deals" label={t.lostDeals} value={n(lc.lost)} info={info(t.lostDeals, h.fnLostDeals)} detail={t.lostDealsDetail}
+            <CallsTile testId="lost-deals" label={t.lostDeals} value={n(lc.lost)} info={info(t.lostDeals, h.fnLostDeals, "lost_reasons.lost")} detail={t.lostDealsDetail}
               delta={ldelta(lc.lost, lp.lost)} />
-            <CallsTile testId="lost-with-reason" label={t.withReason} value={fmtShare(share(lc.withReason, lc.lost), me.locale)} info={info(t.withReason, h.fnWithReason)}
+            <CallsTile testId="lost-with-reason" label={t.withReason} value={fmtShare(share(lc.withReason, lc.lost), me.locale)} info={info(t.withReason, h.fnWithReason, "lost_reasons.with_reason_share")}
               detail={t.withReasonDetail.replace("{n}", n(lc.withReason)).replace("{lost}", n(lc.lost))}
               delta={ldelta(share(lc.withReason, lc.lost), share(lp.withReason, lp.lost), "up")} />
-            <CallsTile testId="lost-no-reason" label={t.noReason} value={n(lc.noReason)} info={info(t.noReason, h.fnNoReason)}
+            <CallsTile testId="lost-no-reason" label={t.noReason} value={n(lc.noReason)} info={info(t.noReason, h.fnNoReason, "lost_reasons.no_reason")}
               detail={t.noReasonDetail.replace("{pct}", fmtShare(share(lc.noReason, lc.lost), me.locale))} delta={ldelta(lc.noReason, lp.noReason, "down")} />
-            <CallsTile testId="lost-dq" label={t.dataQuality} value={n(lc.dataQuality)} info={info(t.dataQuality, h.fnDataQuality)} detail={t.dataQualityDetail}
+            <CallsTile testId="lost-dq" label={t.dataQuality} value={n(lc.dataQuality)} info={info(t.dataQuality, h.fnDataQuality, "lost_reasons.data_quality")} detail={t.dataQualityDetail}
               delta={ldelta(lc.dataQuality, lp.dataQuality)} />
           </div>
 

@@ -102,7 +102,7 @@ export default async function LiveBoardPage() {
       <LiveRefresh />
 
       <div className="mb-8">
-        <InboundLive inbound={inbound} copy={copy} locale={me.locale} />
+        <InboundLive inbound={inbound} copy={copy} locale={me.locale} canOpenMetrics={me.permissions.includes("tenant.configure")} />
       </div>
 
       <div className="mb-8">

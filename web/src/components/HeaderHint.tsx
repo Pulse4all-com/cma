@@ -14,7 +14,15 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 const GAP = 6;
 const MARGIN = 8;
 
-export function HeaderHint({ label, text }: { label: string; text: string }) {
+export function HeaderHint({ label, text, more }: {
+  label: string; text: string;
+  /**
+   * An optional link under the hint's text, inside the panel ("How this is computed" to the figure's
+   * entry on Configuration → Metrics). The mark stays the one info mark of its header or tile; pass
+   * it only to a person who may open the target page.
+   */
+  more?: { href: string; label: string };
+}) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
@@ -97,9 +105,11 @@ export function HeaderHint({ label, text }: { label: string; text: string }) {
           // A tap focuses the button too; the click that follows decides
           if (pointer.current !== "touch" && pointer.current !== "pen") setOpen(true);
         }}
-        onBlur={() => {
+        onBlur={(e) => {
           pointer.current = "";
-          setOpen(false);
+          // With a link inside the panel, Tab moves from the mark into the panel: close only when
+          // the focus leaves the mark and the panel both
+          if (!wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
         }}
         onClick={(e) => {
           // The mark sits inside a header or tile: its click is its own
@@ -134,6 +144,18 @@ export function HeaderHint({ label, text }: { label: string; text: string }) {
         className="fixed z-50 block w-max max-w-80 whitespace-normal rounded-button border border-p4a-border bg-white px-3 py-2 text-left text-small font-normal normal-case text-p4a-body"
       >
         {text}
+        {more ? (
+          <a
+            href={more.href}
+            data-hint-more=""
+            className="mt-1 block font-semibold text-p4a-deepblue hover:underline"
+            onBlur={(e) => {
+              if (!wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+            }}
+          >
+            {more.label}
+          </a>
+        ) : null}
       </span>
     </span>
   );

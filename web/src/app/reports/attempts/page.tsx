@@ -15,6 +15,7 @@ import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
 import { fmtCount, fmtShare, MAX_REPORT_DAYS, REPORT_PERMISSIONS } from "@/lib/reports";
 import { dateKeyInZone } from "@/lib/time";
+import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
@@ -65,7 +66,9 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
   const fill = (text: string) => text.replaceAll("{attempt}", attempt).replaceAll("{window}", n(s.preWindowMinutes)).replaceAll("{max}", n(s.maxBucket))
     .replaceAll("{buckets}", s.sinceLastBuckets.split(",").join(", ")).replaceAll("{seconds}", n(s.reachedMinTalkSeconds))
     .replaceAll("{speedBuckets}", s.speedBuckets.split(",").join(", "));
-  const info = (label: string, text: string) => ({ about: h.about.replace("{label}", label), text: fill(text) });
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) =>
+    ({ about: h.about.replace("{label}", label), text: fill(text), more: key ? metricsMore(me.permissions, key, h.howComputed) : undefined });
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("at")).map(([k, v]) => [k, fill(v)]));
   const cur = report.current;
   const prev = report.previous;
@@ -110,19 +113,19 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
 
       <div className="flex flex-col gap-6">
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-3" aria-label={t.title} data-testid="attempts-tiles">
-          <CallsTile testId="attempts-deals" label={t.deals} value={n(cur.deals)} info={info(t.deals, h.atDeals)} detail={t.dealsDetail}
+          <CallsTile testId="attempts-deals" label={t.deals} value={n(cur.deals)} info={info(t.deals, h.atDeals, "attempts.deals")} detail={t.dealsDetail}
             delta={delta(cur.deals, prev.deals)} />
-          <CallsTile testId="attempts-attempted" label={t.attempted} value={fmtShare(attemptedShare(cur), me.locale)} info={info(t.attempted, h.atAttempted)}
+          <CallsTile testId="attempts-attempted" label={t.attempted} value={fmtShare(attemptedShare(cur), me.locale)} info={info(t.attempted, h.atAttempted, "attempts.attempted_share")}
             detail={t.attemptedDetail.replace("{n}", n(cur.attempted)).replace("{deals}", n(cur.deals))} delta={delta(attemptedShare(cur), attemptedShare(prev), "up")} />
-          <CallsTile testId="attempts-per-deal" label={t.perDeal} value={fmtAttempts(cur.avgAttempts, me.locale)} info={info(t.perDeal, h.atPerDeal)}
+          <CallsTile testId="attempts-per-deal" label={t.perDeal} value={fmtAttempts(cur.avgAttempts, me.locale)} info={info(t.perDeal, h.atPerDeal, "attempts.per_deal")}
             detail={t.perDealDetail.replace("{median}", fmtAttempts(cur.medianAttempts, me.locale)).replace("{attempts}", n(cur.attempts))}
             delta={delta(cur.avgAttempts, prev.avgAttempts)} />
-          <CallsTile testId="attempts-reached" label={t.reached} value={fmtShare(reachedShare(cur), me.locale)} info={info(t.reached, h.atReached)}
+          <CallsTile testId="attempts-reached" label={t.reached} value={fmtShare(reachedShare(cur), me.locale)} info={info(t.reached, h.atReached, "attempts.reached_share")}
             detail={t.reachedDetail.replace("{n}", n(cur.reachedDeals)).replace("{deals}", n(cur.deals)).replace("{first}", n(cur.firstReached))}
             delta={delta(reachedShare(cur), reachedShare(prev), "up")} />
-          <CallsTile testId="attempts-speed" label={t.speed} value={fmtSpeed(cur.medianSpeedSeconds, me.locale)} info={info(t.speed, h.atSpeed)}
+          <CallsTile testId="attempts-speed" label={t.speed} value={fmtSpeed(cur.medianSpeedSeconds, me.locale)} info={info(t.speed, h.atSpeed, "attempts.median_speed_to_lead")}
             detail={t.speedDetail.replace("{n}", n(cur.speedDeals))} delta={delta(cur.medianSpeedSeconds, prev.medianSpeedSeconds, "down")} />
-          <CallsTile testId="attempts-open-never" label={t.openNever} value={n(cur.openNeverAttempted)} info={info(t.openNever, h.atOpenNever)}
+          <CallsTile testId="attempts-open-never" label={t.openNever} value={n(cur.openNeverAttempted)} info={info(t.openNever, h.atOpenNever, "attempts.open_never_attempted")}
             detail={t.openNeverDetail.replace("{open}", n(cur.openDeals))} delta={delta(cur.openNeverAttempted, prev.openNeverAttempted, "down")} />
         </section>
 

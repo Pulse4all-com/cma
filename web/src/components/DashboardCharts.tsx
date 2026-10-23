@@ -32,12 +32,14 @@ export function Swatch({ group }: { group: Group | "pause" }) {
 
 export function Tile({
   label, value, hint, info,
-}: { label: string; value: string; hint: string; info: { about: string; text: string } }) {
+}: { label: string; value: string; hint: string;
+  /** The hint behind the info mark; more: "How this is computed" to the figure's catalog entry, for tenant.configure only */
+  info: { about: string; text: string; more?: { href: string; label: string } } }) {
   return (
     <div className="rounded-card border border-p4a-border bg-white p-5" data-tile="">
       <p className="flex items-start text-caption text-p4a-grey" data-hint-anchor="">
         {label}
-        <HeaderHint label={info.about} text={info.text} />
+        <HeaderHint label={info.about} text={info.text} more={info.more} />
       </p>
       <p className="tabular mt-1 text-title font-bold text-p4a-heading">{value}</p>
       <p className="mt-1 text-small text-p4a-muted">{hint}</p>
