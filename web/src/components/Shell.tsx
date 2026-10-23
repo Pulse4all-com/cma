@@ -16,6 +16,8 @@
  * no loading boundary, so a prefetch carried no page data, and the router.refresh() of a polled page (LiveRefresh)
  * invalidated the client cache, so each poll fetched every visible link's route again. A click loads the page as
  * before, in one request.
+ *
+ * Since 23 October 2026 the frame is exactly the viewport: main and the rail are the only scroll containers.
  */
 import Image from "next/image";
 import Link from "next/link";
@@ -79,7 +81,7 @@ export async function Shell({
     <div
       data-rail={collapsed ? "collapsed" : "expanded"}
       data-hints={hintsHidden ? "hidden" : "shown"}
-      className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_1fr]"
+      className="cma-frame grid h-full grid-cols-[var(--rail-width)_1fr] grid-rows-[var(--spacing-topbar)_minmax(0,1fr)] overflow-hidden"
     >
       {dbTrace ? <meta name="cma-db" content={dbTrace} /> : null}
       <Shortcuts />
@@ -139,7 +141,7 @@ export async function Shell({
         </div>
       </header>
 
-      <nav aria-label={copy.app.name} data-rail-nav className="flex flex-col border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
+      <nav aria-label={copy.app.name} data-rail-nav className="flex min-h-0 flex-col overflow-y-auto border-r border-p4a-border bg-p4a-bgblue px-4 py-6">
         <NavAccordion initial={openGroup}>
         <ul className="flex flex-col gap-2">
           {nav.map((entry) => {
@@ -218,7 +220,7 @@ export async function Shell({
         </div>
       </nav>
 
-      <main className="overflow-y-auto bg-p4a-sand px-10 py-8">
+      <main className="relative min-h-0 overflow-y-auto bg-p4a-sand px-10 py-8">
         {me.preview ? (
           // Previewing: the person sees what the role sees; their own data and permissions are unchanged
           <div className="mb-6" data-testid="preview-banner">
