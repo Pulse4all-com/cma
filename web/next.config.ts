@@ -26,10 +26,6 @@ const nextConfig: NextConfig = {
   // job script (jobs/close-forgotten-workdays.mjs, migration 0005a) can import it from the same
   // node_modules the server uses
   serverExternalPackages: ["@google-cloud/cloud-sql-connector"],
-  // forbidden() for Configuration → Metrics (the metric catalog): the brief asks a real 403 on the
-  // route for everyone without tenant.configure, where the other configuration pages render a calm
-  // card with a 200. Next keeps the function behind this flag; app/forbidden.tsx is the page it renders
-  experimental: { authInterrupts: true },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

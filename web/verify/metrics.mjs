@@ -16,9 +16,11 @@
  *     db/*.sql)
  *   - docs/metrics/METRICS.md and src/lib/metrics-catalog.json equal the generator's output
  *     (scripts/metrics-doc.mjs), so neither is ever hand-edited
- *   - the page's gate (metricsPageStatus): the admin's permissions answer 200; the manager's, the
- *     analyst's, the agent's and the reader's answer 403 (the default ladder's sets, as
- *     verify/preview.mjs models them; the served page is covered by the theme and layout verifiers)
+ *   - the page's gate (metricsPageStatus, the configuration gate's decision: 200 renders the
+ *     catalog, 403 renders the gate's no-permission card with nothing read and no rail item, as on
+ *     every configuration page): the admin's permissions answer 200; the manager's, the analyst's,
+ *     the agent's and the reader's answer 403 (the default ladder's sets, as verify/preview.mjs
+ *     models them; the served page is covered by the theme and layout verifiers)
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

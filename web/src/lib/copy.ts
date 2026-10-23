@@ -2982,11 +2982,6 @@ const en = {
     body: "The address may be mistyped, or the page has moved.",
     home: "Go to Welcome",
   },
-  forbiddenPage: {
-    title: "This page is not yours to open",
-    body: "It needs a permission your role does not hold. If you think you need it, ask whoever manages your access.",
-    home: "Go to Welcome",
-  },
   invitationMail: {
     languageName: "English",
     subject: "Your invitation to the Workspace of {workspace}",
@@ -5988,11 +5983,6 @@ const nl: Copy = {
   notFound: {
     title: "Deze pagina bestaat niet",
     body: "Het adres is misschien verkeerd getypt, of de pagina is verplaatst.",
-    home: "Naar Welkom",
-  },
-  forbiddenPage: {
-    title: "Deze pagina is niet voor jou",
-    body: "Ze vraagt een recht dat jouw rol niet heeft. Denk je dat je het nodig hebt, vraag het dan aan wie jouw toegang beheert.",
     home: "Naar Welkom",
   },
   invitationMail: {

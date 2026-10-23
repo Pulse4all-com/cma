@@ -52,7 +52,13 @@ export interface MetricCatalog {
 /** The permission that shows the page, the rail item and the tile hints' link */
 export const METRICS_PERMISSION = "tenant.configure";
 
-/** The catalog page's answer for a set of permissions: the page for the holder, a real 403 for everyone else */
+/**
+ * The catalog page's answer for a set of permissions, as the configuration gate decides it
+ * (ConfigurationPage, web/src/app/configuration/gate.tsx): 200 means the catalog renders; 403 means
+ * the person gets the gate's no-permission card with nothing read, and the rail hides the item
+ * (nav.ts), exactly as on every other configuration page. The number names the decision, not the
+ * response's own status line.
+ */
 export function metricsPageStatus(permissions: readonly string[]): 200 | 403 {
   return permissions.includes(METRICS_PERMISSION) ? 200 : 403;
 }
