@@ -68,7 +68,10 @@
  * Since the IT audit of 17 October 2026: only the first nine pages carry a
  * digit key (no data-shortcut is longer than one character, the later pages have no keycap), every open dialog
  * has an accessible name (aria-labelledby pointing at its title), and the Live board's tiles form a named
- * group. Saves screenshots under records/ for the release note.
+ * group. The frame fixed to the viewport (23 October 2026): on the Live board, Speed to lead and Follow-up at 1280 and
+ * 1920 px the wheel and End never scroll the page, only main, down to its last line, fixed elements still sit against
+ * the window, and at 1280x600 the rail with its longest group open scrolls on its own to its toggle.
+ * Saves screenshots under records/ for the release note.
  *
  *   BASE=http://localhost:8080 node verify/layout.mjs             expect PASS
  *   BASE=http://localhost:8080 node verify/layout.mjs --provoke   renders at
@@ -85,7 +88,8 @@
  *       area, writes a two-character key on the manager's tenth page, strips the name off
  *       every dialog before it is read and the role off the tiles, expects Time still open after Reports opens,
  *       breaks the line before one header's mark per page, lets the attempts list and the lost deals per period spill out
- *       of their cards, expect FAIL, exit 1
+ *       of their cards, puts the frame of before back (rows that grow, main not positioned, the rail not scrolling),
+ *       expect FAIL, exit 1
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
@@ -997,6 +1001,135 @@ async function expectLiveBoard() {
       else if (!h) problems.push(`${subject} /live/board: the tile's hint leaves the viewport`);
     }
     await p.screenshot({ path: `${outDir}/${subject}-live-board.png` });
+    await ctx.close();
+  }
+}
+
+// The frame is exactly the viewport (23 October 2026): main and the rail are the only scroll containers, and main is the
+// containing block of the absolutely positioned content in it (the sr-only labels in table headers once stretched the
+// document and showed an empty area below the frame). At 1280x800 and 1920x1080 on the Live board (with the fixture's missed
+// calls), Speed to lead and Follow-up: after the wheel takes main to its bottom and End is pressed, the document is exactly the
+// window and never scrolled; a page longer than the window still scrolls in main, down to its last line; a fixed element in
+// the top bar (the toasts) and in main (the header hints) still sits against the window. At 1280x800 the rail's foot sits at
+// its bottom; at 1280x600 with the longest group open the page stays put and the rail toggle is reached by scrolling the rail.
+// --provoke puts the frame of before back (rows that grow with the rail, main not positioned, the rail not a scroll container)
+async function expectFrameFixed() {
+  const unfix = (p) => p.evaluate(() => {
+    const frame = document.querySelector(".cma-frame");
+    Object.assign(frame.style, { gridTemplateRows: "var(--spacing-topbar) 1fr", overflow: "visible" });
+    Object.assign(document.querySelector("main").style, { position: "static", minHeight: "auto" });
+    Object.assign(document.querySelector("nav[data-rail-nav]").style, { overflow: "visible", minHeight: "auto" });
+  });
+  const docOf = (p) => p.evaluate(() => ({ height: document.scrollingElement.scrollHeight, inner: window.innerHeight, y: window.scrollY }));
+  for (const [width, height] of [[1280, 800], [1920, 1080]]) {
+    const tag = `${width}x${height}`;
+    for (const path of ["/live/board", "/reports/speed-to-lead?range=month", "/reports/follow-up"]) {
+      const where = `manager ${path} at ${tag}`;
+      const before = problems.length;
+      const ctx = await b.newContext({ viewport: { width, height }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+      const p = await ctx.newPage();
+      await p.goto(BASE + path);
+      await p.waitForLoadState("networkidle");
+      if (provoke) await unfix(p);
+      if (path === "/live/board" && await p.locator('[data-testid="missed-callbacks"]').count() === 0) problems.push(`${where}: the fixture's missed calls are missing`);
+      // The content's own height, before any scrolling: from the top of main's first child to the bottom of its last, with main's padding
+      const natural = await p.evaluate(() => {
+        const main = document.querySelector("main");
+        const s = getComputedStyle(main);
+        return main.lastElementChild.getBoundingClientRect().bottom - main.firstElementChild.getBoundingClientRect().top + parseFloat(s.paddingTop) + parseFloat(s.paddingBottom);
+      });
+      // As a person would: a click in the content, the wheel over it to the bottom, then End
+      await p.locator("main h1").first().click();
+      const box = await p.locator("main").boundingBox();
+      await p.mouse.move(box.x + box.width / 2, box.y + Math.min(box.height, height - box.y) / 2);
+      await p.mouse.wheel(0, 20000);
+      await p.waitForTimeout(300);
+      await p.evaluate(() => { const main = document.querySelector("main"); main.scrollTop = main.scrollHeight; });
+      await p.keyboard.press("End");
+      await p.waitForTimeout(400);
+      const m = await p.evaluate(() => {
+        const main = document.querySelector("main");
+        const r = main.getBoundingClientRect();
+        // A probe with the toasts' position (bottom-6 right-6) in the top bar and in main's last table header, where the header
+        // hints sit: both against the window
+        const probes = [document.querySelector("header"), [...main.querySelectorAll("th")].at(-1) ?? main.lastElementChild].map((host) => {
+          const el = document.createElement("div");
+          Object.assign(el.style, { position: "fixed", right: "24px", bottom: "24px", width: "8px", height: "8px" });
+          host.appendChild(el);
+          const pr = el.getBoundingClientRect();
+          el.remove();
+          return Math.round(window.innerWidth - pr.right) === 24 && Math.round(window.innerHeight - pr.bottom) === 24;
+        });
+        return {
+          scrollHeight: main.scrollHeight,
+          clientHeight: main.clientHeight,
+          scrollTop: main.scrollTop,
+          lastBottom: main.lastElementChild.getBoundingClientRect().bottom,
+          mainBottom: Math.min(r.bottom, window.innerHeight),
+          probes,
+        };
+      });
+      const doc = await docOf(p);
+      if (doc.height !== doc.inner) problems.push(`${where}: the document is ${doc.height}px tall in a ${doc.inner}px window, so the page scrolls below the frame`);
+      if (doc.y !== 0) problems.push(`${where}: the wheel and End scrolled the page by ${doc.y}px`);
+      if (natural > m.clientHeight) {
+        if (m.scrollHeight <= m.clientHeight || m.scrollTop <= 0) problems.push(`${where}: the content is ${Math.round(natural)}px in a ${m.clientHeight}px main, which does not scroll (scrollHeight ${m.scrollHeight}, scrollTop ${m.scrollTop})`);
+        if (m.lastBottom > m.mainBottom + 1) problems.push(`${where}: at the bottom of main its last line ends at ${Math.round(m.lastBottom)}px, below main's ${Math.round(m.mainBottom)}px`);
+      }
+      if (m.probes.some((ok) => !ok)) problems.push(`${where}: a fixed element in the ${m.probes[0] ? "content" : "top bar"} no longer sits 24px from the window's bottom right`);
+      const ok = problems.length === before;
+      console.log(`${ok ? "PASS" : "FAIL"}  frame does not scroll: ${path} at ${tag}${natural > m.clientHeight ? ", main scrolls" : ", fits"}`);
+      if (path === "/live/board") await p.screenshot({ path: `${outDir}/manager-live-board-bottom-${tag}.png` });
+      await ctx.close();
+    }
+  }
+
+  // The rail: its foot at the bottom while it fits (1280x800, no group open); at 1280x600 with the longest group open it
+  // scrolls on its own, the page stays put and the rail toggle is reached
+  {
+    const before = problems.length;
+    const ctx = await b.newContext({ viewport: { width: 1280, height: 800 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
+    const p = await ctx.newPage();
+    await p.goto(BASE + "/");
+    await p.waitForLoadState("networkidle");
+    if (provoke) await unfix(p);
+    const foot = await p.evaluate(() => {
+      const nav = document.querySelector("nav[data-rail-nav]");
+      const fits = nav.scrollHeight <= nav.clientHeight;
+      const gap = nav.getBoundingClientRect().bottom - parseFloat(getComputedStyle(nav).paddingBottom) - document.querySelector('[data-testid="rail-toggle"]').getBoundingClientRect().bottom;
+      return { fits, gap: Math.round(gap) };
+    });
+    if (foot.fits && foot.gap !== 0) problems.push(`rail at 1280x800: the rail fits but its toggle sits ${foot.gap}px above the rail's foot`);
+    await p.setViewportSize({ width: 1280, height: 600 });
+    const longest = await p.evaluate(() => [...document.querySelectorAll('nav[data-rail-nav] ul[id^="nav-group-"]')]
+      .map((u) => [u.id.slice("nav-group-".length), u.children.length]).sort((x, y) => y[1] - x[1])[0]?.[0]);
+    await p.locator(`nav[data-rail-nav] button[aria-controls="nav-group-${longest}"]`).click();
+    await p.waitForTimeout(200);
+    if (provoke) await unfix(p);
+    const nav = await p.locator("nav[data-rail-nav]").boundingBox();
+    await p.mouse.move(nav.x + nav.width / 2, 300);
+    await p.mouse.wheel(0, 5000);
+    await p.waitForTimeout(400);
+    const r = await p.evaluate(() => {
+      const nav = document.querySelector("nav[data-rail-nav]");
+      const n = nav.getBoundingClientRect();
+      const t = document.querySelector('[data-testid="rail-toggle"]');
+      const tr = t.getBoundingClientRect();
+      const hit = document.elementFromPoint(tr.left + tr.width / 2, tr.top + tr.height / 2);
+      return {
+        taller: nav.scrollHeight > nav.clientHeight,
+        scrolled: nav.scrollTop,
+        inside: tr.top >= n.top && tr.bottom <= Math.min(n.bottom, window.innerHeight),
+        hit: !!hit && t.contains(hit),
+      };
+    });
+    const doc = await docOf(p);
+    const where = `rail at 1280x600 with ${longest} open`;
+    if (!r.taller || r.scrolled <= 0) problems.push(`${where}: the rail does not scroll on its own (taller ${r.taller}, scrollTop ${r.scrolled})`);
+    if (doc.height !== doc.inner || doc.y !== 0) problems.push(`${where}: the page scrolls (document ${doc.height}px in ${doc.inner}px, scrolled ${doc.y}px)`);
+    if (!r.inside || !r.hit) problems.push(`${where}: the rail toggle is not reached by scrolling the rail`);
+    console.log(`${problems.length === before ? "PASS" : "FAIL"}  frame does not scroll: the rail at 1280x600 with ${longest} open`);
+    await p.screenshot({ path: `${outDir}/manager-rail-1280x600.png` });
     await ctx.close();
   }
 }
@@ -1987,6 +2120,7 @@ await expectAccordion();
 await expectNoWrappedMarks();
 await expectReports();
 await expectLiveBoard();
+await expectFrameFixed();
 await expectCalls();
 await expectForms();
 await expectEmail();
@@ -2004,5 +2138,5 @@ else await expectGate(1279, 800);
 await b.close();
 
 for (const x of problems) console.log("  " + x);
-console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
+console.log(problems.length === 0 ? `layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the three intake reports, Inbound and the Intake row with a header hint open, Intake and Inbound inside their cards, no text on Light Blue or Soft Rose, the Live board for 6 identities, Calls and Calls per agent for 7 identities (the per-agent page for performance.team only, the opened rows and the tag table inside their cards, Enter and Down, the deltas like for like and none before the telephony history), Forms for 7 identities (the keycaps, the four tiles, the forms table and the answers inside their cards, the deltas like for like and none before the forms history), Email and Email per agent for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the tables inside their cards, Enter and Down, No email connected), First orders and Orders per person for 7 identities (the per-person page for performance.team with the tenant's switch, not found without it, the keycaps, the four tiles, the level bars, History from in Muted, every grouping and the tables inside their cards, No orders connected), Attempts per deal and Attempts per agent for 7 identities (the per-agent page for performance.team with the tenant's switch, not found without it, the keycaps K, P, A, O, the six tiles, every grouping and the tables inside their cards, the right-most hint inside the viewport, a deal's row opened by Enter and closed by Esc), Funnel and Cancellations for 7 identities (after Attempts in the rail, deals per person for performance.team with the tenant's switch, the keycaps K, P, S, G and X, ten and four tiles, by week and by day, the tables inside their cards), Welcome on open for 2 identities (a fresh sign-in on a deep link lands on /, a deep link while signed in opens), the Live board's last section, Callbacks kept on Follow-up and the Dashboard for 5 identities (the weeks for reports.view or performance.team, per person for performance.team, inside their cards, No callback type set), Campaign monitoring for 7 identities (the journeys' cards inside the main area, the archived one absent, a journey's Muted banner, seven dashed placeholders with the drill-down locked, the prerequisites unticked, no figure, the breadcrumbs, archived and unknown not found, no journeys in words), Sources with its form categories (every table inside its card), Markets and Alert rules, People with Invitations and the Invite dialog for the admin and the manager, /invite open, another account, expired, invalid and another business line, the irreversible confirmations on Lines (with the stored-calls count, loading and failed), Teams and the planner and End workday opening on its confirm button, the rail folded by cookie and by W, the rail as an accordion (one group open, the cookie on the server, a click closing it, the letter, the folded rail, the retired cookies expired, the digit keys and the pill with every group closed), no info mark wrapped apart on Follow-up and Attempts at 1440, the hints hidden by cookie and shown by ?, aria-keyshortcuts, the frame fixed to the viewport (the Live board, Speed to lead and Follow-up at 1280 and 1920 scroll in main only, the rail at 1280x600 on its own), breadcrumbs on 11 pages, preview as role for the admin and ignored for 2 others, the roster's week bar; screenshots in ${outDir})` : `layout: FAIL (${problems.length} problems)`);
 process.exit(problems.length === 0 ? 0 : 1);
