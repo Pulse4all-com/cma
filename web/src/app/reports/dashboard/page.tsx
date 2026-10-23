@@ -93,7 +93,8 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
         </div>
       ) : null}
 
-      <IntakeRow intake={intake} records={records} speed={speed} callbacks={callbacks} copy={copy} locale={me.locale} from={period.from} />
+      <IntakeRow intake={intake} records={records} speed={speed} callbacks={callbacks} copy={copy} locale={me.locale} from={period.from}
+        canOpenMetrics={me.permissions.includes("tenant.configure")} />
 
       <div className="mb-6 flex items-end justify-between gap-4">
         <DashboardFilter people={people} person={person} query={query} copy={copy} />

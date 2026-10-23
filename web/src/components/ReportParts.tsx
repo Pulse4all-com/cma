@@ -16,6 +16,7 @@ import {
   speedFigures,
 } from "@/lib/reports";
 import { fmtDate, fmtPercent } from "@/lib/time";
+import { metricsHref } from "@/lib/metrics";
 import { HeaderHint } from "./HeaderHint";
 import { Card, Keycap } from "./primitives";
 
@@ -135,8 +136,11 @@ function IntakeTile({
  * "No callback type set" while the tenant counts none.
  */
 export function IntakeRow({
-  intake, records, speed, callbacks, copy, locale, from,
-}: { intake: Intake; records: CrmRecordsDay[]; speed: SpeedToLeadRow[]; callbacks: CallbacksKept; copy: Copy; locale: Locale; from: string }) {
+  intake, records, speed, callbacks, copy, locale, from, canOpenMetrics = false,
+}: { intake: Intake; records: CrmRecordsDay[]; speed: SpeedToLeadRow[]; callbacks: CallbacksKept; copy: Copy; locale: Locale; from: string;
+  /** True for a holder of tenant.configure: each tile's hint links to its entry on Configuration → Metrics */
+  canOpenMetrics?: boolean;
+}) {
   const t = copy.intakeRow;
   const r = copy.reports;
   const totals = intakeTotals(intake.rows, intake.connections);
@@ -144,8 +148,10 @@ export function IntakeRow({
   const n = (x: number) => fmtCount(x, locale);
   const muted = (label: string, hint: string) => <NotConnected label={label} hint={hint} />;
   const h = copy.hints;
-  const info = (label: string, text: string) => ({
+  // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
+  const info = (label: string, text: string, key?: string) => ({
     about: h.about.replace("{label}", label), text: fillHint(text, { hours: h.officeHours, minutes: callbacks.windowMinutes }, locale),
+    more: key && canOpenMetrics ? { href: metricsHref(key), label: h.howComputed } : undefined,
   });
   const cb = callbacks.total;
   return (
@@ -155,14 +161,14 @@ export function IntakeRow({
         <p className="text-caption text-p4a-grey">{t.hint}</p>
       </div>
       <div className="grid grid-cols-4 gap-4 2xl:grid-cols-7">
-        <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} info={info(t.leads, h.leads)} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
-        <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.dealsCreatedClosed)} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
-        <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed)} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
+        <IntakeTile testId="intake-leads" href="/reports/intake" label={t.leads} info={info(t.leads, h.leads, "dashboard.intake.leads")} value={n(totals.formSubmissions ?? 0)} hint={t.leadsHint} />
+        <IntakeTile testId="intake-deals" href="/reports/intake" label={t.deals} info={info(t.deals, h.dealsCreatedClosed, "dashboard.intake.deals_created")} value={n(recordsOfType(records, "deal"))} hint={t.dealsHint} />
+        <IntakeTile testId="intake-tickets" href="/reports/intake" label={t.tickets} info={info(t.tickets, h.ticketsCreatedClosed, "dashboard.intake.tickets_created")} value={n(recordsOfType(records, "ticket"))} hint={t.ticketsHint} />
         <IntakeTile
           testId="intake-speed"
           href="/reports/speed-to-lead"
           label={t.speed}
-          info={info(t.speed, h.median)}
+          info={info(t.speed, h.median, "dashboard.intake.speed_to_lead")}
           value={fmtBusinessMinutes(s.medianBusinessMinutes, locale)}
           hint={<>{t.speedHint}<br />{t.speedDetail.replace("{pct}", fmtPct(s.withinTargetPct, locale)).replace("{open}", n(s.openNotCalled))}</>}
         />
@@ -170,7 +176,7 @@ export function IntakeRow({
           testId="intake-calls"
           href="/reports/intake"
           label={t.calls}
-          info={info(t.calls, h.calls)}
+          info={info(t.calls, h.calls, "dashboard.intake.calls")}
           notConnected={!intake.connections.telephony}
           value={intake.connections.telephony ? n((totals.callsIn ?? 0) + (totals.callsOut ?? 0)) : muted(r.noTelephony, r.noTelephonyHint)}
           hint={intake.connections.telephony ? t.callsHint.replace("{in}", n(totals.callsIn ?? 0)).replace("{out}", n(totals.callsOut ?? 0)) : r.noTelephonyHint}
@@ -179,7 +185,7 @@ export function IntakeRow({
           testId="intake-shop"
           href="/reports/intake"
           label={t.shop}
-          info={info(t.shop, h.shop)}
+          info={info(t.shop, h.shop, "dashboard.intake.first_orders")}
           notConnected={!intake.connections.commerce}
           value={intake.connections.commerce ? n(totals.firstOrders ?? 0) : muted(r.noShop, r.noShopHint)}
           hint={intake.connections.commerce
@@ -190,7 +196,7 @@ export function IntakeRow({
           testId="intake-callbacks"
           href="/reports/follow-up"
           label={t.callbacks}
-          info={info(t.callbacks, h.cbTile)}
+          info={info(t.callbacks, h.cbTile, "dashboard.intake.callbacks_kept")}
           notConnected={!callbacks.connected}
           value={callbacks.connected ? fmtPercent(keptShare(cb), locale) : muted(r.noCallbacks, r.noCallbacksHint)}
           hint={callbacks.connected
