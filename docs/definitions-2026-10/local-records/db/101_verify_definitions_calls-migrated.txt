@@ -1,0 +1,46 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/101_verify_definitions_calls.sql:59: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                                check_name                                                                 | result |                                                                        detail                                                                         
+-------------------------------------------------------------------------------------------------------------------------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zc recorded once, after 0008zb                                                                                            | PASS   | 
+ A2 the tag's meaning: nullable, the six keys, in the reader view                                                                          | PASS   | 
+ A3 the settings: the Conversation threshold at 30, connected from 0, the reached threshold gone                                           | PASS   | 
+ A4 every function the application's only and invoker; the helpers immutable; the old names gone                                           | PASS   | 
+ A5 the reads use the helpers, no CRM call outcome and no reached threshold; the skip by its own rule                                      | PASS   | 
+ A6 no column of a function, a reader view or the row type named reached; attempts_per_deal's columns                                      | PASS   | 
+ B1 connected at 1 s and in progress; Conversation at 30 s, without not_reached (removed, or on an uncounted tag still out), inbound alike | PASS   | i1:-- i2:-v i3:-- i4:-- o1:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv
+ B2 connected from 5 s leaves 1 s and in progress out; the Conversation threshold at 29 and 46 s                                           | PASS   | 6/4 8/5 8/1
+ B3 Calls: connected and its rate, conversations, talk time over the answered calls, untagged over every call                              | PASS   | 13/4/9/3/8/88.9/4/425/42.5/315/45.0/9
+ B4 tag use and tags per person count conversations, no untagged row; per person connected, conversations, untagged                        | PASS   | 2026-10-05:Type=1,all:Type=1 | Type=1 | Anna Verify:0/9/8/3/6 Bram Verify:3/0/0/1/2 total:3/9/8/4/8
+ B5 a CRM call is a conversation through its telephony call only; an unlinked one with an outcome marked connected is not                  | PASS   | cw4:t/08:30 cw5:f/08:40 cwx:f/-
+ B6 Attempts per deal: conversations from the telephony call, the outcome deciding nothing                                                 | PASS   | 3/1/2/89/30/2/1 | 1:t/29/f 2:t/30/t 3:t/30/f | 1/0/1/30 30
+ B7 first orders: a conversation and an attempt from the telephony call only; an outcome and an inbound non-conversation none              | PASS   | dF:f/f/self_service dG:t/t/conversation dH:f/f/self_service
+ B8 the unlinked check skips an outbound call not connected and untagged, by its own rule                                                  | PASS   | i2 i3 i4 o1 o2 o6 o7
+ B9 the meaning on the catalogs; an invalid key refused, none clears it; an agent, the Ingest user and no acting user refused              | PASS   | tg-nr=not_reached tg-nr-off=not_reached tg-type=call_type | CMA04 CMA04 none CMA06 CMA06 CMA01
+ B10 a refresh keeps the meaning, a new tag has none; the audit names the admin                                                            | PASS   | tg-new=New/-/true tg-nr=Not Reached renamed/not_reached/true tg-nr-off=Not Reached off/not_reached/false tg-type=Type/call_type/true | 5 by the admin
+ B11 another tenant can neither read nor set a tenant's meaning                                                                            | PASS   | CMA02 CMA02 0 tg-nr=- | not_reached
+ B12 the Conversation threshold 0 to 600; the reached threshold unknown; the old key's value copied, the key gone                          | PASS   | CMA04 CMA04 CMA04 ok ok CMA02 | 45 0 0
+ verdict                                                                                                                                   | PASS   | 18 PASS, 0 FAIL
+(19 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+RESET

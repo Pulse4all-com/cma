@@ -1,0 +1,18 @@
+-- main at 0008zb (02 and 03 run twice), the tenants' own values
+SET
+          slug           |               key               | value 
+-------------------------+---------------------------------+-------
+ pulse4all-invest        | telephony.connected_min_seconds | 10
+ pulse4all-subscriptions | telephony.connected_min_seconds | 10
+(2 rows)
+
+RESET
+-- the same database after 100 (cma_fp: main to 99, then 100 twice)
+SET
+          slug           |               key               | value 
+-------------------------+---------------------------------+-------
+ pulse4all-invest        | telephony.connected_min_seconds | 0
+ pulse4all-subscriptions | telephony.connected_min_seconds | 0
+(2 rows)
+
+RESET

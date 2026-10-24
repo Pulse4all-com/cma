@@ -5,7 +5,7 @@
  * database's rules (cma.connection_settings_ok, cma.record_url, cma.set_business_hours, cma.upsert_market)
  * so a form can explain a refusal before it is sent.
  */
-import type { MarketConfig, SourceCallOutcome, SourceForm, SourceKind, SourceSettingValue, SourceSettings } from "@/lib/data/types";
+import type { MarketConfig, SourceForm, SourceKind, SourceSettingValue, SourceSettings, SourceTag, TagMeaning } from "@/lib/data/types";
 
 export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
 
@@ -246,24 +246,16 @@ export function planFormRule(forms: readonly SourceForm[], rule: FormRule, marke
   return out;
 }
 
-export type OutcomeRule = {
-  include: string[];
-  exclude: string[];
-  connected: boolean;
-  /** Outcomes that do not match: left as they are, or set to the opposite */
-  others: "keep" | "opposite";
-};
-export type OutcomePlanRow = { outcomeRef: string; label: string; matched: boolean; before: boolean; after: boolean };
+// ---- Tags: what a tag means (addition 0008zc; docs/definitions.md, Tag) ------------------------------
 
-/** What an outcome rule changes before anything is saved: only the outcomes whose value changes */
-export function planOutcomeRule(outcomes: readonly SourceCallOutcome[], rule: OutcomeRule): OutcomePlanRow[] {
-  const out: OutcomePlanRow[] = [];
-  for (const o of outcomes) {
-    const matched = nameMatches(o.label, rule.include, rule.exclude);
-    const after = matched ? rule.connected : rule.others === "opposite" ? !rule.connected : o.isConnected;
-    if (after !== o.isConnected) out.push({ outcomeRef: o.outcomeRef, label: o.label, matched, before: o.isConnected, after });
-  }
-  return out;
+/** The meanings a tag can carry, in the order the Sources page offers them; none is a choice too */
+export const TAG_MEANINGS: readonly TagMeaning[] = [
+  "not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative",
+];
+
+/** True when a connection's tags hold none meaning not reached: Conversation is then talk time alone, and the page says so */
+export function tagsWithoutNotReached(tags: readonly Pick<SourceTag, "meaning">[]): boolean {
+  return !tags.some((t) => t.meaning === "not_reached");
 }
 
 // ---- Markets: cma.upsert_market, cma.set_market_alias, cma.set_business_hours ----------------------

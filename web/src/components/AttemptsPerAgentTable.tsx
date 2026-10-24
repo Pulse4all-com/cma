@@ -1,7 +1,7 @@
 /**
  * Attempts per agent's table (addition 0008y, 19 October 2026; for sales since 0008z, 20 October 2026): one row per deal
- * owner with their sales deals, the attempts on them (by anyone), the attempts per deal, the share reached at least once,
- * the median speed to lead, the talk time in contact and the open deals with no attempt yet. Sorted by name and never
+ * owner with their sales deals, the attempts on them (by anyone), the attempts per deal, the share with a conversation,
+ * the median speed to lead, the talk time on conversations and the open deals with no attempt yet. Sorted by name and never
  * ranked (README Decision log, 7 and 14 October 2026), the deals of owner ids without a person (or without an owner) last
  * as one row with how many owner ids that is, then the total. The attempts carry an inline bar scaled to the column's
  * largest value, in Deep Blue (docs/style/Pulse4all-Style.md 7.7), never with text on it (7.8). Rows follow 7.6. Staff
@@ -9,7 +9,7 @@
  */
 import type { Copy, Locale } from "@/lib/copy";
 import type { AttemptPerson } from "@/lib/data";
-import { fmtAttempts, reachedShare } from "@/lib/attempts";
+import { fmtAttempts, conversationShare } from "@/lib/attempts";
 import { barShare, fmtCount, fmtShare, fmtTalk } from "@/lib/reports";
 import { fmtSpeed } from "./AttemptParts";
 import { HeaderHint } from "./HeaderHint";
@@ -39,9 +39,9 @@ export function AttemptsPerAgentTable({ rows, total, hints, copy, locale }: {
         ) : null}
       </td>
       <td className={td}>{fmtAttempts(p.avgAttempts, locale)}</td>
-      <td className={td}>{fmtShare(reachedShare(p), locale)}</td>
+      <td className={td}>{fmtShare(conversationShare(p), locale)}</td>
       <td className={td}>{fmtSpeed(p.medianSpeedSeconds, locale)}</td>
-      <td className={td}>{p.reachedDeals === 0 ? "–" : fmtTalk(p.talkSecondsReached, locale)}</td>
+      <td className={td}>{p.conversationDeals === 0 ? "–" : fmtTalk(p.talkSecondsConversation, locale)}</td>
       <td className={td}>{n(p.openNeverAttempted)}</td>
     </>
   );
@@ -54,9 +54,9 @@ export function AttemptsPerAgentTable({ rows, total, hints, copy, locale }: {
             <th className={`${th} text-right`}><HintLabel label={a.deals}>{hint(a.deals, hints.atAgentDeals!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.attemptsCol}>{hint(a.attemptsCol, hints.atAgentAttempts!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.perDeal}>{hint(a.perDeal, hints.atAgentAvg!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.reachedShare}>{hint(t.reachedShare, hints.atAgentReached!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.conversationShare}>{hint(t.conversationShare, hints.atAgentConversation!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.speed}>{hint(a.speed, hints.atAgentSpeed!)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={a.talkReached}>{hint(a.talkReached, hints.atAgentTalk!)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={a.talkConversation}>{hint(a.talkConversation, hints.atAgentTalk!)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={a.openNever}>{hint(a.openNever, hints.atAgentOpenNever!)}</HintLabel></th>
           </tr>
         </thead>

@@ -66,7 +66,7 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   };
   const MINUTE_KEYS: Record<MinuteSettingKey | SecondSettingKey, keyof Copy["configExports"]> = {
     "roster.adherence_tolerance_minutes": "roster_adherence_tolerance_minutes", "workday.auto_close_grace_minutes": "workday_auto_close_grace_minutes",
-    "telephony.connected_min_seconds": "telephony_connected_min_seconds",
+    "telephony.connected_min_seconds": "telephony_connected_min_seconds", "calls.conversation_min_talk_seconds": "calls_conversation_min_talk_seconds",
     // the System health heartbeat thresholds (addition 0008r)
     "health.heartbeat_fresh_seconds": "health_heartbeat_fresh_seconds", "health.heartbeat_late_seconds": "health_heartbeat_late_seconds",
   };

@@ -15,8 +15,9 @@ import { resolve } from "../../access";
 /**
  * Calls per agent (Report, addition 0008j, brief B16; Aircall's User Activity view): the calls figures
  * per person for a period, narrowed by market (K) and line (N): answered inbound calls with their talk
- * time, outbound calls, the connected ones with their talk time, conversations, untagged conversations
- * and the first and last call's time of day, each figure with an inline bar against its column's
+ * time, outbound calls, the connected ones (answered) with their talk time, the untagged calls (addition
+ * 0008zc: the person's calls without a tag) and the first and last call's time of day, each figure with an
+ * inline bar against its column's
  * largest. Sorted by name, never ranked (README Decision log, 7 and 14 October 2026: per-person call
  * figures for performance.team, agreed by Yordi). A row opens (Enter or a click) to that person's
  * conversations per counted tag. The calls of telephony users not linked to a person come last as one
@@ -94,7 +95,9 @@ export default async function CallsPerAgentPage({ searchParams }: PageProps<"/re
             <CallsPerAgentTable rows={agents.rows} total={agents.total} tags={tags.rows} copy={copy} locale={me.locale}
               threshold={agents.connectedMinSeconds} dataQuality={holdsAny(me, DATA_QUALITY_PERMISSIONS)} />
             <p className="mt-4 text-caption text-p4a-grey">{t.keyboard}</p>
-            <p className="mt-1 text-caption text-p4a-grey">{fillHint(copy.calls.connectedNote, { hours: "", threshold: agents.connectedMinSeconds }, me.locale)}</p>
+            <p className="mt-1 text-caption text-p4a-grey">
+              {fillHint(agents.connectedMinSeconds > 0 ? copy.calls.connectedNoteMin : copy.calls.connectedNote, { hours: "", threshold: agents.connectedMinSeconds }, me.locale)}
+            </p>
           </>
         )}
       </Card>

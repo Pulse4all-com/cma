@@ -9,7 +9,7 @@ import { PeriodBar } from "@/components/PeriodBar";
 import { NoReportPermission } from "@/components/ReportParts";
 import { Shell } from "@/components/Shell";
 import { Card, Notice, PageTitle } from "@/components/primitives";
-import { attemptClientCopy, attemptedShare, attemptFilterQuery, fmtAttempts, parseAttemptFilter, parseAttemptGroup, reachedShare } from "@/lib/attempts";
+import { attemptClientCopy, attemptedShare, attemptFilterQuery, fmtAttempts, parseAttemptFilter, parseAttemptGroup, conversationShare } from "@/lib/attempts";
 import { data, dataIsMock, type AttemptGroup } from "@/lib/data";
 import { holdsAny } from "@/lib/nav";
 import { resolvePeriod } from "@/lib/period";
@@ -26,9 +26,9 @@ import { resolve } from "../../access";
  * customer orders another way. Grouped per day, ISO week, market or pipeline (G), narrowed by market (K), lead pipeline
  * (P), attempted (A: every deal, none yet, at least one) and outcome (O: open, won, lost, ordered); the address keys are
  * market, pipeline, attempted and outcome. Six tiles, each with its change against the previous period like for like:
- * the deals, the share attempted, the attempts per deal (average and median), the share reached at least once, the
+ * the deals, the share attempted, the attempts per deal (average and median), the share with a conversation, the
  * median speed to lead and the open deals with no attempt yet. Then how complete the calls are, won against lost, the
- * win rate by attempts and by speed to lead, the deals by number of attempts, reached per attempt and the open deals by
+ * win rate by attempts and by speed to lead, the deals by number of attempts, the first conversation per attempt and the open deals by
  * time since their last attempt, as horizontal bars with their values (Pulse4all-Style 7.7, no donut); the figures per
  * group; and the deals, each opening with Enter to its attempts (Esc closes). Shown to people holding reports.view or
  * performance.team; the database checks again on every read. Every figure explains itself in a hint with the tenant's
@@ -64,7 +64,7 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
   const s = report.settings;
   const attempt = s.source === "crm" ? h.atAttemptCrm : h.atAttemptTelephony;
   const fill = (text: string) => text.replaceAll("{attempt}", attempt).replaceAll("{window}", n(s.preWindowMinutes)).replaceAll("{max}", n(s.maxBucket))
-    .replaceAll("{buckets}", s.sinceLastBuckets.split(",").join(", ")).replaceAll("{seconds}", n(s.reachedMinTalkSeconds))
+    .replaceAll("{buckets}", s.sinceLastBuckets.split(",").join(", ")).replaceAll("{seconds}", n(s.conversationMinTalkSeconds))
     .replaceAll("{speedBuckets}", s.speedBuckets.split(",").join(", "));
   // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
   const info = (label: string, text: string, key?: string) =>
@@ -76,7 +76,7 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
     <DeltaLine current={current} previous={previous} compared={prevLabel} previousFrom={report.previousFrom} historyStart={report.historyStart}
       copy={copy} locale={me.locale} historyText={t.historyStarts} better={better} />;
   const pipelineLabel = filter.pipeline ? report.pipelines.find((p) => p.key === filter.pipeline)?.label ?? filter.pipeline : null;
-  const note = (s.source === "crm" ? t.noteCrm : t.noteTelephony).replace("{seconds}", n(s.reachedMinTalkSeconds));
+  const note = (s.source === "crm" ? t.noteCrm : t.noteTelephony).replace("{seconds}", n(s.conversationMinTalkSeconds));
   const filterQuery = attemptFilterQuery(filter);
 
   return (
@@ -120,9 +120,9 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
           <CallsTile testId="attempts-per-deal" label={t.perDeal} value={fmtAttempts(cur.avgAttempts, me.locale)} info={info(t.perDeal, h.atPerDeal, "attempts.per_deal")}
             detail={t.perDealDetail.replace("{median}", fmtAttempts(cur.medianAttempts, me.locale)).replace("{attempts}", n(cur.attempts))}
             delta={delta(cur.avgAttempts, prev.avgAttempts)} />
-          <CallsTile testId="attempts-reached" label={t.reached} value={fmtShare(reachedShare(cur), me.locale)} info={info(t.reached, h.atReached, "attempts.reached_share")}
-            detail={t.reachedDetail.replace("{n}", n(cur.reachedDeals)).replace("{deals}", n(cur.deals)).replace("{first}", n(cur.firstReached))}
-            delta={delta(reachedShare(cur), reachedShare(prev), "up")} />
+          <CallsTile testId="attempts-conversation" label={t.conversation} value={fmtShare(conversationShare(cur), me.locale)} info={info(t.conversation, h.atConversation, "attempts.conversation_share")}
+            detail={t.conversationDetail.replace("{n}", n(cur.conversationDeals)).replace("{deals}", n(cur.deals)).replace("{first}", n(cur.firstConversation))}
+            delta={delta(conversationShare(cur), conversationShare(prev), "up")} />
           <CallsTile testId="attempts-speed" label={t.speed} value={fmtSpeed(cur.medianSpeedSeconds, me.locale)} info={info(t.speed, h.atSpeed, "attempts.median_speed_to_lead")}
             detail={t.speedDetail.replace("{n}", n(cur.speedDeals))} delta={delta(cur.medianSpeedSeconds, prev.medianSpeedSeconds, "down")} />
           <CallsTile testId="attempts-open-never" label={t.openNever} value={n(cur.openNeverAttempted)} info={info(t.openNever, h.atOpenNever, "attempts.open_never_attempted")}
@@ -152,8 +152,8 @@ export default async function AttemptsPage({ searchParams }: PageProps<"/reports
             <AttemptIntro text={t.bucketsIntro} label={t.bucketsTitle} hint={fill(h.atBuckets)} copy={copy} />
             {cur.deals === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : <BucketBars buckets={report.buckets} copy={copy} locale={me.locale} />}
           </Card>
-          <Card title={t.reachTitle}>
-            <AttemptIntro text={t.reachIntro} label={t.reachTitle} hint={fill(h.atReach)} copy={copy} />
+          <Card title={t.conversationTitle}>
+            <AttemptIntro text={t.conversationIntro} label={t.conversationTitle} hint={fill(h.atFirstConversationShare)} copy={copy} />
             {cur.attempted === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p>
               : <ReachBars buckets={report.buckets} attempted={cur.attempted} copy={copy} locale={me.locale} />}
           </Card>
