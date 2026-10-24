@@ -32,6 +32,8 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
 CREATE FUNCTION
 DROP FUNCTION
 CREATE FUNCTION
@@ -57,9 +59,9 @@ DROP FUNCTION
 CREATE FUNCTION
 DO
 CREATE VIEW
-psql:db/100_definitions_calls.sql:2024: NOTICE:  view "attempts_per_deal" does not exist, skipping
+psql:db/100_definitions_calls.sql:2094: NOTICE:  view "attempts_per_deal" does not exist, skipping
 DROP VIEW
-psql:db/100_definitions_calls.sql:2025: NOTICE:  function cma_read.attempts_per_deal_rows() does not exist, skipping
+psql:db/100_definitions_calls.sql:2095: NOTICE:  function cma_read.attempts_per_deal_rows() does not exist, skipping
 DROP FUNCTION
 CREATE FUNCTION
 DO

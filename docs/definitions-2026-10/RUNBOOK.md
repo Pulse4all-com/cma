@@ -22,6 +22,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 - **Conversation** is one rule for every figure: a connected outbound or answered inbound call with at least `calls.conversation_min_talk_seconds` of talk (30; the setting replaces `attempts.reached_min_talk_seconds`, whose values `100` copies) and no current tag meaning **not reached**. The CRM call outcome decides nothing any more (R1); a CRM call is a conversation only through its linked telephony call.
 - **Tag meanings**: each tag of a telephony connection can carry one meaning (Not reached, Call type, Courtesy attempt, Courtesy completed positive, neutral or negative), set on Configuration → Sources, Tags; ingest never writes it. Only Not reached is read now. The call outcomes' connected switch and its rule leave the Sources page (the list stays).
 - **Talk time** on Reports → Calls runs over every answered call with talk time; **Untagged** counts every call without a tag, missed ones included, over all calls.
+- **Names**: a CRM call's conversation is `cma.crm_call_conversation_of` (`is_conversation`), in place of `cma.crm_call_connected_of`, which `100` drops: connected is no conversation (docs/definitions.md, convention 1). Email's not-responding read calls the new one.
 - **The API** (`/api/v1`, a breaking change): Calls and Calls per agent answer `connected`, `connectedRate`, `untagged` (were `connectedOutbound`, `connectedPct`, `untaggedConversations`); Attempts per deal and per agent answer `conversation*` (were `reached*`); one deal's attempts answer `connected` and `conversation` (were `answered`, `reached`, `reachedBy`). No reader outside the repository's own web app is known; anything you built on these fields (a Make scenario, a sheet) needs the new names.
 - No `cloudbuild.yaml` change, no environment variable, no ingest change, no HubSpot or Aircall change.
 
@@ -107,7 +108,7 @@ Expected: no error; Studio's last result is `reset role`. `addition 0008zb (98_f
 
 **Studio (cma-dev-pg):** the fingerprint block again.
 
-Expected: `functions` 4 more (`cma.is_connected`, `cma.is_conversation`, `cma.call_not_reached_of`, `cma.set_telephony_tag_meaning`), `views` and `tables` the same, `settings` `calls.conversation_min_talk_seconds=30 telephony.connected_min_seconds=0`, `additions` `0008zb 0008zc` (locally 519, 126 and 85). Write down `functions_md5`.
+Expected: `functions` 4 more (`cma.is_connected`, `cma.is_conversation`, `cma.call_not_reached_of` and `cma.set_telephony_tag_meaning` new; `cma.crm_call_conversation_of` in place of `cma.crm_call_connected_of`, which `100` drops), `views` and `tables` the same, `settings` `calls.conversation_min_talk_seconds=30 telephony.connected_min_seconds=0`, `additions` `0008zb 0008zc` (locally 519, 126 and 85). Write down `functions_md5`.
 
 **Studio (cma-dev-pg):** paste `100` again and Run; then the fingerprint block again.
 
@@ -138,7 +139,7 @@ Expected: every row `FAIL`, the verdict `PROVOKED`, 0 PASS, 18 FAIL. Block B rol
 
 **Studio (cma-dev-pg):** each of these files, copied whole, pasted and Run, one at a time: `db/63_verify_calls_overview.sql`, `db/95_verify_attempts_for_sales.sql`, `db/41_verify_lead_metrics.sql`, `db/75_verify_forms_reporting.sql`, `db/83_verify_email_reports.sql`, `db/85_verify_first_orders.sql`, `db/93_verify_attempts_per_deal.sql`.
 
-Expected, in the verdict table of each: every row `PASS` (`63` 19, `95` 36, `85` 26, `93` 25; `41` and `75` and `83` as before). `63`, `85`, `93` and `95` are amended for 0008zc: their headers say which checks changed and why (connected at any talk time, conversations at 30 seconds, untagged over every call, conversations from the telephony call only).
+Expected, in the verdict table of each: every row `PASS` (`63` 19, `95` 36, `83` 26, `85` 26, `93` 25; `41` and `75` as before). `63`, `83`, `85`, `93` and `95` are amended for 0008zc: their headers say which checks changed and why (connected at any talk time, conversations at 30 seconds, untagged over every call, conversations from the telephony call only, and `83` the CRM call's conversation under its new name).
 
 **Terminal** (from `~/cma` on the branch)
 ```bash

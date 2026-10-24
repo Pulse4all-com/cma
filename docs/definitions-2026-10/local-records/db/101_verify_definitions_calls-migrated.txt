@@ -23,7 +23,7 @@ DO
  A1 addition 0008zc recorded once, after 0008zb                                                                                            | PASS   | 
  A2 the tag's meaning: nullable, the six keys, in the reader view                                                                          | PASS   | 
  A3 the settings: the Conversation threshold at 30, connected from 0, the reached threshold gone                                           | PASS   | 
- A4 every function the application's only and invoker; the helpers immutable; the old signature gone                                       | PASS   | 
+ A4 every function the application's only and invoker; the helpers immutable; the old names gone                                           | PASS   | 
  A5 the reads use the helpers, no CRM call outcome and no reached threshold; the skip by its own rule                                      | PASS   | 
  A6 no column of a function, a reader view or the row type named reached; attempts_per_deal's columns                                      | PASS   | 
  B1 connected at 1 s and in progress; Conversation at 30 s, without not_reached (removed, or on an uncounted tag still out), inbound alike | PASS   | i1:-- i2:-v i3:-- i4:-- o1:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv

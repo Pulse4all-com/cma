@@ -140,7 +140,7 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
 
           <Card title={t.outboundTitle}>
             <div className="grid grid-cols-3 gap-4" data-testid="calls-outbound-tiles">
-              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connected)} info={info(t.connected, h.callsConnected, "calls.outbound_connected")}
+              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connected)} info={info(t.connected, overview.connectedMinSeconds > 0 ? h.callsConnectedMin : h.callsConnected, "calls.outbound_connected")}
                 detail={fill(overview.connectedMinSeconds > 0 ? t.connectedNoteMin : t.connectedNote)} />
               <CallsTile testId="outbound-connected-pct" label={t.connectedRate} value={fmtPct(total.connectedRate, me.locale)} info={info(t.connectedRate, h.callsConnectedRate, "calls.outbound_connected_rate")}
                 detail={t.connectedRateDetail.replace("{outbound}", n(total.outbound))} />

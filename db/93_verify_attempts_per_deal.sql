@@ -50,11 +50,11 @@
 --   B18 tenant two's page read without a scope
 --   B19 the reader view's rows: the lead deals since the intake start (fourteen, not seventeen) with 0008z's columns
 -- B2, B3, B5, B9, B10, B11, B15, B16, B17 and B20 pin what they pinned before.
--- Amended for addition 0008zc (24 October 2026): reached becomes Conversation (docs/definitions.md): a CRM call is one only
--- through its linked telephony call (R1), when that call is connected, has at least calls.conversation_min_talk_seconds (30)
--- of talk and no tag meaning not reached; the outcome decides nothing. The row type's and the figures' reached columns are
--- named conversation (conversation_attempts, first_conversation_attempt, conversation_deals, first_conversation). These
--- checks pin the new figures, each for the reason named:
+-- Amended for addition 0008zc (24 October 2026; 93 runs in dev only): reached becomes Conversation (docs/definitions.md): a
+-- CRM call is one only through its linked telephony call (R1), when that call is connected, has at least
+-- calls.conversation_min_talk_seconds (30) of talk and no tag meaning not reached; the outcome decides nothing. The row
+-- type's and the figures' reached columns are named conversation (conversation_attempts, first_conversation_attempt,
+-- conversation_deals, first_conversation). These checks pin the new figures, each for the reason named:
 --   B1  d3's third attempt and dGB's first, unlinked CRM calls with the outcome Connected, are no conversation (3/1/3 and
 --       1/1/1 become 3/0/- and 1/0/-); d7's second, logging t7b (answered, 200 seconds of talk, no tag), is one (7/0/- becomes
 --       7/1/2)

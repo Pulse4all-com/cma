@@ -45,8 +45,9 @@
 --                  call; cma.calls_tag_use_of and calls_per_person_tags_of: conversations per tag, no untagged row;
 --                  cma.calls_per_person_of, calls_per_person: connected and untagged (renamed), untagged over the
 --                  person's calls
---   CRM calls      cma.crm_call_connected_of(): whether a CRM call is a conversation, through its linked telephony call
---                  only, at that call's start (Email's not responding); first orders (cma.first_orders_of): a call
+--   CRM calls      cma.crm_call_conversation_of() in place of cma.crm_call_connected_of(): whether a CRM call is a
+--                  conversation, through its linked telephony call only, at that call's start, read by Email's not
+--                  responding (cma.email_not_responding_of, made again); first orders (cma.first_orders_of): a call
 --                  is evidence through its linked telephony call, a conversation as the helper says, an attempt when
 --                  outbound; the data-quality check telephony_call_unlinked skips an outbound call not connected (no
 --                  answer) and untagged by that rule alone
@@ -777,12 +778,13 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 5. A CRM call's conversation, first orders and the data-quality skip
 -- ---------------------------------------------------------------------------------------------
--- As 0008t (82), from the telephony system only (R1): a CRM call is a conversation when its linked telephony call
--- (while the link is current and the call not deleted) is a Conversation (cma.is_conversation); a CRM call without one
--- is never one, whatever its outcome. effective_at is that telephony call's start, null without one. Its name and
--- columns stay, so Email's not-responding read (cma.email_not_responding_of) keeps its text and reads the new rule
-create or replace function cma.crm_call_connected_of(p_tenant_id uuid, p_crm_call_id uuid,
-                                                     out effective_at timestamptz, out is_connected boolean)
+-- In place of 0008t's cma.crm_call_connected_of (82), named by its term (docs/definitions.md, convention 1) and from the
+-- telephony system only (R1): a CRM call is a conversation when its linked telephony call (while the link is current
+-- and the call not deleted) is a Conversation (cma.is_conversation); a CRM call without one is never one, whatever its
+-- outcome. effective_at is that telephony call's start, null without one. Email's not-responding read below calls it;
+-- the old function goes after it
+create or replace function cma.crm_call_conversation_of(p_tenant_id uuid, p_crm_call_id uuid,
+                                                        out effective_at timestamptz, out is_conversation boolean)
 language sql stable
 as $$
   select tc.started_at,
@@ -797,6 +799,73 @@ as $$
   cross join lateral cma.call_not_reached_of(p_tenant_id, tc.connection_id, tc.source_id) nr
   where cc.tenant_id = p_tenant_id and cc.id = p_crm_call_id
 $$;
+
+-- As 0008t (82), with a Conversation in place of 0008j's connected call: the open lead deals (counted lead
+-- pipelines, from intake.start_date, not closed, not deleted) whose contacts' latest agent email out (an engagement of
+-- an agent send, or an inbox message out by an agent, as cma.email_of counts them) is at least email.no_response_days
+-- old, without an incoming engagement or inbox message from those contacts, or a conversation
+-- (cma.crm_call_conversation_of: through the CRM call's linked telephony call) on the deal or those contacts, since
+-- it. Ids, the market, the email's age; oldest first
+create or replace function cma.email_not_responding_of(p_tenant_id uuid, p_now timestamptz default now())
+returns table (
+  connection_id     uuid,
+  deal_source_id    text,
+  pipeline_label    text,
+  market            text,
+  owner_ref         text,
+  source_system     text,
+  last_email_at     timestamptz,
+  days_since        integer
+)
+language sql stable
+as $$
+  with s as (
+    select cma.setting_of(t.id, 'email.no_response_days')::integer as days from cma.tenant t where t.id = p_tenant_id
+  ),
+  d as (
+    select l.* from cma.lead_deals_of(p_tenant_id, null, null) l where not l.is_closed and cardinality(l.contacts) > 0
+  ),
+  last_out as (
+    select d.deal_id, max(m.occurred_at) as at
+    from d
+    join cma.email_message m
+      on m.tenant_id = p_tenant_id and m.connection_id = d.connection_id and m.contact_source_id = any (d.contacts)
+    join cma.integration_connection c on c.tenant_id = m.tenant_id and c.id = m.connection_id
+    left join cma.email_thread th
+      on m.source_kind = 'inbox_message' and th.tenant_id = m.tenant_id and th.connection_id = m.connection_id
+     and th.source_id = m.thread_source_id
+    where m.direction = 'out' and m.status = 'sent' and m.source_deleted_at is null
+      and case when m.source_kind = 'crm_email'
+               then not (lower(coalesce(m.origin, '')) = any (cma.setting_codes(c.settings, 'email_inbox_copy_origins')))
+                    and not (lower(coalesce(m.origin, '')) = any (cma.setting_codes(c.settings, 'email_automated_origins')))
+               else m.actor_kind = 'agent' and not coalesce(th.is_spam, false) end
+    group by d.deal_id
+  )
+  select d.connection_id, d.source_id, d.pipeline_label, d.market, d.owner_ref, d.source_system, lo.at,
+         floor(extract(epoch from p_now - lo.at) / 86400)::integer
+  from d
+  join last_out lo on lo.deal_id = d.deal_id
+  cross join s
+  where lo.at <= p_now - make_interval(days => s.days)
+    and not exists (
+      select 1 from cma.email_message m
+      where m.tenant_id = p_tenant_id and m.connection_id = d.connection_id and m.contact_source_id = any (d.contacts)
+        and m.direction in ('in', 'forwarded') and m.source_deleted_at is null and m.occurred_at > lo.at)
+    and not exists (
+      select 1
+      from cma.crm_association a
+      join cma.crm_call cc on cc.tenant_id = a.tenant_id and cc.connection_id = a.connection_id and cc.source_id = a.from_id
+      cross join lateral cma.crm_call_conversation_of(p_tenant_id, cc.id) k
+      where a.tenant_id = p_tenant_id and a.connection_id = d.connection_id and a.from_type = 'crm_call' and a.removed_at is null
+        and ((a.to_type = 'contact' and a.to_id = any (d.contacts)) or (a.to_type = 'deal' and a.to_id = d.source_id))
+        and cc.source_deleted_at is null and k.is_conversation and k.effective_at > lo.at)
+  order by lo.at, d.source_id
+$$;
+
+
+
+-- 0008t's name goes: nothing reads it any more (cma.callbacks_kept_of, 88, names it in a comment only)
+drop function if exists cma.crm_call_connected_of(uuid, uuid);
 
 -- As 0008x (90), with the calls of docs/definitions.md: a call with the contact is evidence through its linked
 -- telephony call only (R1), at that call's start: a conversation when the call is a Conversation (cma.is_conversation),
@@ -1986,7 +2055,8 @@ begin
     'cma.calls_per_person_of(uuid,date,date,text,text)',
     'cma.calls_per_person(date,date,text,text)',
     'cma.calls_per_person_tags_of(uuid,date,date,text,text)',
-    'cma.crm_call_connected_of(uuid,uuid)',
+    'cma.crm_call_conversation_of(uuid,uuid)',
+    'cma.email_not_responding_of(uuid,timestamptz)',
     'cma.first_orders_of(uuid,timestamptz,timestamptz)',
     'cma.data_quality_of(uuid)',
     'cma.deal_calls_of(uuid,uuid,text,text,text[],timestamptz)',

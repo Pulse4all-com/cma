@@ -46,7 +46,8 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
     { key: "answeredInbound", label: t.answered, hint: h.agentAnswered },
     { key: "inboundTalkAvgSeconds", label: t.inboundAvg, hint: h.agentInboundAvg, talk: true },
     { key: "outboundCalls", label: t.outbound, hint: h.agentOutbound },
-    { key: "connected", label: t.connected, hint: h.agentConnected },
+    // a threshold above 0 adds a talk condition to Connected (docs/definitions.md, Connected; addition 0008zc)
+    { key: "connected", label: t.connected, hint: threshold > 0 ? h.agentConnectedMin : h.agentConnected },
     { key: "outboundTalkAvgSeconds", label: t.outboundAvg, hint: h.agentOutboundAvg, talk: true },
     { key: "untagged", label: t.untagged, hint: h.agentUntagged },
   ];

@@ -36,9 +36,10 @@
 -- runbook decide.
 -- Amended for addition 0008zc (24 October 2026; 91 runs in dev only and never ran in prod): 0008zc makes a CRM call a
 -- conversation and an attempt through its linked telephony call only (docs/definitions.md, R1), in cma.first_orders_of and
--- cma.crm_call_connected_of alike. The copy of 0008u's first orders below (pg_temp.v0008x_old_*) follows it, so B2 to B4
--- still compare two computations of one definition: its calls with the contact count a conversation by
--- cma.crm_call_connected_of (which now answers no time without a link) and an attempt when the linked telephony call is
+-- cma.crm_call_conversation_of alike (0008zc's name for 0008t's cma.crm_call_connected_of, which it drops). The copy
+-- of 0008u's first orders below (pg_temp.v0008x_old_*) follows it, so B2 to B4 still compare two computations of one
+-- definition: its calls with the contact count a conversation by
+-- cma.crm_call_conversation_of (which answers no time without a link) and an attempt when the linked telephony call is
 -- outbound, and its phone match through a CRM call keeps the CRM call's own time when the call has no link, as 0008zc's
 -- cma.first_orders_of does. No expectation changes.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
@@ -636,8 +637,8 @@ as $$
       from cma.crm_association a4
       join cma.crm_call c
         on c.tenant_id = a4.tenant_id and c.connection_id = a4.connection_id and c.source_id = a4.from_id and c.source_deleted_at is null
-      cross join lateral cma.crm_call_connected_of(p_tenant_id, c.id) cc
-      cross join lateral (values ('conversation'::text, cc.is_connected),
+      cross join lateral cma.crm_call_conversation_of(p_tenant_id, c.id) cc
+      cross join lateral (values ('conversation'::text, cc.is_conversation),
                                  ('attempt', exists (select 1 from cma.call_link l
                                                      join cma.telephony_call tl on tl.tenant_id = l.tenant_id and tl.id = l.telephony_call_id
                                                       and tl.source_deleted_at is null
@@ -675,10 +676,10 @@ as $$
                       and not (lower(coalesce(em.origin, '')) = any (cma.setting_codes(ic.settings, 'email_automated_origins'))) end
       union all
       -- a CRM call from the order's phone number, any contact, at its linked telephony call's start, else its own time
-      -- (as amended for 0008zc: cma.crm_call_connected_of gives no time without a link)
+      -- (as amended for 0008zc: cma.crm_call_conversation_of gives no time without a link)
       select 'phone_match', coalesce(cc.effective_at, c.occurred_at), c.source_system || '_owner', c.owner_ref
       from cma.crm_call c
-      cross join lateral cma.crm_call_connected_of(p_tenant_id, c.id) cc
+      cross join lateral cma.crm_call_conversation_of(p_tenant_id, c.id) cc
       where cardinality(k.hashes) > 0 and c.tenant_id = p_tenant_id and c.counterpart_hash = any (k.hashes)
         and c.source_deleted_at is null and coalesce(cc.effective_at, c.occurred_at) >= k.t - s.win
         and coalesce(cc.effective_at, c.occurred_at) < k.t

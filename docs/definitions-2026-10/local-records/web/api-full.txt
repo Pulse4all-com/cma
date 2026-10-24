@@ -30,7 +30,7 @@ note  the connection has no task status: the task-status write is left out
 PASS  follow-up: an ill-formed task type is a 400  got 400
 PASS  identity in two tenants is refused           got 403
 PASS  unknown identity is refused                  got 403
-PASS  tenant comes from the identity only          got 00a16fcf-1a8c-7afc-be0c-87d7c62cfe43
+PASS  tenant comes from the identity only          got 00a16fe4-fd34-7864-b6c5-e95312502d5e
 PASS  ?as= is a 303 to the same path, relative     got [303,"/day",true]
 PASS  ?as= keeps the other parameters              got [303,"/day?date=2026-10-01"]
 PASS  an invalid ?as= is a 400                     got [400,"bad-mock-subject"]
@@ -47,7 +47,7 @@ PASS  start opens the own day today                got ["2026-10-24",true]
 PASS  a second start is the same day               got true
 FAIL  the own day ends at the window end, 22:00    got 2026-10-24T22:00:00.000Z, wanted 2026-10-24T20:00:00.000Z
 PASS  two users have two different days            got false
-PASS  hours show the caller's own day              got ["2026-10-24T21:27:17.654Z","2026-10-24T21:27:17.706Z"]
+PASS  hours show the caller's own day              got ["2026-10-24T21:50:48.325Z","2026-10-24T21:50:48.396Z"]
 PASS  a user parameter cannot redirect hours       got {"from":"2026-10-11","to":"2026-10-24","days":[{"date":"2026
 PASS  an agent cannot read team hours              got 403
 PASS  an agent cannot list the team                got 403
@@ -68,7 +68,7 @@ PASS  correction leaves no past day open or capped got [0,true,true]
 PASS  end needs the request header                 got 400
 PASS  cross-site end is refused                    got 403
 PASS  end ends the own day                         got ended
-PASS  start on an ended day changes nothing        got ["ended","2026-10-24T21:27:18.122Z"]
+PASS  start on an ended day changes nothing        got ["ended","2026-10-24T21:50:48.876Z"]
 PASS  a second end changes nothing                 got true
 PASS  log out on an ended day changes nothing      got [303,true]
 PASS  the other user's day is untouched            got working
@@ -89,7 +89,7 @@ PASS  time per status is bounded to 92 days        got 400
 PASS  a link that needs a permission is hidden from the agent got [true,true,true]
 PASS  every link is https, for anyone with a role  got [200,true]
 PASS  the profile is the caller's own row          got [true,true,true]
-PASS  a query cannot pick another person's profile got 00a16fcf-1ad1-7f9a-af3a-9b76304217d5
+PASS  a query cannot pick another person's profile got 00a16fe4-fd9e-7d7f-b494-cb1ef44b02c8
 PASS  the profile names the person as /me does     got [true,true,true]
 PASS  the profile says whose time is kept          got [200,false,true,true]
 PASS  an unknown identity gets no profile          got 403
@@ -177,7 +177,7 @@ PASS  sources: the manager cannot read them either got 403
 PASS  sources: the admin reads every connection with its kind got [200,true,true]
 PASS  sources: no secret value, only names and non-secret settings got true
 PASS  sources: a malformed id is a 400, an unknown one a 404 got [400,404]
-PASS  sources: the admin opens one connection with its catalogs got [200,"00a16fcf-2a05-727b-b29f-b1dbd555004b",true]
+PASS  sources: the admin opens one connection with its catalogs got [200,"00a16fe5-0f5f-7bf2-ae05-9e833fe67d3b",true]
 PASS  sources: a settings write needs the request header got 400
 PASS  sources: a cross-site settings write is refused got 403
 PASS  sources: a secret-looking settings key is a 400 and changes nothing got [400,false]

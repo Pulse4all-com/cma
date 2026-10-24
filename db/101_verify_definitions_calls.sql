@@ -162,7 +162,8 @@ begin
     'cma.calls_overview_of(uuid,date,date,text,text,text,timestamptz)', 'cma.calls_overview(date,date,text,text,text)',
     'cma.calls_tag_use_of(uuid,date,date,text,text,text)', 'cma.calls_per_person_of(uuid,date,date,text,text)',
     'cma.calls_per_person(date,date,text,text)', 'cma.calls_per_person_tags_of(uuid,date,date,text,text)',
-    'cma.crm_call_connected_of(uuid,uuid)', 'cma.first_orders_of(uuid,timestamptz,timestamptz)', 'cma.data_quality_of(uuid)',
+    'cma.crm_call_conversation_of(uuid,uuid)', 'cma.email_not_responding_of(uuid,timestamptz)',
+    'cma.first_orders_of(uuid,timestamptz,timestamptz)', 'cma.data_quality_of(uuid)',
     'cma.deal_calls_of(uuid,uuid,text,text,text[],timestamptz)', 'cma.lead_calls_of(uuid,uuid,text,text,text[],timestamptz)',
     'cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text)',
     'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)', 'cma.attempts_rows_of(uuid,date,date,timestamptz)',
@@ -186,13 +187,21 @@ begin
   if to_regprocedure('cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text,integer)') is not null then
     v_bad := v_bad || 'the old cma.deal_attempts_of is still there; ';
   end if;
-  insert into verify_0008zc values (4, 'A4 every function the application''s only and invoker; the helpers immutable; the old signature gone',
+  -- 0008t's name for a CRM call's conversation goes (convention 1: connected is no conversation), and Email reads the new one
+  if to_regprocedure('cma.crm_call_connected_of(uuid,uuid)') is not null then
+    v_bad := v_bad || 'cma.crm_call_connected_of is still there; ';
+  end if;
+  if (select p.prosrc from pg_proc p where p.oid = to_regprocedure('cma.email_not_responding_of(uuid,timestamptz)'))
+     !~ 'cma\.crm_call_conversation_of\(.*k\.is_conversation' then
+    v_bad := v_bad || 'cma.email_not_responding_of does not read the conversation; ';
+  end if;
+  insert into verify_0008zc values (4, 'A4 every function the application''s only and invoker; the helpers immutable; the old names gone',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A5. the reads use the helpers (Connected and Conversation written once), never a CRM call outcome's flag and never the
   --     reached threshold; the data-quality skip by its own rule
   v_bad := '';
-  foreach v_fn in array array['cma.calls_of(uuid,timestamptz,timestamptz,text,text)', 'cma.crm_call_connected_of(uuid,uuid)',
+  foreach v_fn in array array['cma.calls_of(uuid,timestamptz,timestamptz,text,text)', 'cma.crm_call_conversation_of(uuid,uuid)',
                                'cma.first_orders_of(uuid,timestamptz,timestamptz)', 'cma.deal_calls_of(uuid,uuid,text,text,text[],timestamptz)'] loop
     if (select p.prosrc from pg_proc p where p.oid = to_regprocedure(v_fn)) !~ 'cma\.is_conversation\('
        or (select p.prosrc from pg_proc p where p.oid = to_regprocedure(v_fn)) !~ 'cma\.call_not_reached_of\('
@@ -431,9 +440,9 @@ begin
     -- B5. a CRM call is a conversation through its linked telephony call only, at that call's start: cw4 (o4) is, cw5 (o5,
     --     not_reached) is not though its outcome is marked connected, cwx (no telephony call, outcome Connected) is not and
     --     has no time
-    select string_agg(format('%s:%s/%s', c.source_id, k.is_connected, coalesce(to_char(k.effective_at at time zone 'UTC', 'HH24:MI'), '-')), ' '
+    select string_agg(format('%s:%s/%s', c.source_id, k.is_conversation, coalesce(to_char(k.effective_at at time zone 'UTC', 'HH24:MI'), '-')), ' '
                       order by c.source_id) into v_txt
-    from cma.crm_call c cross join lateral cma.crm_call_connected_of(v_t1, c.id) k
+    from cma.crm_call c cross join lateral cma.crm_call_conversation_of(v_t1, c.id) k
     where c.tenant_id = v_t1 and c.source_id in ('cw4', 'cw5', 'cwx');
     v_rows := v_rows || array['15', 'B5 a CRM call is a conversation through its telephony call only; an unlinked one with an outcome marked connected is not',
       case when v_txt = 'cw4:t/08:30 cw5:f/08:40 cwx:f/-' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];

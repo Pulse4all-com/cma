@@ -17663,7 +17663,7 @@
         "tenant: RLS plus cma.current_tenant_id()",
         "population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact",
         "last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)",
-        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
+        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
         "at least email.no_response_days days old (elapsed days, not business days)",
         "page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals"
       ],
@@ -17714,7 +17714,7 @@
             "migration": "0007d"
           },
           {
-            "object": "cma.crm_call_connected_of",
+            "object": "cma.crm_call_conversation_of",
             "migration": "0008zc"
           },
           {
@@ -17927,7 +17927,7 @@
         "tenant: RLS plus cma.current_tenant_id()",
         "population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact",
         "last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)",
-        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
+        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
         "at least email.no_response_days days old (elapsed days, not business days)",
         "page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals"
       ],
@@ -17970,7 +17970,7 @@
             "migration": "0007d"
           },
           {
-            "object": "cma.crm_call_connected_of",
+            "object": "cma.crm_call_conversation_of",
             "migration": "0008zc"
           },
           {
@@ -18113,7 +18113,7 @@
         "tenant: RLS plus cma.current_tenant_id()",
         "population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact",
         "last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)",
-        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
+        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
         "at least email.no_response_days days old (elapsed days, not business days)",
         "page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals"
       ],
@@ -18152,7 +18152,7 @@
             "migration": "0007d"
           },
           {
-            "object": "cma.crm_call_connected_of",
+            "object": "cma.crm_call_conversation_of",
             "migration": "0008zc"
           },
           {
@@ -18355,7 +18355,7 @@
         "tenant: RLS plus cma.current_tenant_id()",
         "population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact",
         "last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)",
-        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
+        "no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)",
         "at least email.no_response_days days old (elapsed days, not business days)",
         "page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals"
       ],
@@ -18398,7 +18398,7 @@
             "migration": "0007d"
           },
           {
-            "object": "cma.crm_call_connected_of",
+            "object": "cma.crm_call_conversation_of",
             "migration": "0008zc"
           },
           {

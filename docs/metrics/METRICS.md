@@ -8244,7 +8244,7 @@ last_email_at = max(occurred_at) of sent outgoing emails to the deal's contacts 
 - tenant: RLS plus cma.current_tenant_id()
 - population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact
 - last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)
-- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
+- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
 - at least email.no_response_days days old (elapsed days, not business days)
 - page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals
 
@@ -8264,7 +8264,7 @@ last_email_at = max(occurred_at) of sent outgoing emails to the deal's contacts 
 
 **Refresh** On page load (server component; cma.email_waiting() / cma.email_not_responding() computed live at read time, p_now = now(); no polling and no 'Updated' line). Sources: ingest-poll-email every minute; a close or reassignment without a new message arrives with the open check (email_open_check_minutes, default 15) or the nightly reconcile.
 
-**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_connected_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
+**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_conversation_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -8321,7 +8321,7 @@ days_since = floor(extract(epoch from now() - last_email_at) / 86400); the row e
 - tenant: RLS plus cma.current_tenant_id()
 - population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact
 - last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)
-- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
+- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
 - at least email.no_response_days days old (elapsed days, not business days)
 - page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals
 
@@ -8339,7 +8339,7 @@ days_since = floor(extract(epoch from now() - last_email_at) / 86400); the row e
 
 **Refresh** On page load (server component; cma.email_waiting() / cma.email_not_responding() computed live at read time, p_now = now(); no polling and no 'Updated' line). Sources: ingest-poll-email every minute; a close or reassignment without a new message arrives with the open check (email_open_check_minutes, default 15) or the nightly reconcile.
 
-**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_connected_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
+**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_conversation_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -8390,7 +8390,7 @@ owner_user_id = app_user_external_id(system = source_system || '_owner', externa
 - tenant: RLS plus cma.current_tenant_id()
 - population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact
 - last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)
-- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
+- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
 - at least email.no_response_days days old (elapsed days, not business days)
 - page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals
 
@@ -8407,7 +8407,7 @@ owner_user_id = app_user_external_id(system = source_system || '_owner', externa
 
 **Refresh** On page load (server component; cma.email_waiting() / cma.email_not_responding() computed live at read time, p_now = now(); no polling and no 'Updated' line). Sources: ingest-poll-email every minute; a close or reassignment without a new message arrives with the open check (email_open_check_minutes, default 15) or the nightly reconcile.
 
-**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_connected_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
+**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_conversation_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -8462,7 +8462,7 @@ total_rows = count(*) over () after the market filter; the list shows the first 
 - tenant: RLS plus cma.current_tenant_id()
 - population: cma.lead_deals_of(tenant) — open deals of counted lead pipelines, created on or after intake.start_date, not deleted, not closed — with at least one contact
 - last agent email: a sent outgoing email to one of the deal's contacts, not deleted; an engagement must be neither an inbox-copy origin nor an automated origin; an inbox message must have actor 'agent' and a non-spam thread (NOTE: counted inbox/mailbox/channel flags are NOT applied here — finding)
-- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_connected_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
+- no response since: no incoming or forwarded email_message of those contacts after it (any kind; no spam/counted/origin narrowing), and no conversation on the deal or its contacts after it (cma.crm_call_conversation_of, 0008zc: a CRM call whose linked telephony call is a Conversation, at that call's start; a CRM call without a current link never counts)
 - at least email.no_response_days days old (elapsed days, not business days)
 - page filter: market only (the deal's market); the inbox and mailbox filters do not apply to deals
 
@@ -8480,7 +8480,7 @@ total_rows = count(*) over () after the market filter; the list shows the first 
 
 **Refresh** On page load (server component; cma.email_waiting() / cma.email_not_responding() computed live at read time, p_now = now(); no polling and no 'Updated' line). Sources: ingest-poll-email every minute; a close or reassignment without a new message arrives with the open check (email_open_check_minutes, default 15) or the nightly reconcile.
 
-**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_connected_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
+**Computed in** `cma.email_not_responding` (0008t); `cma.email_not_responding_of` (0008t); `cma.lead_deals_of` (0007d); `cma.crm_call_conversation_of` (0008zc); `cma.setting_codes` (0008t); `cma.is_conversation` (0008zc); `cma.call_not_reached_of` (0008zc); `getEmailReport` in src/lib/data/postgres.ts; `NotRespondingTable` in src/components/EmailParts.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 

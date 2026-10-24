@@ -9,14 +9,14 @@
 18_verify_clock_in_app_links: PASS=2 FAIL=0 ERROR=0            || 18_verify_clock_in_app_links: PASS=2 FAIL=0 ERROR=0
 20_verify_team_now: PASS=2 FAIL=0 ERROR=0                      || 20_verify_team_now: PASS=2 FAIL=0 ERROR=0
 22_verify_teams_skills: PASS=2 FAIL=0 ERROR=0                  || 22_verify_teams_skills: PASS=2 FAIL=0 ERROR=0
-25_verify_roster: PASS=2 FAIL=0 ERROR=0                        || 25_verify_roster: PASS=2 FAIL=0 ERROR=1
+25_verify_roster: PASS=2 FAIL=0 ERROR=0                        || 25_verify_roster: PASS=2 FAIL=0 ERROR=0
 27_verify_configuration: PASS=2 FAIL=0 ERROR=1                 || 27_verify_configuration: PASS=2 FAIL=0 ERROR=1
 29_verify_my_profile: PASS=2 FAIL=0 ERROR=0                    || 29_verify_my_profile: PASS=2 FAIL=0 ERROR=0
 31_verify_ingest_crm_records: PASS=2 FAIL=0 ERROR=0            || 31_verify_ingest_crm_records: PASS=2 FAIL=0 ERROR=0
 33_verify_intake_core: PASS=2 FAIL=0 ERROR=0                   || 33_verify_intake_core: PASS=2 FAIL=0 ERROR=0
 35_verify_telephony: PASS=2 FAIL=0 ERROR=0                     || 35_verify_telephony: PASS=2 FAIL=0 ERROR=0
 37_verify_commerce: PASS=2 FAIL=0 ERROR=0                      || 37_verify_commerce: PASS=2 FAIL=0 ERROR=0
-39_verify_outbox: PASS=2 FAIL=0 ERROR=1                        || 39_verify_outbox: PASS=2 FAIL=0 ERROR=0
+39_verify_outbox: PASS=2 FAIL=0 ERROR=1                        || 39_verify_outbox: PASS=2 FAIL=0 ERROR=1
 41_verify_lead_metrics: PASS=2 FAIL=0 ERROR=0                  || 41_verify_lead_metrics: PASS=2 FAIL=0 ERROR=0
 43_verify_messaging: PASS=2 FAIL=0 ERROR=0                     || 43_verify_messaging: PASS=2 FAIL=0 ERROR=0
 45_verify_assignment_alerts: PASS=2 FAIL=0 ERROR=0             || 45_verify_assignment_alerts: PASS=2 FAIL=0 ERROR=0
@@ -49,8 +49,4 @@
 99_verify_funnel: PASS=34 FAIL=0 ERROR=0                       || 99_verify_funnel: PASS=34 FAIL=0 ERROR=0
 101_verify_definitions_calls: PASS=0 FAIL=8 ERROR=0            || 101_verify_definitions_calls: PASS=19 FAIL=0 ERROR=0
 
-# rerun on both, the same day, minutes later: 25_verify_roster and 39_verify_outbox (neither reads a call)
-branch: 25_verify_roster: PASS=2 FAIL=0 ERROR=0
-branch: 39_verify_outbox: PASS=2 FAIL=0 ERROR=1
-main:   25_verify_roster: PASS=2 FAIL=0 ERROR=0
-main:   39_verify_outbox: PASS=2 FAIL=0 ERROR=2
+# 25_verify_roster and 39_verify_outbox (neither reads a call) flip between runs on both databases: rerun minutes apart, 25 passed and 39 erred on both

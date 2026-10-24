@@ -2,7 +2,7 @@ DO
 BEGIN
 SET
 DO
-psql:db/100_definitions_calls.sql:95: NOTICE:  column "meaning" of relation "telephony_tag" already exists, skipping
+psql:db/100_definitions_calls.sql:96: NOTICE:  column "meaning" of relation "telephony_tag" already exists, skipping
 ALTER TABLE
 DO
 COMMENT
@@ -33,11 +33,14 @@ CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
+psql:db/100_definitions_calls.sql:868: NOTICE:  function cma.crm_call_connected_of(uuid,uuid) does not exist, skipping
+DROP FUNCTION
+CREATE FUNCTION
 CREATE FUNCTION
 DROP FUNCTION
 CREATE FUNCTION
 CREATE FUNCTION
-psql:db/100_definitions_calls.sql:1409: NOTICE:  function cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text,pg_catalog.int4) does not exist, skipping
+psql:db/100_definitions_calls.sql:1478: NOTICE:  function cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text,pg_catalog.int4) does not exist, skipping
 DROP FUNCTION
 CREATE FUNCTION
 DO

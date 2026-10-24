@@ -2,7 +2,7 @@
 npm run build: exit 0 (216 lines in build.txt)
 npm run typecheck: ✓ Types generated successfully
 npm run lint: ✖ 2 problems (0 errors, 2 warnings) (verify/follow-up.mjs and scripts/metrics-doc.mjs, both unchanged from main)
-verify:copy: copy: PASS (2878 keys, en and nl)
+verify:copy: copy: PASS (2880 keys, en and nl)
 verify:corrections: ALL 31 PASS
 verify:csv: ALL 21 PASS
 verify:dashboard: ALL 17 PASS

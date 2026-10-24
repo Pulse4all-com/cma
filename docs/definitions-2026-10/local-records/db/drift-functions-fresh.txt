@@ -108,7 +108,7 @@ cma.coverage_targets(text) a64c78ad16a335eb11d3a925562127b4
 cma.coverage_targets_all() 9d421a72727fb0090ea25d5e42f26c0c
 cma.create_invitation(text,text,text,text,text,text[],jsonb) 6a38850783df702d1d299170139a898b
 cma.create_tenant(text,text,text) 2206eace0dc8df9da5031901077fc19f
-cma.crm_call_connected_of(uuid,uuid) 8ddfdd6028f73190404488d0c7ceec02
+cma.crm_call_conversation_of(uuid,uuid) daf326a573a965835237c8529452d632
 cma.crm_records_per_day(date,date) bec5499ae048456148cadb685160c621
 cma.current_actor_label() cc3e047fe01c4099636e151f170f7f3c
 cma.current_tenant_id() 4bfbfeb5b1b2c5e0d1fb6d762fec33c3
@@ -143,7 +143,7 @@ cma.email_history_start() afa1ac0d5d2c290cdb51a0630b48deb9
 cma.email_history_start_of(uuid) 06c8b35cb003b0c81a32af44c8aceac0
 cma.email_market_of(uuid,uuid,text,text) 67804bd8bca6633b2df7fa4586327e1f
 cma.email_not_responding(text,integer) c709145ae881e7adcebd924cee21d33e
-cma.email_not_responding_of(uuid,timestamp with time zone) c5c50cec7f96aaa6c34681bb2943c0a2
+cma.email_not_responding_of(uuid,timestamp with time zone) ca2155c1a3c14c1d541fbabed7349538
 cma.email_of(uuid,timestamp with time zone,timestamp with time zone) 3ff6fd15f4be8609bf52d348e8c77556
 cma.email_openings_of(uuid,timestamp with time zone,timestamp with time zone) c99d170a822a7738bff06eafc48a4df4
 cma.email_overview(date,date,text,text,text,text) a2ca9b4caf72e23fb6af2b3dc952487f
