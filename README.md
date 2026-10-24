@@ -100,6 +100,7 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | **Authentication** | README.md (this file) |
 | **Roadmap** | [docs/product/roadmap.md](docs/product/roadmap.md) |
 | **Out of scope** | [docs/product/roadmap.md](docs/product/roadmap.md) |
+| **Definitions and naming** | [docs/definitions.md](docs/definitions.md) |
 | **Metric catalog** | [docs/metrics/METRICS.md](docs/metrics/METRICS.md) |
 | **Metric audit** | [docs/metrics/AUDIT-2026-10-23.md](docs/metrics/AUDIT-2026-10-23.md) |
 | **Decision log** | [docs/decisions.md](docs/decisions.md) |
@@ -318,4 +319,4 @@ Identity is matched on the external id in `app_user_external_id`, never on the e
 
 A HubSpot app card (UI extension) can be added as a convenience shortcut. App cards appear on CRM records (contact, deal, ticket), not as a fixed main-menu item, and availability depends on the HubSpot subscription. The CMA itself is the home base, not a sub-page of HubSpot.
 
-*Last updated 20 October 2026. History in CHANGELOG.md.*
+*Last updated 24 October 2026. History in CHANGELOG.md.*
