@@ -42,7 +42,7 @@ Martin decided these on 24 October 2026; Kira and Yordi cleared them. Each is a 
 
 The keys below follow convention 3. Where the code uses another name today, As built today names it and Gaps against the definitions lists it; a key settles with the code change that adopts it.
 
-The Aircall help articles named below (Aircall Help Center, en-gb) were found and read through web search results on 24 October 2026; their pages could not be opened from the build session, so each wording is checked against Aircall Analytics in the reconciliation before a figure relies on it:
+The Aircall help articles named below (Aircall Help Center, en-gb) were found and read through web search results on 24 October 2026; their pages could not be opened from the build session, so each wording is checked against Aircall Analytics before a figure relies on it. The reconciliation of 23 October 2026 found the General Performance figures identical (Call, Talk time, Untagged, Day):
 
 - Analytics: Terms, article 13399649077277 (`https://support.aircall.io/hc/en-gb/articles/13399649077277-Analytics-Terms`)
 - Analytics: Metrics, article 13400715237277 (`https://support.aircall.io/hc/en-gb/articles/13400715237277-Analytics-Metrics`)
@@ -58,16 +58,16 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Key | `call`, `calls`; API `calls` |
 | Definition | Any inbound or outbound call on a counted line, internal calls excluded (Aircall). A transferred call is one call, attributed to its last participant. |
 | Source | Aircall, the call object (`id`, `direction`, `started_at`, `user`, `number`), through the webhook and the read-back into `cma.telephony_call` (0007a) |
-| Counts / does not count | Counts every inbound and outbound call on a counted line, connected or not, answered or not. Does not count internal calls between users of the account, calls on a line that does not count (R3: the Invest lines) or deleted calls |
+| Counts / does not count | Counts every inbound and outbound call on a counted line, connected or not, answered or not, archived calls included. A missed inbound call without a user counts in the totals, not per person. Does not count internal calls between users of the account, calls on a line that does not count (R3: the Invest lines) or deleted calls |
 | Unit and display | A count |
 | Time rule | Day |
-| Scope | The tenant's telephony connection and its counted lines (R3) |
+| Scope | The tenant's telephony connection and its counted lines (R3). For Pulse4all Subscriptions the counted lines equal Aircall's preset "Subscriptions" (46 numbers on 24 October 2026) |
 | Equivalent in the source system | Aircall Analytics' calls: any inbound or outbound call made or received, internal calls (between users of the same company) excluded (Analytics: Terms) |
 | Not to use | "CRM call" or "HubSpot call" for a call fact (Retired words) |
-| Status | Decided (R2). Pending: the exclusion of internal calls and the attribution to the last participant, verified in the reconciliation |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
+| Status | Decided (R2; the reconciliation of 23 October 2026). Pending, untested because that day had none: the attribution of a transferred call to its last participant, and whether internal calls are excluded |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
 | Used by | `calls.total`, `calls.chart`, `calls.inbound`, `calls.outbound`, `dashboard.intake.calls`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Intake, Dashboard |
-| As built today | `cma.calls_of` (`62`, as `76` restated it): a telephony call, not deleted, with a start, on a counted line (a line not yet in the catalog counts), either direction. Internal calls are not excluded: neither the Aircall adapter (`ingest/src/adapters/aircall/map.mjs`) nor the SQL recognises one, so every call Aircall returns with direction inbound or outbound is stored and counted. A call is attributed to Aircall's `user` of the call object, not to a last participant (Gaps) |
+| As built today | `cma.calls_of` (`62`, as `76` restated it): a telephony call, not deleted, with a start, on a counted line (a line not yet in the catalog counts), either direction; archived calls are not filtered out, which matches. A person's calls are their answered inbound and outbound calls (`cma.calls_per_person_of`, `62`), so a missed inbound call without a user counts in the totals and in no person's row, which matches. Internal calls are not excluded: neither the Aircall adapter (`ingest/src/adapters/aircall/map.mjs`) nor the SQL recognises one, so every call Aircall returns with direction inbound or outbound is stored and counted. A call is attributed to Aircall's `user` of the call object, not to a last participant (Gaps). A line Aircall adds arrives counted (`cma.telephony_number.is_counted` defaults to true), and no screen shows how many lines count (Gaps) |
 
 ### Attempt
 
@@ -138,7 +138,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Unit and display | A percentage, with its denominator in the detail line |
 | Time rule | Day |
 | Scope | As Call |
-| Equivalent in the source system | Aircall Analytics' "Connected rate" (the label as decided on 24 October 2026; the article is confirmed in the reconciliation) |
+| Equivalent in the source system | Aircall Analytics' "Connected rate" (the label as decided on 24 October 2026; the article to confirm against Aircall Analytics) |
 | Not to use | "connected share", "Aandeel verbonden" (convention 6) |
 | Status | Decided |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Connected" |
@@ -150,19 +150,19 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Field | Value |
 |---|---|
 | Term | Conversation (nl: Gevoerd gesprek; `calls.conversations` "Gevoerde gesprekken") |
-| Key | `conversation`, `conversations`; API `conversations`. The threshold's setting key is chosen with `X` |
-| Definition | A connected call with at least `X` seconds of talk time, meaning someone actually spoke with the contact. It is logged on the deal and is the evidence for direct versus indirect orders. |
-| Source | Aircall, talk time of a connected call |
-| Counts / does not count | Counts a connected outbound call with at least `X` seconds of talk. Does not count a connected call under `X` (a voicemail box, a gatekeeper), a call not connected, or a HubSpot call outcome (R1). Whether an answered inbound call counts by talk time too is pending |
+| Key | `conversation`, `conversations`; API `conversations`; setting `calls.conversation_min_talk_seconds` (it replaces `attempts.reached_min_talk_seconds`) |
+| Definition | A connected call with at least `calls.conversation_min_talk_seconds` of talk time (30 for Pulse4all Subscriptions) that carries no current tag whose meaning is "not reached". An untagged call is decided by talk time alone. It applies to both directions: an answered inbound call is a conversation under the same rule. It is logged on the deal and is the evidence for direct versus indirect orders. |
+| Source | Aircall, the talk time and the current tags of a connected outbound or answered inbound call; the tag-meaning mapping of the telephony connection (CMA configuration) |
+| Counts / does not count | Counts a connected outbound or an answered inbound call with at least `calls.conversation_min_talk_seconds` of talk and no current tag meaning "not reached", an untagged one included. Does not count a call under the threshold, a call carrying a tag meaning "not reached" (a voicemail box, a gatekeeper), a call not connected or not answered, or a HubSpot call outcome (R1) |
 | Unit and display | A count |
 | Time rule | Day |
 | Scope | As Call; on a deal or contact through the call link |
-| Equivalent in the source system | No Aircall measure of this name was found (to confirm in the reconciliation); the Outbound+ dashboard filters connected outbound calls by a minimum talk time (default 0), which with `X` should give the same count for outbound calls |
+| Equivalent in the source system | Aircall Analytics with the minimum connected in-call time at 29 seconds and a tag filter that excludes the "Not Reached" tags; untagged calls stay included (the outbound view; the inbound one to confirm against Aircall Analytics) |
 | Not to use | reached (0008z); "spoken to lead"; "in contact" ("talk time in contact"); "Conversation" for an email thread (Gaps) |
-| Status | Pending: `X` (30 or 60), decided from the tag analysis per talk-time band; whether an answered inbound call counts by talk time too |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Conversation" (it replaces reached and spoken to lead; the threshold is pending) |
-| Used by | `calls.conversations`, `calls.avg_talk`, `calls.talk_total`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `attempts.reached_share`, `attempts.outcomes.reached_share`, `attempts.outcomes.avg_talk_reached`, `attempts.reached_per_attempt`, `attempts.list.reached`, `attempts.list.first_reached`, `attempts.list.talk_in_contact`, `attempts.deal.reached_by`, `attempts_per_agent.reached_share`, `attempts_per_agent.talk_reached`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Attempts per deal, Attempts per agent, First orders, Orders per person, Email |
-| As built today | Three meanings, none with `X`. Reports → Calls and Calls per agent (`cma.calls_of.is_conversation`, `62`, `76`): an answered inbound call at any talk time, or an outbound call with at least `telephony.connected_min_seconds` (10) of talk. First orders, Orders per person and Email's not-responding deals (`cma.crm_call_connected_of`, `82`; `90`): the same through the call link, else the CRM call's HubSpot outcome (R1). Attempts per deal's "reached" (`94`): the HubSpot outcome when the CRM call has one, else at least `attempts.reached_min_talk_seconds` (30) of talk |
+| Status | Decided, for outbound and inbound calls |
+| Decided | 24 October 2026 (Martin); docs/decisions.md, 24 Oct 2026, "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*". Evidence: the outbound connected calls of 1 to 23 October 2026 by talk-time band against the agents' "Not Reached" tags. The share of tagged connected calls tagged "Not Reached" per band: 0–9 s 98 %, 10–19 s 85 %, 20–29 s 72 %, 30–44 s 71 %, 45–59 s 42 %, 60–89 s 27 %, 90 s and more 4 %. Talk time alone at 30 s would count 35 % voicemails; the tag rule removes them while keeping 84 % of the real conversations. Inbound: decided the same day (Martin), under the same rule |
+| Used by | `calls.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.conversations`, `calls_per_agent.tag_split`, `attempts.reached_share`, `attempts.outcomes.reached_share`, `attempts.outcomes.avg_talk_reached`, `attempts.reached_per_attempt`, `attempts.list.reached`, `attempts.list.first_reached`, `attempts.list.talk_in_contact`, `attempts.deal.reached_by`, `attempts_per_agent.reached_share`, `attempts_per_agent.talk_reached`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`; Reports → Calls, Calls per agent, Attempts per deal, Attempts per agent, First orders, Orders per person, Email |
+| As built today | Three meanings, none with the tag rule, since no tag has a meaning yet. Reports → Calls and Calls per agent (`cma.calls_of.is_conversation`, `62`, `76`): an answered inbound call at any talk time, or an outbound call with at least `telephony.connected_min_seconds` (10) of talk. First orders, Orders per person and Email's not-responding deals (`cma.crm_call_connected_of`, `82`; `90`): the same through the call link, else the CRM call's HubSpot outcome (R1). Attempts per deal's "reached" (`94`): the HubSpot outcome when the CRM call has one, else at least `attempts.reached_min_talk_seconds` (30) of talk |
 
 ### Talk time
 
@@ -170,18 +170,18 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 |---|---|
 | Term | Talk time (nl: Gesprekstijd) |
 | Key | `talk_seconds`; API `talkSeconds` |
-| Definition | Aircall's talk time for the call. As built: from the answer to the end, no ringing. |
-| Source | Aircall, `answered_at` and `ended_at` (as built); Aircall Analytics' talk time to compare |
-| Counts / does not count | As Aircall counts it (pending the reconciliation). As built: the seconds from the answer to the end, never ringing or the menu; a call not answered or not yet ended has none |
+| Definition | Aircall's talk time for the call: from the answer to the end. An average of talk time is over the answered calls (talk time present). |
+| Source | Aircall, `answered_at` and `ended_at` |
+| Counts / does not count | Counts the seconds from the answer to the end; ringing and the menu never count. A call not answered or not yet ended has no talk time and is left out of an average |
 | Unit and display | Seconds; the screens show a duration |
 | Time rule | The call's Day |
 | Scope | As Call |
 | Equivalent in the source system | Aircall Analytics' "In call time (outbound)": the time users spent talking with outbound recipients on connected calls, the outbound leg of a transfer to an external number attributed to the transferring user (Analytics: Metrics); its averages |
 | Not to use | duration (Aircall's `duration` includes ringing); "talk in contact" |
-| Status | Pending: verify against Aircall's average in the reconciliation; the denominator of the average |
-| Decided | Not yet (Pending); R2 makes Aircall the source |
+| Status | Decided |
+| Decided | 24 October 2026; evidence: docs/decisions.md, 24 Oct 2026, "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
 | Used by | `calls.avg_talk`, `calls.talk_total`, `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.inbound_talk_avg`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.inbound_talk_total`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.inbound_talk_seconds_total`, `api.calls_per_agent.outbound_talk_seconds_total`, `attempts.deal.talk_seconds`, `attempts.list.talk_in_contact`, `attempts.outcomes.avg_talk_reached`, `attempts_per_agent.talk_reached`; Reports → Calls, Calls per agent, Attempts per deal, Attempts per agent |
-| As built today | `cma.telephony_call.talk_seconds` is generated by the database: ended − answered in whole seconds, null while unanswered (`34`). Averages: per conversation (Reports → Calls), per answered inbound and per connected outbound call (Calls per agent), per reached deal (Attempts per deal). The copy says it is shorter than the phone system's own duration on purpose (`calls.intro`, `hints.callsAvgTalk`), which convention 2 allows only if Aircall's talk time is the same measure; the reconciliation decides |
+| As built today | `cma.telephony_call.talk_seconds` is generated by the database: ended − answered in whole seconds, null while unanswered (`34`), which matches. Reports → Calls averages over 0008j's conversations (`cma.calls_figures_of`, `62`): answered inbound calls, and outbound calls with at least `telephony.connected_min_seconds` (10) of talk, so an answered outbound call under that threshold is left out of the average and the total; with Connected (the threshold at 0) the two sets are the same. Calls per agent averages per answered inbound and per connected outbound call; Attempts per deal per reached deal. The copy says talk time is shorter than the phone system's own duration on purpose (`calls.intro`, `hints.callsAvgTalk`) (Gaps) |
 
 ### Inbound call
 
@@ -195,7 +195,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Unit and display | A count |
 | Time rule | Day |
 | Scope | As Call |
-| Equivalent in the source system | Aircall Analytics' inbound calls, internal calls excluded (Analytics: Terms); Aircall tracks an outbound call successfully transferred to another agent as inbound (to confirm in the reconciliation) |
+| Equivalent in the source system | Aircall Analytics' inbound calls, internal calls excluded (Analytics: Terms); Aircall tracks an outbound call successfully transferred to another agent as inbound (to confirm against Aircall Analytics) |
 | Not to use | "Offered" (proposed; Reports → Inbound uses it today, see Gaps) |
 | Status | Decided (R2) |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
@@ -214,7 +214,7 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Unit and display | A count |
 | Time rule | Day |
 | Scope | As Call |
-| Equivalent in the source system | Aircall Analytics' answered inbound calls (Analytics: Terms; the label is confirmed in the reconciliation) |
+| Equivalent in the source system | Aircall Analytics' answered inbound calls (Analytics: Terms; the label to confirm against Aircall Analytics) |
 | Not to use | "Answered" for an outbound call (Connected) |
 | Status | Decided (R2) |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
@@ -246,18 +246,18 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 |---|---|
 | Term | Tag (nl: Tag) |
 | Key | `tag`, `tags`; API `tagKey` |
-| Definition | Aircall's label on a call; it describes the call (type, outcome). It never decides Attempt, Connected or Conversation. Its meaning comes from a tag-meaning mapping per telephony connection (call type, courtesy completed and so on), configuration only. |
-| Source | Aircall, the call's current `tags` and the tag catalog |
+| Definition | Aircall's label on a call; it describes the call (type, outcome). It never decides Attempt or Connected; a tag with the meaning "not reached" excludes a call from Conversation. Its meaning comes from a tag-meaning mapping per telephony connection, configuration only, with at least the meanings not reached, call type, courtesy attempt, and courtesy completed positive, neutral and negative. |
+| Source | Aircall, the call's current `tags` and the tag catalog; the meanings from the tag-meaning mapping (CMA configuration) |
 | Counts / does not count | Counts the call's current tags. Does not count a tag removed from the call |
 | Unit and display | The tag's name from Aircall; counts per tag |
 | Time rule | The call's Day |
 | Scope | Per telephony connection |
 | Equivalent in the source system | Aircall's tags (the tags chart in the Analytics article on the tags and missed-call reasons charts) |
 | Not to use | "call outcome" or "disposition" for an Aircall tag; a HubSpot call outcome in its place (R1) |
-| Status | Decided; the tag-meaning mapping Pending (backlog CMA-073 and CMA-074) |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1" |
-| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`; Reports → Calls, Calls per agent, Intake |
-| As built today | `cma.telephony_tag` with `is_counted` and the tagging history `cma.telephony_call_tag` (`34`); no meaning is mapped, and tags decide no figure besides tagged or untagged and the counted-tag split, which matches |
+| Status | Decided, the tag-meaning mapping included as a requirement; not built yet (Gaps) |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1" and "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" |
+| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meaning "not reached" every Conversation figure; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
+| As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`); no meaning exists, so no tag can exclude a call from Conversation yet (Gaps) |
 
 ### Untagged
 
@@ -265,18 +265,18 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 |---|---|
 | Term | Untagged (nl: Zonder tag) |
 | Key | `untagged`; API `untagged` |
-| Definition | A call without a current tag; a tag removed makes the call untagged (Aircall). Share over all calls. |
+| Definition | A call without a current tag; a tag removed makes the call untagged (Aircall). Its share is over all calls in scope, missed inbound calls included. |
 | Source | Aircall, the call's current `tags` |
-| Counts / does not count | Counts a call without any current tag. Does not count a call with any tag |
-| Unit and display | A count and its share of all calls |
+| Counts / does not count | Counts a call without any current tag, missed inbound calls included. Does not count a call with any tag |
+| Unit and display | A count and its share of all calls in scope |
 | Time rule | Day |
 | Scope | As Call |
 | Equivalent in the source system | Aircall Analytics' untagged calls: the first bar of the tags chart; a call whose tag is removed is untagged again (the Analytics article on the tags and missed-call reasons charts) |
 | Not to use | "Untagged conversations" as the measure (As built today) |
-| Status | Decided (R2); Pending: verify the denominator in the reconciliation |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
+| Status | Decided |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
 | Used by | `calls.untagged_share`, `calls_per_agent.untagged`; Reports → Calls, Calls per agent |
-| As built today | A conversation (0008j) without any current tag, counted or not; the share is over the conversations (`calls.untaggedDetail` "{untagged} of {conversations} conversations"), not over all calls (Gaps) |
+| As built today | A conversation (0008j) without any current tag, counted or not: `untagged_conversations` (`62`) divided by the conversations in the web (`untaggedPct`, `web/src/lib/reports.ts`; `calls.untaggedDetail` "{untagged} of {conversations} conversations"), so missed inbound calls and outbound calls under the connected threshold are in neither count. The definition's share is over all calls in scope (Gaps) |
 
 ### Last participant
 
@@ -285,17 +285,17 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Term | Last participant (no Dutch label in `copy.ts`) |
 | Key | `last_participant`; API `lastParticipant` |
 | Definition | The user or line a call is attributed to: the last one involved (Aircall). |
-| Source | Aircall, the call's participants; which field holds the last one is confirmed in the reconciliation |
+| Source | Aircall, the call's participants; which field holds the last one is confirmed on a day with a transferred call |
 | Counts / does not count | One user (or line) per call |
 | Unit and display | A person on People through the linked account (`<adapter>_user`, 0008e); never a telephony user id on screen |
 | Time rule | Not applicable |
 | Scope | As Call |
 | Equivalent in the source system | Aircall Analytics' user attribution; the outbound leg of a transfer to an external number goes to the transferring user (Analytics: Metrics) |
 | Not to use | None yet |
-| Status | Decided (R2); as built the CMA uses `call.user`, a gap to fix |
+| Status | Decided (R2); Pending for transferred calls, untested in the reconciliation of 23 October 2026 because that day had none; as built the CMA uses `call.user`, a gap to fix |
 | Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
 | Used by | `calls_per_agent.*`, `attempts.deal.agent_name`; Reports → Calls per agent, Attempts per deal |
-| As built today | `userRef` is Aircall's `call.user.id` (`ingest/src/adapters/aircall/map.mjs`), stored as `cma.telephony_call.user_ref` and mapped to a person in `cma.calls_per_person_of` (`62`) and `cma.attempts_of_deal` (`94`). Whether `user` is the last participant of a transferred call is not verified |
+| As built today | `userRef` is Aircall's `call.user.id` (`ingest/src/adapters/aircall/map.mjs`), stored as `cma.telephony_call.user_ref` and mapped to a person in `cma.calls_per_person_of` (`62`) and `cma.attempts_of_deal` (`94`). On 23 October 2026, a day without transfers, every person's total, inbound and outbound equalled Aircall's; whether `user` is the last participant of a transferred call is not verified |
 
 ### Line
 
@@ -330,8 +330,8 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Scope | Every call figure |
 | Equivalent in the source system | Aircall Analytics' time zone filter |
 | Not to use | None yet |
-| Status | Decided (R2); as built, Reports → Calls uses each line's market zone, a gap to fix |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2" |
+| Status | Decided (R2; the reconciliation of 23 October 2026, in Europe/Amsterdam); as built, Reports → Calls uses each line's market zone, a gap to fix |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
 | Used by | `calls.*`, `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Inbound, Intake |
 | As built today | `cma.calls_of` and `cma.inbound_calls_of` date (and hour) each call in its line's market zone, else the tenant's, so a GB line's call at 23:30 in London lands a day earlier than in Amsterdam; `cma.telephony_history_start_of` (`64`) does the same. Intake (`cma.intake_per_day`) dates calls in the tenant's zone, which matches. The Calls page's like-for-like label uses the viewer's zone (audit finding MA-004) |
 
@@ -380,7 +380,7 @@ Status: Retired. A retired word is never introduced again; where it still appear
 | Retired | Use instead | Note | Where it appears today |
 |---|---|---|---|
 | connected (≥ 10 s talk, 0008j) | Connected (Aircall) | The 10 s threshold goes | `telephony.connected_min_seconds` = 10 (`62`, `02`); `cma.calls_of`; `cma.crm_call_connected_of` (`82`); first orders (`90`); the data-quality skip (`74`); copy `calls.connectedNote`, `hints.callsConnected`, `hints.agentConnected`, `configExports.telephony_connected_min_seconds`, `configSources.connectedThreshold`; catalog `calls.outbound_connected`, `calls_per_agent.connected_outbound` |
-| reached (0008z) | Conversation | Dutch "bereikt" goes with it | `attempts.reached_min_talk_seconds` and the reached columns of `cma.deal_attempts_of`, `cma.attempt_deal` and `cma_read.attempts_per_deal` (`94`); copy `attempts.reached*`, `hints.at*Reached*`; API `reachedDeals`, `firstReached`, `reachedAttempts`, `talkSecondsReached`, `firstReachedAttempt`, `reachedBy`; catalog `attempts.*reached*` |
+| reached (0008z) | Conversation | Dutch "bereikt" goes with it. The tag meaning "not reached" (the agents' Aircall tag "Not Reached") is a defined meaning of Tag and stays | `attempts.reached_min_talk_seconds` and the reached columns of `cma.deal_attempts_of`, `cma.attempt_deal` and `cma_read.attempts_per_deal` (`94`); copy `attempts.reached*`, `hints.at*Reached*`; API `reachedDeals`, `firstReached`, `reachedAttempts`, `talkSecondsReached`, `firstReachedAttempt`, `reachedBy`; catalog `attempts.*reached*` |
 | spoken to lead | Conversation | | Not found in the repository (searched on 24 October 2026); the nearest wording is the catalog's "spoke with (or called)" in `follow_up.leads.last_call_days` and `callbacks.week.kept` |
 | answered (for outbound calls) | Connected | "Answered" stays for inbound calls only | Copy `attempts.colAnswered`, `hints.atAAnswered`; API `answered` on one deal's attempts; catalog `attempts.deal.answered` ("Technically answered") |
 | CRM call / HubSpot call as a call fact | Attempt / Call (telephony) | R1 | `attempts.source` `crm` (`94`); `cma.lead_calls_of` and `cma.speed_to_lead_of` (`40`); `cma.crm_call_connected_of` (`82`); first orders (`84`, `90`); callbacks kept (`88`); copy `attempts.noteCrm`; catalog `speed_to_lead.*`, `follow_up.leads*`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`, `callbacks.*` |
@@ -421,19 +421,19 @@ Where the code or the catalog says something else than this file: every retired 
 |---|---|---|---|---|
 | W1 | `web/src/lib/copy.ts` | `calls.connected`, `callsPerAgent.connected` ("Connected", "Verbonden"); `calls.connectedNote`, `calls.outboundDetail`, `hints.callsOutbound`, `hints.callsConnected`, `hints.agentConnected` | Connected: at least {threshold} seconds of talk time | Connected: answered by the recipient or their voicemail, any duration (Aircall) |
 | W2 | `web/src/lib/copy.ts` | `calls.connectedPct` "Connected share" ("Aandeel verbonden"), `hints.callsConnectedPct` | Connected share | Connected rate (Aircall's label) |
-| W3 | `web/src/lib/copy.ts` | `calls.outboundTalk` "Talk time on connected calls", `hints.callsOutboundTalk`, `hints.agentOutboundAvg` | Talk time of the outbound calls with at least the threshold | The same words over Connected (Aircall); the average's denominator pending (Talk time) |
-| W4 | `web/src/lib/copy.ts` | `calls.conversations`, `calls.callsDetail`, `calls.tagBarsTitle`, `callsPerAgent.split`, `callsPerAgent.splitOf`, `hints.callsConversations` ("Gevoerde gesprekken") | Answered inbound calls and connected outbound calls | Conversation: a connected call with at least `X` seconds of talk (pending) |
-| W5 | `web/src/lib/copy.ts` | `calls.untaggedDetail`, `calls.tagNote`, `hints.callsUntagged`, `hints.callsUntaggedPct`, `hints.agentUntagged` | Untagged conversations, as a share of the conversations | Untagged calls, as a share of all calls (the denominator verified in the reconciliation) |
-| W6 | `web/src/lib/copy.ts` | `calls.intro`, `hints.callsAvgTalk` | Talk time is shorter than the phone system's own duration, on purpose | Aircall's talk time, the same figure as Aircall Analytics (pending the reconciliation) |
+| W3 | `web/src/lib/copy.ts` | `calls.outboundTalk` "Talk time on connected calls", `hints.callsOutboundTalk`, `hints.agentOutboundAvg` | Talk time of the outbound calls with at least the threshold | The same words over Connected (Aircall) |
+| W4 | `web/src/lib/copy.ts` | `calls.conversations`, `calls.callsDetail`, `calls.tagBarsTitle`, `callsPerAgent.split`, `callsPerAgent.splitOf`, `hints.callsConversations` ("Gevoerde gesprekken") | Answered inbound calls and connected outbound calls | Conversation: a connected or answered call with at least `calls.conversation_min_talk_seconds` of talk and no tag meaning "not reached" |
+| W5 | `web/src/lib/copy.ts` | `calls.untaggedDetail`, `calls.tagNote`, `hints.callsUntagged`, `hints.callsUntaggedPct`, `hints.agentUntagged` | Untagged conversations, as a share of the conversations | Untagged calls, as a share of all calls in scope, missed inbound calls included |
+| W6 | `web/src/lib/copy.ts` | `calls.intro`, `hints.callsAvgTalk` ("Average talk time per conversation", "per gevoerd gesprek") | Talk time is shorter than the phone system's own duration, on purpose; the average is per conversation | Aircall's talk time, from the answer to the end, averaged over the answered calls (identical to Aircall on 23 October 2026) |
 | W7 | `web/src/lib/copy.ts` | `inbound.intro` | Each call's day and hour in the time zone of its line's market | In the tenant's time zone (Day) |
 | W8 | `web/src/lib/copy.ts` | `inbound.unansweredPct`, `live.inboundUnanswered`, `hints.unansweredPct` ("Unanswered", "Niet aangenomen") | Unanswered, while the Live board's list says Missed | Missed (proposed: one word for Missed inbound call) |
-| W9 | `web/src/lib/copy.ts` | `inbound.offered`, `hints.offered` ("Offered", "Aangeboden") | Offered for the inbound calls | Inbound calls (proposed; Aircall's label checked in the reconciliation) |
-| W10 | `web/src/lib/copy.ts` | `attempts.reached`, `reachedDetail`, `colReached`, `reachTitle`, `reachIntro`, `firstReachCol`, `reachedCol`, `firstReached`, `talkReached`, `colTalk`, `colReachedBy`, `reachedByOutcome`, `reachedByTalk`, `noteTelephony`, `outcomesIntro`; `attemptsPerAgent.reachedShare`; hints `atReached`, `atReach`, `atReachedCol`, `atFirstReached`, `atTalkReached`, `atAReached`, `atAgentReached`, `atAgentTalk`, `atOcReached`, `atOcTalk`, `atGroupFirst`, `atGroupReached`, `atOutcomes` (Dutch "bereikt", "met contact") | Reached: the HubSpot outcome says connected, else at least {seconds} seconds of talk; "talk in contact" | Conversation, by talk time only (R1) |
+| W9 | `web/src/lib/copy.ts` | `inbound.offered`, `hints.offered` ("Offered", "Aangeboden") | Offered for the inbound calls | Inbound calls (proposed; Aircall's label to confirm against Aircall Analytics) |
+| W10 | `web/src/lib/copy.ts` | `attempts.reached`, `reachedDetail`, `colReached`, `reachTitle`, `reachIntro`, `firstReachCol`, `reachedCol`, `firstReached`, `talkReached`, `colTalk`, `colReachedBy`, `reachedByOutcome`, `reachedByTalk`, `noteTelephony`, `outcomesIntro`; `attemptsPerAgent.reachedShare`; hints `atReached`, `atReach`, `atReachedCol`, `atFirstReached`, `atTalkReached`, `atAReached`, `atAgentReached`, `atAgentTalk`, `atOcReached`, `atOcTalk`, `atGroupFirst`, `atGroupReached`, `atOutcomes` (Dutch "bereikt", "met contact") | Reached: the HubSpot outcome says connected, else at least {seconds} seconds of talk; "talk in contact" | Conversation: the threshold and no tag meaning "not reached", never the HubSpot outcome (R1) |
 | W11 | `web/src/lib/copy.ts` | `attempts.colAnswered` "Answered", `hints.atAAnswered` | Answered, for an outbound call | Connected |
 | W12 | `web/src/lib/copy.ts` | `attempts.colCallOutcome` "Call outcome", `attempts.noOutcome`, `attempts.withoutOutcome`, `attempts.qualityIntro`, `hints.atWithoutOutcome` | The HubSpot call outcome, set by agents on every call | No HubSpot call outcome (R1); a description of the call is its Tag |
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W14 | `web/src/lib/copy.ts` | `configSources.outcomesIntro`, `configSources.connected`, `configSources.hintConnected`, `configSources.ruleConnected` | A HubSpot call outcome marked connected "reached the customer and counts for the contact rate" | R1: no HubSpot outcome decides Connected or Conversation; no "contact rate" figure exists |
-| W15 | `web/src/lib/copy.ts`; `web/src/components/configuration/SourceConfig.tsx`, `ExportsConfig.tsx` | `configExports.telephony_connected_min_seconds`, `configSources.connectedCall`, `configSources.connectedThreshold` | An outbound call counts as connected from {seconds} seconds of talk time | Connected has no talk-time threshold (0 for Pulse4all Subscriptions); the Conversation threshold `X` is its own setting |
+| W15 | `web/src/lib/copy.ts`; `web/src/components/configuration/SourceConfig.tsx`, `ExportsConfig.tsx` | `configExports.telephony_connected_min_seconds`, `configSources.connectedCall`, `configSources.connectedThreshold` | An outbound call counts as connected from {seconds} seconds of talk time | Connected has no talk-time threshold (0 for Pulse4all Subscriptions); the Conversation threshold is its own setting, `calls.conversation_min_talk_seconds` |
 | W16 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `firstOrders.level_conversation`, `firstOrders.ev_conversation` "Call", `firstOrders.level_attempt` and `firstOrdersFile.attempt` "Call attempt", `firstOrders.ev_attempt`, `firstOrdersFile.conversation`, `hints.foConversation`; the export's `conversation` and `attempt` columns | A conversation as Calls counts one (0008j or the HubSpot outcome); an attempt is a call with the contact that is no conversation | Conversation and Attempt as defined, from Aircall calls through the call link |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
@@ -441,15 +441,17 @@ Where the code or the catalog says something else than this file: every retired 
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `connectedOutbound`, `connectedPct`, `conversations`, `untaggedConversations` (Calls, Calls per agent); `unanswered`, `unansweredByReason` (Inbound); `reachedDeals`, `firstReached`, `reachedAttempts`, `talkSecondsReached`, `firstReachedAttempt`, `reachedBy`, `answered` (Attempts per deal) | 0008j's and 0008z's words | The terms' camelCase keys (`connected`, `connectedRate`, `conversations`, `untagged`, `missedInbound`) |
 | W22 | `web/src/lib/attempts.ts` | The mock's mirror of 0008z's reached | Reached by the outcome, else by talk time | Follows Conversation |
-| W23 | `web/src/lib/reports.ts` | `untaggedPct` (`calls.untagged_share`) | Untagged conversations ÷ conversations | Untagged calls ÷ all calls (the denominator verified in the reconciliation) |
+| W23 | `web/src/lib/reports.ts` | `untaggedPct` (`calls.untagged_share`) | Untagged conversations ÷ conversations | Untagged calls ÷ all calls in scope, missed inbound calls included |
 | W24 | `web/src/lib/copy.ts` | `email.notRespondingIntro`, `hints.emailNrDays` | "no email, message or conversation back": a conversation as `cma.crm_call_connected_of` gives it | A Conversation as defined |
+| W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with Aircall's preset "Subscriptions" (46 numbers on 24 October 2026) after a line is added in Aircall |
+| W26 | `web/src/lib/data/postgres.ts`, `mock.ts`, `types.ts`; `web/src/lib/attempts.ts` | `reachedMinTalkSeconds`, `attempts.reached_min_talk_seconds` | The attempts' reached threshold | `conversationMinTalkSeconds`, `calls.conversation_min_talk_seconds` (the rename, D20) |
 
 ### db/
 
 | # | File | Key or label | Says | Should say |
 |---|---|---|---|---|
 | D1 | `db/62_calls_overview.sql`; `db/02_seed_pulse4all.sql` | Setting `telephony.connected_min_seconds` (default 10; Pulse4all 10) | An outbound call with at least this many seconds of talk time is connected | Connected is `answered_at` set: 0 for Pulse4all Subscriptions, shipped with Conversation in a new script |
-| D2 | `db/76_audit_hardening.sql` (`cma.calls_of`, first in `62`) | `is_connected_outbound`; `is_conversation` | Connected at the threshold; a conversation is an answered inbound or a connected outbound call | Connected = answered; Conversation = connected with at least `X` seconds (pending) |
+| D2 | `db/76_audit_hardening.sql` (`cma.calls_of`, first in `62`) | `is_connected_outbound`; `is_conversation` | Connected at the threshold; a conversation is an answered inbound or a connected outbound call | Connected = answered; Conversation = a connected or answered call with at least `calls.conversation_min_talk_seconds` and no tag meaning "not reached" |
 | D3 | `db/62_calls_overview.sql` | `untagged_conversations` of the overview, the tag use and the per-person reads | Conversations without a current tag | Untagged calls (all calls without a current tag) |
 | D4 | `db/76_audit_hardening.sql` (`cma.calls_of`, `cma.inbound_calls_of`); `db/62_calls_overview.sql` (`cma.calls_per_person_of`); `db/64_calls_history_start.sql` | `business_date`, week, hour and time of day | In the line's market zone, else the tenant's | In the tenant's zone (Day) |
 | D5 | `db/62_calls_overview.sql` (`cma.calls_per_person_of`); `db/94_attempts_for_sales.sql` (`cma.attempts_of_deal`) | The person behind `user_ref` | Aircall's `call.user` | The last participant |
@@ -458,7 +460,7 @@ Where the code or the catalog says something else than this file: every retired 
 | D8 | `db/82_email_reports.sql` (`cma.email_not_responding_of`) | "a connected call" since the email | `cma.crm_call_connected_of` | A Conversation |
 | D9 | `db/94_attempts_for_sales.sql` (`cma.deal_calls_of`, which `cma.lead_calls_of` reads) | `is_connected`, `effective_at`, `direction` | Connected when the outcome is marked connected or the linked call was answered; the CRM call's time and direction when unlinked | Connected from Aircall's `answered_at`; the call's time and direction from Aircall (R1) |
 | D10 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`) | The first outbound call | The first outbound CRM call, linked or not, with no window end; the agent its CRM owner | The first attempt (details pending) |
-| D11 | `db/94_attempts_for_sales.sql` | `attempts.reached_min_talk_seconds`; `reached`, `reached_by`, `first_reached`, the reached and in-contact columns of `cma.attempt_deal`, `cma_read.attempts_per_deal` | Reached: the HubSpot outcome, else 30 seconds of talk | Conversation (`X` pending) |
+| D11 | `db/94_attempts_for_sales.sql` | `attempts.reached_min_talk_seconds`; `reached`, `reached_by`, `first_reached`, the reached and in-contact columns of `cma.attempt_deal`, `cma_read.attempts_per_deal` | Reached: the HubSpot outcome, else 30 seconds of talk | Conversation (the threshold and the tag rule); the setting renamed (D20) |
 | D12 | `db/94_attempts_for_sales.sql` | `attempts.source` value `crm` | Every outbound CRM call is an attempt | Attempts from the telephony system only (R1) |
 | D13 | `db/32_intake_core.sql` | `cma.connection_call_outcome.is_connected`, `cma.set_call_outcome` | Which HubSpot call outcomes count as connected (a conversation) | Retired (R1) |
 | D14 | `db/88_callbacks_kept.sql` (`cma.callbacks_kept_of`) | The call that keeps a callback | Its start: the linked Aircall call's, else the CRM call's time | The Aircall call, tied through the call link (R1) |
@@ -466,6 +468,11 @@ Where the code or the catalog says something else than this file: every retired 
 | D16 | `db/98_funnel.sql` | `reached_won` | Of the deals that entered, those won now | A word that is not retired |
 | D17 | `db/60_inbound_service.sql` (`cma.inbound_service_of`, `cma.inbound_today_of`) | `unanswered`, `unanswered_by_reason` | Unanswered | Missed (proposed, as W8) |
 | D18 | `db/74_forms_reporting.sql` (`cma.data_quality_of`) | The `telephony_call_unlinked` skip | Outbound calls under the connected threshold (at least 1 second) and untagged are skipped | A skip rule named by its own measure once Connected is `answered_at` |
+| D19 | `db/62_calls_overview.sql` (`cma.calls_figures_of`) | The talk time total and average | Over 0008j's conversations | Over the answered calls with talk time (Talk time) |
+| D20 | `db/94_attempts_for_sales.sql` (the setting and its reads); `db/98_funnel.sql` (the settings check) | Setting `attempts.reached_min_talk_seconds` (30) | The talk time at which an attempt without a HubSpot outcome reached the customer | Renamed `calls.conversation_min_talk_seconds` (30 for Pulse4all Subscriptions), the Conversation threshold for every call figure |
+| D21 | `db/34_telephony.sql` (`cma.telephony_tag`); Configuration → Sources, Tags (`configSources.tagsIntro`, `hintTagCounted`) | The tag-meaning mapping | Does not exist: `telephony_tag` holds names (and `is_counted`) only | A meaning per tag and telephony connection, configuration only, with at least not reached, call type, courtesy attempt, and courtesy completed positive, neutral and negative |
+| D22 | `db/74_forms_reporting.sql` (`cma.data_quality_of`) | A check: tag inconsistent with talk time | No such check | Proposed: a call with a tag meaning "not reached" and 90 seconds or more of talk, or with another tag and under 10 seconds; on 1 to 23 October 2026 about 20 and about 50 calls |
+| D23 | `db/76_audit_hardening.sql` (`cma.calls_of`); `db/82_email_reports.sql` (`cma.crm_call_connected_of`); `db/90_report_speed.sql` (first orders' calls) | An answered inbound call as a conversation | A conversation at any talk time | Under the same rule as outbound: answered inbound calls under 30 seconds (`calls.conversation_min_talk_seconds`), or with a tag meaning "not reached", stop counting as conversations (Reports → Email, First orders, Calls per agent) |
 
 ### ingest/
 
@@ -484,11 +491,11 @@ Where the code or the catalog says something else than this file: every retired 
 | C1 | `calls.outbound_connected`, `calls_per_agent.connected_outbound` | Outbound calls with at least the tenant's threshold of talk time | Connected (Aircall) |
 | C2 | `calls.outbound_connected_share` (title "Connected share") | Connected outbound ÷ all outbound, 0008j's connected | Connected rate |
 | C3 | `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.outbound_talk_total`, `api.calls_per_agent.outbound_talk_seconds_total` | Talk time of the outbound calls at the threshold | Talk time of the connected calls (Aircall) |
-| C4 | `calls.conversations`, `calls_per_agent.conversations`, `calls.avg_talk`, `calls.talk_total`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split` | A conversation is an answered inbound or a connected outbound call | Conversation (`X` pending) |
+| C4 | `calls.conversations`, `calls_per_agent.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split` | A conversation is an answered inbound or a connected outbound call | Conversation (the threshold and the tag rule, both directions) |
 | C5 | `calls.untagged_share`, `calls_per_agent.untagged` | Conversations without a tag, over the conversations | Calls without a tag, over all calls |
 | C6 | `calls.avg_talk` (notes) | Shorter than Aircall's own duration on purpose; "connected" is never Aircall's technical connected | Aircall's talk time and Aircall's connected (R2) |
 | C7 | The `time` field of `calls.*`, `calls_per_agent.*`, `inbound.*` | Each call's date in its line's market zone, else the tenant's | The tenant's zone (Day) |
-| C8 | `attempts.reached_share`, `attempts.outcomes.reached_share`, `attempts.outcomes.avg_talk_reached`, `attempts.reached_per_attempt`, `attempts.list.reached`, `attempts.list.first_reached`, `attempts.list.talk_in_contact`, `attempts.deal.reached_by`, `attempts_per_agent.reached_share`, `attempts_per_agent.talk_reached` | Reached by the HubSpot outcome, else by talk time | Conversation |
+| C8 | `attempts.reached_share`, `attempts.outcomes.reached_share`, `attempts.outcomes.avg_talk_reached`, `attempts.reached_per_attempt`, `attempts.list.reached`, `attempts.list.first_reached`, `attempts.list.talk_in_contact`, `attempts.deal.reached_by`, `attempts_per_agent.reached_share`, `attempts_per_agent.talk_reached` | Reached by the HubSpot outcome, else by talk time | Conversation; their setting `attempts.reached_min_talk_seconds` becomes `calls.conversation_min_talk_seconds` |
 | C9 | `attempts.deal.answered` ("Technically answered") | Answered for an outbound call | Connected |
 | C10 | `attempts.without_outcome_share`, `attempts.deal.outcome_label` | The HubSpot call outcome | Retired (R1) |
 | C11 | Every `attempts.*` and `attempts_per_agent.*` formula | `attempts.source` `crm` takes every outbound CRM call | Attempts from the telephony system only |
@@ -499,12 +506,15 @@ Where the code or the catalog says something else than this file: every retired 
 | C16 | `inbound.unanswered_share`, `live.inbound.unanswered_share`, `live.inbound.unanswered_count` | Unanswered | Missed (proposed) |
 | C17 | `funnel.stage.reached_won`, `export.funnel_stages_csv.reached_won` | Reached won | A word that is not retired |
 | C18 | `data_quality.telephony_call_unlinked` | The skip reuses the connected threshold | Its own measure once Connected is `answered_at` |
+| C19 | `calls.avg_talk`, `calls.talk_total` | Average talk time per conversation (answered inbound or connected outbound) | Average talk time over the answered calls with talk time |
 
 **Catalog entries that change meaning** once the code follows the definitions:
 
 - Connected: `calls.outbound_connected`, `calls.outbound_connected_share`, `calls_per_agent.connected_outbound`, and with them `calls.outbound_talk`, `calls.outbound_talk_avg`, `calls_per_agent.outbound_talk_avg`, `calls_per_agent.outbound_talk_total` and `api.calls_per_agent.outbound_talk_seconds_total`.
 - Conversation in place of reached: the `attempts.*reached*` entries (`attempts.reached_share`, `attempts.outcomes.reached_share`, `attempts.outcomes.avg_talk_reached`, `attempts.reached_per_attempt`, `attempts.list.reached`, `attempts.list.first_reached`, `attempts.list.talk_in_contact`, `attempts.deal.reached_by`, `attempts_per_agent.reached_share`, `attempts_per_agent.talk_reached`).
-- Conversation in place of 0008j's: `calls.conversations`, `calls_per_agent.conversations`, `calls.avg_talk`, `calls.talk_total`, `calls.untagged_share`, `calls_per_agent.untagged`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`.
+- Conversation in place of 0008j's: `calls.conversations`, `calls_per_agent.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`.
+- Talk time over the answered calls: `calls.avg_talk`, `calls.talk_total`. Untagged over all calls: `calls.untagged_share`, `calls_per_agent.untagged`.
+- Answered inbound calls under 30 seconds, or with a tag meaning "not reached", leave the conversation counts of Reports → Calls, Calls per agent, Email and First orders (D23).
 - `cma.crm_call_connected_of` and its users: Reports → Email (`email.not_responding.*`), Reports → First orders (`first_orders.*`) and Reports → Orders per person (`orders_per_person.*`).
 
-**Count per area:** `web/` 24, `db/` 18, `ingest/` 5, `docs/metrics/catalog.json` 18; 65 in all.
+**Count per area:** `web/` 26, `db/` 23, `ingest/` 5, `docs/metrics/catalog.json` 19; 73 in all.
