@@ -340,19 +340,19 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Field | Value |
 |---|---|
 | Term | Speed to lead (nl: Snelheid tot lead) |
-| Key | `speed_to_lead`; API `speedToLead` |
-| Definition | From the deal's creation to its first Attempt, in business minutes of the deal's market (office hours and holidays from Markets). |
-| Source | The deal's creation from the CRM (HubSpot owns deals); the first attempt from Aircall; office hours and holidays from Configuration → Markets (CMA) |
-| Counts / does not count | Pending: which deals; attribution per person |
-| Unit and display | Business minutes; a median over the deals attempted |
-| Time rule | The deal's business date in the tenant's zone; business minutes in the deal's market |
-| Scope | Pending (which deals) |
+| Key | `speed_to_lead`; API `speedToLead`; settings `speed_to_lead.creation_sources`, `speed_to_lead.target_minutes`, `speed_to_lead.pre_window_minutes` |
+| Definition | From the creation of an automatically created lead deal to its first Attempt, in business minutes of the deal's market. One definition and one function serve Reports → Speed to lead, the Dashboard tile, Attempts and the cockpit. |
+| Source | The deal and its creation from the CRM (HubSpot owns deals); its creation source from the CRM's record-source fields, mapped per CRM connection (HubSpot: `hs_object_source` and `hs_created_by_user_id`, to verify); the first attempt from Aircall through the call link; office hours and holidays from Configuration → Markets (CMA) |
+| Counts / does not count | **Deals:** every deal created in a lead pipeline (configured; Pulse4all: Sales Pipeline – Subscriptions) whose creation source counts (`speed_to_lead.creation_sources`; Pulse4all: form, automation), test deals excluded. The creation source is a neutral value per deal: form, automation, user, import or unknown. **Shown apart, out of the measures:** deals created by hand, as "Created by hand, not in speed to lead"; a deal closed (won or lost, for example by a Self Serve order) before any attempt, as closed before first call. **Not called yet:** an open deal without an attempt, shown with its age. The measure Created deals keeps counting every new deal |
+| Unit and display | Median business minutes over the called deals, shown with the count not called yet; % within `speed_to_lead.target_minutes` (60); % called before 12:00 the next working day; the count not called yet. A deal not called yet counts as late in "% within 1 hour" once past the target, and in "% before 12:00 next working day" once past that moment |
+| Time rule | **Start:** the deal's creation; outside the office hours of the deal's market the clock starts at the next opening; holidays from Markets; measured in business minutes. **End:** the first Attempt linked to the deal or its contacts (Call link); a call within `speed_to_lead.pre_window_minutes` before the creation counts as 0 minutes. The deal's business date is its creation in the tenant's zone |
+| Scope | The tenant's lead pipelines. **Per person:** the person who placed the first attempt (the call's Last participant, Aircall); a view by deal owner follows with Assignments (0009). This is the basis for the gamification of speed to lead |
 | Equivalent in the source system | None: a CMA measure joining the CRM's deal and Aircall's call |
-| Not to use | "Mediane speed to lead" and "Speed to lead" in Dutch copy next to "Snelheid tot lead" (one Dutch label; see Gaps) |
-| Status | Decided (principle); details Pending (step 3): which deals, attribution per person |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: Attempt" |
-| Used by | `speed_to_lead.*`, `api.speed_to_lead.*`, `dashboard.intake.speed_to_lead`, `follow_up.leads_open_not_called`, `follow_up.leads_past_target`, `attempts.median_speed_to_lead`, `attempts.outcomes.median_speed`, `attempts.list.speed_to_lead`, `attempts.win_rate_by_speed`, `attempts_per_agent.median_speed`; Reports → Speed to lead, Follow-up, Attempts per deal, Attempts per agent; Dashboard |
-| As built today | Reports → Speed to lead (`cma.speed_to_lead_of`, `40`): to the first outbound CRM call associated with the deal or its contacts, its start the linked Aircall call's, else the CRM call's own time, so a call logged in HubSpot without an Aircall call counts (R1); no end to the window; the agent is the first call's CRM owner, else the deal's owner. Attempts per deal (`94`): to the first attempt within the deal's window. The two medians can differ (audit finding MA-003) |
+| Not to use | "Mediane speed to lead" and "Speed to lead" in Dutch copy next to "Snelheid tot lead" (one Dutch label; see Gaps); "Open, not called" for Not called yet (proposed) |
+| Status | Decided |
+| Decided | 24 October 2026 (Martin); docs/decisions.md, 24 Oct 2026, "Definitions: Speed to lead = from creation of an automatically created lead deal to its first attempt, in business minutes; uncalled deals count as late; one function for all pages (closes MA-003)" |
+| Used by | `speed_to_lead.*`, `api.speed_to_lead.*`, `dashboard.intake.speed_to_lead`, `follow_up.leads_open_not_called`, `follow_up.leads_past_target`, `attempts.median_speed_to_lead`, `attempts.outcomes.median_speed`, `attempts.list.speed_to_lead`, `attempts.win_rate_by_speed`, `attempts_per_agent.median_speed`; Reports → Speed to lead, Follow-up, Attempts per deal, Attempts per agent; Dashboard; Live board |
+| As built today | **Reports → Speed to lead** (`cma.speed_to_lead_of`, `40`; the Dashboard tile computes the same rows in the web). **Deals:** every deal of a counted lead pipeline created from `intake.start_date` (`cma.lead_deals_of`, `76`); deals carry no creation source and no test flag, so neither filter exists. **End:** the first outbound CRM call associated with the deal or its contacts; its start is the linked Aircall call's, else the CRM call's own time, so a call logged in HubSpot without an Aircall call counts (R1). There is no window end. **Uncalled deals:** an uncalled deal, open or closed, is left out of the percentages until the target's business time (or the next noon) has passed, and then counts as late; a deal closed before its first call is therefore not shown apart (audit findings MA-015, MA-016). **Cutoff:** 12:00 is hardcoded in `cma.next_business_noon_of` (`40`). **Per person:** the first call's CRM owner, else the deal's owner. **Elsewhere:** Attempts per deal (`94`) measures to the first attempt within the deal's window, and Follow-up (`72`, `80`) reads the same target on its own, so the pages can differ (MA-003) |
 
 ### Call link
 
@@ -445,6 +445,8 @@ Where the code or the catalog says something else than this file: every retired 
 | W24 | `web/src/lib/copy.ts` | `email.notRespondingIntro`, `hints.emailNrDays` | "no email, message or conversation back": a conversation as `cma.crm_call_connected_of` gives it | A Conversation as defined |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with Aircall's preset "Subscriptions" (46 numbers on 24 October 2026) after a line is added in Aircall |
 | W26 | `web/src/lib/data/postgres.ts`, `mock.ts`, `types.ts`; `web/src/lib/attempts.ts` | `reachedMinTalkSeconds`, `attempts.reached_min_talk_seconds` | The attempts' reached threshold | `conversationMinTalkSeconds`, `calls.conversation_min_talk_seconds` (the rename, D20) |
+| W27 | `web/src/lib/copy.ts` | `hints.agent` (Speed to lead's grouping by agent) | "The person behind the first outbound call, else the deal's owner" (its CRM owner) | The person who placed the first attempt (the call's last participant, Aircall) |
+| W28 | `web/src/lib/copy.ts` | `speedToLead.openNotCalled` "Open, not called", `speedToLead.openTitle`, `hints.withinTarget`, `hints.openNotCalled`; no group for deals created by hand or closed before the first call | "Deals closed without a call count as missed; deals still open and not called are left out until they are called or closed" | "Not called yet" with its age, late once past the target or the cutoff; "Created by hand, not in speed to lead" and closed before first call shown apart, out of the measures |
 
 ### db/
 
@@ -459,7 +461,7 @@ Where the code or the catalog says something else than this file: every retired 
 | D7 | `db/90_report_speed.sql` (`cma.first_orders_of`, as `84` defined it) | Evidence `conversation` and `attempt` | An attempt is a CRM call with the contact, either direction, that is no conversation | Attempt (every outbound call) and Conversation, from Aircall calls |
 | D8 | `db/82_email_reports.sql` (`cma.email_not_responding_of`) | "a connected call" since the email | `cma.crm_call_connected_of` | A Conversation |
 | D9 | `db/94_attempts_for_sales.sql` (`cma.deal_calls_of`, which `cma.lead_calls_of` reads) | `is_connected`, `effective_at`, `direction` | Connected when the outcome is marked connected or the linked call was answered; the CRM call's time and direction when unlinked | Connected from Aircall's `answered_at`; the call's time and direction from Aircall (R1) |
-| D10 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`) | The first outbound call | The first outbound CRM call, linked or not, with no window end; the agent its CRM owner | The first attempt (details pending) |
+| D10 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`, `cma.lead_calls_of`) | The end of speed to lead | Reports → Speed to lead reads HubSpot calls: the first outbound CRM call, linked or not, with no window end (R1) | The first Attempt linked to the deal or its contacts through the call link; a call in the pre-window counts as 0 minutes |
 | D11 | `db/94_attempts_for_sales.sql` | `attempts.reached_min_talk_seconds`; `reached`, `reached_by`, `first_reached`, the reached and in-contact columns of `cma.attempt_deal`, `cma_read.attempts_per_deal` | Reached: the HubSpot outcome, else 30 seconds of talk | Conversation (the threshold and the tag rule); the setting renamed (D20) |
 | D12 | `db/94_attempts_for_sales.sql` | `attempts.source` value `crm` | Every outbound CRM call is an attempt | Attempts from the telephony system only (R1) |
 | D13 | `db/32_intake_core.sql` | `cma.connection_call_outcome.is_connected`, `cma.set_call_outcome` | Which HubSpot call outcomes count as connected (a conversation) | Retired (R1) |
@@ -473,6 +475,12 @@ Where the code or the catalog says something else than this file: every retired 
 | D21 | `db/34_telephony.sql` (`cma.telephony_tag`); Configuration → Sources, Tags (`configSources.tagsIntro`, `hintTagCounted`) | The tag-meaning mapping | Does not exist: `telephony_tag` holds names (and `is_counted`) only | A meaning per tag and telephony connection, configuration only, with at least not reached, call type, courtesy attempt, and courtesy completed positive, neutral and negative |
 | D22 | `db/74_forms_reporting.sql` (`cma.data_quality_of`) | A check: tag inconsistent with talk time | No such check | Proposed: a call with a tag meaning "not reached" and 90 seconds or more of talk, or with another tag and under 10 seconds; on 1 to 23 October 2026 about 20 and about 50 calls |
 | D23 | `db/76_audit_hardening.sql` (`cma.calls_of`); `db/82_email_reports.sql` (`cma.crm_call_connected_of`); `db/90_report_speed.sql` (first orders' calls) | An answered inbound call as a conversation | A conversation at any talk time | Under the same rule as outbound: answered inbound calls under 30 seconds (`calls.conversation_min_talk_seconds`), or with a tag meaning "not reached", stop counting as conversations (Reports → Email, First orders, Calls per agent) |
+| D24 | `db/30_ingest_crm_records.sql` (`cma.crm_record`); `db/32_intake_core.sql` (settings) | A deal's creation source and `speed_to_lead.creation_sources` | Deals carry no creation source, and the setting does not exist | A neutral creation source per deal (form, automation, user, import, unknown), mapped per CRM connection; `speed_to_lead.creation_sources` (Pulse4all: form, automation) |
+| D25 | `db/76_audit_hardening.sql` (`cma.lead_deals_of`) | Test deals | Deals carry no test flag; every deal of a lead pipeline counts | Test deals excluded from speed to lead |
+| D26 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`) | The person of a deal's speed to lead | The first CRM call's owner, else the deal's owner | The person who placed the first attempt (its last participant) |
+| D27 | `db/40_lead_metrics.sql` (`cma.speed_to_lead_of`, `cma.speed_to_lead_summary`) | Deals without a call in the percentages | An uncalled deal, open or closed, is null until the target's business time (or the next noon) passes, then late; a deal closed before its first call counts the same way | An open deal not called yet counts as late once past the target or the cutoff; a deal closed before its first call is shown apart and stays out of the measures |
+| D28 | `db/40_lead_metrics.sql` (`cma.next_business_noon_of`) | The cutoff of "% before 12:00 next working day" | 12:00 hardcoded | A tenant setting (12:00 for Pulse4all) |
+| D29 | `db/40_lead_metrics.sql`; `db/94_attempts_for_sales.sql`; `db/72_follow_up.sql`, `db/80_follow_up_snapshot.sql`; the Dashboard tile in `web/src/lib/reports.ts` | Where speed to lead is computed | Separately for Reports → Speed to lead, Attempts per deal and Follow-up, and in the web for the Dashboard tile (MA-003) | One definition and one function for Reports → Speed to lead, the Dashboard tile, Attempts and the cockpit |
 
 ### ingest/
 
@@ -483,6 +491,7 @@ Where the code or the catalog says something else than this file: every retired 
 | I3 | `ingest/src/adapters/aircall/map.mjs` | `userRef: call.user.id` | The call's user | The last participant (the field to confirm) |
 | I4 | `ingest/src/adapters/aircall/map.mjs` | `numberRef: call.number.id` | The call's number | The last number of a routed call (to verify) |
 | I5 | `ingest/src/adapters/aircall/map.mjs` | `callFromObject` | Every inbound or outbound call is stored, internal ones included | Internal calls left out (how Aircall marks one, to verify) |
+| I6 | `ingest/src/adapters/hubspot/map.mjs` | A deal's record-source fields | Not read: a deal brings its pipeline, stage, owner and times (and configured fields) only | The creation source mapped per CRM connection from the record-source fields (HubSpot: `hs_object_source` and `hs_created_by_user_id`, to verify) |
 
 ### docs/metrics/catalog.json
 
@@ -507,6 +516,7 @@ Where the code or the catalog says something else than this file: every retired 
 | C17 | `funnel.stage.reached_won`, `export.funnel_stages_csv.reached_won` | Reached won | A word that is not retired |
 | C18 | `data_quality.telephony_call_unlinked` | The skip reuses the connected threshold | Its own measure once Connected is `answered_at` |
 | C19 | `calls.avg_talk`, `calls.talk_total` | Average talk time per conversation (answered inbound or connected outbound) | Average talk time over the answered calls with talk time |
+| C20 | `speed_to_lead.deals`, `speed_to_lead.within_target_pct`, `speed_to_lead.before_next_noon_pct`, `speed_to_lead.open_not_called`, `dashboard.intake.speed_to_lead` | Every lead deal; a deal closed without a call counts as missed once past the target or the noon | The deals by creation source, test deals out; closed before first call and created by hand apart; Not called yet late once past |
 
 **Catalog entries that change meaning** once the code follows the definitions:
 
@@ -515,6 +525,7 @@ Where the code or the catalog says something else than this file: every retired 
 - Conversation in place of 0008j's: `calls.conversations`, `calls_per_agent.conversations`, `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`.
 - Talk time over the answered calls: `calls.avg_talk`, `calls.talk_total`. Untagged over all calls: `calls.untagged_share`, `calls_per_agent.untagged`.
 - Answered inbound calls under 30 seconds, or with a tag meaning "not reached", leave the conversation counts of Reports → Calls, Calls per agent, Email and First orders (D23).
+- Speed to lead: `speed_to_lead.*`, `api.speed_to_lead.*`, `dashboard.intake.speed_to_lead` and the speed-to-lead entries of `attempts.*`, `attempts_per_agent.*` and `follow_up.*` (one function; the deals by creation source; the first attempt; closed before first call apart).
 - `cma.crm_call_connected_of` and its users: Reports → Email (`email.not_responding.*`), Reports → First orders (`first_orders.*`) and Reports → Orders per person (`orders_per_person.*`).
 
-**Count per area:** `web/` 26, `db/` 23, `ingest/` 5, `docs/metrics/catalog.json` 19; 73 in all.
+**Count per area:** `web/` 28, `db/` 29, `ingest/` 6, `docs/metrics/catalog.json` 20; 83 in all.
