@@ -10,10 +10,11 @@ export const dynamic = "force-dynamic";
  * &group=day|week|market|pipeline (day when left out) and the optional &market, &pipeline (a lead pipeline), &attempted
  * (all, none, some) and &outcome (all, open, won, lost, ordered) filters; a &scope is a 400 since 0008z. Only the deals of
  * the lead pipelines count. `current` and `previous` (the previous equal period, like for like) with the deals, those
- * attempted, the attempts, the average and median per deal, those reached and first reached, the median speed to lead,
+ * attempted, the attempts, the average and median per deal, those with a conversation and their first conversation
+ * (addition 0008zc), the median speed to lead,
  * called before the next noon, the open deals never attempted, won, lost, ordered, the talk time, the attempts without
  * an outcome and the calls logged without a telephony call; `buckets` (deals per number of attempts up to
- * attempts.max_bucket, first reached there, won and lost); `outcomes` (won against lost and the deals not decided);
+ * attempts.max_bucket, first conversation there, won and lost); `outcomes` (won against lost and the deals not decided);
  * `speedBuckets` (won and lost by business minutes to the first attempt); `groups`; `sinceLast` (the open deals by
  * business days since their last attempt); `list` (open deals first, the longest waiting first, then the decided ones
  * newest first, capped by follow_up.list_rows, with the total); the filter lists; `historyStart` and `settings`. One

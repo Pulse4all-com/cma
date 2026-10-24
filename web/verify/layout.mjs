@@ -1154,7 +1154,8 @@ async function expectIntakeConfiguration() {
   const cases = [
     // since addition 0008p the form categories follow the connections, with Add category (A)
     ["/configuration/sources", ["A"], ['[data-testid="sources"]', '[data-testid="form-categories"]']],
-    ["/configuration/sources/00000000-0000-7000-8000-00000000c001", ["B", "N", "S", "F", "O"], '[data-testid="source-forms"]'],
+    // since addition 0008zc no O: the call outcomes' rule went with their connected switch (W14)
+    ["/configuration/sources/00000000-0000-7000-8000-00000000c001", ["B", "N", "S", "F"], '[data-testid="source-forms"]'],
     ["/configuration/sources/00000000-0000-7000-8000-00000000c002", ["B", "N", "S"], '[data-testid="source-lines"]'],
     ["/configuration/sources/00000000-0000-7000-8000-00000000c003", ["B", "N", "S", "A"], '[data-testid="source-store"]'],
     ["/configuration/markets", ["A", "I", "H"], '[data-testid="office-hours"]'],

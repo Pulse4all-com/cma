@@ -1,0 +1,47 @@
+# web/ checks on branch claude/hopeful-pascal-juaw1g, 24 October 2026 (Claude Code's container; last line of each)
+npm run build: exit 0 (216 lines in build.txt)
+npm run typecheck: ✓ Types generated successfully
+npm run lint: ✖ 2 problems (0 errors, 2 warnings) (verify/follow-up.mjs and scripts/metrics-doc.mjs, both unchanged from main)
+verify:copy: copy: PASS (2878 keys, en and nl)
+verify:corrections: ALL 31 PASS
+verify:csv: ALL 21 PASS
+verify:dashboard: ALL 17 PASS
+verify:live: ALL 40 PASS
+verify:team: team: PASS (26 checks)
+verify:roster: roster: PASS (36 checks)
+verify:configuration: ALL 106 PASS
+verify:messages: ALL 24 PASS
+verify:import: ALL 23 PASS
+verify:datamap: datamap: PASS (85 tables, 117 views, all described; index.html current)
+verify:signed-out: signed-out: PASS (20 checks)
+verify:invitations: invitations: PASS (27 checks)
+verify:preview: preview: PASS (18 checks)
+verify:follow-up: follow-up: PASS (34 checks)
+verify:reports: ALL 183 PASS
+verify:health: ALL 39 PASS
+verify:boundaries: boundaries: PASS (316 files)
+verify:jobs: ALL 18 PASS
+verify:metrics: ok
+verify:reports --provoke: ALL 183 PROVOKED CHECKS FAILED, as they must
+verify:metrics --provoke: PROVOKED: 11 problems found, as intended
+verify:configuration --provoke: ALL 106 PROVOKED CHECKS FAILED, as they must
+
+# against the standalone server, mock sign-in, mock data (BASE=http://localhost:8080)
+verify:hints: hints: PASS (874 headers and 169 tiles on 47 pages, 7 level bars on First orders and 6 bar cards on Attempts per deal and 6 intro cards on Funnel and Cancellations, each with one described mark; focus
+verify:theme: theme: PASS (76 pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, 111 tables per 7.6 and 3.3, a header hint open on 32 report pages)
+verify:layout: layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for  ...
+verify/api.mjs --reports, --calls, --attempts: ALL 17, 19 and 20 PASS; provoked ALL 17, 19 and 20 PROVOKED CHECKS FAILED
+
+# against the standalone server, mock sign-in, api data mode on a fresh local database (00 to 101, 02 and 03 again, reports-fixture.sql)
+verify/api.mjs: 1 of 312 FAILED  (the one FAIL is local: see README)
+  FAIL  the own day ends at the window end, 22:00    got 2026-10-24T22:00:00.000Z, wanted 2026-10-24T20:00:00.000Z
+verify/api.mjs --provoke: ALL 312 PROVOKED CHECKS FAILED, as they must
+
+# against the server in api data mode with CMA_DB_TRACE=1 on a fresh local database (00 to 101, 02 and 03 again, round-trips-fixture.sql)
+  manager /reports/dashboard: 6 transactions, budget 5
+  manager /reports/dashboard: 29 statements, budget 23
+  manager /reports/follow-up: 3 transactions, budget 2
+  manager /reports/follow-up: 15 statements, budget 9
+  supervisor /reports/dashboard: 6 transactions, budget 5
+  supervisor /reports/dashboard: 29 statements, budget 23
+round-trips: FAIL (6 problems)

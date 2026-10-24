@@ -1,0 +1,56 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/93_verify_attempts_per_deal.sql:92: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                                   check_name                                                                    |        result        |                                                                           detail                                                                           
+-------------------------------------------------------------------------------------------------------------------------------------------------+----------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008y recorded, after 0008x                                                                                                         | FAIL                 | provoked
+ A2 every function the application's only and invoker; the readers' function definer, the owner's, pinned, theirs only                           | FAIL                 | 
+ A3 the reader view with its exact columns; no name, address, email, phone, hash or payload                                                      | FAIL                 | 
+ A4 the two settings and reports.per_person in the catalog                                                                                       | FAIL                 | attempts.max_bucket:integer:5 attempts.since_last_buckets_business_days:text:1,2,5 reports.per_person:text: names attempts
+ A5 cma.lead_deals_of reads cma.counted_deals_of within coalesce bounds                                                                          | FAIL                 | 
+ B1 attempts per deal: outbound calls up to the close, conversations, the first attempt a conversation                                           | FAIL                 | d0:0/0/- d1:1/0/- d3:3/0/- d7:7/1/2 dFri:1/0/- dGB:1/0/- dIn:0/0/- dK2:1/0/- dPre:1/0/- dUnk:0/0/- dX:2/0/-
+ B2 a second contact's call in, a removed association out, the pre-window both ways, the call after the close out                                | FAIL                 | d3:06 09:00>06 11:00 d7:06 10:00>09 09:00 dK2:07 10:00>07 10:00 dPre:08 07:55>08 07:55
+ B3 the outcomes won, lost, open and unknown                                                                                                     | FAIL                 | d0:open d3:won d7:lost dUnk:unknown
+ B4 only the lead pipelines: dRen, the order pipeline, the uncounted one and the deleted deal out                                                | FAIL                 | d0 d1 d3 d7 dFri dGB dIn dK2 dP1 dP2 dP3 dPre dUnk dX
+ B5 business days since the last attempt across a weekend and a holiday, never attempted, unknown market none                                    | FAIL                 | d0:6:5+ d1:6:5+ d3:-:- d7:-:- dFri:2:1–2 dGB:3:2–5 dIn:4:2–5 dK2:4:2–5 dPre:3:2–5 dUnk:-:- dX:-:-
+ B6 the buckets 0 to 5+ (7 attempts in 5+) with the first conversation, won and lost; with max_bucket 8, 7 in 7                                  | FAIL                 | 0:3/0/0/0 1:5/0/0/0 2:1/1/0/0 3:1/0/1/0 4:0/0/0/0 5+:1/0/0/1 | 0:3 1:5 2:1 3:1 4:0 5:0 6:0 7:1 8+:0
+ B7 the period's figures                                                                                                                         | FAIL                 | 11/8/17/1.55/1.0/0/1/8/2/1/1
+ B8 the figures per day, market and pipeline (the lead pipelines only)                                                                           | FAIL                 | 2026-10-05=2/1 2026-10-06=2/10 2026-10-07=2/1 2026-10-08=2/1 2026-10-09=3/4 | GB=1/1 NL=9/14 unknown=1/2 | Sales=11/17
+ B9 the previous period like for like: in full after the period, up to the time of day while it runs                                             | FAIL                 | 3/2/3/1.00/1.0/0/0/3/1/0/0 2/1/2/1.00/1.0/0/0/2/1/0/0
+ B10 the open deals by time since the last attempt, the unknown market apart                                                                     | FAIL                 | 0–1:0 1–2:1 2–5:4 5+:2 no_hours:1
+ B11 the list's order, its cap and total, the record link                                                                                        | FAIL                 | d0 d1 dIn dK2 dPre dGB dFri dX d7 d3 dUnk | d0 d1 dIn dK2 of 11 true
+ B12 the market and pipeline filters, the filter lists (lead pipelines only), the history start and the settings                                 | FAIL                 | 1/1/1/1.00/1.0/0/0/1/0/0/0 ["GB", "NL", "unknown"] Sales 11/8/17/1.55/1.0/0/1/8/2/1/1 2026-10-01 5/1,2,5/10/100
+ B13 the 92-day bound and the parameters refused (the attempted filter in the scope's place); the page for reports.view or performance.team only | FAIL                 | CMA04 CMA04 CMA04 CMA04 CMA04 ok/ok ok/ok ok/ok CMA06/CMA06 CMA06/CMA06 CMA01
+ B14 per person by name with the not-linked row and the total                                                                                    | FAIL                 | Anna Verify:3/2/2/0.67/1.0/0/0/3/1/0/0 Bram Verify:3/3/5/1.67/1.0/0/0/2/0/1/0 not_linked(1):5/3/10/2.00/1.0/0/1/3/1/0/1 total:11/8/17/1.55/1.0/0/1/8/2/1/1
+ B15 per person needs performance.team and attempts in reports.per_person                                                                        | FAIL                 | ok CMA06 CMA06 CMA06
+ B16 the settings' refusals and the buckets' spaces                                                                                              | FAIL                 | CMA04 CMA04 CMA04 ok CMA04 CMA04 CMA04 ok CMA04 CMA04 ok 1,2,5
+ B17 the stored calls of a line and the first one's start, for tenant.configure only                                                             | FAIL                 | 2/2026-10-05 12:00 0/- CMA02 CMA06
+ B18 tenant isolation for the pages and the line count                                                                                           | FAIL                 | 1/0/0/0.00/0.0/0/0/1/1/0/0 d1 CMA02
+ B19 the reader view equals the application's rows for its tenant and shows no other tenant's                                                    | FAIL                 | 14 true 0
+ B20 cma.lead_deals_of gives 0008q's rows; every market as cma.record_market_of gives it                                                         | FAIL                 | 0/0 0 d0:NL/record dAl:NL/record dCo:GB/contact dX:unknown/-
+ verdict                                                                                                                                         | PROVOKED, NOT A PASS | 0 PASS, 25 FAIL
+(26 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION

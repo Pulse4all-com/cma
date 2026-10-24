@@ -1,0 +1,70 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ set_config 
+------------
+ 1000
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/91_verify_report_speed.sql:72: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+psql:db/91_verify_report_speed.sql:74: NOTICE:  table "v0008x_old_cache" does not exist, skipping
+DROP TABLE
+psql:db/91_verify_report_speed.sql:75: NOTICE:  table "v0008x_old_keys" does not exist, skipping
+DROP TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+SELECT 0
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                        check_name                                         | result |                                                                                                                                                                                                                                      detail                                                                                                                                                                                                                                      
+-------------------------------------------------------------------------------------------+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008x recorded, after 0008w                                                   | PASS   | 
+ A2 cma.first_order is cma.first_orders_of's row; cma.email_fact holds the 28 fact columns | PASS   | ok
+ A3 every function of 0008x: the application's only, in the caller's rights                | PASS   | 26 functions
+ A4 cma.market, market_alias and app_user_external_id analyzed                             | PASS   | ok
+ B1 a throwaway tenant at prod's counts of 19 October 2026                                 | PASS   | contacts 5257, order deals won in the window 1486, calls 4156/4096, emails 5263, threads 1362, events 3193, orders 2806, customers 11313, associations 22637
+ B2 cma.first_orders_of gives 0008u's rows (October's window, the previous span's)         | PASS   | October 1486/1486 rows, 0/0 apart; previous span 145/145 rows, 0/0 apart
+ B3 first orders: report per day and per week for NL, amounts, per person equal 0008u's    | PASS   | 43/43 rows, 0/0 apart; 13/13 rows, 0/0 apart; 16/16 rows, 0/0 apart; 20/20 rows, 0/0 apart; 
+ B4 cma.first_orders_page as the application: report, amounts and list equal 0008u's reads | PASS   | report 43/43 rows, 0/0 apart; amounts 16/16 rows, 0/0 apart; list 100/100 rows, 0/0 apart
+ B5 email: emails, counted conversations, openings and closes equal 0008t's                | PASS   | 3421/3421 rows, 0/0 apart; 846/846 rows, 0/0 apart; 776/776 rows, 0/0 apart; 473/473 rows, 0/0 apart; 
+ B6 email: report, overview, per dimension, received series, per person equal 0008t's      | PASS   | 139/139 rows, 0/0 apart; 32/32 rows, 0/0 apart; 6/6 rows, 0/0 apart; 23/23 rows, 0/0 apart; 54/54 rows, 0/0 apart; 24/24 rows, 0/0 apart; 24/24 rows, 0/0 apart; 
+ B7 cma.email_report_page and email_per_person_page as the application equal 0008t's reads | PASS   | report NL 122/122 rows, 0/0 apart; unfiltered 23/23 rows, 0/0 apart; report 139/139 rows, 0/0 apart; per person 24/24 rows, 0/0 apart; per dimension 23/23 rows, 0/0 apart
+ B8 every report read of a month as the application under 1000 ms (best of three)          | PASS   | first_orders_page 59 ms; first_orders_report_of 53 ms; first_orders_amounts_of 51 ms; first_orders_list 52 ms; first_orders_per_person_of 52 ms; first_orders_history_start_of 8 ms; email_report_page NL 150 ms; email_report_of 153 ms; email_overview_of 123 ms; email_by_dimension_of 128 ms; email_received_series_of 46 ms; email_per_person_page 135 ms; email_per_person_of 108 ms; email_waiting_of 17 ms; email_not_responding_of 93 ms; email_history_start_of 0 ms; 
+ B9 at least five times faster than the 0008t and 0008u definitions, as the application    | PASS   | email_report_of 154 ms (0008t/u 2193 ms); email_per_person_of 114 ms (0008t/u 1830 ms); first_orders_of 53 ms (0008u 32486 ms)
+ verdict                                                                                   | PASS   | 13 PASS, 0 FAIL
+(14 rows)
+
+RESET

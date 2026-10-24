@@ -1,0 +1,56 @@
+# every db/ verify script on two local databases, 24 October 2026: PASS, FAIL and ERROR rows per script
+# left: main at 0008zb (00 to 99 from main, the seeds, reports-fixture.sql) with this branch's verify scripts; right: this branch, 00 to 101 fresh, the same seeds and fixture
+04: no script                                                  || 04: no script
+07_verify_time_model: PASS=0 FAIL=0 ERROR=7                    || 07_verify_time_model: PASS=0 FAIL=0 ERROR=7
+10_verify_corrections: PASS=0 FAIL=0 ERROR=0                   || 10_verify_corrections: PASS=0 FAIL=0 ERROR=0
+12_verify_team_people: PASS=4 FAIL=0 ERROR=1                   || 12_verify_team_people: PASS=4 FAIL=0 ERROR=1
+14_verify_tenant_settings: PASS=2 FAIL=0 ERROR=0               || 14_verify_tenant_settings: PASS=2 FAIL=0 ERROR=0
+16_verify_team_status_time: PASS=2 FAIL=0 ERROR=0              || 16_verify_team_status_time: PASS=2 FAIL=0 ERROR=0
+18_verify_clock_in_app_links: PASS=2 FAIL=0 ERROR=0            || 18_verify_clock_in_app_links: PASS=2 FAIL=0 ERROR=0
+20_verify_team_now: PASS=2 FAIL=0 ERROR=0                      || 20_verify_team_now: PASS=2 FAIL=0 ERROR=0
+22_verify_teams_skills: PASS=2 FAIL=0 ERROR=0                  || 22_verify_teams_skills: PASS=2 FAIL=0 ERROR=0
+25_verify_roster: PASS=2 FAIL=0 ERROR=0                        || 25_verify_roster: PASS=2 FAIL=0 ERROR=1
+27_verify_configuration: PASS=2 FAIL=0 ERROR=1                 || 27_verify_configuration: PASS=2 FAIL=0 ERROR=1
+29_verify_my_profile: PASS=2 FAIL=0 ERROR=0                    || 29_verify_my_profile: PASS=2 FAIL=0 ERROR=0
+31_verify_ingest_crm_records: PASS=2 FAIL=0 ERROR=0            || 31_verify_ingest_crm_records: PASS=2 FAIL=0 ERROR=0
+33_verify_intake_core: PASS=2 FAIL=0 ERROR=0                   || 33_verify_intake_core: PASS=2 FAIL=0 ERROR=0
+35_verify_telephony: PASS=2 FAIL=0 ERROR=0                     || 35_verify_telephony: PASS=2 FAIL=0 ERROR=0
+37_verify_commerce: PASS=2 FAIL=0 ERROR=0                      || 37_verify_commerce: PASS=2 FAIL=0 ERROR=0
+39_verify_outbox: PASS=2 FAIL=0 ERROR=1                        || 39_verify_outbox: PASS=2 FAIL=0 ERROR=0
+41_verify_lead_metrics: PASS=2 FAIL=0 ERROR=0                  || 41_verify_lead_metrics: PASS=2 FAIL=0 ERROR=0
+43_verify_messaging: PASS=2 FAIL=0 ERROR=0                     || 43_verify_messaging: PASS=2 FAIL=0 ERROR=0
+45_verify_assignment_alerts: PASS=2 FAIL=0 ERROR=0             || 45_verify_assignment_alerts: PASS=2 FAIL=0 ERROR=0
+47_verify_workday_window: PASS=2 FAIL=0 ERROR=0                || 47_verify_workday_window: PASS=2 FAIL=0 ERROR=0
+49_verify_alert_time_zone: PASS=8 FAIL=0 ERROR=0               || 49_verify_alert_time_zone: PASS=8 FAIL=0 ERROR=0
+51_verify_legacy_time_import: PASS=2 FAIL=0 ERROR=0            || 51_verify_legacy_time_import: PASS=2 FAIL=0 ERROR=0
+53_verify_sources_configuration: PASS=15 FAIL=2 ERROR=0        || 53_verify_sources_configuration: PASS=15 FAIL=2 ERROR=0
+55_verify_uncounted_lines: PASS=18 FAIL=0 ERROR=0              || 55_verify_uncounted_lines: PASS=18 FAIL=0 ERROR=0
+57_verify_commerce_phone_hash: PASS=13 FAIL=0 ERROR=0          || 57_verify_commerce_phone_hash: PASS=13 FAIL=0 ERROR=0
+59_verify_commerce_contact_link: PASS=14 FAIL=0 ERROR=0        || 59_verify_commerce_contact_link: PASS=14 FAIL=0 ERROR=0
+61_verify_inbound_service: PASS=21 FAIL=0 ERROR=0              || 61_verify_inbound_service: PASS=21 FAIL=0 ERROR=0
+63_verify_calls_overview: PASS=3 FAIL=3 ERROR=0                || 63_verify_calls_overview: PASS=20 FAIL=0 ERROR=0
+65_verify_calls_history_start: PASS=12 FAIL=0 ERROR=0          || 65_verify_calls_history_start: PASS=12 FAIL=0 ERROR=0
+67_verify_invitations: PASS=24 FAIL=0 ERROR=0                  || 67_verify_invitations: PASS=24 FAIL=0 ERROR=0
+69_verify_email_activity: PASS=30 FAIL=0 ERROR=0               || 69_verify_email_activity: PASS=30 FAIL=0 ERROR=0
+71_verify_crm_tasks: PASS=21 FAIL=0 ERROR=0                    || 71_verify_crm_tasks: PASS=21 FAIL=0 ERROR=0
+73_verify_follow_up: PASS=22 FAIL=0 ERROR=0                    || 73_verify_follow_up: PASS=22 FAIL=0 ERROR=0
+75_verify_forms_reporting: PASS=25 FAIL=0 ERROR=0              || 75_verify_forms_reporting: PASS=25 FAIL=0 ERROR=0
+77_verify_audit_hardening: PASS=15 FAIL=0 ERROR=0              || 77_verify_audit_hardening: PASS=15 FAIL=0 ERROR=0
+79_verify_system_health: PASS=14 FAIL=0 ERROR=0                || 79_verify_system_health: PASS=14 FAIL=0 ERROR=0
+81_verify_follow_up_snapshot: PASS=20 FAIL=0 ERROR=0           || 81_verify_follow_up_snapshot: PASS=20 FAIL=0 ERROR=0
+83_verify_email_reports: PASS=27 FAIL=0 ERROR=0                || 83_verify_email_reports: PASS=27 FAIL=0 ERROR=0
+85_verify_first_orders: PASS=25 FAIL=2 ERROR=0                 || 85_verify_first_orders: PASS=27 FAIL=0 ERROR=0
+87_verify_journeys: PASS=17 FAIL=0 ERROR=0                     || 87_verify_journeys: PASS=17 FAIL=0 ERROR=0
+89_verify_callbacks_kept: PASS=16 FAIL=0 ERROR=0               || 89_verify_callbacks_kept: PASS=16 FAIL=0 ERROR=0
+91_verify_report_speed: PASS=11 FAIL=3 ERROR=0                 || 91_verify_report_speed: PASS=14 FAIL=0 ERROR=0
+93_verify_attempts_per_deal: PASS=4 FAIL=3 ERROR=1             || 93_verify_attempts_per_deal: PASS=26 FAIL=0 ERROR=0
+95_verify_attempts_for_sales: PASS=11 FAIL=6 ERROR=1           || 95_verify_attempts_for_sales: PASS=37 FAIL=0 ERROR=0
+97_verify_stage_times: PASS=18 FAIL=0 ERROR=0                  || 97_verify_stage_times: PASS=18 FAIL=0 ERROR=0
+99_verify_funnel: PASS=34 FAIL=0 ERROR=0                       || 99_verify_funnel: PASS=34 FAIL=0 ERROR=0
+101_verify_definitions_calls: PASS=0 FAIL=8 ERROR=0            || 101_verify_definitions_calls: PASS=19 FAIL=0 ERROR=0
+
+# rerun on both, the same day, minutes later: 25_verify_roster and 39_verify_outbox (neither reads a call)
+branch: 25_verify_roster: PASS=2 FAIL=0 ERROR=0
+branch: 39_verify_outbox: PASS=2 FAIL=0 ERROR=1
+main:   25_verify_roster: PASS=2 FAIL=0 ERROR=0
+main:   39_verify_outbox: PASS=2 FAIL=0 ERROR=2

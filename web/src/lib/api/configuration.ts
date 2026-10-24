@@ -3,10 +3,10 @@ import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
-  SourceStore, SourceTagInput, SourceTaskStatusInput, SourceTaskTypeInput, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
+  SourceStore, SourceTagInput, SourceTagMeaningInput, SourceTaskStatusInput, SourceTaskTypeInput, TagMeaning, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
   RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput,
 } from "@/lib/data";
-import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem } from "@/lib/sources";
+import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem, TAG_MEANINGS } from "@/lib/sources";
 
 /**
  * Parameter checks of the configuration routes (migration 0005a): shape and bounds only, so a bad
@@ -285,6 +285,15 @@ export function checkLineInput(b: Record<string, unknown>): SourceLineInput {
 
 export function checkTagInput(b: Record<string, unknown>): SourceTagInput {
   return { tagRef: ref(b.tagRef, "tagRef"), isCounted: flag(b, "isCounted") };
+}
+
+/** { tagRef, meaning }: one of the six meanings of docs/definitions.md (Tag), or null for none (addition 0008zc) */
+export function checkTagMeaningInput(b: Record<string, unknown>): SourceTagMeaningInput {
+  const m = b.meaning;
+  if (m !== null && !(typeof m === "string" && (TAG_MEANINGS as readonly string[]).includes(m))) {
+    throw new ApiError(400, "invalid_meaning", `meaning must be one of ${TAG_MEANINGS.join(", ")}, or null`);
+  }
+  return { tagRef: ref(b.tagRef, "tagRef"), meaning: m as TagMeaning | null };
 }
 
 /** { code, label, countsInServiceLevel, needsCallback }: one missed-call reason of a telephony connection (addition 0008i) */

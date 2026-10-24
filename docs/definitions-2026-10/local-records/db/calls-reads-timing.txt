@@ -1,0 +1,16 @@
+# Calls and Attempts reads of a month as the application, best of three, on 91's prod-volume tenant (4156 CRM calls, 4096 telephony calls)
+# 91 with five reads added to its B8 list (a scratch copy, not committed); main at 0008zb against this branch at 0008zc
+== cma_main
+PASS | first_orders_page 65 ms
+ calls_overview 73 ms
+ calls_tag_use 37 ms
+ calls_per_person 59 ms
+ calls_per_person_tags 89 ms
+ attempts_per_deal_page 55 ms
+== cma_mig
+PASS | first_orders_page 73 ms
+ calls_overview 147 ms
+ calls_tag_use 83 ms
+ calls_per_person 118 ms
+ calls_per_person_tags 204 ms
+ attempts_per_deal_page 55 ms

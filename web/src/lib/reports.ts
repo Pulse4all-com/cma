@@ -14,7 +14,7 @@
 import type {
   CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
   FormsGroup, FormsResolution, FormsRow, HoursRange, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason,
-  SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow, TagUseRow,
+  SourceConnections, SpeedToLeadGroup, SpeedToLeadRow, SpeedToLeadSummaryRow, TagMeaning, TagUseRow,
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { isoWeek } from "./roster.ts";
@@ -575,11 +575,13 @@ export function personalDataIn(value: unknown, path = "$", calls = false): strin
 //
 // The figures come from the database (cma.calls_overview, cma.calls_tag_use, cma.calls_per_person,
 // cma.calls_per_person_tags); the functions below mirror its definitions for the mock and for
-// verify/reports.mjs, and arrange the rows for the two screens. Talk time runs from the answer to the
-// end (no ringing, unlike the telephony system's duration); an outbound call is connected from
-// telephony.connected_min_seconds of talk time; a conversation is an answered inbound or a connected
-// outbound call; untagged is a conversation without any current tag. No call here carries a number, a
-// customer's name, a call id or a telephony user id on screen, and never the caller's hash.
+// verify/reports.mjs, and arrange the rows for the two screens. Since addition 0008zc they follow
+// docs/definitions.md: talk time runs from the answer to the end, as the telephony system counts it; an
+// outbound call is connected when it is answered (at telephony.connected_min_seconds of talk when that is
+// above 0); a conversation is a connected outbound or an answered inbound call with at least
+// calls.conversation_min_talk_seconds of talk and no current tag meaning not reached; untagged is a call
+// without any current tag, missed calls included. No call here carries a number, a customer's name, a call
+// id or a telephony user id on screen, and never the caller's hash.
 
 export const CALLS_GROUPS: readonly CallsGroup[] = ["day", "week", "market", "line"];
 
@@ -625,6 +627,40 @@ export interface CallTagFixture {
   tagRef: string;
   name: string;
   isCounted: boolean;
+  /** What the tag means (addition 0008zc); not_reached keeps a call from being a conversation */
+  meaning?: TagMeaning | null;
+}
+
+/** What classifies a call (addition 0008zc): the two thresholds and the tags meaning not reached ("<connection id>:<tag ref>") */
+export interface CallRules {
+  /** telephony.connected_min_seconds: 0, connected when answered; above 0, also that much talk time */
+  connectedMinSeconds: number;
+  /** calls.conversation_min_talk_seconds */
+  conversationMinSeconds: number;
+  notReachedTags: ReadonlySet<string>;
+}
+
+/** The rules from the two settings and a connection's tag catalog */
+export function callRules(connectedMinSeconds: number, conversationMinSeconds: number, tags: readonly CallTagFixture[]): CallRules {
+  return {
+    connectedMinSeconds, conversationMinSeconds,
+    notReachedTags: new Set(tags.filter((t) => t.meaning === "not_reached").map((t) => `${t.connectionId}:${t.tagRef}`)),
+  };
+}
+
+/** Connected, as cma.is_connected: an outbound call that was answered; with a threshold above 0, also that much talk time */
+export function isConnectedCall(direction: string, answered: boolean, talkSeconds: number | null, connectedMinSeconds: number): boolean {
+  return direction === "outbound" && answered && (connectedMinSeconds <= 0 || (talkSeconds !== null && talkSeconds >= connectedMinSeconds));
+}
+
+/**
+ * Conversation, as cma.is_conversation: a connected outbound or an answered inbound call with at least the threshold of
+ * talk time (a call not ended has none yet) that carries no current tag meaning not reached
+ */
+export function isConversationCall(direction: string, answered: boolean, talkSeconds: number | null, rules: Omit<CallRules, "notReachedTags">,
+  notReached: boolean): boolean {
+  return (isConnectedCall(direction, answered, talkSeconds, rules.connectedMinSeconds) || (direction === "inbound" && answered))
+    && talkSeconds !== null && talkSeconds >= Math.max(0, rules.conversationMinSeconds) && !notReached;
 }
 
 /** One call as cma.calls_of gives it: no call id, no hash, no number */
@@ -666,13 +702,14 @@ export function timeInZone(instant: Instant, timeZone: string): string {
 /**
  * The calls of a fixture as cma.calls_of classifies them: not deleted, with a start, on a counted line (a
  * line not in the catalog counts), either direction; the date and time in the line's market zone, else
- * the tenant's; talk time in whole seconds from the answer to the end; then narrowed by the filter
+ * the tenant's; talk time in whole seconds from the answer to the end; connected and conversation by the
+ * rules; then narrowed by the filter
  */
 export function callRecords(
-  calls: readonly TelephonyCallFixture[], lines: readonly InboundLine[], tenantZone: string, connectedMinSeconds: number,
+  calls: readonly TelephonyCallFixture[], lines: readonly InboundLine[], tenantZone: string, rules: CallRules,
   filter: CallsFilter = { market: null, line: null },
 ): CallRecord[] {
-  const min = Math.max(0, connectedMinSeconds);
+  const min = Math.max(0, rules.connectedMinSeconds);
   const out: CallRecord[] = [];
   for (const c of calls) {
     if (c.deleted || !c.startedAt) continue;
@@ -681,14 +718,16 @@ export function callRecords(
     const zone = line?.zone ?? tenantZone;
     const talk = c.answeredAt !== null && c.endedAt !== null ? Math.max(0, Math.floor((Date.parse(c.endedAt) - Date.parse(c.answeredAt)) / 1000)) : null;
     const answeredIn = c.direction === "inbound" && c.answeredAt !== null;
-    const connectedOut = c.direction === "outbound" && talk !== null && talk >= min;
+    const connectedOut = isConnectedCall(c.direction, c.answeredAt !== null, talk, min);
     const tagRefs = [...new Set(c.tagRefs ?? [])].sort();
+    const notReached = tagRefs.some((t) => rules.notReachedTags.has(`${c.connectionId}:${t}`));
     const date = dateKeyInZone(c.startedAt, zone);
     const r: CallRecord = {
       connectionId: c.connectionId, sourceSystem: c.sourceSystem, direction: c.direction,
       lineKey: `${c.connectionId}:${c.lineRef ?? ""}`, lineName: line?.name ?? c.lineRef, market: line?.market ?? "unknown", zone,
       date, weekStart: startOfWeek(date), localTime: timeInZone(c.startedAt, zone), userRef: c.userRef ?? null,
-      isAnsweredInbound: answeredIn, isConnectedOutbound: connectedOut, isConversation: answeredIn || connectedOut,
+      isAnsweredInbound: answeredIn, isConnectedOutbound: connectedOut,
+      isConversation: isConversationCall(c.direction, c.answeredAt !== null, talk, { connectedMinSeconds: min, conversationMinSeconds: rules.conversationMinSeconds }, notReached),
       talkSeconds: talk, tagRefs, isTagged: tagRefs.length > 0,
     };
     if (filter.market !== null && r.market !== filter.market) continue;
@@ -701,25 +740,28 @@ export function callRecords(
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const avg1 = (xs: number[]) => (xs.length === 0 ? null : round1(sum(xs) / xs.length));
 
-/** The figures of a set of calls, as cma.calls_figures_of computes them */
+/**
+ * The figures of a set of calls, as cma.calls_figures_of computes them: talk time over the answered calls with talk time,
+ * untagged over every call (0008zc)
+ */
 export function callsFigures(calls: readonly CallRecord[]): CallsFigures {
   const outbound = calls.filter((c) => c.direction === "outbound").length;
   const connected = calls.filter((c) => c.isConnectedOutbound);
-  const talk = calls.filter((c) => c.isConversation && c.talkSeconds !== null).map((c) => c.talkSeconds!);
-  const outTalk = connected.map((c) => c.talkSeconds!);
+  const talk = calls.filter((c) => c.talkSeconds !== null).map((c) => c.talkSeconds!);
+  const outTalk = connected.filter((c) => c.talkSeconds !== null).map((c) => c.talkSeconds!);
   return {
     calls: calls.length,
     inbound: calls.filter((c) => c.direction === "inbound").length,
     outbound,
     answeredInbound: calls.filter((c) => c.isAnsweredInbound).length,
-    connectedOutbound: connected.length,
-    connectedPct: outbound === 0 ? null : round1((100 * connected.length) / outbound),
+    connected: connected.length,
+    connectedRate: outbound === 0 ? null : round1((100 * connected.length) / outbound),
     conversations: calls.filter((c) => c.isConversation).length,
     talkSeconds: sum(talk),
     talkAvgSeconds: avg1(talk),
     outboundTalkSeconds: sum(outTalk),
     outboundTalkAvgSeconds: avg1(outTalk),
-    untaggedConversations: calls.filter((c) => c.isConversation && !c.isTagged).length,
+    untagged: calls.filter((c) => !c.isTagged).length,
   };
 }
 
@@ -809,27 +851,27 @@ export function previousCalls(calls: readonly CallRecord[], prev: PreviousPeriod
 
 /**
  * Conversations per group and current tag, as cma.calls_tag_use: any tag, counted or not (with the
- * catalog's name and switch), tagKey null for the untagged ones; a conversation with two tags counts
- * under each. Within a group the most used tag first, untagged last; then the whole period (groupKey null)
+ * catalog's name and switch); a conversation with two tags counts under each; no untagged row (Untagged
+ * counts calls and is callsFigures'). Within a group the most used tag first; then the whole period
+ * (groupKey null)
  */
 export function callsTagUse(calls: readonly CallRecord[], from: DateKey, to: DateKey, group: CallsGroup, tags: readonly CallTagFixture[]): TagUseRow[] {
   const conversations = inPeriod(calls, from, to).filter((c) => c.isConversation);
   const tagOf = (connectionId: string, ref: string) => tags.find((t) => t.connectionId === connectionId && t.tagRef === ref);
   const count = (list: CallRecord[], groupKey: string | null, groupLabel: string | null): TagUseRow[] => {
-    const n = new Map<string | null, { name: string | null; isCounted: boolean | null; n: number }>();
+    const n = new Map<string, { name: string; isCounted: boolean; n: number }>();
     for (const c of list) {
-      for (const ref of c.isTagged ? c.tagRefs : [null]) {
-        const key = ref === null ? null : `${c.connectionId}:${ref}`;
-        const t = ref === null ? null : tagOf(c.connectionId, ref);
-        const e = n.get(key) ?? { name: ref === null ? null : (t?.name ?? ref), isCounted: ref === null ? null : (t?.isCounted ?? true), n: 0 };
+      for (const ref of c.tagRefs) {
+        const key = `${c.connectionId}:${ref}`;
+        const t = tagOf(c.connectionId, ref);
+        const e = n.get(key) ?? { name: t?.name ?? ref, isCounted: t?.isCounted ?? true, n: 0 };
         e.n++;
         n.set(key, e);
       }
     }
     return [...n.entries()]
       .map(([tagKey, e]) => ({ groupKey, groupLabel, tagKey, tagName: e.name, isCounted: e.isCounted, conversations: e.n }))
-      .sort((a, b) => Number(a.tagKey === null) - Number(b.tagKey === null) || b.conversations - a.conversations
-        || (a.tagName ?? "").localeCompare(b.tagName ?? "") || byCode(a.tagKey ?? "", b.tagKey ?? ""));
+      .sort((a, b) => b.conversations - a.conversations || a.tagName.localeCompare(b.tagName) || byCode(a.tagKey, b.tagKey));
   };
   const groups = new Map<string, { label: string | null; calls: CallRecord[] }>();
   for (const c of conversations) {
@@ -859,7 +901,7 @@ function personFigures(kind: CallsPerson["kind"], userId: string | null, name: s
   const outbound = calls.filter((c) => c.direction === "outbound");
   const connected = outbound.filter((c) => c.isConnectedOutbound);
   const inTalk = inbound.filter((c) => c.talkSeconds !== null).map((c) => c.talkSeconds!);
-  const outTalk = connected.map((c) => c.talkSeconds!);
+  const outTalk = connected.filter((c) => c.talkSeconds !== null).map((c) => c.talkSeconds!);
   const times = calls.map((c) => c.localTime).sort();
   return {
     kind, userId, name,
@@ -868,11 +910,11 @@ function personFigures(kind: CallsPerson["kind"], userId: string | null, name: s
     inboundTalkSeconds: sum(inTalk),
     inboundTalkAvgSeconds: avg1(inTalk),
     outboundCalls: outbound.length,
-    connectedOutbound: connected.length,
+    connected: connected.length,
     outboundTalkSeconds: sum(outTalk),
     outboundTalkAvgSeconds: avg1(outTalk),
     conversations: calls.filter((c) => c.isConversation).length,
-    untaggedConversations: calls.filter((c) => c.isConversation && !c.isTagged).length,
+    untagged: calls.filter((c) => !c.isTagged).length,
     firstCallTime: hhmm(times[0]),
     lastCallTime: hhmm(times[times.length - 1]),
   };
@@ -900,9 +942,8 @@ export function callsPerPerson(calls: readonly CallRecord[], from: DateKey, to: 
 }
 
 /**
- * Per person (and the not-linked calls) the conversations per counted tag, then their untagged
- * conversations, as cma.calls_per_person_tags; a tag that does not count is left out, and still makes
- * its conversation tagged
+ * Per person (and the not-linked calls) the conversations per counted tag, as cma.calls_per_person_tags; a
+ * tag that does not count is left out; no untagged row (0008zc: Untagged counts calls, callsPerPerson's)
  */
 export function callsPerPersonTags(
   calls: readonly CallRecord[], from: DateKey, to: DateKey, personOf: PersonOf, tags: readonly CallTagFixture[],
@@ -932,7 +973,7 @@ export function callsPerPersonTags(
     const tagged = [...n.entries()]
       .map(([tagKey, e]) => ({ kind: o.kind, userId: o.userId, tagKey, tagName: e.name, conversations: e.n }))
       .sort((a, b) => b.conversations - a.conversations || a.tagName.localeCompare(b.tagName) || byCode(a.tagKey, b.tagKey));
-    return [...tagged, { kind: o.kind, userId: o.userId, tagKey: null, tagName: null, conversations: o.calls.filter((c) => !c.isTagged).length }];
+    return tagged;
   });
 }
 
@@ -974,15 +1015,15 @@ export function callsChange(current: number | null, previous: number | null, pre
   return previousBeforeHistory(previousFrom, historyStart) ? { direction: "noHistory", pct: null } : callsDelta(current, previous);
 }
 
-/** Untagged conversations as a share of the conversations, 0 to 100; null without one */
-export function untaggedPct(f: Pick<CallsFigures, "conversations" | "untaggedConversations">): number | null {
-  return f.conversations === 0 ? null : round1((100 * f.untaggedConversations) / f.conversations);
+/** Untagged calls as a share of all calls in scope, missed calls included, 0 to 100; null without a call (0008zc) */
+export function untaggedPct(f: Pick<CallsFigures, "calls" | "untagged">): number | null {
+  return f.calls === 0 ? null : round1((100 * f.untagged) / f.calls);
 }
 
 /** A group without calls, for the chart's axis */
 const NO_CALLS: CallsFigures = {
-  calls: 0, inbound: 0, outbound: 0, answeredInbound: 0, connectedOutbound: 0, connectedPct: null, conversations: 0, talkSeconds: 0,
-  talkAvgSeconds: null, outboundTalkSeconds: 0, outboundTalkAvgSeconds: null, untaggedConversations: 0,
+  calls: 0, inbound: 0, outbound: 0, answeredInbound: 0, connected: 0, connectedRate: null, conversations: 0, talkSeconds: 0,
+  talkAvgSeconds: null, outboundTalkSeconds: 0, outboundTalkAvgSeconds: null, untagged: 0,
 };
 
 /**
@@ -1024,8 +1065,8 @@ export interface TagBar {
  * their own and the rest added up as Other with how many tags it holds
  */
 export function topTags(rows: readonly TagUseRow[], conversations: number, n = TOP_TAGS): { bars: TagBar[]; other: (TagBar & { tags: number }) | null } {
-  const tags = rows.filter((r) => r.groupKey === null && r.tagKey !== null)
-    .sort((a, b) => b.conversations - a.conversations || (a.tagName ?? "").localeCompare(b.tagName ?? "") || byCode(a.tagKey!, b.tagKey!));
+  const tags = rows.filter((r) => r.groupKey === null)
+    .sort((a, b) => b.conversations - a.conversations || a.tagName.localeCompare(b.tagName) || byCode(a.tagKey, b.tagKey));
   const top = tags.slice(0, n);
   const rest = tags.slice(n);
   const otherCount = sum(rest.map((r) => r.conversations));
@@ -1033,21 +1074,22 @@ export function topTags(rows: readonly TagUseRow[], conversations: number, n = T
   const share = (x: number) => (conversations === 0 ? null : x / conversations);
   const length = (x: number) => (longest === 0 ? 0 : x / longest);
   return {
-    bars: top.map((r) => ({ key: r.tagKey!, name: r.tagName ?? r.tagKey!, isCounted: r.isCounted !== false, count: r.conversations, share: share(r.conversations), length: length(r.conversations) })),
+    bars: top.map((r) => ({ key: r.tagKey, name: r.tagName, isCounted: r.isCounted, count: r.conversations, share: share(r.conversations), length: length(r.conversations) })),
     other: rest.length === 0 ? null : { key: "other", name: "", isCounted: true, count: otherCount, share: share(otherCount), length: length(otherCount), tags: rest.length },
   };
 }
 
 export interface TagCell {
   count: number;
-  /** Of the group's conversations, 0 to 1; null without one */
+  /** Of the group's conversations (the untagged cell: of its calls), 0 to 1; null without one */
   share: number | null;
 }
 
 /**
  * The groups by tags: the whole period's top TOP_TAGS tags as columns (as `topTags`), Other for the rest,
- * then the untagged conversations; one line per group of the overview, in its order, with counts and
- * shares of the group's conversations
+ * with counts and shares of the group's conversations; then the untagged calls with their share of the
+ * group's calls (0008zc: Untagged counts calls, missed ones included); one line per group of the overview,
+ * in its order
  */
 export function tagTable(rows: readonly TagUseRow[], groups: readonly CallsRow[], n = TOP_TAGS): {
   columns: { key: string; name: string; isCounted: boolean }[];
@@ -1063,12 +1105,12 @@ export function tagTable(rows: readonly TagUseRow[], groups: readonly CallsRow[]
     hasOther: other !== null,
     lines: groups.map((g) => {
       const mine = rows.filter((r) => r.groupKey === g.groupKey);
-      const countOf = (key: string | null) => mine.find((r) => r.tagKey === key)?.conversations ?? 0;
+      const countOf = (key: string) => mine.find((r) => r.tagKey === key)?.conversations ?? 0;
       return {
         groupKey: g.groupKey, groupLabel: g.groupLabel, conversations: g.conversations,
         cells: columns.map((c) => cell(countOf(c.key), g.conversations)),
-        other: cell(sum(mine.filter((r) => r.tagKey !== null && !shown.has(r.tagKey)).map((r) => r.conversations)), g.conversations),
-        untagged: cell(countOf(null), g.conversations),
+        other: cell(sum(mine.filter((r) => !shown.has(r.tagKey)).map((r) => r.conversations)), g.conversations),
+        untagged: cell(g.untagged, g.calls),
       };
     }),
   };
@@ -1076,16 +1118,16 @@ export function tagTable(rows: readonly TagUseRow[], groups: readonly CallsRow[]
 
 /** The columns of Calls per agent that carry an inline bar, each scaled to its column's largest value */
 export const PER_AGENT_BARS = [
-  "answeredInbound", "inboundTalkSeconds", "inboundTalkAvgSeconds", "outboundCalls", "connectedOutbound", "outboundTalkSeconds",
-  "outboundTalkAvgSeconds", "untaggedConversations",
+  "answeredInbound", "inboundTalkSeconds", "inboundTalkAvgSeconds", "outboundCalls", "connected", "outboundTalkSeconds",
+  "outboundTalkAvgSeconds", "untagged",
 ] as const;
 export type PerAgentBar = (typeof PER_AGENT_BARS)[number];
 
-/** The bar colour of each column: inbound Deep Blue, outbound Leaf Green, the untagged conversations Light Blue (series order, 7.7) */
+/** The bar colour of each column: inbound Deep Blue, outbound Leaf Green, the untagged calls Light Blue (series order, 7.7) */
 export const PER_AGENT_BAR_CLASS: Record<PerAgentBar, string> = {
   answeredInbound: INBOUND_CLASS, inboundTalkSeconds: INBOUND_CLASS, inboundTalkAvgSeconds: INBOUND_CLASS,
-  outboundCalls: OUTBOUND_CLASS, connectedOutbound: OUTBOUND_CLASS, outboundTalkSeconds: OUTBOUND_CLASS, outboundTalkAvgSeconds: OUTBOUND_CLASS,
-  untaggedConversations: CONVERSATION_CLASS,
+  outboundCalls: OUTBOUND_CLASS, connected: OUTBOUND_CLASS, outboundTalkSeconds: OUTBOUND_CLASS, outboundTalkAvgSeconds: OUTBOUND_CLASS,
+  untagged: CONVERSATION_CLASS,
 };
 
 /** Each column's largest value over the people and the not-linked row (the total row is not a person) */
@@ -1102,7 +1144,7 @@ export function barShare(value: number | null, largest: number): number {
 
 /**
  * One person's (or the not-linked calls') split by counted tag: each tag with its count and its share of
- * their conversations, in the database's order, the untagged ones last
+ * their conversations, in the database's order
  */
 export function personSplit(tags: readonly CallsPersonTag[], person: Pick<CallsPerson, "kind" | "userId" | "conversations">): {
   key: string | null; name: string | null; count: number; share: number | null; length: number;

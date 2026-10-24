@@ -23,11 +23,11 @@ import { resolve } from "../../access";
  * that previous span starts before the tenant's telephony history, no change but "No history to compare
  * yet", the history's first date in its title (brief B16.1: a span without data is no comparison); the
  * calls per group as stacked bars, inbound Deep Blue and outbound Leaf Green (the series order of
- * docs/style/Pulse4all-Style.md 7.7); the outbound calls with the connected ones (talk time of at least
- * telephony.connected_min_seconds) and their talk time; and the tags following the grouping: the untagged
- * share, the whole period's tags as bars (top twelve and Other) and the groups by tags as a table with
- * counts and row shares. Talk time runs from the answer to the end, without ringing, so it differs from
- * the telephony system's duration on purpose (README Decision log, 14 October 2026). Shown to people
+ * docs/style/Pulse4all-Style.md 7.7); the outbound calls with the connected ones (answered, docs/definitions.md
+ * Connected), their connected rate and their talk time; and the tags following the grouping: the untagged
+ * share over every call, the whole period's tags as bars over the conversations (top twelve and Other) and
+ * the groups by tags as a table with counts and row shares. Talk time runs from the answer to the end, as
+ * the telephony system counts it, averaged over the answered calls (addition 0008zc). Shown to people
  * holding reports.view or performance.team; the database checks again on every read. A tenant without
  * telephony sees "No telephony connected", never 0. Counts, seconds, line and tag names only: no
  * number, no customer name, no call id, never the caller's hash. Every tile and header explains itself
@@ -64,7 +64,8 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
   const prevLabel = previousLabel(overview.previousFrom, overview.previousTo, overview.previousPartial, copy, me.locale);
 
   const h = copy.hints;
-  const fill = (text: string) => fillHint(text, { hours: h.officeHours, threshold: overview.connectedMinSeconds }, me.locale);
+  const fill = (text: string) =>
+    fillHint(text, { hours: h.officeHours, threshold: overview.connectedMinSeconds, seconds: overview.conversationMinSeconds }, me.locale);
   // key: the figure's entry in the metric catalog; the link shows only to a holder of tenant.configure
   const info = (label: string, text: string, key: string) =>
     ({ about: h.about.replace("{label}", label), text: fill(text), more: metricsMore(me.permissions, key, h.howComputed) });
@@ -123,7 +124,7 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
             <CallsTile testId="calls-inbound" label={t.inbound} value={n(total.inbound)} info={info(t.inbound, h.callsInbound, "calls.inbound")}
               detail={t.inboundDetail.replace("{answered}", n(total.answeredInbound))} delta={delta(total.inbound, previous.inbound)} />
             <CallsTile testId="calls-outbound" label={t.outbound} value={n(total.outbound)} info={info(t.outbound, h.callsOutbound, "calls.outbound")}
-              detail={t.outboundDetail.replace("{connected}", n(total.connectedOutbound))} delta={delta(total.outbound, previous.outbound)} />
+              detail={t.outboundDetail.replace("{connected}", n(total.connected))} delta={delta(total.outbound, previous.outbound)} />
             <CallsTile testId="calls-avg-talk" label={t.avgTalk} value={fmtTalk(total.talkAvgSeconds, me.locale)} info={info(t.avgTalk, h.callsAvgTalk, "calls.avg_talk")}
               detail={t.avgTalkDetail.replace("{total}", fmtTalk(total.talkSeconds, me.locale))} delta={delta(total.talkAvgSeconds, previous.talkAvgSeconds)} />
           </section>
@@ -139,30 +140,36 @@ export default async function CallsPage({ searchParams }: PageProps<"/reports/ca
 
           <Card title={t.outboundTitle}>
             <div className="grid grid-cols-3 gap-4" data-testid="calls-outbound-tiles">
-              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connectedOutbound)} info={info(t.connected, h.callsConnected, "calls.outbound_connected")}
-                detail={fill(t.connectedNote)} />
-              <CallsTile testId="outbound-connected-pct" label={t.connectedPct} value={fmtPct(total.connectedPct, me.locale)} info={info(t.connectedPct, h.callsConnectedPct, "calls.outbound_connected_share")}
-                detail={t.connectedPctDetail.replace("{outbound}", n(total.outbound))} />
+              <CallsTile testId="outbound-connected" label={t.connected} value={n(total.connected)} info={info(t.connected, h.callsConnected, "calls.outbound_connected")}
+                detail={fill(overview.connectedMinSeconds > 0 ? t.connectedNoteMin : t.connectedNote)} />
+              <CallsTile testId="outbound-connected-pct" label={t.connectedRate} value={fmtPct(total.connectedRate, me.locale)} info={info(t.connectedRate, h.callsConnectedRate, "calls.outbound_connected_rate")}
+                detail={t.connectedRateDetail.replace("{outbound}", n(total.outbound))} />
               <CallsTile testId="outbound-talk" label={t.outboundTalk} value={fmtTalk(total.outboundTalkSeconds, me.locale)} info={info(t.outboundTalk, h.callsOutboundTalk, "calls.outbound_talk")}
                 detail={t.outboundTalkDetail.replace("{avg}", fmtTalk(total.outboundTalkAvgSeconds, me.locale))} />
             </div>
           </Card>
 
           <Card title={t.tagsTitle}>
-            {total.conversations === 0 ? <p className="text-body text-p4a-muted">{t.noConversations}</p> : (
+            {total.calls === 0 ? <p className="text-body text-p4a-muted">{t.empty}</p> : (
               <div className="flex flex-col gap-6">
+                {/* untagged over every call, missed calls included (docs/definitions.md, Untagged; addition 0008zc) */}
                 <div className="grid grid-cols-4 gap-4">
                   <CallsTile testId="calls-untagged" label={t.untagged} value={fmtPct(untaggedPct(total), me.locale)} info={info(t.untagged, h.callsUntaggedPct, "calls.untagged_share")}
-                    detail={t.untaggedDetail.replace("{untagged}", n(total.untaggedConversations)).replace("{conversations}", n(total.conversations))} />
+                    detail={t.untaggedDetail.replace("{untagged}", n(total.untagged)).replace("{calls}", n(total.calls))} />
                 </div>
-                <section aria-labelledby="tag-bars-title">
-                  <h3 id="tag-bars-title" className="mb-3 text-body font-semibold text-p4a-heading">{t.tagBarsTitle}</h3>
-                  <TagBars rows={tagUse.rows} conversations={total.conversations} copy={copy} locale={me.locale} />
-                </section>
-                <section aria-labelledby="tag-table-title">
-                  <h3 id="tag-table-title" className="mb-3 text-body font-semibold text-p4a-heading">{tagTitle[group]}</h3>
-                  <TagTable rows={tagUse.rows} groups={overview.rows} total={total} group={group} copy={copy} locale={me.locale} />
-                </section>
+                {total.conversations === 0 ? <p className="text-body text-p4a-muted">{t.noConversations}</p> : (
+                  <>
+                    <section aria-labelledby="tag-bars-title">
+                      <h3 id="tag-bars-title" className="mb-3 text-body font-semibold text-p4a-heading">{t.tagBarsTitle}</h3>
+                      <TagBars rows={tagUse.rows} conversations={total.conversations} copy={copy} locale={me.locale} />
+                    </section>
+                    <section aria-labelledby="tag-table-title">
+                      <h3 id="tag-table-title" className="mb-3 text-body font-semibold text-p4a-heading">{tagTitle[group]}</h3>
+                      <TagTable rows={tagUse.rows} groups={overview.rows} total={total} group={group} copy={copy} locale={me.locale}
+                        conversationMinSeconds={overview.conversationMinSeconds} />
+                    </section>
+                  </>
+                )}
                 <p className="max-w-3xl text-caption text-p4a-grey">{t.tagNote}</p>
               </div>
             )}

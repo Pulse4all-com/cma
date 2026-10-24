@@ -1,0 +1,6 @@
+# tools/drift/functions.sql on two local databases, 24 October 2026
+# cma_fresh: this branch, 00 to 101 fresh; cma_mig: main 00 to 99, then this branch's 100 (prod's path)
+  519 cma_fresh
+  519 cma_mig
+ 1038 total
+diff: no line differs

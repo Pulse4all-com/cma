@@ -1,0 +1,7 @@
+SET
+ functions |          functions_md5           | views | tables |                                 settings                                 |   additions   
+-----------+----------------------------------+-------+--------+--------------------------------------------------------------------------+---------------
+       519 | 35a42a16d24b76e2a7eef8e4b6aa5ff9 |   126 |     85 | calls.conversation_min_talk_seconds=30 telephony.connected_min_seconds=0 | 0008zb 0008zc
+(1 row)
+
+RESET

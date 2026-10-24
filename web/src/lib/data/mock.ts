@@ -51,10 +51,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { INVITE_TOKEN_RE } from "@/lib/invitations";
 import { recordUrlPreview, settingsProblem } from "@/lib/sources";
 import {
-  applyConnections, callRecords, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
+  applyConnections, callRecords, callRules, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, CALLS_GROUPS, groupCalls, groupInbound, groupSpeedToLead,
   historyStartOf, inboundCalls, inboundFigures, missedReasonOf, parseCallsFilter, PER_AGENT_PERMISSION, previousCalls, previousPeriod, rangeProblem,
   FORMS_GROUPS, formsAnswersOf, formsFigures, formsHistoryStart, parseAnswerFilter, parseFormsFilter, previousForms, type FormSubmissionRecord,
-  type CallRecord, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
+  type CallRecord, type CallRules, type CallTagFixture, type InboundLine, type IntakeCounts, type PersonOf, type TelephonyCallFixture, timeInZone,
 } from "@/lib/reports";
 import { missedCallbacks, type CallerCall } from "@/lib/live";
 import {
@@ -308,10 +308,11 @@ function mockPeriodCalls(me: Principal, range: { from: DateKey; to: DateKey }): 
 
 // ---- Calls overview and calls per agent fixture (addition 0008j, brief B16) ----------------------
 // The same inbound calls, now with the telephony user who took them and their tags, and outbound calls
-// per line and day: unanswered ones, short ones under the threshold (not connected), the NL line's first
-// call of each day at exactly the threshold (connected), and conversations of up to fifteen minutes.
-// Tags from the test connection's catalog: Quote and Courtesy call count, Internal does not; some
-// conversations are untagged and some carry only Internal. Telephony users 900001 to 900004 are linked
+// per line and day: unanswered ones (not connected), short ones (connected, no conversation), the NL line's
+// first call of each day answered at exactly telephony.connected_min_seconds of talk (connected), and calls
+// of up to fifteen minutes. Tags from the test connection's catalog: Quote and Courtesy call count, Internal
+// does not, Voicemail means not reached (so its calls are no conversation, addition 0008zc); some calls are
+// untagged and some carry only Internal. Telephony users 900001 to 900004 are linked
 // to people of the fictional team (People, linked accounts), 900009 to nobody. The test line l-3 does not
 // count: its calls are in the fixture and in no figure. The calls start at intake.start_date, as the
 // inbound calls do: there the fixture's telephony history starts (addition 0008k), so a previous period
@@ -367,7 +368,18 @@ function mockOutboundOn(me: Principal, date: DateKey, line: InboundLine, now: nu
 /** telephony.connected_min_seconds of the fixture's settings */
 function mockConnectedMin(): number {
   const list = state.config ? state.config.settings : MOCK_SETTINGS;
-  return Number(list.find((x) => x.key === "telephony.connected_min_seconds")?.value ?? 10);
+  return Number(list.find((x) => x.key === "telephony.connected_min_seconds")?.value ?? 0);
+}
+
+/** calls.conversation_min_talk_seconds of the fixture's settings (addition 0008zc) */
+function mockConversationMin(): number {
+  const list = state.config ? state.config.settings : MOCK_SETTINGS;
+  return Number(list.find((x) => x.key === "calls.conversation_min_talk_seconds")?.value ?? 30);
+}
+
+/** The rules that classify the fixture's calls: both thresholds and the tags meaning not reached (addition 0008zc) */
+function mockCallRules(me: Principal): CallRules {
+  return callRules(mockConnectedMin(), mockConversationMin(), mockCallTags(me));
 }
 
 /**
@@ -396,7 +408,7 @@ function mockCalls(me: Principal, range: HoursRange): TelephonyCallFixture[] {
 /** The test connection's tags with their configuration (Configuration, Sources) */
 function mockCallTags(me: Principal): CallTagFixture[] {
   const c = seedIntakeConfig(me).sources.find((x) => x.connection.id === MOCK_TEL_CONNECTION);
-  return (c?.tags ?? []).map((t) => ({ connectionId: MOCK_TEL_CONNECTION, tagRef: t.tagRef, name: t.name, isCounted: t.isCounted }));
+  return (c?.tags ?? []).map((t) => ({ connectionId: MOCK_TEL_CONNECTION, tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, meaning: t.meaning }));
 }
 
 /** Who a telephony user is: the person who holds `<adapter>_user` with that id on People */
@@ -654,17 +666,14 @@ function mockOrderDeals(me: Principal): OrderDealFixture[] {
 const MOCK_ATTEMPT_ZONES: Record<string, string> = { NL: "Europe/Amsterdam", GB: "Europe/London", DE: "Europe/Berlin" };
 const MOCK_TENANT_ZONE = "Europe/Amsterdam";
 const MOCK_NO_ATTEMPT_FILTER: AttemptFilter = { market: null, pipeline: null, attempted: "all", outcome: "all" };
-/** The fixture's call outcomes (the CRM's catalog): label and whether it counts as connected (Pulse4all: Connected, Meeting booked) */
-const MOCK_OUTCOMES: { label: string; connected: boolean }[] = [
-  { label: "Connected", connected: true }, { label: "Meeting booked", connected: true }, { label: "No answer", connected: false },
-  { label: "Left voicemail", connected: false }, { label: "Busy", connected: false },
-];
+/** The fixture's call outcomes (the CRM's catalog): labels only, since an outcome decides neither connected nor a conversation (0008zc) */
+const MOCK_OUTCOMES: string[] = ["Connected", "Meeting booked", "No answer", "Left voicemail", "Busy"];
 
 function mockAttemptSettings(): AttemptSettings {
   return {
     maxBucket: Number(mockSetting("attempts.max_bucket")), sinceLastBuckets: mockSetting("attempts.since_last_buckets_business_days"),
     preWindowMinutes: Number(mockSetting("speed_to_lead.pre_window_minutes")), listRows: Number(mockSetting("follow_up.list_rows")),
-    source: mockSetting("attempts.source") === "crm" ? "crm" : "telephony", reachedMinTalkSeconds: Number(mockSetting("attempts.reached_min_talk_seconds")),
+    source: mockSetting("attempts.source") === "crm" ? "crm" : "telephony", conversationMinTalkSeconds: Number(mockSetting("calls.conversation_min_talk_seconds")),
     speedBuckets: mockSetting("attempts.speed_buckets_business_minutes"),
   };
 }
@@ -691,7 +700,7 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
     recordUrl: `https://crm.example.com/records/100200300/deal/${id}`, calls: [], orders: [], ...o,
   });
   const call = (id: string, t: number, o: Partial<AttemptCallFixture> = {}): AttemptCallFixture => ({
-    id, at: new Date(t).toISOString(), direction: "outbound", linked: true, outcome: "No answer", outcomeConnected: false, answered: false,
+    id, at: new Date(t).toISOString(), direction: "outbound", linked: true, outcome: "No answer", connected: false,
     talkSeconds: null, agentName: "Agent One", ...o,
   });
   for (let date = mockStartDate(me); date <= today; date = addDays(date, 1)) {
@@ -710,15 +719,16 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
         const g = (x: string) => h(`c${k}${x}`);
         const answered = g("answered") < 0.45;
         const talk = answered ? Math.floor(g("talk") ** 2 * 600) : null;
-        // a third of the calls carry no outcome (the agent did not set one), the rest one from the catalog
+        // a third of the calls carry no outcome (the agent did not set one), the rest one from the catalog; a voicemail the
+        // agent tagged not reached in the telephony system is never a conversation, whatever its talk time
         const outcome = g("outcome") < 0.33 ? null : answered && talk! > 20 ? MOCK_OUTCOMES[Math.floor(g("which") * 2)]! : MOCK_OUTCOMES[2 + Math.floor(g("which") * 3)]!;
         calls.push(call(`c-${id}-${k}`, at, {
-          linked: g("linked") >= 0.08, answered, talkSeconds: talk, outcome: outcome?.label ?? null, outcomeConnected: outcome?.connected ?? false,
+          linked: g("linked") >= 0.08, connected: answered, talkSeconds: talk, outcome, notReached: answered && outcome === "Left voicemail",
           agentName: agents[Math.floor(g("agent") * agents.length)]!,
         }));
         at += (2 + h(`gap${k}`) * 30) * 3_600_000;
       }
-      if (!invest && h("inbound") < 0.15) calls.push(call(`c-${id}-in`, t + 90 * 60_000, { direction: "inbound", outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 120 }));
+      if (!invest && h("inbound") < 0.15) calls.push(call(`c-${id}-in`, t + 90 * 60_000, { direction: "inbound", outcome: "Connected", connected: false, talkSeconds: 120 }));
       const roll = h("close");
       const closedAt = t + (1 + h("closeAt") * 6) * 86_400_000;
       const closed = roll < 0.42 && closedAt < now;
@@ -741,13 +751,13 @@ function mockAttemptDeals(me: Principal): AttemptDealFixture[] {
     deal("4100000001", at(0), "NL", { ownerRef: "70000001" }),
     deal("4100000002", at(1), "NL", { ownerRef: "70000002", calls: [call("c-41-2a", at(1) - 5 * 60_000)] }),
     deal("4100000003", at(2), "GB", { ownerRef: "70000009", calls: Array.from({ length: 7 }, (_, k) => call(`c-41-3-${k}`, at(2) + (k + 1) * 6 * 60_000,
-      k === 6 ? { outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 240 } : k === 4 ? { outcome: null, answered: true, talkSeconds: 12 } : {})) }),
-    deal("4100000004", at(3), "DE", { ownerRef: null, calls: [call("c-41-4in", at(3) + 10 * 60_000, { direction: "inbound", outcome: "Connected", outcomeConnected: true, answered: true, talkSeconds: 60 })] }),
-    deal("4100000005", at(4), "unknown", { ownerRef: "70000004", calls: [call("c-41-5a", at(4) + 15 * 60_000, { outcome: null, answered: true, talkSeconds: 95 })] }),
+      k === 6 ? { outcome: "Connected", connected: true, talkSeconds: 240 } : k === 4 ? { outcome: null, connected: true, talkSeconds: 12 } : {})) }),
+    deal("4100000004", at(3), "DE", { ownerRef: null, calls: [call("c-41-4in", at(3) + 10 * 60_000, { direction: "inbound", outcome: "Connected", connected: false, talkSeconds: 60 })] }),
+    deal("4100000005", at(4), "unknown", { ownerRef: "70000004", calls: [call("c-41-5a", at(4) + 15 * 60_000, { outcome: null, connected: true, talkSeconds: 95 })] }),
     deal("4100000007", at(6), "NL", { ownerRef: "70000001", calls: [call("c-41-7a", at(6) + 3 * 60_000, { linked: false, outcome: null }),
-      call("c-41-7b", at(6) + 40 * 60_000, { outcome: "Left voicemail", answered: true, talkSeconds: 85 })] }),
+      call("c-41-7b", at(6) + 40 * 60_000, { outcome: "Left voicemail", connected: true, talkSeconds: 85, notReached: true })] }),
     deal("4100000006", at(5), "NL", { pipelineId: "p-self-serve", pipelineLabel: "Web orders (test)", stageLabel: "Won", isLead: false, isOrder: true, isClosed: true,
-      closedAt: new Date(at(5)).toISOString(), stageOutcome: "won", calls: [call("c-41-6a", at(5) + 60_000, { outcome: "Connected", outcomeConnected: true })] }),
+      closedAt: new Date(at(5)).toISOString(), stageOutcome: "won", calls: [call("c-41-6a", at(5) + 60_000, { outcome: "Connected" })] }),
   );
   return out;
 }
@@ -769,7 +779,7 @@ function mockAttemptOptions(me: Principal): AttemptOptions {
   const accounts = seedIntakeConfig(me).accounts;
   const working = mockWorkingDay(me);
   return {
-    source: s.source, preWindowMinutes: s.preWindowMinutes, reachedMinTalkSeconds: s.reachedMinTalkSeconds, sinceLastBuckets: s.sinceLastBuckets,
+    source: s.source, preWindowMinutes: s.preWindowMinutes, conversationMinTalkSeconds: s.conversationMinTalkSeconds, sinceLastBuckets: s.sinceLastBuckets,
     now: new Date().toISOString(), tenantZone: MOCK_TENANT_ZONE, working,
     ownerUserOf: (ref) => (ref === null ? null : accounts.find((x) => x.system === "crmtest_owner" && x.externalId === ref)?.userId ?? null),
     businessSeconds: (market, from, to) => (Date.parse(to) <= Date.parse(from) ? (MOCK_ATTEMPT_ZONES[market] ? 0 : null) : mockBusinessSeconds(market, from, Date.parse(to))),
@@ -1100,12 +1110,12 @@ function mockFormRecords(me: Principal): FormSubmissionRecord[] {
 
 /** The fixture's calls of the range and the previous period, classified and filtered */
 function mockCallRecords(me: Principal, range: HoursRange, filter: CallsFilter): CallRecord[] {
-  return callRecords(mockCalls(me, { from: previousPeriod(range, mockToday(me)).from, to: range.to }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin(), filter);
+  return callRecords(mockCalls(me, { from: previousPeriod(range, mockToday(me)).from, to: range.to }), MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me), filter);
 }
 
 /** The markets and lines with calls in the period, the lines within the chosen market */
 function mockCallsLists(me: Principal, range: HoursRange, filter: CallsFilter) {
-  const all = callRecords(mockCalls(me, range), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin());
+  const all = callRecords(mockCalls(me, range), MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me));
   return {
     markets: groupCalls(all, range.from, range.to, "market").rows.map((r) => r.groupKey),
     lines: groupCalls(all.filter((c) => filter.market === null || c.market === filter.market), range.from, range.to, "line").rows
@@ -1120,9 +1130,9 @@ function mockCallsOverview(me: Principal, range: HoursRange, group: CallsGroup, 
   const prev = previousPeriod(range, mockToday(me));
   const { rows, total } = groupCalls(records, range.from, range.to, group);
   // the history start as cma.telephony_history_start: the earliest call of the whole fixture, without the filter
-  const history = callRecords(mockCalls(me, { from: mockStartDate(me), to: mockToday(me) }), MOCK_INBOUND_LINES, me.timeZone, mockConnectedMin());
+  const history = callRecords(mockCalls(me, { from: mockStartDate(me), to: mockToday(me) }), MOCK_INBOUND_LINES, me.timeZone, mockCallRules(me));
   return {
-    ...range, group, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total,
+    ...range, group, filter, telephony, connectedMinSeconds: mockConnectedMin(), conversationMinSeconds: mockConversationMin(), rows, total,
     previous: callsFigures(previousCalls(records, prev, new Date().toISOString())),
     previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial, historyStart: historyStartOf(history),
     ...mockCallsLists(me, range, filter),
@@ -1290,7 +1300,7 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "export.csv.separator", value: "semicolon", isDefault: false },
   { key: "export.csv.utf8_bom", value: "true", isDefault: true },
   // the connected-call threshold (addition 0008j), at its default
-  { key: "telephony.connected_min_seconds", value: "10", isDefault: true },
+  { key: "telephony.connected_min_seconds", value: "0", isDefault: true },
   // the invitation settings (addition 0008l), at their defaults
   { key: "auth.invitation_valid_days", value: "7", isDefault: true },
   { key: "auth.invitation_email_domains", value: "", isDefault: true },
@@ -1322,9 +1332,9 @@ const MOCK_SETTINGS: TenantSetting[] = [
   // speed-to-lead pre-window they share with 0007d
   { key: "attempts.max_bucket", value: "5", isDefault: true },
   { key: "attempts.since_last_buckets_business_days", value: "1,2,5", isDefault: true },
-  // attempts per deal for sales (addition 0008z): telephony attempts, reached at 30 s of talk without an outcome, the speed buckets
+  // attempts per deal for sales (addition 0008z): telephony attempts, the speed buckets; the Conversation threshold (0008zc), 30 s of talk
   { key: "attempts.source", value: "telephony", isDefault: true },
-  { key: "attempts.reached_min_talk_seconds", value: "30", isDefault: true },
+  { key: "calls.conversation_min_talk_seconds", value: "30", isDefault: true },
   { key: "attempts.speed_buckets_business_minutes", value: "5,15,60,240,1440", isDefault: true },
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
 ];
@@ -1826,14 +1836,14 @@ function seedConfig(): MockConfig {
 const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "export.csv.separator": "comma", "export.csv.decimal_mark": "point", "export.csv.date_format": "yyyy-mm-dd",
   "export.csv.duration_format": "decimal_hours", "export.csv.utf8_bom": "true", "roster.adherence_tolerance_minutes": "5",
-  "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "10",
+  "workday.auto_close_grace_minutes": "120", "telephony.connected_min_seconds": "0",
   "auth.invitation_valid_days": "7", "auth.invitation_email_domains": "",
   "reports.cancellation_kind": "", "speed_to_lead.target_minutes": "60", "tickets.sla_minutes": "240", "tickets.sla_warning_pct": "75", "leads.age_buckets_business_days": "1,2,5", "tasks.callback_window_minutes": "240",
   "follow_up.list_rows": "100",
   "attribution.window_days": "90", "attribution.level_order": "lead_deal,conversation,email,phone_match,attempt,known_contact",
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
   "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
-  "attempts.reached_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
+  "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -2180,10 +2190,12 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       lines: [{ lineRef: "l-1", name: "NL sales line (test)", digits: "+31200000001", market: "NL", isCounted: true, isActive: true },
         { lineRef: "l-2", name: "UK sales line (test)", digits: "+442000000002", market: "GB", isCounted: true, isActive: true },
         { lineRef: "l-3", name: "Test line (test)", digits: null, market: null, isCounted: false, isActive: true }],
-      tags: [{ tagRef: "t-1", name: "Quote", isCounted: true, isActive: true }, { tagRef: "t-2", name: "Courtesy call", isCounted: true, isActive: true },
-        { tagRef: "t-3", name: "Internal", isCounted: false, isActive: true },
+      // with their meanings (addition 0008zc): Voicemail means not reached, so a call carrying it is no conversation
+      tags: [{ tagRef: "t-1", name: "Quote", isCounted: true, meaning: "call_type", isActive: true },
+        { tagRef: "t-2", name: "Courtesy call", isCounted: true, meaning: "courtesy_attempt", isActive: true },
+        { tagRef: "t-3", name: "Internal", isCounted: false, meaning: null, isActive: true },
         // twelve more (addition 0008j), so the Calls report shows its top twelve tags and Other
-        ...MOCK_EXTRA_TAGS.map((name, i) => ({ tagRef: `t-${i + 4}`, name, isCounted: true, isActive: true }))],
+        ...MOCK_EXTRA_TAGS.map((name, i) => ({ tagRef: `t-${i + 4}`, name, isCounted: true, meaning: name === "Voicemail" ? "not_reached" as const : null, isActive: true }))],
     }, { record_url_call: "https://phone.example.com/calls/{id}" }));
     sources.push(mockSource(t, 3, "shoptest", "Shop NL (test)", "shop-nl-test.example.com", "commerce", {
       store: { handle: "shop-nl-test", name: "Shop NL (test)", market: "NL", currency: "EUR", timeZone: "Europe/Amsterdam" },
@@ -3604,7 +3616,14 @@ export const mockData: CmaData = {
     const x = sourceOf(me, id);
     const t = x.tags.find((y) => y.tagRef === input.tagRef);
     if (t) t.isCounted = input.isCounted;
-    else x.tags.push({ tagRef: input.tagRef, name: input.tagRef, isCounted: input.isCounted, isActive: true } satisfies SourceTag);
+    else x.tags.push({ tagRef: input.tagRef, name: input.tagRef, isCounted: input.isCounted, meaning: null, isActive: true } satisfies SourceTag);
+  },
+
+  async setSourceTagMeaning(me, id, input) {
+    const x = sourceOf(me, id);
+    const t = x.tags.find((y) => y.tagRef === input.tagRef);
+    if (t) t.meaning = input.meaning;
+    else x.tags.push({ tagRef: input.tagRef, name: input.tagRef, isCounted: true, meaning: input.meaning, isActive: true } satisfies SourceTag);
   },
 
   async setSourceMissedReason(me, id, input) {
@@ -3815,7 +3834,8 @@ export const mockData: CmaData = {
     assertCalls(me, range, filter, null, [PER_AGENT_PERMISSION]);
     const telephony = connectionsOf(me).telephony;
     const { rows, total } = callsPerPerson(mockCallRecords(me, range, filter), range.from, range.to, mockPersonOf(me));
-    return { ...range, filter, telephony, connectedMinSeconds: mockConnectedMin(), rows, total, ...mockCallsLists(me, range, filter) };
+    return { ...range, filter, telephony, connectedMinSeconds: mockConnectedMin(), conversationMinSeconds: mockConversationMin(), rows, total,
+      ...mockCallsLists(me, range, filter) };
   },
 
   async getCallsPerAgentTags(me, range, filter): Promise<CallsPerAgentTags> {

@@ -5,7 +5,7 @@
  * last attempt first, then the deals won, lost or ordered another way, the latest first (capped by follow_up.list_rows).
  * A deal's row opens with Enter on its id or a click anywhere on it and shows the deal's attempts in time order, read
  * once from /api/v1/reports/attempts/deals/{dealId}; Esc closes it and puts the focus back on the deal, Up and Down move
- * between the deals. The attempts show their number, start, answered, talk time, reached and by what, and the call's
+ * between the deals. The attempts show their number, start, connected, talk time, conversation (addition 0008zc) and the call's
  * outcome; the agent column only when the database names agents (the per-person figures for attempts on and the reader
  * holding performance.team). Rows follow Pulse4all-Style 7.6 (zebra rows, a hover row, at least 40px), the table scrolls
  * sideways inside its card. Ids, codes, counts, links and times only: never a call id, number or recording.
@@ -103,9 +103,9 @@ export function AttemptDealList({ rows, hints, copy, locale, timeZone }: {
             <th className={`${th} text-right`}><HintLabel label={t.created}>{hint(t.created, hints.atCreated)}</HintLabel></th>
             <th className={th}><HintLabel label={t.outcome}>{hint(t.outcome, hints.atOutcome)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.attemptsCol}>{hint(t.attemptsCol, hints.atAttempts)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.reachedCol}>{hint(t.reachedCol, hints.atReachedCol)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.firstReached}>{hint(t.firstReached, hints.atFirstReached)}</HintLabel></th>
-            <th className={`${th} text-right`}><HintLabel label={t.talkReached}>{hint(t.talkReached, hints.atTalkReached)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.conversationCol}>{hint(t.conversationCol, hints.atConversationCol)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.firstConversation}>{hint(t.firstConversation, hints.atFirstConversation)}</HintLabel></th>
+            <th className={`${th} text-right`}><HintLabel label={t.talkConversation}>{hint(t.talkConversation, hints.atTalkConversation)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.speedCol}>{hint(t.speedCol, hints.atSpeedCol)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.lastAttempt}>{hint(t.lastAttempt, hints.atLastAttempt)}</HintLabel></th>
             <th className={`${th} text-right`}><HintLabel label={t.daysSince}>{hint(t.daysSince, hints.atDaysSince)}</HintLabel></th>
@@ -150,9 +150,9 @@ export function AttemptDealList({ rows, hints, copy, locale, timeZone }: {
                   <td className={td}>{time(r.createdAt)}</td>
                   <td className={cell} title={orderedTitle}>{outcome}</td>
                   <td className={td}>{n(r.attempts)}</td>
-                  <td className={td}>{n(r.reachedAttempts)}</td>
-                  <td className={td}>{r.firstReachedAttempt === null ? "–" : n(r.firstReachedAttempt)}</td>
-                  <td className={td}>{r.reachedAttempts === 0 ? "–" : fmtTalk(r.talkSecondsReached, locale)}</td>
+                  <td className={td}>{n(r.conversationAttempts)}</td>
+                  <td className={td}>{r.firstConversationAttempt === null ? "–" : n(r.firstConversationAttempt)}</td>
+                  <td className={td}>{r.conversationAttempts === 0 ? "–" : fmtTalk(r.talkSecondsConversation, locale)}</td>
                   <td className={td}>{fmtBusinessMinutes(speedMinutes(r.speedToLeadSeconds), locale)}</td>
                   <td className={td}>{time(r.lastAttemptAt)}</td>
                   <td className={td}>{r.outcome !== "open" ? "" : r.businessDaysSinceLast === null ? "–" : n(r.businessDaysSinceLast)}</td>
@@ -186,7 +186,6 @@ function DealAttempts({ dealSourceId, loaded, hints, copy, locale, time }: {
   if (loaded.attempts.length === 0) return <p className="text-small text-p4a-muted" data-testid="attempts-detail-none">{t.attemptsNone}</p>;
   const hint = (label: string, text: string | undefined) => <HeaderHint label={copy.hints.about.replace("{label}", label)} text={text ?? ""} />;
   const agents = loaded.attempts.some((a) => a.agentName !== null);
-  const reached = (a: DealAttempt) => (!a.reached ? t.no : a.reachedBy === "talk_time" ? t.reachedByTalk : t.reachedByOutcome);
   const sub = "h-9 px-2 py-1 align-bottom font-semibold";
   return (
     <table className="border-collapse text-small leading-table" data-testid="attempts-detail-table" aria-label={title}>
@@ -194,21 +193,21 @@ function DealAttempts({ dealSourceId, loaded, hints, copy, locale, time }: {
         <tr className="border-b border-p4a-border text-left text-p4a-heading">
           <th className={`${sub} text-right`}><HintLabel label={t.colN}>{hint(t.colN, hints.atAN)}</HintLabel></th>
           <th className={`${sub} text-right`}><HintLabel label={t.colStart}>{hint(t.colStart, hints.atAStart)}</HintLabel></th>
-          <th className={sub}><HintLabel label={t.colAnswered}>{hint(t.colAnswered, hints.atAAnswered)}</HintLabel></th>
+          <th className={sub}><HintLabel label={t.colConnected}>{hint(t.colConnected, hints.atAConnected)}</HintLabel></th>
           <th className={`${sub} text-right`}><HintLabel label={t.colTalkTime}>{hint(t.colTalkTime, hints.atATalk)}</HintLabel></th>
-          <th className={sub}><HintLabel label={t.colReachedBy}>{hint(t.colReachedBy, hints.atAReached)}</HintLabel></th>
+          <th className={sub}><HintLabel label={t.colIsConversation}>{hint(t.colIsConversation, hints.atAConversation)}</HintLabel></th>
           <th className={sub}><HintLabel label={t.colCallOutcome}>{hint(t.colCallOutcome, hints.atAOutcome)}</HintLabel></th>
           {agents ? <th className={sub}><HintLabel label={t.colAgent}>{hint(t.colAgent, hints.atAAgent)}</HintLabel></th> : null}
         </tr>
       </thead>
       <tbody>
         {loaded.attempts.map((a) => (
-          <tr key={a.n} className="border-b border-p4a-border last:border-b-0" data-testid="attempt-row" data-reached={a.reached ? a.reachedBy ?? "" : "no"}>
+          <tr key={a.n} className="border-b border-p4a-border last:border-b-0" data-testid="attempt-row" data-conversation={a.conversation ? "yes" : "no"}>
             <td className="h-9 px-2 tabular text-right">{fmtCount(a.n, locale)}</td>
             <td className="h-9 whitespace-nowrap px-2 tabular text-right">{time(a.startedAt)}</td>
-            <td className="h-9 px-2">{a.answered ? t.yes : t.no}</td>
+            <td className="h-9 px-2">{a.connected ? t.yes : t.no}</td>
             <td className="h-9 px-2 tabular text-right">{a.talkSeconds === null ? "–" : fmtTalk(a.talkSeconds, locale)}</td>
-            <td className="h-9 whitespace-nowrap px-2">{reached(a)}</td>
+            <td className="h-9 whitespace-nowrap px-2">{a.conversation ? t.yes : t.no}</td>
             <td className="h-9 max-w-[16rem] overflow-hidden text-ellipsis whitespace-nowrap px-2" title={a.outcomeLabel ?? undefined}>{a.outcomeLabel ?? t.noOutcome}</td>
             {agents ? <td className="h-9 whitespace-nowrap px-2">{a.agentName ?? "–"}</td> : null}
           </tr>
