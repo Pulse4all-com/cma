@@ -10,8 +10,9 @@
 -- 100_definitions_calls.sql; then 63, 95, 41, 75, 83, 85, 91, 93 and 99 again (91 and 99 from the Terminal).
 --   A  structure and privileges: the addition row after 0008zb; the tag's meaning with its six keys, nullable, in
 --      the reader view; the settings (the Conversation threshold, the old key gone everywhere, connected from 0); every
---      function the application's only and in the caller's rights, the helpers immutable; the reads use the helpers
---      and no CRM call outcome; no column of a function or reader view still named reached
+--      function the application's only and in the caller's rights, the helpers immutable, the old names gone
+--      (cma.crm_call_connected_of among them) and Email's not-responding read on cma.crm_call_conversation_of; the
+--      reads use the helpers and no CRM call outcome; no column of a function or reader view still named reached
 --   B  behaviour. Tenant one (Europe/Amsterdam; a CRM and a telephony connection; one NL line; tags Not Reached
 --      (meaning not_reached), Not Reached off (not_reached, not counted) and Type (call_type); Anna linked to the
 --      telephony user of the outbound calls, Bram to the inbound one) with thirteen telephony calls on 6 October 2026:

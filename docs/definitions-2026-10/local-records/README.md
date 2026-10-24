@@ -33,7 +33,7 @@ Three local databases: **fresh** (this branch, `00` to `101` in README order wit
 | `build.txt` | The output of `npm run build`. |
 | `api-full.txt` | The full `verify/api.mjs` run, among it the new check of a tag's meaning (written and put back, a key outside the six or none a 400, an agent refused) and the Calls and Attempts checks as amended for 0008zc. |
 
-Two things in `web/` are local, not this branch's:
+Three things in `web/` are local, not this branch's:
 - **The one `verify/api.mjs` failure** ("the own day ends at the window end, 22:00") is the local run's own doing. The run started at 23:27 in Amsterdam, after the seed's workday window (07:00 to 22:00) had closed, so the two tenants' `workday.window_start` and `workday.window_end` were removed on that local database to let the clock-in checks run; that check then reads the catalog default (24:00) where it expects 22:00. In dev, within the window, it passes as before.
 - **`verify/round-trips.mjs`**: six rows over budget, all on the Dashboard and Follow-up, which this branch does not touch; the funnel's local records (`docs/funnel-2026-10/local-records/web/checks.txt`) found the same six on `main`'s build. Every Calls, Calls per agent, Attempts and Configuration row is within its budget.
 - **`verify:layout`** passes with `BASE=http://localhost:8080` (as `web/verify/README.md` runs it). With `http://127.0.0.1:8080` its accordion check reads the server's page without the rail's cookie (the cookie belongs to the other host name) and fails; nothing on this branch touches the rail.

@@ -57,7 +57,7 @@ SQL and shell never share a block. Studio shows no notices and one result per st
 **Browser:** GitHub → Pulse4all-com/cma → Pull requests → "Definitions step 1: tag meanings, Connected and Conversation (0008zc)". Read the description and the diff.
 
 Expected:
-- in `db/`, the new `100_definitions_calls.sql` and `101_verify_definitions_calls.sql`; `02_seed_pulse4all.sql` (the connected threshold 0); `63`, `85`, `91`, `93` and `95` amended, each header naming what changed;
+- in `db/`, the new `100_definitions_calls.sql` and `101_verify_definitions_calls.sql`; `02_seed_pulse4all.sql` (the connected threshold 0); `63`, `83`, `85`, `91`, `93` and `95` amended, each header naming what changed;
 - under `web/`, the Calls, Calls per agent, Attempts and Configuration (Sources, Exports) pages and components, the data layer, `lib/reports.ts`, `lib/attempts.ts`, `lib/sources.ts`, the copy, the metric catalog and the verifiers;
 - `docs/definitions-2026-10/` (this runbook and `local-records/`), `docs/definitions.md`, the metric catalog, the data model, API, features, KPIs, decisions, open decisions, `docs/datamap/catalog.json` and `CHANGELOG.md`;
 - nothing under `cloudbuild.yaml`, `ingest/`, `records/` or `hubspot/`.
@@ -370,7 +370,7 @@ Rows 11 and 12 equal Aircall only once step 11 has set the meanings. A differenc
 5. Configuration → Exports: "Conversation: talk time of at least (seconds)" with 30, beside the connected threshold at 0.
 6. Configuration → Sources → the HubSpot connection → Call outcomes: the list without a Connected column and without the rule button (O).
 
-Expected: each as described; nothing reads "reached", "bereikt", "Connected share" or "in contact".
+Expected: each as described; nothing reads "reached", "bereikt", "Connected share" or "in contact", outside the tag meaning Not reached (Niet bereikt).
 
 ## 14. Dev and prod: the drift check after
 
