@@ -18,11 +18,11 @@ import type {
   CallsFilter, CallsGroup, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsTagUse, HoursRange,
   FormCategory, FormsAnswers, FormsFilter, FormsGroup, FormsReport, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
+  FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SourceTaskStatus, SourceTaskType,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFilter, EmailGroup, EmailNotRespondingRow, EmailPerAgent, EmailReport, EmailWaitingRow, SourceInbox, SourceMailbox,
   AttributionSettings, FirstOrderEvidence, FirstOrderFilter, FirstOrderGroup, FirstOrdersReport, OrdersPerPerson, SourceStage,
-  Journey, JourneyStatus, CallbackOwner, CallbacksKept,
+  Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardData,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
 } from "./types";
@@ -2835,6 +2835,18 @@ export const mockData: CmaData = {
     return { ...range, rows };
   },
 
+  /** The Dashboard's reads together, as the database answers them in one transaction */
+  async getDashboard(me, range): Promise<DashboardData> {
+    assertReportRange(range);
+    return {
+      time: await mockData.getTeamStatusTime(me, range, null),
+      intake: await mockData.getIntake(me, range),
+      records: await mockData.getCrmRecordsPerDay(me, range),
+      speed: await mockData.getSpeedToLeadRows(me, range),
+      callbacks: await mockData.getCallbacksKept(me, range),
+    };
+  },
+
   /** Today per person, the way cma.team_now derives it from the day's effective events */
   async getTeamNow(me): Promise<TeamNow> {
     assertLive(me);
@@ -3895,16 +3907,20 @@ export const mockData: CmaData = {
   // ---- Follow-up (addition 0008o): the same permission checks as the database functions, over the fixture. Since
   // addition 0008s the database reads a snapshot computed once a minute; the mock computes on every read, so its
   // figures are always "now" (computedAt is the read's own time)
-  async getFollowUpPage(me, filter): Promise<FollowUpPage> {
+  async getFollowUpPage(me, filter, callbacks): Promise<FollowUpPage & FollowUpCallbacks> {
     assertAny(me, [...FOLLOW_UP_PERMISSIONS]);
     const now = Date.now();
     const { leads, tickets, tasks } = mockFollowUpRows(me, now);
     const num = (key: string) => (/^\d+$/.test(mockSetting(key)) ? Number(mockSetting(key)) : null);
-    return followUpPage(leads, tickets, tasks, filter, {
+    const page = followUpPage(leads, tickets, tasks, filter, {
       rows: listRowsOf(mockSetting("follow_up.list_rows")), canByOwner: me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION),
       computedAt: new Date(now).toISOString(), durationMs: 0,
       targetMinutes: num("speed_to_lead.target_minutes"), warningPct: num("tickets.sla_warning_pct"),
     });
+    // the callbacks kept with it, as the database reads them in the same statement; per person once a callback type counts
+    const kept = callbacks ? await mockData.getCallbacksKept(me, callbacks.range) : null;
+    const owners = callbacks?.perOwner ? await mockData.getCallbacksPerOwner(me, callbacks.range) : null;
+    return { ...page, callbacks: kept, callbackOwners: kept?.connected && owners ? owners : null };
   },
 
   async getOpenLeads(me): Promise<FollowUpRowsAt<OpenLead>> {

@@ -4820,7 +4820,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "Ran against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and matched the page's own function for the last 30 days (2).",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -4910,7 +4910,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -4996,7 +4996,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -5095,7 +5095,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -5219,7 +5219,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -5323,7 +5323,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -5420,7 +5420,7 @@
         ],
         "perPerson": null
       },
-      "refresh": "on page load (server component); five parallel reads (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
+      "refresh": "on page load (server component); one read in one transaction (team time, intake, records per day, speed-to-lead rows, callbacks kept); no polling",
       "fixture_check": "The query runs against the local fixture database (migrations 00 to 99, the dev seed and web/verify's reports and follow-up volume fixtures, 23 October 2026) and returns 1 row(s); Martin compares the value with the page in Studio.",
       "docs": [
         "api.md, Dashboard (Intake row, since 12 Oct 2026, B11)",
@@ -5565,7 +5565,7 @@
           },
           {
             "file": "src/lib/data/postgres.ts",
-            "export": "getCallbacksKept"
+            "export": "getDashboard"
           }
         ]
       },
