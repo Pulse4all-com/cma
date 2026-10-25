@@ -39,6 +39,11 @@
 --      like for like; the filters and their refusals; the figures per dimension and the received
 --      series; the history start; waiting now; not responding with a connected and a short call; the
 --      permissions; tenant isolation; a reader scoped to one tenant
+-- Amended for addition 0008zc (24 October 2026; 83 runs in dev only): 0008zc gives a CRM call's conversation its term's
+-- name (docs/definitions.md, convention 1): cma.crm_call_conversation_of in place of cma.crm_call_connected_of, which it
+-- drops, and cma.email_not_responding_of reads it. A6 names the function the database holds: the new one once 0008zc
+-- is recorded, the old one before it. Every other check pins what it pinned before (not responding counts a
+-- conversation through the CRM call's linked telephony call, which its fixture's calls already are or are not).
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -203,7 +208,9 @@ begin
     'cma.email_received_series(date,date,text,text,text,text,text)', 'cma.email_per_person(date,date,text,text,text)',
     'cma.email_waiting(text,text,text,integer)', 'cma.email_not_responding(text,integer)', 'cma.email_history_start()',
     'cma.email_filters_check(text,text,text)', 'cma.per_person_on(uuid,text)', 'cma.assert_per_person(text)',
-    'cma.is_per_person_list(text)', 'cma.setting_codes(jsonb,text)', 'cma.crm_call_connected_of(uuid,uuid)'] loop
+    'cma.is_per_person_list(text)', 'cma.setting_codes(jsonb,text)',
+    case when exists (select 1 from cma.schema_migration m where m.version = '0008zc') then 'cma.crm_call_conversation_of(uuid,uuid)'
+         else 'cma.crm_call_connected_of(uuid,uuid)' end] loop
     if to_regprocedure(v_fn) is null then
       v_bad := v_bad || v_fn || ' missing; ';
     elsif not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')

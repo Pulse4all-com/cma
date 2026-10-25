@@ -19,7 +19,7 @@ import type {
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
-  DealAttempt, LineStoredCalls,
+  DealAttempt, LineStoredCalls, TagMeaning,
   CancellationFigures, CancellationsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
@@ -208,24 +208,24 @@ function toReason(x: ReasonDbRow): MissedReason {
 // ---- Calls overview and calls per agent (addition 0008j): the rows as the functions answer them ----
 type CallsDbRow = {
   period: string; group_key: string | null; group_label: string | null; calls: number; inbound: number; outbound: number;
-  answered_inbound: number; connected_outbound: number; connected_pct: string | null; conversations: number;
+  answered_inbound: number; connected: number; connected_rate: string | null; conversations: number;
   talk_seconds_total: string; talk_seconds_avg: string | null; outbound_talk_seconds: string; outbound_talk_avg: string | null;
-  untagged_conversations: number;
+  untagged: number;
 };
 type PersonDbRow = {
   row_kind: "person" | "not_linked" | "total"; user_id: string | null; display_name: string | null; unlinked_users: number | null;
-  answered_inbound: number; inbound_talk_seconds: string; inbound_talk_avg: string | null; outbound_calls: number; connected_outbound: number;
-  outbound_talk_seconds: string; outbound_talk_avg: string | null; conversations: number; untagged_conversations: number;
+  answered_inbound: number; inbound_talk_seconds: string; inbound_talk_avg: string | null; outbound_calls: number; connected: number;
+  outbound_talk_seconds: string; outbound_talk_avg: string | null; conversations: number; untagged: number;
   first_call_time: string | null; last_call_time: string | null;
 };
 
 function toCallsFigures(x: CallsDbRow | undefined): CallsFigures {
   return {
     calls: x?.calls ?? 0, inbound: x?.inbound ?? 0, outbound: x?.outbound ?? 0, answeredInbound: x?.answered_inbound ?? 0,
-    connectedOutbound: x?.connected_outbound ?? 0, connectedPct: num(x?.connected_pct ?? null), conversations: x?.conversations ?? 0,
+    connected: x?.connected ?? 0, connectedRate: num(x?.connected_rate ?? null), conversations: x?.conversations ?? 0,
     talkSeconds: Number(x?.talk_seconds_total ?? 0), talkAvgSeconds: num(x?.talk_seconds_avg ?? null),
     outboundTalkSeconds: Number(x?.outbound_talk_seconds ?? 0), outboundTalkAvgSeconds: num(x?.outbound_talk_avg ?? null),
-    untaggedConversations: x?.untagged_conversations ?? 0,
+    untagged: x?.untagged ?? 0,
   };
 }
 
@@ -233,8 +233,8 @@ function toCallsPerson(x: PersonDbRow): CallsPerson {
   return {
     kind: x.row_kind === "not_linked" ? "notLinked" : x.row_kind, userId: x.user_id, name: x.display_name, unlinkedUsers: x.unlinked_users,
     answeredInbound: x.answered_inbound, inboundTalkSeconds: Number(x.inbound_talk_seconds), inboundTalkAvgSeconds: num(x.inbound_talk_avg),
-    outboundCalls: x.outbound_calls, connectedOutbound: x.connected_outbound, outboundTalkSeconds: Number(x.outbound_talk_seconds),
-    outboundTalkAvgSeconds: num(x.outbound_talk_avg), conversations: x.conversations, untaggedConversations: x.untagged_conversations,
+    outboundCalls: x.outbound_calls, connected: x.connected, outboundTalkSeconds: Number(x.outbound_talk_seconds),
+    outboundTalkAvgSeconds: num(x.outbound_talk_avg), conversations: x.conversations, untagged: x.untagged,
     firstCallTime: x.first_call_time?.slice(0, 5) ?? null, lastCallTime: x.last_call_time?.slice(0, 5) ?? null,
   };
 }
@@ -349,9 +349,12 @@ function toEmailPerson(x: EmailPersonDbRow): EmailPerson {
   };
 }
 
-async function telephonySetting(q: Querier): Promise<number> {
-  const r = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'telephony.connected_min_seconds'`);
-  return Number(r.rows[0]?.value ?? 10);
+/** The two call thresholds the Calls pages' hints name (Connected and Conversation, 0008zc), in one statement */
+async function callSettings(q: Querier): Promise<{ connectedMinSeconds: number; conversationMinSeconds: number }> {
+  const r = await q.query<{ key: string; value: string | null }>(
+    `select key, value from cma.tenant_settings() where key in ('telephony.connected_min_seconds', 'calls.conversation_min_talk_seconds')`);
+  const of = (key: string, fallback: number) => Number(r.rows.find((x) => x.key === key)?.value ?? fallback);
+  return { connectedMinSeconds: of("telephony.connected_min_seconds", 0), conversationMinSeconds: of("calls.conversation_min_talk_seconds", 30) };
 }
 
 function ctx(me: Principal): TenantContext {
@@ -864,7 +867,7 @@ type CatalogsJson = {
   }[];
   callOutcomes: { outcomeRef: string; label: string; isConnected: boolean; status: string }[];
   lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
-  tags: { tagRef: string; name: string; isCounted: boolean; status: string }[];
+  tags: { tagRef: string; name: string; isCounted: boolean; meaning: TagMeaning | null; status: string }[];
   sampleIds: Record<string, string>;
 };
 
@@ -965,32 +968,32 @@ function toOwner(x: OwnerDb): FollowUpOwner {
 // ---- Attempts per deal (addition 0008y; for sales since 0008z): cma.attempts_per_deal_page and attempts_per_person_page answer one
 // JSON object each, snake_case keys, numbers as numbers (the averages and medians as JSON numbers), times as ISO text
 type AttemptFiguresDb = {
-  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; reached_deals: number;
-  first_reached: number; reached_attempts: number; speed_deals: number; median_speed_seconds: number | null; noon_known: number;
+  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; conversation_deals: number;
+  first_conversation: number; conversation_attempts: number; speed_deals: number; median_speed_seconds: number | null; noon_known: number;
   called_before_noon: number; open_deals: number; open_never_attempted: number; won: number; lost: number; ordered: number; unknown: number;
-  talk_seconds_total: number; talk_seconds_reached: number; attempts_without_outcome: number; logged_without_aircall: number;
+  talk_seconds_total: number; talk_seconds_conversation: number; attempts_without_outcome: number; logged_without_aircall: number;
 };
 type AttemptListDb = {
   deal_id: string; connection_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string | null; stage_label: string | null;
   market: string; created_at: string; closed_at: string | null; ordered_at: string | null; window_end_reason: AttemptListRow["windowEndReason"];
-  outcome: AttemptListRow["outcome"]; attempts: number; reached_attempts: number; first_reached_attempt: number | null; talk_seconds_total: number;
-  talk_seconds_reached: number; first_attempt_at: string | null; speed_to_lead_seconds: number | null; called_before_next_noon: boolean | null;
+  outcome: AttemptListRow["outcome"]; attempts: number; conversation_attempts: number; first_conversation_attempt: number | null; talk_seconds_total: number;
+  talk_seconds_conversation: number; first_attempt_at: string | null; speed_to_lead_seconds: number | null; called_before_next_noon: boolean | null;
   last_attempt_at: string | null; business_days_since_last: number | null; since_last_bucket: string | null; logged_without_aircall: number;
 };
 type AttemptsCommonDb = {
   markets: string[]; pipelines: { key: string; label: string }[]; history_start: string | null;
   settings: {
     max_bucket: number; since_last_buckets: string; pre_window_minutes: number; list_rows: number; source: AttemptSettings["source"];
-    reached_min_talk_seconds: number; speed_buckets: string;
+    conversation_min_talk_seconds: number; speed_buckets: string;
   };
 };
 type AttemptOutcomeDb = {
   outcome: "won" | "lost"; deals: number; avg_attempts: number | null; median_attempts: number | null; speed_deals: number;
-  median_speed_seconds: number | null; noon_known: number; called_before_noon: number; reached_deals: number; avg_talk_reached_seconds: number | null;
+  median_speed_seconds: number | null; noon_known: number; called_before_noon: number; conversation_deals: number; avg_talk_conversation_seconds: number | null;
 };
 type AttemptsPageDb = AttemptsCommonDb & {
   current: AttemptFiguresDb; previous: AttemptFiguresDb;
-  buckets: { bucket: number; label: string; deals: number; first_reached: number; won: number; lost: number }[];
+  buckets: { bucket: number; label: string; deals: number; first_conversation: number; won: number; lost: number }[];
   outcomes: { rows: AttemptOutcomeDb[]; not_decided: number; open: number; ordered: number; unknown: number };
   speed_buckets: { buckets: { from: number; to: number | null; label: string; won: number; lost: number }[]; none: { won: number; lost: number }; no_hours: number };
   groups: (AttemptFiguresDb & { key: string; label: string | null })[];
@@ -1003,7 +1006,7 @@ type AttemptsPersonDb = AttemptsCommonDb & {
   total: AttemptFiguresDb;
 };
 type DealAttemptDb = {
-  n: number; started_at: Date; answered: boolean; talk_seconds: number | null; reached: boolean; reached_by: DealAttempt["reachedBy"];
+  n: number; started_at: Date; connected: boolean; talk_seconds: number | null; conversation: boolean;
   outcome_label: string | null; agent_name: string | null;
 };
 /** An instant as ISO text in UTC, from the JSON's timestamptz text */
@@ -1011,25 +1014,25 @@ const isoOf = (v: string | null): string | null => (v === null ? null : new Date
 function toAttemptFigures(x: AttemptFiguresDb): AttemptFigures {
   return {
     deals: x.deals, attempted: x.attempted, attempts: x.attempts, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts),
-    reachedDeals: x.reached_deals, firstReached: x.first_reached, reachedAttempts: x.reached_attempts, speedDeals: x.speed_deals,
+    conversationDeals: x.conversation_deals, firstConversation: x.first_conversation, conversationAttempts: x.conversation_attempts, speedDeals: x.speed_deals,
     medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
     openDeals: x.open_deals, openNeverAttempted: x.open_never_attempted, won: x.won, lost: x.lost, ordered: x.ordered, unknown: x.unknown,
-    talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached, attemptsWithoutOutcome: x.attempts_without_outcome,
+    talkSecondsTotal: x.talk_seconds_total, talkSecondsConversation: x.talk_seconds_conversation, attemptsWithoutOutcome: x.attempts_without_outcome,
     loggedWithoutAircall: x.logged_without_aircall,
   };
 }
 function toAttemptSettings(x: AttemptsCommonDb["settings"]): AttemptSettings {
   return {
     maxBucket: x.max_bucket, sinceLastBuckets: x.since_last_buckets, preWindowMinutes: x.pre_window_minutes, listRows: x.list_rows, source: x.source,
-    reachedMinTalkSeconds: x.reached_min_talk_seconds, speedBuckets: x.speed_buckets,
+    conversationMinTalkSeconds: x.conversation_min_talk_seconds, speedBuckets: x.speed_buckets,
   };
 }
 function toAttemptListRow(x: AttemptListDb): AttemptListRow {
   return {
     dealId: x.deal_id, connectionId: x.connection_id, dealSourceId: x.deal_source_id, recordUrl: x.record_url, pipelineLabel: x.pipeline_label,
     stageLabel: x.stage_label, market: x.market, createdAt: isoOf(x.created_at)!, closedAt: isoOf(x.closed_at), orderedAt: isoOf(x.ordered_at),
-    windowEndReason: x.window_end_reason, outcome: x.outcome, attempts: x.attempts, reachedAttempts: x.reached_attempts,
-    firstReachedAttempt: x.first_reached_attempt, talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached,
+    windowEndReason: x.window_end_reason, outcome: x.outcome, attempts: x.attempts, conversationAttempts: x.conversation_attempts,
+    firstConversationAttempt: x.first_conversation_attempt, talkSecondsTotal: x.talk_seconds_total, talkSecondsConversation: x.talk_seconds_conversation,
     firstAttemptAt: isoOf(x.first_attempt_at), speedToLeadSeconds: x.speed_to_lead_seconds, calledBeforeNextNoon: x.called_before_next_noon,
     lastAttemptAt: isoOf(x.last_attempt_at), businessDaysSinceLast: x.business_days_since_last, sinceLastBucket: x.since_last_bucket,
     loggedWithoutAircall: x.logged_without_aircall,
@@ -1039,7 +1042,7 @@ function toAttemptOutcomeRow(x: AttemptOutcomeDb): AttemptOutcomeRow {
   return {
     outcome: x.outcome, deals: x.deals, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts), speedDeals: x.speed_deals,
     medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
-    reachedDeals: x.reached_deals, avgTalkReachedSeconds: numOrNull(x.avg_talk_reached_seconds),
+    conversationDeals: x.conversation_deals, avgTalkConversationSeconds: numOrNull(x.avg_talk_conversation_seconds),
   };
 }
 
@@ -1886,7 +1889,7 @@ export const postgresData: CmaData = {
         })),
         callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
         lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
-        tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, isActive: t.status === "active" })),
+        tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, meaning: t.meaning ?? null, isActive: t.status === "active" })),
         fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property,
           sourceType: f.sourceType ?? null, checkedAt: isoAny(f.checkedAt), state: f.state ?? null })),
         reasons: (config.reasons ?? []).map((x) => ({ recordType: x.recordType, value: x.value, label: x.label, order: x.order, isDataQuality: x.isDataQuality,
@@ -2048,7 +2051,7 @@ export const postgresData: CmaData = {
       return {
         ...range, group, filter, current: toAttemptFigures(j.current), previous: toAttemptFigures(j.previous),
         previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
-        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstReached: b.first_reached, won: b.won, lost: b.lost })),
+        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstConversation: b.first_conversation, won: b.won, lost: b.lost })),
         outcomes: { rows: j.outcomes.rows.map(toAttemptOutcomeRow), notDecided: j.outcomes.not_decided, open: j.outcomes.open, ordered: j.outcomes.ordered,
           unknown: j.outcomes.unknown },
         speedBuckets: { buckets: j.speed_buckets.buckets, none: j.speed_buckets.none, noHours: j.speed_buckets.no_hours },
@@ -2080,7 +2083,7 @@ export const postgresData: CmaData = {
       // the function checks reports.view or performance.team (CMA06) and the deal (CMA02); the agent's name only when allowed
       const r = await q.query<DealAttemptDb>(`select * from cma.attempts_of_deal($1::uuid)`, [dealId]);
       return r.rows.map((x) => ({
-        n: x.n, startedAt: x.started_at.toISOString(), answered: x.answered, talkSeconds: x.talk_seconds, reached: x.reached, reachedBy: x.reached_by,
+        n: x.n, startedAt: x.started_at.toISOString(), connected: x.connected, talkSeconds: x.talk_seconds, conversation: x.conversation,
         outcomeLabel: x.outcome_label, agentName: x.agent_name,
       }));
     });
@@ -2370,6 +2373,10 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag($1::uuid, $2, $3)`, [id, input.tagRef, input.isCounted]));
   },
 
+  async setSourceTagMeaning(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag_meaning($1::uuid, $2, $3)`, [id, input.tagRef, input.meaning]));
+  },
+
   async setSourceMissedReason(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_missed_reason($1::uuid, $2, $3, $4, $5)`,
       [id, input.code, input.label, input.countsInServiceLevel, input.needsCallback]));
@@ -2605,7 +2612,7 @@ export const postgresData: CmaData = {
       // where the tenant's telephony history starts (addition 0008k), tenant-wide: a previous span before it shows no change
       const history = await q.query<{ history_start: string | null }>(`select cma.telephony_history_start() as history_start`);
       return {
-        ...range, group, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        ...range, group, filter, telephony: connections.telephony, ...(await callSettings(q)),
         rows: connections.telephony ? current.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toCallsFigures(x) })) : [],
         total: toCallsFigures(current.find((x) => x.group_key === null)),
         previous: toCallsFigures(r.rows.find((x) => x.period === "previous")),
@@ -2665,7 +2672,7 @@ export const postgresData: CmaData = {
   async getCallsTagUse(me, range, group, filter): Promise<CallsTagUse> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ group_key: string | null; group_label: string | null; tag_key: string | null; tag_name: string | null; is_counted: boolean | null; conversations: number }>(
+      const r = await q.query<{ group_key: string | null; group_label: string | null; tag_key: string; tag_name: string; is_counted: boolean; conversations: number }>(
         `select * from cma.calls_tag_use($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, group]);
       const connections = await readConnections(q);
       return {
@@ -2684,7 +2691,7 @@ export const postgresData: CmaData = {
       const lists = await callsFilterLists(q, range, filter);
       const rows = r.rows.map(toCallsPerson);
       return {
-        ...range, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        ...range, filter, telephony: connections.telephony, ...(await callSettings(q)),
         rows: connections.telephony ? rows.filter((x) => x.kind !== "total") : [],
         total: rows.find((x) => x.kind === "total")!,
         ...(connections.telephony ? lists : { markets: [], lines: [] }),
@@ -2695,7 +2702,7 @@ export const postgresData: CmaData = {
   async getCallsPerAgentTags(me, range, filter): Promise<CallsPerAgentTags> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ row_kind: "person" | "not_linked"; user_id: string | null; tag_key: string | null; tag_name: string | null; conversations: number }>(
+      const r = await q.query<{ row_kind: "person" | "not_linked"; user_id: string | null; tag_key: string; tag_name: string; conversations: number }>(
         `select * from cma.calls_per_person_tags($1::date, $2::date, $3, $4)`, [range.from, range.to, filter.market, filter.line]);
       const connections = await readConnections(q);
       return {

@@ -1,6 +1,6 @@
 /**
  * Attempts per deal (addition 0008y; for sales since 0008z, 20 October 2026): Reports → Attempts per deal and Attempts per
- * agent. How many attempts a sales deal gets, how often and how soon they reach the customer, Closed Won against Closed
+ * agent. How many attempts a sales deal gets, how often and how soon they lead to a conversation, Closed Won against Closed
  * Lost on attempts and speed to lead (Kira), and how long the open deals have waited since their last attempt. The figures
  * come from the database (cma.attempts_per_deal_page, cma.attempts_per_person_page, cma.attempts_of_deal); this module
  * mirrors their definitions for the mock and for verify/reports.mjs, and arranges the rows for the screen. Pure, with no
@@ -15,8 +15,9 @@
  *                at its creation) and now
  *   attempt      telephony (attempts.source, the default): an outbound telephony call on a counted line whose CRM call is
  *                associated with the deal or its contacts; crm: every outbound CRM call; in the window
- *   reached      the CRM call's outcome counts as connected when it has one, else at least
- *                attempts.reached_min_talk_seconds of talk time; answered alone is no contact
+ *   conversation (0008zc; docs/definitions.md) the linked telephony call is connected (cma.is_connected), has at least
+ *                calls.conversation_min_talk_seconds of talk time and carries no tag meaning not reached
+ *                (cma.is_conversation); the CRM call's outcome decides nothing, and a call without a telephony call is none
  *   speed        business seconds from the creation to the first attempt (0007d's business time); called before the next
  *                business noon as 0007d
  *   outcome      won by the stage; else ordered (the window ended at an order); else lost by the stage; else unknown
@@ -111,14 +112,14 @@ export interface AttemptCallFixture {
   linked: boolean;
   /** The linked telephony call's line counts (a line not yet in the catalog counts); true when absent */
   lineCounted?: boolean;
-  /** The outcome's label from the catalog; null without an outcome */
+  /** The outcome's label from the catalog; null without an outcome. It describes the call and decides nothing (0008zc) */
   outcome: string | null;
-  /** The outcome counts as connected (connection_call_outcome.is_connected) */
-  outcomeConnected: boolean;
-  /** The linked telephony call was answered */
-  answered: boolean;
-  /** Ended - answered of the linked telephony call; null without one or unanswered */
+  /** The linked telephony call is connected: outbound and answered (cma.is_connected at telephony.connected_min_seconds 0) */
+  connected: boolean;
+  /** Ended - answered of the linked telephony call; null without one, unanswered or not ended */
   talkSeconds: number | null;
+  /** The linked telephony call carries a current tag meaning not reached (cma.call_not_reached_of) */
+  notReached?: boolean;
   /** The person behind the telephony user, else the CRM call's owner; null when nobody */
   agentName: string | null;
 }
@@ -176,10 +177,10 @@ export interface AttemptRecord {
   windowEndReason: AttemptWindowEnd;
   outcome: AttemptOutcome;
   attempts: number;
-  reachedAttempts: number;
-  firstReachedAttempt: number | null;
+  conversationAttempts: number;
+  firstConversationAttempt: number | null;
   talkSecondsTotal: number;
-  talkSecondsReached: number;
+  talkSecondsConversation: number;
   firstAttemptAt: Instant | null;
   speedToLeadSeconds: number | null;
   calledBeforeNextNoon: boolean | null;
@@ -199,7 +200,7 @@ export type WorkingDay = (market: string, date: DateKey) => boolean;
 export interface AttemptOptions {
   source: AttemptSource;
   preWindowMinutes: number;
-  reachedMinTalkSeconds: number;
+  conversationMinTalkSeconds: number;
   sinceLastBuckets: string;
   now: Instant;
   tenantZone: string;
@@ -255,16 +256,20 @@ export function attemptWindow(d: AttemptDealFixture, now: Instant): { orderedAt:
   return { orderedAt, end, reason, outcome };
 }
 
-/** A deal's calls in its window that are attempts, numbered in order of their start (then the CRM call's id), each reached or not (cma.deal_attempts_of) */
-export function dealAttemptCalls(d: AttemptDealFixture, o: Pick<AttemptOptions, "source" | "preWindowMinutes" | "reachedMinTalkSeconds">, end: number):
-  { attempts: (AttemptCallFixture & { n: number; reached: boolean; reachedBy: "outcome" | "talk_time" | null })[]; withoutAircall: number } {
+/**
+ * A deal's calls in its window that are attempts, numbered in order of their start (then the CRM call's id), each a conversation
+ * or not (cma.deal_attempts_of): from the linked telephony call only, connected with at least the threshold of talk time and no
+ * tag meaning not reached
+ */
+export function dealAttemptCalls(d: AttemptDealFixture, o: Pick<AttemptOptions, "source" | "preWindowMinutes" | "conversationMinTalkSeconds">, end: number):
+  { attempts: (AttemptCallFixture & { n: number; conversation: boolean })[]; withoutAircall: number } {
   const inWindow = d.calls.filter((c) => ms(c.at) >= ms(d.createdAt) - o.preWindowMinutes * 60_000 && ms(c.at) <= end);
   const attempts = inWindow
     .filter((c) => (o.source === "crm" ? c.direction === "outbound" : c.linked && c.direction === "outbound" && c.lineCounted !== false))
     .sort((x, y) => x.at.localeCompare(y.at) || x.id.localeCompare(y.id))
     .map((c, i) => {
-      const reached = c.outcome !== null ? c.outcomeConnected : c.talkSeconds !== null && c.talkSeconds >= o.reachedMinTalkSeconds;
-      return { ...c, n: i + 1, reached, reachedBy: reached ? (c.outcome !== null ? "outcome" as const : "talk_time" as const) : null };
+      const conversation = c.linked && c.connected && c.talkSeconds !== null && c.talkSeconds >= o.conversationMinTalkSeconds && !c.notReached;
+      return { ...c, n: i + 1, conversation };
     });
   return { attempts, withoutAircall: inWindow.filter((c) => c.direction === "outbound" && !c.linked).length };
 }
@@ -279,7 +284,7 @@ export function attemptRecords(deals: readonly AttemptDealFixture[], o: AttemptO
       const { attempts, withoutAircall } = dealAttemptCalls(d, o, w.end);
       const first = attempts[0] ?? null;
       const last = attempts.at(-1)?.at ?? null;
-      const firstReached = attempts.find((a) => a.reached)?.n ?? null;
+      const firstConversation = attempts.find((a) => a.conversation)?.n ?? null;
       const noon = o.nextNoon(d.market, d.createdAt);
       const days = w.outcome === "open" ? businessDays(d.market, d.zone, last ?? d.createdAt, o.now, o.working) : null;
       const bucket = ageBucket(days, o.sinceLastBuckets);
@@ -289,9 +294,9 @@ export function attemptRecords(deals: readonly AttemptDealFixture[], o: AttemptO
         pipelineLabel: d.pipelineLabel, stageLabel: d.stageLabel, market: d.market, ownerRef: d.ownerRef, ownerUserId: o.ownerUserOf(d.ownerRef),
         createdAt: d.createdAt, date, week: startOfWeek(date), localTime: timeInZone(d.createdAt, o.tenantZone), isClosed: d.isClosed,
         closedAt: d.closedAt, orderedAt: w.orderedAt, windowEndReason: w.reason, outcome: w.outcome,
-        attempts: attempts.length, reachedAttempts: attempts.filter((a) => a.reached).length, firstReachedAttempt: firstReached,
+        attempts: attempts.length, conversationAttempts: attempts.filter((a) => a.conversation).length, firstConversationAttempt: firstConversation,
         talkSecondsTotal: attempts.reduce((s, a) => s + (a.talkSeconds ?? 0), 0),
-        talkSecondsReached: attempts.filter((a) => a.reached).reduce((s, a) => s + (a.talkSeconds ?? 0), 0),
+        talkSecondsConversation: attempts.filter((a) => a.conversation).reduce((s, a) => s + (a.talkSeconds ?? 0), 0),
         firstAttemptAt: first?.at ?? null, speedToLeadSeconds: first ? o.businessSeconds(d.market, d.createdAt, first.at) : null,
         calledBeforeNextNoon: first ? (noon === null ? null : ms(first.at) < ms(noon)) : noon !== null && now >= ms(noon) ? false : null,
         lastAttemptAt: last, businessDaysSinceLast: days, sinceLastFrom: bucket?.from ?? null, sinceLastTo: bucket?.to ?? null,
@@ -305,7 +310,7 @@ export function attemptRecords(deals: readonly AttemptDealFixture[], o: AttemptO
 export function dealAttempts(d: AttemptDealFixture, o: AttemptOptions, names: boolean): DealAttempt[] {
   const w = attemptWindow(d, o.now);
   return dealAttemptCalls(d, o, w.end).attempts.map((a) => ({
-    n: a.n, startedAt: a.at, answered: a.answered, talkSeconds: a.talkSeconds, reached: a.reached, reachedBy: a.reachedBy,
+    n: a.n, startedAt: a.at, connected: a.linked && a.connected, talkSeconds: a.talkSeconds, conversation: a.conversation,
     outcomeLabel: a.outcome, agentName: names ? a.agentName : null,
   }));
 }
@@ -341,9 +346,9 @@ export function attemptFigures(rows: readonly AttemptRecord[]): AttemptFigures {
     attempts: sum,
     avgAttempts: rows.length === 0 ? null : Math.round((sum / rows.length) * 100) / 100,
     medianAttempts: median === null ? null : round1(median),
-    reachedDeals: rows.filter((r) => r.reachedAttempts > 0).length,
-    firstReached: rows.filter((r) => r.firstReachedAttempt === 1).length,
-    reachedAttempts: total((r) => r.reachedAttempts),
+    conversationDeals: rows.filter((r) => r.conversationAttempts > 0).length,
+    firstConversation: rows.filter((r) => r.firstConversationAttempt === 1).length,
+    conversationAttempts: total((r) => r.conversationAttempts),
     speedDeals: rows.filter((r) => r.speedToLeadSeconds !== null).length,
     medianSpeedSeconds: speed === null ? null : Math.round(speed),
     noonKnown: rows.filter((r) => r.calledBeforeNextNoon !== null).length,
@@ -355,19 +360,19 @@ export function attemptFigures(rows: readonly AttemptRecord[]): AttemptFigures {
     ordered: rows.filter((r) => r.outcome === "ordered").length,
     unknown: rows.filter((r) => r.outcome === "unknown").length,
     talkSecondsTotal: total((r) => r.talkSecondsTotal),
-    talkSecondsReached: total((r) => r.talkSecondsReached),
+    talkSecondsConversation: total((r) => r.talkSecondsConversation),
     attemptsWithoutOutcome: total((r) => r.attemptsWithoutOutcome),
     loggedWithoutAircall: total((r) => r.loggedWithoutAircall),
   };
 }
 
-/** Per attempt bucket 0 to max ("max+"), as cma.attempts_buckets_from: deals, first reached there, won and lost */
+/** Per attempt bucket 0 to max ("max+"), as cma.attempts_buckets_from: deals, their first conversation there, won and lost */
 export function attemptBuckets(rows: readonly AttemptRecord[], max: number): AttemptBucket[] {
   return Array.from({ length: max + 1 }, (_, b) => {
     const at = rows.filter((r) => Math.min(r.attempts, max) === b);
     return {
       bucket: b, label: b === max ? `${b}+` : String(b), deals: at.length,
-      firstReached: rows.filter((r) => r.firstReachedAttempt !== null && Math.min(r.firstReachedAttempt, max) === b).length,
+      firstConversation: rows.filter((r) => r.firstConversationAttempt !== null && Math.min(r.firstConversationAttempt, max) === b).length,
       won: at.filter((r) => r.outcome === "won").length, lost: at.filter((r) => r.outcome === "lost").length,
     };
   });
@@ -378,11 +383,12 @@ export function attemptOutcomes(rows: readonly AttemptRecord[]): { rows: Attempt
   const row = (outcome: "won" | "lost"): AttemptOutcomeRow => {
     const mine = rows.filter((r) => r.outcome === outcome);
     const f = attemptFigures(mine);
-    const reached = mine.filter((r) => r.reachedAttempts > 0);
+    const withConversation = mine.filter((r) => r.conversationAttempts > 0);
     return {
       outcome, deals: f.deals, avgAttempts: f.avgAttempts, medianAttempts: f.medianAttempts, speedDeals: f.speedDeals, medianSpeedSeconds: f.medianSpeedSeconds,
-      noonKnown: f.noonKnown, calledBeforeNoon: f.calledBeforeNoon, reachedDeals: f.reachedDeals,
-      avgTalkReachedSeconds: reached.length === 0 ? null : Math.round(reached.reduce((s, r) => s + r.talkSecondsReached, 0) / reached.length),
+      noonKnown: f.noonKnown, calledBeforeNoon: f.calledBeforeNoon, conversationDeals: f.conversationDeals,
+      avgTalkConversationSeconds: withConversation.length === 0 ? null
+        : Math.round(withConversation.reduce((s, r) => s + r.talkSecondsConversation, 0) / withConversation.length),
     };
   };
   const count = (o: AttemptOutcome) => rows.filter((r) => r.outcome === o).length;
@@ -464,8 +470,8 @@ export function attemptList(rows: readonly AttemptRecord[], limit: number): { ro
     rows: sorted.slice(0, limit).map((r) => ({
       dealId: r.dealId, connectionId: r.connectionId, dealSourceId: r.dealSourceId, recordUrl: r.recordUrl, pipelineLabel: r.pipelineLabel,
       stageLabel: r.stageLabel, market: r.market, createdAt: r.createdAt, closedAt: r.closedAt, orderedAt: r.orderedAt, windowEndReason: r.windowEndReason,
-      outcome: r.outcome, attempts: r.attempts, reachedAttempts: r.reachedAttempts, firstReachedAttempt: r.firstReachedAttempt,
-      talkSecondsTotal: r.talkSecondsTotal, talkSecondsReached: r.talkSecondsReached, firstAttemptAt: r.firstAttemptAt,
+      outcome: r.outcome, attempts: r.attempts, conversationAttempts: r.conversationAttempts, firstConversationAttempt: r.firstConversationAttempt,
+      talkSecondsTotal: r.talkSecondsTotal, talkSecondsConversation: r.talkSecondsConversation, firstAttemptAt: r.firstAttemptAt,
       speedToLeadSeconds: r.speedToLeadSeconds, calledBeforeNextNoon: r.calledBeforeNextNoon, lastAttemptAt: r.lastAttemptAt,
       businessDaysSinceLast: r.businessDaysSinceLast, sinceLastBucket: r.sinceLastBucket, loggedWithoutAircall: r.loggedWithoutAircall,
     })),
@@ -503,19 +509,19 @@ export function attemptedShare(f: Pick<AttemptFigures, "attempted" | "deals">): 
   return share(f.attempted, f.deals);
 }
 
-/** Deals reached at least once as a share of the deals; null without a deal */
-export function reachedShare(f: Pick<AttemptFigures, "reachedDeals" | "deals">): number | null {
-  return share(f.reachedDeals, f.deals);
+/** Deals with at least one conversation as a share of the deals; null without a deal */
+export function conversationShare(f: Pick<AttemptFigures, "conversationDeals" | "deals">): number | null {
+  return share(f.conversationDeals, f.deals);
 }
 
-/** Deals reached on their first attempt as a share of the deals attempted, 0 to 1; null without an attempted deal */
-export function firstReachShare(f: Pick<AttemptFigures, "firstReached" | "attempted">): number | null {
-  return share(f.firstReached, f.attempted);
+/** Deals whose first attempt was a conversation as a share of the deals attempted, 0 to 1; null without an attempted deal */
+export function firstConversationShare(f: Pick<AttemptFigures, "firstConversation" | "attempted">): number | null {
+  return share(f.firstConversation, f.attempted);
 }
 
-/** Deals first reached on an attempt as a share of the deals attempted; null without an attempted deal */
-export function reachShare(b: Pick<AttemptBucket, "firstReached">, attempted: number): number | null {
-  return share(b.firstReached, attempted);
+/** Deals whose first conversation was an attempt's as a share of the deals attempted; null without an attempted deal */
+export function firstConversationOnShare(b: Pick<AttemptBucket, "firstConversation">, attempted: number): number | null {
+  return share(b.firstConversation, attempted);
 }
 
 /** Called before the next business noon, of the deals whose answer is known; null without one */

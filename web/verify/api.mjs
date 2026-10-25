@@ -1054,7 +1054,7 @@ function verdict() {
 // The admin configures sources, markets and rules (tenant.configure); linked accounts follow the People
 // rule (users.manage_agents for non-managing people, users.manage_all for everyone, never oneself). Every
 // write is undone at the end: settings, a pipeline, a call outcome, an alias, a holiday and two people's ids
-// are put back as the run found them; the one rule the run writes ("API verifier rule", a record_assigned
+// (and since 0008zc a tag's meaning) are put back as the run found them; the one rule the run writes ("API verifier rule", a record_assigned
 // rule on a pipeline id no source has) is left switched off (dev data). The source checks need a
 // connection: dev's CRM connection, or locally verify/reports-fixture.sql.
 async function sourceChecks() {
@@ -1131,6 +1131,27 @@ async function sourceChecks() {
       expect("sources: a call outcome's connected switch is written and put back", [find(o1), find(o2)], [!outcome.isConnected, outcome.isConnected], [outcome.isConnected, outcome.isConnected]);
     } else {
       console.log("note  the connection has no call outcome: the outcome check is left out");
+    }
+    // a tag's meaning (addition 0008zc): written with PATCH under the same gate as its counted switch, put back, a key outside
+    // the six a 400 that writes nothing, an agent refused
+    const tel = sources.find((c) => c.kind === "telephony") ?? sources.find((c) => c.heldKinds.includes("telephony"));
+    const telBase = tel ? `${cfgS}/sources/${tel.id}` : null;
+    const tag = telBase ? ((await get(ADMIN, telBase)).body?.data?.tags ?? [])[0] : null;
+    if (tag) {
+      const other = tag.meaning === "call_type" ? "not_reached" : "call_type";
+      const m1 = await sj(ADMIN, "PATCH", `${telBase}/tags`, { tagRef: tag.tagRef, meaning: other });
+      const bad = await sj(ADMIN, "PATCH", `${telBase}/tags`, { tagRef: tag.tagRef, meaning: "Not_Reached" });
+      const none = await sj(ADMIN, "PATCH", `${telBase}/tags`, { tagRef: tag.tagRef });
+      const agent = await sj(AGENT, "PATCH", `${telBase}/tags`, { tagRef: tag.tagRef, meaning: other });
+      const m2 = await sj(ADMIN, "PATCH", `${telBase}/tags`, { tagRef: tag.tagRef, meaning: tag.meaning ?? null });
+      const find = (r) => (r.body?.data?.tags ?? []).find((t) => t.tagRef === tag.tagRef);
+      const after = ((await get(ADMIN, telBase)).body?.data?.tags ?? []).find((t) => t.tagRef === tag.tagRef);
+      expect("sources: a tag's meaning is written and put back; a key outside the six or none a 400; an agent refused",
+        [find(m1)?.meaning, find(m1)?.isCounted, bad.status, none.status, agent.status, find(m2)?.meaning ?? null, after?.meaning ?? null],
+        [other, tag.isCounted, 400, 400, 403, tag.meaning ?? null, tag.meaning ?? null],
+        [tag.meaning ?? null, !tag.isCounted, 200, 200, 200, other, other]);
+    } else {
+      console.log("note  no telephony connection with a tag: the tag meaning check is left out");
     }
   }
 
@@ -1435,13 +1456,15 @@ async function callsChecks() {
     [...groups.flatMap((d) => personal(d)), ...personal(tags), ...personal(per), ...personal(perTags)], [], ["$.something"]);
   const d = groups[0] ?? { rows: [], total: {} };
   const sum = (rows, k) => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
-  const counts = ["calls", "inbound", "outbound", "answeredInbound", "connectedOutbound", "conversations", "talkSeconds", "outboundTalkSeconds", "untaggedConversations"];
+  const counts = ["calls", "inbound", "outbound", "answeredInbound", "connected", "conversations", "talkSeconds", "outboundTalkSeconds", "untagged"];
   expect("calls: the days add up to the total (every count and the talk time)",
     counts.map((k) => sum(d.rows, k) === d.total[k]), counts.map(() => true), counts.map((_, i) => i !== 0));
-  const coherent = (f) => f.inbound + f.outbound === f.calls && f.answeredInbound <= f.inbound && f.connectedOutbound <= f.outbound
-    && f.conversations === f.answeredInbound + f.connectedOutbound && f.untaggedConversations <= f.conversations
-    && (f.connectedPct === null ? f.outbound === 0 : Math.abs(f.connectedPct - Math.round((1000 * f.connectedOutbound) / f.outbound) / 10) < 0.06)
-    && (f.conversations > 0 || (f.talkAvgSeconds === null && f.talkSeconds === 0))
+  // 0008zc: a conversation is a connected or answered call with enough talk time and no tag meaning not reached, so at most
+  // their sum; untagged counts every call; talk time runs over the answered calls with talk time
+  const coherent = (f) => f.inbound + f.outbound === f.calls && f.answeredInbound <= f.inbound && f.connected <= f.outbound
+    && f.conversations <= f.answeredInbound + f.connected && f.untagged <= f.calls
+    && (f.connectedRate === null ? f.outbound === 0 : Math.abs(f.connectedRate - Math.round((1000 * f.connected) / f.outbound) / 10) < 0.06)
+    && (f.talkAvgSeconds !== null || f.talkSeconds === 0) && (f.answeredInbound + f.connected > 0 || f.conversations === 0)
     && f.outboundTalkSeconds <= f.talkSeconds;
   expect("calls: every group, the total and the previous period are coherent",
     [...groups.flatMap((g) => [...(g?.rows ?? []), g?.total, g?.previous])].every((f) => f && coherent(f)), true, false);
@@ -1488,8 +1511,11 @@ async function callsChecks() {
       [before(d), before(ended), before(ahead)], [false, false, false], [true, false, false]);
   }
   const settings = (await get(ANALYST, "/api/v1/settings")).body?.data ?? [];
-  expect("calls: the threshold comes from the settings",
-    [d.connectedMinSeconds, per?.connectedMinSeconds], [Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value), Number(settings.find((x) => x.key === "telephony.connected_min_seconds")?.value)], [-1, -1]);
+  const setting = (key) => Number(settings.find((x) => x.key === key)?.value);
+  expect("calls: the thresholds come from the settings (connected, and the conversation's since 0008zc)",
+    [d.connectedMinSeconds, per?.connectedMinSeconds, d.conversationMinSeconds, per?.conversationMinSeconds],
+    [setting("telephony.connected_min_seconds"), setting("telephony.connected_min_seconds"), setting("calls.conversation_min_talk_seconds"), setting("calls.conversation_min_talk_seconds")],
+    [-1, -1, -1, -1]);
   const market = groups[2]?.rows?.[0];
   const line = groups[3]?.rows?.[0];
   const alike = async (q) => {
@@ -1497,9 +1523,10 @@ async function callsChecks() {
     const t = (await tagUse(ANALYST, `${range}&group=day&${q}`)).body?.data?.rows ?? [];
     const p = (await agents(SUPERVISOR, `${range}&${q}`)).body?.data;
     const pt = (await agentTags(SUPERVISOR, `${range}&${q}`)).body?.data?.rows ?? [];
+    // untagged counts calls (0008zc): the people's (answered inbound and outbound) are among the overview's; no tag row is untagged
     return [o?.calls, o?.conversations === p?.total?.conversations && o?.conversations === sum(p?.rows ?? [], "conversations"),
-      o?.untaggedConversations === sum(t.filter((r) => r.groupKey === null && r.tagKey === null), "conversations"),
-      p?.total?.untaggedConversations === sum(pt.filter((r) => r.tagKey === null), "conversations")];
+      o?.untagged <= o?.calls && p?.total?.untagged <= o?.untagged,
+      t.every((r) => r.tagKey !== null && r.conversations <= o?.conversations) && pt.every((r) => r.tagKey !== null)];
   };
   const byMarket = market ? await alike(`market=${encodeURIComponent(market.groupKey)}`) : null;
   const byLine = line ? await alike(`line=${encodeURIComponent(line.groupKey)}`) : null;
@@ -1511,14 +1538,14 @@ async function callsChecks() {
     [persons.every((r, i, a) => i === 0 || a[i - 1].name.localeCompare(r.name) <= 0),
       (per?.rows ?? []).findIndex((r) => r.kind === "notLinked") === -1 || (per?.rows ?? []).at(-1)?.kind === "notLinked",
       (per?.rows ?? []).every((r) => r.kind === "person" ? r.unlinkedUsers === null && r.userId : r.unlinkedUsers >= 1 && r.userId === null && r.name === null),
-      [per?.total?.answeredInbound, per?.total?.outboundCalls, per?.total?.connectedOutbound, per?.total?.conversations].join("/")
-        === [plain?.total?.answeredInbound, plain?.total?.outbound, plain?.total?.connectedOutbound, plain?.total?.conversations].join("/")],
+      [per?.total?.answeredInbound, per?.total?.outboundCalls, per?.total?.connected, per?.total?.conversations].join("/")
+        === [plain?.total?.answeredInbound, plain?.total?.outbound, plain?.total?.connected, plain?.total?.conversations].join("/")],
     [true, true, true, true], [false, true, true, true]);
   const counted = new Set((tags?.rows ?? []).filter((r) => r.isCounted === true).map((r) => r.tagKey));
   const notCounted = new Set((tags?.rows ?? []).filter((r) => r.isCounted === false).map((r) => r.tagKey));
-  expect("calls per agent: tags per person are counted tags only, the untagged ones add up to the total",
-    [(perTags?.rows ?? []).every((r) => r.tagKey === null || (counted.has(r.tagKey) && !notCounted.has(r.tagKey))),
-      sum((perTags?.rows ?? []).filter((r) => r.tagKey === null), "conversations") === per?.total?.untaggedConversations],
+  expect("calls per agent: tags per person are counted tags only, no untagged row; the untagged calls per person add up to the total",
+    [(perTags?.rows ?? []).every((r) => r.tagKey !== null && counted.has(r.tagKey) && !notCounted.has(r.tagKey)),
+      sum(per?.rows ?? [], "untagged") === per?.total?.untagged],
     [true, true], [false, true]);
   const whole = (tags?.rows ?? []).filter((r) => r.groupKey === null);
   expect("calls: the whole period's tag use equals its groups', tag by tag",
@@ -1578,12 +1605,12 @@ async function attemptsChecks() {
       ...(/hash|phone|e164|email|digits|counterpart|caller|contact|address|street|zip|postal/i.test(k) || (/name/i.test(k) && k !== "name") ? [`${path}.${k}`] : []),
       ...personal(x, `${path}.${k}`)]) : [];
   expect("attempts: no name, address, phone number or hash in any answer", [...groups.flatMap((d) => personal(d)), ...personal(per)], [], ["$.something"]);
-  const FIG = ["deals", "attempted", "attempts", "reachedDeals", "firstReached", "reachedAttempts", "speedDeals", "noonKnown", "calledBeforeNoon", "openDeals",
-    "openNeverAttempted", "won", "lost", "ordered", "unknown", "talkSecondsTotal", "talkSecondsReached", "attemptsWithoutOutcome", "loggedWithoutAircall"];
-  const coherent = (f) => !!f && FIG.every((k) => Number.isInteger(f[k]) && f[k] >= 0) && f.attempted <= f.deals && f.firstReached <= f.reachedDeals
-    && f.reachedDeals <= f.attempted && f.reachedAttempts <= f.attempts && f.speedDeals <= f.attempted && f.calledBeforeNoon <= f.noonKnown
+  const FIG = ["deals", "attempted", "attempts", "conversationDeals", "firstConversation", "conversationAttempts", "speedDeals", "noonKnown", "calledBeforeNoon", "openDeals",
+    "openNeverAttempted", "won", "lost", "ordered", "unknown", "talkSecondsTotal", "talkSecondsConversation", "attemptsWithoutOutcome", "loggedWithoutAircall"];
+  const coherent = (f) => !!f && FIG.every((k) => Number.isInteger(f[k]) && f[k] >= 0) && f.attempted <= f.deals && f.firstConversation <= f.conversationDeals
+    && f.conversationDeals <= f.attempted && f.conversationAttempts <= f.attempts && f.speedDeals <= f.attempted && f.calledBeforeNoon <= f.noonKnown
     && f.openNeverAttempted <= f.openDeals && f.openDeals + f.won + f.lost + f.ordered + f.unknown === f.deals && f.attempts >= f.attempted
-    && f.talkSecondsReached <= f.talkSecondsTotal && f.attemptsWithoutOutcome <= f.attempts
+    && f.talkSecondsConversation <= f.talkSecondsTotal && f.attemptsWithoutOutcome <= f.attempts
     && (f.deals === 0 ? f.avgAttempts === null : Math.abs(f.avgAttempts - Math.round((100 * f.attempts) / f.deals) / 100) < 0.006);
   const d = groups[0] ?? {};
   const sum = (rows, k) => (rows ?? []).reduce((n, r) => n + (r[k] ?? 0), 0);
@@ -1594,7 +1621,7 @@ async function attemptsChecks() {
   const edges = String(d.settings?.sinceLastBuckets ?? "").split(",").map(Number);
   expect("attempts: the buckets run 0 to the top setting and hold every deal; time since the last attempt every open deal",
     [Number.isInteger(max) && d.buckets?.length === max + 1 && d.buckets.every((b, i) => b.bucket === i && b.label === (i === max ? `${i}+` : String(i))),
-      sum(d.buckets, "deals") === d.current?.deals, sum(d.buckets, "firstReached") === d.current?.reachedDeals,
+      sum(d.buckets, "deals") === d.current?.deals, sum(d.buckets, "firstConversation") === d.current?.conversationDeals,
       d.sinceLast?.buckets?.length === edges.length + 1, sum(d.sinceLast?.buckets, "deals") + (d.sinceLast?.noHours ?? 0) === d.current?.openDeals],
     [true, true, true, true, true], [false, true, true, true, true]);
   const rows = d.list?.rows ?? [];
@@ -1627,11 +1654,12 @@ async function attemptsChecks() {
   if (withAttempts) {
     const one = await get(ANALYST, `/api/v1/reports/attempts/deals/${withAttempts.dealId}`);
     const list = one.body?.data ?? [];
-    expect("attempts: one deal's attempts in order, as many as the list says, reached as the list counts, no call id or number",
-      [one.status, list.length === withAttempts.attempts, list.every((a, i) => a.n === i + 1), list.filter((a) => a.reached).length === withAttempts.reachedAttempts,
-        // exactly these fields: the agent's name is staff data, gated by the database (performance.team and the per-person switch)
-        list.every((a) => Object.keys(a).sort().join() === "agentName,answered,n,outcomeLabel,reached,reachedBy,startedAt,talkSeconds"
-          && (a.reached ? ["outcome", "talk_time"].includes(a.reachedBy) : a.reachedBy === null)),
+    expect("attempts: one deal's attempts in order, as many as the list says, conversations as the list counts, no call id or number",
+      [one.status, list.length === withAttempts.attempts, list.every((a, i) => a.n === i + 1), list.filter((a) => a.conversation).length === withAttempts.conversationAttempts,
+        // exactly these fields: the agent's name is staff data, gated by the database (performance.team and the per-person switch);
+        // a conversation is always connected (0008zc)
+        list.every((a) => Object.keys(a).sort().join() === "agentName,connected,conversation,n,outcomeLabel,startedAt,talkSeconds"
+          && (!a.conversation || a.connected)),
         personal(list.map((a) => Object.fromEntries(Object.entries(a).filter(([k]) => k !== "agentName"))))],
       [200, true, true, true, true, []], [403, false, true, true, true, []]);
   } else {
@@ -1669,7 +1697,7 @@ async function attemptsChecks() {
       Number.isInteger(d.settings?.maxBucket) && d.settings.maxBucket >= 2 && Number.isInteger(d.settings?.listRows) && d.settings.listRows > 0
         && Number.isInteger(d.settings?.preWindowMinutes) && d.settings.preWindowMinutes >= 0,
       /^\d+(,\d+)*$/.test(d.settings?.sinceLastBuckets ?? "") && /^\d+(,\d+)*$/.test(d.settings?.speedBuckets ?? "")
-        && ["telephony", "crm"].includes(d.settings?.source) && Number.isInteger(d.settings?.reachedMinTalkSeconds)],
+        && ["telephony", "crm"].includes(d.settings?.source) && Number.isInteger(d.settings?.conversationMinTalkSeconds)],
     [true, true, true], [false, true, true]);
   // A reports reader without performance.team (the mock fixture and the local fixture; absent in dev)
   if ((await get("reader", "/api/v1/me")).status === 200) {

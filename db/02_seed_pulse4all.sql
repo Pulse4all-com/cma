@@ -288,11 +288,11 @@ begin
 end
 $$;
 
--- The connected-call threshold per tenant (after addition 0008j; brief B16, 14 October 2026): an
--- outbound call with at least 10 seconds of talk time (answer to end, no ringing) counts as connected.
--- To confirm with Kira against Aircall's own "x sec" setting for a connected call (README Decision
--- log, 14 October 2026). Only adds what a tenant does not have yet, so a later change on
--- Configuration survives a rerun.
+-- The connected-call threshold per tenant (after addition 0008j; brief B16, 14 October 2026): 0, so an
+-- outbound call counts as connected when it is answered, at any talk time, as Aircall's connected
+-- (docs/definitions.md, Connected; Decision log, 24 October 2026, "Definitions: Connected"). The 10
+-- seconds seeded before are retired; 100_definitions_calls.sql (0008zc) moves a tenant holding them to
+-- 0. Only adds what a tenant does not have yet, so a later change on Configuration survives a rerun.
 do $$
 begin
   -- on a fresh database this seed runs before the settings catalog exists (13), so look it up by name first
@@ -305,7 +305,7 @@ begin
     return;
   end if;
   insert into cma.tenant_setting (tenant_id, key, value)
-  select t.id, 'telephony.connected_min_seconds', '10'
+  select t.id, 'telephony.connected_min_seconds', '0'
   from cma.tenant t
   where t.slug in ('pulse4all-subscriptions', 'pulse4all-invest')
   order by t.slug

@@ -16,8 +16,8 @@ import { resolve } from "../../access";
 
 /**
  * Attempts per agent (Report, addition 0008y, 19 October 2026; for sales since 0008z, 20 October 2026): per deal owner,
- * the sales deals they own in the period with their attempts (by anyone), the attempts per deal, the share reached at
- * least once, the median speed to lead, the talk time in contact and the open deals with no attempt yet, narrowed by
+ * the sales deals they own in the period with their attempts (by anyone), the attempts per deal, the share with a
+ * conversation, the median speed to lead, the talk time on conversations and the open deals with no attempt yet, narrowed by
  * market (K), lead pipeline (P), attempted (A) and outcome (O), as on Attempts per deal. Sorted by name, never ranked; owner ids
  * without a person last as one row with how many they are, never which; then the total. There only while the tenant's
  * reports.per_person holds attempts (off for Pulse4all until Yordi agrees, README Open decisions): otherwise the page is
@@ -51,9 +51,9 @@ export default async function AttemptsPerAgentPage({ searchParams }: PageProps<"
   const s = people.settings;
   const n = (x: number) => fmtCount(x, me.locale);
   const attempt = s.source === "crm" ? h.atAttemptCrm : h.atAttemptTelephony;
-  const fill = (text: string) => text.replaceAll("{attempt}", attempt).replaceAll("{window}", n(s.preWindowMinutes)).replaceAll("{seconds}", n(s.reachedMinTalkSeconds));
+  const fill = (text: string) => text.replaceAll("{attempt}", attempt).replaceAll("{window}", n(s.preWindowMinutes)).replaceAll("{seconds}", n(s.conversationMinTalkSeconds));
   const hints: Record<string, string> = Object.fromEntries(Object.entries(h).filter(([k]) => k.startsWith("at")).map(([k, v]) => [k, fill(v)]));
-  const note = (s.source === "crm" ? copy.attempts.noteCrm : copy.attempts.noteTelephony).replace("{seconds}", n(s.reachedMinTalkSeconds));
+  const note = (s.source === "crm" ? copy.attempts.noteCrm : copy.attempts.noteTelephony).replace("{seconds}", n(s.conversationMinTalkSeconds));
   const pipelineLabel = filter.pipeline ? people.pipelines.find((p) => p.key === filter.pipeline)?.label ?? filter.pipeline : null;
 
   return (
