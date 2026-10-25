@@ -70,6 +70,7 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | Data model: report speed (addition 0008x) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: attempts per deal (additions 0008y and 0008z) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: reviews (addition 0008ze) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
+| Data model: review reference guard (addition 0008zf) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | API: the web app's data layer (since 5 October 2026) | [docs/architecture/api.md](docs/architecture/api.md) |
 | **Source of truth** | README.md (this file) |
 | **Users and roles** | README.md (this file) |
