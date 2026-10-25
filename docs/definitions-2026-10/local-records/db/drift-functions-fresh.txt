@@ -1,0 +1,519 @@
+cma.absence_types() 609fecbe4c314a911931a88e294180f6
+cma.accept_invitation(text,text,text,text) 2a25722ad55212fa768f26747c300180
+cma.acknowledge_message(uuid) dfbda9ebca08f31d2ef197e83fe154ab
+cma.active_connection_adapter(uuid) 2c751ac85eea1cdcdc30dc967dcc713f
+cma.add_person(text,text,text,text,text,text,text) d6a56848693c10adaeccd55853623f93
+cma.age_bucket_of(integer,text) 3efd10309b856cee8101f568a712dec3
+cma.app_links() af6f42da199ebd918453d4bd0facb2b1
+cma.app_links_all() 718fef37ff1ff67bb77d009c92bede5a
+cma.assert_acting_person() 82e5bc224b07c2749038f747f6a6fb4e
+cma.assert_any_permission(text[]) 873685be8371ac882593d358a1c7312f
+cma.assert_connection(uuid) b8a65ab15d928cc4eca8b73f62948d01
+cma.assert_email_connection(uuid,boolean) 85e9e78b480fae3f95716f48e88e1859
+cma.assert_invitation_allowed(uuid,text) c17acd6da8a1fdfd25de4b8ec5e9e667
+cma.assert_market(text,boolean) 5b4a8e1ce8dfd5e251310080c1695e22
+cma.assert_may_manage(uuid) 288ed2e3fbb9751ec8cee21e4b11c5b6
+cma.assert_not_last_admin(uuid) 66f3c61fac9eb32d461cabac7f05b47a
+cma.assert_per_person(text) ebeef596041725407da8c32879f89516
+cma.assert_permission(text) 7124ab35f5b6b685fcfa74c0e1c4cac0
+cma.assert_role_assignable(text) 3af81bdaf2f737a44b911756888ea436
+cma.assert_task_connection(uuid) f3638fdb1a42e2859d1711bcc23030ce
+cma.assert_time_kept(uuid) f92512923751210cd535088a8f0ae3cf
+cma.assert_week_start(date) c1894badcdf9717f66ff2050b8214c94
+cma.attempts_buckets_from(cma.attempt_deal[],integer) ff2481b6030cef39f9c5ad03b74a2bd2
+cma.attempts_choices_check(text,text) a994c0d82e83da92179e08634c7de6ba
+cma.attempts_figures_from(cma.attempt_deal[]) 081764ddaded896b0381b1998816a9a2
+cma.attempts_filter_lists_from(cma.attempt_deal[]) cebe4205bf3f93eb84b00cb62f772f1d
+cma.attempts_filters_check(text,text) 5e4281b0d071e1451c616938e516cbcd
+cma.attempts_groups_from(cma.attempt_deal[],text) e389000c21ab0293a57421eb3dc5544c
+cma.attempts_history_start_of(uuid) 8e7a13925f1485074b5a7e1cebdcaccc
+cma.attempts_in_period(cma.attempt_deal[],date,date,text,text,text,text,timestamp with time zone,text) df214844985a1bbac13c7c80f23be2fe
+cma.attempts_list_from(cma.attempt_deal[],integer) 592498c388a9df49ae82ee4f45ee4c78
+cma.attempts_of_deal(uuid) 3055a9006259a04e9432fe652c0e050f
+cma.attempts_outcomes_from(cma.attempt_deal[]) d1f40988145a39fe78eb9276ead5383f
+cma.attempts_params_check(uuid,date,date,text,text,text,text) e6633d9088b1b2c54232109432797d87
+cma.attempts_per_deal_of(uuid,timestamp with time zone,timestamp with time zone,timestamp with time zone) e8b526684a1c3829821d31c3742e189e
+cma.attempts_per_deal_page(date,date,text,text,text,text,text,integer) 201a34322711002942b863dc2dfb6aa3
+cma.attempts_per_deal_page_of(uuid,date,date,text,text,text,text,text,integer,timestamp with time zone) cdecca2a77eba6c29107cf559aace49c
+cma.attempts_per_person_of(uuid,date,date,text,text,text,text,timestamp with time zone) da76596e2fefd64cc79d0acf2c388a14
+cma.attempts_per_person_page(date,date,text,text,text,text) f7d837c304059f19e900e13fddb461f5
+cma.attempts_rows_of(uuid,date,date,timestamp with time zone) 39ded2cfd33ed2d78be30c91554d5be9
+cma.attempts_settings_of(uuid) 563762902e365affd229aab037f6d7cf
+cma.attempts_since_last_from(cma.attempt_deal[],text) 73c62f332f352ae6bb1bcb665ffddcfc
+cma.attempts_speed_buckets_from(cma.attempt_deal[],text) 9dc6bb4745141b403e25e8215ee92c0d
+cma.audit_row() fbad7f8d73dd84b56952c5234866f90d
+cma.business_date(timestamp with time zone,text) fe41568122d172c7443dc820c00f760b
+cma.business_day_end(date,text) 3bb2bbd95a0c310a3377edcf7ea5ae19
+cma.business_day_start(date,text) 849f9d52346cfbb0920739619bc40694
+cma.business_day_time(date,text,time without time zone) f77c608412b1af2c07904d67fe85682c
+cma.business_days_of(uuid,text,timestamp with time zone,timestamp with time zone) 508819703ba2c2cead49ecd9a63eb053
+cma.business_holidays_all() a89ca17dd90948a8104a1e0fd408c35b
+cma.business_hours_all() 5e8a39e8af9d6651657dcf8cbe3ba25c
+cma.business_schedule_of(text) 6e49a0ece76ce430fb628b39e68b55d5
+cma.business_seconds(text,timestamp with time zone,timestamp with time zone) 03ed14d6ef016bc2b8ddd3ae5b1549d7
+cma.business_seconds_of(uuid,text,timestamp with time zone,timestamp with time zone) a4718d4ea6476603f6ed87de6457e1b8
+cma.call_not_reached_of(uuid,uuid,text) b0f9d0d1e0d57f20a4de7a65c2c3ee93
+cma.callbacks_kept_connected() c91038cf28d5f21db85151b6150250c9
+cma.callbacks_kept_connected_of(uuid) 70f0fdbddb8cb04642b576383646a83e
+cma.callbacks_kept_figures_of(uuid,date,date,timestamp with time zone,timestamp with time zone) 1634822a06b424824a246d10bff7b23c
+cma.callbacks_kept_of(uuid,timestamp with time zone,timestamp with time zone,timestamp with time zone) ac00d77133775f65982d736596c290b1
+cma.callbacks_kept_per_owner(date,date) 08f871268bc59ce2d135c7eedc84127c
+cma.callbacks_kept_per_owner_of(uuid,date,date,timestamp with time zone) c8e960d7b62b3fc50299b6e3440eebf2
+cma.callbacks_kept_report(date,date) fde0d9239e846c0fc7643a688da1db54
+cma.callbacks_kept_report_of(uuid,date,date,timestamp with time zone) 3fb4c149f86ca8c72f5ab61d28c41282
+cma.calls_figures_of(uuid,date,date,text,text,text,timestamp with time zone) b56cfe1e333b5bcae2ccdab726b488b4
+cma.calls_filters_check(text,text) 62c3725fd7f3871d1532d7e5371ae63d
+cma.calls_of(uuid,timestamp with time zone,timestamp with time zone,text,text) e4017a389f96e5e2c36f269aa08a931a
+cma.calls_overview(date,date,text,text,text) f772a56af732b94a40cfd2e7cdc0a5b5
+cma.calls_overview_of(uuid,date,date,text,text,text,timestamp with time zone) 2e9df87ecfb3471d75a095c6ff066488
+cma.calls_people_of(uuid,date,date,text,text) 8bd5eccda437296352fc0927fa3ec8bd
+cma.calls_per_person(date,date,text,text) fce38a5db223f4d6b14cebdc055a0b8d
+cma.calls_per_person_of(uuid,date,date,text,text) 8e8b9f40bdbb55352c3c11f389f2b535
+cma.calls_per_person_tags(date,date,text,text) c751fded6f5d666f0005ac6941e5c6a1
+cma.calls_per_person_tags_of(uuid,date,date,text,text) 1a89f4c65c63d26d02bc5077510a2309
+cma.calls_tag_use(date,date,text,text,text) e2b0dc62f33ba0dc597c43343078766f
+cma.calls_tag_use_of(uuid,date,date,text,text,text) 16e2fa06d8876b7be555966b8e1f3240
+cma.cancellation_figures_from(jsonb,date,date,time without time zone) b71870b333828bef8f02358bd5278577
+cma.cancellation_records_of(uuid,timestamp with time zone,timestamp with time zone) 2c6000867540d197818f5ab9b0ccbe59
+cma.cancellations_page(date,date,text,text) 40153ba91fb8d5a43dbfffabad31b349
+cma.cancellations_page_of(uuid,date,date,text,text,integer,timestamp with time zone) d361ca9861e97d421dd61566a270818c
+cma.check_business_hours() bb7b8fb30eeb2929c392b671abf0eda2
+cma.check_call_link() a5934a13ceb183d4c2521887b77016d4
+cma.check_import_row() db6c1a25c48a445c3e8503cd0b6a66c4
+cma.check_message_change() 7be327f358b5c96d8161de225e3814ca
+cma.check_message_delivery() 8ebbd575ca55fd5d1f6fb9db168453f0
+cma.check_outbox_action() 64a83d71ba0f5265b4bf5396ec5d47ba
+cma.check_sync_run() ab1b8eb82d47ffbff00dc82a1de63303
+cma.check_telephony_call_tag() d378f565c7c501e14ea41d9bf930f2c3
+cma.check_tenant_setting() 55005de035ed6d3d558a653047fcd70d
+cma.check_user_skill() 970b92b006207288e668ce3b19da1957
+cma.clear_coverage_target(text,text,smallint) 47b502bf1b1f3283cb4f055950affdc8
+cma.close_forgotten_workdays(integer) 7de3e7fd9b4492771e47f52309c19da8
+cma.commerce_order_kind(text,text,integer,text[],text[]) 6752e96d69378cfe55b9dea82b2d6313
+cma.commerce_renewal_lists(uuid) 85d78ed8e224654ca0d6af7be57529ea
+cma.commerce_tags_ok(text[]) c198bc92b8baa6df2f16080e3db8686e
+cma.connection_catalogs(uuid) acb3c7f78c93c96b9d78774f6f46cc68
+cma.connection_config(uuid) 5db2a3b021bfc0d93a0ff99612842bbe
+cma.connection_held_kinds_of(uuid,uuid) 34b4988e618e6f53748fddd39df01259
+cma.connection_missed_reasons(uuid) 3fad5fbfbcb4e79ba5618b7833c53953
+cma.connection_settings_ok(jsonb) b207142a9b0f8dd87b07aad094b8790d
+cma.connection_task_catalogs(uuid) 4077254570ca7cf707c02eb1e5ed3205
+cma.connections_all() 90ae9764f477f876e803e80d16646285
+cma.contact_country_pick(text[]) 01d4919ac910201a336134135975d0a6
+cma.contact_store_orders_of(uuid) 6942dd6ee64776e2790e117a9b629ba3
+cma.correct_time_event(uuid,text,timestamp with time zone,text,uuid,text,uuid) c152bf1aa12837b2d65ee110331ed42c
+cma.correct_workday(uuid,date,jsonb,text) 9906db95c7d872f0cb57d81752ffd1bb
+cma.counted_deals_of(uuid,timestamp with time zone,timestamp with time zone) f3dfe5292c50a92b4217600697217229
+cma.coverage_targets(text) a64c78ad16a335eb11d3a925562127b4
+cma.coverage_targets_all() 9d421a72727fb0090ea25d5e42f26c0c
+cma.create_invitation(text,text,text,text,text,text[],jsonb) 6a38850783df702d1d299170139a898b
+cma.create_tenant(text,text,text) 2206eace0dc8df9da5031901077fc19f
+cma.crm_call_conversation_of(uuid,uuid) daf326a573a965835237c8529452d632
+cma.crm_records_per_day(date,date) bec5499ae048456148cadb685160c621
+cma.current_actor_label() cc3e047fe01c4099636e151f170f7f3c
+cma.current_tenant_id() 4bfbfeb5b1b2c5e0d1fb6d762fec33c3
+cma.current_user_id() 165ff42d638d560e4dc3346ae38c1636
+cma.data_quality() 396ac38d2d41e7d25b694008d0873467
+cma.data_quality_added_checks() 3ff1a074ac07c3aac3b7b13033e619f4
+cma.data_quality_checks() 89a8ecc158848f10cfe26c5c6f340457
+cma.data_quality_follow_up_checks() d31e4689ef0c2dd4da18738e63589e4d
+cma.data_quality_forms_checks() bdac0fcb0c04d9b31b78d2e6666a96f5
+cma.data_quality_of(uuid) 413648fe4276cdabe1e5cd1f0dbb9a3c
+cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamp with time zone,timestamp with time zone,text) c59545fd3243371ba96a63d8a1c364ce
+cma.deal_calls_of(uuid,uuid,text,text,text[],timestamp with time zone) 90aebc3b946801c97a40a2d2f366bc42
+cma.deal_funnel_page(date,date,text,text,text) 7f4011f572006483315ad464e4da33d0
+cma.deal_funnel_page_of(uuid,date,date,text,text,text,timestamp with time zone) 329737346a129514863c259823683b3d
+cma.deal_person_figures_from(cma.funnel_deal[]) f724823bdcb7d312c97c0d5c3aff676a
+cma.deal_reasons_of(uuid) 56b4b595ec815abe0a9e1d90e4dfd5ae
+cma.deals_per_person_of(uuid,date,date,text,text,text,timestamp with time zone) 5805a0b489f5b60a2ea4465d2fd2987a
+cma.deals_per_person_page(date,date,text,text,text) 4d9c1bd662379e0da2b89c778ca57788
+cma.deliver_message(uuid,uuid[]) 99de416dc6f79848dbe5908f449bc243
+cma.directory() 5793a68c5ed7e10b19bbf1c2d972a59e
+cma.dissolve_team(text) 5762ea7ba0fdce535d6a7e7d83abd7cf
+cma.email_by_dimension(date,date,text,text,text) 2322eade6505db5238bb332f0c2d44d7
+cma.email_by_dimension_from(cma.email_fact[],date,date,text,text,text) 8fa15fec9cc0a41a680554e4e2208a07
+cma.email_by_dimension_of(uuid,date,date,text,text,text) 8c9ea7234c22dfc751157d20c48ae119
+cma.email_category_of(uuid,uuid,text,text) 99f71d6e2c5ab1d9730bb638f6b21d70
+cma.email_closes_of(uuid,timestamp with time zone,timestamp with time zone) 6b287ed396a1d92e1538a8bcac1aa5db
+cma.email_facts_of(uuid,date,date) 8f11a931f4818fccba539b022f8a8223
+cma.email_figures_from(cma.email_fact[],date,date,text,text,text,text[],timestamp with time zone) 1c4a08b3caef79e70bea85668e2d71ec
+cma.email_figures_of(uuid,date,date,text,text,text,text[],timestamp with time zone) 6cf8ba76397381190a66c377850c5ac3
+cma.email_filters_check(text,text,text) 58a7844734f0c878b496d7e18e7c6cad
+cma.email_history_start() afa1ac0d5d2c290cdb51a0630b48deb9
+cma.email_history_start_of(uuid) 06c8b35cb003b0c81a32af44c8aceac0
+cma.email_market_of(uuid,uuid,text,text) 67804bd8bca6633b2df7fa4586327e1f
+cma.email_not_responding(text,integer) c709145ae881e7adcebd924cee21d33e
+cma.email_not_responding_of(uuid,timestamp with time zone) ca2155c1a3c14c1d541fbabed7349538
+cma.email_of(uuid,timestamp with time zone,timestamp with time zone) 3ff6fd15f4be8609bf52d348e8c77556
+cma.email_openings_of(uuid,timestamp with time zone,timestamp with time zone) c99d170a822a7738bff06eafc48a4df4
+cma.email_overview(date,date,text,text,text,text) a2ca9b4caf72e23fb6af2b3dc952487f
+cma.email_overview_of(uuid,date,date,text,text,text,text,timestamp with time zone) 5ffd61e61acf3bd58df3dc4af4a0b942
+cma.email_per_person(date,date,text,text,text) ad9402e9cfa9605c24034f57eccaa04a
+cma.email_per_person_from(uuid,cma.email_fact[],date,date,text,text,text) f7705a470b5cef92b00939dda31f7227
+cma.email_per_person_of(uuid,date,date,text,text,text) 7b7e9af4af97c192f58229a8a21d8d3f
+cma.email_per_person_page(date,date,text,text,text) f043aabdc00a4e12620aee697827afed
+cma.email_raw(jsonb) cd67b8472e9250cbda3b2ae744b9aff0
+cma.email_received_series(date,date,text,text,text,text,text) 72f775b3c4be8ec8ea4a724e08264016
+cma.email_received_series_of(uuid,date,date,text,text,text,text,text) 5ff85245c63b94ca93a8c3fac823ba23
+cma.email_report(date,date,text,text,text,text) 59273f0b5a77d33d3c01f11ae8177641
+cma.email_report_from(uuid,cma.email_fact[],date,date,text,text,text,text,timestamp with time zone) ecada7c0ccae1ade2359a792a5c6dcc3
+cma.email_report_of(uuid,date,date,text,text,text,text,timestamp with time zone) 6a8235f15c2c690ae3098d519f640b69
+cma.email_report_page(date,date,text,text,text,text) c9b5ce340706466cd3e71adfe8517356
+cma.email_start_date_of(uuid) a53ce9de9e6dc35f00e9f4a7550438d4
+cma.email_threads_counted_of(uuid,uuid[]) d75b949e3af073e79cdabfbd5e2c1d8f
+cma.email_waiting(text,text,text,integer) 9ce1520a36ebacbe1d85394d11934f86
+cma.email_waiting_of(uuid,timestamp with time zone) b498d17555b6fdbfd2bf3c1a469c2732
+cma.email_words(text[]) 8ca24840966cb2a3fbc6a67dfb7cccbd
+cma.email_words_match(text,text[],text[]) 4f30af7199b8232579f5e34ae9476c06
+cma.email_words_ok(text[]) 80a62f1028849cebc24c5f98dfd738b7
+cma.end_workday(uuid,timestamp with time zone,text) 6205cf79e1ce1d6c9af7e4e3af092ad4
+cma.enqueue_contact_writeback(uuid,text,jsonb,text) bbb2e7378e73bd5d81025b463e7321e5
+cma.ensure_ingest_user(uuid) b7a2d912bba5bff55c3ac5556ee8440f
+cma.ensure_scheduler_user(uuid) 9513acc8b20540a65830ac207fe9be5a
+cma.export_hours(date,date,uuid) 0448f6276ff8495de5db1b178cc09694
+cma.export_status_changes(date,date,uuid) 42419fb568568ac180d356a3aab39b47
+cma.find_tenants_for_identity(text,text) 638309fcc049525db350e9cf65f6a83a
+cma.first_orders_amounts(date,date,text,text) 750071d5d31f41d4be35638564784a15
+cma.first_orders_amounts_from(cma.first_order[],date,date,text,text) 5f3de79cd86ced13b3460776abf42660
+cma.first_orders_amounts_of(uuid,date,date,text,text) 143448a7e6fdb1ded4d625845a767b4b
+cma.first_orders_connected_of(uuid) 86d1831d324d848a71247ac3e415054e
+cma.first_orders_figures_from(cma.first_order[],date,date,text,text,text[],timestamp with time zone) 40815d27122729c1ad63afbb3ef59370
+cma.first_orders_figures_of(uuid,date,date,text,text,text[],timestamp with time zone) fdd44651d86c6c46af90641725d1d5cc
+cma.first_orders_filters_check(text,text) 39810c77fac46408b5012b7f4679f082
+cma.first_orders_history_start() db7930ab9d7d6600afb7caf27c78b90c
+cma.first_orders_history_start_of(uuid) 5147c9529cb5213547b920346be1c49d
+cma.first_orders_list(date,date,text,text,integer) 1be091c7a08e607b3a2cb7efad008caf
+cma.first_orders_list_from(cma.first_order[],date,date,text,text,integer) 7bfdee4699de448f8e68297df766e830
+cma.first_orders_of(uuid,timestamp with time zone,timestamp with time zone) 341f160aee4cd157d1f285aa202c262f
+cma.first_orders_page(date,date,text,text,text,integer) ab64eb1cbdbffb6dcd7e28d729c355eb
+cma.first_orders_per_person(date,date,text,text) 7de5bd081a629caeb5bfa53f8944604b
+cma.first_orders_per_person_of(uuid,date,date,text,text) 1de65dad16d9dee9b3eb0fd6de2fa534
+cma.first_orders_report(date,date,text,text,text) 42bbe2796dea176d700093dd38dba6be
+cma.first_orders_report_from(uuid,cma.first_order[],date,date,text,text,text,timestamp with time zone) 89d97fef196fe3989541344a31024477
+cma.first_orders_report_of(uuid,date,date,text,text,text,timestamp with time zone) d2b27fa5ac125639c37e15820a1de09e
+cma.first_orders_rows_of(uuid,date,date) 731e371fcc204101323d1442215e14f3
+cma.follow_up_attention(text) 9d12d2af69d4e4ff780a89d8ed2f3604
+cma.follow_up_by_owner() fa4b0ae57e6b736b1008734e1dd2a36d
+cma.follow_up_by_owner_of(uuid) 3454a9112e7077c8d1fc5c63dbf2f7f3
+cma.follow_up_computed_at() f308a44e04c44964085a3c759b397888
+cma.follow_up_configured_of(uuid) fdb313896200e95adc25f667b1775ae9
+cma.follow_up_list_of(uuid,text,text,uuid,boolean,boolean,integer) b9317c2704c534a53b5b3f9997424c71
+cma.follow_up_lock_key(uuid) 726b4ae3d747c291342d2d081f30f330
+cma.follow_up_owners_of(uuid,jsonb) 7c7532e05c37b5f562b1bf3dead89e71
+cma.follow_up_page(text,text,text,integer) 002948ad3a110cfa14e696b22e9ceddb
+cma.follow_up_snapshot_of(uuid) d5330d31ea1596fdda40d1f111c650d1
+cma.follow_up_summary() d464e4254255505b4c4c21147113a47a
+cma.follow_up_summary_of(uuid) 4d58215bfdfe969735499f95f225f1f3
+cma.forget_commerce_contact_links(uuid,text) e8ac1eec92c04ac4157de390a3bbf066
+cma.form_answer_of(text,text[],jsonb) a9cfdf892ef6510ea78ddb4d6a78a226
+cma.form_categories() 1f627f208f773cdeac34ef263fce6afa
+cma.form_choice_kind(text) d309af62ea18e327dbfbb42661ed7504
+cma.form_is_lead(jsonb,jsonb) 8d7fdfcd4049c010e27219d781e2a2cf
+cma.form_kept_fields_check(uuid,text,text[]) b0fb54dffeb1cd64e948fb707f07a698
+cma.form_kept_values_of(uuid,uuid,text,jsonb) 99fd69197e66b73966f93a6fea553879
+cma.form_kept_values_ok(jsonb) b80380010d9d4fc4f74773dcc3477c58
+cma.form_lead_condition_ok(jsonb) c35e14c2953e0e884594c41c1ab0477a
+cma.form_options_ok(text[]) 8c2170d27938edaf46084765dfc1b893
+cma.form_submission_market_of(uuid,uuid,text,text,jsonb,text) 08d30dd6ef5a4d230662aea556d3ac73
+cma.form_submissions_of(uuid,timestamp with time zone,timestamp with time zone) 8f1def72ee2de5bf6d20ab2031f761b5
+cma.forms_answers(date,date,text,text,text,text,text) 36d3d2057c7dab7f214835f7ff410aeb
+cma.forms_answers_of(uuid,date,date,text,text,text,text,text,timestamp with time zone) 81aa329801ba15ebecfed893cd355b5b
+cma.forms_figures_of(uuid,date,date,text,text,text,text,timestamp with time zone) c81dd6381a205663c45b3ce6168fbabb
+cma.forms_filters_check(text,text,text,text,text) 5308083d715bd79912982cb94b737ceb
+cma.forms_history_start() fc089486f579f4b83e12911672bac590
+cma.forms_history_start_of(uuid) 3cc881848ae2d25c47b6ef75862b4a17
+cma.forms_previous_of(uuid,date,date,timestamp with time zone) 0b61c6a77be4c6994fff62cb31204b13
+cma.forms_report(date,date,text,text,text,text) b1f6baa470c2a59f0e7d34838d88b781
+cma.forms_report_of(uuid,date,date,text,text,text,text,timestamp with time zone) ab88b1ea9f6101bfb475442f22e6b08b
+cma.funnel_deals_of(uuid,timestamp with time zone) aac92bf0f06d44abe97653ba301db0f9
+cma.funnel_figures_from(cma.funnel_deal[],date,date,time without time zone) 537eb9cc7aff31ee8269a3cfa81347a6
+cma.funnel_filter(cma.funnel_deal[],text,text,text) 03fbadb5eba0f6e24bbcc0a91df0e6a3
+cma.funnel_filter_lists_from(cma.funnel_deal[]) 0e0d7dc74b406335d5ffa866867da4ef
+cma.funnel_filters_check(text,text,text,text) a61e609c746555e8dd9e1656453de316
+cma.funnel_history_start_of(uuid,cma.funnel_deal[]) 40fa64948b71f4515c30be09a4ef9d4f
+cma.funnel_lost_in(cma.funnel_deal[],date,date,time without time zone) e63d3b6634012cdb0c0b88978c83b20b
+cma.funnel_pipelines_from(cma.funnel_deal[],date,date,date,date,time without time zone) 161a9c7157d20c05f1d1b25a2956cf5b
+cma.funnel_rows_of(uuid,timestamp with time zone) 6e1e3c3463647cfad8c8fe54085f6987
+cma.funnel_stages_of(uuid,cma.funnel_deal[],text,date,date,date,date,time without time zone) d2fbcd7d121b663e9e204652ac334f78
+cma.has_permission(uuid,text) b35b12303315575d13b857c96aaa90df
+cma.has_skill(uuid,text,text,smallint) f996c213f36a24d0b33e2fc3aa94642d
+cma.import_session_staging_insert() 0b6cd496f880ecb18d254fa128dc9d28
+cma.in_period(date,time without time zone,date,date,time without time zone) ae4d8cd7b394cdcd1392ecf0d1ccf18e
+cma.inbound_calls_of(uuid,timestamp with time zone,timestamp with time zone) 35fb84b7c3e1c92664244b86c86a4a21
+cma.inbound_service(date,date,text) d15150afe279fc722bd8398315fd4852
+cma.inbound_service_of(uuid,date,date,text) 49148215ad9a3ddc4d76dab791c8bb3a
+cma.inbound_today() bc29798e1648414a0d25e420fb97bf38
+cma.inbound_today_of(uuid) 8e48d64350c6dba453054ed44e1f5143
+cma.ingest_assignment_alerts(uuid,text,text[]) db249d9568b9f18ea048476573cf840d
+cma.ingest_claim_events(uuid,uuid[],integer) f4b6fac3890672d555242137e143ba1c
+cma.ingest_connection(text) 248d4a8924cb98d980ef6c3203df29f0
+cma.ingest_contact_forget(uuid,text) 28acb9fdef3965003e0e4d30517dd634
+cma.ingest_cursor_get(uuid,text) 8905b99d0c8e476161dba8c282b2f0b4
+cma.ingest_cursor_set(uuid,text,jsonb) 21bec42595ec9e9dd36d431aab6bdcfe
+cma.ingest_finish_events(uuid,uuid[],text,text) c58fe30a5a3d534e3d313a4dbe3dee46
+cma.ingest_record_alerts(uuid,text,text[]) 813cad2cbb3cbc5e4ca9634be60b861a
+cma.ingest_record_events(uuid,jsonb) e270345f6e86ae75405d6b2ca38cdd0d
+cma.ingest_record_stages(uuid,text,text,jsonb) 55a32147f2420fc7bcb8fc5604349eed
+cma.ingest_records_without_contact(uuid,interval) b6e00ad7e1ba99afbb91225be0a35c02
+cma.ingest_send_message(uuid,text,text,text,jsonb,text,text,text) 69f6208aa623e5f9217356d1d8849207
+cma.ingest_sync_run_finish(uuid,text,jsonb,text) 96fdea3657c7f7f678283051211fa8de
+cma.ingest_sync_run_start(uuid,text,text,timestamp with time zone,timestamp with time zone) 7c89c7fac11c498be1487ee16e7bb8eb
+cma.ingest_thread_forget(uuid,text) 170d61c1fc2827521402c77e71582575
+cma.ingest_thread_marks(uuid,text[]) 243b90ddc561fb0cf5f1e3d0af733d3b
+cma.ingest_upsert_associations(uuid,jsonb) 426b1106e6a45f31762cca402ab274fd
+cma.ingest_upsert_call_outcomes(uuid,jsonb) ca0471806df489e448b337861b44057b
+cma.ingest_upsert_calls(uuid,jsonb) 2ec247757773347416431b378e294af9
+cma.ingest_upsert_commerce_customers(uuid,jsonb) 1f593386543287ffee81939e636eeefb
+cma.ingest_upsert_commerce_orders(uuid,jsonb) bc550230b87d6a6432cbf5aa5feca9c7
+cma.ingest_upsert_contacts(uuid,jsonb) 830538a246b8337978ffed867bacc2e7
+cma.ingest_upsert_emails(uuid,jsonb) a272ae90ce052166dd6745dffa516f9c
+cma.ingest_upsert_form_submissions(uuid,jsonb) 52984427cd9095832f7cfbba44b3745b
+cma.ingest_upsert_forms(uuid,jsonb) 6771e1098b583c5500e9ce8fa444eb5a
+cma.ingest_upsert_inbox_accounts(uuid,jsonb) e7bdc00020d218127e02abcda054a37d
+cma.ingest_upsert_inbox_channels(uuid,jsonb) b822f7c98b248c85e8778add195f058f
+cma.ingest_upsert_inboxes(uuid,jsonb) 9a2b692be0ad7a8eaeab8d745f53d78f
+cma.ingest_upsert_pipelines(uuid,jsonb) 3a40c6fffae2d85819f27e50ed026fb9
+cma.ingest_upsert_reasons(uuid,jsonb) cc18da2b6280e93ce50672d6d87ab6dd
+cma.ingest_upsert_records(uuid,jsonb) 1f9af9b7b7dd5cdd5fcb7a20b587fbac
+cma.ingest_upsert_tasks(uuid,jsonb) e1d827882451dd79dbfa07051254b25c
+cma.ingest_upsert_telephony_calls(uuid,jsonb) 4de1271614c54b4315ea8868134a1828
+cma.ingest_upsert_telephony_catalog(uuid,text,jsonb) f1d0a1c002336dc2c7d1ec421cc28b77
+cma.ingest_upsert_thread_events(uuid,jsonb) 4f4422f03f5c59fa4fdba85ba3ef1665
+cma.ingest_upsert_threads(uuid,jsonb) 4e5f7f3318930ce637a6d44d4612e027
+cma.intake_per_day(date,date) 599504e91b0028be48a3b7942eda3e4c
+cma.intake_per_day_of(uuid,timestamp with time zone,timestamp with time zone) 15bc0c7fd71c47b83b6f5e0b58daba5a
+cma.invitation_domain_allowed(uuid,text) 864f68f21fd540b9550de20ccd29ae28
+cma.invitation_new_token() 4c98ab89db1ef558d88d8f0bda108b64
+cma.invitation_other_tenant(uuid,text,text) 166bebcdb47d1df6f6a6ab44305c12d5
+cma.invitation_preview(text,text,text,text) 9f79a5495682d6082675f23932ccaf4b
+cma.invitation_state(timestamp with time zone,timestamp with time zone,timestamp with time zone) b729c7f762f218b163a375d5a1bf139f
+cma.invitation_token_hash(text) d5dbe9ada73c03ac4e097cdf30c0978c
+cma.invitations() faf21a3a5f90b76bb2ee2eec57d7b073
+cma.is_attribution_levels(text,boolean) a340df7c43888a557e3113e6b9f70fe7
+cma.is_bucket_list(text) 107ab574c9cd8a9fb3047975a6bd0699
+cma.is_bucket_list(text,integer) 8bfcda19c44677010fcd3976c0159744
+cma.is_clocked_in(uuid) bc37f20142530ab035431832db1b5bb4
+cma.is_connected(text,boolean,integer,integer) 45032d631b50a6ca6a36cb3fec321396
+cma.is_conversation(text,boolean,integer,integer,integer,boolean) 2f1fa3a62d740bceb43af0c2a3b79104
+cma.is_domain_list(text) 92f67f1337785e398044f22fbb8f6333
+cma.is_email_market_order(text) bb3c1ef6f20eccf21137fc22476462bb
+cma.is_journey_prerequisites(text[]) dbdc8b82cc1838f3ede3b095bb5c8389
+cma.is_per_person_list(text) 2852c7a9911cc88eefa7dbcb55c2965b
+cma.is_timezone(text) 4355263283aca780f10004b366f8cb37
+cma.job_permission_of(text) 14accfc030d62a5339149a2354eddfe4
+cma.job_run_finish(uuid,text,jsonb,text) 575bf45705b16c325cf6b3a865d54202
+cma.job_run_start(text) 1f5a06e5fed90f2881932059afb82cd8
+cma.journeys() d7fed395a504547835682aa3bcf76952
+cma.json_amount(jsonb) 86c8179095620f03fba7e8527a2968a6
+cma.json_currency(text) a092112c0c0af2abd4f777061022ff8d
+cma.json_flag(jsonb,text) bd243d660e5b33259931cfc610a037b5
+cma.json_time(jsonb,text) 184bd39772f4a65c13197ad7bfd60338
+cma.kind_rule_matches(text,text,text,text) a39a50858fc4dc9a3f2f95e186e6f773
+cma.lead_calls_of(uuid,uuid,text,text,text[],timestamp with time zone) 0111fdd4e9b5a55ac79257be0dafabf7
+cma.lead_deals_of(uuid,timestamp with time zone,timestamp with time zone) 59fc8d7666e5d94dbaab98a8bc378a4f
+cma.lead_to_order_of(uuid,timestamp with time zone,timestamp with time zone) 97b4c913ff6a5ddc47a551568f0e3898
+cma.lead_to_order_rows(date,date) dfe2201ba8c2f863f86888e2b1d6995a
+cma.link_calls(timestamp with time zone) 06c48204f531813e01e7771f81af1f23
+cma.linked_account_systems() 084782d844494df37a5654b718b1cd17
+cma.linked_accounts() b00eb049c5b67cb6aaf38b391077f543
+cma.load_import_batch(text) 7035a1b971db4951f5e936206776ca25
+cma.lost_figures_from(uuid,cma.funnel_deal[]) 1541e88325d2ceec7ab060e685d998c9
+cma.lost_reasons_from(uuid,cma.funnel_deal[],text,integer) 7143ca9690e418afe4a54ab63b09016c
+cma.lost_reasons_page(date,date,text,text,text,text) 534360ab6fe4ea80f2f586a6424fd56a
+cma.lost_reasons_page_of(uuid,date,date,text,text,text,text,integer,timestamp with time zone) f307bd58b00feea06d425bd6aa4736b2
+cma.mark_messages_read(uuid[]) 3fcdde987356b0e4a83deb0fe3ff07b2
+cma.market_code_of(uuid,text) e1711061e67756b7c86bc26b437b87dc
+cma.markets_all() ad9e217e079384b26feef825876606b1
+cma.may_manage_user(uuid) 9e1481286f19f8be1c7725ff3a70b2fa
+cma.message_rules() f0dae88f615c3f47069170b1f578b5ad
+cma.message_stats(date,date) 65cc9fba16582f87c880e977841ea656
+cma.missed_callbacks() fac2ebbf6988b35e57ddc207d6a30136
+cma.missed_callbacks_of(uuid) 89fe86073f48efdca6ebeaef11bbb403
+cma.missed_callbacks_summary() a1eab5e760848f4d3d5c75c65c15ac64
+cma.missed_callbacks_summary_of(uuid) a299a13ebfbb05cb40246e3cfbb5130e
+cma.missed_reasons() 95cf6f0dac2331a7f91443f83be676f4
+cma.my_follow_up() 2f0fa6804173e4017db4f475b65fafcd
+cma.my_follow_up_of(uuid,uuid) 0d21f3079bdf98f705ce0a4ec2500654
+cma.my_messages(timestamp with time zone,integer) aa986ad8130a321a8414545a67389162
+cma.my_profile() de3e372858b153a1dff1899322b96975
+cma.my_roster(date,date) a9f7c9ae5547aecfbe8e1106fb2107fe
+cma.my_unread_count() b05ab75c972d9249ee5097a60c7631b2
+cma.next_business_noon(text,timestamp with time zone) b2c4f3e1f7562f4c8040698e74d2c70a
+cma.next_business_noon_of(uuid,text,timestamp with time zone) 1bc60b15de7c181b65480ec0c42977c3
+cma.normalize_market(text) 3a994008d2c3ae4a06c1597249ce5fb2
+cma.open_leads() be966779f713b19d85caf6b7d69606d0
+cma.open_leads_of(uuid) 00144c1c12aaf0fd736913c457ebc8a7
+cma.open_tasks() fbf10e37c29135001c241bc63a1e37c9
+cma.open_tasks_of(uuid) d401f770e90574c6ebe80726a3f2029b
+cma.open_tickets() 36a3dc4fac3ce92133f6ac459284279f
+cma.open_tickets_of(uuid) 6ebefc4dc1fbb8e1fe66bc47417fe349
+cma.open_workday(timestamp with time zone) f377b0443b5bdf89ba19c95070fb7442
+cma.organisations() c1c3b677028d777f7eb4a325322a3cca
+cma.outbox_claim(uuid,integer) 8e068eb745285f1d517c5a5d23cb44e5
+cma.outbox_finish(uuid[],text,jsonb,text) 8f025cd91321f55108a11032ab3ab6fa
+cma.outbox_resolve(uuid,text) 13b21163ac4d6a39ee6fe0c556ee4c66
+cma.outbox_status() 3430aaa4e08dd970f1cce5f749fbaaab
+cma.owner_user_of(uuid,text,text) eb9f6bfad87230325675a320425dfb08
+cma.per_person_on(uuid,text) c8278af91f57ca34d19a5e6fee69e601
+cma.protect_system_rows() 4b7970d7104eb2be17f22d644de41ffd
+cma.read_times_of(boolean,boolean) f3c697360133b7ba0bd42e0d4542ee9d
+cma.reason_field_state_of(uuid,text) 8efd3b25a4664041b66a2b4728fdd3f1
+cma.reason_state_of(text,text) e148b18c99e6ba86cad4ebeb48ad5f84
+cma.reclassify_orders() 740d4ceaac78bcb59aa778efcbcf5c9f
+cma.reclassify_orders_of(uuid) 4f20c62e3e79f9458b49c82c7e1a9c7d
+cma.reclassify_orders_on_setting() 2214cd41cf4ff0ba82103416b62cb47d
+cma.record_kind_of(uuid,uuid,text,text,text) 47679104651a1fde84cd9a95ffeea2c4
+cma.record_kinds() 6b214dd14955ba0c891410c7361a9d84
+cma.record_market_of(uuid,uuid,text,text) acc22c94a7729b578add8a21b1cdfd52
+cma.record_url(uuid,text,text) 882159eddd019413e2732c0353cc6577
+cma.refresh_follow_up() f46aa32aea9980b4f8f02a97210d8a38
+cma.refresh_follow_up_of(uuid,boolean) 1bcec0880a2bee4f52fe91608872bad3
+cma.refresh_workday(uuid) 522cebb2094cd3cb5a43418f78af2c27
+cma.remove_all_uncounted_line_calls() eb7ba6ab34df3de3f2feca648ae0b0d5
+cma.remove_business_holiday(text,date) 7141bd98ab4f69a6aeea0f96be985868
+cma.remove_calls_of_uncounted_line() a80e678ba8d218716741828ae1cf2342
+cma.remove_market_alias(text) c07bc47651879c0cfda18c7e9bd4f11f
+cma.remove_uncounted_line_calls(uuid,uuid,text) bd355933d063d13d327416bd24a9d353
+cma.remove_user_external_id(uuid,text) f61f3deef62f03ae77acabc83ee7ff19
+cma.renew_invitation(uuid) df2756f4f403b0ac0814a1b75c69b66e
+cma.report_range(uuid,date,date) 18fae8abd3178511cb3543af3caf0026
+cma.retire_absence_type(text) a62aeec83f5e4ec9bcec8a1472df9da2
+cma.retire_app_link(text) 8f3d2f358ad81cb4f683bdb8b7c3e443
+cma.retire_work_status(text) 831123153c8357a732ea30e6f94c3288
+cma.revoke_invitation(uuid) 6188df0d8eb22038319f459c1e2cd5e9
+cma.role_is_managing(uuid) fa7966fd2b6ad55bd99e6393bbf88cf1
+cma.roles() 3fac272a97820767265d035090adf7a4
+cma.roster_copy_week(date,date,text) f86ea47660318d168be806cde2294fe2
+cma.roster_coverage(date,text) 80fca932fcc28e4c6e94b01dba21e0e4
+cma.roster_entries(date,text) 8aa6d47e9bd967fb6c641e9f02097de4
+cma.roster_in_scope(uuid,uuid,date) b4fc6fb856bb129ede7d4f43df5f608c
+cma.roster_people(date,text) f9fbb9ecea1303063d4377f369b88d93
+cma.roster_publish(date,text) 3e3cf6ed229f99a32b94167aff50a6ae
+cma.roster_set_entry(date,text,uuid,date,text,time without time zone,time without time zone,text,text) 2b0232d67446733f5aee5fff5d21794c
+cma.roster_team_id(text) e5dd9dde8af9a123327951fe6b902218
+cma.roster_today() c64c859eab6d6b33858e3af996f14039
+cma.roster_week(date,text) 3f7c474795c713ab8859f2e0188c7282
+cma.roster_week_id(date,uuid) 451189aa137fd255c80248e56a96c652
+cma.roster_weeks(text,date,date) eb59cb9f3db690f32335021ca683018a
+cma.sales_deals_of(uuid,timestamp with time zone,timestamp with time zone,timestamp with time zone) 8ac9c80dd6a9a73e59b9b3e517fe1c45
+cma.scheduler_run_finish(uuid,text,integer,text) f830b4d9e1e791ba93c427273fb372e1
+cma.scheduler_run_start() ea96676d5cf57cff1cd2721e3085222c
+cma.seed_default_absence_types(uuid) 07bb64b574ee7b23fb16558d796e919e
+cma.seed_default_roles(uuid) 2cc8c8ab4c12a943d62074c10a5f8688
+cma.seed_default_skill_levels(uuid) 0b4cc57d2270fad243a3bd5b84621bd3
+cma.seed_default_work_statuses(uuid) 8b26d1c14006b37f4a5e13d73fcae8d9
+cma.send_message(text,text,text,jsonb) 20753796586aad6fcff5a2902330310b
+cma.set_business_holiday(text,date,text) 20299294d2725e920d9cf1719418d59d
+cma.set_business_hours(text,smallint,text) cd7f4b46c96d59dcd00732ce618b0421
+cma.set_call_outcome(uuid,text,boolean) 05764f05213dafcae090e6937f073d1c
+cma.set_commerce_customer_contact(uuid,text,uuid,text) b3a4778a3c821d0e6fa6a1971cb86d57
+cma.set_connection_field(uuid,text,text,text,text) 25bc4daee1b5da54b2304cb382abd22f
+cma.set_connection_field(uuid,text,text,text,text,smallint) 83e0c3d9bd0aa172f35ae065a705761f
+cma.set_connection_kind(uuid,text) b22b77bc41c5ea7cef835f901c37a02d
+cma.set_connection_pipeline(uuid,text,text,boolean,boolean,text) c42e44a8b8dc7a1c16a96507eff2a780
+cma.set_connection_settings(uuid,jsonb) 6a0ed201d3e30624fd4a905d20660413
+cma.set_connection_status(uuid,text) a1470012e88ef99d77d9e318119f7277
+cma.set_coverage_target(text,text,smallint,integer) 08d7c16304120f76e38be8a45bb7abdc
+cma.set_default_work_status(text) e8ffb61ba244c3310a9e909b83f5a24b
+cma.set_email_rule(uuid,uuid,text,text[],text[],text,integer) 7582e77bdc11c17939fda2d98a1f11a4
+cma.set_email_rule_status(uuid,text) c295594343b77fa54247154b47146c60
+cma.set_form(uuid,text,boolean,text,text,text[]) 9d0dbd7b5c6628a4bfd0fc2a2dd94534
+cma.set_form_category(text,text,integer) 53d35d39f8636e56f5965ef25c846109
+cma.set_form_category_status(text,text) c2058022f31c776f72e0463d9d0d9f3d
+cma.set_form_lead_condition(uuid,text,text,text[]) b509f2d29883ea9494670a6b083fd4bc
+cma.set_form_market_field(uuid,text,text) b678d4251fb8dd45be4de333205d2a90
+cma.set_form_reporting(uuid,text,boolean,text,text) fa06ee3abbd212a32fa9bad0de8e6ce9
+cma.set_inbox(uuid,text,boolean,text,text,text) b8edbf2509664ee1b098bf169506aef1
+cma.set_inbox_account(uuid,text,text,boolean,text) a414456fe958ff87767e2800df7cfc46
+cma.set_inbox_channel(uuid,text,text,boolean) 5bf69234829de7bef168ddfbc8c47ff9
+cma.set_journey(text,text,text,text,text,text[],integer) 5849a8d9587a07438b0e50ade79c6aa0
+cma.set_journey_status(text,text) 01bd5755ecf78717dfb8f1b2098867cb
+cma.set_market_alias(text,text) 94a85260216df04b5b0518f89fd67fe2
+cma.set_market_status(text,text) 761104588974575e6ca17cc56ce1d735
+cma.set_message_rule_enabled(uuid,boolean) ce4119377a825b07568784ca01edfd42
+cma.set_person_active(uuid,boolean) 19bd7deaf38a50eb70a42c70ee3f42de
+cma.set_person_role(uuid,text) 50dd69da4536d4cb4d1b68ecb775427a
+cma.set_person_skills(uuid,jsonb) cfb2589be9c740e6088660da492a5f8c
+cma.set_person_teams(uuid,text[]) 6951d6f726aec5102221953c09e091b3
+cma.set_pipeline_lead(uuid,text,text,boolean) 7dcf823b1064e30d88fc782886322887
+cma.set_pipeline_order(uuid,text,text,boolean) 407b22b1ded19f65b4ef72e20055a6e5
+cma.set_pipeline_sla(uuid,text,text,integer) 5cd8ce3ee09021354b53d3e7050d5e3c
+cma.set_reason_data_quality(uuid,text,text,boolean) 558c811638d112fa9bb77c4ddd1b9ac3
+cma.set_record_kind(text,text,text,integer) 10c1e41764be11bdb209b0473c06db47
+cma.set_record_kind_rule(uuid,text,text,text,boolean) bcbffeac5a26735aad034039fb11ca22
+cma.set_record_kind_status(text,text) 0e9490474ca9dd7784bf02a783f602ef
+cma.set_skill_levels(text,jsonb) 5d6e29eb84feaa50242f665cae9a3ebb
+cma.set_stage_outcome(uuid,text,text,text,text) 980c0c1c6730c70a9af210752ad1fbc9
+cma.set_stage_read_times(uuid,text,text,text,boolean) a218817f39726ae221208b5b4e1351a7
+cma.set_status(uuid,text,timestamp with time zone) 4af2533c89dc82e0e05bda911b2e0ff3
+cma.set_task_status(uuid,text,text,boolean) 3feb32d78b6450eb48c334a455740f24
+cma.set_task_type(uuid,text,text,boolean,boolean) 305297e320bedbacd7eb32b0377824d4
+cma.set_telephony_missed_reason(uuid,text,text,boolean,boolean) c3e634faceac47dc42e970efcc8bd1ba
+cma.set_telephony_number(uuid,text,text,boolean) 022d9ec45f81905a4f17ac8a4bb51ed2
+cma.set_telephony_tag(uuid,text,boolean) 396fcc10b648f796e5f4ff29f57f33cb
+cma.set_telephony_tag_meaning(uuid,text,text) 3ec0e2c732021dfbf8116d0ce4fd1916
+cma.set_tenant_setting(text,text) 0163b58a5564a775b6db65812c6935ac
+cma.set_updated_at() 37eb1fa2eee54513d3ea67a888a3008b
+cma.set_user_external_id(uuid,text,text) dcceca0b70b3947bbb6a20b8a15d6dd0
+cma.set_writeback_field(uuid,text,text,text,boolean,smallint) 7303ad5dc8accc513b7d6b552245c073
+cma.setting_codes(jsonb,text) 029aefd48669422ccaf2e4e6e7e52d2b
+cma.setting_of(uuid,text) b086f2664ebe901b77c58505ebd87300
+cma.setup_tenant_table(regclass) 7bc045a5e320186844cef239b5392624
+cma.skills() df2f62bb63f46f2adc0843e88d85b1fa
+cma.sources() f8b617809d5397317a77d98ec9810912
+cma.speed_to_lead_of(uuid,timestamp with time zone,timestamp with time zone) db84a6bbd3deb3000f6d2b5c9a693426
+cma.speed_to_lead_rows(date,date) 892c8011b32a68319102b2869ff0cfcf
+cma.speed_to_lead_summary(date,date,text) ad970ba33d807ad050c0d92edb3e962f
+cma.stage_import_batch(text,text,text,date,date,text,text,text) c6617f67256cc4d84c5da5f1f46a954f
+cma.system_health_runs() 43755c0b90e4667fe87d4071512af6f3
+cma.task_market_of(uuid,uuid,text,text,text) 375a4cf4a47566c96b11179ba921237f
+cma.task_raw(uuid,jsonb) 5da88b248790b0695f94f94fe8174312
+cma.task_raw_ok(jsonb) df7bbe66f562f1caf24121e39f063bff
+cma.team_day(uuid,date) df718a18ac14467f28247ddf6e42eced
+cma.team_hours(date,date,uuid) dca67bcf2eabac3bf45f4a13030d76da
+cma.team_members_now() ab4273032dde67e72fdc03c33f167b57
+cma.team_now() b507b3338484a87b4c74b561a0373824
+cma.team_people() 4fbadce32eba24b8e7aabe4a7e641c54
+cma.team_status_time(date,date,uuid) aafd2b94d42f5c506e707a8314c540d1
+cma.teams() a52a24ec4e2c6a29f537e8dccd3d1978
+cma.telephony_history_start() eb68feab718bff81608d8d59cef51ceb
+cma.telephony_history_start_of(uuid) cfbe1a76fc53ff079bc5b83988d4cf85
+cma.telephony_number_stored_calls(uuid,text) 6765836c4641dd73da5ed9989e2772b7
+cma.telephony_raw(jsonb) 68a9bac619fbbbe6c337cc70b849ed68
+cma.telephony_tag_ref(jsonb) 8683080368ff98540d9f8a5636724edc
+cma.tenant_settings() 019171f9e6c515a45b2d404633f9dc98
+cma.time_is_kept(uuid) 769fddd3106405e6f75131a64b0818a1
+cma.unlink_call(uuid) bd10035d4c9dab0152ccc125f38db82e
+cma.upsert_absence_type(text,text,boolean,integer,text) bd2464c63275d2a3e425f0d39f07dfd8
+cma.upsert_app_link(text,text,text,text,integer) e8a81adc29b6dfa9ea186b9ed0d0b708
+cma.upsert_assignment_rule(text,text,text[],text,integer) dc60262c9cde9a02aac6b7fee9bffe8a
+cma.upsert_commerce_store(uuid,text,text,text,text,text) b4c86e85b16c9482441d0af4663b5460
+cma.upsert_connection(text,text,text,text,text) 629fa22b7e9495a8f6f05b9aa32125d6
+cma.upsert_market(text,text,text,text,text,text,smallint,integer) d2e831364b1618b63627fc28a3c21cb9
+cma.upsert_message_rule(text,text,text[],text,boolean,boolean,text,text,integer) cd8c985d3a938d74523e88cc10cc5013
+cma.upsert_skill(text,text,text,integer,text) af736f4070c74374e246f7d2d3a46c25
+cma.upsert_team(text,text,text[],integer) 49d73a85efbc8315e03315acc603a25b
+cma.upsert_work_status(text,text,boolean,boolean,boolean,boolean,integer) 939e53ee21058515a7cb535d0ac1a359
+cma.user_permissions(uuid) f8da4696f018c90123dde250106c005f
+cma.user_timezone(uuid) 4bce917f3498c797736638f96aeaa7fe
+cma.void_import_batch(text,text) cd55dce046cc67e7c0918432428e1b1a
+cma.week_start(date) f4fd779299f222fce65e8cd52d6398ee
+cma.withdraw_message(uuid) 21914a1a01a17b97f79501a461fefcb0
+cma.work_statuses_all() a08f3fb2711a627a64e02c71ba7a179f
+cma_read.attempts_per_deal_rows() 8d77512bd275b067c3c4ae4cdce486a7
+cma_read.callbacks_kept_rows() 7d1e427e65343b91334f2e91b15d590f
+cma_read.cancellation_rows_of() b4a27b08a65adc511dde6c1054f0ab1a
+cma_read.data_quality_rows() 3171462ad488be590bacc096d52d1996
+cma_read.deal_funnel_rows_of() 30aecc3f73a1f8748e364645784f556a
+cma_read.email_not_responding_rows() f1deeb0f387d8abf3f8558795d2a37d4
+cma_read.email_waiting_rows() ff13e095aa4dbc2187312b522b1b67d2
+cma_read.first_orders_rows() fab59107ba4fe2c9e3ecc40704217ec0
+cma_read.follow_up_by_owner_rows() dafd308dad95f08e85222d6307a160e5
+cma_read.follow_up_summary_rows() 3ac834b7782e4de1ebc021927ea747b0
+cma_read.intake_per_day_rows() 17223bcbc856fff57750e1b242270f16
+cma_read.lead_to_order_rows() b0b56c39f75b7fa3fa6b504914c347ef
+cma_read.open_leads_rows() 7891803cc7c8afa8debb9d05bd5fb119
+cma_read.open_tasks_rows() 8ab1d80009564e273873b96c57de8219
+cma_read.open_tickets_rows() 9c24d28eef8ce651240a99bf55c1d9e6
+cma_read.reader_sees(uuid) f381a035156b68191179165be72441bf
+cma_read.speed_to_lead_rows() 371967de28bbffea71cbcedd6debd826

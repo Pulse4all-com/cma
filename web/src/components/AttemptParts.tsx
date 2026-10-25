@@ -1,7 +1,7 @@
 /**
  * Building blocks of Reports → Attempts per deal (addition 0008y; for sales since 0008z, 20 October 2026): the grouping switch
  * (G), the date line with the history's start, won against lost, the bars (the win rate by attempts and by speed to lead,
- * deals by number of attempts, reached per attempt, open deals by time since the last attempt), how complete the calls are,
+ * deals by number of attempts, the first conversation per attempt, open deals by time since the last attempt), how complete the calls are,
  * and the figures per group. Server components, plain CSS, no chart library; the figures come from the data layer and
  * lib/attempts arranges them. Pulse4all-Style 7.7: horizontal bars with their values, never a donut or a red stack; the
  * attempt bars in Deep Blue, the time-since-last bars in one neutral hue (Light Blue), never with text on them (7.8);
@@ -15,7 +15,7 @@ import type {
   SinceLastBucket,
 } from "@/lib/data";
 import {
-  ATTEMPT_GROUPS, ATTEMPTS_BAR_CLASS, fmtAttempts, nextAttemptGroup, noonShare, reachedShare, reachShare, SINCE_LAST_CLASS, speedMinutes, withoutOutcomeShare,
+  ATTEMPT_GROUPS, ATTEMPTS_BAR_CLASS, fmtAttempts, nextAttemptGroup, noonShare, conversationShare, firstConversationOnShare, SINCE_LAST_CLASS, speedMinutes, withoutOutcomeShare,
   wonRate,
 } from "@/lib/attempts";
 import { barShare, fmtBusinessMinutes, fmtCount, fmtShare, fmtTalk } from "@/lib/reports";
@@ -120,16 +120,16 @@ export function BucketBars({ buckets, copy, locale }: { buckets: AttemptBucket[]
   );
 }
 
-/** Of the deals attempted, the share first reached on each attempt (1 to the top bucket) */
+/** Of the deals attempted, the share whose first conversation came on each attempt (1 to the top bucket) */
 export function ReachBars({ buckets, attempted, copy, locale }: { buckets: AttemptBucket[]; attempted: number; copy: Copy; locale: Locale }) {
   const t = copy.attempts;
   const tries = buckets.filter((b) => b.bucket > 0);
   return (
-    <BarList testId="attempts-reach" label={t.reachTitle} className={ATTEMPTS_BAR_CLASS}
+    <BarList testId="attempts-reach" label={t.conversationTitle} className={ATTEMPTS_BAR_CLASS}
       bars={tries.map((b) => {
-        const share = reachShare(b, attempted);
+        const share = firstConversationOnShare(b, attempted);
         const name = t.attemptLabel.replace("{n}", b.label);
-        const value = t.reachValue.replace("{pct}", fmtShare(share, locale)).replace("{n}", fmtCount(b.firstReached, locale));
+        const value = t.conversationValue.replace("{pct}", fmtShare(share, locale)).replace("{n}", fmtCount(b.firstConversation, locale));
         return { key: String(b.bucket), label: name, share: share ?? 0, value, title: `${name}: ${value}` };
       })} />
   );
@@ -193,7 +193,7 @@ export function fmtSpeed(seconds: number | null, locale: Locale): string {
 
 /**
  * Won against lost (Kira's comparison): one row each with the deals, the average and median attempts, the median speed to
- * lead, called before the next noon, reached at least once and the average talk time in contact; the deals not decided
+ * lead, called before the next noon, with a conversation and the average talk time on conversations; the deals not decided
  * beside the table
  */
 export function OutcomesTable({ outcomes, hints, copy, locale }: {
@@ -209,8 +209,8 @@ export function OutcomesTable({ outcomes, hints, copy, locale }: {
     [t.colMedianAttempts, hints.atOcMedian!, (r) => fmtAttempts(r.medianAttempts, locale)],
     [t.colMedianSpeed, hints.atOcSpeed!, (r) => fmtSpeed(r.medianSpeedSeconds, locale)],
     [t.colNoon, hints.atOcNoon!, (r) => share(r.calledBeforeNoon, r.noonKnown)],
-    [t.colReached, hints.atOcReached!, (r) => share(r.reachedDeals, r.deals)],
-    [t.colTalk, hints.atOcTalk!, (r) => fmtTalk(r.avgTalkReachedSeconds, locale)],
+    [t.colConversation, hints.atOcConversation!, (r) => share(r.conversationDeals, r.deals)],
+    [t.colTalk, hints.atOcTalk!, (r) => fmtTalk(r.avgTalkConversationSeconds, locale)],
   ];
   const decided = outcomes.rows.some((r) => r.deals > 0);
   return (
@@ -284,8 +284,8 @@ export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
   const cols: [string, string, (r: AttemptGroupRow) => string][] = [
     [t.deals, hints.atGroupDeals!, (r) => n(r.deals)], [t.attempted, hints.atGroupAttempted!, (r) => n(r.attempted)],
     [t.attemptsCol, hints.atGroupAttempts!, (r) => n(r.attempts)], [t.avgCol, hints.atGroupAvg!, (r) => fmtAttempts(r.avgAttempts, locale)],
-    [t.medianCol, hints.atGroupMedian!, (r) => fmtAttempts(r.medianAttempts, locale)], [t.reachedCol, hints.atGroupReached!, (r) => n(r.reachedDeals)],
-    [t.firstReachCol, hints.atGroupFirst!, (r) => n(r.firstReached)], [t.openNeverCol, hints.atGroupOpenNever!, (r) => n(r.openNeverAttempted)],
+    [t.medianCol, hints.atGroupMedian!, (r) => fmtAttempts(r.medianAttempts, locale)], [t.conversationCol, hints.atGroupConversation!, (r) => n(r.conversationDeals)],
+    [t.firstConversationCol, hints.atGroupFirst!, (r) => n(r.firstConversation)], [t.openNeverCol, hints.atGroupOpenNever!, (r) => n(r.openNeverAttempted)],
     [t.wonCol, hints.atGroupWon!, (r) => n(r.won)], [t.lostCol, hints.atGroupLost!, (r) => n(r.lost)], [t.orderedCol, hints.atGroupOrdered!, (r) => n(r.ordered)],
   ];
   return (
@@ -310,9 +310,9 @@ export function AttemptGroupTable({ rows, group, hints, copy, locale }: {
   );
 }
 
-/** The reached share of a set of deals, for the tile and per agent */
-export function fmtReachedShare(f: Pick<AttemptFigures, "reachedDeals" | "deals">, locale: Locale): string {
-  return fmtShare(reachedShare(f), locale);
+/** The share of a set of deals with a conversation, for the tile and per agent */
+export function fmtConversationShare(f: Pick<AttemptFigures, "conversationDeals" | "deals">, locale: Locale): string {
+  return fmtShare(conversationShare(f), locale);
 }
 
 /** Called before the next business noon, of the deals whose answer is known */

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * One sales deal's attempts in time order (cma.attempts_of_deal, addition 0008z), as the definition counts them now: n, the
- * start, answered, talk time, reached and by what (outcome or talk_time), the outcome's label from the catalog, and the
+ * start, connected, talk time, conversation (addition 0008zc), the outcome's label from the catalog, and the
  * agent's name only while the tenant's reports.per_person holds attempts and the caller holds performance.team (null
  * otherwise). Never a call id, a number, a hash or a recording. {dealId} is the CMA's id of the deal (the list's dealId);
  * another tenant's, an unknown one or a deal that is no sales deal is a 404 (CMA02). Needs reports.view or

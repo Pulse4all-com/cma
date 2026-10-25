@@ -399,8 +399,11 @@ cma_db prod && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/drift/function
 diff /tmp/fn-dev.txt /tmp/fn-prod.txt && echo "no drift"
 ```
 
-Expected: the same count twice (475 at 0008z), then `no drift`. Otherwise `<` lines are dev's, `>` prod's: send them to
-Claude Code; nothing is changed by hand.
+Expected: the same count twice (519 at 0008zc), then one known pair of lines and nothing else: `cma.setup_tenant_table`,
+whose definitions differ by one code comment only (`-- from an earlier draft` in `db/01_foundation.sql`), because prod
+was built from `01` before that comment existed. That pair is known and expected, not drift, so `no drift` does not
+print. Any other line that differs: `<` lines are dev's, `>` prod's; send them to Claude Code; nothing is changed by
+hand.
 
 ## 7a. Addition 0008s: the follow-up snapshot (18 October 2026)
 

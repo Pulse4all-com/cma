@@ -1,0 +1,17 @@
+# ingest/ npm test on branch claude/hopeful-pascal-juaw1g, 24 October 2026 (no ingest file changed; the sixteen pure verifiers, last line of each)
+verify:signature	ALL 18 PASS
+verify:mapping	ALL 53 PASS
+verify:hash	ALL 26 PASS
+verify:forms	ALL 50 PASS
+verify:aircall-token	ALL 20 PASS
+verify:aircall-mapping	ALL 49 PASS
+verify:aircall-scripts	ALL 30 PASS
+verify:shopify-signature	ALL 17 PASS
+verify:shopify-mapping	ALL 51 PASS
+verify:shopify-client	ALL 27 PASS
+verify:shopify-scripts	ALL 21 PASS
+verify:outbox	ALL 20 PASS
+verify:email-mapping	ALL 85 PASS
+verify:api-budget	ALL 52 PASS
+verify:deploy-script	ALL 21 PASS
+verify:funnel-mapping	ALL 36 PASS

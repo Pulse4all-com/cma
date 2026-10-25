@@ -33,6 +33,23 @@
 --      call never counted; a period that reaches today compared with the same elapsed dates, the last
 --      of them cut at the current time of day in each call's own zone, and a period that ended
 --      compared with the whole previous equal period
+-- Amended for addition 0008zc (24 October 2026; 63 runs in dev only): 0008zc's Connected is answered at any talk time
+-- (telephony.connected_min_seconds defaults to 0) and Conversation needs calls.conversation_min_talk_seconds (30) of
+-- talk; 101 verifies those defaults. To keep pinning the reads' machinery (filters, groups, the previous period across
+-- DST, per person, isolation), the three tenants set 0008j's thresholds as their own (connected at 10 seconds, a
+-- conversation at any talk time), which gives 0008j's connected and conversations; B1 puts the threshold back to 10. The
+-- columns are named connected, connected_rate and untagged. What changes with the definitions, and these checks pin:
+--   A2  the setting's default is 0
+--   B1  talk time over the answered calls with talk time: o2's 9 seconds join (710 / 88.8 becomes 719 / 79.9)
+--   B3  untagged counts every call without a current tag, missed and unanswered ones included, over the calls (3 of 8
+--       conversations becomes 6 of 12 calls: o3, i3 and o6 join)
+--   B4, B6, B10  the tag use and the tags per person have no untagged row
+--   B5  the untagged figures as B3 and B8; the tag use's and the tags per person's tag rows summed in place of their
+--       untagged rows
+--   B7, B12, B14, B15  untagged as B3 (p4 joins); B12's talk time as B1
+--   B8  the per-person untagged over the person's own calls (o3, o6 join)
+--   B9  the rows the supervisor reads without the untagged rows (28 becomes 22)
+-- A1, A3, A4, B2, B11 and B13 pin what they pinned before.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -99,8 +116,8 @@ begin
   -- A2. the setting with its type and universal default
   select string_agg(key || '=' || value_type || ':' || default_value, ', ') into v_cols
   from cma.setting where key = 'telephony.connected_min_seconds';
-  insert into verify_0008j values (2, 'A2 the setting: connected from 10 seconds of talk time',
-    case when v_cols = 'telephony.connected_min_seconds=integer:10' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_cols, 'none'));
+  insert into verify_0008j values (2, 'A2 the setting: connected when answered (0 seconds of talk by default, 0008zc)',
+    case when v_cols = 'telephony.connected_min_seconds=integer:0' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_cols, 'none'));
 
   -- A3. every function exists, executable by the application only, in the caller's rights
   v_bad := '';
@@ -297,11 +314,16 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_telephony_tag(v_tel1, 'tg-test', false);
+    -- 0008j's thresholds as the tenant's own choice (0008zc): connected at 10 seconds of talk, a conversation at any talk time
+    perform cma.set_tenant_setting('telephony.connected_min_seconds', '10');
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '0');
 
     -- tenant two: the same line, user and tag refs; tel-user-1 is Dora here
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_admin2::text, true);
     perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+    perform cma.set_tenant_setting('telephony.connected_min_seconds', '10');
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '0');
     select c.connection_id into v_tel2 from cma.upsert_connection('verifytel', 'Verify phones two', 'company-2', null, null) c;
     perform cma.set_telephony_number(v_tel2, 'line-nl', 'NL', true);
     perform cma.set_user_external_id(v_dora, 'verifytel_user', 'tel-user-1');
@@ -316,6 +338,8 @@ begin
     perform set_config('app.tenant_id', v_t3::text, true);
     perform set_config('app.user_id', v_admin3::text, true);
     perform cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR');
+    perform cma.set_tenant_setting('telephony.connected_min_seconds', '10');
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '0');
     select c.connection_id into v_tel3 from cma.upsert_connection('verifytel', 'Verify phones three', 'company-3', null, null) c;
     perform cma.set_telephony_number(v_tel3, 'line-nl', 'NL', true);
     perform set_config('app.user_id', v_ing3::text, true);
@@ -330,21 +354,21 @@ begin
     -- B1. talk time runs from the answer to the end (i1: 300 seconds, not its 312 of duration): the
     --     conversations' talk is 710 seconds where their durations add up to 768; a call at exactly the
     --     threshold is connected: 3 connected at 10 seconds, 4 at 9 (o2 joins), 2 at 11 (o1 leaves)
-    select format('talk %s avg %s; connected %s', talk_seconds_total, talk_seconds_avg, connected_outbound) into v_txt
+    select format('talk %s avg %s; connected %s', talk_seconds_total, talk_seconds_avg, connected) into v_txt
     from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'day') where period = 'current' and group_key is null;
     v_detail := '';
     foreach v_s in array array['9', '11'] loop
       perform set_config('app.user_id', v_admin1::text, true);
       perform cma.set_tenant_setting('telephony.connected_min_seconds', v_s);
       perform set_config('app.user_id', v_analyst1::text, true);
-      select v_detail || case when v_detail = '' then '' else '/' end || connected_outbound into v_detail
+      select v_detail || case when v_detail = '' then '' else '/' end || connected into v_detail
       from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'day') where period = 'current' and group_key is null;
     end loop;
     perform set_config('app.user_id', v_admin1::text, true);
-    perform cma.set_tenant_setting('telephony.connected_min_seconds', null);
+    perform cma.set_tenant_setting('telephony.connected_min_seconds', '10');
     perform set_config('app.user_id', v_analyst1::text, true);
     v_rows := v_rows || array['11', 'B1 talk time excludes ringing; a call at exactly the threshold is connected',
-      case when v_txt = 'talk 710 avg 88.8; connected 3' and v_detail = '4/2' and not v_provoke then 'PASS' else 'FAIL' end,
+      case when v_txt = 'talk 719 avg 79.9; connected 3' and v_detail = '4/2' and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no row') || ' | at 9/11: ' || coalesce(v_detail, 'none')];
 
     -- B2. the line that does not count: the write skipped off1, and off2, stored past it, is in no
@@ -363,12 +387,12 @@ begin
 
     -- B3. untagged is a conversation without a current tag of any kind: c0 (its tag removed), i2 and o5;
     --     i1, tagged only with a tag that does not count, is tagged; o4 carries both kinds
-    select format('untagged %s of %s', untagged_conversations, conversations) into v_txt
+    select format('untagged %s of %s calls', untagged, calls) into v_txt
     from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'day') where period = 'current' and group_key is null;
-    select v_txt || ' | ' || string_agg(group_key || '=' || untagged_conversations, ',' order by group_key) into v_txt
+    select v_txt || ' | ' || string_agg(group_key || '=' || untagged, ',' order by group_key) into v_txt
     from cma.calls_overview('2026-10-26', '2026-11-01', null, null, 'day') where period = 'current' and group_key is not null;
     v_rows := v_rows || array['13', 'B3 the untagged rule: any current tag counts, counted or not; a removed tag does not',
-      case when v_txt = 'untagged 3 of 8 | 2026-10-26=1,2026-10-27=0,2026-10-28=1,2026-10-29=0,2026-10-30=0,2026-10-31=0,2026-11-01=1' and not v_provoke then 'PASS' else 'FAIL' end,
+      case when v_txt = 'untagged 6 of 12 calls | 2026-10-26=1,2026-10-27=1,2026-10-28=1,2026-10-29=1,2026-10-30=0,2026-10-31=1,2026-11-01=1' and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no row')];
 
     -- B4. the tag that does not count (Test) is in the tag use, marked, and in none of the tags per
@@ -379,8 +403,8 @@ begin
                       || ':' || coalesce(tag_name, '-') || '=' || conversations, ',' order by ordinality) into v_detail
     from cma.calls_per_person_tags('2026-10-26', '2026-11-01', null, null) with ordinality t;
     v_rows := v_rows || array['14', 'B4 a tag that does not count is left out of the tags per person and still makes a call tagged',
-      case when v_txt = 'Sale=3,Info=2,Test=2(not counted),-=3'
-                and v_detail = 'Anna Verify:Sale=1,Anna Verify:-=1,Bram Verify:Info=2,Bram Verify:Sale=1,Bram Verify:-=1,not_linked:Sale=1,not_linked:-=1'
+      case when v_txt = 'Sale=3,Info=2,Test=2(not counted)'
+                and v_detail = 'Anna Verify:Sale=1,Bram Verify:Info=2,Bram Verify:Sale=1,not_linked:Sale=1'
                 and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no rows') || ' | ' || coalesce(v_detail, 'no rows')];
 
@@ -392,20 +416,19 @@ begin
     v_f := array[null, null, 'GB', null, 'NL', null, 'NL', v_nl, null, v_nl2, 'NL', v_gb];
     for v_i in 1 .. 6 loop
       select v_txt || case when v_i > 1 then ' | ' else '' end
-             || (select o.calls || '/' || o.conversations || '/' || o.untagged_conversations
+             || (select o.calls || '/' || o.conversations || '/' || o.untagged
                  from cma.calls_overview('2026-10-26', '2026-11-01', v_f[2 * v_i - 1], v_f[2 * v_i], 'market') o
                  where o.period = 'current' and o.group_key is null)
-             || ' ' || (select max(p.conversations) filter (where p.row_kind = 'total') || '/' || max(p.untagged_conversations) filter (where p.row_kind = 'total')
+             || ' ' || (select max(p.conversations) filter (where p.row_kind = 'total') || '/' || max(p.untagged) filter (where p.row_kind = 'total')
                                || '/' || coalesce(sum(p.conversations) filter (where p.row_kind <> 'total'), 0)
                         from cma.calls_per_person('2026-10-26', '2026-11-01', v_f[2 * v_i - 1], v_f[2 * v_i]) p)
              || ' ' || (select coalesce(sum(t.conversations), 0) from cma.calls_tag_use('2026-10-26', '2026-11-01', v_f[2 * v_i - 1], v_f[2 * v_i], 'line') t
-                        where t.group_key is null and t.tag_key is null)
-             || ' ' || (select coalesce(sum(t.conversations), 0) from cma.calls_per_person_tags('2026-10-26', '2026-11-01', v_f[2 * v_i - 1], v_f[2 * v_i]) t
-                        where t.tag_key is null)
+                        where t.group_key is null)
+             || ' ' || (select coalesce(sum(t.conversations), 0) from cma.calls_per_person_tags('2026-10-26', '2026-11-01', v_f[2 * v_i - 1], v_f[2 * v_i]) t)
         into v_txt;
     end loop;
     v_rows := v_rows || array['15', 'B5 the market and line filters narrow every function alike',
-      case when v_txt = '12/8/3 8/3/8 3 3 | 4/3/2 3/2/3 2 2 | 8/5/1 5/1/5 1 1 | 7/4/1 4/1/4 1 1 | 1/1/0 1/0/1 0 0 | 0/0/0 0/0/0 0 0'
+      case when v_txt = '12/8/6 8/5/8 7 5 | 4/3/3 3/3/3 2 1 | 8/5/3 5/2/5 5 4 | 7/4/3 4/2/4 3 2 | 1/1/0 1/0/1 2 2 | 0/0/0 0/0/0 0 0'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
 
     -- B6. tag use by market: per market the conversations per tag, the most used first, then untagged;
@@ -413,7 +436,7 @@ begin
     select string_agg(coalesce(group_key, 'all') || ':' || coalesce(tag_name, '-') || '=' || conversations, ',' order by ordinality) into v_txt
     from cma.calls_tag_use('2026-10-26', '2026-11-01', null, null, 'market') with ordinality;
     v_rows := v_rows || array['16', 'B6 tag use grouped by market, then the whole period',
-      case when v_txt = 'GB:Info=1,GB:Test=1,GB:-=2,NL:Sale=3,NL:Info=1,NL:Test=1,NL:-=1,all:Sale=3,all:Info=2,all:Test=2,all:-=3'
+      case when v_txt = 'GB:Info=1,GB:Test=1,NL:Sale=3,NL:Info=1,NL:Test=1,all:Sale=3,all:Info=2,all:Test=2'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
 
     -- B7. the previous equal period (19 to 25 October, across the DST change), measured after the
@@ -421,15 +444,15 @@ begin
     --     to q4 on 21 October, q5 on 20 October, p4 on 19 October; not p5 (18 October in Amsterdam)
     --     nor c0 (26 October 00:30 CET). By day and by ISO week over both weeks, each call in its
     --     line's zone; the previous period of those 14 days holds p5 only
-    select format('%s/%s/%s %s/%s %s %s %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound, connected_pct,
-                  conversations, talk_seconds_total, talk_seconds_avg, untagged_conversations) into v_txt
+    select format('%s/%s/%s %s/%s %s %s %s %s %s', calls, inbound, outbound, answered_inbound, connected, connected_rate,
+                  conversations, talk_seconds_total, talk_seconds_avg, untagged) into v_txt
     from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', v_after) where period = 'previous';
     select v_txt || ' | ' || string_agg(group_key || '=' || calls, ',' order by group_key) into v_txt
     from cma.calls_overview('2026-10-19', '2026-11-01', null, null, 'day') where period = 'current' and group_key is not null;
     select v_txt || ' | ' || string_agg(coalesce(group_key, period) || '=' || calls, ',' order by ordinality) into v_txt
     from cma.calls_overview_of(v_t1, '2026-10-19', '2026-11-01', null, null, 'week', v_after) with ordinality;
     v_rows := v_rows || array['17', 'B7 the previous period''s totals, days and weeks across the DST change, each call in its line''s zone',
-      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 9 | 2026-10-19=1,2026-10-20=1,2026-10-21=4,2026-10-25=4,2026-10-26=3,2026-10-27=2,2026-10-28=2,2026-10-29=2,2026-10-30=1,2026-10-31=1,2026-11-01=1'
+      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 10 | 2026-10-19=1,2026-10-20=1,2026-10-21=4,2026-10-25=4,2026-10-26=3,2026-10-27=2,2026-10-28=2,2026-10-29=2,2026-10-30=1,2026-10-31=1,2026-11-01=1'
                         || ' | 2026-10-19=10,2026-10-26=12,current=22,previous=1'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
 
@@ -439,8 +462,8 @@ begin
     --     own and one user is left without a person
     select string_agg(row_kind || ':' || coalesce(display_name, '-') || coalesce('(' || unlinked_users || ')', '')
                       || format(' in %s %s %s out %s/%s %s %s conv %s untagged %s %s-%s', answered_inbound, inbound_talk_seconds,
-                                coalesce(inbound_talk_avg::text, '-'), outbound_calls, connected_outbound, outbound_talk_seconds,
-                                coalesce(outbound_talk_avg::text, '-'), conversations, untagged_conversations,
+                                coalesce(inbound_talk_avg::text, '-'), outbound_calls, connected, outbound_talk_seconds,
+                                coalesce(outbound_talk_avg::text, '-'), conversations, untagged,
                                 to_char(first_call_time, 'HH24:MI'), to_char(last_call_time, 'HH24:MI')), ' | ' order by ordinality) into v_txt
     from cma.calls_per_person('2026-10-26', '2026-11-01', null, null) with ordinality;
     perform set_config('app.user_id', v_admin1::text, true);
@@ -453,9 +476,9 @@ begin
     perform set_config('app.user_id', v_analyst1::text, true);
     v_rows := v_rows || array['18', 'B8 the per-person rows through linked accounts, by name; the users without a person as one counted row',
       case when v_txt = 'person:Anna Verify in 2 360 180.0 out 2/1 10 10.0 conv 3 untagged 1 00:30-16:00'
-                        || ' | person:Bram Verify in 2 90 45.0 out 2/1 120 120.0 conv 3 untagged 1 10:00-16:30'
-                        || ' | not_linked:-(2) in 1 90 90.0 out 2/1 40 40.0 conv 2 untagged 1 10:00-23:30'
-                        || ' | total:- in 5 540 108.0 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30'
+                        || ' | person:Bram Verify in 2 90 45.0 out 2/1 120 120.0 conv 3 untagged 2 10:00-16:30'
+                        || ' | not_linked:-(2) in 1 90 90.0 out 2/1 40 40.0 conv 2 untagged 2 10:00-23:30'
+                        || ' | total:- in 5 540 108.0 out 6/3 170 56.7 conv 8 untagged 5 00:30-23:30'
                 and v_detail = 'person:Anna Verify conv 3 | person:Bram Verify conv 3 | person:Cas Verify conv 1 | not_linked:-(1) conv 1 | total:- conv 8'
                 and not v_provoke then 'PASS' else 'FAIL' end,
       coalesce(v_txt, 'no rows') || ' || ' || coalesce(v_detail, 'no rows')];
@@ -495,8 +518,8 @@ begin
     begin perform cma.calls_tag_use('2026-10-26', '2026-11-01', null, 'line-nl', 'day'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
     begin perform cma.calls_per_person_tags('2026-10-26', '2026-11-01', null, 'x'); exception when sqlstate 'CMA04' then v_n := v_n + 1; end;
     v_rows := v_rows || array['19', 'B9 performance.team for both per-person reads, reports.view enough for the overview and the tag use; refusals',
-      case when v_n = 18 and v_i = 4 + 7 + 5 + 12 and not v_provoke then 'PASS' else 'FAIL' end,
-      format('%s of 18 refusals; the supervisor read %s rows of 28', v_n, v_i)];
+      case when v_n = 18 and v_i = 4 + 4 + 5 + 9 and not v_provoke then 'PASS' else 'FAIL' end,
+      format('%s of 18 refusals; the supervisor read %s rows of 22', v_n, v_i)];
 
     -- B10. tenant isolation: tenant one's reads hold none of tenant two's calls or people, and tenant
     --      two's reads none of tenant one's, with the same line, user and tag refs; tenant one's reads
@@ -526,7 +549,7 @@ begin
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
     v_rows := v_rows || array['20', 'B10 tenant isolation with equal refs, also in the owner''s rights',
-      case when v_txt = '12/0/0/0 | 2/2/Dora Verify,total/Sale=1,-=1/0 | Anna Verify,Bram Verify,not_linked,total / Dora Verify,total'
+      case when v_txt = '12/0/0/0 | 2/2/Dora Verify,total/Sale=1/0 | Anna Verify,Bram Verify,not_linked,total / Dora Verify,total'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
 
     -- B11. no answer holds a hash, a line's digits, a call id (the CMA's or the telephony system's) or,
@@ -562,13 +585,13 @@ begin
     --      and its average, the connected outbound calls' talk time and its average, untagged; then the
     --      previous period, measured after the period. The deleted call d1 is in none of them
     select string_agg(coalesce(group_key, period) || format(':%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound,
-                      connected_outbound, coalesce(connected_pct::text, '-'), conversations, talk_seconds_total,
+                      connected, coalesce(connected_rate::text, '-'), conversations, talk_seconds_total,
                       coalesce(talk_seconds_avg::text, '-'), outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'),
-                      untagged_conversations), ' | ' order by ordinality) into v_txt
+                      untagged), ' | ' order by ordinality) into v_txt
     from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'market', v_after) with ordinality;
     v_rows := v_rows || array['22', 'B12 the overview per market, the computed total and the previous period',
-      case when v_txt = 'GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80.0 2 | NL:8/5/3 4/1 33.3 5 490 98.0 out 10 10.0 1'
-                        || ' | current:12/6/6 5/3 50.0 8 710 88.8 out 170 56.7 3 | previous:10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 9'
+      case when v_txt = 'GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80.0 3 | NL:8/5/3 4/1 33.3 5 499 83.2 out 10 10.0 3'
+                        || ' | current:12/6/6 5/3 50.0 8 719 79.9 out 170 56.7 6 | previous:10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 10'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no rows')];
 
     -- B13. a period that reaches today compares with the same elapsed dates (README Decision log, 14
@@ -611,15 +634,15 @@ begin
     --      and q4 (13:30 in London, 14:30 in Amsterdam) do not; q5 (20 October at 23:00) counts, an
     --      earlier date counting whole; with p4: 4 calls, 2100 seconds (100 + 400 + 1600). Per market:
     --      NL p4, q5 and q1; GB q3
-    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound,
-                  coalesce(connected_pct::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
-                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged_conversations) into v_txt
+    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected,
+                  coalesce(connected_rate::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
+                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged) into v_txt
     from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2026-10-28 13:00:00+00') where period = 'previous';
     select v_txt || ' | NL ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', 'NL', null, 'day', '2026-10-28 13:00:00+00') where period = 'previous')
            || ' | GB ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', 'GB', null, 'day', '2026-10-28 13:00:00+00') where period = 'previous')
       into v_txt;
     v_rows := v_rows || array['24', 'B14 on the previous span''s last date a call later than the time of day in its own zone is left out',
-      case when v_txt = '4/3/1 3/0 0.0 3 2100 700.0 out 0 - 3 | NL 3/1700 | GB 1/400'
+      case when v_txt = '4/3/1 3/0 0.0 3 2100 700.0 out 0 - 4 | NL 3/1700 | GB 1/400'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
 
     -- B15. a period that ended before today compares with the whole previous equal period. Measured on
@@ -627,9 +650,9 @@ begin
     --      October, also those later in the day than 00:30 (p1, p2 at 02:30, p3 and p6 at 23:30), and
     --      q2 and q4: 10 calls, 3220 seconds; the same measured a year later. Tenant three, through the
     --      application's read: 8 days before today to yesterday compares with 16 to 9 days ago (r1 to r3)
-    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected_outbound,
-                  coalesce(connected_pct::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
-                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged_conversations) into v_txt
+    select format('%s/%s/%s %s/%s %s %s %s %s out %s %s %s', calls, inbound, outbound, answered_inbound, connected,
+                  coalesce(connected_rate::text, '-'), conversations, talk_seconds_total, coalesce(talk_seconds_avg::text, '-'),
+                  outbound_talk_seconds, coalesce(outbound_talk_avg::text, '-'), untagged) into v_txt
     from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2026-11-01 23:30:00+00') where period = 'previous';
     select v_txt || ' | a year later ' || (select calls || '/' || talk_seconds_total from cma.calls_overview_of(v_t1, '2026-10-26', '2026-11-01', null, null, 'day', '2027-11-02 12:00:00+00') where period = 'previous')
       into v_txt;
@@ -640,7 +663,7 @@ begin
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_analyst1::text, true);
     v_rows := v_rows || array['25', 'B15 a period that ended before today compares with the whole previous equal period',
-      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 9 | a year later 10/3220 | to yesterday 3'
+      case when v_txt = '10/8/2 8/1 50.0 9 3220 357.8 out 20 20.0 10 | a year later 10/3220 | to yesterday 3'
                 and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'no row')];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';

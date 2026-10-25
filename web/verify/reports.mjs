@@ -28,7 +28,12 @@
  * the not-linked row, tags per person (counted only), the filters narrowing every figure alike; then the
  * screens: the deltas, the colours (series order, never a red), the top twelve tags and Other, the groups
  * by tags, the chart's axis, the per-agent bars and split, the formats, and no hash, number, call id or
- * telephony user id in an answer. Since addition 0008k (brief B16.1) also the telephony history start on
+ * telephony user id in an answer. Since addition 0008zc the calls follow docs/definitions.md (63 amended to match, and 101's
+ * own calls: connected at any talk time, Conversation at the threshold without a tag meaning not reached, inbound alike,
+ * the settings moving the edges, talk time over the answered calls, untagged over every call, no untagged tag row).
+ * Since addition 0008zd also 103's own calls: a tag meaning incorrect data keeps a call out of Conversation like not reached
+ * (on a tag that does not count, next to another tag, inbound alike), Connected unchanged, and again once the tag is removed.
+ * Since addition 0008k (brief B16.1) also the telephony history start on
  * 65's own dataset (the earliest business date in its line's zone; deleted calls, calls without a start
  * and calls on a line that does not count left out; a later call on an earlier date) and what a tile
  * says: no change against a previous span that starts before it, the change as before from it on. Since
@@ -61,8 +66,8 @@
  * Since addition 0008y also Attempts per deal and Attempts per agent (src/lib/attempts.ts), since 0008z on 95's own
  * scenario, so the definitions are the ones 95 proves in the database: the groups and G, the filters (market, pipeline,
  * attempted, outcome) and the problems the routes answer with a 400, the sales population (no order pipeline, no other
- * pipeline), the attempts by source (telephony, crm) with reached by the outcome or the talk time and the setting moving
- * the edge, the window ending at the close or the first order, the ordered deal out of the open figures, one deal's
+ * pipeline), the attempts by source (telephony, crm) with a conversation by the linked call's talk time alone (0008zc) and the
+ * setting moving the edge, the window ending at the close or the first order, the ordered deal out of the open figures, one deal's
  * attempts with the agent only when names are allowed, won against lost, the win rate by attempts and by speed to lead,
  * the figures and the previous period, the list's order and cap, per person by name with the not-linked row, and nothing
  * personal in an answer; and, from their source, the routes: the scope and the lists refused with a 400, one deal's
@@ -84,7 +89,8 @@ import {
   reasonColumns, recordsOfType, speedFigures, summaryTotals, unansweredPct, WAITING_CLASS,
   barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
-  historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, UNTAGGED_CLASS, untaggedPct,
+  historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, untaggedPct, callRules,
+  CONVERSATION_EXCLUDING_MEANINGS,
   answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
@@ -103,7 +109,8 @@ import { callbackFigures, callbackRecords, callbacksInPeriod, callbacksPerOwner,
 import {
   ageBucket, attemptBuckets, attemptedShare, attemptFigures, attemptFilterQuery, attemptGroups, attemptList, attemptOutcomes, attemptRecords, ATTEMPTS_BAR_CLASS,
   ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptSpeedBuckets, attemptsInPeriod, attemptsPerPerson, bucketText, businessDays, dealAttempts,
-  firstReachShare, fmtAttempts, nextAttemptGroup, noonShare, parseAttemptFilter, parseAttemptGroup, reachedShare, reachShare, SINCE_LAST_CLASS, sinceLastBuckets,
+  conversationShare, firstConversationOnShare, firstConversationShare, fmtAttempts, nextAttemptGroup, noonShare, parseAttemptFilter, parseAttemptGroup,
+  SINCE_LAST_CLASS, sinceLastBuckets,
   speedMinutes, withoutOutcomeShare, wonRate,
 } from "../src/lib/attempts.ts";
 import {
@@ -419,15 +426,16 @@ const calls63 = [
   ccall("d1", "inbound", V + 37 * H, 5, 65, "line-nl", "tel-user-1", ["tg-sale"], { deleted: true }),
   ccall("off2", "outbound", V + 35 * H, 5, 55, "line-off", "tel-user-1"),
 ];
-const records = (min = 10, filter) => callRecords(calls63, callLines, "Europe/Amsterdam", min, filter);
+// 63 as amended for 0008zc: the tenants keep 0008j's thresholds as their own (connected at 10 seconds, a conversation at any talk time)
+const records = (min = 10, filter) => callRecords(calls63, callLines, "Europe/Amsterdam", callRules(min, 0, callTags), filter);
 const people = { "tel-user-1": { userId: "u-anna", name: "Anna Verify" }, "tel-user-2": { userId: "u-bram", name: "Bram Verify" } };
 const personOf = (system, ref) => (system === "verifytel" && ref ? people[ref] ?? null : null);
-const figs = (f) => `${f.calls}/${f.inbound}/${f.outbound} ${f.answeredInbound}/${f.connectedOutbound} ${f.connectedPct} ${f.conversations} ${f.talkSeconds} ${f.talkAvgSeconds} out ${f.outboundTalkSeconds} ${f.outboundTalkAvgSeconds} ${f.untaggedConversations}`;
+const figs = (f) => `${f.calls}/${f.inbound}/${f.outbound} ${f.answeredInbound}/${f.connected} ${f.connectedRate} ${f.conversations} ${f.talkSeconds} ${f.talkAvgSeconds} out ${f.outboundTalkSeconds} ${f.outboundTalkAvgSeconds} ${f.untagged}`;
 const week = groupCalls(records(), "2026-10-26", "2026-11-01", "market");
-expect("talk time from the answer to the end, no ringing; a call at exactly the threshold connected, as 63 B1",
+expect("talk time from the answer to the end over the answered calls, no ringing; a call at exactly the threshold connected, as 63 B1",
   [week.total.talkSeconds, records().find((c) => c.talkSeconds === 300)?.isConversation,
-    [10, 9, 11].map((m) => groupCalls(records(m), "2026-10-26", "2026-11-01", "day").total.connectedOutbound)],
-  [710, true, [3, 4, 2]], [768, true, [3, 3, 3]]);
+    [10, 9, 11].map((m) => groupCalls(records(m), "2026-10-26", "2026-11-01", "day").total.connected)],
+  [719, true, [3, 4, 2]], [768, true, [3, 3, 3]]);
 expect("a line that does not count and a deleted call are never counted, as 63 B2 and B12",
   [records().some((c) => c.lineKey === `${CONN}:line-off`), records().length, groupCalls(records(10, { market: null, line: `${CONN}:line-off` }), "2026-10-26", "2026-11-01", "day").total.calls],
   [false, 24, 0], [true, 26, 1]);
@@ -436,8 +444,8 @@ const WEEK63 = { from: "2026-10-26", to: "2026-11-01" };
 const prevAt = (now, filter) => callsFigures(previousCalls(records(10, filter), previousPeriod(WEEK63, dateKeyInZone(now, "Europe/Amsterdam")), now));
 expect("the overview per market, the computed total and the previous period measured after it, as 63 B12",
   [...week.rows.map((r) => `${r.groupKey}:${figs(r)}`), `current:${figs(week.total)}`, `previous:${figs(prevAt("2026-11-02T09:00:00Z"))}`],
-  ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.8 out 170 56.7 3",
-    "previous:10/8/2 8/1 50 9 3220 357.8 out 20 20 9"],
+  ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 3", "NL:8/5/3 4/1 33.3 5 499 83.2 out 10 10 3", "current:12/6/6 5/3 50 8 719 79.9 out 170 56.7 6",
+    "previous:10/8/2 8/1 50 9 3220 357.8 out 20 20 10"],
   ["GB:4/1/3 1/2 66.7 3 220 73.3 out 160 80 2", "NL:8/5/3 4/1 33.3 5 490 98 out 10 10 1", "current:12/6/6 5/3 50 8 710 88.75 out 170 56.7 3",
     "previous:5/3/2 3/1 50 4 120 30 out 20 20 4"]);
 expect("a period that ended: the whole previous equal period, across the DST change, a day and a month",
@@ -456,10 +464,10 @@ expect("a period that reaches today compares with the same elapsed dates, as 63 
   ["6 calls 3100", "1 calls 0", "0 calls 0"], ["10 calls 3220", "10 calls 3220", "10 calls 3220"]);
 expect("on the previous span's last date only the calls up to the time of day in their own zone, as 63 B14",
   [figs(prevAt("2026-10-28T13:00:00Z")), ...["NL", "GB"].map((m) => `${m} ${prevAt("2026-10-28T13:00:00Z", { market: m, line: null }).calls}/${prevAt("2026-10-28T13:00:00Z", { market: m, line: null }).talkSeconds}`)],
-  ["4/3/1 3/0 0 3 2100 700 out 0 null 3", "NL 3/1700", "GB 1/400"], ["6/5/1 5/0 0 5 3100 620 out 0 null 5", "NL 4/1900", "GB 2/1200"]);
+  ["4/3/1 3/0 0 3 2100 700 out 0 null 4", "NL 3/1700", "GB 1/400"], ["6/5/1 5/0 0 5 3100 620 out 0 null 5", "NL 4/1900", "GB 2/1200"]);
 expect("a period that ended compares with the whole previous one, whatever the time of day, as 63 B15",
   [figs(prevAt("2026-11-01T23:30:00Z")), figs(prevAt("2027-11-02T12:00:00Z"))],
-  ["10/8/2 8/1 50 9 3220 357.8 out 20 20 9", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"],
+  ["10/8/2 8/1 50 9 3220 357.8 out 20 20 10", "10/8/2 8/1 50 9 3220 357.8 out 20 20 10"],
   ["2/1/1 1/1 100 2 1620 810 out 20 20 2", "10/8/2 8/1 50 9 3220 357.8 out 20 20 9"]);
 // The start of the telephony history (addition 0008k) on 65's own dataset: an NL line, a US line in Los
 // Angeles, an NL line that does not count, and lines in Kiritimati (UTC+14) and at UTC-12
@@ -478,7 +486,7 @@ const hist = [
   hcall("h-off", "2026-09-20T10:00:00Z", "h-off"),
   { ...hcall("h-nostart", "2026-09-01T10:00:00Z", "h-nl"), startedAt: null },
 ];
-const startOf = (calls, lines = histLines) => historyStartOf(callRecords(calls, lines, "Europe/Amsterdam", 10));
+const startOf = (calls, lines = histLines) => historyStartOf(callRecords(calls, lines, "Europe/Amsterdam", callRules(10, 0, [])));
 expect("the history start: the earliest business date in its line's zone; deleted, unstarted and uncounted calls left out, as 65 B2 to B5 and B9",
   [startOf(hist), startOf(hist, histLines.map((l) => (l.lineRef === "h-us" ? { ...l, market: "NL", zone: "Europe/Amsterdam" } : l))),
     startOf(hist.map((c) => ({ ...c, deleted: false }))), startOf(hist, histLines.map((l) => ({ ...l, isCounted: true }))),
@@ -510,74 +518,152 @@ expect("days and ISO weeks across the DST change, each call in its line's zone, 
     ["2026-10-19=10", "2026-10-26=12"]],
   [["2026-10-18=1", "2026-10-20=1", "2026-10-21=4", "2026-10-25=3", "2026-10-26=4", "2026-10-27=2", "2026-10-28=2", "2026-10-29=2", "2026-10-30=1", "2026-10-31=1", "2026-11-01=1"],
     ["2026-10-19=10", "2026-10-26=12"]]);
-expect("untagged: any current tag counts, counted or not, as 63 B3",
-  groupCalls(records(), "2026-10-26", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.untaggedConversations}`),
-  ["2026-10-26=1", "2026-10-27=0", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"],
-  ["2026-10-26=1", "2026-10-27=1", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"]);
+expect("untagged: every call without a current tag, missed ones included; any tag counts, counted or not, as 63 B3",
+  [`${week.total.untagged} of ${week.total.calls} calls`, ...groupCalls(records(), "2026-10-26", "2026-11-01", "day").rows.map((r) => `${r.groupKey}=${r.untagged}`)],
+  ["6 of 12 calls", "2026-10-26=1", "2026-10-27=1", "2026-10-28=1", "2026-10-29=1", "2026-10-30=0", "2026-10-31=1", "2026-11-01=1"],
+  ["3 of 8 calls", "2026-10-26=1", "2026-10-27=0", "2026-10-28=1", "2026-10-29=0", "2026-10-30=0", "2026-10-31=0", "2026-11-01=1"]);
 const tagUse = callsTagUse(records(), "2026-10-26", "2026-11-01", "market", callTags);
-expect("tag use by market, the most used first, untagged last, then the whole period, as 63 B6",
+expect("tag use by market, the most used first, no untagged row, then the whole period, as 63 B6",
   tagUse.map((r) => `${r.groupKey ?? "all"}:${r.tagName ?? "-"}=${r.conversations}${r.isCounted === false ? "(not counted)" : ""}`),
-  ["GB:Info=1", "GB:Test=1(not counted)", "GB:-=2", "NL:Sale=3", "NL:Info=1", "NL:Test=1(not counted)", "NL:-=1", "all:Sale=3", "all:Info=2", "all:Test=2(not counted)", "all:-=3"],
+  ["GB:Info=1", "GB:Test=1(not counted)", "NL:Sale=3", "NL:Info=1", "NL:Test=1(not counted)", "all:Sale=3", "all:Info=2", "all:Test=2(not counted)"],
   ["GB:Info=1", "GB:-=2", "NL:Sale=3", "NL:Info=1", "NL:-=1", "all:Sale=3", "all:Info=2", "all:-=3"]);
 const perPerson = callsPerPerson(records(), "2026-10-26", "2026-11-01", personOf);
-const pp = (p) => `${p.kind}:${p.name ?? "-"}${p.unlinkedUsers === null ? "" : `(${p.unlinkedUsers})`} in ${p.answeredInbound} ${p.inboundTalkSeconds} ${p.inboundTalkAvgSeconds} out ${p.outboundCalls}/${p.connectedOutbound} ${p.outboundTalkSeconds} ${p.outboundTalkAvgSeconds} conv ${p.conversations} untagged ${p.untaggedConversations} ${p.firstCallTime}-${p.lastCallTime}`;
-expect("per person by name, the users without a person as one counted row, then the total, as 63 B8",
+const pp = (p) => `${p.kind}:${p.name ?? "-"}${p.unlinkedUsers === null ? "" : `(${p.unlinkedUsers})`} in ${p.answeredInbound} ${p.inboundTalkSeconds} ${p.inboundTalkAvgSeconds} out ${p.outboundCalls}/${p.connected} ${p.outboundTalkSeconds} ${p.outboundTalkAvgSeconds} conv ${p.conversations} untagged ${p.untagged} ${p.firstCallTime}-${p.lastCallTime}`;
+expect("per person by name, the users without a person as one counted row, then the total; untagged over their own calls, as 63 B8",
   [...perPerson.rows.map(pp), pp(perPerson.total)],
-  ["person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:30-16:00", "person:Bram Verify in 2 90 45 out 2/1 120 120 conv 3 untagged 1 10:00-16:30",
-    "notLinked:-(2) in 1 90 90 out 2/1 40 40 conv 2 untagged 1 10:00-23:30", "total:- in 5 540 108 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30"],
+  ["person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:30-16:00", "person:Bram Verify in 2 90 45 out 2/1 120 120 conv 3 untagged 2 10:00-16:30",
+    "notLinked:-(2) in 1 90 90 out 2/1 40 40 conv 2 untagged 2 10:00-23:30", "total:- in 5 540 108 out 6/3 170 56.7 conv 8 untagged 5 00:30-23:30"],
   ["person:Bram Verify in 2 90 45 out 2/1 120 120 conv 3 untagged 1 10:00-16:30", "person:Anna Verify in 2 360 180 out 2/1 10 10 conv 3 untagged 1 00:30-16:00",
     "notLinked:-(3) in 1 90 90 out 2/1 40 40 conv 2 untagged 1 10:00-23:30", "total:- in 5 540 108 out 6/3 170 56.7 conv 8 untagged 3 00:30-23:30"]);
 const ppTags = callsPerPersonTags(records(), "2026-10-26", "2026-11-01", personOf, callTags);
-expect("tags per person: counted tags only, untagged last; a tag that does not count still makes a call tagged, as 63 B4",
+expect("tags per person: counted tags only, no untagged row, as 63 B4",
   ppTags.map((t) => `${t.kind === "person" ? people[Object.keys(people).find((k) => people[k].userId === t.userId)].name : t.kind}:${t.tagName ?? "-"}=${t.conversations}`),
-  ["Anna Verify:Sale=1", "Anna Verify:-=1", "Bram Verify:Info=2", "Bram Verify:Sale=1", "Bram Verify:-=1", "notLinked:Sale=1", "notLinked:-=1"],
+  ["Anna Verify:Sale=1", "Bram Verify:Info=2", "Bram Verify:Sale=1", "notLinked:Sale=1"],
   ["Anna Verify:Sale=1", "Anna Verify:Test=1", "Anna Verify:-=1", "Bram Verify:Info=2", "Bram Verify:Sale=1", "Bram Verify:Test=1", "Bram Verify:-=1", "notLinked:Sale=1", "notLinked:-=1"]);
 const alike = (filter) => {
   const r = records(10, filter);
   const o = groupCalls(r, "2026-10-26", "2026-11-01", "market").total;
   const p = callsPerPerson(r, "2026-10-26", "2026-11-01", personOf);
-  const tu = callsTagUse(r, "2026-10-26", "2026-11-01", "line", callTags).filter((x) => x.groupKey === null && x.tagKey === null).reduce((a, x) => a + x.conversations, 0);
-  const pt = callsPerPersonTags(r, "2026-10-26", "2026-11-01", personOf, callTags).filter((x) => x.tagKey === null).reduce((a, x) => a + x.conversations, 0);
-  return `${o.calls}/${o.conversations}/${o.untaggedConversations} ${p.total.conversations}/${p.total.untaggedConversations}/${p.rows.reduce((a, x) => a + x.conversations, 0)} ${tu} ${pt}`;
+  const tu = callsTagUse(r, "2026-10-26", "2026-11-01", "line", callTags).filter((x) => x.groupKey === null).reduce((a, x) => a + x.conversations, 0);
+  const pt = callsPerPersonTags(r, "2026-10-26", "2026-11-01", personOf, callTags).reduce((a, x) => a + x.conversations, 0);
+  return `${o.calls}/${o.conversations}/${o.untagged} ${p.total.conversations}/${p.total.untagged}/${p.rows.reduce((a, x) => a + x.conversations, 0)} ${tu} ${pt}`;
 };
 expect("the market and line filters narrow every figure alike, as 63 B5",
   [alike({ market: null, line: null }), alike({ market: "GB", line: null }), alike({ market: "NL", line: null }), alike({ market: "NL", line: `${CONN}:line-nl` }),
     alike({ market: null, line: `${CONN}:line-nl2` }), alike({ market: "NL", line: `${CONN}:line-gb` })],
-  ["12/8/3 8/3/8 3 3", "4/3/2 3/2/3 2 2", "8/5/1 5/1/5 1 1", "7/4/1 4/1/4 1 1", "1/1/0 1/0/1 0 0", "0/0/0 0/0/0 0 0"],
+  ["12/8/6 8/5/8 7 5", "4/3/3 3/3/3 2 1", "8/5/3 5/2/5 5 4", "7/4/3 4/2/4 3 2", "1/1/0 1/0/1 2 2", "0/0/0 0/0/0 0 0"],
   ["12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3", "12/8/3 8/3/8 3 3"]);
 expect("the change against the previous period: up, down, the same, new from none, nothing to compare",
   [callsDelta(395, 335), callsDelta(179, 181), callsDelta(5, 5), callsDelta(4, 0), callsDelta(null, 12)],
   [{ direction: "up", pct: 17.9 }, { direction: "down", pct: 1.1 }, { direction: "same", pct: 0 }, { direction: "up", pct: null }, { direction: "none", pct: null }],
   [{ direction: "up", pct: 17.9 }, { direction: "up", pct: 1.1 }, { direction: "same", pct: 0 }, { direction: "up", pct: Infinity }, { direction: "down", pct: null }]);
 expect("the volume colours in the style's series order, never a red or an amber; Light Blue bars carry no text",
-  [INBOUND_CLASS, OUTBOUND_CLASS, [TAG_CLASS, TAG_NOT_COUNTED_CLASS, OTHER_TAGS_CLASS, UNTAGGED_CLASS, CONVERSATION_CLASS, ...Object.values(PER_AGENT_BAR_CLASS)].filter((c) => /error|warning|red/.test(c))],
+  [INBOUND_CLASS, OUTBOUND_CLASS, [TAG_CLASS, TAG_NOT_COUNTED_CLASS, OTHER_TAGS_CLASS, CONVERSATION_CLASS, ...Object.values(PER_AGENT_BAR_CLASS)].filter((c) => /error|warning|red/.test(c))],
   ["bg-p4a-deepblue", "bg-p4a-green", []], ["bg-p4a-green", "bg-p4a-deepblue", ["bg-p4a-error"]]);
-const many = Array.from({ length: 14 }, (_, i) => ({ groupKey: null, groupLabel: null, tagKey: `${CONN}:t${i}`, tagName: `Tag ${String(i).padStart(2, "0")}`, isCounted: i !== 2, conversations: 20 - i }))
-  .concat([{ groupKey: null, groupLabel: null, tagKey: null, tagName: null, isCounted: null, conversations: 9 }]);
+const many = Array.from({ length: 14 }, (_, i) => ({ groupKey: null, groupLabel: null, tagKey: `${CONN}:t${i}`, tagName: `Tag ${String(i).padStart(2, "0")}`, isCounted: i !== 2, conversations: 20 - i }));
 const top = topTags(many, 200);
 expect("tags as bars: the top twelve, largest first, the rest as Other with its count; shares of the conversations",
   [top.bars.length, top.bars[0].name, top.bars[0].share, top.bars[2].isCounted, top.other && [top.other.count, top.other.tags, top.other.share]],
   [12, "Tag 00", 0.1, false, [15, 2, 0.075]], [14, "Tag 00", 0.1, true, null]);
 const groupedMany = [...many.map((r) => ({ ...r, groupKey: "NL", groupLabel: "NL" })), ...many];
 const table = tagTable(groupedMany, [{ groupKey: "NL", groupLabel: "NL", ...week.total, conversations: 100 }]);
-expect("the groups by tags: twelve columns and Other, counts and shares of the row's conversations, untagged last",
+expect("the groups by tags: twelve columns and Other, shares of the row's conversations; untagged last, a share of the row's calls",
   [table.columns.length, table.hasOther, table.lines[0].cells[0], table.lines[0].other, table.lines[0].untagged],
-  [12, true, { count: 20, share: 0.2 }, { count: 15, share: 0.15 }, { count: 9, share: 0.09 }],
-  [14, false, { count: 20, share: 0.2 }, { count: 0, share: 0 }, { count: 9, share: 0.09 }]);
+  [12, true, { count: 20, share: 0.2 }, { count: 15, share: 0.15 }, { count: 6, share: 0.5 }],
+  [14, false, { count: 20, share: 0.2 }, { count: 0, share: 0 }, { count: 6, share: 0.06 }]);
 expect("the untagged share, the chart's axis without gaps up to today, a count axis",
-  [untaggedPct(week.total), untaggedPct({ conversations: 0, untaggedConversations: 0 }),
+  [untaggedPct(week.total), untaggedPct({ calls: 0, untagged: 0 }),
     chartGroups(groupCalls(records(10, { market: "GB", line: null }), "2026-10-26", "2026-11-01", "day").rows, "day", "2026-10-26", "2026-11-01", "2026-10-31")
       .map((r) => `${r.groupKey.slice(8)}=${r.calls}`),
     chartGroups(groupCalls(records(), "2026-10-19", "2026-11-01", "week").rows, "week", "2026-10-21", "2026-11-01", "2026-11-01").length,
     [countAxis(0), countAxis(47), countAxis(395)]],
-  [37.5, null, ["26=0", "27=0", "28=2", "29=0", "30=0", "31=1", "01=1"], 2, [{ top: 4, step: 1 }, { top: 50, step: 10 }, { top: 400, step: 100 }]],
+  [50, null, ["26=0", "27=0", "28=2", "29=0", "30=0", "31=1", "01=1"], 2, [{ top: 4, step: 1 }, { top: 50, step: 10 }, { top: 400, step: 100 }]],
   [37.5, 0, ["28=2", "31=1", "01=1"], 1, [{ top: 0, step: 1 }, { top: 47, step: 10 }, { top: 395, step: 100 }]]);
 const maxima = columnMaxima([...perPerson.rows, perPerson.total]);
 expect("the per-agent bars scaled to each column's largest person (the total row is not one); a person's split by tag",
   [maxima.answeredInbound, maxima.inboundTalkSeconds, barShare(90, maxima.inboundTalkSeconds), barShare(null, 10),
     personSplit(ppTags, perPerson.rows[1]).map((s) => `${s.name ?? "-"}:${s.count}:${Math.round(s.share * 100)}`)],
-  [2, 360, 0.25, 0, ["Info:2:67", "Sale:1:33", "-:1:33"]],
-  [5, 540, 0.17, 0, ["Info:2:67", "Sale:1:33"]]);
+  [2, 360, 0.25, 0, ["Info:2:67", "Sale:1:33"]],
+  [5, 540, 0.17, 0, ["Info:2:67", "Sale:1:33", "-:1:33"]]);
+// Connected and Conversation as docs/definitions.md defines them (addition 0008zc) on 101's own calls of 6 October 2026: one NL
+// line; tags Not Reached (meaning not_reached), Not Reached off (not_reached, not counted) and Type (call_type); five seconds
+// of ringing, then the talk; o2 still in progress, o6's Not Reached since removed (its current tags are none), o8 and i4
+// nobody answered; Anna behind the outbound calls, Bram behind the inbound ones
+const tagsZc = [
+  { connectionId: CONN, tagRef: "tg-nr", name: "Not Reached", isCounted: true, meaning: "not_reached" },
+  { connectionId: CONN, tagRef: "tg-nr-off", name: "Not Reached off", isCounted: false, meaning: "not_reached" },
+  { connectionId: CONN, tagRef: "tg-type", name: "Type", isCounted: true, meaning: "call_type" },
+];
+const D6 = Date.parse("2026-10-06T08:00:00Z");
+const zcall = (src, direction, min, talk, user, tags = []) =>
+  ccall(src, direction, D6 + min * 60e3, talk === undefined ? null : 5, talk === undefined ? 30 : 5 + (talk ?? 0), "line-nl", user, tags,
+    talk === null ? { endedAt: null } : {});
+const calls101 = [
+  zcall("o1", "outbound", 0, 1, "tu-1"), zcall("o2", "outbound", 10, null, "tu-1"), zcall("o3", "outbound", 20, 29, "tu-1"),
+  zcall("o4", "outbound", 30, 30, "tu-1"), zcall("o5", "outbound", 40, 30, "tu-1", ["tg-nr"]), zcall("o6", "outbound", 50, 120, "tu-1", []),
+  zcall("o7", "outbound", 60, 60, "tu-1", ["tg-nr-off"]), zcall("o8", "outbound", 70, undefined, "tu-1"), zcall("o9", "outbound", 80, 45, "tu-1", ["tg-type"]),
+  zcall("i1", "inbound", 90, 20, "tu-2"), zcall("i2", "inbound", 100, 45, "tu-2"), zcall("i3", "inbound", 110, 45, "tu-2", ["tg-nr"]),
+  zcall("i4", "inbound", 120, undefined, null),
+];
+const zcRecords = (connected = 0, conversation = 30, tags = tagsZc) => callRecords(calls101, callLines, "Europe/Amsterdam", callRules(connected, conversation, tags));
+const zcPeople = { "tu-1": { userId: "u-anna", name: "Anna Verify" }, "tu-2": { userId: "u-bram", name: "Bram Verify" } };
+const zcPersonOf = (system, ref) => (system === "verifytel" && ref ? zcPeople[ref] ?? null : null);
+const zcPerCall = (rows) => rows.map((c, i) => `${calls101[i].sourceId}:${c.isConnectedOutbound ? "c" : "-"}${c.isConversation ? "v" : "-"}`).sort().join(" ");
+expect("connected at 1 s and in progress; Conversation at 30 s without not_reached (removed, or on an uncounted tag still out), inbound alike, as 101 B1",
+  zcPerCall(zcRecords()), "i1:-- i2:-v i3:-- i4:-- o1:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv",
+  "i1:-- i2:-v i3:-v i4:-- o1:-- o2:-- o3:c- o4:cv o5:cv o6:cv o7:cv o8:-- o9:cv");
+const zcTotals = (a, b) => { const f = callsFigures(zcRecords(a, b)); return `${f.connected}/${f.conversations}`; };
+expect("connected from 5 s leaves 1 s and in progress out; the Conversation threshold at 29 and 46 s, as 101 B2",
+  `${zcTotals(5, 30)} ${zcTotals(0, 29)} ${zcTotals(0, 46)}`, "6/4 8/5 8/1", "8/4 8/4 8/4");
+const zf = callsFigures(zcRecords());
+expect("Calls: connected and its rate, conversations, talk time over the answered calls, untagged over every call, as 101 B3",
+  [zf.calls, zf.inbound, zf.outbound, zf.answeredInbound, zf.connected, zf.connectedRate, zf.conversations, zf.talkSeconds, zf.talkAvgSeconds,
+    zf.outboundTalkSeconds, zf.outboundTalkAvgSeconds, zf.untagged, untaggedPct(zf)].join("/"),
+  "13/4/9/3/8/88.9/4/425/42.5/315/45/9/69.2", "13/4/9/3/8/88.9/4/315/45/315/45/7/77.8");
+const zcPeopleRows = callsPerPerson(zcRecords(), "2026-10-06", "2026-10-06", zcPersonOf);
+expect("tag use and tags per person without an untagged row; per person connected, conversations and untagged over their own calls, as 101 B4",
+  `${callsTagUse(zcRecords(), "2026-10-05", "2026-10-11", "week", tagsZc).map((r) => `${r.groupKey ?? "all"}:${r.tagName}=${r.conversations}`).join(",")}`
+    + ` | ${callsPerPersonTags(zcRecords(), "2026-10-06", "2026-10-06", zcPersonOf, tagsZc).map((r) => `${r.tagName}=${r.conversations}`).join(",")}`
+    + ` | ${[...zcPeopleRows.rows, zcPeopleRows.total].map((p) => `${p.name ?? p.kind}:${p.answeredInbound}/${p.outboundCalls}/${p.connected}/${p.conversations}/${p.untagged}`).join(" ")}`,
+  "2026-10-05:Type=1,all:Type=1 | Type=1 | Anna Verify:0/9/8/3/6 Bram Verify:3/0/0/1/2 total:3/9/8/4/8",
+  "2026-10-05:Type=1,2026-10-05:Not Reached=1,all:Type=1,all:Not Reached=1 | Type=1 | Anna Verify:0/9/8/4/6 Bram Verify:3/0/0/2/2 total:3/9/8/6/8");
+expect("without a tag meaning not reached, Conversation counts on talk time alone, as 101 B1 without the meanings",
+  [zcPerCall(zcRecords(0, 30, tagsZc.map((t) => ({ ...t, meaning: t.meaning === "not_reached" ? null : t.meaning })))), callRules(0, 30, []).notReachedTags.size],
+  ["i1:-- i2:-v i3:-v i4:-- o1:c- o2:c- o3:c- o4:cv o5:cv o6:cv o7:cv o8:-- o9:cv", 0],
+  ["i1:-- i2:-v i3:-- i4:-- o1:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv", 0]);
+// The tag meaning incorrect data (addition 0008zd) on 103's own calls of 6 October 2026: tags Wrong Number (meaning
+// incorrect_data), Incorrect Data off (incorrect_data, not counted), Not Reached (not_reached) and Type (call_type); o7
+// nobody answered; then o1 and i1 with their tag removed (their current tags none)
+const tagsZd = [
+  { connectionId: CONN, tagRef: "tg-wrong", name: "Wrong Number", isCounted: true, meaning: "incorrect_data" },
+  { connectionId: CONN, tagRef: "tg-wrong-off", name: "Incorrect Data off", isCounted: false, meaning: "incorrect_data" },
+  { connectionId: CONN, tagRef: "tg-nr", name: "Not Reached", isCounted: true, meaning: "not_reached" },
+  { connectionId: CONN, tagRef: "tg-type", name: "Type", isCounted: true, meaning: "call_type" },
+];
+const calls103 = (removed) => [
+  zcall("o1", "outbound", 0, 45, "tu-1", removed ? [] : ["tg-wrong"]), zcall("o2", "outbound", 10, 45, "tu-1"),
+  zcall("o3", "outbound", 20, 45, "tu-1", ["tg-nr"]), zcall("o4", "outbound", 30, 45, "tu-1", ["tg-wrong-off"]),
+  zcall("o5", "outbound", 40, 45, "tu-1", ["tg-type"]), zcall("o6", "outbound", 50, 10, "tu-1", ["tg-wrong"]),
+  zcall("o7", "outbound", 60, undefined, "tu-1", ["tg-wrong"]), zcall("o8", "outbound", 70, 45, "tu-1", ["tg-type", "tg-wrong"]),
+  zcall("o9", "outbound", 80, 60, "tu-1", ["tg-wrong"]), zcall("i1", "inbound", 90, 45, "tu-2", removed ? [] : ["tg-wrong"]),
+  zcall("i2", "inbound", 100, 45, "tu-2"), zcall("i3", "inbound", 110, 45, "tu-2", ["tg-nr"]),
+];
+const zdRecords = (removed = false) => callRecords(calls103(removed), callLines, "Europe/Amsterdam", callRules(0, 30, tagsZd));
+const zdPerCall = (removed = false) => zdRecords(removed).map((c, i) => `${calls103(removed)[i].sourceId}:${c.isConnectedOutbound ? "c" : "-"}${c.isConversation ? "v" : "-"}`).sort().join(" ");
+expect("incorrect data: connected, no conversation (uncounted tag, next to another tag, inbound alike); not reached as before, as 103 B1",
+  [zdPerCall(), CONVERSATION_EXCLUDING_MEANINGS],
+  ["i1:-- i2:-v i3:-- o1:c- o2:cv o3:c- o4:c- o5:cv o6:c- o7:-- o8:c- o9:c-", ["not_reached", "incorrect_data"]],
+  ["i1:-v i2:-v i3:-- o1:cv o2:cv o3:c- o4:cv o5:cv o6:c- o7:-- o8:cv o9:cv", ["not_reached"]]);
+const zdf = callsFigures(zdRecords());
+const zdPeopleRows = callsPerPerson(zdRecords(), "2026-10-06", "2026-10-06", zcPersonOf);
+expect("Calls, tag use and per person count no conversation with a tag meaning incorrect data, as 103 B2",
+  [zdf.calls, zdf.inbound, zdf.outbound, zdf.answeredInbound, zdf.connected, zdf.connectedRate, zdf.conversations, zdf.untagged].join("/")
+    + ` | ${callsTagUse(zdRecords(), "2026-10-05", "2026-10-11", "week", tagsZd).map((r) => `${r.groupKey ?? "all"}:${r.tagName}=${r.conversations}`).join(",")}`
+    + ` | ${[...zdPeopleRows.rows, zdPeopleRows.total].map((p) => `${p.name ?? p.kind}:${p.answeredInbound}/${p.outboundCalls}/${p.connected}/${p.conversations}/${p.untagged}`).join(" ")}`,
+  "12/3/9/3/8/88.9/3/2 | 2026-10-05:Type=1,all:Type=1 | Anna Verify:0/9/8/2/1 Bram Verify:3/0/0/1/1 total:3/9/8/3/2",
+  "12/3/9/3/8/88.9/6/2 | 2026-10-05:Type=2,2026-10-05:Wrong Number=4,all:Type=2,all:Wrong Number=4 | Anna Verify:0/9/8/5/1 Bram Verify:3/0/0/2/1 total:3/9/8/7/2");
+expect("the same call is a conversation once its incorrect-data tag is removed, as 103 B5",
+  zdPerCall(true).split(" ").filter((x) => /^(o1|i1):/.test(x)).join(" "), "i1:-v o1:cv", "i1:-- o1:c-");
 expect("talk time: seconds under a minute, minutes and seconds under an hour, hours and minutes from an hour",
   [fmtTalk(45, "en"), fmtTalk(88.75, "en"), fmtTalk(3725, "nl"), fmtTalk(null, "en"), fmtShare(0.375, "en"), fmtShare(null, "en")],
   ["45 s", "1m 29s", "1h 02m", "–", "38%", "–"], ["45.0 s", "88 s", "62m 05s", "0 s", "37.5%", "0%"]);
@@ -1001,7 +1087,7 @@ expect("callbacks: Follow-up's span is this week and the seven before",
 // orders never reach the definition, dB's store order before its creation and dA's order deal on the removed contact do
 // not count). The order pipeline's dOrd, the renewals (counted, no lead pipeline) and the uncounted test pipeline are here
 // to be left out. NL in Amsterdam, offices Monday to Friday 09:00 to 17:00, no holiday; owners o-1 Anna and o-2 Bram, o-3
-// nobody; the pre-window 10 minutes; reached at 30 seconds of talk without an outcome; seen on Wednesday 14 October at
+// nobody; the pre-window 10 minutes; a conversation at 30 seconds of talk, the outcome deciding nothing (0008zc); seen on Wednesday 14 October at
 // 10:00 UTC. Amsterdam is UTC+2 throughout.
 const AT = "00000000-0000-7000-8000-0000000000a7";
 const AMS_AT = "Europe/Amsterdam";
@@ -1010,8 +1096,8 @@ const atT = (x) => `2026-${x}Z`;
 // a CRM call: [id, CRM time, outcome, linked, talk (null: unanswered), agent]; a linked call starts 10 s earlier
 const atCall = ([id, crmAt, outcome, linked, talk, agent]) => ({
   id, at: linked ? new Date(Date.parse(atT(crmAt)) - 10_000).toISOString().replace(".000Z", "Z") : atT(crmAt), direction: "outbound", linked,
-  outcome: { connected: "Connected", no_answer: "No answer", voicemail: "Left voicemail" }[outcome] ?? null, outcomeConnected: outcome === "connected",
-  answered: linked && talk !== null, talkSeconds: linked ? talk : null, agentName: linked ? agent : null,
+  outcome: { connected: "Connected", no_answer: "No answer", voicemail: "Left voicemail" }[outcome] ?? null,
+  connected: linked && talk !== null, talkSeconds: linked ? talk : null, agentName: linked ? agent : null,
 });
 const atDeal = (id, pipeline, created, o = {}) => ({
   dealId: `deal-${id}`, connectionId: AT, dealSourceId: id, pipelineId: pipeline, pipelineLabel: AT_PIPES[pipeline],
@@ -1059,7 +1145,7 @@ const atOwners = { "o-1": "u-anna", "o-2": "u-bram" };
 const atNames = { "u-anna": ANNA, "u-bram": BRAM };
 const AT_NOW = "2026-10-14T10:00:00Z";
 const atOptions = (o = {}) => ({
-  source: "telephony", preWindowMinutes: 10, reachedMinTalkSeconds: 30, sinceLastBuckets: "1,2,5", now: AT_NOW, tenantZone: AMS_AT, working: atWorking,
+  source: "telephony", preWindowMinutes: 10, conversationMinTalkSeconds: 30, sinceLastBuckets: "1,2,5", now: AT_NOW, tenantZone: AMS_AT, working: atWorking,
   ownerUserOf: (r) => atOwners[r] ?? null, businessSeconds: (market, from, to) => businessSeconds(atHours, market, from, to), nextNoon: atNoon, ...o,
 });
 const AT_ALL = { market: null, pipeline: null, attempted: "all", outcome: "all" };
@@ -1069,8 +1155,8 @@ const atDealOf = (id) => atDeals.find((d) => d.dealSourceId === id);
 const hms = (x) => (x ? `${x.slice(8, 10)} ${x.slice(11, 19)}` : "-");
 // as 95's pg_temp.v0008z_fig
 const atFig = (f) => [f.deals, f.attempted, f.attempts, f.avgAttempts === null ? "-" : f.avgAttempts.toFixed(2), f.medianAttempts === null ? "-" : f.medianAttempts.toFixed(1),
-  f.reachedDeals, f.firstReached, f.medianSpeedSeconds ?? "-", `${f.calledBeforeNoon}of${f.noonKnown}`, f.openDeals, f.openNeverAttempted, f.won, f.lost, f.ordered,
-  f.unknown, f.talkSecondsTotal, f.talkSecondsReached, f.attemptsWithoutOutcome, f.loggedWithoutAircall].join("/");
+  f.conversationDeals, f.firstConversation, f.medianSpeedSeconds ?? "-", `${f.calledBeforeNoon}of${f.noonKnown}`, f.openDeals, f.openNeverAttempted, f.won, f.lost, f.ordered,
+  f.unknown, f.talkSecondsTotal, f.talkSecondsConversation, f.attemptsWithoutOutcome, f.loggedWithoutAircall].join("/");
 
 expect("attempts: the four groups parse, anything else is refused (the routes' 400)",
   ["day", "week", "market", "pipeline", "owner", "", null, "Day"].map(parseAttemptGroup),
@@ -1090,12 +1176,12 @@ expect("attempts: the filter as a query, the defaults left out; the per-person k
   [{ market: "GB", attempted: "all" }, { pipeline: `${AT}:sales`, attempted: "none", outcome: "open" }, "attempts", "performance.team"]);
 expect("attempts: only sales deals: an order pipeline, a pipeline that is no lead pipeline and an uncounted one out, as 95's B1",
   byId(atWeek()).map((r) => r.dealSourceId).join(" "), "dA dB dL dL2 dN dO dS dT dU dW dW2", "dA dB dL dL2 dN dO dOrd dS dT dU dW dW2");
-expect("attempts: telephony: attempts, reached, first reached, talk, without outcome; logged without the telephony call apart, as 95's B2",
-  byId(atWeek()).map((r) => `${r.dealSourceId}:${r.attempts}/${r.reachedAttempts}/${r.firstReachedAttempt ?? "-"}/${r.talkSecondsTotal}/${r.talkSecondsReached}/${r.attemptsWithoutOutcome}/${r.loggedWithoutAircall}`).join(" "),
-  "dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/0/-/90/0/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/2/3/64/35/2/1 dW2:1/1/1/300/300/0/0",
+expect("attempts: telephony: attempts, conversations, the first, talk, without outcome; logged without the telephony call apart, as 95's B2",
+  byId(atWeek()).map((r) => `${r.dealSourceId}:${r.attempts}/${r.conversationAttempts}/${r.firstConversationAttempt ?? "-"}/${r.talkSecondsTotal}/${r.talkSecondsConversation}/${r.attemptsWithoutOutcome}/${r.loggedWithoutAircall}`).join(" "),
+  "dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/1/1/90/90/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/1/3/64/30/2/1 dW2:1/1/1/300/300/0/0",
   "dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:3/1/3/150/60/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:2/2/1/120/120/0/0 dS:2/2/1/90/90/2/0 dT:2/0/-/10/0/2/0 dU:1/1/1/120/120/0/0 dW:5/3/3/124/95/3/0 dW2:1/1/1/300/300/0/0");
 const atSrc = (rows) => byId(rows.filter((r) => ["dT", "dW"].includes(r.dealSourceId)))
-  .map((r) => `${r.dealSourceId}:${r.attempts}/${r.firstReachedAttempt ?? "-"}/${hms(r.firstAttemptAt)}/${r.speedToLeadSeconds}`).join(" ");
+  .map((r) => `${r.dealSourceId}:${r.attempts}/${r.firstConversationAttempt ?? "-"}/${hms(r.firstAttemptAt)}/${r.speedToLeadSeconds}`).join(" ");
 expect("attempts: the source: crm counts every outbound CRM call, telephony only the telephony calls, as 95's B3",
   `${atSrc(atWeek({ source: "crm" }))} | ${atSrc(atWeek())}`,
   "dT:2/-/08 08:02:00/120 dW:5/4/05 08:04:50/290 | dT:1/-/08 09:29:50/5390 dW:4/3/05 08:04:50/290",
@@ -1112,14 +1198,14 @@ expect("attempts: an ordered deal is out of the open figures, without business d
   "dA:3 dB:4 dN:3 dO:- dS:- dT:4 open 4 never 1 since 0–1:0 1–2:0 2–5:4 5+:0",
   "dA:3 dB:4 dN:3 dO:4 dS:3 dT:4 open 6 never 1 since 0–1:0 1–2:0 2–5:6 5+:0");
 const atOf = (id, o = {}, names = true) => dealAttempts(atDealOf(id), atOptions(o), names);
-const atAttemptText = (list) => list.map((a) => `${a.n}:${a.answered ? "t" : "f"}/${a.talkSeconds ?? "-"}/${a.reached ? "t" : "f"}/${a.reachedBy ?? "-"}`).join(" ");
-expect("attempts: reached by the outcome first, else 30 s of talk; Left voicemail with 90 s and answered with 0 s not, as 95's B6",
+const atAttemptText = (list) => list.map((a) => `${a.n}:${a.connected ? "t" : "f"}/${a.talkSeconds ?? "-"}/${a.conversation ? "t" : "f"}`).join(" ");
+expect("attempts: a conversation at 30 s of talk, the outcome deciding nothing; answered with 0 s connected, no conversation, as 95's B6",
   `${atAttemptText(atOf("dW"))} | ${atAttemptText(atOf("dL"))}`,
-  "1:f/-/f/- 2:t/29/f/- 3:t/30/t/talk_time 4:t/5/t/outcome | 1:t/90/f/- 2:t/0/f/-",
-  "1:f/-/f/- 2:t/29/t/talk_time 3:t/30/t/talk_time 4:t/5/f/- | 1:t/90/t/talk_time 2:t/0/f/-");
-const atEdge = (min) => { const r = atWeek({ reachedMinTalkSeconds: min }).find((x) => x.dealSourceId === "dW"); return `${min}:${r.reachedAttempts}/${r.firstReachedAttempt}`; };
-expect("attempts: attempts.reached_min_talk_seconds moves the edge, as 95's B7",
-  `${atEdge(29)} ${atEdge(31)}`, "29:3/2 31:1/4", "29:2/3 31:2/3");
+  "1:f/-/f 2:t/29/f 3:t/30/t 4:t/5/f | 1:t/90/t 2:t/0/f",
+  "1:f/-/f 2:t/29/f 3:t/30/t 4:t/5/t | 1:t/90/f 2:t/0/f");
+const atEdge = (min) => { const r = atWeek({ conversationMinTalkSeconds: min }).find((x) => x.dealSourceId === "dW"); return `${min}:${r.conversationAttempts}/${r.firstConversationAttempt ?? ""}`; };
+expect("attempts: calls.conversation_min_talk_seconds moves the edge, as 95's B7",
+  `${atEdge(29)} ${atEdge(31)}`, "29:2/2 31:0/", "29:3/2 31:1/4");
 expect("attempts: one deal's attempts in order with the start, the outcome's label and the agent (only with names), as 95's B9 and B10",
   [atOf("dW").map((a) => `${a.n}|${hms(a.startedAt)}|${a.outcomeLabel ?? "-"}|${a.agentName ?? "-"}`).join(" "), atOf("dW", {}, false).filter((a) => a.agentName !== null).length],
   ["1|05 08:04:50|No answer|Anna Verify 2|05 08:59:50|-|Anna Verify 3|06 08:59:50|-|Anna Verify 4|07 08:59:50|Connected|Bram Verify", 0],
@@ -1134,9 +1220,9 @@ expect("attempts: the filters attempted and outcome narrow every figure and the 
   "none:all=2/2/dL2,dN some:all=9/9/dA,dB,dL,dO,dS,dT,dU,dW,dW2 all:open=6/6/dA,dB,dN,dO,dS,dT all:won=2/2/dW,dW2 all:lost=2/2/dL,dL2 all:ordered=0/0/ none:lost=1/1/dL2");
 const atOc = attemptOutcomes(atWeek());
 expect("attempts: won against lost, the deals not decided counted apart, as 95's B12",
-  `${atOc.rows.map((o) => `${o.outcome}:${o.deals}/${o.avgAttempts.toFixed(2)}/${o.medianAttempts.toFixed(1)}/${o.medianSpeedSeconds ?? "-"}/${o.calledBeforeNoon}of${o.noonKnown}/${o.reachedDeals}/${o.avgTalkReachedSeconds ?? "-"}`).join(" ")}`
+  `${atOc.rows.map((o) => `${o.outcome}:${o.deals}/${o.avgAttempts.toFixed(2)}/${o.medianAttempts.toFixed(1)}/${o.medianSpeedSeconds ?? "-"}/${o.calledBeforeNoon}of${o.noonKnown}/${o.conversationDeals}/${o.avgTalkConversationSeconds ?? "-"}`).join(" ")}`
     + ` not_decided:${atOc.notDecided} open:${atOc.open} ordered:${atOc.ordered} unknown:${atOc.unknown}`,
-  "won:2/2.50/2.5/6440/2of2/2/168 lost:2/1.00/1.0/3590/1of2/0/- not_decided:7 open:4 ordered:2 unknown:1",
+  "won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of2/1/90 not_decided:7 open:4 ordered:2 unknown:1",
   "won:2/2.50/2.5/6440/2of2/2/335 lost:2/1.00/1.0/3590/1of1/0/- not_decided:7 open:4 ordered:2 unknown:1");
 const atSp = attemptSpeedBuckets(atWeek(), "5,15,60,240,1440");
 expect("attempts: the win rate by attempts and by speed to lead with their buckets, as 95's B13",
@@ -1145,9 +1231,9 @@ expect("attempts: the win rate by attempts and by speed to lead with their bucke
   "0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:1/0 5–15:0/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0",
   "0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:0/0 5–15:1/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0");
 const atPrev = attemptsInPeriod(attemptRecords(atDeals, atOptions()), "2026-09-28", "2026-10-04", AT_ALL, null, AMS_AT);
-expect("attempts: the figures, the previous period and reached per attempt, as 95's B14",
-  `${atFig(attemptFigures(atWeek()))} | ${atFig(attemptFigures(atPrev))} | ${attemptBuckets(atWeek(), 5).filter((b) => b.bucket > 0).map((b) => `${b.label}:${b.firstReached}`).join(" ")}`,
-  "11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:4 2:0 3:1 4:0 5+:0",
+expect("attempts: the figures, the previous period and the first conversation per attempt, as 95's B14",
+  `${atFig(attemptFigures(atWeek()))} | ${atFig(attemptFigures(atPrev))} | ${attemptBuckets(atWeek(), 5).filter((b) => b.bucket > 0).map((b) => `${b.label}:${b.firstConversation}`).join(" ")}`,
+  "11/9/13/1.18/1.0/6/5/5390/8of11/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0",
   "11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 0/0/0/-/-/0/0/-/0of0/0/0/0/0/0/0/0/0/0/0 | 1:4 2:0 3:1 4:0 5+:0");
 const atList = attemptList(atWeek(), 100);
 const atCapped = attemptList(atWeek(), 4);
@@ -1159,10 +1245,10 @@ expect("attempts: the list's order, its cap and total, the deal's id, the link a
 const atPeople = attemptsPerPerson(atWeek(), (id) => atNames[id] ?? null);
 const atNl = atPeople.rows.find((p) => p.kind === "notLinked");
 expect("attempts per agent: by name, never ranked, the not-linked row with one owner id, the total, as 95's B16",
-  `${atPeople.rows.filter((p) => p.kind === "person").map((p) => `${p.name}:${p.deals}/${p.attempts}/${p.reachedDeals}/${p.medianSpeedSeconds ?? "-"}/${p.talkSecondsReached}/${p.openNeverAttempted}`).join(" ")}`
-    + ` not_linked(${atNl.unlinkedOwners}):${atNl.deals}/${atNl.attempts}/${atNl.reachedDeals}/${atNl.medianSpeedSeconds}/${atNl.talkSecondsReached}/${atNl.openNeverAttempted}`
+  `${atPeople.rows.filter((p) => p.kind === "person").map((p) => `${p.name}:${p.deals}/${p.attempts}/${p.conversationDeals}/${p.medianSpeedSeconds ?? "-"}/${p.talkSecondsConversation}/${p.openNeverAttempted}`).join(" ")}`
+    + ` not_linked(${atNl.unlinkedOwners}):${atNl.deals}/${atNl.attempts}/${atNl.conversationDeals}/${atNl.medianSpeedSeconds}/${atNl.talkSecondsConversation}/${atNl.openNeverAttempted}`
     + ` total:${atPeople.total.deals}/${atPeople.total.attempts}`,
-  "Anna Verify:4/7/4/7190/440/0 Bram Verify:3/4/0/32390/0/0 not_linked(1):4/2/1/3590/120/1 total:11/13",
+  "Anna Verify:4/7/4/7190/435/0 Bram Verify:3/4/1/32390/90/0 not_linked(1):4/2/1/3590/120/1 total:11/13",
   "Bram Verify:3/4/0/32390/0/0 Anna Verify:4/7/4/7190/440/0 not_linked(1):4/2/1/3590/120/1 total:11/13");
 expect("attempts: the figures per pipeline, the lead pipelines only, as 95's B22",
   attemptGroups(atWeek(), "pipeline").map((g) => `${g.label}=${g.deals}`).join(","), "Sales=11", "Sales=11,Self Serve=1");
@@ -1176,10 +1262,10 @@ expect("attempts: business days count the dates after the first up to the second
   [3, 0, null], [4, 0, null]);
 // the screen: the shares, the format, the colours (one series, never a red), and nothing personal in the list or per person
 const atCur = attemptFigures(atWeek());
-expect("attempts: the shares (attempted, reached, first reach, noon, without an outcome, won), none without a base; one decimal in both languages",
-  [attemptedShare(atCur), reachedShare(atCur), firstReachShare(atCur), noonShare(atCur), withoutOutcomeShare(atCur), reachShare({ firstReached: 1 }, 0),
+expect("attempts: the shares (attempted, a conversation, the first a conversation, noon, without an outcome, won), none without a base; one decimal",
+  [attemptedShare(atCur), conversationShare(atCur), firstConversationShare(atCur), noonShare(atCur), withoutOutcomeShare(atCur), firstConversationOnShare({ firstConversation: 1 }, 0),
     wonRate({ won: 1, lost: 0 }), wonRate({ won: 0, lost: 0 }), fmtAttempts(1.55, "en"), fmtAttempts(1.55, "nl"), fmtAttempts(null, "en"), speedMinutes(290), speedMinutes(null)],
-  [9 / 11, 5 / 11, 4 / 9, 8 / 11, 6 / 13, null, 1, null, "1.6", "1,6", "–", 4.8, null],
+  [9 / 11, 6 / 11, 5 / 9, 8 / 11, 6 / 13, null, 1, null, "1.6", "1,6", "–", 4.8, null],
   [9 / 11, 5 / 11, 4 / 9, 8 / 11, 6 / 13, 0, 1, 0, "1.55", "1,6", "0", 4.8, null]);
 expect("attempts: the bars in the series' colours, never a red",
   [ATTEMPTS_BAR_CLASS, SINCE_LAST_CLASS, /red|error|rose/.test(ATTEMPTS_BAR_CLASS + SINCE_LAST_CLASS)], ["bg-p4a-deepblue", "bg-p4a-lightblue", false], ["bg-p4a-error", "bg-p4a-lightblue", false]);

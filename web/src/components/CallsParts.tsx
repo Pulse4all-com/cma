@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { CallsFigures, CallsGroup, CallsRow, TagUseRow } from "@/lib/data";
 import {
-  CALLS_GROUPS, callsBars, callsChange, countAxis, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
+  CALLS_GROUPS, callsBars, callsChange, countAxis, fillHint, fmtCount, fmtShare, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS,
   TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, weekNumber,
 } from "@/lib/reports";
 import { fmtDate } from "@/lib/time";
@@ -241,11 +241,14 @@ export function TagBars({ rows, conversations, copy, locale }: { rows: TagUseRow
 }
 
 /**
- * The groups by tags: the whole period's top twelve tags as columns, Other, then Untagged; counts with
- * their share of the row's conversations. Scrolls sideways inside its card where it is wider (1280 px)
+ * The groups by tags: the whole period's top twelve tags as columns and Other, counts with their share of
+ * the row's conversations; then Untagged, the row's calls without a tag with their share of the row's calls
+ * (addition 0008zc). Scrolls sideways inside its card where it is wider (1280 px)
  */
-export function TagTable({ rows, groups, total, group, copy, locale }: {
+export function TagTable({ rows, groups, total, group, copy, locale, conversationMinSeconds }: {
   rows: TagUseRow[]; groups: CallsRow[]; total: CallsFigures; group: CallsGroup; copy: Copy; locale: Locale;
+  /** calls.conversation_min_talk_seconds, for the Conversations header's hint (addition 0008zc) */
+  conversationMinSeconds: number;
 }) {
   const t = copy.calls;
   const h = copy.hints;
@@ -254,10 +257,11 @@ export function TagTable({ rows, groups, total, group, copy, locale }: {
   const whole = rows.filter((r) => r.groupKey === null);
   const shown = new Set(table.columns.map((c) => c.key));
   const of = (count: number) => ({ count, share: total.conversations === 0 ? null : count / total.conversations });
-  const totalOf = (key: string | null) => of(whole.find((r) => r.tagKey === key)?.conversations ?? 0);
-  const totalOther = of(whole.filter((r) => r.tagKey !== null && !shown.has(r.tagKey)).reduce((a, r) => a + r.conversations, 0));
-  const otherLabel = t.other.replace("{n}", fmtCount(whole.filter((r) => r.tagKey !== null && !shown.has(r.tagKey)).length, locale));
-  const hint = (label: string, text: string) => <HeaderHint label={h.about.replace("{label}", label)} text={text} />;
+  const totalOf = (key: string) => of(whole.find((r) => r.tagKey === key)?.conversations ?? 0);
+  const totalOther = of(whole.filter((r) => !shown.has(r.tagKey)).reduce((a, r) => a + r.conversations, 0));
+  const otherLabel = t.other.replace("{n}", fmtCount(whole.filter((r) => !shown.has(r.tagKey)).length, locale));
+  const hint = (label: string, text: string) =>
+    <HeaderHint label={h.about.replace("{label}", label)} text={fillHint(text, { hours: h.officeHours, seconds: conversationMinSeconds }, locale)} />;
   const n = (x: number) => fmtCount(x, locale);
   const th = "h-10 whitespace-nowrap px-2 py-1 font-semibold";
   const td = "h-10 whitespace-nowrap px-2 tabular text-right";
@@ -302,7 +306,7 @@ export function TagTable({ rows, groups, total, group, copy, locale }: {
             <td className={`${td} font-semibold`}>{n(total.conversations)}</td>
             {table.columns.map((c) => cell(totalOf(c.key), c.key, true))}
             {table.hasOther ? cell(totalOther, "other", true) : null}
-            {cell(totalOf(null), "untagged", true)}
+            {cell({ count: total.untagged, share: total.calls === 0 ? null : total.untagged / total.calls }, "untagged", true)}
           </tr>
         </tfoot>
       </table>
