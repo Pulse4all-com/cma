@@ -1525,7 +1525,7 @@ Expected: `0`, then `0`, then `0008zf`.
 
 **(d) The merge**
 
-**Browser:** Martin reviews and squash-merges PR #PRNUM on GitHub ((a) to (c) done). A merge that touches `web/` or `cloudbuild.yaml` builds and deploys prod's web through Cloud Build trigger `cma-web-main`; the ingest is not built by it, so the next step follows at once.
+**Browser:** Martin reviews and squash-merges PR #193 on GitHub ((a) to (c) done). A merge that touches `web/` or `cloudbuild.yaml` builds and deploys prod's web through Cloud Build trigger `cma-web-main`; the ingest is not built by it, so the next step follows at once.
 
 Expected: the PR shows merged.
 
