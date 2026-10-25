@@ -1,0 +1,32 @@
+verify/legacy-calls.mjs
+
+PASS  A1 the columns: every role, a header with a space; unknown, doubled or missing roles refused got ["{\"tag\":\"tags\",\"date\":\"timestamp call\",\"phone\":\"Phone\",\"
+PASS  A2 the meanings: trimmed, spaces collapsed, the last = splits; an unknown key, an @ or a double meaning refused got ["Courtesy positief,courtesy_completed_positive|A=B,call_type",7,"usag
+PASS  A3 the date format: a time ignored, one digit allowed, 31 February and other orders refused; YYYY-MM-DD and MM/DD/YYYY read got ["2025-05-14","2025-06-01",null,null,null,"2025-05-14","2025-05-14","u
+PASS  A4 the file's address and the source system: gs:// only; a bad bucket, an http address, a bad source system refused got ["{\"bucket\":\"cma-import-p4a-cma-prod\",\"object\":\"steam/courtesy.
+PASS  B1 the CSV: the byte order mark, ; as delimiter, a quoted ; and "" inside, CRLF, 21 records got ["Voornaam",21,"Fixture; \"Negentien\"","Persoon; Negentien","11-08-20
+PASS  B2 the rows: the blank one skipped, numbered from the header as row 1; the source by the marker got [19,"2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18,19,20,21",16,"11,12,14"]
+PASS  B3 the refusals: the cutover both ways (13, 14), unmapped (15), a date that is no date (16); a doubled space in a label mapped (19) got ["13:cutover 14:cutover 15:unmapped 16:date","courtesy_completed_posit
+PASS  B4 E.164 only (spaces allowed); a national number, 00 and letters refused; a customer id of 10 or more digits only got ["+31201110002",null,null,null,"1234567890123",null,null,null]
+PASS  B5 a missing column is a usage error naming its role             got "usage"
+PASS  C1 the email: the primary in any case; an additional one confirmed, its decoy left out; two contacts several; no @ no search got ["103 105 110+210 ",4]
+PASS  C2 the phone: NL and GB share the national number, the NL one kept; a national-format number confirmed with NL; six candidates several got ["104 118 130+131 ","hs_searchable_calculated_phone_number=201110004,h
+PASS  C3 the properties the lookups rely on, checked on the portal     got "hs_additional_emails,hs_searchable_calculated_phone_number,hs_searcha
+PASS  D1 a dry run: the counts; refused rows per reason; the reconciliation; nothing searched, written or run got [19,16,3,4,"{\"cutover\":[13,14],\"unmapped\":[15],\"date\":[16]}","{\
+PASS  D2 …the SHA-256 of the file, the reconciliation sent as hashes and dates only got ["ab5aea4928e6652c0c1985a5b9825913878247c761aa0d23ea7ce11281c43bd9","[
+PASS  E1 every match path stored: email_phone, email (primary and additional), phone (collision, national format), customer_id (store, ref field), conflict, none got "2:email_phone:102 3:email:103 4:phone:104 5:email:105 6:conflict:- 7:
+PASS  E2 …the stored rows' facts: date, meaning and label as the file and mapping say got ["{\"on\":\"2025-05-14\",\"meaning\":\"courtesy_completed_positive\",\
+PASS  E3 the finished line: the counts per source and method, the row numbers of conflict, none and refused got ["started",19,16,3,4,"{\"email_phone\":2,\"email\":4,\"phone\":2,\"cus
+PASS  E4 the batch's counts and the run's row: legacy_call_import, its stream, succeeded; commits in parts of at most 100 got ["{\"total\":19,\"legacy\":16,\"current\":3,\"refused\":4,\"current_fo
+PASS  F1 a rerun: the batch reused; row 10 filled (its email now one contact); conflict and none searched again, the rest not got ["reused","2:email_phone:102 3:email:103 4:phone:104 5:email:105 6:con
+PASS  G1 below the daily floor: the run pauses as succeeded with daily_floor, keeps what it matched, the batch not finished got [true,"daily_floor",0,"succeeded","daily_floor",true,null,"number"]
+PASS  G2 …the same command later continues and ends where a whole run ends got [null,"reused","2:email_phone:102 3:email:103 4:phone:104 5:email:105 
+PASS  H1 a missing property: the run fails with property_missing before any search or batch; the dry run says so too got ["property_missing",1,"[\"hs_searchable_calculated_mobile_number\"]",0
+PASS  I1 the object read with the bearer token, its path encoded; 404 object_not_found; over the cap object_too_large got ["a;b\n1;2\n","object_not_found","object_too_large"]
+PASS  J1 the fixture holds the values the check looks for (emails, names, numbers, customer ids) got true
+PASS  J2 the captured log holds none of them                           got []
+PASS  J3 the job's answers (the finished line) hold none of them       got []
+PASS  J4 the stored rows, counts and run rows hold none of them        got []
+PASS  J5 the log has progress and nothing but counts, row numbers and ids: no email, no + got [true,false]
+
+ALL 28 PASS

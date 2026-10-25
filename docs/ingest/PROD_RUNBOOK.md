@@ -571,6 +571,21 @@ reset role;
 ```
 Expected: calls from 1 October onward; links for most calls agents logged in HubSpot; a `backfill` row `succeeded` for stream `telephony_call`. Few links next to many calls means the Aircall–HubSpot integration does not log every call (data prerequisite) or the HubSpot calls carry no number (the `counterpart_hash` on `cma.crm_call` is empty).
 
+**Note: the start moved back to 1 September 2026 (prod, 25 October 2026, Pulse4all Subscriptions).** So the courtesy figures can read the Aircall calls from September (the legacy call import of addition 0008zg covers what came before, `docs/import/legacy-calls.md`), the same three steps ran again with `2026-09-01`: the HubSpot calls, the Aircall calls, then the links by hand. The outcome is in CHANGELOG.md (25 October 2026).
+
+**Terminal** (`<hubspot conn>` the HubSpot connection, `<aircall conn>` from 8.3)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<hubspot conn>,--object,crm_call,--from,2026-09-01
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<aircall conn>,--object,telephony_call,--from,2026-09-01
+```
+
+**Studio (cma-prod-pg)** after the context block
+```sql
+select cma.link_calls('2026-09-01 00:00 Europe/Amsterdam'::timestamptz);
+reset role;
+```
+Expected: each execution `has successfully completed`, then the number of links made.
+
 ## 8.9 Day one
 
 - **The end-to-end check** of Phase 7 step 7 on the first real new deal: the Aircall call, its HubSpot call engagement, the `call_link` within two hours, the deal in `speed_to_lead_rows`. Compare the engagement's `occurred_at` with the Aircall call's `started_at` for the same call: equal within seconds means HubSpot's time is the start; minutes apart means the effective start comes from the link (DESIGN §4.4 does that already).

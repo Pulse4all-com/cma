@@ -1,0 +1,41 @@
+> node verify/signature.mjs
+ALL 18 PASS
+> node verify/mapping.mjs
+ALL 53 PASS
+> node verify/hash.mjs
+ALL 26 PASS
+> node verify/forms.mjs
+ALL 50 PASS
+> node verify/aircall-token.mjs
+ALL 20 PASS
+> node verify/aircall-mapping.mjs
+ALL 49 PASS
+> node verify/aircall-scripts.mjs
+ALL 30 PASS
+> node verify/shopify-signature.mjs
+ALL 17 PASS
+> node verify/shopify-mapping.mjs
+ALL 51 PASS
+> node verify/shopify-client.mjs
+ALL 27 PASS
+> node verify/shopify-scripts.mjs
+ALL 21 PASS
+> node verify/outbox.mjs
+ALL 20 PASS
+> node verify/email-mapping.mjs
+ALL 85 PASS
+> node verify/api-budget.mjs
+ALL 52 PASS
+> node verify/deploy-script.mjs
+ALL 26 PASS
+> node verify/funnel-mapping.mjs
+ALL 36 PASS
+> node verify/reviews-mapping.mjs
+ALL 27 PASS
+> node verify/legacy-calls.mjs
+ALL 28 PASS
+## eslint
+eslint: no problems
+## provoked
+verify/legacy-calls.mjs --provoke: ALL 28 PROVOKED CHECKS FAILED, as they must
+verify/deploy-script.mjs --provoke: ALL 26 PROVOKED CHECKS FAILED, as they must

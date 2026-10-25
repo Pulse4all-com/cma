@@ -1,0 +1,107 @@
+# every db/ verify script on main's database (00 to 106) and on this branch's (00 to 108), PASS / FAIL / ERROR line counts and the verdict row
+# (fail=1 on scripts with a verdict row is the word FAIL in '0 FAIL'; 04, 07, 12, 25, 27 and 39 are as on main, 39 flips between runs on both)
+## main
+04_verify.sql pass=0 fail=0 error=3 
+07_verify_time_model.sql pass=0 fail=0 error=7 
+10_verify_corrections.sql pass=0 fail=0 error=0 
+12_verify_team_people.sql pass=4 fail=0 error=1 
+14_verify_tenant_settings.sql pass=2 fail=0 error=0 
+16_verify_team_status_time.sql pass=2 fail=0 error=0 
+18_verify_clock_in_app_links.sql pass=2 fail=0 error=0 
+20_verify_team_now.sql pass=2 fail=0 error=0 
+22_verify_teams_skills.sql pass=2 fail=0 error=0 
+25_verify_roster.sql pass=2 fail=0 error=0 
+27_verify_configuration.sql pass=2 fail=1 error=1 
+29_verify_my_profile.sql pass=2 fail=0 error=0 
+31_verify_ingest_crm_records.sql pass=2 fail=0 error=0 
+33_verify_intake_core.sql pass=2 fail=0 error=0 
+35_verify_telephony.sql pass=2 fail=0 error=0 
+37_verify_commerce.sql pass=2 fail=0 error=0 
+39_verify_outbox.sql pass=2 fail=1 error=1 
+41_verify_lead_metrics.sql pass=2 fail=0 error=0 
+43_verify_messaging.sql pass=2 fail=0 error=0 
+45_verify_assignment_alerts.sql pass=2 fail=0 error=0 
+47_verify_workday_window.sql pass=2 fail=0 error=0 
+49_verify_alert_time_zone.sql pass=8 fail=1 error=0 verdict | PASS | 7 PASS, 0 FAIL
+51_verify_legacy_time_import.sql pass=2 fail=0 error=0 
+53_verify_sources_configuration.sql pass=17 fail=1 error=0 verdict | PASS | 16 PASS, 0 FAIL
+55_verify_uncounted_lines.sql pass=18 fail=1 error=0 verdict | PASS | 17 PASS, 0 FAIL
+57_verify_commerce_phone_hash.sql pass=13 fail=1 error=0 verdict | PASS | 12 PASS, 0 FAIL
+59_verify_commerce_contact_link.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+61_verify_inbound_service.sql pass=21 fail=1 error=0 verdict | PASS | 20 PASS, 0 FAIL
+63_verify_calls_overview.sql pass=20 fail=1 error=0 verdict | PASS | 19 PASS, 0 FAIL
+65_verify_calls_history_start.sql pass=12 fail=1 error=0 verdict | PASS | 11 PASS, 0 FAIL
+67_verify_invitations.sql pass=24 fail=1 error=0 verdict | PASS | 23 PASS, 0 FAIL
+69_verify_email_activity.sql pass=30 fail=1 error=0 verdict | PASS | 29 PASS, 0 FAIL
+71_verify_crm_tasks.sql pass=21 fail=1 error=0 verdict | PASS | 20 PASS, 0 FAIL
+73_verify_follow_up.sql pass=22 fail=1 error=0 verdict | PASS | 21 PASS, 0 FAIL
+75_verify_forms_reporting.sql pass=25 fail=1 error=0 verdict | PASS | 24 PASS, 0 FAIL
+77_verify_audit_hardening.sql pass=15 fail=1 error=0 verdict | PASS | 14 PASS, 0 FAIL
+79_verify_system_health.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+81_verify_follow_up_snapshot.sql pass=20 fail=1 error=0 verdict | PASS | 19 PASS, 0 FAIL
+83_verify_email_reports.sql pass=27 fail=1 error=0 verdict | PASS | 26 PASS, 0 FAIL
+85_verify_first_orders.sql pass=27 fail=1 error=0 verdict | PASS | 26 PASS, 0 FAIL
+87_verify_journeys.sql pass=17 fail=1 error=0 verdict | PASS | 16 PASS, 0 FAIL
+89_verify_callbacks_kept.sql pass=16 fail=1 error=0 verdict | PASS | 15 PASS, 0 FAIL
+91_verify_report_speed.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+93_verify_attempts_per_deal.sql pass=26 fail=1 error=0 verdict | PASS | 25 PASS, 0 FAIL
+95_verify_attempts_for_sales.sql pass=37 fail=1 error=0 verdict | PASS | 36 PASS, 0 FAIL
+97_verify_stage_times.sql pass=18 fail=1 error=0 verdict | PASS | 17 PASS, 0 FAIL
+99_verify_funnel.sql pass=34 fail=1 error=0 verdict | PASS | 33 PASS, 0 FAIL
+101_verify_definitions_calls.sql pass=19 fail=1 error=0 verdict | PASS | 18 PASS, 0 FAIL
+103_verify_tag_meaning_incorrect_data.sql pass=13 fail=1 error=0 verdict | PASS | 12 PASS, 0 FAIL
+105_verify_reviews.sql pass=28 fail=1 error=0 verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL
+107_verify_review_reference_guard.sql pass=11 fail=1 error=0 verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL
+## branch
+04_verify.sql pass=0 fail=0 error=3 
+07_verify_time_model.sql pass=0 fail=0 error=7 
+10_verify_corrections.sql pass=0 fail=0 error=0 
+12_verify_team_people.sql pass=4 fail=0 error=1 
+14_verify_tenant_settings.sql pass=2 fail=0 error=0 
+16_verify_team_status_time.sql pass=2 fail=0 error=0 
+18_verify_clock_in_app_links.sql pass=2 fail=0 error=0 
+20_verify_team_now.sql pass=2 fail=0 error=0 
+22_verify_teams_skills.sql pass=2 fail=0 error=0 
+25_verify_roster.sql pass=2 fail=1 error=1 
+27_verify_configuration.sql pass=2 fail=1 error=1 
+29_verify_my_profile.sql pass=2 fail=0 error=0 
+31_verify_ingest_crm_records.sql pass=2 fail=0 error=0 
+33_verify_intake_core.sql pass=2 fail=0 error=0 
+35_verify_telephony.sql pass=2 fail=0 error=0 
+37_verify_commerce.sql pass=2 fail=0 error=0 
+39_verify_outbox.sql pass=2 fail=2 error=2 
+41_verify_lead_metrics.sql pass=2 fail=0 error=0 
+43_verify_messaging.sql pass=2 fail=0 error=0 
+45_verify_assignment_alerts.sql pass=2 fail=0 error=0 
+47_verify_workday_window.sql pass=2 fail=0 error=0 
+49_verify_alert_time_zone.sql pass=8 fail=1 error=0 verdict | PASS | 7 PASS, 0 FAIL
+51_verify_legacy_time_import.sql pass=2 fail=0 error=0 
+53_verify_sources_configuration.sql pass=17 fail=1 error=0 verdict | PASS | 16 PASS, 0 FAIL
+55_verify_uncounted_lines.sql pass=18 fail=1 error=0 verdict | PASS | 17 PASS, 0 FAIL
+57_verify_commerce_phone_hash.sql pass=13 fail=1 error=0 verdict | PASS | 12 PASS, 0 FAIL
+59_verify_commerce_contact_link.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+61_verify_inbound_service.sql pass=21 fail=1 error=0 verdict | PASS | 20 PASS, 0 FAIL
+63_verify_calls_overview.sql pass=20 fail=1 error=0 verdict | PASS | 19 PASS, 0 FAIL
+65_verify_calls_history_start.sql pass=12 fail=1 error=0 verdict | PASS | 11 PASS, 0 FAIL
+67_verify_invitations.sql pass=24 fail=1 error=0 verdict | PASS | 23 PASS, 0 FAIL
+69_verify_email_activity.sql pass=30 fail=1 error=0 verdict | PASS | 29 PASS, 0 FAIL
+71_verify_crm_tasks.sql pass=21 fail=1 error=0 verdict | PASS | 20 PASS, 0 FAIL
+73_verify_follow_up.sql pass=22 fail=1 error=0 verdict | PASS | 21 PASS, 0 FAIL
+75_verify_forms_reporting.sql pass=25 fail=1 error=0 verdict | PASS | 24 PASS, 0 FAIL
+77_verify_audit_hardening.sql pass=15 fail=1 error=0 verdict | PASS | 14 PASS, 0 FAIL
+79_verify_system_health.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+81_verify_follow_up_snapshot.sql pass=20 fail=1 error=0 verdict | PASS | 19 PASS, 0 FAIL
+83_verify_email_reports.sql pass=27 fail=1 error=0 verdict | PASS | 26 PASS, 0 FAIL
+85_verify_first_orders.sql pass=27 fail=1 error=0 verdict | PASS | 26 PASS, 0 FAIL
+87_verify_journeys.sql pass=17 fail=1 error=0 verdict | PASS | 16 PASS, 0 FAIL
+89_verify_callbacks_kept.sql pass=16 fail=1 error=0 verdict | PASS | 15 PASS, 0 FAIL
+91_verify_report_speed.sql pass=14 fail=1 error=0 verdict | PASS | 13 PASS, 0 FAIL
+93_verify_attempts_per_deal.sql pass=26 fail=1 error=0 verdict | PASS | 25 PASS, 0 FAIL
+95_verify_attempts_for_sales.sql pass=37 fail=1 error=0 verdict | PASS | 36 PASS, 0 FAIL
+97_verify_stage_times.sql pass=18 fail=1 error=0 verdict | PASS | 17 PASS, 0 FAIL
+99_verify_funnel.sql pass=34 fail=1 error=0 verdict | PASS | 33 PASS, 0 FAIL
+101_verify_definitions_calls.sql pass=19 fail=1 error=0 verdict | PASS | 18 PASS, 0 FAIL
+103_verify_tag_meaning_incorrect_data.sql pass=13 fail=1 error=0 verdict | PASS | 12 PASS, 0 FAIL
+105_verify_reviews.sql pass=28 fail=1 error=0 verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL
+107_verify_review_reference_guard.sql pass=11 fail=1 error=0 verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL
+109_verify_legacy_call_outcome.sql pass=19 fail=1 error=0 verdict | PASS | 109_verify_legacy_call_outcome: 18 PASS, 0 FAIL

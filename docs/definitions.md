@@ -259,12 +259,17 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
 | As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the courtesy meanings and call type wait for their figures. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
 
-**Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it.
+**Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it. The courtesy rows were set in prod on 25 October 2026 (Martin); the meaning of the Data Issue Escalate tags is an Open decision (docs/open-decisions.md, the courtesy definitions).
 
 | Aircall tags | Meaning |
 |---|---|
 | `1.1 Sales - Not Reached` and the other "Not Reached" tags | Not reached (`not_reached`) |
 | `1.4 Sales - Wrong Number*`, `1.5 Sales - Incorrect Data*` | Incorrect data (`incorrect_data`) |
+| `4.1 Courtesy - Not Reached` | Not reached (`not_reached`) |
+| `4.2 Courtesy - Follow Up ∞`, `4.3 Courtesy - Data Issue Escalate*` | Courtesy attempt (`courtesy_attempt`) |
+| `4.4 Courtesy - Completed Positive*` | Courtesy completed, positive (`courtesy_completed_positive`) |
+| `4.5 Courtesy - Completed Neutral*` | Courtesy completed, neutral (`courtesy_completed_neutral`) |
+| `4.6 Courtesy - Completed Negative*` | Courtesy completed, negative (`courtesy_completed_negative`) |
 
 ### Untagged
 

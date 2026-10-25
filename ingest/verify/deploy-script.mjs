@@ -15,6 +15,10 @@
  * uncommitted change under ingest/; and the reconcile's default schedule is 30 3 * * * Europe/Amsterdam,
  * outside the hour the autumn change repeats and the spring change skips.
  *
+ * The legacy call import (addition 0008zg, 25 October 2026): the eighth job, ingest-import-legacy-calls, without a
+ * schedule and without the scheduler's invoker, running as cma-ingest; the service account reads the import bucket
+ * cma-import-<project> through a binding on that bucket only, and a bucket that does not exist yet is named, not made.
+ *
  *   node verify/deploy-script.mjs             every check must PASS
  *   node verify/deploy-script.mjs --provoke   every check must FAIL
  */
@@ -63,6 +67,7 @@ printf 'gcloud %s\\n' "$*" >> "${LOG}"
 proj=""; fmt=""
 for a in "$@"; do case "$a" in --project=*) proj="\${a#--project=}";; --format=*) fmt="\${a#--format=}";; esac; done
 case "$1 $2 $3" in
+  "storage buckets describe") [ -e "${bin}/no-bucket" ] && exit 1 ;;
   "sql users list") echo "cma-ingest@\${proj}.iam" ;;
   "projects describe "*) echo 100000000002 ;;
   "artifacts repositories get-iam-policy") echo roles/artifactregistry.reader ;;
@@ -114,8 +119,27 @@ expect("prod --jobs --front → refused as before (--front is the service's)", [
 
 // ---- B. What still runs: prod's jobs, dev's service, prod's service with --front ----------------------
 r = await run(["prod", "--jobs"]);
-expect("prod --jobs → exit 0: the seven jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
-  [0, 7, 0], [2, 0, 1]);
+expect("prod --jobs → exit 0: the eight jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
+  [0, 8, 0], [2, 0, 1]);
+const importJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-import-legacy-calls ")) ?? "";
+expect("…the import job (0008zg): node jobs/import-legacy-calls.mjs as cma-ingest, 6 hours, no arguments",
+  [importJob.includes("--command=node,jobs/import-legacy-calls.mjs"), importJob.includes("--service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com"),
+    importJob.includes("--task-timeout=6h"), importJob.includes("--args= ")], [true, true, true, true], [false, false, false, false]);
+expect("…no schedule and no invoker for it",
+  [r.calls.filter((c) => c.startsWith("gcloud scheduler jobs ") && c.includes("ingest-import-legacy-calls")).length,
+    r.calls.filter((c) => c.startsWith("gcloud run jobs add-iam-policy-binding ingest-import-legacy-calls ")).length], [0, 0], [1, 1]);
+const storageGrants = r.calls.filter((c) => c.includes("storage.objectViewer"));
+expect("…storage.objectViewer for cma-ingest on gs://cma-import-p4a-cma-prod only, never on the project",
+  [storageGrants.length, (storageGrants[0] ?? "").startsWith("gcloud storage buckets add-iam-policy-binding gs://cma-import-p4a-cma-prod "),
+    (storageGrants[0] ?? "").includes("--member=serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com"),
+    r.calls.some((c) => c.startsWith("gcloud projects add-iam-policy-binding") && c.includes("storage."))],
+  [1, true, true, false], [0, false, false, true]);
+writeFileSync(path.join(bin, "no-bucket"), "");
+r = await run(["dev", "--jobs"]);
+rmSync(path.join(bin, "no-bucket"));
+expect("…a bucket that does not exist is named with the runbook, nothing granted or created",
+  [r.code, r.out.includes("bucket gs://cma-import-p4a-cma-dev does not exist yet: create it (docs/import/legacy-calls.md, step 1), then rerun with --jobs"),
+    r.calls.filter((c) => c.includes("storage.objectViewer") || c.startsWith("gcloud storage buckets create")).length], [0, true, 0], [2, false, 1]);
 r = await run(["dev"]);
 let d = serviceDeploy(r);
 expect("dev → exit 0: ingress all, the run.app addresses, replay on", [r.code, d.ingress, d.vars.INGEST_PUBLIC_URLS, d.vars.INGEST_ALLOW_REPLAY], [0, "all", RUNAPP.join(","), "1"],

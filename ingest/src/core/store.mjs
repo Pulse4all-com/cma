@@ -55,6 +55,18 @@
  *   reviewAlerts(ids)           cma.ingest_review_alerts, at most 500 ids a call: the messages written
  *   reviewChannelSummary(id)    one channel's reviews held: count, link levels, oldest and newest submission
  *
+ * For the legacy call import (addition 0008zg), the store of the CRM connection the rows are matched against; each its
+ * own short transaction, ids, dates, meanings and counts only (never an email, a phone number, a name or a customer id
+ * of the file; the reconciliation sends keyed hashes):
+ *   legacyBatchStart(system, sha256, cutover)   cma.legacy_call_batch_start: { batchId, outcome started or reused }
+ *   legacyBatchRows(batchId)    the batch's stored rows: source row → match method
+ *   upsertLegacyOutcomes(batchId, rows)   cma.legacy_call_outcomes_upsert in parts of at most 500: { outcome: count }
+ *   legacyBatchFinish(batchId, counts)    cma.legacy_call_batch_finish: the counts stored
+ *   legacyReconcile(items)      cma.legacy_call_reconcile in parts of at most 500: item → calls
+ *   customerContacts(customerId)   the contacts (at most three) the store customers with that id are linked to on this
+ *                               CRM connection (0008h), any store connection of the tenant
+ *   contactRefProperties()      this CRM connection's contact properties holding ids of any ref system
+ *
  * For the outbox job (migration 0007c): outboxClaim(limit), outboxFinish(groups).
  * For the sweep's outbox guard: outboxLate(lateBy, connectionId)   per active connection, the tenant's
  *                               actions the outbox still has to deliver (pending, failed, or a claim that
@@ -420,6 +432,54 @@ export function storeFor(ctx, connectionId) {
         return { held: r.reviews, linkedOrder: r.linked_order, linkedContact: r.linked_contact, unlinked: r.unlinked,
           oldestSubmittedAt: r.oldest ? new Date(r.oldest).toISOString() : null, newestSubmittedAt: r.newest ? new Date(r.newest).toISOString() : null };
       });
+    },
+    async legacyBatchStart(sourceSystem, sha256, cutoverDate) {
+      return withTenant(ctx, async (q) => {
+        const r = (await q.query("select batch_id, outcome from cma.legacy_call_batch_start($1, $2, $3, $4::date)",
+          [connectionId, sourceSystem, sha256, cutoverDate])).rows[0];
+        return { batchId: r.batch_id, outcome: r.outcome };
+      });
+    },
+    async legacyBatchRows(batchId) {
+      return withTenant(ctx, async (q) => new Map((await q.query(
+        `select source_row, match_method from cma.legacy_call_outcome
+          where tenant_id = cma.current_tenant_id() and batch_id = $1`, [batchId])).rows.map((r) => [r.source_row, r.match_method])));
+    },
+    async upsertLegacyOutcomes(batchId, rows) {
+      const counts = {};
+      for (const part of chunks(rows)) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query("select outcome from cma.legacy_call_outcomes_upsert($1, $2::jsonb)", [batchId, JSON.stringify(part)]);
+          for (const row of r.rows) counts[row.outcome] = (counts[row.outcome] ?? 0) + 1;
+        });
+      }
+      return counts;
+    },
+    async legacyBatchFinish(batchId, counts) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.legacy_call_batch_finish($1, $2::jsonb) as c",
+        [batchId, JSON.stringify(counts)])).rows[0].c);
+    },
+    async legacyReconcile(items) {
+      const out = new Map();
+      for (const part of chunks(items)) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query("select item, calls from cma.legacy_call_reconcile($1::jsonb)", [JSON.stringify(part)]);
+          for (const x of r.rows) out.set(x.item, x.calls);
+        });
+      }
+      return out;
+    },
+    async customerContacts(customerId) {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select distinct crm_contact_source_id from cma.commerce_customer
+          where tenant_id = cma.current_tenant_id() and source_id = $1 and crm_connection_id = $2 and crm_contact_source_id is not null
+          order by 1 limit 3`, [customerId, connectionId])).rows.map((r) => r.crm_contact_source_id));
+    },
+    async contactRefProperties() {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select distinct source_property from cma.connection_field
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 and entity = 'contact' and field = 'ref'
+          order by 1`, [connectionId])).rows.map((r) => r.source_property));
     },
     async lineMarkets(numberRefs) {
       if (!numberRefs.length) return new Map();

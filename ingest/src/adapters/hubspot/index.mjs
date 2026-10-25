@@ -16,7 +16,9 @@
  *   dailyFloor                           the floor below which a backfill or reconcile pauses: the
  *                                        connection's api_daily_floor_pct (usage.mjs, backlog CMA-069)
  *   crm                                  contact lookups for another adapter's match (match.mjs: the
- *                                        commerce customer's contact, kept in the CMA, 0008h)
+ *                                        commerce customer's contact, kept in the CMA, 0008h); for the legacy
+ *                                        call import (0008zg) also by any email and by phone, with the
+ *                                        properties those rely on and a check that the portal holds them
  *   writeContacts                        the outbox job: claimed contact write-backs (write.mjs; generic,
  *                                        unused for commerce since 0008h)
  */
@@ -29,7 +31,10 @@ import { pollEmail, emailPollEnabled } from "./email-poll.mjs";
 import { reconcile, RECONCILE_OBJECTS } from "./reconcile.mjs";
 import { backfill, backfillFrom, BACKFILL_OBJECTS } from "./backfill.mjs";
 import { refreshReasons } from "./reasons.mjs";
-import { findContactsByEmail, findContactsByProperties, existingContacts } from "./match.mjs";
+import {
+  findContactsByEmail, findContactsByProperties, existingContacts, findContactsByAnyEmail, findContactsByPhone, missingContactProperties,
+  LOOKUP_PROPERTIES,
+} from "./match.mjs";
 import { writeContacts } from "./write.mjs";
 import { usageSettings } from "./usage.mjs";
 import { warn } from "../../core/log.mjs";
@@ -73,6 +78,9 @@ export const hubspot = {
     }
     return usage.floorPct;
   },
-  crm: { findContactsByEmail, findContactsByProperties, existingContacts },
+  crm: {
+    findContactsByEmail, findContactsByProperties, existingContacts, findContactsByAnyEmail, findContactsByPhone, missingContactProperties,
+    lookupProperties: LOOKUP_PROPERTIES,
+  },
   writeContacts,
 };

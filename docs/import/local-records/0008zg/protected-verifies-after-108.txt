@@ -1,0 +1,7 @@
+33_verify_intake_core.sql: ERROR lines 0; pulse4all-invest|0|0|0|0|0|0|PASS pulse4all-subscriptions|0|0|0|0|0|0|PASS 
+35_verify_telephony.sql: ERROR lines 0; pulse4all-invest|0|0|0|0|PASS pulse4all-subscriptions|0|0|0|0|PASS 
+69_verify_email_activity.sql: verdict | PASS | 29 PASS, 0 FAIL
+71_verify_crm_tasks.sql: verdict | PASS | 20 PASS, 0 FAIL
+75_verify_forms_reporting.sql: verdict | PASS | 24 PASS, 0 FAIL
+105_verify_reviews.sql: verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL
+107_verify_review_reference_guard.sql: verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL
