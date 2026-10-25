@@ -54,13 +54,16 @@ function whole(settings, name, fallbacks) {
 }
 
 /**
- * The connection's transaction_ref_pattern as a regular expression: text of at most 200 characters that compiles;
- * anything else takes the default (map.mjs DEFAULT_REF_PATTERN) and is named in fallbacks. The pattern decides which
- * references are kept; an @ is never kept whatever it says (map.mjs referenceOf).
+ * The connection's transaction_ref_pattern as a regular expression. Only the form the default has is taken: anchored,
+ * one character class, a length from 1 to at most 100 (`^[...]{1,N}$`), because a tenant's pattern runs in the poll
+ * every tenant shares and a pattern of that form cannot backtrack. Anything else takes the default (map.mjs
+ * DEFAULT_REF_PATTERN) and is named in fallbacks. An @ is never kept whatever the class allows (map.mjs referenceOf).
  */
+const REF_PATTERN_FORM = /^\^\[(?:[^\]\\]|\\.)+\]\{1,(\d{1,3})\}\$$/;
 function refPatternOf(settings, fallbacks) {
   const v = settings?.transaction_ref_pattern;
-  if (typeof v === "string" && v.trim() !== "" && v.length <= 200) {
+  const form = typeof v === "string" ? REF_PATTERN_FORM.exec(v) : null;
+  if (form && Number(form[1]) >= 1 && Number(form[1]) <= 100) {
     try {
       return new RegExp(v);
     } catch {

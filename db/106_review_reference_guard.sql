@@ -5,10 +5,11 @@
 -- Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then
 -- 107_verify_review_reference_guard.sql (dev), then 105, 77, 75, 67 and 33 again (dev); then prod, before the ingest
 -- image of brief B18.1 runs: that image finishes a run that left a reference out with the count ref_dropped, which only
--- this addition's cma.ingest_sync_run_finish() accepts. The ingest of main before B18.1 keeps working on it: it sends
--- the reference it reads, and only one with an @ is refused, which comes back only when a backfill re-reads that
--- review. Nothing in the web reads what this changes. So prod runs this as soon as dev has passed, before the merge
--- (PROD_RUNBOOK 13.12).
+-- this addition's cma.ingest_sync_run_finish() accepts. The ingest of main before B18.1 keeps working on it, except for
+-- a batch that holds a reference with an @: a new review with one in the hourly poll, or the 2024 review re-read by a
+-- backfill or a reconcile reaching back that far, fails its run with CMA04 (nothing of it stored) until the new image
+-- runs. Nothing in the web reads what this changes. So prod runs this as soon as dev has passed, before the merge, and
+-- the new ingest image is deployed straight after the merge (PROD_RUNBOOK 13.12).
 --
 -- Why (Decision log, 25 October 2026; brief B18.1): in prod, 1 of the 845 reviews of the first backfill held an email
 -- address as its transaction reference (a manual invite of June 2024 without an event type). 0008ze stored it in

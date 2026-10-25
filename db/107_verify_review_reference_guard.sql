@@ -161,7 +161,7 @@ begin
              || ' ' || pg_temp.v0008zf_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                                                    jsonb_build_array(pg_temp.v0008zf_item('rev-at-2', 'chl-zf', null, v_mail))))
              || ' ' || (select count(*) from cma.review r where r.tenant_id = v_t1);
-    perform cma.ingest_upsert_reviews(v_rev, jsonb_build_array(pg_temp.v0008zf_item('rev-ok-1', 'chl-zf', 'P4AUK-990001', 'P4AUK-990001'),
+    perform cma.ingest_upsert_reviews(v_rev, jsonb_build_array(pg_temp.v0008zf_item('rev-ok-1', 'chl-zf', 'ORD-990001', 'ORD-990001'),
                                                                pg_temp.v0008zf_item('rev-ok-2', 'chl-zf', null, null)));
     perform set_config('role', 'cma_owner', true);
     v_txt := v_txt || ' ' || pg_temp.v0008zf_code(format('update cma.review set transaction_ref = %L where tenant_id = %L and source_id = %L',
@@ -176,7 +176,7 @@ begin
                                 ' ' order by r.source_id)
               from cma.review r where r.tenant_id = v_t1);
     v_rows := v_rows || array['12', 'B2 a normal reference kept in the column and raw, none stored as nothing',
-      case when v_txt = 'rev-ok-1:P4AUK-990001:P4AUK-990001 rev-ok-2:-:-' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'rev-ok-1:ORD-990001:ORD-990001 rev-ok-2:-:-' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B3. a review as 0008ze could store it (the check dropped inside this block, as the owner, then the Ingest user):
     --     the row holds the address, its insert audit row does not (cma.audit_row() scrubs the image at write time)
@@ -225,15 +225,15 @@ begin
     -- B5. the helper: nothing for nothing, a non-object as it is, the reference cleared where it holds an @ and only there
     v_txt := coalesce(cma.review_image_without_at_reference(null)::text, 'null')
              || ' ' || cma.review_image_without_at_reference('"text"'::jsonb)::text
-             || ' ' || (cma.review_image_without_at_reference('{"transaction_ref": "P4AUK-1", "raw": {"transaction": {"reference": "P4AUK-1"}}}')
-                        = '{"transaction_ref": "P4AUK-1", "raw": {"transaction": {"reference": "P4AUK-1"}}}'::jsonb)::text
+             || ' ' || (cma.review_image_without_at_reference('{"transaction_ref": "ORD-1", "raw": {"transaction": {"reference": "ORD-1"}}}')
+                        = '{"transaction_ref": "ORD-1", "raw": {"transaction": {"reference": "ORD-1"}}}'::jsonb)::text
              || ' ' || cma.review_image_without_at_reference(jsonb_build_object('transaction_ref', v_mail, 'raw',
-                                                                                jsonb_build_object('transaction', jsonb_build_object('reference', 'P4AUK-1'))))::text
-             || ' ' || cma.review_image_without_at_reference(jsonb_build_object('transaction_ref', 'P4AUK-1', 'raw',
+                                                                                jsonb_build_object('transaction', jsonb_build_object('reference', 'ORD-1'))))::text
+             || ' ' || cma.review_image_without_at_reference(jsonb_build_object('transaction_ref', 'ORD-1', 'raw',
                                                                                 jsonb_build_object('id', 'x', 'transaction', jsonb_build_object('reference', v_mail))))::text;
     v_rows := v_rows || array['15', 'B5 the helper: null, a non-object, a clean image, the column only, raw only',
-      case when v_txt = 'null "text" true {"raw": {"transaction": {"reference": "P4AUK-1"}}, "transaction_ref": null} '
-                        || '{"raw": {"id": "x"}, "transaction_ref": "P4AUK-1"}'
+      case when v_txt = 'null "text" true {"raw": {"transaction": {"reference": "ORD-1"}}, "transaction_ref": null} '
+                        || '{"raw": {"id": "x"}, "transaction_ref": "ORD-1"}'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B6. a reviews run finishes with ref_dropped among its counts (the Ingest user); a key outside the list is still

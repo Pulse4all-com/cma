@@ -59,8 +59,8 @@ market and off.
 - Execution `ingest-backfill-g9ncq`, 12:51 to 13:00.
 - 845 reviews: UK 411 (since October 2023), NL 241 (since November 2023), DE 191 (since February 2025), FR 1, SE 1,
   AT 0.
-- Links: order 16, contact 782, none 45. These three add up to 843, two fewer than the 845 reviews; the report does
-  not say where the other two are.
+- Links: order 16, contact 782, none 45. (Claude Code's note: these three add up to 843, two fewer than the 845
+  reviews; the report does not say where the other two are.)
 - About 9 of the run's minutes went to the HubSpot contact lookups.
 
 ## The check against the eTrusted Control Centre
@@ -70,7 +70,7 @@ market and off.
   - NL: 241, 240 approved and 1 in moderation.
   - DE: 191.
 - The Control Centre's score is the simple average of the APPROVED reviews submitted in the last 12 months:
-  DE 4.71 = 4.71, NL 4.77 = 4.77, UK 4.83 against 4.82 (it appears to cut to two decimals rather than round).
+  DE 4.71 = 4.71, NL 4.77 = 4.77, UK 4.83 against 4.82 (it appears to cut to two decimals).
   Reports → Reviews averages the selected period, so it differs by design.
 - Paging worked over the 845 reviews and 7 channels at 60 requests a minute without a 429.
 
