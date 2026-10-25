@@ -59,8 +59,7 @@ market and off.
 - Execution `ingest-backfill-g9ncq`, 12:51 to 13:00.
 - 845 reviews: UK 411 (since October 2023), NL 241 (since November 2023), DE 191 (since February 2025), FR 1, SE 1,
   AT 0.
-- Links: order 16, contact 782, none 45. (Claude Code's note: these three add up to 843, two fewer than the 845
-  reviews; the report does not say where the other two are.)
+- Links: order 16, contact 784, none 45.
 - About 9 of the run's minutes went to the HubSpot contact lookups.
 
 ## The check against the eTrusted Control Centre
@@ -80,3 +79,6 @@ market and off.
 manual invite of 16 June 2024. 0008ze stored it in `cma.review.transaction_ref` and in `raw.transaction.reference`.
 Brief B18.1 (addition 0008zf, `db/106_review_reference_guard.sql`) addresses it; its run in dev and prod is recorded
 separately.
+
+Martin's report adds: backups and point-in-time recovery keep the old value until their retention ends (point-in-time
+recovery's logs: 7 days); no extract of `cma_read.review` from before `106` is known.
