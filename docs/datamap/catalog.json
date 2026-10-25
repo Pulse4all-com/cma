@@ -141,12 +141,28 @@
       ]
     },
     {
+      "key": "reviews",
+      "label": "Reviews",
+      "tables": [
+        {
+          "name": "review_channel",
+          "what": "A review platform's channels per connection: name and locale from the platform, the market each serves and whether its reviews count (configuration); a channel gone from the platform's list is marked, never deleted (0008ze)",
+          "how": "Reviews poll hourly (the channel list first, again with the nightly reconcile and the backfill); a new channel lands without a market and not counted; market and counted set on Configuration, Sources, which ingest never overwrites"
+        },
+        {
+          "name": "review",
+          "what": "Reviews, metadata only: channel, type, state, published, rating 1 to 5, submitted and updated times, reply, invite event type, transaction reference, and the link to an order or a CRM contact by id; never the reviewer's name, email or phone, nor a title or text (0008ze)",
+          "how": "Reviews poll hourly (each channel's reviews after its cursor less two hours), nightly reconcile (the last reviews_reconcile_days, default 30), backfill by hand; polling only, the platform sends no webhook; the reviewer's email is used in memory to find the CRM contact, then dropped"
+        }
+      ]
+    },
+    {
       "key": "connections",
       "label": "Source settings and catalogs",
       "tables": [
         {
           "name": "integration_connection",
-          "what": "One row per connected account (portal, Aircall account, store)",
+          "what": "One row per connected account (portal, Aircall account, store, review platform account)",
           "how": "Configuration → Sources"
         },
         {
@@ -356,7 +372,7 @@
         {
           "name": "message",
           "what": "Messages and alerts, with a link to the record; withdrawn_at and withdrawn_by when one was deleted for everyone, never removed (0008z)",
-          "how": "Messages screen, or a rule when a lead is assigned; Delete on Messages withdraws one (messages.withdraw)"
+          "how": "Messages screen, or a rule when a lead is assigned or a published review of a counted channel comes in at or below a review rule's highest rating (the reviews poll, 0008ze); Delete on Messages withdraws one (messages.withdraw)"
         },
         {
           "name": "message_delivery",
@@ -365,7 +381,7 @@
         },
         {
           "name": "message_rule",
-          "what": "Alert rules",
+          "what": "Alert rules: a new record, an assigned record, or a submitted review at or below the rule's highest rating (review_submitted, max_rating; 0008ze); a rule's trigger is fixed once it exists",
           "how": "Configuration → alert rules"
         }
       ]
@@ -479,7 +495,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection"
         },
         {
           "name": "sync_cursor",
@@ -579,6 +595,26 @@
     {
       "name": "cancellation_rows",
       "what": "Per record of the tenant's cancellation kind (reports.cancellation_kind, matched by its rules) since the intake start: the kind, ids, pipeline, stage, created, open or closed, closed, the reason's option value and the market (the record's, else its contact's country). Requests, never contracts; computed on read (0008zb)"
+    },
+    {
+      "name": "reviews_per_day",
+      "what": "Per tenant and business day: the counted reviews (published, of a counted review channel), the average rating, the distribution by whole star, the negative ones, the link levels (order, contact, none) and the previous day's count and average. From the review platform's reviews, by the day they were submitted in the tenant's zone; computed on read (0008ze)"
+    },
+    {
+      "name": "reviews_per_week",
+      "what": "The same per ISO week, with the previous week's count and average (0008ze)"
+    },
+    {
+      "name": "reviews_per_market",
+      "what": "Per market and ISO week: the counted reviews, average rating, star distribution, negative ones, link levels and the previous week's count and average; the market is the review channel's, unknown when it has none (0008ze)"
+    },
+    {
+      "name": "reviews_per_channel",
+      "what": "Per review channel and ISO week: its name, market, the counted reviews, average rating, star distribution, negative ones, link levels and the previous week's count and average (0008ze)"
+    },
+    {
+      "name": "review_market_state",
+      "what": "Per active market: whether it has a counted review channel and whether that channel holds published reviews (no channel, channel without reviews, has reviews), with the channels and the published reviews they hold (0008ze)"
     }
   ],
   "flows": {
@@ -617,6 +653,18 @@
       "doms": [
         "commerce",
         "connections",
+        "plumbing"
+      ]
+    },
+    "trustedshops": {
+      "src": "s-trustedshops",
+      "ways": [
+        "w-jobs"
+      ],
+      "doms": [
+        "reviews",
+        "connections",
+        "messaging",
         "plumbing"
       ]
     },
