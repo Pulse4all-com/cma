@@ -2,6 +2,7 @@
 
 ## Source of truth
 - README.md and the files in its Documentation map are the source of truth for scope, architecture, source-of-truth rules, roles, features, KPIs, roadmap, Decision log (docs/decisions.md) and Open decisions (docs/open-decisions.md). Read README.md first, then the files the task touches; refer to sections by name. Treat decisions as settled unless asked to reopen one.
+- docs/definitions.md defines every term, label and metric word: every UI label, column header, hint, API field, setting, SQL name and catalog entry uses its terms in its meaning. A new term or a changed meaning updates docs/definitions.md in the same PR, with a docs/decisions.md row starting 'Definitions:'. A retired word is never introduced.
 - docs/RUNBOOK.md describes how changes are built, merged, released and verified.
 - web/CLAUDE.md and web/AGENTS.md hold the Next.js rules for web/. Read them before touching web/.
 - Write everything in English: code, comments, SQL, docs, commit messages and PR descriptions.

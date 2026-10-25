@@ -49,6 +49,8 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   // the connected-call threshold (addition 0008j), shown in words on a telephony connection
   const settings = await data().listSettings(me);
   const threshold = settings.find((x) => x.key === "telephony.connected_min_seconds")?.value;
+  // the conversation threshold (addition 0008zc), shown in words beside it
+  const conversation = settings.find((x) => x.key === "calls.conversation_min_talk_seconds")?.value;
   // the tenant's email settings (addition 0008t), shown in words on a CRM connection
   const valueOf = (key: string) => settings.find((x) => x.key === key)?.value ?? null;
   const numberOf = (v: string | null) => (v === null || v === "" ? null : Number(v));
@@ -63,7 +65,8 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     <ConfigurationPage me={me} copy={copy} active="config-sources" title={`${t.title}: ${detail.connection.name}`} intro={t.intro} bare trail={[{ label: detail.connection.name }]}>
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
       <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={copy} locale={me.locale} timeZone={me.timeZone}
-        connectedMinSeconds={threshold === undefined ? null : Number(threshold)} email={email} />
+        connectedMinSeconds={threshold === undefined ? null : Number(threshold)}
+        conversationMinSeconds={conversation === undefined ? null : Number(conversation)} email={email} />
       {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={copy} /> : null}
       {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={copy} /> : null}
     </ConfigurationPage>

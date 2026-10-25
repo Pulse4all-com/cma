@@ -50,14 +50,9 @@ export default async function DashboardPage({ searchParams }: PageProps<"/report
 
   // The Intake row (B11, migration 0007d and 0006's crm_records_per_day): the tenant's intake for the
   // period, read next to the time per status; the person filter does not apply to it
-  // since addition 0008w with the callbacks kept (KPI 5)
-  const [all, intake, records, speed, callbacks] = await Promise.all([
-    data().getTeamStatusTime(me, period, null),
-    data().getIntake(me, period),
-    data().getCrmRecordsPerDay(me, period),
-    data().getSpeedToLeadRows(me, period),
-    data().getCallbacksKept(me, period),
-  ]);
+  // since addition 0008w with the callbacks kept (KPI 5). One read since 23 October 2026: the five reads in
+  // one transaction (the round-trips budget, web/verify/round-trips.json)
+  const { time: all, intake, records, speed, callbacks } = await data().getDashboard(me, period);
   const people = peopleOf(all.rows);
   const person = typeof sp.person === "string" && people.some((p) => p.userId === sp.person) ? sp.person : "";
   const rows = person ? all.rows.filter((x) => x.userId === person) : all.rows;

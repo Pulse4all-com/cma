@@ -19,7 +19,8 @@ Check, in this order:
 6. Database: a change is a new numbered script plus its verify script, never an edit to a script that ran in prod; the version follows the series rule in docs/decisions.md (0008za after 0008z); a table, view or column change updates docs/datamap/catalog.json.
 7. Docs: a docs/decisions.md row, a dated CHANGELOG.md line and the affected sections exist for every decision or change; records/ is untouched unless written from Martin's report.
 8. Style and language: UI copy and components follow docs/style/Pulse4all-Style.md; everything is in English.
-9. Data prerequisites: a metric or feature that depends on a HubSpot or Aircall prerequisite not in place is flagged.
-10. Scope: one increment, nothing outside the goal.
+9. Definitions: review against docs/definitions.md; a retired word or a term used in another meaning is a Critical.
+10. Data prerequisites: a metric or feature that depends on a HubSpot or Aircall prerequisite not in place is flagged.
+11. Scope: one increment, nothing outside the goal.
 
 Report findings as Critical (must fix), Warning (should fix) or Note, each with file and line and the rule it breaks. End with "Verdict: ready" or "Verdict: not ready" and a three-line summary for the PR description. Report nothing you did not verify in the files.

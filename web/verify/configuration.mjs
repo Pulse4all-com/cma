@@ -21,8 +21,9 @@ import {
 } from "../src/lib/configuration.ts";
 import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
-  planOutcomeRule, formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
+  formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
   formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
+  TAG_MEANINGS, tagsWithoutNotReached,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -83,6 +84,14 @@ expect("a customer-records connection has seven sections", sourceSections("crm",
   ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"]);
 expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags", "missedReasons"], ["lines", "tags"]);
 expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
+// a tag's meanings (addition 0008zc; incorrect_data 0008zd): seven keys, incorrect data offered after not reached; the notice
+// that Conversation counts on talk time alone looks at not reached only
+expect("a tag's seven meanings, incorrect data after not reached; the talk-time-alone notice looks at not reached only",
+  [TAG_MEANINGS, tagsWithoutNotReached([{ meaning: "incorrect_data" }, { meaning: null }]), tagsWithoutNotReached([{ meaning: "not_reached" }])],
+  [["not_reached", "incorrect_data", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral",
+    "courtesy_completed_negative"], true, false],
+  [["not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative"],
+    false, false]);
 expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
 expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);
 expect("a settings key in the right form", settingKeyProblem("record_url_deal", ["app_host"], true), null, "key");
@@ -131,12 +140,6 @@ expect("a second run changes nothing", planFormRule(fixtureForms.map((f) => { co
 expect("a rule that sets nothing is refused", formRuleProblem({ ...leadRule, counted: "keep", leadSource: { kind: "keep" }, market: { kind: "keep" }, others: "keep" }), "nothing", null);
 expect("the first word needs include words", formRuleProblem({ ...leadRule, include: [] }), "noInclude", null);
 expect("a lead source value needs a value", formRuleProblem({ ...leadRule, leadSource: { kind: "value", value: " " } }), "leadSource", null);
-// Martin's call outcome rule of 12 October 2026
-const outcomes = [["o1", "Connected", false], ["o2", "Not reached", true], ["o3", "Voicemail", true], ["o4", "Do Not Call Or Email", false], ["o5", "Left live message", true], ["o6", "Busy", false]]
-  .map(([outcomeRef, label, isConnected]) => ({ outcomeRef, label, isConnected, isActive: true }));
-const outcomePlan = planOutcomeRule(outcomes, { include: parseWords("not reached, voicemail, no answer, busy, wrong number, incorrect data, email only, left live message"), exclude: [], connected: false, others: "opposite" });
-expect("the outcome rule: not reached and voicemail off, connected on", outcomePlan.map((p) => `${p.outcomeRef}=${p.after}`), ["o1=true", "o2=false", "o3=false", "o4=true", "o5=false"], ["o1=false"]);
-expect("others left alone change nothing", planOutcomeRule(outcomes, { include: ["busy"], exclude: [], connected: false, others: "keep" }).length, 0, 1);
 // Markets
 expect("office hours as typed", parseOfficeHours("9-12:30, 13-17"), "09:00-12:30,13:00-17:00", "9-12:30,13-17");
 expect("hours in four digits and to 24:00", parseOfficeHours("0900-2400"), "09:00-24:00", null);

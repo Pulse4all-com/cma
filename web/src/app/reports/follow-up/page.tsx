@@ -51,7 +51,8 @@ function Tile({ label, info, value, testId }: {
  * of the organisation's own people only: no customer name, number or address, never a task's text. Every header
  * explains itself in a hint (copy.hints), the target and the warning share filled in from the tenant's settings.
  * Since addition 0008w (brief N19-A part 4) below the lists the callbacks kept of the last eight ISO weeks, per week
- * for reports.view or performance.team and per person for performance.team, or "No callback type set" in words.
+ * for reports.view or performance.team and per person for performance.team, or "No callback type set" in words; since 23
+ * October 2026 read in the same statement as the page (the round-trips budget, web/verify/round-trips.json).
  */
 export default async function FollowUpPage({ searchParams }: PageProps<"/reports/follow-up">) {
   const r = await resolve();
@@ -69,14 +70,15 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/reports
   }
 
   const filter = parseFollowUpFilter(await searchParams);
-  // One read: the snapshot's counts, per person, the filter choices and the three lists after the filter
-  const page = await data().getFollowUpPage(me, filter);
-  // Per person only for performance.team as the page is seen (a preview narrows it); the database decides for the real person
-  const byOwner = me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION) ? page.byOwner : null;
   // Callbacks kept (0008w): the last eight ISO weeks, for the report permissions; per person for performance.team
   const span = callbackWeeksRange(dateKeyInZone(new Date(), me.timeZone));
-  const callbacks = holdsAny(me, CALLBACKS_PERMISSIONS) ? await data().getCallbacksKept(me, span) : null;
-  const callbackOwners = callbacks?.connected && me.permissions.includes(CALLBACKS_PER_OWNER_PERMISSION) ? await data().getCallbacksPerOwner(me, span) : null;
+  // One read: the snapshot's counts, per person, the filter choices and the three lists after the filter, and the callbacks
+  // kept in the same statement (per person only once a callback type counts)
+  const page = await data().getFollowUpPage(me, filter, holdsAny(me, CALLBACKS_PERMISSIONS)
+    ? { range: span, perOwner: me.permissions.includes(CALLBACKS_PER_OWNER_PERMISSION) } : null);
+  // Per person only for performance.team as the page is seen (a preview narrows it); the database decides for the real person
+  const byOwner = me.permissions.includes(FOLLOW_UP_BY_OWNER_PERMISSION) ? page.byOwner : null;
+  const { callbacks, callbackOwners } = page;
   const ctx: TableContext = {
     copy, locale: me.locale, timeZone: me.timeZone, withOwner: true,
     targetMinutes: page.settings.targetMinutes, warningPct: page.settings.warningPct,

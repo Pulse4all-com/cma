@@ -5,21 +5,21 @@ import { CmaDbError, one, withTenant, withoutTenant, type Querier, type TenantCo
 import type {
   AbsenceType, AppLink, CmaData, ConfigAppLink, ConfigStatus, CoverageTargetRow, DateKey, DirectoryPerson, ExportHoursRow, HoursRange, HoursSummary, MessageStat, MyMessage, MyMessages, MyProfile, MyRosterDay, OrganisationInfo,
   RoleInfo, RosterCoverageRow, RosterEntry, RosterPerson, RosterWeek, RosterWeekHeader, RosterWeekSummary, SkillInfo, TodayShift,
-  StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
+  StatusChangeRow, StatusTimeRow, TeamDay, TeamDayDetail, TeamStatusTime, TeamInfo, TeamMembership, TeamNow, TeamNowPerson,
   TeamPerson, TenantSetting, TimeEvent, Workday, WorkStatus, PermissionInfo, SentMessage,
-  CrmRecordsDay, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
+  CrmRecordsDay, DashboardData, DataQualityCheck, Intake, SourceConnections, SpeedToLeadRow, SpeedToLeadStatus, SpeedToLeadSummaryRow,
   AlertPipelineChoice, AlertRule, LinkedAccountSystem, MarketConfig, SourceConnection, SourceDetail, SourceKind, SourcePipeline, SourceSettings,
   InboundFigures, InboundNow, InboundService, MissedReason,
   CallsFigures, CallsFilter, CallsLine, CallsOverview, CallsPerAgent, CallsPerAgentTags, CallsPerson, CallsTagUse,
   FormAnswerRow, FormCategory, FormsAnswers, FormsReport, FormsRow, SourceFormField,
   Invitation, InvitationAcceptResult, InvitationLink, InvitationPreview,
-  DueState, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
+  DueState, FollowUpCallbacks, FollowUpOwner, FollowUpPage, FollowUpRowsAt, FollowUpSummary, FollowUpSummaryAt, MyFollowUp, OpenLead, OpenTask, OpenTicket, SlaState,
   DatabaseProbe, OutboxStatusRow, SystemHealthRun,
   EmailFigures, EmailNotRespondingRow, EmailPerAgent, EmailPerson, EmailReport, EmailRow, EmailSeriesRow, EmailWaitingRow,
   AttributionSettings, FirstOrderAmount, FirstOrderEvidence, FirstOrderFigures, FirstOrderListRow, FirstOrderRow, FirstOrdersReport, OrderPerson, OrdersPerPerson,
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
-  DealAttempt, LineStoredCalls,
+  DealAttempt, LineStoredCalls, TagMeaning,
   CancellationFigures, CancellationsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
@@ -139,6 +139,17 @@ function toSpeedRow(r: SpeedDbRow): SpeedToLeadRow {
   };
 }
 
+/** One row per lead deal created in the range (cma.speed_to_lead_rows checks the permission and the 92 days) */
+async function readSpeedToLeadRows(q: Querier, range: HoursRange): Promise<SpeedToLeadRow[]> {
+  // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
+  const r = await q.query<SpeedDbRow>(
+    `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
+       from cma.speed_to_lead_rows($1::date, $2::date) r`,
+    [range.from, range.to],
+  );
+  return r.rows.map(toSpeedRow);
+}
+
 type SummaryDbRow = {
   group_key: string; group_label: string | null; deals: number; called: number; median_business_minutes: string | null;
   p80_business_minutes: string | null; within_target_pct: string | null; before_next_noon_pct: string | null; open_not_called: number;
@@ -171,6 +182,28 @@ async function readConnections(q: Querier): Promise<SourceConnections> {
   );
   const row = one(r.rows, "connections");
   return { telephony: row.telephony, commerce: row.commerce };
+}
+
+/** Intake per business date and market with the tenant's source connections (cma.intake_per_day checks the permission) */
+async function readIntake(q: Querier, range: HoursRange): Promise<Intake> {
+  const r = await q.query<IntakeDbRow>(`select * from cma.intake_per_day($1::date, $2::date)`, [range.from, range.to]);
+  const connections = await readConnections(q);
+  const start = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'intake.start_date'`);
+  const counts: IntakeCounts[] = r.rows.map((x) => ({
+    date: x.business_date, market: x.market, formSubmissions: x.form_submissions, dealsCreated: x.deals_created,
+    dealsClosed: x.deals_closed, ticketsCreated: x.tickets_created, ticketsClosed: x.tickets_closed, callsIn: x.calls_in,
+    callsOut: x.calls_out, taggedCalls: x.tagged_calls, newCustomers: x.new_customers, firstOrders: x.first_orders,
+    repeatOrders: x.repeat_orders, renewals: x.renewals,
+  }));
+  return { ...range, connections, startDate: start.rows[0]?.value ?? null, rows: applyConnections(counts, connections) };
+}
+
+/** CRM records created per business date, type, market and pipeline (cma.crm_records_per_day checks performance.team) */
+async function readCrmRecordsPerDay(q: Querier, range: HoursRange): Promise<CrmRecordsDay[]> {
+  const r = await q.query<{ business_date: string; record_type: string; market: string | null; pipeline_id: string | null; pipeline_label: string | null; records: number; closed_now: number }>(
+    `select * from cma.crm_records_per_day($1::date, $2::date)`, [range.from, range.to]);
+  return r.rows.map((x) => ({ date: x.business_date, recordType: x.record_type, market: x.market, pipelineId: x.pipeline_id,
+    pipelineLabel: x.pipeline_label, records: x.records, closedNow: x.closed_now }));
 }
 
 // ---- Inbound service and callbacks (addition 0008i): the rows as the functions answer them ----------
@@ -208,24 +241,24 @@ function toReason(x: ReasonDbRow): MissedReason {
 // ---- Calls overview and calls per agent (addition 0008j): the rows as the functions answer them ----
 type CallsDbRow = {
   period: string; group_key: string | null; group_label: string | null; calls: number; inbound: number; outbound: number;
-  answered_inbound: number; connected_outbound: number; connected_pct: string | null; conversations: number;
+  answered_inbound: number; connected: number; connected_rate: string | null; conversations: number;
   talk_seconds_total: string; talk_seconds_avg: string | null; outbound_talk_seconds: string; outbound_talk_avg: string | null;
-  untagged_conversations: number;
+  untagged: number;
 };
 type PersonDbRow = {
   row_kind: "person" | "not_linked" | "total"; user_id: string | null; display_name: string | null; unlinked_users: number | null;
-  answered_inbound: number; inbound_talk_seconds: string; inbound_talk_avg: string | null; outbound_calls: number; connected_outbound: number;
-  outbound_talk_seconds: string; outbound_talk_avg: string | null; conversations: number; untagged_conversations: number;
+  answered_inbound: number; inbound_talk_seconds: string; inbound_talk_avg: string | null; outbound_calls: number; connected: number;
+  outbound_talk_seconds: string; outbound_talk_avg: string | null; conversations: number; untagged: number;
   first_call_time: string | null; last_call_time: string | null;
 };
 
 function toCallsFigures(x: CallsDbRow | undefined): CallsFigures {
   return {
     calls: x?.calls ?? 0, inbound: x?.inbound ?? 0, outbound: x?.outbound ?? 0, answeredInbound: x?.answered_inbound ?? 0,
-    connectedOutbound: x?.connected_outbound ?? 0, connectedPct: num(x?.connected_pct ?? null), conversations: x?.conversations ?? 0,
+    connected: x?.connected ?? 0, connectedRate: num(x?.connected_rate ?? null), conversations: x?.conversations ?? 0,
     talkSeconds: Number(x?.talk_seconds_total ?? 0), talkAvgSeconds: num(x?.talk_seconds_avg ?? null),
     outboundTalkSeconds: Number(x?.outbound_talk_seconds ?? 0), outboundTalkAvgSeconds: num(x?.outbound_talk_avg ?? null),
-    untaggedConversations: x?.untagged_conversations ?? 0,
+    untagged: x?.untagged ?? 0,
   };
 }
 
@@ -233,8 +266,8 @@ function toCallsPerson(x: PersonDbRow): CallsPerson {
   return {
     kind: x.row_kind === "not_linked" ? "notLinked" : x.row_kind, userId: x.user_id, name: x.display_name, unlinkedUsers: x.unlinked_users,
     answeredInbound: x.answered_inbound, inboundTalkSeconds: Number(x.inbound_talk_seconds), inboundTalkAvgSeconds: num(x.inbound_talk_avg),
-    outboundCalls: x.outbound_calls, connectedOutbound: x.connected_outbound, outboundTalkSeconds: Number(x.outbound_talk_seconds),
-    outboundTalkAvgSeconds: num(x.outbound_talk_avg), conversations: x.conversations, untaggedConversations: x.untagged_conversations,
+    outboundCalls: x.outbound_calls, connected: x.connected, outboundTalkSeconds: Number(x.outbound_talk_seconds),
+    outboundTalkAvgSeconds: num(x.outbound_talk_avg), conversations: x.conversations, untagged: x.untagged,
     firstCallTime: x.first_call_time?.slice(0, 5) ?? null, lastCallTime: x.last_call_time?.slice(0, 5) ?? null,
   };
 }
@@ -349,9 +382,12 @@ function toEmailPerson(x: EmailPersonDbRow): EmailPerson {
   };
 }
 
-async function telephonySetting(q: Querier): Promise<number> {
-  const r = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'telephony.connected_min_seconds'`);
-  return Number(r.rows[0]?.value ?? 10);
+/** The two call thresholds the Calls pages' hints name (Connected and Conversation, 0008zc), in one statement */
+async function callSettings(q: Querier): Promise<{ connectedMinSeconds: number; conversationMinSeconds: number }> {
+  const r = await q.query<{ key: string; value: string | null }>(
+    `select key, value from cma.tenant_settings() where key in ('telephony.connected_min_seconds', 'calls.conversation_min_talk_seconds')`);
+  const of = (key: string, fallback: number) => Number(r.rows.find((x) => x.key === key)?.value ?? fallback);
+  return { connectedMinSeconds: of("telephony.connected_min_seconds", 0), conversationMinSeconds: of("calls.conversation_min_talk_seconds", 30) };
 }
 
 function ctx(me: Principal): TenantContext {
@@ -534,6 +570,16 @@ function toStatusTimeRow(r: StatusTimeDbRow): StatusTimeRow {
     stretches: r.stretches,
     isCapped: r.is_capped,
   };
+}
+
+// Addition 0003c: the permission (performance.team) is checked inside the function, in the same
+// transaction as the read
+async function readTeamStatusTime(q: Querier, range: HoursRange, userId: string | null): Promise<TeamStatusTime> {
+  const r = await q.query<StatusTimeDbRow>(
+    `select * from cma.team_status_time($1::date, $2::date, $3::uuid)`,
+    [range.from, range.to, userId],
+  );
+  return { ...range, rows: r.rows.map(toStatusTimeRow) };
 }
 
 function toStatusChangeRow(r: StatusChangeDbRow): StatusChangeRow {
@@ -789,6 +835,51 @@ function toCallbackCounts(r: CallbackKeptDbRow | undefined): CallbackCounts {
   return { callbacks: r?.callbacks ?? 0, kept: r?.kept ?? 0, notKept: r?.not_kept ?? 0, pending: r?.pending ?? 0, noContact: r?.no_contact ?? 0, noDue: r?.no_due ?? 0 };
 }
 
+/**
+ * Callbacks kept (addition 0008w) as columns of one select, so a page reads them in a statement it already makes
+ * (23 October 2026, the round-trips budget): the report's rows in the function's order, whether a callback type
+ * counts, and tasks.callback_window_minutes as an array (empty when the catalog lacks it). from and to are the
+ * statement's placeholders; each function checks its permission and the 92 days (CMA06, CMA04). json_agg keeps
+ * every value as the row read gave it: integers as numbers, week_start as its YYYY-MM-DD text.
+ */
+const callbacksKeptColumns = (from: string, to: string) =>
+  `(select coalesce(json_agg(r order by r.ordinality), '[]'::json)
+      from cma.callbacks_kept_report(${from}::date, ${to}::date) with ordinality r) as callback_rows,
+   cma.callbacks_kept_connected() as callbacks_connected,
+   array(select s.value from cma.tenant_settings() s where s.key = 'tasks.callback_window_minutes') as callback_window`;
+type CallbacksKeptDb = { callback_rows: CallbackKeptDbRow[]; callbacks_connected: boolean; callback_window: (string | null)[] };
+
+function toCallbacksKept(range: HoursRange, x: CallbacksKeptDb): CallbacksKept {
+  if (x.callback_window.length === 0) throw new Error("tenant setting tasks.callback_window_minutes is missing from the catalog");
+  const current = x.callback_rows.filter((r) => r.period === "current");
+  return {
+    ...range, connected: x.callbacks_connected ?? false,
+    weeks: current.filter((r) => r.dimension === "week" && r.week_start).map((r) => ({ weekStart: r.week_start as string, ...toCallbackCounts(r) })),
+    total: toCallbackCounts(current.find((r) => r.dimension === "total")),
+    previous: toCallbackCounts(x.callback_rows.find((r) => r.period === "previous" && r.dimension === "total")),
+    windowMinutes: Number(x.callback_window[0]),
+  };
+}
+
+/** Callbacks kept per person (cma.callbacks_kept_per_owner, performance.team) as one column, in the function's order */
+const callbackOwnersColumn = (from: string, to: string) =>
+  `(select coalesce(json_agg(o order by o.ordinality), '[]'::json)
+      from cma.callbacks_kept_per_owner(${from}::date, ${to}::date) with ordinality o) as callback_owners`;
+
+function toCallbackOwner(x: CallbackKeptDbRow): CallbackOwner {
+  return {
+    kind: x.row_kind === "person" ? "person" : x.row_kind === "not_linked" ? "notLinked" : "total",
+    userId: x.user_id ?? null, name: x.display_name ?? null, unlinkedOwners: x.unlinked_owners ?? null,
+    callbacks: x.callbacks, kept: x.kept, notKept: x.not_kept, pending: x.pending, noContact: x.no_contact,
+  };
+}
+
+/** The callbacks kept of a span in one statement */
+async function readCallbacksKept(q: Querier, range: HoursRange): Promise<CallbacksKept> {
+  const r = await q.query<CallbacksKeptDb>(`select ${callbacksKeptColumns("$1", "$2")}`, [range.from, range.to]);
+  return toCallbacksKept(range, one(r.rows, "callbacks_kept"));
+}
+
 /** The tenant's active markets for the filter, then unknown */
 async function marketCodes(q: Querier): Promise<string[]> {
   const r = await q.query<{ code: string }>(`select code from cma.market where status = 'active' order by sort_order, code`);
@@ -864,7 +955,7 @@ type CatalogsJson = {
   }[];
   callOutcomes: { outcomeRef: string; label: string; isConnected: boolean; status: string }[];
   lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
-  tags: { tagRef: string; name: string; isCounted: boolean; status: string }[];
+  tags: { tagRef: string; name: string; isCounted: boolean; meaning: TagMeaning | null; status: string }[];
   sampleIds: Record<string, string>;
 };
 
@@ -965,32 +1056,32 @@ function toOwner(x: OwnerDb): FollowUpOwner {
 // ---- Attempts per deal (addition 0008y; for sales since 0008z): cma.attempts_per_deal_page and attempts_per_person_page answer one
 // JSON object each, snake_case keys, numbers as numbers (the averages and medians as JSON numbers), times as ISO text
 type AttemptFiguresDb = {
-  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; reached_deals: number;
-  first_reached: number; reached_attempts: number; speed_deals: number; median_speed_seconds: number | null; noon_known: number;
+  deals: number; attempted: number; attempts: number; avg_attempts: number | null; median_attempts: number | null; conversation_deals: number;
+  first_conversation: number; conversation_attempts: number; speed_deals: number; median_speed_seconds: number | null; noon_known: number;
   called_before_noon: number; open_deals: number; open_never_attempted: number; won: number; lost: number; ordered: number; unknown: number;
-  talk_seconds_total: number; talk_seconds_reached: number; attempts_without_outcome: number; logged_without_aircall: number;
+  talk_seconds_total: number; talk_seconds_conversation: number; attempts_without_outcome: number; logged_without_aircall: number;
 };
 type AttemptListDb = {
   deal_id: string; connection_id: string; deal_source_id: string; record_url: string | null; pipeline_label: string | null; stage_label: string | null;
   market: string; created_at: string; closed_at: string | null; ordered_at: string | null; window_end_reason: AttemptListRow["windowEndReason"];
-  outcome: AttemptListRow["outcome"]; attempts: number; reached_attempts: number; first_reached_attempt: number | null; talk_seconds_total: number;
-  talk_seconds_reached: number; first_attempt_at: string | null; speed_to_lead_seconds: number | null; called_before_next_noon: boolean | null;
+  outcome: AttemptListRow["outcome"]; attempts: number; conversation_attempts: number; first_conversation_attempt: number | null; talk_seconds_total: number;
+  talk_seconds_conversation: number; first_attempt_at: string | null; speed_to_lead_seconds: number | null; called_before_next_noon: boolean | null;
   last_attempt_at: string | null; business_days_since_last: number | null; since_last_bucket: string | null; logged_without_aircall: number;
 };
 type AttemptsCommonDb = {
   markets: string[]; pipelines: { key: string; label: string }[]; history_start: string | null;
   settings: {
     max_bucket: number; since_last_buckets: string; pre_window_minutes: number; list_rows: number; source: AttemptSettings["source"];
-    reached_min_talk_seconds: number; speed_buckets: string;
+    conversation_min_talk_seconds: number; speed_buckets: string;
   };
 };
 type AttemptOutcomeDb = {
   outcome: "won" | "lost"; deals: number; avg_attempts: number | null; median_attempts: number | null; speed_deals: number;
-  median_speed_seconds: number | null; noon_known: number; called_before_noon: number; reached_deals: number; avg_talk_reached_seconds: number | null;
+  median_speed_seconds: number | null; noon_known: number; called_before_noon: number; conversation_deals: number; avg_talk_conversation_seconds: number | null;
 };
 type AttemptsPageDb = AttemptsCommonDb & {
   current: AttemptFiguresDb; previous: AttemptFiguresDb;
-  buckets: { bucket: number; label: string; deals: number; first_reached: number; won: number; lost: number }[];
+  buckets: { bucket: number; label: string; deals: number; first_conversation: number; won: number; lost: number }[];
   outcomes: { rows: AttemptOutcomeDb[]; not_decided: number; open: number; ordered: number; unknown: number };
   speed_buckets: { buckets: { from: number; to: number | null; label: string; won: number; lost: number }[]; none: { won: number; lost: number }; no_hours: number };
   groups: (AttemptFiguresDb & { key: string; label: string | null })[];
@@ -1003,7 +1094,7 @@ type AttemptsPersonDb = AttemptsCommonDb & {
   total: AttemptFiguresDb;
 };
 type DealAttemptDb = {
-  n: number; started_at: Date; answered: boolean; talk_seconds: number | null; reached: boolean; reached_by: DealAttempt["reachedBy"];
+  n: number; started_at: Date; connected: boolean; talk_seconds: number | null; conversation: boolean;
   outcome_label: string | null; agent_name: string | null;
 };
 /** An instant as ISO text in UTC, from the JSON's timestamptz text */
@@ -1011,25 +1102,25 @@ const isoOf = (v: string | null): string | null => (v === null ? null : new Date
 function toAttemptFigures(x: AttemptFiguresDb): AttemptFigures {
   return {
     deals: x.deals, attempted: x.attempted, attempts: x.attempts, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts),
-    reachedDeals: x.reached_deals, firstReached: x.first_reached, reachedAttempts: x.reached_attempts, speedDeals: x.speed_deals,
+    conversationDeals: x.conversation_deals, firstConversation: x.first_conversation, conversationAttempts: x.conversation_attempts, speedDeals: x.speed_deals,
     medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
     openDeals: x.open_deals, openNeverAttempted: x.open_never_attempted, won: x.won, lost: x.lost, ordered: x.ordered, unknown: x.unknown,
-    talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached, attemptsWithoutOutcome: x.attempts_without_outcome,
+    talkSecondsTotal: x.talk_seconds_total, talkSecondsConversation: x.talk_seconds_conversation, attemptsWithoutOutcome: x.attempts_without_outcome,
     loggedWithoutAircall: x.logged_without_aircall,
   };
 }
 function toAttemptSettings(x: AttemptsCommonDb["settings"]): AttemptSettings {
   return {
     maxBucket: x.max_bucket, sinceLastBuckets: x.since_last_buckets, preWindowMinutes: x.pre_window_minutes, listRows: x.list_rows, source: x.source,
-    reachedMinTalkSeconds: x.reached_min_talk_seconds, speedBuckets: x.speed_buckets,
+    conversationMinTalkSeconds: x.conversation_min_talk_seconds, speedBuckets: x.speed_buckets,
   };
 }
 function toAttemptListRow(x: AttemptListDb): AttemptListRow {
   return {
     dealId: x.deal_id, connectionId: x.connection_id, dealSourceId: x.deal_source_id, recordUrl: x.record_url, pipelineLabel: x.pipeline_label,
     stageLabel: x.stage_label, market: x.market, createdAt: isoOf(x.created_at)!, closedAt: isoOf(x.closed_at), orderedAt: isoOf(x.ordered_at),
-    windowEndReason: x.window_end_reason, outcome: x.outcome, attempts: x.attempts, reachedAttempts: x.reached_attempts,
-    firstReachedAttempt: x.first_reached_attempt, talkSecondsTotal: x.talk_seconds_total, talkSecondsReached: x.talk_seconds_reached,
+    windowEndReason: x.window_end_reason, outcome: x.outcome, attempts: x.attempts, conversationAttempts: x.conversation_attempts,
+    firstConversationAttempt: x.first_conversation_attempt, talkSecondsTotal: x.talk_seconds_total, talkSecondsConversation: x.talk_seconds_conversation,
     firstAttemptAt: isoOf(x.first_attempt_at), speedToLeadSeconds: x.speed_to_lead_seconds, calledBeforeNextNoon: x.called_before_next_noon,
     lastAttemptAt: isoOf(x.last_attempt_at), businessDaysSinceLast: x.business_days_since_last, sinceLastBucket: x.since_last_bucket,
     loggedWithoutAircall: x.logged_without_aircall,
@@ -1039,7 +1130,7 @@ function toAttemptOutcomeRow(x: AttemptOutcomeDb): AttemptOutcomeRow {
   return {
     outcome: x.outcome, deals: x.deals, avgAttempts: numOrNull(x.avg_attempts), medianAttempts: numOrNull(x.median_attempts), speedDeals: x.speed_deals,
     medianSpeedSeconds: numOrNull(x.median_speed_seconds), noonKnown: x.noon_known, calledBeforeNoon: x.called_before_noon,
-    reachedDeals: x.reached_deals, avgTalkReachedSeconds: numOrNull(x.avg_talk_reached_seconds),
+    conversationDeals: x.conversation_deals, avgTalkConversationSeconds: numOrNull(x.avg_talk_conversation_seconds),
   };
 }
 
@@ -1414,13 +1505,21 @@ export const postgresData: CmaData = {
   async getTeamStatusTime(me, range, userId) {
     assertDate(range.from, "from");
     assertDate(range.to, "to");
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<StatusTimeDbRow>(
-        `select * from cma.team_status_time($1::date, $2::date, $3::uuid)`,
-        [range.from, range.to, userId],
-      );
-      return { ...range, rows: r.rows.map(toStatusTimeRow) };
-    });
+    return withTenant(ctx(me), (q) => readTeamStatusTime(q, range, userId));
+  },
+
+  // The Dashboard in one transaction (23 October 2026, the round-trips budget): the same reads as the routes of
+  // each part, one after the other on one connection instead of five checkouts; each function checks its own
+  // permission and range (performance.team for the time and the records; reports.view or performance.team else)
+  async getDashboard(me, range): Promise<DashboardData> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => ({
+      time: await readTeamStatusTime(q, range, null),
+      intake: await readIntake(q, range),
+      records: await readCrmRecordsPerDay(q, range),
+      speed: await readSpeedToLeadRows(q, range),
+      callbacks: await readCallbacksKept(q, range),
+    }));
   },
 
   // Addition 0003e: team_now() checks monitoring.live and raises CMA06 otherwise, so the plain read
@@ -1886,7 +1985,7 @@ export const postgresData: CmaData = {
         })),
         callOutcomes: cat.callOutcomes.map((o) => ({ outcomeRef: o.outcomeRef, label: o.label, isConnected: o.isConnected, isActive: o.status === "active" })),
         lines: cat.lines.map((l) => ({ lineRef: l.lineRef, name: l.name, digits: l.digits, market: l.market, isCounted: l.isCounted, isActive: l.status === "active" })),
-        tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, isActive: t.status === "active" })),
+        tags: cat.tags.map((t) => ({ tagRef: t.tagRef, name: t.name, isCounted: t.isCounted, meaning: t.meaning ?? null, isActive: t.status === "active" })),
         fields: config.fields.map((f) => ({ entity: f.entity, field: f.field, refSystem: f.refSystem, slot: f.slot, property: f.property,
           sourceType: f.sourceType ?? null, checkedAt: isoAny(f.checkedAt), state: f.state ?? null })),
         reasons: (config.reasons ?? []).map((x) => ({ recordType: x.recordType, value: x.value, label: x.label, order: x.order, isDataQuality: x.isDataQuality,
@@ -2048,7 +2147,7 @@ export const postgresData: CmaData = {
       return {
         ...range, group, filter, current: toAttemptFigures(j.current), previous: toAttemptFigures(j.previous),
         previousFrom: prev.from, previousTo: prev.to, previousPartial: prev.partial,
-        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstReached: b.first_reached, won: b.won, lost: b.lost })),
+        buckets: j.buckets.map((b): AttemptBucket => ({ bucket: b.bucket, label: b.label, deals: b.deals, firstConversation: b.first_conversation, won: b.won, lost: b.lost })),
         outcomes: { rows: j.outcomes.rows.map(toAttemptOutcomeRow), notDecided: j.outcomes.not_decided, open: j.outcomes.open, ordered: j.outcomes.ordered,
           unknown: j.outcomes.unknown },
         speedBuckets: { buckets: j.speed_buckets.buckets, none: j.speed_buckets.none, noHours: j.speed_buckets.no_hours },
@@ -2080,7 +2179,7 @@ export const postgresData: CmaData = {
       // the function checks reports.view or performance.team (CMA06) and the deal (CMA02); the agent's name only when allowed
       const r = await q.query<DealAttemptDb>(`select * from cma.attempts_of_deal($1::uuid)`, [dealId]);
       return r.rows.map((x) => ({
-        n: x.n, startedAt: x.started_at.toISOString(), answered: x.answered, talkSeconds: x.talk_seconds, reached: x.reached, reachedBy: x.reached_by,
+        n: x.n, startedAt: x.started_at.toISOString(), connected: x.connected, talkSeconds: x.talk_seconds, conversation: x.conversation,
         outcomeLabel: x.outcome_label, agentName: x.agent_name,
       }));
     });
@@ -2164,33 +2263,16 @@ export const postgresData: CmaData = {
 
   async getCallbacksKept(me, range): Promise<CallbacksKept> {
     assertReportRange(range);
-    return withTenant(ctx(me), async (q) => {
-      // the functions check reports.view or performance.team (CMA06) and the 92 days (CMA04)
-      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_report($1::date, $2::date)`, [range.from, range.to]);
-      const connected = await q.query<{ connected: boolean }>(`select cma.callbacks_kept_connected() as connected`);
-      const win = await q.query<{ value: string }>(`select value from cma.tenant_settings() where key = 'tasks.callback_window_minutes'`);
-      if (win.rows[0] === undefined) throw new Error("tenant setting tasks.callback_window_minutes is missing from the catalog");
-      const current = r.rows.filter((x) => x.period === "current");
-      return {
-        ...range, connected: connected.rows[0]?.connected ?? false,
-        weeks: current.filter((x) => x.dimension === "week" && x.week_start).map((x) => ({ weekStart: x.week_start as string, ...toCallbackCounts(x) })),
-        total: toCallbackCounts(current.find((x) => x.dimension === "total")),
-        previous: toCallbackCounts(r.rows.find((x) => x.period === "previous" && x.dimension === "total")),
-        windowMinutes: Number(win.rows[0].value),
-      };
-    });
+    // the functions check reports.view or performance.team (CMA06) and the 92 days (CMA04)
+    return withTenant(ctx(me), (q) => readCallbacksKept(q, range));
   },
 
   async getCallbacksPerOwner(me, range): Promise<CallbackOwner[]> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
       // the function checks performance.team (CMA06)
-      const r = await q.query<CallbackKeptDbRow>(`select * from cma.callbacks_kept_per_owner($1::date, $2::date)`, [range.from, range.to]);
-      return r.rows.map((x) => ({
-        kind: x.row_kind === "person" ? "person" : x.row_kind === "not_linked" ? "notLinked" : "total",
-        userId: x.user_id ?? null, name: x.display_name ?? null, unlinkedOwners: x.unlinked_owners ?? null,
-        callbacks: x.callbacks, kept: x.kept, notKept: x.not_kept, pending: x.pending, noContact: x.no_contact,
-      }));
+      const r = await q.query<{ callback_owners: CallbackKeptDbRow[] }>(`select ${callbackOwnersColumn("$1", "$2")}`, [range.from, range.to]);
+      return one(r.rows, "callbacks_kept_per_owner").callback_owners.map(toCallbackOwner);
     });
   },
 
@@ -2370,6 +2452,10 @@ export const postgresData: CmaData = {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag($1::uuid, $2, $3)`, [id, input.tagRef, input.isCounted]));
   },
 
+  async setSourceTagMeaning(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_tag_meaning($1::uuid, $2, $3)`, [id, input.tagRef, input.meaning]));
+  },
+
   async setSourceMissedReason(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_telephony_missed_reason($1::uuid, $2, $3, $4, $5)`,
       [id, input.code, input.label, input.countsInServiceLevel, input.needsCallback]));
@@ -2484,15 +2570,7 @@ export const postgresData: CmaData = {
 
   async getSpeedToLeadRows(me, range): Promise<SpeedToLeadRow[]> {
     assertReportRange(range);
-    return withTenant(ctx(me), async (q) => {
-      // cma.record_url (migration 0008) builds the link from the connection's own template; null without one
-      const r = await q.query<SpeedDbRow>(
-        `select r.*, cma.record_url(r.connection_id, 'deal', r.deal_source_id) as record_url
-           from cma.speed_to_lead_rows($1::date, $2::date) r`,
-        [range.from, range.to],
-      );
-      return r.rows.map(toSpeedRow);
-    });
+    return withTenant(ctx(me), (q) => readSpeedToLeadRows(q, range));
   },
 
   async getSpeedToLeadSummary(me, range, group) {
@@ -2513,18 +2591,7 @@ export const postgresData: CmaData = {
 
   async getIntake(me, range): Promise<Intake> {
     assertReportRange(range);
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<IntakeDbRow>(`select * from cma.intake_per_day($1::date, $2::date)`, [range.from, range.to]);
-      const connections = await readConnections(q);
-      const start = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'intake.start_date'`);
-      const counts: IntakeCounts[] = r.rows.map((x) => ({
-        date: x.business_date, market: x.market, formSubmissions: x.form_submissions, dealsCreated: x.deals_created,
-        dealsClosed: x.deals_closed, ticketsCreated: x.tickets_created, ticketsClosed: x.tickets_closed, callsIn: x.calls_in,
-        callsOut: x.calls_out, taggedCalls: x.tagged_calls, newCustomers: x.new_customers, firstOrders: x.first_orders,
-        repeatOrders: x.repeat_orders, renewals: x.renewals,
-      }));
-      return { ...range, connections, startDate: start.rows[0]?.value ?? null, rows: applyConnections(counts, connections) };
-    });
+    return withTenant(ctx(me), (q) => readIntake(q, range));
   },
 
   async getDataQuality(me): Promise<DataQualityCheck[]> {
@@ -2605,7 +2672,7 @@ export const postgresData: CmaData = {
       // where the tenant's telephony history starts (addition 0008k), tenant-wide: a previous span before it shows no change
       const history = await q.query<{ history_start: string | null }>(`select cma.telephony_history_start() as history_start`);
       return {
-        ...range, group, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        ...range, group, filter, telephony: connections.telephony, ...(await callSettings(q)),
         rows: connections.telephony ? current.filter((x) => x.group_key !== null).map((x) => ({ groupKey: x.group_key!, groupLabel: x.group_label, ...toCallsFigures(x) })) : [],
         total: toCallsFigures(current.find((x) => x.group_key === null)),
         previous: toCallsFigures(r.rows.find((x) => x.period === "previous")),
@@ -2665,7 +2732,7 @@ export const postgresData: CmaData = {
   async getCallsTagUse(me, range, group, filter): Promise<CallsTagUse> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ group_key: string | null; group_label: string | null; tag_key: string | null; tag_name: string | null; is_counted: boolean | null; conversations: number }>(
+      const r = await q.query<{ group_key: string | null; group_label: string | null; tag_key: string; tag_name: string; is_counted: boolean; conversations: number }>(
         `select * from cma.calls_tag_use($1::date, $2::date, $3, $4, $5)`, [range.from, range.to, filter.market, filter.line, group]);
       const connections = await readConnections(q);
       return {
@@ -2684,7 +2751,7 @@ export const postgresData: CmaData = {
       const lists = await callsFilterLists(q, range, filter);
       const rows = r.rows.map(toCallsPerson);
       return {
-        ...range, filter, telephony: connections.telephony, connectedMinSeconds: await telephonySetting(q),
+        ...range, filter, telephony: connections.telephony, ...(await callSettings(q)),
         rows: connections.telephony ? rows.filter((x) => x.kind !== "total") : [],
         total: rows.find((x) => x.kind === "total")!,
         ...(connections.telephony ? lists : { markets: [], lines: [] }),
@@ -2695,7 +2762,7 @@ export const postgresData: CmaData = {
   async getCallsPerAgentTags(me, range, filter): Promise<CallsPerAgentTags> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ row_kind: "person" | "not_linked"; user_id: string | null; tag_key: string | null; tag_name: string | null; conversations: number }>(
+      const r = await q.query<{ row_kind: "person" | "not_linked"; user_id: string | null; tag_key: string; tag_name: string; conversations: number }>(
         `select * from cma.calls_per_person_tags($1::date, $2::date, $3, $4)`, [range.from, range.to, filter.market, filter.line]);
       const connections = await readConnections(q);
       return {
@@ -2708,22 +2775,27 @@ export const postgresData: CmaData = {
 
   async getCrmRecordsPerDay(me, range): Promise<CrmRecordsDay[]> {
     assertReportRange(range);
-    return withTenant(ctx(me), async (q) => {
-      const r = await q.query<{ business_date: string; record_type: string; market: string | null; pipeline_id: string | null; pipeline_label: string | null; records: number; closed_now: number }>(
-        `select * from cma.crm_records_per_day($1::date, $2::date)`, [range.from, range.to]);
-      return r.rows.map((x) => ({ date: x.business_date, recordType: x.record_type, market: x.market, pipelineId: x.pipeline_id,
-        pipelineLabel: x.pipeline_label, records: x.records, closedNow: x.closed_now }));
-    });
+    return withTenant(ctx(me), (q) => readCrmRecordsPerDay(q, range));
   },
 
   // ---- Follow-up (addition 0008o): every function checks its permission and reads the current tenant under row-level security.
   // Since addition 0008s they read the snapshot the refresh job computes once a minute (computed once on demand when a tenant has none)
-  async getFollowUpPage(me, filter): Promise<FollowUpPage> {
+  async getFollowUpPage(me, filter, callbacks): Promise<FollowUpPage & FollowUpCallbacks> {
+    if (callbacks) assertReportRange(callbacks.range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the filters and the per-person figures' permission itself; the rows are capped there
-      const j = one((await q.query<{ j: FollowUpPageDb }>(`select cma.follow_up_page($1, $2, $3, null) as j`,
-        [filter.market, filter.owner, filter.state])).rows, "follow_up_page").j;
+      // the function checks the permission, the filters and the per-person figures' permission itself; the rows are capped there.
+      // The callbacks kept of the span (0008w) ride in the same statement (the round-trips budget, 23 October 2026); per person
+      // read whenever asked, so the page costs the same whether a callback type counts or not
+      const extra = callbacks ? `, ${callbacksKeptColumns("$4", "$5")}${callbacks.perOwner ? `, ${callbackOwnersColumn("$4", "$5")}` : ""}` : "";
+      const row = one((await q.query<{ j: FollowUpPageDb; callback_owners?: CallbackKeptDbRow[] } & Partial<CallbacksKeptDb>>(
+        `select cma.follow_up_page($1, $2, $3, null) as j${extra}`,
+        [filter.market, filter.owner, filter.state, ...(callbacks ? [callbacks.range.from, callbacks.range.to] : [])])).rows, "follow_up_page");
+      const j = row.j;
+      const kept = callbacks ? toCallbacksKept(callbacks.range, row as CallbacksKeptDb) : null;
       return {
+        callbacks: kept,
+        // per person shows once a callback type counts, as before
+        callbackOwners: kept?.connected && row.callback_owners ? row.callback_owners.map(toCallbackOwner) : null,
         computedAt: isoAny(j.computed_at)!, durationMs: j.duration_ms, rows: j.rows, summary: toSummary(j.summary),
         byOwner: j.by_owner ? j.by_owner.map(toOwner) : null,
         options: { markets: j.options.markets, owners: j.options.owners, hasUnowned: j.options.has_unowned },

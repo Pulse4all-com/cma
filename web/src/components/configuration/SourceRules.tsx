@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * Rules by name pattern (Sources, addition 0008e): one dialog for forms, one for call outcomes. The
- * person types the words a name contains (and does not), chooses what the rule sets, and sees every
- * change form by form before anything is saved; Save sends exactly the rows of the preview in one
- * request, which the database writes in one transaction (set_form, set_call_outcome). The plans come
- * from lib/sources (planFormRule, planOutcomeRule), so the preview and the verifier share one rule.
+ * Rules by name pattern (Sources, addition 0008e): the dialog for forms. The person types the words a
+ * name contains (and does not), chooses what the rule sets, and sees every change form by form before
+ * anything is saved; Save sends exactly the rows of the preview in one request, which the database
+ * writes in one transaction (set_form). The plan comes from lib/sources (planFormRule), so the preview
+ * and the verifier share one rule. The call outcomes' rule went with their connected switch (addition
+ * 0008zc: an outcome decides neither connected nor a conversation, docs/definitions.md R1).
  */
 import { useMemo, useState } from "react";
 import type { Copy } from "@/lib/copy";
-import type { MarketConfig, SourceCallOutcome, SourceForm, SourceFormChange, SourceOutcomeChange } from "@/lib/data";
-import { formRuleProblem, parseWords, planFormRule, planOutcomeRule, type FormRule, type OutcomeRule } from "@/lib/sources";
+import type { MarketConfig, SourceForm, SourceFormChange } from "@/lib/data";
+import { formRuleProblem, parseWords, planFormRule, type FormRule } from "@/lib/sources";
 import { Badge } from "../primitives";
 import { FormDialog, field, label, td, th } from "./shared";
 
@@ -126,76 +127,6 @@ export function FormRuleDialog({ forms, markets, copy, busy, onSave, onClose }: 
                     <td className={td}>{p.changes.includes("isCounted") ? <>{yesNo(p.before.isCounted, t)} → <strong>{yesNo(p.after.isCounted, t)}</strong></> : yesNo(p.after.isCounted, t)}</td>
                     <td className={td}>{p.changes.includes("leadSource") ? <>{show(p.before.leadSource)} → <strong>{show(p.after.leadSource)}</strong></> : show(p.after.leadSource)}</td>
                     <td className={td}>{p.changes.includes("market") ? <>{show(p.before.market)} → <strong>{show(p.after.market)}</strong></> : show(p.after.market)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
-    </FormDialog>
-  );
-}
-
-export function OutcomeRuleDialog({ outcomes, copy, busy, onSave, onClose }: {
-  outcomes: SourceCallOutcome[]; copy: Copy; busy: boolean;
-  onSave: (changes: SourceOutcomeChange[]) => void; onClose: () => void;
-}) {
-  const c = copy.configuration;
-  const t = copy.configSources;
-  const [include, setInclude] = useState("");
-  const [exclude, setExclude] = useState("");
-  const [connected, setConnected] = useState(false);
-  const [others, setOthers] = useState<OutcomeRule["others"]>("keep");
-  const rule: OutcomeRule = useMemo(() => ({ include: parseWords(include), exclude: parseWords(exclude), connected, others }), [include, exclude, connected, others]);
-  const plan = useMemo(() => planOutcomeRule(outcomes, rule), [outcomes, rule]);
-
-  function submit() {
-    if (plan.length === 0) return;
-    onSave(plan.map((p) => ({ outcomeRef: p.outcomeRef, isConnected: p.after })));
-  }
-
-  return (
-    <FormDialog title={t.ruleTitleOutcomes} intro={t.ruleIntro} onSave={submit} onClose={onClose} busy={busy}
-      saveLabel={t.ruleSave.replace("{n}", String(plan.length))} cancelLabel={c.cancel} wide>
-      <div className="grid grid-cols-2 gap-4">
-        <label className={label}>
-          {t.ruleIncludeOutcomes}
-          <input className={field} value={include} onChange={(e) => setInclude(e.target.value)} />
-          <span className="font-normal text-caption text-p4a-muted">{t.ruleIncludeHint}</span>
-        </label>
-        <label className={label}>
-          {t.ruleExclude}
-          <input className={field} value={exclude} onChange={(e) => setExclude(e.target.value)} />
-        </label>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-small font-semibold">{t.ruleConnected}</legend>
-          <Radio name="connected" value="yes" checked={connected} onChange={() => setConnected(true)}>{t.ruleYes}</Radio>
-          <Radio name="connected" value="no" checked={!connected} onChange={() => setConnected(false)}>{t.ruleNo}</Radio>
-        </fieldset>
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-small font-semibold">{t.ruleOutcomeOthers}</legend>
-          <Radio name="others" value="keep" checked={others === "keep"} onChange={(v) => setOthers(v as OutcomeRule["others"])}>{t.ruleOthersKeep}</Radio>
-          <Radio name="others" value="opposite" checked={others === "opposite"} onChange={(v) => setOthers(v as OutcomeRule["others"])}>{t.ruleOthersOpposite}</Radio>
-        </fieldset>
-      </div>
-      <section aria-live="polite">
-        <h3 className="mb-2 text-body font-semibold text-p4a-heading">
-          {t.rulePreviewTitle} · {plan.length === 0 ? t.rulePreviewNone : t.rulePreviewCount.replace("{n}", String(plan.length)).replace("{total}", String(outcomes.length))}
-        </h3>
-        {plan.length > 0 ? (
-          <div className="max-h-72 overflow-y-auto rounded-input border border-p4a-border">
-            <table className="w-full border-collapse text-small" data-testid="rule-preview">
-              <thead className="sticky top-0 bg-p4a-bgblue text-p4a-heading">
-                <tr><th className={th}>{t.outcome}</th><th className={th}>{t.connected}</th></tr>
-              </thead>
-              <tbody>
-                {plan.map((p) => (
-                  <tr key={p.outcomeRef}>
-                    <td className={td}><span className="font-semibold">{p.label}</span> <Badge tone={p.matched ? "info" : "neutral"}>{p.matched ? t.ruleMatched : t.ruleNotMatched}</Badge></td>
-                    <td className={td}>{yesNo(p.before, t)} → <strong>{yesNo(p.after, t)}</strong></td>
                   </tr>
                 ))}
               </tbody>

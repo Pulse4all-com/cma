@@ -104,8 +104,8 @@
   {
     "path": "/reports/dashboard",
     "subject": "manager",
-    "tx": 5,
-    "rt": 23
+    "tx": 2,
+    "rt": 15
   },
   {
     "path": "/reports/speed-to-lead",
@@ -242,8 +242,8 @@
   {
     "path": "/reports/dashboard",
     "subject": "supervisor",
-    "tx": 5,
-    "rt": 23
+    "tx": 2,
+    "rt": 15
   },
   {
     "path": "/",

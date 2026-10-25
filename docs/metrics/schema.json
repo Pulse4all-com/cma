@@ -25,7 +25,7 @@
       ],
       "properties": {
         "key": {
-          "description": "Stable dotted key, e.g. calls.outbound_connected_share; the page's anchor (#key)",
+          "description": "Stable dotted key, e.g. calls.outbound_connected_rate; the page's anchor (#key)",
           "type": "string",
           "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$"
         },

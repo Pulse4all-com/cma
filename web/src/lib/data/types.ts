@@ -784,7 +784,7 @@ export interface MessageStat {
 /** How cma.speed_to_lead_summary groups its rows */
 export type SpeedToLeadGroup = "day" | "market" | "agent" | "pipeline";
 
-/** called: an outbound call reached the deal; otherwise not called, open or closed */
+/** called: an outbound call was made on the deal; otherwise not called, open or closed */
 export type SpeedToLeadStatus = "called" | "not_called_open" | "not_called_closed";
 
 /** One lead deal (cma.speed_to_lead_rows) with the link to its record (cma.record_url, null without a template) */
@@ -1035,20 +1035,20 @@ export interface CallsFigures {
   inbound: number;
   outbound: number;
   answeredInbound: number;
-  /** Outbound calls with at least telephony.connected_min_seconds of talk time */
-  connectedOutbound: number;
-  /** 0 to 100 with one decimal; null without an outbound call */
-  connectedPct: number | null;
-  /** Answered inbound and connected outbound calls */
+  /** Connected (0008zc): outbound calls answered by the recipient or their voicemail (at telephony.connected_min_seconds of talk when above 0) */
+  connected: number;
+  /** The connected rate: connected of all outbound, 0 to 100 with one decimal; null without an outbound call */
+  connectedRate: number | null;
+  /** Conversations (0008zc): connected outbound and answered inbound calls with at least calls.conversation_min_talk_seconds of talk, no tag meaning not reached or incorrect data */
   conversations: number;
-  /** Talk time (answer to end, no ringing) over the conversations, in seconds */
+  /** Talk time (answer to end) over the answered calls with talk time, in seconds */
   talkSeconds: number;
   talkAvgSeconds: number | null;
   /** Talk time over the connected outbound calls */
   outboundTalkSeconds: number;
   outboundTalkAvgSeconds: number | null;
-  /** Conversations without a current tag of any kind */
-  untaggedConversations: number;
+  /** Untagged (0008zc): calls without a current tag of any kind, missed calls included */
+  untagged: number;
 }
 
 /** One group of cma.calls_overview */
@@ -1074,6 +1074,8 @@ export interface CallsOverview {
   telephony: boolean;
   /** telephony.connected_min_seconds, for the hints */
   connectedMinSeconds: number;
+  /** calls.conversation_min_talk_seconds, for the hints (0008zc) */
+  conversationMinSeconds: number;
   rows: CallsRow[];
   /** Over every call of the period (the database's own total, not a sum of the groups) */
   total: CallsFigures;
@@ -1099,15 +1101,15 @@ export interface CallsOverview {
   lines: CallsLine[];
 }
 
-/** Conversations carrying a current tag, or without one (tagKey null), per group or over the whole period (groupKey null) */
+/** Conversations carrying a current tag, per group or over the whole period (groupKey null); untagged is CallsFigures' (0008zc) */
 export interface TagUseRow {
   groupKey: string | null;
   groupLabel: string | null;
-  /** connection id ':' tag ref; null for the untagged conversations */
-  tagKey: string | null;
-  tagName: string | null;
-  /** Whether the tag counts (configuration); null for the untagged row */
-  isCounted: boolean | null;
+  /** connection id ':' tag ref */
+  tagKey: string;
+  tagName: string;
+  /** Whether the tag counts (configuration) */
+  isCounted: boolean;
   conversations: number;
 }
 
@@ -1132,11 +1134,11 @@ export interface CallsPerson {
   inboundTalkSeconds: number;
   inboundTalkAvgSeconds: number | null;
   outboundCalls: number;
-  connectedOutbound: number;
+  connected: number;
   outboundTalkSeconds: number;
   outboundTalkAvgSeconds: number | null;
   conversations: number;
-  untaggedConversations: number;
+  untagged: number;
   /** The earliest and latest time of day ("HH:MM") of a call of theirs on any day of the period, in the line's market zone */
   firstCallTime: string | null;
   lastCallTime: string | null;
@@ -1148,6 +1150,8 @@ export interface CallsPerAgent {
   filter: CallsFilter;
   telephony: boolean;
   connectedMinSeconds: number;
+  /** calls.conversation_min_talk_seconds, for the hints (0008zc) */
+  conversationMinSeconds: number;
   /** The people by name, then the not-linked row when there is one */
   rows: CallsPerson[];
   total: CallsPerson;
@@ -1155,12 +1159,12 @@ export interface CallsPerAgent {
   lines: CallsLine[];
 }
 
-/** A person's (or the not-linked calls') conversations per counted tag; tagKey null for their untagged conversations */
+/** A person's (or the not-linked calls') conversations per counted tag; their untagged calls are CallsPerson's (0008zc) */
 export interface CallsPersonTag {
   kind: "person" | "notLinked";
   userId: string | null;
-  tagKey: string | null;
-  tagName: string | null;
+  tagKey: string;
+  tagName: string;
   conversations: number;
 }
 
@@ -1606,11 +1610,11 @@ export interface AttemptFigures {
   /** Per deal, never-attempted deals as 0; null without a deal */
   avgAttempts: number | null;
   medianAttempts: number | null;
-  /** Deals with at least one attempt that reached the customer */
-  reachedDeals: number;
-  /** Deals whose first attempt reached the customer */
-  firstReached: number;
-  reachedAttempts: number;
+  /** Deals with at least one attempt that was a Conversation (addition 0008zc) */
+  conversationDeals: number;
+  /** Deals whose first attempt was a Conversation */
+  firstConversation: number;
+  conversationAttempts: number;
   /** Attempted deals in a market with business hours, and their median business seconds to the first attempt */
   speedDeals: number;
   medianSpeedSeconds: number | null;
@@ -1625,8 +1629,8 @@ export interface AttemptFigures {
   ordered: number;
   unknown: number;
   talkSecondsTotal: number;
-  /** Talk time of the attempts that reached the customer */
-  talkSecondsReached: number;
+  /** Talk time of the attempts that were a Conversation */
+  talkSecondsConversation: number;
   /** Attempts whose CRM call carries no outcome */
   attemptsWithoutOutcome: number;
   /** Outbound CRM calls in the windows logged without a telephony call (never an attempt under telephony) */
@@ -1646,8 +1650,8 @@ export interface AttemptBucket {
   label: string;
   /** Deals with that many attempts */
   deals: number;
-  /** Deals first reached on that attempt (none for 0) */
-  firstReached: number;
+  /** Deals whose first Conversation was that attempt (none for 0) */
+  firstConversation: number;
   /** Of the decided deals: won and lost */
   won: number;
   lost: number;
@@ -1663,9 +1667,9 @@ export interface AttemptOutcomeRow {
   medianSpeedSeconds: number | null;
   noonKnown: number;
   calledBeforeNoon: number;
-  reachedDeals: number;
-  /** The average talk time in contact of the deals reached at least once */
-  avgTalkReachedSeconds: number | null;
+  conversationDeals: number;
+  /** The average talk time on Conversations of the deals with at least one */
+  avgTalkConversationSeconds: number | null;
 }
 
 /** One bucket of the win rate by speed to lead, in business minutes ("5–15", "1440+") */
@@ -1702,10 +1706,10 @@ export interface AttemptListRow {
   windowEndReason: AttemptWindowEnd;
   outcome: AttemptOutcome;
   attempts: number;
-  reachedAttempts: number;
-  firstReachedAttempt: number | null;
+  conversationAttempts: number;
+  firstConversationAttempt: number | null;
   talkSecondsTotal: number;
-  talkSecondsReached: number;
+  talkSecondsConversation: number;
   firstAttemptAt: Instant | null;
   /** Business seconds from the creation to the first attempt; null without one or for a market without business hours */
   speedToLeadSeconds: number | null;
@@ -1721,10 +1725,11 @@ export interface AttemptListRow {
 export interface DealAttempt {
   n: number;
   startedAt: Instant;
-  answered: boolean;
+  /** The linked telephony call connected: outbound and answered (Connected, 0008zc) */
+  connected: boolean;
   talkSeconds: number | null;
-  reached: boolean;
-  reachedBy: "outcome" | "talk_time" | null;
+  /** A conversation: connected, at least calls.conversation_min_talk_seconds of talk and no tag meaning not reached or incorrect data (0008zc, 0008zd) */
+  conversation: boolean;
   /** The outcome's label from the catalog; null without an outcome */
   outcomeLabel: string | null;
   /** The agent's name while the per-person figures for attempts are on and the reader holds performance.team; else null */
@@ -1741,8 +1746,8 @@ export interface AttemptSettings {
   /** follow_up.list_rows: the list's cap */
   listRows: number;
   source: AttemptSource;
-  /** attempts.reached_min_talk_seconds: an attempt without an outcome reaches the customer at this much talk time */
-  reachedMinTalkSeconds: number;
+  /** calls.conversation_min_talk_seconds: a connected call is a conversation at this much talk time, without a tag meaning not reached or incorrect data */
+  conversationMinTalkSeconds: number;
   /** attempts.speed_buckets_business_minutes, such as "5,15,60,240,1440" */
   speedBuckets: string;
 }
@@ -2164,10 +2169,21 @@ export interface SourceLine {
   isActive: boolean;
 }
 
+/**
+ * What a tag means (addition 0008zc; incorrect_data 0008zd; docs/definitions.md, Tag): a fixed set of keys, one per tag,
+ * configuration only. not_reached and incorrect_data keep a call from being a conversation; the others are kept for the
+ * courtesy figures
+ */
+export type TagMeaning =
+  | "not_reached" | "incorrect_data" | "call_type" | "courtesy_attempt" | "courtesy_completed_positive" | "courtesy_completed_neutral"
+  | "courtesy_completed_negative";
+
 export interface SourceTag {
   tagRef: string;
   name: string;
   isCounted: boolean;
+  /** null for none */
+  meaning: TagMeaning | null;
   isActive: boolean;
 }
 
@@ -2445,6 +2461,12 @@ export interface SourceLineInput {
 export interface SourceTagInput {
   tagRef: string;
   isCounted: boolean;
+}
+
+/** A tag's meaning (cma.set_telephony_tag_meaning, 0008zc); null clears it */
+export interface SourceTagMeaningInput {
+  tagRef: string;
+  meaning: TagMeaning | null;
 }
 
 /** A ticket pipeline's own response time (cma.set_pipeline_sla, 0008o); null for the tenant default */
@@ -2816,6 +2838,27 @@ export interface CallbackOwner {
   noContact: number;
 }
 
+/** The callbacks kept getFollowUpPage reads with the page (addition 0008w): the span, and per person too (performance.team) */
+export interface FollowUpCallbacksRequest {
+  range: HoursRange;
+  perOwner: boolean;
+}
+
+/** The callbacks kept read with the Follow-up page: null when not asked; the per-person rows null when not asked or until a callback type counts */
+export interface FollowUpCallbacks {
+  callbacks: CallbacksKept | null;
+  callbackOwners: CallbackOwner[] | null;
+}
+
+/** Reports → Dashboard in one read: the time per status of the period, the Intake row's reads and the callbacks kept */
+export interface DashboardData {
+  time: TeamStatusTime;
+  intake: Intake;
+  records: CrmRecordsDay[];
+  speed: SpeedToLeadRow[];
+  callbacks: CallbacksKept;
+}
+
 /** A journey's status (addition 0008v): placeholder until its monitor is built; archived journeys never reach the screens */
 export type JourneyStatus = "placeholder" | "building" | "live";
 
@@ -2880,6 +2923,11 @@ export interface CmaData {
   exportStatusChanges(me: Principal, range: HoursRange, userId: string | null): Promise<Export<StatusChangeRow>>;
   /** Seconds per person per day per status, for the Dashboard. Needs performance.team (CMA06) */
   getTeamStatusTime(me: Principal, range: HoursRange, userId: string | null): Promise<TeamStatusTime>;
+  /**
+   * Reports → Dashboard in one transaction: getTeamStatusTime for everyone, getIntake, getCrmRecordsPerDay, getSpeedToLeadRows and
+   * getCallbacksKept of the period, the same reads one after the other. Needs performance.team (CMA06); at most 92 days (CMA04)
+   */
+  getDashboard(me: Principal, range: HoursRange): Promise<DashboardData>;
   /** The app links the caller may see, in the tenant's order (cma.app_links); any person of the tenant */
   listAppLinks(me: Principal): Promise<AppLink[]>;
   /** Everyone whose time is kept, with today's day and status, for the Live board. Needs monitoring.live (CMA06) */
@@ -3050,6 +3098,8 @@ export interface CmaData {
   /** The stored calls of a line, which switching it off removes, and the first one's start (tenant.configure; backlog CMA-020) */
   getSourceLineStoredCalls(me: Principal, id: string, lineRef: string): Promise<LineStoredCalls>;
   setSourceTag(me: Principal, id: string, input: SourceTagInput): Promise<void>;
+  /** A tag's meaning (set_telephony_tag_meaning, 0008zc; tenant.configure); a key outside the set CMA04 */
+  setSourceTagMeaning(me: Principal, id: string, input: SourceTagMeaningInput): Promise<void>;
   /** One missed-call reason of a telephony connection (set_telephony_missed_reason, 0008i); another kind of connection CMA04 */
   setSourceMissedReason(me: Principal, id: string, input: SourceMissedReasonInput): Promise<void>;
   /** The connection's store (upsert_commerce_store); a handle another store holds CMA03 */
@@ -3162,8 +3212,13 @@ export interface CmaData {
   // ---- Follow-up (addition 0008o): the database checks the permission on every call (CMA06); the person's
   // name comes from app_user, the record link from the connection's template (cma.record_url). Since addition
   // 0008s every read comes from the snapshot the refresh job computes once a minute (computedAt says when)
-  /** Reports → Follow-up in one read: the counts, per person (performance.team), the filter choices, the three lists after the filter. Needs reports.view, performance.team or monitoring.live */
-  getFollowUpPage(me: Principal, filter: { market: string | null; owner: string | null; state: "attention" | null }): Promise<FollowUpPage>;
+  /**
+   * Reports → Follow-up in one read: the counts, per person (performance.team), the filter choices, the three lists after the filter.
+   * Needs reports.view, performance.team or monitoring.live. With callbacks, the callbacks kept of its span in the same statement
+   * (getCallbacksKept, and getCallbacksPerOwner when perOwner: reports.view or performance.team, per person performance.team)
+   */
+  getFollowUpPage(me: Principal, filter: { market: string | null; owner: string | null; state: "attention" | null },
+    callbacks: FollowUpCallbacksRequest | null): Promise<FollowUpPage & FollowUpCallbacks>;
   /** Every open lead deal not called, longest waiting first. Needs reports.view, performance.team or monitoring.live */
   getOpenLeads(me: Principal): Promise<FollowUpRowsAt<OpenLead>>;
   /** Every open ticket of a counted pipeline against its response time, the least time left first. The same permissions */

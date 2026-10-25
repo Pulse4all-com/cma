@@ -1,0 +1,35 @@
+# web/ on this branch: npm ci, then each check's last line
+build: exit 0 (build.txt)
+typecheck: ✓ Types generated successfully
+lint:   46:44  warning  '_p4a' is defined but never used  @typescript-eslint/no-unused-vars   50:7  warning  'uid' is assigned a value but never used  @typescript-eslint/no-unused-vars ✖ 2 problems (0 errors, 2 warnings) 
+verify:copy: copy: PASS (2881 keys, en and nl)
+verify:corrections: ALL 31 PASS
+verify:csv: ALL 21 PASS
+verify:dashboard: ALL 17 PASS
+verify:live: ALL 40 PASS
+verify:team: team: PASS (26 checks)
+verify:roster: roster: PASS (36 checks)
+verify:configuration: ALL 107 PASS
+verify:messages: ALL 24 PASS
+verify:import: ALL 23 PASS
+verify:datamap: datamap: PASS (85 tables, 117 views, all described; index.html current)
+verify:signed-out: signed-out: PASS (20 checks)
+verify:invitations: invitations: PASS (27 checks)
+verify:preview: preview: PASS (18 checks)
+verify:follow-up: follow-up: PASS (34 checks)
+verify:reports: ALL 186 PASS
+verify:health: ALL 39 PASS
+verify:boundaries: boundaries: PASS (316 files)
+verify:jobs: ALL 18 PASS
+verify:metrics: ok
+
+# provoked
+verify:reports --provoke: ALL 186 PROVOKED CHECKS FAILED, as they must
+verify:configuration --provoke: ALL 107 PROVOKED CHECKS FAILED, as they must
+verify:metrics --provoke: PROVOKED: 11 problems found, as intended
+
+# the checks added for 0008zd
+PASS  incorrect data: connected, no conversation (uncounted tag, next to another tag, inbound alike); not reached as before, as 103 B1 got ["i1:-- i2:-v i3:-- o1:c- o2:cv o3:c- o4:c- o5:cv o6:c- o7:-- o8:c- o9
+PASS  Calls, tag use and per person count no conversation with a tag meaning incorrect data, as 103 B2 got "12/3/9/3/8/88.9/3/2 | 2026-10-05:Type=1,all:Type=1 | Anna Verify:0/9/
+PASS  the same call is a conversation once its incorrect-data tag is removed, as 103 B5 got "i1:-v o1:cv"
+PASS  a tag's seven meanings, incorrect data after not reached; the talk-time-alone notice looks at not reached only got [["not_reached","incorrect_data","call_type","courtesy_attempt","court

@@ -17,7 +17,7 @@ import { Fragment, useRef, useState, type KeyboardEvent, type ReactNode } from "
 import type { Copy, Locale } from "@/lib/copy";
 import type { CallsPerson, CallsPersonTag } from "@/lib/data";
 import {
-  barShare, columnMaxima, fmtCount, fmtShare, fmtTalk, PER_AGENT_BAR_CLASS, personKey, personSplit, TAG_CLASS, UNTAGGED_CLASS, type PerAgentBar,
+  barShare, columnMaxima, fmtCount, fmtShare, fmtTalk, PER_AGENT_BAR_CLASS, personKey, personSplit, TAG_CLASS, type PerAgentBar,
 } from "@/lib/reports";
 import { HeaderHint } from "./HeaderHint";
 import { HintLabel } from "./HintLabel";
@@ -46,9 +46,10 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
     { key: "answeredInbound", label: t.answered, hint: h.agentAnswered },
     { key: "inboundTalkAvgSeconds", label: t.inboundAvg, hint: h.agentInboundAvg, talk: true },
     { key: "outboundCalls", label: t.outbound, hint: h.agentOutbound },
-    { key: "connectedOutbound", label: t.connected, hint: h.agentConnected },
+    // a threshold above 0 adds a talk condition to Connected (docs/definitions.md, Connected; addition 0008zc)
+    { key: "connected", label: t.connected, hint: threshold > 0 ? h.agentConnectedMin : h.agentConnected },
     { key: "outboundTalkAvgSeconds", label: t.outboundAvg, hint: h.agentOutboundAvg, talk: true },
-    { key: "untaggedConversations", label: t.untagged, hint: h.agentUntagged },
+    { key: "untagged", label: t.untagged, hint: h.agentUntagged },
   ];
   const maxima = columnMaxima(rows);
   const value = (p: CallsPerson, c: Column) => (c.talk ? fmtTalk(p[c.key], locale) : n(p[c.key] ?? 0));
@@ -152,10 +153,10 @@ export function CallsPerAgentTable({ rows, total, tags, copy, locale, threshold,
                       {p.conversations === 0 ? <p className="text-small text-p4a-muted">{t.splitEmpty}</p> : (
                         <ul className="flex max-w-3xl flex-col gap-1.5" aria-label={`${t.split}: ${name}`}>
                           {split.map((s) => (
-                            <li key={s.key ?? "untagged"} className="grid grid-cols-[14rem_1fr_8rem] items-center gap-4 text-small" title={`${s.name ?? t.splitUntagged}: ${n(s.count)}`}>
-                              <span className="truncate">{s.name ?? t.splitUntagged}</span>
+                            <li key={s.key} className="grid grid-cols-[14rem_1fr_8rem] items-center gap-4 text-small" title={`${s.name}: ${n(s.count)}`}>
+                              <span className="truncate">{s.name}</span>
                               <span className="h-2 rounded-full bg-p4a-neutral-surface">
-                                <span className={`block h-2 rounded-full ${s.key === null ? UNTAGGED_CLASS : TAG_CLASS}`} style={{ width: `${(s.length * 100).toFixed(1)}%` }} />
+                                <span className={`block h-2 rounded-full ${TAG_CLASS}`} style={{ width: `${(s.length * 100).toFixed(1)}%` }} />
                               </span>
                               <span className="tabular text-right text-p4a-muted">{n(s.count)} · {fmtShare(s.share, locale)}</span>
                             </li>

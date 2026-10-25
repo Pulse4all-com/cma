@@ -12,7 +12,8 @@ Do, in this order:
 1. docs/decisions.md: one row per decision the delegation message states, dated today, at most two sentences, naming the PR. Record only decisions the message states; never add one you inferred.
 2. CHANGELOG.md: one dated line at the top, in the format of the lines already there (newest first, the files and sections it touches).
 3. The affected sections in whichever file README.md's Documentation map names (README.md, docs/). Reference sections hold no history: counts over time, earlier values and records paths belong in records/, CHANGELOG.md or the PR.
-4. docs/datamap/catalog.json when a table, view or column in cma or cma_read changed: a `what` and `how` per new table, an entry per new computed view; and when a source's cadence changed, that table's `how`.
-5. records/: never write or change one.
+4. docs/definitions.md: keep it current for the change: a term's Decided pointer (the docs/decisions.md row), its Used by (catalog keys and pages) and its As built today; a new term or a changed meaning gets its fields and a docs/decisions.md row starting "Definitions:".
+5. docs/datamap/catalog.json when a table, view or column in cma or cma_read changed: a `what` and `how` per new table, an entry per new computed view; and when a source's cadence changed, that table's `how`.
+6. records/: never write or change one.
 
 Keep README.md under 80 KB and everything in English. Never invent a value, id, count or date. Finish with the list of files changed and the exact rows and lines you added, plus the two PR reminders when they apply: "Martin refreshes docs/datamap/schema.json from dev on this branch after running the migration there, before merging" and, when docs/datamap/index.html changed, "After merge: in the Claude project, say 'republish the data map'".

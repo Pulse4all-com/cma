@@ -37,6 +37,11 @@
 --      the list capped with its link; per person refused while reports.per_person does not hold orders,
 --      then by name with the not-linked row; the filters' refusals; the permissions; tenant isolation;
 --      a reader scoped to one tenant
+-- Amended for addition 0008zc (24 October 2026; 85 runs in dev only and never ran in prod): 0008zc takes a call's evidence
+-- from its linked telephony call only (docs/definitions.md, R1): a conversation as Conversation defines it, an attempt for
+-- every outbound call, a conversation included. o6's call c6, an unconnected CRM call without a telephony call before,
+-- now logs an outbound telephony call nobody answered (tp6), so o6 keeps its attempt; B7 pins o2's outbound conversation as
+-- an attempt too (010000 becomes 010010). Every other check pins what it pinned before.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says
 -- PROVOKED instead of PASS.
 -- =============================================================================================
@@ -243,6 +248,7 @@ declare
   v_j jsonb;
   h2 text := repeat('2', 64);   -- the other party of o2's call
   h5 text := repeat('5', 64);   -- o5's order phone
+  h6 text := repeat('6', 64);   -- the other party of o6's call
   -- the week of Monday 5 October 2026 (CEST, UTC+2; BST, UTC+1); T of each order deal
   t1  timestamptz := '2026-10-05 10:00:00+00';
   t2  timestamptz := '2026-10-06 09:00:00+00';
@@ -440,12 +446,13 @@ begin
       case when v_txt = '2025-12-01 CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- calls: o2's contact k2 connected (a linked outbound telephony call of a minute, owner 103); o6's k6
-    -- an unconnected call (101); a CRM call from o5's order phone on another contact (101, 28 September),
-    -- a telephony call from it (u1, 7 October)
+    -- an unconnected call (101; since 0008zc logging an outbound telephony call nobody answered); a CRM call
+    -- from o5's order phone on another contact (101, 28 September), a telephony call from it (u1, 7 October)
     perform cma.ingest_upsert_calls(v_crm, jsonb_build_array(
       jsonb_build_object('sourceId', 'c2', 'occurredAt', '2026-10-01T08:00:00Z', 'direction', 'outbound', 'ownerRef', '103', 'counterpartHash', h2,
                          'updatedAt', '2026-10-01T08:00:00Z'),
-      jsonb_build_object('sourceId', 'c6', 'occurredAt', '2026-10-08T09:00:00Z', 'direction', 'outbound', 'ownerRef', '101', 'updatedAt', '2026-10-08T09:00:00Z'),
+      jsonb_build_object('sourceId', 'c6', 'occurredAt', '2026-10-08T09:00:00Z', 'direction', 'outbound', 'ownerRef', '101', 'counterpartHash', h6,
+                         'updatedAt', '2026-10-08T09:00:00Z'),
       jsonb_build_object('sourceId', 'c5', 'occurredAt', '2026-09-28T10:00:00Z', 'direction', 'inbound', 'ownerRef', '101', 'counterpartHash', h5,
                          'updatedAt', '2026-09-28T10:00:00Z')));
     perform cma.ingest_upsert_associations(v_crm, jsonb_build_array(
@@ -455,6 +462,8 @@ begin
     perform cma.ingest_upsert_telephony_calls(v_tel, jsonb_build_array(
       jsonb_build_object('sourceId', 'tp2', 'direction', 'outbound', 'status', 'done', 'startedAt', '2026-10-01T08:00:10Z', 'answeredAt', '2026-10-01T08:00:20Z',
                          'endedAt', '2026-10-01T08:01:20Z', 'counterpartHash', h2, 'versionAt', '2026-10-01T08:01:20Z'),
+      jsonb_build_object('sourceId', 'tp6', 'direction', 'outbound', 'status', 'done', 'startedAt', '2026-10-08T08:59:50Z',
+                         'endedAt', '2026-10-08T09:00:10Z', 'counterpartHash', h6, 'versionAt', '2026-10-08T09:00:10Z'),
       jsonb_build_object('sourceId', 'tp5', 'direction', 'inbound', 'status', 'done', 'startedAt', '2026-10-07T10:00:00Z', 'answeredAt', '2026-10-07T10:00:10Z',
                          'endedAt', '2026-10-07T10:03:00Z', 'counterpartHash', h5, 'userRef', 'u1', 'versionAt', '2026-10-07T10:03:00Z')));
     v_n := cma.link_calls(timestamptz '2026-09-01 00:00+00');
@@ -518,14 +527,15 @@ begin
       case when v_txt = 'o1:or1a:EUR:100.00 o2:or2:GBP:50.00 o3:-:EUR:70.00 o8:-:EUR:25.00 o9:or9:EUR:20.00' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B7. the evidence of each first order (lead_deal, conversation, email, phone_match, attempt,
-    --     known_contact as 1 or 0): o4's inbox copy, automation and bot no email; o5's call on another
-    --     contact a phone match; o7 known at exactly an hour; o13 a lead deal at the window's start, not
-    --     the email a second before it or the one at T; o14 nothing (a lead deal at T, one a second early)
+    --     known_contact as 1 or 0): o2's outbound conversation an attempt too (0008zc: every outbound call is
+    --     one); o4's inbox copy, automation and bot no email; o5's call on another contact a phone match; o7
+    --     known at exactly an hour; o13 a lead deal at the window's start, not the email a second before it or the
+    --     one at T; o14 nothing (a lead deal at T, one a second early)
     select string_agg(format('%s:%s%s%s%s%s%s', x.deal_source_id, x.lead_deal::int, x.conversation::int, x.email::int, x.phone_match::int,
                              x.attempt::int, x.known_contact::int), ' ' order by x.deal_source_id) into v_txt
     from cma.first_orders_of(v_t1, timestamptz '2026-10-05 00:00+02', timestamptz '2026-10-12 00:00+02') x where x.kind = 'first';
     v_rows := v_rows || array['17', 'B7 every flag at its edges; an inbox copy, an automation and a bot no touch',
-      case when v_txt = 'o1:101001 o13:100000 o14:000000 o2:010000 o3:001000 o4:000001 o5:000100 o6:000010 o7:000001' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'o1:101001 o13:100000 o14:000000 o2:010010 o3:001000 o4:000001 o5:000100 o6:000010 o7:000001' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B8. the level, the attribution and the credited person (the latest assisted touch): o1 lead_deal via
     --     the call center, credited to Bram's later email; o2 Bram's call; o3 an owner without a person; o5

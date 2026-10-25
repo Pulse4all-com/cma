@@ -1,0 +1,36 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:db/103_verify_tag_meaning_incorrect_data.sql:56: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+psql:db/103_verify_tag_meaning_incorrect_data.sql:178: ERROR:  function cma.tag_meaning_excludes_conversation(text) does not exist
+LINE 1: select string_agg(case when cma.tag_meaning_excludes_convers...
+                                    ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  select string_agg(case when cma.tag_meaning_excludes_conversation(k) then 't' when not cma.tag_meaning_excludes_conversation(k) then 'f'
+                         else 'n' end, '' order by o)              from unnest(array['not_reached', 'incorrect_data', 'call_type', 'courtesy_attempt', 'courtesy_completed_positive',
+                    'courtesy_completed_neutral', 'courtesy_completed_negative', 'Incorrect_Data', null]) with ordinality as x(k, o)
+CONTEXT:  PL/pgSQL function inline_code_block line 44 at SQL statement
+DO
+         check_name         | result |                                                                                    detail                                                                                     
+----------------------------+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ B the block ran to the end | FAIL   | a tag's meaning is not_reached, call_type, courtesy_attempt, courtesy_completed_positive, courtesy_completed_neutral, courtesy_completed_negative or none, not incorrect_data
+ verdict                    | FAIL   | 0 PASS, 1 FAIL
+(2 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+RESET

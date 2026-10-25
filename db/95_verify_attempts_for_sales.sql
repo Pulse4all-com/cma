@@ -38,6 +38,23 @@
 --      permission, an agent and another tenant refused; a recipient's inbox and unread count without them, a
 --      delivery not yet made never made; the stats marking them; the audit row; a second withdrawal changing nothing;
 --      nothing else of a message changing
+-- Amended for addition 0008zc (24 October 2026; 95 runs in dev only): reached becomes Conversation (docs/definitions.md): a
+-- connected (answered) telephony call with at least calls.conversation_min_talk_seconds (30, which replaces
+-- attempts.reached_min_talk_seconds) of talk and no tag meaning not reached; the CRM call's outcome decides nothing, and
+-- one deal's attempts answer connected and conversation (reached_by is gone). The reached columns and keys are named
+-- conversation. These checks pin the new figures, each for the reason named:
+--   A2  cma.deal_attempts_of without the reached threshold
+--   A4, A7  the setting calls.conversation_min_talk_seconds in place of attempts.reached_min_talk_seconds (four attempts.*
+--       settings)
+--   B2  dL's first attempt (cl1, 90 s, outcome Left voicemail) is a conversation by its talk time (2/0/- becomes 2/1/1);
+--       dW's fourth (cw4, 5 s, outcome Connected) is not (4/2/3 becomes 4/1/3, 35 s on conversations becomes 30)
+--   B6  connected and conversation per attempt as B2
+--   B7  at 29 s cw2 and cw3 are conversations (two, the first the second attempt); at 31 s none (cw4's outcome no longer
+--       counts)
+--   B12, B14, B16  the figures as B2: dL with a conversation (lost 0 becomes 1, its 90 s), dW's 5 s out
+--   B21 the copy of 0007d's calls of a deal reads connected as Connected (the linked telephony call outbound and answered),
+--       as cma.deal_calls_of does since 0008zc
+-- Every other check pins what it pinned before.
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of PASS.
 -- =============================================================================================
 
@@ -79,19 +96,19 @@ exception when others then
 end
 $$;
 
--- The deals of 5 to 11 October 2026 as text: source id, attempts, reached, first reached, talk in all and in contact,
+-- The deals of 5 to 11 October 2026 as text: source id, attempts, conversations, the first, talk in all and on conversations,
 -- attempts without an outcome, calls logged without the telephony call
 create or replace function pg_temp.v0008z_deals(p_tenant uuid, p_now timestamptz)
 returns text
 language sql
 as $$
-  select string_agg(format('%s:%s/%s/%s/%s/%s/%s/%s', x.deal_source_id, x.attempts, x.reached_attempts, coalesce(x.first_reached_attempt::text, '-'),
-                           x.talk_seconds_total, x.talk_seconds_reached, x.attempts_without_outcome, x.logged_without_aircall),
+  select string_agg(format('%s:%s/%s/%s/%s/%s/%s/%s', x.deal_source_id, x.attempts, x.conversation_attempts, coalesce(x.first_conversation_attempt::text, '-'),
+                           x.talk_seconds_total, x.talk_seconds_conversation, x.attempts_without_outcome, x.logged_without_aircall),
                     ' ' order by x.deal_source_id)
   from cma.attempts_per_deal_of(p_tenant, timestamptz '2026-10-04 22:00:00+00', timestamptz '2026-10-11 22:00:00+00', p_now) x
 $$;
 
--- The figures of a JSON object: deals/attempted/attempts/avg/median/reached_deals/first_reached/median speed/
+-- The figures of a JSON object: deals/attempted/attempts/avg/median/conversation_deals/first_conversation/median speed/
 -- called before noon of known/open/open never/won/lost/ordered/unknown/talk/talk in contact/without outcome/logged
 -- without the telephony call
 create or replace function pg_temp.v0008z_fig(f jsonb)
@@ -99,10 +116,10 @@ returns text
 language sql immutable
 as $$
   select format('%s/%s/%s/%s/%s/%s/%s/%s/%sof%s/%s/%s/%s/%s/%s/%s/%s/%s/%s/%s', f ->> 'deals', f ->> 'attempted', f ->> 'attempts',
-                coalesce(f ->> 'avg_attempts', '-'), coalesce(f ->> 'median_attempts', '-'), f ->> 'reached_deals', f ->> 'first_reached',
+                coalesce(f ->> 'avg_attempts', '-'), coalesce(f ->> 'median_attempts', '-'), f ->> 'conversation_deals', f ->> 'first_conversation',
                 coalesce(f ->> 'median_speed_seconds', '-'), f ->> 'called_before_noon', f ->> 'noon_known', f ->> 'open_deals',
                 f ->> 'open_never_attempted', f ->> 'won', f ->> 'lost', f ->> 'ordered', f ->> 'unknown', f ->> 'talk_seconds_total',
-                f ->> 'talk_seconds_reached', f ->> 'attempts_without_outcome', f ->> 'logged_without_aircall')
+                f ->> 'talk_seconds_conversation', f ->> 'attempts_without_outcome', f ->> 'logged_without_aircall')
 $$;
 
 -- 0007d's cma.lead_calls_of, copied as it was before 0008z, so B21 can prove the calls written once give its rows
@@ -114,7 +131,9 @@ language sql stable
 as $$
   select c.id, c.source_id, c.source_system, c.direction, c.owner_ref,
          coalesce(tc.started_at, c.occurred_at), tc.started_at is not null,
-         coalesce(o.is_connected, false) or tc.answered_at is not null
+         -- as amended for 0008zc: connected is Connected, the linked telephony call outbound and answered (the outcome no longer
+         -- counts; telephony.connected_min_seconds is 0 here)
+         coalesce(tc.direction = 'outbound' and tc.answered_at is not null, false)
   from cma.crm_call c
   left join cma.call_link l
     on l.tenant_id = c.tenant_id and l.crm_call_id = c.id and l.unlinked_at is null
@@ -193,7 +212,7 @@ begin
     'cma.deal_calls_of(uuid,uuid,text,text,text[],timestamptz)', 'cma.lead_calls_of(uuid,uuid,text,text,text[],timestamptz)',
     'cma.contact_store_orders_of(uuid)', 'cma.lead_to_order_of(uuid,timestamptz,timestamptz)',
     'cma.sales_deals_of(uuid,timestamptz,timestamptz,timestamptz)',
-    'cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text,integer)',
+    'cma.deal_attempts_of(uuid,uuid,text,text,text[],timestamptz,timestamptz,text)',
     'cma.attempts_per_deal_of(uuid,timestamptz,timestamptz,timestamptz)', 'cma.attempts_choices_check(text,text)',
     'cma.attempts_rows_of(uuid,date,date,timestamptz)',
     'cma.attempts_in_period(cma.attempt_deal[],date,date,text,text,text,text,timestamptz,text)',
@@ -241,8 +260,8 @@ begin
   if (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
       where table_schema = 'cma_read' and table_name = 'attempts_per_deal')
      is distinct from 'tenant_id,deal_id,connection_id,deal_source_id,pipeline_id,pipeline_label,stage_id,market,owner_user_id,created_at,'
-                      'business_date,is_closed,closed_at,ordered_at,window_end_reason,outcome,attempts,reached_attempts,first_reached_attempt,'
-                      'talk_seconds_total,talk_seconds_reached,first_attempt_at,speed_to_lead_seconds,called_before_next_noon,last_attempt_at,'
+                      'business_date,is_closed,closed_at,ordered_at,window_end_reason,outcome,attempts,conversation_attempts,first_conversation_attempt,'
+                      'talk_seconds_total,talk_seconds_conversation,first_attempt_at,speed_to_lead_seconds,called_before_next_noon,last_attempt_at,'
                       'business_days_since_last,since_last_bucket,attempts_without_outcome,logged_without_aircall'
      or not has_table_privilege('cma_readonly', 'cma_read.attempts_per_deal', 'select') then
     v_bad := 'cma_read.attempts_per_deal; ';
@@ -257,9 +276,9 @@ begin
   -- A4. the three settings in the catalog with their types, defaults and allowed values
   select string_agg(format('%s:%s:%s:%s', s.key, s.value_type, s.default_value, coalesce(array_to_string(s.allowed_values, '|'), '-')), ' ' order by s.key)
     into v_bad
-  from cma.setting s where s.key in ('attempts.source', 'attempts.reached_min_talk_seconds', 'attempts.speed_buckets_business_minutes');
+  from cma.setting s where s.key in ('attempts.source', 'calls.conversation_min_talk_seconds', 'attempts.speed_buckets_business_minutes');
   insert into verify_0008z values (4, 'A4 the three settings in the catalog',
-    case when v_bad = 'attempts.reached_min_talk_seconds:integer:30:- attempts.source:text:telephony:telephony|crm attempts.speed_buckets_business_minutes:text:5,15,60,240,1440:-'
+    case when v_bad = 'attempts.source:text:telephony:telephony|crm attempts.speed_buckets_business_minutes:text:5,15,60,240,1440:- calls.conversation_min_talk_seconds:integer:30:-'
           and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A5. written once: the calls (cma.lead_calls_of over cma.deal_calls_of), the store orders (cma.lead_to_order_of and the
@@ -327,7 +346,8 @@ begin
   -- A7. nothing twice: one 0008z row, each setting once, messages.withdraw once per role, the row type in its new shape
   v_bad := '';
   if (select count(*) from cma.schema_migration where version = '0008z') <> 1
-     or (select count(*) from cma.setting where key like 'attempts.%') <> 5
+     or (select count(*) from cma.setting where key like 'attempts.%') <> 4
+     or (select count(*) from cma.setting where key = 'calls.conversation_min_talk_seconds') <> 1
      or exists (select 1 from cma.role_permission where permission_key = 'messages.withdraw' group by tenant_id, role_id having count(*) > 1)
      or (select count(*) from pg_attribute a where a.attrelid = (select t.typrelid from pg_type t where t.oid = to_regtype('cma.attempt_deal'))
          and a.attnum > 0 and not a.attisdropped) <> 37 then
@@ -556,24 +576,24 @@ begin
     v_rows := v_rows || array['11', 'B1 only sales deals: an order pipeline, a pipeline that is no lead pipeline and an uncounted one out',
       case when v_txt = 'dA dB dL dL2 dN dO dS dT dU dW dW2' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B2. telephony (the default): attempts, reached, the first reached attempt, talk in all and in contact, attempts without an
+    -- B2. telephony (the default): attempts, conversations, the first conversation, talk in all and on them, attempts without an
     --     outcome, the outbound CRM calls logged without the telephony call (dW's cwh, dT's ct0: never attempts)
     select pg_temp.v0008z_deals(v_t1, v_now) into v_txt;
-    v_rows := v_rows || array['12', 'B2 telephony: attempts, reached, first reached, talk, without outcome; a CRM call without the telephony call counted apart',
-      case when v_txt = 'dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/0/-/90/0/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 '
-                        || 'dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/2/3/64/35/2/1 dW2:1/1/1/300/300/0/0'
+    v_rows := v_rows || array['12', 'B2 telephony: attempts, conversations, the first, talk, without outcome; a CRM call without the telephony call counted apart',
+      case when v_txt = 'dA:1/0/-/0/0/1/0 dB:1/0/-/0/0/0/0 dL:2/1/1/90/90/1/0 dL2:0/0/-/0/0/0/0 dN:0/0/-/0/0/0/0 dO:1/1/1/60/60/0/0 '
+                        || 'dS:1/1/1/45/45/1/0 dT:1/0/-/10/0/1/1 dU:1/1/1/120/120/0/0 dW:4/1/3/64/30/2/1 dW2:1/1/1/300/300/0/0'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B3. the source crm: every outbound CRM call is an attempt (dW five, its first reached the fourth; dT two, the first the
+    -- B3. the source crm: every outbound CRM call is an attempt (dW five, its first conversation the fourth; dT two, the first the
     --     call logged by hand two minutes after the creation); back to telephony
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_tenant_setting('attempts.source', 'crm');
-    select string_agg(format('%s:%s/%s/%s/%s', x.deal_source_id, x.attempts, coalesce(x.first_reached_attempt::text, '-'),
+    select string_agg(format('%s:%s/%s/%s/%s', x.deal_source_id, x.attempts, coalesce(x.first_conversation_attempt::text, '-'),
                              to_char(x.first_attempt_at at time zone 'UTC', 'DD HH24:MI:SS'), x.speed_to_lead_seconds), ' ' order by x.deal_source_id)
       into v_txt
     from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x where x.deal_source_id in ('dT', 'dW');
     perform cma.set_tenant_setting('attempts.source', 'telephony');
-    select v_txt || ' | ' || string_agg(format('%s:%s/%s/%s/%s', x.deal_source_id, x.attempts, coalesce(x.first_reached_attempt::text, '-'),
+    select v_txt || ' | ' || string_agg(format('%s:%s/%s/%s/%s', x.deal_source_id, x.attempts, coalesce(x.first_conversation_attempt::text, '-'),
                                                to_char(x.first_attempt_at at time zone 'UTC', 'DD HH24:MI:SS'), x.speed_to_lead_seconds), ' ' order by x.deal_source_id)
       into v_txt
     from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x where x.deal_source_id in ('dT', 'dW');
@@ -604,31 +624,31 @@ begin
     v_rows := v_rows || array['15', 'B5 an ordered deal is out of the open figures, without business days since its last attempt',
       case when v_txt = 'dA:3 dB:4 dN:3 dO:- dS:- dT:4 open 4 never 1 since 0–1:0 1–2:0 2–5:4 5+:0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B6. reached, per attempt (one deal's attempts as a supervisor reads them): an outcome without connected and 0 s, 29 s
-    --     without an outcome not, 30 s without an outcome by the talk time, Connected with 5 s by the outcome; Left voicemail
-    --     with 90 s not, answered with 0 s not
+    -- B6. connected and conversation per attempt (one deal's attempts as a supervisor reads them; 0008zc): not answered
+    --     neither; 29 s connected, no conversation; 30 s a conversation; Connected with 5 s connected, no conversation; Left
+    --     voicemail with 90 s a conversation; answered with 0 s connected, no conversation
     perform set_config('app.user_id', v_super1::text, true);
-    select string_agg(format('%s:%s/%s/%s/%s', a.n, a.answered, coalesce(a.talk_seconds::text, '-'), a.reached, coalesce(a.reached_by, '-')), ' ' order by a.n)
+    select string_agg(format('%s:%s/%s/%s', a.n, a.connected, coalesce(a.talk_seconds::text, '-'), a.conversation), ' ' order by a.n)
       into v_txt from cma.attempts_of_deal(v_dw) a;
-    select v_txt || ' | ' || string_agg(format('%s:%s/%s/%s/%s', a.n, a.answered, coalesce(a.talk_seconds::text, '-'), a.reached, coalesce(a.reached_by, '-')), ' ' order by a.n)
+    select v_txt || ' | ' || string_agg(format('%s:%s/%s/%s', a.n, a.connected, coalesce(a.talk_seconds::text, '-'), a.conversation), ' ' order by a.n)
       into v_txt from cma.attempts_of_deal(v_dl) a;
-    v_rows := v_rows || array['16', 'B6 reached by the outcome first, else 30 s of talk; Left voicemail with 90 s and answered with 0 s not',
-      case when v_txt = '1:f/-/f/- 2:t/29/f/- 3:t/30/t/talk_time 4:t/5/t/outcome | 1:t/90/f/- 2:t/0/f/-'
+    v_rows := v_rows || array['16', 'B6 a conversation at 30 s of talk, the outcome deciding nothing; answered with 0 s connected, no conversation',
+      case when v_txt = '1:f/-/f 2:t/29/f 3:t/30/t 4:t/5/f | 1:t/90/t 2:t/0/f'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B7. the setting moves the edge: at 29 s dW's second attempt reaches (first reached 2, three reached), at 31 s its third
-    --     no longer does (first reached 4, one reached)
+    -- B7. the setting moves the edge: at 29 s dW's second attempt is a conversation (the first 2, two in all), at 31 s its
+    --     third no longer is (none)
     perform set_config('app.user_id', v_admin1::text, true);
-    perform cma.set_tenant_setting('attempts.reached_min_talk_seconds', '29');
-    select format('29:%s/%s', x.reached_attempts, x.first_reached_attempt) into v_txt
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '29');
+    select format('29:%s/%s', x.conversation_attempts, x.first_conversation_attempt) into v_txt
     from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x where x.deal_source_id = 'dW';
-    perform cma.set_tenant_setting('attempts.reached_min_talk_seconds', '31');
-    select v_txt || format(' 31:%s/%s', x.reached_attempts, x.first_reached_attempt) into v_txt
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '31');
+    select v_txt || format(' 31:%s/%s', x.conversation_attempts, x.first_conversation_attempt) into v_txt
     from cma.attempts_per_deal_of(v_t1, v_from, v_to, v_now) x where x.deal_source_id = 'dW';
-    perform cma.set_tenant_setting('attempts.reached_min_talk_seconds', '30');
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '30');
     perform set_config('app.user_id', v_analyst1::text, true);
-    v_rows := v_rows || array['17', 'B7 attempts.reached_min_talk_seconds moves the edge',
-      case when v_txt = '29:3/2 31:1/4' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['17', 'B7 calls.conversation_min_talk_seconds moves the edge',
+      case when v_txt = '29:2/2 31:0/' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B8. the speed to lead equals cma.speed_to_lead_of's business seconds and next-noon answer for every deal whose first
     --     outbound CRM call is the first attempt's (the same telephony call); dT differs: its first CRM call was logged without
@@ -646,7 +666,7 @@ begin
     v_rows := v_rows || array['18', 'B8 the speed to lead is 0007d''s for the same first call; a first CRM call without the telephony call differs',
       case when v_txt = '8 equal of 8; differ: dT 5390<>120' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B9. one deal's attempts in time order with their fields: the start, answered, talk, reached and by what, the outcome's
+    -- B9. one deal's attempts in time order with their fields: the start, connected, talk, conversation, the outcome's
     --     catalog label, the agent's name (the telephony user's person, else the CRM call's owner's) for performance.team while
     --     reports.per_person holds attempts
     perform set_config('app.user_id', v_super1::text, true);
@@ -697,16 +717,16 @@ begin
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B12. won against lost: deals, average and median attempts, the median speed to lead, called before the next noon of those
-    --      known, reached at least once, the average talk time in contact of the deals reached; the deals not decided apart
+    --      known, with a conversation, the average talk time on the conversations of those deals; the deals not decided apart
     j := cma.attempts_per_deal_page_of(v_t1, date '2026-10-05', date '2026-10-11', 'day', null, null, 'all', 'all', 100, v_now);
     select string_agg(format('%s:%s/%s/%s/%s/%sof%s/%s/%s', o ->> 'outcome', o ->> 'deals', o ->> 'avg_attempts', o ->> 'median_attempts',
-                             coalesce(o ->> 'median_speed_seconds', '-'), o ->> 'called_before_noon', o ->> 'noon_known', o ->> 'reached_deals',
-                             coalesce(o ->> 'avg_talk_reached_seconds', '-')), ' ')
+                             coalesce(o ->> 'median_speed_seconds', '-'), o ->> 'called_before_noon', o ->> 'noon_known', o ->> 'conversation_deals',
+                             coalesce(o ->> 'avg_talk_conversation_seconds', '-')), ' ')
            || format(' not_decided:%s open:%s ordered:%s unknown:%s', j -> 'outcomes' ->> 'not_decided', j -> 'outcomes' ->> 'open',
                      j -> 'outcomes' ->> 'ordered', j -> 'outcomes' ->> 'unknown')
       into v_txt from jsonb_array_elements(j -> 'outcomes' -> 'rows') o;
     v_rows := v_rows || array['22', 'B12 won against lost, the deals not decided counted apart',
-      case when v_txt = 'won:2/2.50/2.5/6440/2of2/2/168 lost:2/1.00/1.0/3590/1of2/0/- not_decided:7 open:4 ordered:2 unknown:1'
+      case when v_txt = 'won:2/2.50/2.5/6440/2of2/2/165 lost:2/1.00/1.0/3590/1of2/1/90 not_decided:7 open:4 ordered:2 unknown:1'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B13. the win rate by attempts (0 to 5+) and by speed to lead (the business-minute buckets, the deals never attempted and
@@ -721,12 +741,12 @@ begin
       case when v_txt = '0:0/1 1:1/0 2:0/1 3:0/0 4:1/0 5+:0/0 | 0–5:1/0 5–15:0/0 15–60:0/1 60–240:1/0 240–1440:0/0 1440+:0/0 none:0/1 no_hours:0'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
-    -- B14. the figures of the period and of the previous week (dP), and reached per attempt (the deals first reached on each)
+    -- B14. the figures of the period and of the previous week (dP), and per attempt the deals whose first conversation it was
     v_txt := pg_temp.v0008z_fig(j -> 'current') || ' | ' || pg_temp.v0008z_fig(j -> 'previous') || ' | '
-             || (select string_agg(format('%s:%s', b ->> 'label', b ->> 'first_reached'), ' ' order by (b ->> 'bucket')::int)
+             || (select string_agg(format('%s:%s', b ->> 'label', b ->> 'first_conversation'), ' ' order by (b ->> 'bucket')::int)
                  from jsonb_array_elements(j -> 'buckets') b where (b ->> 'bucket')::int > 0);
-    v_rows := v_rows || array['24', 'B14 the figures, the previous period and reached per attempt',
-      case when v_txt = '11/9/13/1.18/1.0/5/4/5390/8of11/4/1/2/2/2/1/689/560/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:4 2:0 3:1 4:0 5+:0'
+    v_rows := v_rows || array['24', 'B14 the figures, the previous period and the first conversation per attempt',
+      case when v_txt = '11/9/13/1.18/1.0/6/5/5390/8of11/4/1/2/2/2/1/689/645/6/2 | 1/1/1/1.00/1.0/1/1/590/1of1/0/0/1/0/0/0/60/60/0/0 | 1:5 2:0 3:1 4:0 5+:0'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B15. the list: open first, the longest since the last attempt first (then the earlier last attempt or creation); then the
@@ -746,23 +766,23 @@ begin
     -- B16. per deal owner by name, never ranked, the not-linked row with one owner id, the total
     perform set_config('app.user_id', v_super1::text, true);
     j := cma.attempts_per_person_of(v_t1, date '2026-10-05', date '2026-10-11', null, null, 'all', 'all', v_now);
-    select string_agg(format('%s:%s/%s/%s/%s/%s/%s', p ->> 'display_name', p ->> 'deals', p ->> 'attempts', p ->> 'reached_deals',
-                             coalesce(p ->> 'median_speed_seconds', '-'), p ->> 'talk_seconds_reached', p ->> 'open_never_attempted'), ' ' order by o)
+    select string_agg(format('%s:%s/%s/%s/%s/%s/%s', p ->> 'display_name', p ->> 'deals', p ->> 'attempts', p ->> 'conversation_deals',
+                             coalesce(p ->> 'median_speed_seconds', '-'), p ->> 'talk_seconds_conversation', p ->> 'open_never_attempted'), ' ' order by o)
       into v_txt from jsonb_array_elements(j -> 'rows') with ordinality as x(p, o);
     v_txt := v_txt || format(' not_linked(%s):%s/%s/%s/%s/%s/%s total:%s/%s', j -> 'not_linked' ->> 'unlinked_owners', j -> 'not_linked' ->> 'deals',
-                             j -> 'not_linked' ->> 'attempts', j -> 'not_linked' ->> 'reached_deals', j -> 'not_linked' ->> 'median_speed_seconds',
-                             j -> 'not_linked' ->> 'talk_seconds_reached', j -> 'not_linked' ->> 'open_never_attempted',
+                             j -> 'not_linked' ->> 'attempts', j -> 'not_linked' ->> 'conversation_deals', j -> 'not_linked' ->> 'median_speed_seconds',
+                             j -> 'not_linked' ->> 'talk_seconds_conversation', j -> 'not_linked' ->> 'open_never_attempted',
                              j -> 'total' ->> 'deals', j -> 'total' ->> 'attempts');
     v_rows := v_rows || array['26', 'B16 per deal owner by name with the not-linked row and the total',
-      case when v_txt = 'Anna Verify:4/7/4/7190/440/0 Bram Verify:3/4/0/32390/0/0 not_linked(1):4/2/1/3590/120/1 total:11/13'
+      case when v_txt = 'Anna Verify:4/7/4/7190/435/0 Bram Verify:3/4/1/32390/90/0 not_linked(1):4/2/1/3590/120/1 total:11/13'
             and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B17. the settings refuse what the catalog does not take, and the speed buckets drop their spaces
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := '';
     foreach v_detail in array array['attempts.source=calls', 'attempts.source=crm', 'attempts.source=telephony',
-                                    'attempts.reached_min_talk_seconds=-1', 'attempts.reached_min_talk_seconds=601', 'attempts.reached_min_talk_seconds=x',
-                                    'attempts.reached_min_talk_seconds=0', 'attempts.reached_min_talk_seconds=600',
+                                    'calls.conversation_min_talk_seconds=-1', 'calls.conversation_min_talk_seconds=601', 'calls.conversation_min_talk_seconds=x',
+                                    'calls.conversation_min_talk_seconds=0', 'calls.conversation_min_talk_seconds=600',
                                     'attempts.speed_buckets_business_minutes=0,5', 'attempts.speed_buckets_business_minutes=5,5',
                                     'attempts.speed_buckets_business_minutes=1,2,3,4,5,6,7', 'attempts.speed_buckets_business_minutes=1,2,3,4,5,6'] loop
       v_txt := v_txt || pg_temp.v0008z_code(format('select cma.set_tenant_setting(%L, %L)', split_part(v_detail, '=', 1), substr(v_detail, strpos(v_detail, '=') + 1))) || ' ';
@@ -770,7 +790,7 @@ begin
     perform cma.set_tenant_setting('attempts.speed_buckets_business_minutes', ' 5, 15 ,60');
     v_txt := v_txt || cma.setting_of(v_t1, 'attempts.speed_buckets_business_minutes');
     perform cma.set_tenant_setting('attempts.speed_buckets_business_minutes', '5,15,60,240,1440');
-    perform cma.set_tenant_setting('attempts.reached_min_talk_seconds', '30');
+    perform cma.set_tenant_setting('calls.conversation_min_talk_seconds', '30');
     v_rows := v_rows || array['27', 'B17 the settings'' refusals and the speed buckets'' spaces',
       case when v_txt = 'CMA04 ok ok CMA04 CMA04 CMA04 ok ok CMA04 CMA04 CMA04 ok 5,15,60' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -796,7 +816,7 @@ begin
     perform set_config('app.user_id', v_analyst1::text, true);
     select string_agg(concat_ws('|', r.deal_id, r.connection_id, r.deal_source_id, r.pipeline_id, r.pipeline_label, r.stage_id, r.market, r.owner_user_id,
                                 r.created_at, r.business_date, r.is_closed, r.closed_at, r.ordered_at, r.window_end_reason, r.outcome, r.attempts,
-                                r.reached_attempts, r.first_reached_attempt, r.talk_seconds_total, r.talk_seconds_reached, r.first_attempt_at,
+                                r.conversation_attempts, r.first_conversation_attempt, r.talk_seconds_total, r.talk_seconds_conversation, r.first_attempt_at,
                                 r.speed_to_lead_seconds, r.called_before_next_noon, r.last_attempt_at, r.business_days_since_last, r.since_last_bucket,
                                 r.attempts_without_outcome, r.logged_without_aircall), ';' order by r.deal_id) into v_app
     from cma.attempts_per_deal_of(v_t1, null, null) r;
@@ -804,7 +824,7 @@ begin
     perform set_config('app.tenant_id', v_t1::text, true);
     select string_agg(concat_ws('|', r.deal_id, r.connection_id, r.deal_source_id, r.pipeline_id, r.pipeline_label, r.stage_id, r.market, r.owner_user_id,
                                 r.created_at, r.business_date, r.is_closed, r.closed_at, r.ordered_at, r.window_end_reason, r.outcome, r.attempts,
-                                r.reached_attempts, r.first_reached_attempt, r.talk_seconds_total, r.talk_seconds_reached, r.first_attempt_at,
+                                r.conversation_attempts, r.first_conversation_attempt, r.talk_seconds_total, r.talk_seconds_conversation, r.first_attempt_at,
                                 r.speed_to_lead_seconds, r.called_before_next_noon, r.last_attempt_at, r.business_days_since_last, r.since_last_bucket,
                                 r.attempts_without_outcome, r.logged_without_aircall), ';' order by r.deal_id) into v_view
     from cma_read.attempts_per_deal r where r.tenant_id = v_t1;
@@ -855,7 +875,7 @@ begin
 
     -- B22. the page's settings, history start and filter lists (the lead pipelines only)
     j := cma.attempts_per_deal_page_of(v_t1, date '2026-10-05', date '2026-10-11', 'pipeline', null, null, 'all', 'all', 100, v_now);
-    v_txt := (j -> 'settings' ->> 'source') || '/' || (j -> 'settings' ->> 'reached_min_talk_seconds') || '/' || (j -> 'settings' ->> 'speed_buckets')
+    v_txt := (j -> 'settings' ->> 'source') || '/' || (j -> 'settings' ->> 'conversation_min_talk_seconds') || '/' || (j -> 'settings' ->> 'speed_buckets')
              || '/' || (j -> 'settings' ->> 'max_bucket') || ' ' || (j ->> 'history_start') || ' ' || (j ->> 'markets') || ' '
              || (select string_agg(p ->> 'label', ',') from jsonb_array_elements(j -> 'pipelines') p) || ' '
              || (select string_agg(format('%s=%s', g ->> 'label', g ->> 'deals'), ',') from jsonb_array_elements(j -> 'groups') g);

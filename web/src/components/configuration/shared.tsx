@@ -16,7 +16,7 @@ export { field, label, td, th, tr } from "./tableClasses";
 export type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "problem"; message: string };
 
 /** One write to a configuration route; the answer's status decides the message, never its SQL */
-export async function send(method: "PUT" | "POST", path: string, body?: unknown): Promise<Response> {
+export async function send(method: "PUT" | "POST" | "PATCH", path: string, body?: unknown): Promise<Response> {
   return fetch(path, {
     method,
     headers: { "content-type": "application/json", "x-cma-request": "1" },

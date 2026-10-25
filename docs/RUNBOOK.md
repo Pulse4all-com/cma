@@ -289,7 +289,7 @@ closes Agent Two's open past days itself (as the supervisor); no fixture runs fi
 Keep outputs as evidence:
 `node verify/api.mjs | tee ../records/<what>-dev-<date>/verify-api.txt`.
 
-`verify:round-trips` against dev (**Terminal**): the database cost of every page and polled route per test user, 46 requests,
+`verify:round-trips` against dev (**Terminal**): the database cost of every page and polled route per test user, 53 requests,
 against the budgets in `web/verify/round-trips.json`. The app reports that cost only with `CMA_DB_TRACE=1` and mock sign-in
 (never in iap mode), so the variable is set on dev's `cma-web` for the run and removed right after it; each update makes a new
 revision and keeps the image and the other variables. Dev must run an image with the trace (the speed fixes of the IT audit of
@@ -300,8 +300,8 @@ gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
   --update-env-vars=CMA_DB_TRACE=1 2>&1 | tail -1
 pkill -f "run services proxy"; gcloud run services proxy cma-web --project=p4a-cma-dev \
   --region=europe-west4 --port=8080 >/tmp/proxy.log 2>&1 & sleep 6
-cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (46 requests ...), exit 0
-BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (92 problems), exit 1
+cd ~/cma/web && BASE=http://localhost:8080 node verify/round-trips.mjs; echo "exit $?"   # round-trips: PASS (53 requests ...), exit 0
+BASE=http://localhost:8080 node verify/round-trips.mjs --provoke; echo "exit $?"         # round-trips: FAIL (106 problems), exit 1
 gcloud run services update cma-web --project=p4a-cma-dev --region=europe-west4 \
   --remove-env-vars=CMA_DB_TRACE 2>&1 | tail -1
 curl -s -D - -o /dev/null -H "x-cma-mock-subject: agent-two" localhost:8080/api/v1/me | grep -ci x-cma-db   # 0: off again
@@ -399,8 +399,11 @@ cma_db prod && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/drift/function
 diff /tmp/fn-dev.txt /tmp/fn-prod.txt && echo "no drift"
 ```
 
-Expected: the same count twice (475 at 0008z), then `no drift`. Otherwise `<` lines are dev's, `>` prod's: send them to
-Claude Code; nothing is changed by hand.
+Expected: the same count twice (519 at 0008zc), then one known pair of lines and nothing else: `cma.setup_tenant_table`,
+whose definitions differ by one code comment only (`-- from an earlier draft` in `db/01_foundation.sql`), because prod
+was built from `01` before that comment existed. That pair is known and expected, not drift, so `no drift` does not
+print. Any other line that differs: `<` lines are dev's, `>` prod's; send them to Claude Code; nothing is changed by
+hand.
 
 ## 7a. Addition 0008s: the follow-up snapshot (18 October 2026)
 

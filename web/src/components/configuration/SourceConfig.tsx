@@ -23,15 +23,16 @@ import type {
 import { DQ_UNLINKED_SKIP_DEFAULT, DQ_UNLINKED_SKIP_KEY, DQ_UNLINKED_SKIP_NONE, parsePipelineSla, unlinkedSkipOf } from "@/lib/follow-up";
 import {
   POLL_PROBE_SETTING, POLL_SETTINGS, coerceSettingValue, emailMarketSteps, formCategoryChoices, formEditProblem, kindChoices, mailboxLabelProblem, parsePollSetting, pollCadenceOf,
-  recordTypeOfSetting, recordUrlPreview, settingCodes, settingKeyProblem, settingsSize, settingText, sourceSections, type PollSettingName,
+  recordTypeOfSetting, recordUrlPreview, settingCodes, settingKeyProblem, settingsSize, settingText, sourceSections, TAG_MEANINGS, tagsWithoutNotReached,
+  type PollSettingName,
 } from "@/lib/sources";
 import { settingAnchor } from "@/lib/configuration";
 import { dateKeyInZone, fmtDate } from "@/lib/time";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { HeaderHint } from "../HeaderHint";
 import { HintLabel } from "../HintLabel";
-import { Badge, Button, Card, Keycap } from "../primitives";
-import { FormRuleDialog, OutcomeRuleDialog } from "./SourceRules";
+import { Badge, Button, Card, Keycap, Notice } from "../primitives";
+import { FormRuleDialog } from "./SourceRules";
 import { kindLabel } from "./SourcesList";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
@@ -50,7 +51,7 @@ export interface EmailSettingsInWords {
 const EMAIL_NUMBER_KEYS = { reply: "email.reply_target_minutes", days: "email.no_response_days" } as const;
 const EMAIL_NUMBER_MAX = { reply: 10080, days: 90 } as const;
 
-export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, email = null }: {
+export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, conversationMinSeconds = null, email = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
   /** The tenant's email settings (addition 0008t), shown in words on a CRM connection */
   email?: EmailSettingsInWords | null;
@@ -58,6 +59,8 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
   categories?: FormCategory[];
   /** telephony.connected_min_seconds (addition 0008j), shown in words on a telephony connection */
   connectedMinSeconds?: number | null;
+  /** calls.conversation_min_talk_seconds (addition 0008zc), shown in words on a telephony connection */
+  conversationMinSeconds?: number | null;
 }) {
   const c = copy.configuration;
   const t = copy.configSources;
@@ -101,7 +104,7 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
   const [formDraft, setFormDraft] = useState<{ isCounted: boolean; isPolled: boolean; category: string; leadSource: string; market: string }>(
     { isCounted: true, isPolled: true, category: "", leadSource: "", market: "" });
   const [formProblem, setFormProblem] = useState<string | null>(null);
-  const [ruleOpen, setRuleOpen] = useState<{ kind: "forms" | "outcomes"; opened: number } | null>(null);
+  const [ruleOpen, setRuleOpen] = useState<{ kind: "forms"; opened: number } | null>(null);
   const [storeEdit, setStoreEdit] = useState<number | null>(null);
   const [store, setStore] = useState<SourceStore>(detail.store ?? { handle: "", name: "", market: marketCodes[0] ?? "", currency: "", timeZone: "" });
   const [storeProblem, setStoreProblem] = useState<string | null>(null);
@@ -364,8 +367,18 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
             <>
               <dt className="font-semibold">{t.connectedCall}</dt>
               <dd className="flex flex-wrap items-baseline gap-x-3" data-testid="source-connected-threshold">
-                <span>{t.connectedThreshold.replace("{seconds}", connectedMinSeconds === null ? "–" : new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB").format(connectedMinSeconds))}</span>
+                {/* Connected is answered at any talk time; a value above 0 adds a talk condition (addition 0008zc) */}
+                <span>{connectedMinSeconds !== null && connectedMinSeconds > 0
+                  ? t.connectedThresholdMin.replace("{seconds}", new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB").format(connectedMinSeconds))
+                  : t.connectedThreshold}</span>
                 <Link href={`/configuration/exports#${settingAnchor("telephony.connected_min_seconds")}`} className="text-small font-semibold text-p4a-deepblue hover:underline">
+                  {t.connectedThresholdLink}
+                </Link>
+              </dd>
+              <dt className="font-semibold">{t.conversationCall}</dt>
+              <dd className="flex flex-wrap items-baseline gap-x-3" data-testid="source-conversation-threshold">
+                <span>{t.conversationThreshold.replace("{seconds}", conversationMinSeconds === null ? "–" : new Intl.NumberFormat(locale === "nl" ? "nl-NL" : "en-GB").format(conversationMinSeconds))}</span>
+                <Link href={`/configuration/exports#${settingAnchor("calls.conversation_min_talk_seconds")}`} className="text-small font-semibold text-p4a-deepblue hover:underline">
                   {t.connectedThresholdLink}
                 </Link>
               </dd>
@@ -593,23 +606,17 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
       {/* ---- call outcomes ---- */}
       {sections.includes("callOutcomes") ? (
         <Card title={t.sectionOutcomes}>
-          <div className="-mt-2 mb-4 flex items-start justify-between gap-4">
-            <p className="max-w-3xl text-small text-p4a-muted">{t.outcomesIntro}</p>
-            <Button variant="outlined" shortcut="O" data-shortcut="o" disabled={detail.callOutcomes.length === 0} onClick={() => setRuleOpen({ kind: "outcomes", opened: tick() })}>{t.applyRuleOutcomes}</Button>
-          </div>
+          {/* the outcomes as a list: since addition 0008zc no outcome decides connected or a conversation (docs/definitions.md, R1) */}
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.outcomesIntro}</p>
           {detail.callOutcomes.length === 0 ? <p className="text-body text-p4a-muted">{t.outcomesEmpty}</p> : (
             <table className="w-full border-collapse text-body leading-table" data-testid="source-outcomes">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-                <tr><th className={th}>{t.outcome}</th><th className={th}><HintLabel label={t.connected}>{hint(t.connected, t.hintConnected)}</HintLabel></th></tr>
+                <tr><th className={th}>{t.outcome}</th></tr>
               </thead>
               <tbody>
                 {detail.callOutcomes.map((o) => (
                   <tr key={o.outcomeRef} className={`${tr} ${o.isActive ? "" : "text-p4a-muted"}`}>
                     <td className={td}><span className="font-semibold">{o.label}</span> <span className="text-caption text-p4a-muted">({o.outcomeRef})</span></td>
-                    <td className={td}>
-                      <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.connected}: ${o.label}`} checked={o.isConnected}
-                        onChange={(e) => save(() => send("PUT", `${base}/call-outcomes`, { outcomes: [{ outcomeRef: o.outcomeRef, isConnected: e.target.checked }] }))} />
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -949,10 +956,18 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
       {sections.includes("tags") ? (
         <Card title={t.sectionTags}>
           <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.tagsIntro}</p>
+          {/* without a tag meaning not reached, Conversation is talk time alone (addition 0008zc), and the page says so */}
+          {tagsWithoutNotReached(detail.tags) ? (
+            <div className="mb-4" data-testid="source-tags-no-not-reached"><Notice tone="warning">{t.tagsNoNotReached}</Notice></div>
+          ) : null}
           {detail.tags.length === 0 ? <p className="text-body text-p4a-muted">{t.tagsEmpty}</p> : (
             <table className="w-full border-collapse text-body leading-table" data-testid="source-tags">
               <thead className="bg-p4a-bgblue text-small text-p4a-heading">
-                <tr><th className={th}>{t.tag}</th><th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintTagCounted)}</HintLabel></th></tr>
+                <tr>
+                  <th className={th}>{t.tag}</th>
+                  <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintTagCounted)}</HintLabel></th>
+                  <th className={th}><HintLabel label={t.tagMeaning}>{hint(t.tagMeaning, t.hintTagMeaning)}</HintLabel></th>
+                </tr>
               </thead>
               <tbody>
                 {detail.tags.map((x) => (
@@ -961,6 +976,13 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
                     <td className={td}>
                       <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${x.name}`} checked={x.isCounted}
                         onChange={(e) => save(() => send("PUT", `${base}/tags`, { tagRef: x.tagRef, isCounted: e.target.checked }))} />
+                    </td>
+                    <td className={td}>
+                      <select className={`${field} w-64`} aria-label={`${t.tagMeaning}: ${x.name}`} value={x.meaning ?? ""} data-testid={`tag-meaning-${x.tagRef}`}
+                        onChange={(e) => save(() => send("PATCH", `${base}/tags`, { tagRef: x.tagRef, meaning: e.target.value === "" ? null : e.target.value }))}>
+                        <option value="">{t.meaning_none}</option>
+                        {TAG_MEANINGS.map((m) => <option key={m} value={m}>{t[`meaning_${m}`]}</option>)}
+                      </select>
                     </td>
                   </tr>
                 ))}
@@ -1092,12 +1114,6 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
         <FormRuleDialog key={ruleOpen.opened} forms={detail.forms} markets={markets} copy={copy} busy={state.kind === "saving"}
           onClose={() => setRuleOpen(null)}
           onSave={async (changes) => { if (await save(() => send("PUT", `${base}/forms`, { forms: changes }))) setRuleOpen(null); }} />
-      ) : null}
-
-      {ruleOpen?.kind === "outcomes" ? (
-        <OutcomeRuleDialog key={ruleOpen.opened} outcomes={detail.callOutcomes} copy={copy} busy={state.kind === "saving"}
-          onClose={() => setRuleOpen(null)}
-          onSave={async (changes) => { if (await save(() => send("PUT", `${base}/call-outcomes`, { outcomes: changes }))) setRuleOpen(null); }} />
       ) : null}
 
       {reasonEdit ? (
