@@ -1,5 +1,5 @@
 /**
- * Verifier: the Trusted Shops adapter end to end (addition 0008ze, brief B18), against a local PostgreSQL with db/00…104
+ * Verifier: the Trusted Shops adapter end to end (addition 0008ze, brief B18; 0008zf), against a local PostgreSQL with db/00…106
  * and the fake eTrusted API with HubSpot's contact search (verify/etrusted-fake.mjs). Everything is invented: tenants,
  * channels, reviews, orders, contacts, emails (example.com), names, numbers in the +44 20 0000 09xx range.
  *
@@ -12,7 +12,8 @@
  * Proves: no route for the adapter (404); the first poll: the channel catalog (new channels unmapped, not counted), the
  * reviews of the last reviews_reconcile_days (statements asked for, an unreadable review skipped), the order link by
  * order name with the order's customer's contact (0008h), a contact found by email (one search per new review without a
- * link; none and two contacts leave none), the run's sync_run row and counts, the cursors; a poll not due writes
+ * link; none and two contacts leave none), the run's sync_run row and counts, the cursors, the reference guard
+ * (0008zf: an email as transaction reference stored as nothing and counted as ref_dropped, a normal one kept); a poll not due writes
  * nothing; the next poll reads from its cursor less two hours, stores only what is new, and alerts on a negative review
  * of a counted channel once the channels are mapped; a 429 fails the run (rate_limited) and the next one carries on;
  * the reconcile reads the window again (a state change, a reply) and looks every unlinked review up again (a contact
@@ -159,6 +160,12 @@ const nlCursor = await cursor("reviews:chl-fixture-nl");
 expect("B7 a cursor per channel at the poll's start, and the cadence", [Number.isFinite(nlCursor?.at) && nlCursor.at >= START - 5_000, Number.isFinite((await cursor("reviews:cadence"))?.at)],
   [true, true], [false, false]);
 expect("B8 no alert: no channel counts yet", (await q("select count(*)::int as n from cma.message where tenant_id = $1 and ref_type = 'review'", [t1]))[0].n, 0, 1);
+const refs = await q(`select source_id, coalesce(transaction_ref, '-') as ref, coalesce(raw #>> '{transaction,reference}', '-') as raw_ref
+                      from cma.review where tenant_id = $1 and source_id in ('rev-fixture-none-1', 'rev-fixture-twice-1') order by source_id`, [t1]);
+expect("B9 the reference guard (0008zf): an email as reference stored as nothing, column and raw; a normal one kept; the run counts ref_dropped 1",
+  [...refs.map((r) => `${r.source_id}:${r.ref}:${r.raw_ref}`), runs[0].counts.ref_dropped ?? 0],
+  ["rev-fixture-none-1:-:-", "rev-fixture-twice-1:P4AUK-990002:P4AUK-990002", 1],
+  ["rev-fixture-none-1:nobody.order@example.com:nobody.order@example.com", "rev-fixture-twice-1:-:-", 0]);
 
 // ---- C. Not due; the next poll from its cursor; an alert --------------------------------------------------------
 const asked0 = reviewsAsked().length;

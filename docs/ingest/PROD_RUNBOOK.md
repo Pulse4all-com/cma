@@ -1168,9 +1168,9 @@ Expected: "Saved" after each; the settings table below lists `forms_poll_interva
 
 # 13. Trusted Shops reviews in prod (brief B18, addition 0008ze)
 
-The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shops reviews are phase 13, after phase 12. Written on 25 October 2026 (PR #192), before anything ran in dev or prod. The reviews of Pulse4all Subscriptions' Trusted Shops account, read through the eTrusted API into `cma.review_channel` and `cma.review` (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: reviews): read only, metadata only, never the reviewer's name, email or phone, nor a review's title or text. Order: the migration in dev with its verifies, the data map's snapshot and the migration in prod, all three before the merge (13.1 to 13.3); then the merge, the existing API client's secret, the ingest from `main` with its jobs, the connection and its settings, the first poll, the channels' markets, the backfill with its check against the Control Centre, day one (13.4 to 13.11). The ingest is deployed before the connection exists, so no job of an older image meets a connection of an adapter it does not know. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<hubspot conn>` is the live portal's HubSpot connection (7.3), `<reviews conn>` the connection of 13.7. The Terminal blocks of this phase run from the Chromebook, in `~/cma`.
+The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shops reviews are phase 13, after phase 12. Written on 25 October 2026 (PR #192), before anything ran in dev or prod. The reviews of Pulse4all Subscriptions' Trusted Shops account, read through the eTrusted API into `cma.review_channel` and `cma.review` (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: reviews): read only, metadata only, never the reviewer's name, email or phone, nor a review's title or text. Order: the migration in dev with its verifies, the data map's snapshot and the migration in prod, all three before the merge (13.1 to 13.3); then the merge, the existing API client's secret, the ingest from `main` with its jobs, the connection and its settings, the first poll, the channels' markets, the backfill with its check against the Control Centre, day one (13.4 to 13.11). The ingest is deployed before the connection exists, so no job of an older image meets a connection of an adapter it does not know. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<hubspot conn>` is the live portal's HubSpot connection (7.3), `<reviews conn>` the connection of 13.7. The Terminal blocks of this phase run from the Chromebook, in `~/cma`. 13.12 (brief B18.1, addition 0008zf) is the reference guard: dev and prod before the merge of its own pull request, the new ingest image straight after it.
 
-**To confirm on the live account.** The adapter follows the prod discovery of 25 October 2026 and the developer reference as far as it could be read; none of these is proven against the live API yet: the page size 100 (`count`), the cursor field of the reviews' paging (`after`: the answer's cursor, else the last review's id), `ignoreStatements=false` (asks for the star-only reviews; setting `etrusted_include_statements`) and the rate limits (not documented: the adapter paces itself at `etrusted_max_per_minute`, default 60). A first poll or backfill that fails with `http_<status>` on `/reviews` points at one of them: report the code, never a body.
+**To confirm on the live account.** The adapter follows the prod discovery of 25 October 2026 and the developer reference as far as it could be read. The page size 100 (`count`) and the cursor field of the reviews' paging (`after`: the answer's cursor, else the last review's id) are confirmed in practice on 25 October 2026 (845 reviews, 7 channels, 60 requests a minute, no 429). Still to confirm: `ignoreStatements=false` (asks for the star-only reviews; setting `etrusted_include_statements`) and the rate limits (not documented: the adapter paces itself at `etrusted_max_per_minute`, default 60). A first poll or backfill that fails with `http_<status>` on `/reviews` points at one of them: report the code, never a body.
 
 **Data prerequisites** (the counts mean nothing without them):
 - The reviews' transaction reference names the shop's order (an order name, else the order's id) for the order link. A review without one links to a CRM contact by the reviewer's email, else to nothing.
@@ -1182,7 +1182,7 @@ The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shop
 
 **File:** `db/104_reviews.sql`: open it and copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
 
-Expected: no error; the last result is `reset role`. A second run ends the same and changes nothing. `addition 0008zd (102_tag_meaning_incorrect_data.sql) must run before 0008ze` means dev lacks 0008zd: run `docs/definitions-2026-10/RUNBOOK-0008zd.md` first.
+Expected: no error. Studio lists only the results that return rows, so `104` ends with two `setup_tenant_table` results and no error. A second run ends the same and changes nothing. `addition 0008zd (102_tag_meaning_incorrect_data.sql) must run before 0008ze` means dev lacks 0008zd: run `docs/definitions-2026-10/RUNBOOK-0008zd.md` first.
 
 **File:** `db/02_seed_pulse4all.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run (the seed adds the alert rule Negative review, which needs `104`).
 
@@ -1223,17 +1223,11 @@ Expected: rows `A1` to `A8`, `B1` to `B23` and `C1` to `C2`, each `PASS`; `verdi
 
 `docs/datamap/catalog.json` describes the two new tables, the five computed views and the flow `trustedshops`; `verify:datamap` fails on this branch until the snapshot is refreshed from dev, as `docs/datamap/README.md` (Refreshing the snapshot) says. Martin refreshes `docs/datamap/schema.json` from dev on this branch after running the migration there (13.1), before merging.
 
-**Terminal** (first tab; leave it running)
+**Terminal** (in `~/cma`, on this branch; the `cma_db` route works without the proxy)
 ```bash
-cloud-sql-proxy --auto-iam-authn --port 5433 p4a-cma-dev:europe-west4:cma-dev-pg
+cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
 ```
-Expected: `The proxy has started successfully and is ready for new connections!`
-
-**Terminal** (second tab, in `~/cma`, on this branch)
-```bash
-psql "host=127.0.0.1 port=5433 dbname=cma user=$(gcloud config get-value account) sslmode=disable" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
-```
-Expected: nothing printed; `docs/datamap/schema.json` is one line of JSON whose `latest_migration` is `0008ze`.
+Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008ze"` (spaces around the colon).
 
 **Terminal** (`~/cma`)
 ```bash
@@ -1243,9 +1237,9 @@ Expected: `datamap: wrote docs/datamap/index.html (<n> tables, <m> views)`, then
 
 **Terminal** (`~/cma`)
 ```bash
-git add docs/datamap && git commit -m "Data map: snapshot after 0008ze" && git push
+git add docs/datamap && git commit -m "Data map: snapshot after 0008ze" && git push origin HEAD:<branch>
 ```
-Expected: the push names this branch; the PR now passes `verify:datamap`. After the merge: in the Claude project, say "republish the data map".
+Expected: the push of the local branch names `<branch>`; the PR now passes `verify:datamap`. After the merge: in the Claude project, say "republish the data map".
 
 ## 13.3 The migration in prod (before the merge)
 
@@ -1267,7 +1261,7 @@ Expected: `0008zc` and `0008zd`. Without `0008zd`, run `docs/definitions-2026-10
 
 **Studio (cma-prod-pg):** `db/104_reviews.sql` as one script, as your own login.
 
-Expected: no error; the last result is `reset role`. A second run ends the same and changes nothing.
+Expected: no error. Studio lists only the results that return rows, so `104` ends with two `setup_tenant_table` results and no error. A second run ends the same and changes nothing.
 
 **Studio (cma-prod-pg):** `db/02_seed_pulse4all.sql` again (the rule Negative review, switched off, only where missing).
 
@@ -1295,15 +1289,41 @@ Expected: the build ends `SUCCESS`; Workspace → Reports → **Reviews** opens 
 
 The API client exists: Martin created it on 25 October 2026 during the discovery, in the eTrusted Control Centre → Settings → SSO-clientbeheer (the Dutch interface's name for API client management): name `CMA prod ingest`, identifier `CMAprodIngest`, client id `<prefix>__CMAprodIngest`. It took the account's last free client slot (5 of 5): do not create another one. An eTrusted API client has no scopes, so this one can read and write (invites, replies, vetoes); the adapter only reads, and only `cma-ingest` can read the secret from Secret Manager (the accessor of 13.6). The client id is not a secret: it goes into the connection's settings in 13.7, never into the repository.
 
-**Browser:** eTrusted Control Centre → Settings → SSO-clientbeheer → the row `CMA prod ingest` → the arrow → **Tonen**. Keep the page open until the next block is done. Note two values for 13.7: the client id, and the account id as Instellingen → Accountmanagement shows it; if it shows none, the account id is the client id's prefix before `__`. The record of this phase says which one was used.
+**Browser:** eTrusted Control Centre → Settings → SSO-clientbeheer → the row `CMA prod ingest` → the arrow → **Tonen**. Keep the page open until the next block is done. Note the client id for 13.7; the account id is its prefix before `__`, because eTrusted shows no separate account id (13.7).
 
 Expected: the row with identifier `CMAprodIngest` and client id `<prefix>__CMAprodIngest`; **Tonen** shows the secret (it can be shown again at any time, not only once).
+
+`put_secret` must be defined first: it is the function block under Before you start, at the top of this runbook before 7.1 (`type put_secret` prints it; a new terminal session needs it defined again). The secret is pasted only at its hidden prompt, never as an argument of a command.
 
 **Terminal** (on its own line; the value is the client's secret)
 ```bash
 put_secret p4a-cma-prod ingest-trustedshops-subs-token
 ```
 Expected: the hidden prompt; paste, Enter; `stored ingest-trustedshops-subs-token (version added)`. Then close the Control Centre page. The client id is not a secret: it goes into the connection's settings (13.7). A connection setting never holds the secret, and the connection's settings refuse a key that contains "secret": the connection reaches it only by its name, the access secret name of 13.7.
+
+**Rotating the secret** when it was exposed, for example typed into a terminal command (the first one of the prod run was). The ingest reads the secret's `latest` version, so no redeploy is needed.
+
+**Browser:** eTrusted Control Centre → Settings → SSO-clientbeheer → the row `CMA prod ingest`: a new secret on the client's row. Keep the page open until the next block is done.
+
+Expected: **Tonen** shows the new secret.
+
+**Terminal** (on its own line)
+```bash
+put_secret p4a-cma-prod ingest-trustedshops-subs-token
+```
+Expected: the hidden prompt; paste the new secret, Enter; `stored ingest-trustedshops-subs-token (version added)`: a new version is added (version 2 at the first rotation).
+
+**Terminal**
+```bash
+gcloud secrets versions list ingest-trustedshops-subs-token --project=p4a-cma-prod
+```
+Expected: the new version and the old one, both `enabled`; the old one is the number before the new (1 at the first rotation).
+
+**Terminal**
+```bash
+gcloud secrets versions destroy <old version> --secret=ingest-trustedshops-subs-token --project=p4a-cma-prod
+```
+Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the secret [ingest-trustedshops-subs-token].` The list of the previous block now shows the old version `destroyed` and the new one `enabled`.
 
 ## 13.6 The ingest from `main`: the service and the jobs
 
@@ -1317,7 +1337,7 @@ Expected: `main`'s ingest tag first (the squash commit's short sha); the image b
 
 ## 13.7 The connection and its settings
 
-**Studio (cma-prod-pg)** in one Run (`<eTrusted account id>` from 13.5: the id Instellingen → Accountmanagement shows, else the client id's prefix before `__`)
+**Studio (cma-prod-pg)** in one Run (`<eTrusted account id>`: the client id's prefix, before `__`; eTrusted shows no separate account id, and prod used `9b3bfe12ca88`, as the record says)
 ```sql
 set role cma_app;
 select set_config('app.tenant_id', '<tenant_id>', false),
@@ -1402,7 +1422,7 @@ After the channels are mapped: one full backfill without `--from`, then check Re
 ```bash
 gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<reviews conn>,--object,review
 ```
-Expected: `Execution [ingest-backfill-…] has successfully completed.` Without `--from` and with `reviews.history_start_date` empty the run reads all history: per channel in id order, a year at a time from 1 January 2000, at `etrusted_max_per_minute` (default 60 requests a minute), so at least one request per channel and year (about 190 for seven channels, three minutes at the default pace) plus one per hundred reviews. A failed execution is run again with the same arguments: it continues from the cursor `backfill:review`. A run that paused below the CRM's daily floor finishes as succeeded with the error `daily_floor`: run the same command later. A finished backfill with the same start reads nothing again; `--again` walks it again and stores nothing new.
+Expected: `Execution [ingest-backfill-…] has successfully completed.` Without `--from` and with `reviews.history_start_date` empty the run reads all history: per channel in id order, a year at a time from 1 January 2000, at `etrusted_max_per_minute` (default 60 requests a minute), so at least one request per channel and year (about 190 for seven channels, three minutes at the default pace) plus one per hundred reviews. The HubSpot contact lookups dominate the time: about 9 minutes for 845 reviews in prod. A failed execution is run again with the same arguments: it continues from the cursor `backfill:review`. A run that paused below the CRM's daily floor finishes as succeeded with the error `daily_floor`: run the same command later. A finished backfill with the same start reads nothing again; `--again` walks it again and stores nothing new.
 
 **Terminal** (the summary line per channel; ids, counts and times only)
 ```bash
@@ -1425,7 +1445,7 @@ Expected: per channel `reviews` and `published`, `oldest` the channel's first re
 
 **Browser:** the eTrusted Control Centre: per channel, the number of reviews (the total, and the same for the last 92 days); then Workspace → Reports → **Reviews**, period the last 92 days, the card Per review channel.
 
-Expected: per channel the Control Centre's total equals the Studio row's `published` (or `reviews`, whichever the Control Centre counts: note which), and its last 92 days equal the report's count for the channel; the report counts published reviews of counted channels only, by the day they were submitted in the Amsterdam zone. A channel that differs is the finding of this step: report the channel, both numbers and the oldest date of each (a missing statements-only review points at `ignoreStatements`, a missing tail at the paging; both are to confirm, above). The pages of the whole history are Studio's: a report page covers at most 92 days.
+Expected: per channel the Control Centre's total counts the states APPROVED and MODERATION and leaves out REJECTED (`docs/ingest/README.md`, Trusted Shops), so it is the Studio row's `published` plus the reviews in moderation, not its `reviews` (which holds the rejected ones too), and its last 92 days equal the report's count for the channel plus the reviews in moderation; the report counts published reviews of counted channels only, by the day they were submitted in the Amsterdam zone. A channel that differs is the finding of this step: report the channel, both numbers and the oldest date of each (a missing statements-only review points at `ignoreStatements`, still to confirm, above; a missing tail at the paging). The pages of the whole history are Studio's: a report page covers at most 92 days.
 
 ## 13.11 Day one
 
@@ -1436,3 +1456,96 @@ Expected: per channel the Control Centre's total equals the Studio row's `publis
 - **Reports → Data quality:** `Review channels without a market` at 0; `Active markets without a review channel` lists the markets Trusted Shops does not serve.
 - **The alert rule:** **Browser:** Configuration → Alert rules: `Negative review` is listed and switched off. It stays off until Kira decides the threshold (the review settings on Configuration → Sources: rated 2 or lower by default) and the audience (seeded: the holders of `performance.team`, no language or clocked-in condition, no fallback, reviews at most a day old; `docs/open-decisions.md`). A rule's name and trigger cannot be changed once it exists. Once it is on, a published review of a counted channel at or below the threshold alerts within the hour (title `New review`: market, channel, rating, time, and the link when `record_url_review` is set; never the review's text or the reviewer).
 - **Records:** the outputs of 13.3 and 13.5 to 13.10 into `records/reviews-prod-<date>/`, in a separate pull request, written from your report (ids, counts, dates and times only; no key, secret or personal data), and the eTrusted parameters confirmed or corrected (page size, cursor field, `ignoreStatements`, rate limits).
+
+## 13.12 The reference guard (addition 0008zf, brief B18.1)
+
+In prod one of the 845 reviews of the first backfill held an email address as its transaction reference (a manual invite without an event type). `db/106_review_reference_guard.sql` removes it from the review and from that review's audit rows, and has the database refuse an @ from now on; the new ingest image keeps a reference only when it fits the connection's pattern and holds no @ (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: review reference guard). Order: dev and the data map's snapshot, then prod, all before the merge; then the merge and, straight after it, the new ingest image. Prod runs `106` before the merge because the new image finishes runs with the count `ref_dropped`, which only `106`'s `cma.ingest_sync_run_finish()` accepts. The image follows the merge at once because until then the old image fails a run whose batch holds an @ reference (nothing of that batch is stored): a new review with one in the hourly poll, or the 2024 review read again by a backfill or by a long reconcile.
+
+**(a) Dev, before the merge**
+
+**File:** `db/106_review_reference_guard.sql`: open it and copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error and one result row `reviews_cleared 0 | audit_rows_scrubbed 0` in dev. A second run ends the same. `addition 0008ze (104_reviews.sql) must run before 0008zf` means dev lacks 0008ze: run 13.1 first.
+
+**File:** `db/107_verify_review_reference_guard.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run. Open the results dropdown at the verdict table.
+
+Expected: rows `A1` to `A4` and `B1` to `B6`, each `PASS`, and `verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL`. `REFUSED: the connected database is not dev` means the instance is not dev's. Any `FAIL`: report the row.
+
+**Studio (cma-dev-pg):** `107` again, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 107_verify_review_reference_guard: 0 PASS, 10 FAIL`.
+
+**Studio (cma-dev-pg):** the earlier verifies again, each pasted whole and Run: `105`, `77`, `75`, `67` and `33`.
+
+Expected, each as it passed before this change: `105` 27 PASS, `75` 24 PASS, `77`, `67` and `33` passing.
+
+**(b) The data map, before the merge**
+
+No table, view or column changes, so `docs/datamap/schema.json` only moves its `latest_migration`; `verify:datamap` fails on this branch until Martin refreshes it from dev after running the migration there, as in 13.2.
+
+**Terminal** (in `~/cma`, on this branch)
+```bash
+cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
+```
+Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008zf"` (spaces around the colon).
+
+**Terminal** (`~/cma`)
+```bash
+node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
+```
+Expected: `datamap: wrote docs/datamap/index.html (<n> tables, <m> views)`, then `datamap: <n> tables, <m> views, all described; index.html current`.
+
+**Terminal** (`~/cma`)
+```bash
+git add docs/datamap && git commit -m "Data map: snapshot after 0008zf" && git push origin HEAD:<branch>
+```
+Expected: the push of the local branch names `<branch>`; the PR now passes `verify:datamap`. After merge: in the Claude project, say "republish the data map" (when `docs/datamap/index.html` changed).
+
+**(c) Prod, before the merge**
+
+**Terminal** (point-in-time recovery on, as 13.3)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
+
+**Studio (cma-prod-pg):** `db/106_review_reference_guard.sql` as one script, as your own login.
+
+Expected on the first run: no error and one result row `reviews_cleared 1 | audit_rows_scrubbed <n>`, where `<n>` is the number of that review's audit rows (at least 1). A second run: `reviews_cleared 0 | audit_rows_scrubbed 0`.
+
+**Studio (cma-prod-pg)** (read only; counts only)
+```sql
+set role cma_owner;
+select count(*) from cma.review where raw::text like '%@%' or coalesce(transaction_ref, '') like '%@%';
+select count(*) from cma.audit_log where table_name = 'review' and (coalesce(old_row::text, '') like '%@%' or coalesce(new_row::text, '') like '%@%');
+select version from cma.schema_migration where version = '0008zf';
+reset role;
+```
+Expected: `0`, then `0`, then `0008zf`.
+
+**(d) The merge**
+
+**Browser:** Martin reviews and squash-merges PR #193 on GitHub ((a) to (c) done). A merge that touches `web/` or `cloudbuild.yaml` builds and deploys prod's web through Cloud Build trigger `cma-web-main`; the ingest is not built by it, so the next step follows at once.
+
+Expected: the PR shows merged.
+
+**(e) The ingest from `main`, straight after the merge**
+
+**Terminal** (in `~/cma`, on `main` after the merge; as 13.6)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-trustedshops-subs-token && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: as 13.6: `main`'s ingest tag first; the image built once under it; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`).
+
+**(f) The next poll**
+
+**Studio (cma-prod-pg)** (read only; after the next poll at minute 7; `<reviews conn>` from 13.7)
+```sql
+set role cma_owner;
+select job, stream, status, counts, error, started_at, finished_at from cma.sync_run
+where connection_id = '<reviews conn>' and job = 'reviews_poll' order by started_at desc limit 3;
+reset role;
+```
+Expected: the latest `reviews_poll` run `succeeded`, with its `fetched` and `upserted` counts. `ref_dropped` appears among the counts only when a reference was left out; the reference itself is never stored or logged.
+
+**Note.** Backups and point-in-time recovery keep the old value until their retention runs out, and an extract taken through `cma_read.review` between the backfill and `106` still holds it.

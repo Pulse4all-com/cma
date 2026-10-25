@@ -23,8 +23,9 @@
  *
  * A 429 fails the run (rate_limited) where it stands: the cursors of the channels already read have moved, the next
  * run carries on. The counts are sync_run's: fetched (reviews read), upserted (inserted or updated), stale, skipped
- * (unchanged, unreadable, or of a channel the catalog lacks), failed (lookups that failed); the run's log line has the
- * details (links, lookups, alerts).
+ * (unchanged, unreadable, or of a channel the catalog lacks), failed (lookups that failed), and ref_dropped once a
+ * review's transaction reference was left out because the connection's pattern refused it (addition 0008zf; the count
+ * only, never the value); the run's log line has the details (links, lookups, alerts).
  */
 import { JobBudget } from "../../core/budget.mjs";
 import { info } from "../../core/log.mjs";
@@ -71,17 +72,18 @@ async function refreshChannels(api, store, detail) {
  * One page of reviews: mapped, upserted, the contacts looked up (every review without a link with lookAll, else the
  * new ones), the alerts raised. Answers the newest submission time of the page (ms).
  */
-async function ingestPage({ store, side, rawItems, counts, detail, lookAll, budget, pause }) {
+async function ingestPage({ store, side, rawItems, counts, detail, lookAll, budget, pause, refPattern }) {
   const emails = new Map();
   try {
     const items = [];
     let newest = null;
     for (const r of rawItems) {
-      const mapped = reviewOf(r);
+      const mapped = reviewOf(r, { refPattern });
       if (!mapped) {
         detail.unreadable += 1;
         continue;
       }
+      if (mapped.refDropped) counts.ref_dropped = (counts.ref_dropped ?? 0) + 1;
       items.push(mapped.item);
       if (mapped.email) emails.set(mapped.item.reviewId, mapped.email);
       newest = Math.max(newest ?? 0, Date.parse(mapped.item.submittedAt));
@@ -145,7 +147,7 @@ export async function pollReviews({ connection, store, budget, now = Date.now(),
     const cur = await store.cursor(pollStream(channelId));
     const since = (Number.isFinite(cur?.at) ? cur.at : now - s.reconcileDays * DAY_MS) - OVERLAP_MS;
     for await (const page of api.reviews(channelId, since, null)) {
-      await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: false, budget: crmBudget, pause: false });
+      await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: false, budget: crmBudget, pause: false, refPattern: s.refPattern });
     }
     await store.setCursor(pollStream(channelId), { at: Math.max(now, Number.isFinite(cur?.at) ? cur.at : 0) });
   }
@@ -164,7 +166,7 @@ export async function reconcile({ connection, store, budget, object, sinceMs, un
   const from = Math.min(sinceMs, untilMs - s.reconcileDays * DAY_MS);
   for (const channelId of await refreshChannels(api, store, detail)) {
     for await (const page of api.reviews(channelId, from - 1, untilMs)) {
-      await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: true, budget: crmBudget, pause: true });
+      await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: true, budget: crmBudget, pause: true, refPattern: s.refPattern });
     }
   }
   info("reconcile: reviews", { connection: connection.connectionId, ...detail });
@@ -194,6 +196,7 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
   if (cur && cur.from === from && cur.done) return undefined;
   const same = cur && cur.from === from && !cur.done;
   const settings = (await store.config())?.settings ?? {};
+  const s = reviewSettings(settings);
   const api = clientFor(connection, settings, budget);
   const { side, crmBudget } = await crmOf(store, settings, "backfill", budget);
   const detail = emptyDetail();
@@ -206,7 +209,7 @@ export async function backfill({ connection, store, budget, object, fromMs, unti
     const read = { fetched: counts.fetched, upserted: counts.upserted };
     for (const [w0, w1] of yearWindows(resumeAt ?? from ?? HISTORY_FLOOR_MS, untilMs)) {
       for await (const page of api.reviews(channelId, w0 - 1, w1)) {
-        await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: true, budget: crmBudget, pause: true });
+        await ingestPage({ store, side, rawItems: page, counts, detail, lookAll: true, budget: crmBudget, pause: true, refPattern: s.refPattern });
       }
       await store.setCursor(BACKFILL_STREAM, { from, channel: channelId, value: w1, done: false });
     }

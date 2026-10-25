@@ -1,5 +1,5 @@
 {
-  "_about": "Invented eTrusted channels, reviews and HubSpot contacts for verify/reviews-mapping.mjs and verify/reviews-flow.mjs (addition 0008ze). Times as ago:<minutes>. The customer fields, titles and texts are here so the verifiers can prove none of them is kept.",
+  "_about": "Invented eTrusted channels, reviews and HubSpot contacts for verify/reviews-mapping.mjs and verify/reviews-flow.mjs (addition 0008ze). Times as ago:<minutes>. The customer fields, titles and texts are here so the verifiers can prove none of them is kept. Since 0008zf rev-fixture-none-1 carries an email address as its transaction reference (dropped by the adapter, counted as ref_dropped) and rev-fixture-twice-1 a normal one (kept).",
   "channels": [
     { "id": "chl-fixture-nl", "name": "shop-nl.example", "locale": "nl_NL", "url": "https://shop-nl.example" },
     { "id": "chl-fixture-gb", "name": "shop-gb.example", "locale": "en_GB" },
@@ -23,10 +23,11 @@
       "title": "Fixture title two", "comment": "Fixture text two" },
     { "id": "rev-fixture-none-1", "channelRef": "chl-fixture-gb", "rating": 4, "type": "SERVICE_REVIEW", "state": "APPROVED",
       "submittedAt": "ago:200", "updatedAt": "ago:200", "event": { "type": "order_status_from_woocommerce" }, "reply": null,
+      "transaction": { "reference": "nobody.order@example.com" },
       "customer": { "fullName": "Invented Reviewer Three", "email": "nobody@example.com", "mobile": "+44 20 0000 0903" },
       "title": "Fixture title three", "comment": "Fixture text three" },
     { "id": "rev-fixture-twice-1", "channelRef": "chl-fixture-gb", "rating": 3.5, "type": "SERVICE_REVIEW", "state": "APPROVED",
-      "submittedAt": "ago:100", "updatedAt": "ago:100",
+      "submittedAt": "ago:100", "updatedAt": "ago:100", "transaction": { "reference": "P4AUK-990002" },
       "customer": { "fullName": "Invented Reviewer Four", "email": "twice@example.com" }, "comment": "Fixture text four" },
     { "id": "rev-fixture-statement-1", "channelRef": "chl-fixture-gb", "rating": 5, "type": "SERVICE_REVIEW", "state": "APPROVED",
       "submittedAt": "ago:50", "updatedAt": "ago:50", "statement": true,

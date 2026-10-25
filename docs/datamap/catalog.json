@@ -151,7 +151,7 @@
         },
         {
           "name": "review",
-          "what": "Reviews, metadata only: channel, type, state, published, rating 1 to 5, submitted and updated times, reply, invite event type, transaction reference, and the link to an order or a CRM contact by id; never the reviewer's name, email or phone, nor a title or text (0008ze)",
+          "what": "Reviews, metadata only: channel, type, state, published, rating 1 to 5, submitted and updated times, reply, invite event type, transaction reference, and the link to an order or a CRM contact by id; never the reviewer's name, email or phone, nor a title or text (0008ze); the transaction reference holds an order reference only, never an @ (check review_reference_no_at, 0008zf)",
           "how": "Reviews poll hourly (each channel's reviews after its cursor less two hours), nightly reconcile (the last reviews_reconcile_days, default 30), backfill by hand; polling only, the platform sends no webhook; the reviewer's email is used in memory to find the CRM contact, then dropped"
         }
       ]

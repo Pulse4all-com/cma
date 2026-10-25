@@ -396,12 +396,31 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Unit and display | A count; each review has a rating from 1 to 5 |
 | Time rule | Day: the date of the review's submission in the tenant's zone |
 | Scope | The tenant's reviews connection and its counted review channels; another business line's channels stay out by their Counted switch |
-| Equivalent in the source system | A review in Trusted Shops' eTrusted account; its API parameters are to confirm on the live account (docs/open-decisions.md) |
+| Equivalent in the source system | A review in Trusted Shops' eTrusted account; its rate limits and `ignoreStatements` are still to confirm (docs/open-decisions.md) |
 | Not to use | The reviewer, the reviewer's email or the review's text in any figure, label, alert or log |
 | Status | Decided |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
 | Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.invite_events`, `reviews.by_channel`, `reviews.market_states`; Reports → Reviews (`/reports/reviews`) |
 | As built today | `cma.reviews_of` (`104`): a review with `is_published` of a counted `cma.review_channel`, its market the channel's else unknown, its business date the submission's in the tenant's zone, its rating a number (a whole star is the rating rounded up). Matches the definition |
+
+### Published review
+
+| Field | Value |
+|---|---|
+| Term | Published review (nl: no Dutch label in copy.ts) |
+| Key | `is_published` (`cma.review.is_published`); the adapter's `isPublished` |
+| Definition | A review whose state on the review platform is APPROVED. The CMA counts and alerts on published reviews of counted review channels only. |
+| Source | The platform's state, decided by the adapter (eTrusted: APPROVED), so no vendor word is in SQL |
+| Counts / does not count | Counts a review in the state APPROVED. Does not count one in MODERATION, REJECTED or any other state; those stay stored and neither count nor alert |
+| Unit and display | A flag on each review; no figure of its own |
+| Time rule | Day of the review's submission, as Review |
+| Scope | As Review |
+| Equivalent in the source system | The state APPROVED. The platform's own counts and score follow other rules (Platform facts below) |
+| Not to use | A vendor's state word (APPROVED, MODERATION, REJECTED) in SQL; "published" for a review the platform counts but has not approved |
+| Status | Decided |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED" |
+| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.by_channel`, `reviews.market_states`; the alert trigger `review_submitted` and the rule "Negative review"; Reports → Reviews |
+| As built today | `cma.review.is_published`, set by the adapter from the state APPROVED; `cma.reviews_of` (`104`) takes published reviews of counted review channels only, and the alert takes published reviews only. Matches the definition |
 
 ### Review channel
 
@@ -434,7 +453,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Unit and display | A number from 1 to 5 with two decimals ("Out of 5") |
 | Time rule | Day of the review's submission |
 | Scope | The tenant, the period, optionally one market; per market, per day or week and per review channel |
-| Equivalent in the source system | None read: the CMA computes it from the counted reviews |
+| Equivalent in the source system | None read: the CMA computes it from the counted reviews; the Control Centre's score is another figure (Platform facts below) |
 | Not to use | An average over unpublished reviews or reviews of a channel that is not counted |
 | Status | Decided; which window the review score KPI means is open for Kira (Open decisions), the report uses the page's period |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
@@ -467,7 +486,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Term | Link level (nl: Koppelniveau; `reviews.linkCard` "Koppelniveaus") |
 | Key | `link_level` with the values `order`, `contact` and `none`; `reviews.link_levels`; API `linkLevels` |
 | Definition | How a review is tied to the tenant's own records: order (its transaction reference names exactly one of the tenant's orders), contact (no order; the reviewer's email, in memory only, finds exactly one CRM contact) or none. |
-| Source | The review's transaction reference against the orders' name, else their source id (a Klaviyo invite's reference is the Shopify order's id, to confirm with the first real data); the CRM contact search by the reviewer's email, the email never stored |
+| Source | The review's transaction reference against the orders' name, else their source id (a Klaviyo invite's reference is the Shopify order's id, to confirm with the first real data); the CRM contact search by the reviewer's email, the email never stored. The reference itself is kept only when the connection's `transaction_ref_pattern` accepts it and it holds no @; otherwise it is left out and counted as `ref_dropped` |
 | Counts / does not count | One level per review. The contact search runs only for reviews without an order or contact and respects the CRM connection's `api_daily_floor_pct`. A reference or an email that finds none or more than one links to nothing. A contact's privacy deletion clears a review's contact link; an order link stays |
 | Unit and display | A count per level, as bars: To an order, To a contact, Not linked |
 | Time rule | Day of the review's submission |
@@ -497,6 +516,10 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
 | Used by | `reviews.linked`; Reports → Reviews |
 | As built today | `cma.review_figures` (`104`) counts the levels order and contact (`linkedOrder`, `linkedContact`) and none (`unlinked`); the tile shows the first two together with their share. Matches the definition |
+
+### Platform facts
+
+Facts about the review platform's own figures, recorded so nobody mistakes them for CMA metrics (docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED"). Trusted Shops' Control Centre counts the reviews in the states APPROVED and MODERATION and leaves out REJECTED; its score is the simple average of the APPROVED reviews submitted in the last 12 months, apparently cut to two decimals. Reports → Reviews' average rating is per selected period (Average rating), so the two differ by design; which one the review score KPI means is an Open decision for Kira.
 
 ## Retired words
 

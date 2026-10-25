@@ -18,6 +18,7 @@
  * or http on the local machine. Errors carry a code only, never a body.
  */
 import { getSecret, SecretUnavailable } from "../../core/secrets.mjs";
+import { DEFAULT_REF_PATTERN } from "./map.mjs";
 import { requestJson, checkedBase, SourceError } from "../../core/http.mjs";
 import { Pace } from "../../core/pace.mjs";
 import { warn } from "../../core/log.mjs";
@@ -53,9 +54,31 @@ function whole(settings, name, fallbacks) {
 }
 
 /**
+ * The connection's transaction_ref_pattern as a regular expression. Only the form the default has is taken: anchored,
+ * one character class, a length from 1 to at most 100 (`^[...]{1,N}$`), because a tenant's pattern runs in the poll
+ * every tenant shares and a pattern of that form cannot backtrack. Anything else takes the default (map.mjs
+ * DEFAULT_REF_PATTERN) and is named in fallbacks. An @ is never kept whatever the class allows (map.mjs referenceOf).
+ */
+const REF_PATTERN_FORM = /^\^\[(?:[^\]\\]|\\.)+\]\{1,(\d{1,3})\}\$$/;
+function refPatternOf(settings, fallbacks) {
+  const v = settings?.transaction_ref_pattern;
+  const form = typeof v === "string" ? REF_PATTERN_FORM.exec(v) : null;
+  if (form && Number(form[1]) >= 1 && Number(form[1]) <= 100) {
+    try {
+      return new RegExp(v);
+    } catch {
+      // falls back below
+    }
+  }
+  if (v !== undefined && v !== null && v !== "") fallbacks.push("transaction_ref_pattern");
+  return new RegExp(DEFAULT_REF_PATTERN);
+}
+
+/**
  * The connection's settings for the adapter: its pace, poll interval and reconcile window (a value out of range takes
  * the default and is named in fallbacks), whether star-only reviews are asked for (etrusted_include_statements, default
- * true: the API leaves them out unless ignoreStatements=false), the CRM connection the reviewers' emails are matched in.
+ * true: the API leaves them out unless ignoreStatements=false), the CRM connection the reviewers' emails are matched in,
+ * and the pattern a transaction reference must match to be kept (transaction_ref_pattern, addition 0008zf).
  */
 export function reviewSettings(settings) {
   const fallbacks = [];
@@ -66,6 +89,7 @@ export function reviewSettings(settings) {
     reconcileDays: whole(settings, "reviews_reconcile_days", fallbacks),
     includeStatements: !(statements === false || statements === "false"),
     crmConnectionId: typeof settings?.crm_connection_id === "string" ? settings.crm_connection_id.trim() : "",
+    refPattern: refPatternOf(settings, fallbacks),
     fallbacks,
   };
 }
