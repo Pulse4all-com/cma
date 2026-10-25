@@ -17,9 +17,9 @@ export async function PUT(request: Request, { params }: Params) {
 }
 
 /**
- * { tagRef, meaning }: what a tag means (set_telephony_tag_meaning, addition 0008zc): not_reached, call_type,
- * courtesy_attempt, courtesy_completed_positive, courtesy_completed_neutral or courtesy_completed_negative, or null for
- * none. The same gate as is_counted. Answers the connection with its catalogs
+ * { tagRef, meaning }: what a tag means (set_telephony_tag_meaning, addition 0008zc; incorrect_data 0008zd): not_reached,
+ * incorrect_data, call_type, courtesy_attempt, courtesy_completed_positive, courtesy_completed_neutral or
+ * courtesy_completed_negative, or null for none. The same gate as is_counted. Answers the connection with its catalogs
  */
 export async function PATCH(request: Request, { params }: Params) {
   return forPrincipal(async (me) => {

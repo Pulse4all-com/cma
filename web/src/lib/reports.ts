@@ -579,7 +579,7 @@ export function personalDataIn(value: unknown, path = "$", calls = false): strin
 // docs/definitions.md: talk time runs from the answer to the end, as the telephony system counts it; an
 // outbound call is connected when it is answered (at telephony.connected_min_seconds of talk when that is
 // above 0); a conversation is a connected outbound or an answered inbound call with at least
-// calls.conversation_min_talk_seconds of talk and no current tag meaning not reached; untagged is a call
+// calls.conversation_min_talk_seconds of talk and no current tag meaning not reached or incorrect data; untagged is a call
 // without any current tag, missed calls included. No call here carries a number, a customer's name, a call
 // id or a telephony user id on screen, and never the caller's hash.
 
@@ -627,11 +627,20 @@ export interface CallTagFixture {
   tagRef: string;
   name: string;
   isCounted: boolean;
-  /** What the tag means (addition 0008zc); not_reached keeps a call from being a conversation */
+  /** What the tag means (addition 0008zc); not_reached and incorrect_data keep a call from being a conversation */
   meaning?: TagMeaning | null;
 }
 
-/** What classifies a call (addition 0008zc): the two thresholds and the tags meaning not reached ("<connection id>:<tag ref>") */
+/**
+ * The meanings that keep a call carrying one (as a current tag) from being a conversation, as
+ * cma.tag_meaning_excludes_conversation (addition 0008zd): not reached and incorrect data
+ */
+export const CONVERSATION_EXCLUDING_MEANINGS: readonly TagMeaning[] = ["not_reached", "incorrect_data"];
+
+/**
+ * What classifies a call (addition 0008zc): the two thresholds and the tags whose meaning keeps a call from being a
+ * conversation ("<connection id>:<tag ref>"; the name as cma.call_not_reached_of's column, which covers incorrect data too)
+ */
 export interface CallRules {
   /** telephony.connected_min_seconds: 0, connected when answered; above 0, also that much talk time */
   connectedMinSeconds: number;
@@ -644,7 +653,8 @@ export interface CallRules {
 export function callRules(connectedMinSeconds: number, conversationMinSeconds: number, tags: readonly CallTagFixture[]): CallRules {
   return {
     connectedMinSeconds, conversationMinSeconds,
-    notReachedTags: new Set(tags.filter((t) => t.meaning === "not_reached").map((t) => `${t.connectionId}:${t.tagRef}`)),
+    notReachedTags: new Set(tags.filter((t) => t.meaning != null && CONVERSATION_EXCLUDING_MEANINGS.includes(t.meaning))
+      .map((t) => `${t.connectionId}:${t.tagRef}`)),
   };
 }
 
@@ -655,7 +665,7 @@ export function isConnectedCall(direction: string, answered: boolean, talkSecond
 
 /**
  * Conversation, as cma.is_conversation: a connected outbound or an answered inbound call with at least the threshold of
- * talk time (a call not ended has none yet) that carries no current tag meaning not reached
+ * talk time (a call not ended has none yet) that carries no current tag meaning not reached or incorrect data
  */
 export function isConversationCall(direction: string, answered: boolean, talkSeconds: number | null, rules: Omit<CallRules, "notReachedTags">,
   notReached: boolean): boolean {

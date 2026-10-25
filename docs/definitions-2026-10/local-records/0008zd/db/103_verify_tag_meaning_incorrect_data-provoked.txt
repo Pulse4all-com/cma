@@ -1,0 +1,40 @@
+DO
+SET
+ set_config 
+------------
+ true
+(1 row)
+
+ is_dev 
+--------
+ true
+(1 row)
+
+DO
+psql:/tmp/103-provoked.sql:56: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+DO
+DO
+                                                        check_name                                                        |        result        |                                                                                      detail                                                                                      
+--------------------------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ A1 addition 0008zd recorded once, after 0008zc                                                                           | FAIL                 | provoked
+ A2 the meaning's check holds the seven keys; the setter and the setting name incorrect data                              | FAIL                 | 
+ A3 the meanings excluding a call from Conversation written once, read by cma.call_not_reached_of                         | FAIL                 | 
+ A4 the functions the application's only and invoker; the helper immutable; nothing renamed                               | FAIL                 | 
+ B1 incorrect data: connected, no conversation (uncounted tag, next to another tag, inbound alike); not reached as before | FAIL                 | i1:-- i2:-v i3:-- o1:c- o2:cv o3:c- o4:c- o5:cv o6:c- o7:-- o8:c- o9:c-
+ B2 Calls, tag use and per person count no conversation with a tag meaning incorrect data                                 | FAIL                 | 12/3/9/3/8/88.9/3/2 | 2026-10-05:Type=1,all:Type=1 | Anna Verify:0/9/8/2/1 Bram Verify:3/0/0/1/1 total:3/9/8/3/2
+ B3 a CRM call and Attempts per deal: no conversation through a telephony call tagged incorrect data                      | FAIL                 | cw1:f cw2:t | 2/1/2/90/45 | 1:t/45/f 2:t/45/t
+ B4 first orders: a call tagged incorrect data is an attempt, no conversation                                             | FAIL                 | dG:f/t/attempt
+ B5 the same call is a conversation once its incorrect-data tag is removed                                                | FAIL                 | i1:-v o1:cv | cw1:t | 2/1
+ B6 the setter and the check accept incorrect_data, one meaning per tag; an unknown key refused by both; others refused   | FAIL                 | ok incorrect_data tg-nr=not_reached tg-type=incorrect_data tg-wrong=incorrect_data tg-wrong-off=incorrect_data | CMA04 CMA04 CMA04 | ok incorrect_data 23514 | CMA06 CMA06 CMA01
+ B7 the audit names the admin for each incorrect-data meaning; a catalog refresh keeps it                                 | FAIL                 | 4 by the admin | Wrong Number renamed/incorrect_data
+ B8 another tenant can neither read nor set a tenant's meaning                                                            | FAIL                 | CMA02 CMA02 0 tg-wrong=- tg-wrong=not_reached | incorrect_data
+ verdict                                                                                                                  | PROVOKED, NOT A PASS | 0 PASS, 12 FAIL
+(13 rows)
+
+DROP FUNCTION
+DROP FUNCTION
+RESET

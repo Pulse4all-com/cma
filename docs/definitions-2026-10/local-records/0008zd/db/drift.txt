@@ -1,0 +1,18 @@
+# tools/drift/functions.sql on three local databases: at 0008zc (main's 01 to 100), migrated (the same, then 102 twice) and fresh (01 to 102 in order)
+   519 at-0008zc
+   520 migrated
+   520 fresh
+  1559 total
+# diff fresh migrated
+(no line differs)
+# diff at-0008zc migrated
+55c55
+< cma.call_not_reached_of(uuid,uuid,text) b0f9d0d1e0d57f20a4de7a65c2c3ee93
+---
+> cma.call_not_reached_of(uuid,uuid,text) 09ef8d170947147bb3f325c929e6cc97
+454c454
+< cma.set_telephony_tag_meaning(uuid,text,text) 3ec0e2c732021dfbf8116d0ce4fd1916
+---
+> cma.set_telephony_tag_meaning(uuid,text,text) 8e63bea5b69c3b4a3484b46580e5b160
+468a469
+> cma.tag_meaning_excludes_conversation(text) 5e4d638fc13b3eda928ab98a3cc4ca48

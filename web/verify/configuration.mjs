@@ -23,6 +23,7 @@ import {
   coerceSettingValue, effectiveHours, firstWordIn, kindChoices, marketFormProblem, nameMatches, parseDay, parseOfficeHours, parseWords, planFormRule,
   formRuleProblem, prefixMarket, recordTypeOfSetting, recordUrlPreview, settingKeyProblem, settingsProblem, settingsSize, sourceSections,
   formCategoryChoices, formCategoryProblem, formEditProblem, emailMarketSteps, mailboxLabelProblem, settingCodes, parsePollSetting, pollCadenceOf,
+  TAG_MEANINGS, tagsWithoutNotReached,
 } from "../src/lib/sources.ts";
 import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, ruleEffect } from "../src/lib/alertRules.ts";
 
@@ -83,6 +84,14 @@ expect("a customer-records connection has seven sections", sourceSections("crm",
   ["pipelines", "forms", "callOutcomes", "fields", "taskStatuses", "taskTypes"]);
 expect("an unset kind shows what its rows imply", sourceSections(null, ["telephony"]), ["lines", "tags", "missedReasons"], ["lines", "tags"]);
 expect("an automation connection has no catalog section", sourceSections("automation", []), [], ["store"]);
+// a tag's meanings (addition 0008zc; incorrect_data 0008zd): seven keys, incorrect data offered after not reached; the notice
+// that Conversation counts on talk time alone looks at not reached only
+expect("a tag's seven meanings, incorrect data after not reached; the talk-time-alone notice looks at not reached only",
+  [TAG_MEANINGS, tagsWithoutNotReached([{ meaning: "incorrect_data" }, { meaning: null }]), tagsWithoutNotReached([{ meaning: "not_reached" }])],
+  [["not_reached", "incorrect_data", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral",
+    "courtesy_completed_negative"], true, false],
+  [["not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative"],
+    false, false]);
 expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
 expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);
 expect("a settings key in the right form", settingKeyProblem("record_url_deal", ["app_host"], true), null, "key");

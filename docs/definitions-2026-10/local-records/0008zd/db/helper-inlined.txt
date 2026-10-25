@@ -1,0 +1,23 @@
+SET
+                                                                       QUERY PLAN                                                                        
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit
+   Output: ((hashed SubPlan 2))
+   ->  Seq Scan on cma.telephony_call tc
+         Output: (hashed SubPlan 2)
+         SubPlan 2
+           ->  Hash Join
+                 Output: ct.tenant_id, ct.connection_id, ct.call_source_id
+                 Hash Cond: ((tg.tenant_id = ct.tenant_id) AND (tg.connection_id = ct.connection_id) AND (tg.tag_ref = ct.tag_ref))
+                 ->  Seq Scan on cma.telephony_tag tg
+                       Output: tg.tenant_id, tg.connection_id, tg.tag_ref, tg.name, tg.is_counted, tg.status, tg.refreshed_at, tg.updated_at, tg.meaning
+                       Filter: COALESCE((tg.meaning = ANY ('{not_reached,incorrect_data}'::text[])), false)
+                 ->  Hash
+                       Output: ct.tenant_id, ct.connection_id, ct.call_source_id, ct.tag_ref
+                       ->  Bitmap Heap Scan on cma.telephony_call_tag ct
+                             Output: ct.tenant_id, ct.connection_id, ct.call_source_id, ct.tag_ref
+                             Recheck Cond: (ct.untagged_at IS NULL)
+                             ->  Bitmap Index Scan on telephony_call_tag_current_idx
+(17 rows)
+
+RESET

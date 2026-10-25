@@ -1459,7 +1459,8 @@ async function callsChecks() {
   const counts = ["calls", "inbound", "outbound", "answeredInbound", "connected", "conversations", "talkSeconds", "outboundTalkSeconds", "untagged"];
   expect("calls: the days add up to the total (every count and the talk time)",
     counts.map((k) => sum(d.rows, k) === d.total[k]), counts.map(() => true), counts.map((_, i) => i !== 0));
-  // 0008zc: a conversation is a connected or answered call with enough talk time and no tag meaning not reached, so at most
+  // 0008zc: a conversation is a connected or answered call with enough talk time and no tag meaning not reached (or incorrect
+  // data, 0008zd), so at most
   // their sum; untagged counts every call; talk time runs over the answered calls with talk time
   const coherent = (f) => f.inbound + f.outbound === f.calls && f.answeredInbound <= f.inbound && f.connected <= f.outbound
     && f.conversations <= f.answeredInbound + f.connected && f.untagged <= f.calls

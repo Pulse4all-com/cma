@@ -8,7 +8,7 @@
 -- values (no hash below is made from a real number). Every check writes one row, PASS or FAIL, and the last result
 -- lists them with the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM login in dev, after
 -- 100_definitions_calls.sql; then 63, 95, 41, 75, 83, 85, 91, 93 and 99 again (91 and 99 from the Terminal).
---   A  structure and privileges: the addition row after 0008zb; the tag's meaning with its six keys, nullable, in
+--   A  structure and privileges: the addition row after 0008zb; the tag's meaning with its seven keys, nullable, in
 --      the reader view; the settings (the Conversation threshold, the old key gone everywhere, connected from 0); every
 --      function the application's only and in the caller's rights, the helpers immutable, the old names gone
 --      (cma.crm_call_connected_of among them) and Email's not-responding read on cma.crm_call_conversation_of; the
@@ -32,6 +32,9 @@
 --      untagged over every call); tag use and tags per person without an untagged row; per person; a CRM call's
 --      conversation through its link only; Attempts per deal; first orders' evidence; the data-quality skip; the
 --      meaning's writes, refusals, audit and isolation; the settings' checks and the copy of the old key
+-- Amended for addition 0008zd (25 October 2026; 101 runs in dev only): 0008zd adds the tag meaning incorrect_data, so
+-- the meaning's check holds seven keys; 103 verifies the addition. What changes, and this check pins:
+--   A2  the check holds exactly the seven keys, incorrect_data among them (was six)
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead of PASS.
 -- =============================================================================================
 
@@ -107,7 +110,8 @@ begin
               and exists (select 1 from cma.schema_migration where version = '0008zb') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
-  -- A2. the tag's meaning: a nullable text column, a check holding exactly the six keys, the reader view with it last
+  -- A2. the tag's meaning: a nullable text column, a check holding exactly the seven keys (incorrect_data since 0008zd),
+  --     the reader view with it last
   v_bad := '';
   if (select data_type || ':' || is_nullable from information_schema.columns
       where table_schema = 'cma' and table_name = 'telephony_tag' and column_name = 'meaning') is distinct from 'text:YES' then
@@ -117,7 +121,7 @@ begin
   from pg_constraint c
   cross join lateral regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g') m
   where c.conrelid = 'cma.telephony_tag'::regclass and c.conname = 'telephony_tag_meaning_check';
-  if v_txt is distinct from 'call_type,courtesy_attempt,courtesy_completed_negative,courtesy_completed_neutral,courtesy_completed_positive,not_reached' then
+  if v_txt is distinct from 'call_type,courtesy_attempt,courtesy_completed_negative,courtesy_completed_neutral,courtesy_completed_positive,incorrect_data,not_reached' then
     v_bad := v_bad || 'the keys ' || coalesce(v_txt, 'none') || '; ';
   end if;
   if (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
@@ -128,7 +132,7 @@ begin
   if has_table_privilege('cma_app', 'cma.telephony_tag', 'delete') then
     v_bad := v_bad || 'the application deletes tags; ';
   end if;
-  insert into verify_0008zc values (2, 'A2 the tag''s meaning: nullable, the six keys, in the reader view',
+  insert into verify_0008zc values (2, 'A2 the tag''s meaning: nullable, the seven keys, in the reader view',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A3. the settings: the Conversation threshold (integer, 30), connected from 0, the reached threshold gone from the
@@ -484,7 +488,7 @@ begin
     v_rows := v_rows || array['18', 'B8 the unlinked check skips an outbound call not connected and untagged, by its own rule',
       case when v_txt = 'i2 i3 i4 o1 o2 o6 o7' and not v_provoke then 'PASS' else 'FAIL' end, coalesce(v_txt, 'none')];
 
-    -- B9. the meaning: on the Sources page's catalogs; a key outside the six and a wrong case refused, none clears it; an
+    -- B9. the meaning: on the Sources page's catalogs; a key outside the seven and a wrong case refused, none clears it; an
     --     agent, the Ingest user and no acting user refused
     perform set_config('app.user_id', v_admin1::text, true);
     select string_agg(t ->> 'tagRef' || '=' || coalesce(t ->> 'meaning', '-'), ' ' order by t ->> 'tagRef') into v_txt
