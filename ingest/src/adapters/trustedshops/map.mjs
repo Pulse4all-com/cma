@@ -8,12 +8,20 @@
  *   channel   { channelId: id, name, locale }
  *   review    { reviewId: id, channelId: channelRef, type, state, isPublished (state APPROVED: the platform's published
  *             state, decided here so no vendor word lives in the database), rating (1 to 5), submittedAt, updatedAt,
- *             hasReply (a reply object is there), inviteEventType (event.type), transactionRef (transaction.reference),
- *             raw: id, channelRef, rating, type, state, submittedAt, updatedAt, inviteRef, event.type and
- *             transaction.reference only }
+ *             hasReply (a reply object is there), inviteEventType (event.type), transactionRef (transaction.reference
+ *             when the connection's pattern accepts it), raw: id, channelRef, rating, type, state, submittedAt, updatedAt,
+ *             inviteRef, event.type and transaction.reference only }
+ *
+ * A transaction reference is kept only when the connection setting transaction_ref_pattern accepts it (by default
+ * DEFAULT_REF_PATTERN: letters, digits and # _ . : / -, 1 to 100 characters) and it holds no @ (addition 0008zf: in
+ * prod a manual invite carried the reviewer's email address there, and the database refuses an @ in either place).
+ * Otherwise it is left out of the item and of raw, and the review says refDropped; the value is never logged.
  */
 export const OBJECT_TYPE = "review";
 export const PUBLISHED_STATE = "APPROVED";
+/** The default of the connection setting transaction_ref_pattern: never an @ or a space */
+export const DEFAULT_REF_PATTERN = "^[A-Za-z0-9#_.:/-]{1,100}$";
+const DEFAULT_REF = new RegExp(DEFAULT_REF_PATTERN);
 
 const ID = /^[A-Za-z0-9_.:-]{1,100}$/;
 const TOKEN = /^[A-Za-z0-9_.-]{1,40}$/;
@@ -38,10 +46,23 @@ export function channelItem(c) {
 }
 
 /**
- * One review of GET /reviews → { item, email } or null when it lacks an id, a channel, a submission time or a rating
- * from 1 to 5. email: the reviewer's email as the source holds it, or null; the caller keeps it in memory only.
+ * A transaction reference as the review holds it → { reference, dropped }: the reference when it is text of at most 100
+ * characters that the pattern accepts and holds no @, else null; dropped when the review held one that is not kept.
  */
-export function reviewOf(r) {
+export function referenceOf(v, pattern = DEFAULT_REF) {
+  const held = v !== undefined && v !== null && !(typeof v === "string" && v.trim() === "");
+  const text = textOf(v, 100);
+  const reference = text !== null && !text.includes("@") && pattern.test(text) ? text : null;
+  return { reference, dropped: held && reference === null };
+}
+
+/**
+ * One review of GET /reviews → { item, email, refDropped } or null when it lacks an id, a channel, a submission time or
+ * a rating from 1 to 5. email: the reviewer's email as the source holds it, or null; the caller keeps it in memory
+ * only. refPattern: the connection's transaction_ref_pattern (client.mjs reviewSettings); refDropped: the review held
+ * a reference the pattern refused, left out of the item and raw.
+ */
+export function reviewOf(r, { refPattern = DEFAULT_REF } = {}) {
   const reviewId = idOf(r?.id);
   const channelId = idOf(r?.channelRef);
   const submittedAt = timeOf(r?.submittedAt);
@@ -51,7 +72,7 @@ export function reviewOf(r) {
   const raw = { id: reviewId, channelRef: channelId, rating, type: tokenOf(r?.type), state: tokenOf(r?.state), submittedAt,
     updatedAt: timeOf(r?.updatedAt), inviteRef: idOf(r?.inviteRef) };
   const eventType = textOf(r?.event?.type, 60);
-  const reference = textOf(r?.transaction?.reference, 100);
+  const { reference, dropped: refDropped } = referenceOf(r?.transaction?.reference, refPattern);
   if (eventType) raw.event = { type: eventType };
   if (reference) raw.transaction = { reference };
   for (const k of Object.keys(raw)) if (raw[k] === null) delete raw[k];
@@ -63,5 +84,5 @@ export function reviewOf(r) {
     inviteEventType: eventType, transactionRef: reference, raw,
   };
   const email = typeof r?.customer?.email === "string" && r.customer.email.includes("@") ? r.customer.email : null;
-  return { item, email };
+  return { item, email, refDropped };
 }

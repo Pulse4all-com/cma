@@ -18,6 +18,7 @@
  * or http on the local machine. Errors carry a code only, never a body.
  */
 import { getSecret, SecretUnavailable } from "../../core/secrets.mjs";
+import { DEFAULT_REF_PATTERN } from "./map.mjs";
 import { requestJson, checkedBase, SourceError } from "../../core/http.mjs";
 import { Pace } from "../../core/pace.mjs";
 import { warn } from "../../core/log.mjs";
@@ -53,9 +54,28 @@ function whole(settings, name, fallbacks) {
 }
 
 /**
+ * The connection's transaction_ref_pattern as a regular expression: text of at most 200 characters that compiles;
+ * anything else takes the default (map.mjs DEFAULT_REF_PATTERN) and is named in fallbacks. The pattern decides which
+ * references are kept; an @ is never kept whatever it says (map.mjs referenceOf).
+ */
+function refPatternOf(settings, fallbacks) {
+  const v = settings?.transaction_ref_pattern;
+  if (typeof v === "string" && v.trim() !== "" && v.length <= 200) {
+    try {
+      return new RegExp(v);
+    } catch {
+      // falls back below
+    }
+  }
+  if (v !== undefined && v !== null && v !== "") fallbacks.push("transaction_ref_pattern");
+  return new RegExp(DEFAULT_REF_PATTERN);
+}
+
+/**
  * The connection's settings for the adapter: its pace, poll interval and reconcile window (a value out of range takes
  * the default and is named in fallbacks), whether star-only reviews are asked for (etrusted_include_statements, default
- * true: the API leaves them out unless ignoreStatements=false), the CRM connection the reviewers' emails are matched in.
+ * true: the API leaves them out unless ignoreStatements=false), the CRM connection the reviewers' emails are matched in,
+ * and the pattern a transaction reference must match to be kept (transaction_ref_pattern, addition 0008zf).
  */
 export function reviewSettings(settings) {
   const fallbacks = [];
@@ -66,6 +86,7 @@ export function reviewSettings(settings) {
     reconcileDays: whole(settings, "reviews_reconcile_days", fallbacks),
     includeStatements: !(statements === false || statements === "false"),
     crmConnectionId: typeof settings?.crm_connection_id === "string" ? settings.crm_connection_id.trim() : "",
+    refPattern: refPatternOf(settings, fallbacks),
     fallbacks,
   };
 }

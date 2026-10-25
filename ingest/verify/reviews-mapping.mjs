@@ -71,6 +71,23 @@ expect("A5 unreadable reviews refused (rating 0 or 6, no id, no channel, no time
   [mapped[8], reviewOf({ ...source.reviews[0], rating: 6 }), reviewOf({ ...source.reviews[0], id: undefined }), reviewOf({ ...source.reviews[0], channelRef: "" }),
     reviewOf({ ...source.reviews[0], submittedAt: undefined }), reviewOf({ ...source.reviews[0], submittedAt: "yesterday" })],
   [null, null, null, null, null, null], [null, null, null, null, null, {}]);
+// A7 (addition 0008zf): a transaction reference is kept only when the connection's pattern accepts it and it holds no @;
+// otherwise it is left out of the item and raw, and the review says refDropped (the run counts ref_dropped)
+const refOf = (ref, settings = {}) => {
+  const m = reviewOf({ ...source.reviews[0], transaction: ref === undefined ? undefined : { reference: ref } }, { refPattern: reviewSettings(settings).refPattern });
+  return `${m.item.transactionRef ?? "-"}:${m.item.raw.transaction?.reference ?? "-"}:${m.refDropped}`;
+};
+expect("A7 the reference: kept when the pattern accepts it and it holds no @, else dropped from the item and raw, flagged",
+  [`${mapped[2].item.transactionRef ?? "-"}:${mapped[2].item.raw.transaction?.reference ?? "-"}:${mapped[2].refDropped}`,
+    `${mapped[3].item.transactionRef}:${mapped[3].item.raw.transaction?.reference}:${mapped[3].refDropped}`,
+    refOf("buyer@example.com"), refOf("P4AUK-990001"), refOf("A B"), refOf(undefined), refOf(""), refOf("x".repeat(101)),
+    refOf("SO-12", { transaction_ref_pattern: "^SO-[0-9]+$" }), refOf("P4AUK-1", { transaction_ref_pattern: "^SO-[0-9]+$" }),
+    refOf("a@b.example", { transaction_ref_pattern: ".*" }), reviewSettings({ transaction_ref_pattern: "(" }).fallbacks,
+    reviewSettings({}).refPattern.source],
+  ["-:-:true", "P4AUK-990002:P4AUK-990002:false", "-:-:true", "P4AUK-990001:P4AUK-990001:false", "-:-:true", "-:-:false", "-:-:false",
+    "-:-:true", "SO-12:SO-12:false", "-:-:true", "-:-:true", ["transaction_ref_pattern"], "^[A-Za-z0-9#_.:/-]{1,100}$"],
+  ["nobody.order@example.com:nobody.order@example.com:false", "-:-:true", "buyer@example.com:buyer@example.com:false", "-:-:true",
+    "A B:A B:false", "-:-:true", "-:-:true", "x:x:false", "-:-:true", "P4AUK-1:P4AUK-1:false", "a@b.example:a@b.example:false", [], ""]);
 expect("A6 channels: id, name, locale; a channel without an id refused; a long name or a control character left out",
   [channelItem(source.channels[0]), channelItem({ name: "x" }), channelItem({ id: "chl-y", name: "a\u0001b", locale: "en" })],
   [{ channelId: "chl-fixture-nl", name: "shop-nl.example", locale: "nl_NL" }, null, { channelId: "chl-y", name: "chl-y", locale: "en" }],
@@ -149,8 +166,9 @@ expect("B11 the hold after a 429: Retry-After in seconds, at most two minutes; o
   [6000, 121000, 61000, "GET /reviews"], [1000, 901000, 1000, "GET /reviews?channels=chl-a"]);
 expect("B12 the settings' ranges and defaults; out of range named",
   [reviewSettings({}), reviewSettings({ etrusted_max_per_minute: "120", reviews_poll_interval_minutes: 0, reviews_reconcile_days: 400, etrusted_include_statements: "false", crm_connection_id: " x " })],
-  [{ perMinute: 60, intervalMinutes: 60, reconcileDays: 30, includeStatements: true, crmConnectionId: "", fallbacks: [] },
-    { perMinute: 120, intervalMinutes: 60, reconcileDays: 30, includeStatements: false, crmConnectionId: "x", fallbacks: ["reviews_poll_interval_minutes", "reviews_reconcile_days"] }],
+  [{ perMinute: 60, intervalMinutes: 60, reconcileDays: 30, includeStatements: true, crmConnectionId: "", refPattern: {}, fallbacks: [] },
+    { perMinute: 120, intervalMinutes: 60, reconcileDays: 30, includeStatements: false, crmConnectionId: "x", refPattern: {},
+      fallbacks: ["reviews_poll_interval_minutes", "reviews_reconcile_days"] }],
   [{}, {}]);
 
 // ---- C. The contact match, poll cadence, windows -------------------------------------------------------------
