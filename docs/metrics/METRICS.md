@@ -23747,7 +23747,7 @@ select count(*) as reviews from r
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -23822,7 +23822,7 @@ select round(avg(r.rating), 2) as average_rating from r
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -23897,7 +23897,7 @@ select count(*) filter (where r.is_negative) as negative, count(*) as reviews fr
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -23972,7 +23972,7 @@ select count(*) filter (where r.link_level in ('order', 'contact')) as linked, c
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24047,7 +24047,7 @@ select ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 orde
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24118,7 +24118,7 @@ select r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating,
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24187,7 +24187,7 @@ select date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, 
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24258,7 +24258,7 @@ select r.link_level, count(*) as reviews from r group by 1
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24329,7 +24329,7 @@ select r.invite_event_type, count(*) as reviews from r group by 1 order by 2 des
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24404,7 +24404,7 @@ select r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rat
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -24453,7 +24453,7 @@ per active market: channels = count(counted, not gone channels with that market)
 
 - A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
-- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+- A Trusted Shops channel per active market (kpis.md 11 names the markets still without one) (data quality check `market_without_review_channel`)
 
 **Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
@@ -31046,7 +31046,7 @@ select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 
 
 **Notes**
 
-Sort 220. Pulse4all: no Trusted Shops channel yet for IE, BE, CH, DK, NO, FI, ES and IT (kpis.md 11).
+Sort 220. Which active markets have no channel is the tenant's state, not the catalog's: kpis.md 11 names Pulse4all's.
 
 ### /messages/send
 

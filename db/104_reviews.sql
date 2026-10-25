@@ -7,8 +7,8 @@
 -- prod.
 -- Nothing in the web of main reads what this adds, so the script may run before or after the web deploy.
 --
--- Why (Decision log, 25 October 2026): the review platform owns the reviews of a business line (Trusted Shops for
--- Pulse4all Subscriptions); the CMA polls them into Postgres, maps them to markets through their channel, links them
+-- Why (Decision log, 25 October 2026): the review platform owns the reviews of a business line (the platform and its
+-- adapter are the tenant's choice); the CMA polls them into Postgres, maps them to markets through their channel, links them
 -- to an order or a CRM contact where it can, reports them and alerts on negative ones. Read only: nothing is written
 -- to the review platform or the CRM. A review is a standalone fact with an optional link; it never holds the
 -- reviewer's name, email or phone, nor the review's title or text.
@@ -269,7 +269,7 @@ end
 $$;
 
 -- Whether a tenant has a reviews connection: an active connection of kind reviews, or one holding review channels
-create or replace function cma.reviews_connected_of(p_tenant_id uuid)
+create or replace function cma.reviews_set_up_of(p_tenant_id uuid)
 returns boolean
 language sql stable
 as $$
@@ -796,6 +796,26 @@ $$;
 comment on column cma.message_rule.trigger is 'record_created: a new record alerts an audience; record_assigned: a record alerts the person its owner maps to (0008a); review_submitted: a published review of a counted channel alerts an audience (0008ze)';
 comment on column cma.message_rule.max_rating is 'review_submitted only: the highest rating that raises the alert (1 to 5); null: any rating (0008ze)';
 
+-- A rule's trigger is fixed once the rule exists (README, Alert rules: name and trigger fixed). The upserts of 0008 and
+-- 0008a match a rule by name, and 0008a's sets the trigger on a conflict, so it would turn a review rule without a
+-- highest rating into an assignment rule; the data layer refuses another trigger's name first (CMA03), and this keeps
+-- that true for every caller. A trigger function: it runs whoever updates the row, so nobody gets execute on it
+create or replace function cma.message_rule_trigger_fixed()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.trigger is distinct from old.trigger then
+    raise exception 'the rule % has the trigger %; a rule''s trigger is fixed once it exists', old.name, old.trigger using errcode = 'CMA03';
+  end if;
+  return new;
+end
+$$;
+revoke execute on function cma.message_rule_trigger_fixed() from public;
+drop trigger if exists message_rule_trigger_fixed on cma.message_rule;
+create trigger message_rule_trigger_fixed before update of trigger on cma.message_rule
+  for each row execute function cma.message_rule_trigger_fixed();
+
 -- A review rule (tenant.configure), identified by name like every rule: record type review, no pipelines, an audience as
 -- a created-record rule's, and the highest rating that raises it (null: any). A name that belongs to a rule of another
 -- trigger is CMA03
@@ -964,7 +984,7 @@ begin
                              target, sender_user_id)
     values (v_tenant, 'alert', r.urgency, 'New review',
             left(coalesce(r.market, 'unknown') || ' · ' || r.channel_name || ' · rating ' || trim_scale(r.rating)::text || ' of 5 · submitted '
-                 || to_char(r.submitted_at at time zone v_zone, 'HH24:MI'), 500),
+                 || to_char(r.submitted_at at time zone v_zone, 'YYYY-MM-DD HH24:MI'), 500),
             v_system, 'review', r.source_id, cma.record_url(p_connection_id, 'review', r.source_id), r.rule_id,
             jsonb_build_object('rule', r.rule_name, 'permission', r.audience_permission, 'market', r.market,
                                'matchLanguage', r.match_language, 'onlyClockedIn', r.only_clocked_in,
@@ -1014,8 +1034,7 @@ $$;
 -- 7. Sources: the review channels in the connection's catalogs
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zc (100), with the review channels: source id, name, locale, market, counted, first seen, gone, the reviews held
--- and the latest submitted time
--- As 0008p (74), and each tag with its meaning (null for none)
+-- and the latest submitted time (each tag keeps its meaning, as 0008zc gave it)
 create or replace function cma.connection_catalogs(p_connection_id uuid)
 returns jsonb
 language plpgsql stable
@@ -1269,7 +1288,7 @@ begin
   -- active markets without a counted review channel, once the tenant has a reviews connection (0008ze)
   select 'market_without_review_channel', null::uuid, 'market', m.code, null::text
   from cma.market m
-  where m.tenant_id = p_tenant_id and m.status = 'active' and cma.reviews_connected_of(p_tenant_id)
+  where m.tenant_id = p_tenant_id and m.status = 'active' and cma.reviews_set_up_of(p_tenant_id)
     and not exists (select 1 from cma.review_channel ch
                     where ch.tenant_id = m.tenant_id and ch.market = m.code and ch.is_counted and ch.source_deleted_at is null);
 
@@ -1319,7 +1338,7 @@ begin
                     where f.tenant_id = v_tenant and f.fields_refreshed_at is not null and cardinality(f.kept_fields) > 0)
       union all
       select rc.check_key, rc.sort_order, rc.description from cma.data_quality_reviews_checks() rc
-      where cma.reviews_connected_of(v_tenant) or exists (select 1 from q where q.check_key = rc.check_key)
+      where cma.reviews_set_up_of(v_tenant) or exists (select 1 from q where q.check_key = rc.check_key)
     )
     select c.check_key, c.description,
            case when c.check_key = 'writeback_parked' and to_regclass('cma.outbox_action') is null then null
@@ -1480,7 +1499,7 @@ begin
                         from cma.review_market_states_of(p_tenant_id) s),
       'history_start', (select min(business_date) from a),
       'negative_max_rating', cma.setting_of(p_tenant_id, 'reviews.negative_max_rating')::integer,
-      'connected', cma.reviews_connected_of(p_tenant_id),
+      'is_set_up', cma.reviews_set_up_of(p_tenant_id),
       'filter_markets', (select coalesce(jsonb_agg(f.market order by (f.market = 'unknown'), f.sort_order, f.market), '[]'::jsonb)
                          from (select distinct coalesce(ch.market, 'unknown') as market, coalesce(mk.sort_order, 2147483647) as sort_order
                                from cma.review_channel ch
@@ -1530,7 +1549,7 @@ begin
   foreach f in array array[
     'cma.connection_held_kinds_of(uuid,uuid)',
     'cma.set_connection_kind(uuid,text)',
-    'cma.reviews_connected_of(uuid)',
+    'cma.reviews_set_up_of(uuid)',
     'cma.assert_reviews_connection(uuid)',
     'cma.ingest_upsert_review_channels(uuid,jsonb)',
     'cma.review_order_of(uuid,text)',

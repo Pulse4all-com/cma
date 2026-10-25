@@ -201,7 +201,7 @@ begin
   --     search path pinned with pg_temp last, the readers' only
   v_bad := '';
   foreach v_fn in array array[
-    'cma.connection_held_kinds_of(uuid,uuid)', 'cma.set_connection_kind(uuid,text)', 'cma.reviews_connected_of(uuid)',
+    'cma.connection_held_kinds_of(uuid,uuid)', 'cma.set_connection_kind(uuid,text)', 'cma.reviews_set_up_of(uuid)',
     'cma.assert_reviews_connection(uuid)', 'cma.ingest_upsert_review_channels(uuid,jsonb)', 'cma.review_order_of(uuid,text)',
     'cma.ingest_upsert_reviews(uuid,jsonb)', 'cma.set_review_contact(uuid,text,uuid,text)', 'cma.forget_review_contact_links(uuid,text)',
     'cma.upsert_review_rule(text,text,boolean,boolean,text,text,numeric,integer)', 'cma.message_rules()',
@@ -378,9 +378,9 @@ begin
     values (v_t1, v_shop, 'verifyshop', 'cu-1', v_crm, 'c-1', v_now - interval '30 days'),
            (v_t1, v_shop, 'verifyshop', 'cu-2', null, null, null);
     insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at)
-    values (v_t1, v_shop, 'verifyshop', 'so-1001', 'P4ANL-1001', 'cu-1', v_now - interval '20 days') returning id into v_o1;
+    values (v_t1, v_shop, 'verifyshop', 'so-1001', 'TESTNL-1001', 'cu-1', v_now - interval '20 days') returning id into v_o1;
     insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at)
-    values (v_t1, v_shop, 'verifyshop', 'so-2002', 'P4ANL-2002', 'cu-2', v_now - interval '15 days') returning id into v_o2;
+    values (v_t1, v_shop, 'verifyshop', 'so-2002', 'TESTNL-2002', 'cu-2', v_now - interval '15 days') returning id into v_o2;
     perform set_config('role', 'cma_app', true);
 
     -- tenant one's configuration (the admin): markets
@@ -445,15 +445,15 @@ begin
     from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-1', 'channelId', 'chl-nl', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 5, 'submittedAt', '2026-10-02T09:00:00Z', 'updatedAt', '2026-10-02T09:05:00Z', 'hasReply', true,
-                         'inviteEventType', 'checkout', 'transactionRef', 'P4ANL-1001',
+                         'inviteEventType', 'checkout', 'transactionRef', 'TESTNL-1001',
                          'raw', jsonb_build_object('id', 'rev-1', 'channelRef', 'chl-nl', 'event', jsonb_build_object('type', 'checkout'),
-                                                   'transaction', jsonb_build_object('reference', 'P4ANL-1001'))),
+                                                   'transaction', jsonb_build_object('reference', 'TESTNL-1001'))),
       jsonb_build_object('reviewId', 'rev-2', 'channelId', 'chl-nl', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 2, 'submittedAt', '2026-10-05T10:00:00Z', 'updatedAt', '2026-10-05T10:00:00Z',
                          'inviteEventType', 'checkout', 'transactionRef', 'so-2002'),
       jsonb_build_object('reviewId', 'rev-3', 'channelId', 'chl-gb', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 4.5, 'submittedAt', '2026-10-14T09:00:00Z', 'updatedAt', '2026-10-14T09:00:00Z',
-                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '6044272197712'),
+                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '9900000000017'),
       jsonb_build_object('reviewId', 'rev-4', 'channelId', 'chl-gb', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 1, 'submittedAt', '2026-10-13T22:30:00Z', 'updatedAt', '2026-10-13T22:30:00Z'),
       jsonb_build_object('reviewId', 'rev-5', 'channelId', 'chl-x', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
@@ -489,9 +489,9 @@ begin
     select v_txt || ',' || string_agg(x.outcome, ',') into v_txt from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-1', 'channelId', 'chl-nl', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 5, 'submittedAt', '2026-10-02T09:00:00Z', 'updatedAt', '2026-10-02T09:05:00Z', 'hasReply', true,
-                         'inviteEventType', 'checkout', 'transactionRef', 'P4ANL-1001',
+                         'inviteEventType', 'checkout', 'transactionRef', 'TESTNL-1001',
                          'raw', jsonb_build_object('id', 'rev-1', 'channelRef', 'chl-nl', 'event', jsonb_build_object('type', 'checkout'),
-                                                   'transaction', jsonb_build_object('reference', 'P4ANL-1001'))))) x;
+                                                   'transaction', jsonb_build_object('reference', 'TESTNL-1001'))))) x;
     v_txt := v_txt || ' ' || ((select count(*) from cma.audit_log a where a.tenant_id = v_t1 and a.table_name = 'review') - v_n);
     select v_txt || ' ' || string_agg(x.outcome || ':' || x.link_level, ',') into v_txt from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-6', 'channelId', 'chl-nl', 'type', 'SERVICE_REVIEW', 'state', 'VETOED', 'isPublished', false,
@@ -546,19 +546,19 @@ begin
     --     contact while the order's customer has none; an ambiguous order name (two stores) links nothing
     perform set_config('role', 'cma_owner', true);
     insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at)
-    values (v_t1, v_shop, 'verifyshop', '6044272197712', 'P4AUK-3003', 'cu-2', v_now - interval '12 days') returning id into v_o3;
+    values (v_t1, v_shop, 'verifyshop', '9900000000017', 'TESTUK-3003', 'cu-2', v_now - interval '12 days') returning id into v_o3;
     perform set_config('role', 'cma_app', true);
     select string_agg(x.outcome || ':' || x.link_level || ':' || x.has_contact, ',') into v_txt
     from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-3', 'channelId', 'chl-gb', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 4.5, 'submittedAt', '2026-10-14T09:00:00Z', 'updatedAt', '2026-10-14T09:00:00Z',
-                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '6044272197712'))) x;
+                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '9900000000017'))) x;
     v_txt := v_txt || ' ' || (select (r.commerce_order_id = v_o3) || ':' || r.crm_contact_source_id from cma.review r where r.tenant_id = v_t1 and r.source_id = 'rev-3');
     perform set_config('role', 'cma_owner', true);
     insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, source_created_at)
-    values (v_t1, v_shop, 'verifyshop', 'so-dup-a', 'P4ADUP-1', v_now), (v_t1, v_crm, 'verifyshop', 'so-dup-b', 'P4ADUP-1', v_now);
+    values (v_t1, v_shop, 'verifyshop', 'so-dup-a', 'TESTDUP-1', v_now), (v_t1, v_crm, 'verifyshop', 'so-dup-b', 'TESTDUP-1', v_now);
     perform set_config('role', 'cma_app', true);
-    v_txt := v_txt || ' ' || coalesce(cma.review_order_of(v_t1, 'P4ADUP-1')::text, 'none') || ' ' || (cma.review_order_of(v_t1, ' P4ANL-1001 ') = v_o1)
+    v_txt := v_txt || ' ' || coalesce(cma.review_order_of(v_t1, 'TESTDUP-1')::text, 'none') || ' ' || (cma.review_order_of(v_t1, ' TESTNL-1001 ') = v_o1)
              || ' ' || coalesce(cma.review_order_of(v_t1, '')::text, 'none');
     -- the third review back without an order, for the report and the alerts below (its order deleted at the source)
     perform set_config('role', 'cma_owner', true);
@@ -568,7 +568,7 @@ begin
     from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-3', 'channelId', 'chl-gb', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
                          'rating', 4.5, 'submittedAt', '2026-10-14T09:00:00Z', 'updatedAt', '2026-10-14T09:00:00Z',
-                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '6044272197712'))) x;
+                         'inviteEventType', 'klaviyo-integration', 'transactionRef', '9900000000017'))) x;
     perform cma.set_review_contact(v_rev, 'rev-3', v_crm, 'c-3');
     v_rows := v_rows || array['17', 'B7 an order arriving later links the review, the email contact kept; an ambiguous name links nothing; a deleted order unlinks',
       case when v_txt = 'updated:order:true true:c-3 none true none updated:none:false' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -603,7 +603,8 @@ begin
 
     -- B10. review rules: created with a highest rating; any rating with none; message_rules() lists it; a name of another
     --      trigger's rule (CMA03), a rating of 6 (CMA04), an agent (CMA06); a created-record rule keeps no rating; an
-    --      assignment rule cannot take a review rule's name without losing the rating (CMA04)
+    --      assignment rule cannot take a review rule's name, with a rating or without, nor a created-record rule's: the
+    --      trigger is fixed (CMA03); every rule keeps its trigger
     perform cma.upsert_message_rule('Verify new deal', 'deal', '{}', 'leads.accept', false, false, null, 'normal', null);
     perform cma.upsert_review_rule('Negative review', 'performance.team', false, false, null, 'normal', 2, 1440);
     perform cma.upsert_review_rule('Every review', 'performance.team', false, false, null, 'normal', null, 1440);
@@ -612,13 +613,17 @@ begin
     into v_txt from cma.message_rules() r;
     v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Verify new deal'', ''performance.team'', false, false, null, ''normal'', 2)')
              || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Bad'', ''performance.team'', false, false, null, ''normal'', 6)')
-             || ' ' || pg_temp.v0008ze_code('select cma.upsert_assignment_rule(''Negative review'', ''deal'', ''{}'', ''normal'')');
+             || ' ' || pg_temp.v0008ze_code('select cma.upsert_assignment_rule(''Negative review'', ''deal'', ''{}'', ''normal'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.upsert_assignment_rule(''Every review'', ''deal'', ''{}'', ''normal'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.upsert_assignment_rule(''Verify new deal'', ''deal'', ''{}'', ''normal'')');
     perform set_config('app.user_id', v_agent1::text, true);
     v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Agent'', ''performance.team'', false, false, null, ''normal'', 2)');
     perform set_config('app.user_id', v_admin1::text, true);
-    v_rows := v_rows || array['20', 'B10 review rules with and without a highest rating, listed; another trigger''s name, a rating of 6, an agent refused',
+    v_txt := v_txt || ' ' || (select string_agg(r.name || ':' || r.trigger, ' ' order by r.name) from cma.message_rules() r);
+    v_rows := v_rows || array['20', 'B10 review rules with and without a highest rating, listed; another trigger''s name, a rating of 6, an agent refused; the trigger fixed',
       case when v_txt = 'Every review:review_submitted:review:-:normal Negative review:review_submitted:review:2.00:urgent Verify new deal:record_created:deal:-:normal '
-                        || 'CMA03 CMA04 CMA04 CMA06'
+                        || 'CMA03 CMA04 CMA03 CMA03 CMA03 CMA06 '
+                        || 'Every review:review_submitted Negative review:review_submitted Verify new deal:record_created'
                 and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B11. the report for 1 to 14 October 2026 as of the 14th 12:00 (the analyst): the figures, the previous period like
@@ -631,7 +636,7 @@ begin
              || ' ' || (j ->> 'previous_from') || '..' || (j ->> 'previous_to') || ':' || (j ->> 'previous_partial')
              || ' stars ' || (select string_agg((d ->> 'reviews') || '/' || (d ->> 'previous'), ',' order by (d ->> 'stars')::int) from jsonb_array_elements(j -> 'distribution') d)
              || ' links ' || (select string_agg((d ->> 'level') || ':' || (d ->> 'reviews') || '/' || (d ->> 'previous'), ',') from jsonb_array_elements(j -> 'link_levels') d)
-             || ' start ' || (j ->> 'history_start') || ' neg ' || (j ->> 'negative_max_rating') || ' ' || (j ->> 'connected');
+             || ' start ' || (j ->> 'history_start') || ' neg ' || (j ->> 'negative_max_rating') || ' ' || (j ->> 'is_set_up');
     v_rows := v_rows || array['21', 'B11 the report''s figures, the previous period like for like, the distribution, the link levels, the history start',
       case when v_txt = '4/3.13/2/2/1/1 prev 2/3.00/1/0/0/2 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/0 '
                         || 'links order:2/0,contact:1/0,none:1/2 start 2026-08-01 neg 2 true'
@@ -746,7 +751,7 @@ begin
     select v_txt || ' ' || string_agg(ru.name || '>' || m.ref_id, ',' order by ru.name, m.ref_id) into v_txt
     from cma.message m join cma.message_rule ru on ru.tenant_id = m.tenant_id and ru.id = m.rule_id
     where m.tenant_id = v_t1 and m.ref_type = 'review';
-    select v_txt || ' ' || (m.title = 'New review') || ' ' || (m.body ~ '^NL · Shop NL renamed · rating 1 of 5 · submitted [0-2][0-9]:[0-5][0-9]$')
+    select v_txt || ' ' || (m.title = 'New review') || ' ' || (m.body ~ '^NL · Shop NL renamed · rating 1 of 5 · submitted 20[0-9][0-9]-[01][0-9]-[0-3][0-9] [0-2][0-9]:[0-5][0-9]$')
            || ' ' || (m.ref_url = 'https://reviews.example.invalid/acc-1/reviews/al-1') || ' ' || m.ref_system || ' ' || m.urgency
            || ' ' || ((select count(*) from cma.message_delivery d where d.tenant_id = m.tenant_id and d.message_id = m.id)
                       = (select count(*) from cma.app_user u where u.tenant_id = v_t1 and u.status = 'active' and u.kind = 'person'

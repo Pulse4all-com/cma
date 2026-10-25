@@ -1,6 +1,6 @@
 /**
- * Reviews (addition 0008ze, brief B18; KPI 3): Reports → Reviews. The review platform (Trusted Shops for Pulse4all
- * Subscriptions) owns the reviews; the CMA polls them in hourly, maps them to markets through their channel and links
+ * Reviews (addition 0008ze, brief B18; KPI 3): Reports → Reviews. The review platform (the tenant's, behind its
+ * adapter) owns the reviews; the CMA polls them in hourly, maps them to markets through their channel and links
  * them to an order or a CRM contact where it can. The figures come from the database (cma.reviews_page); this module
  * mirrors their definitions for the mock and for verify/reports.mjs, and arranges them for the screen. Pure, with no
  * runtime imports beyond time.ts, reports.ts and funnel.ts, so the verifier runs it under Node's type stripping.
@@ -109,7 +109,7 @@ export function reviewMarketStates(markets: readonly ReviewMarket[], channels: r
 /** The page as cma.reviews_page_of answers it; `records` every counted review up to now, for the history start */
 export function reviewsReport(records: readonly ReviewRecord[], opts: {
   from: DateKey; to: DateKey; group: FunnelGroup; market: string | null; prev: FunnelPrevious; zone: string; negativeMaxRating: number;
-  connected: boolean; markets: readonly ReviewMarket[]; marketStates: ReviewsReport["marketStates"]; filterMarkets: string[];
+  isSetUp: boolean; markets: readonly ReviewMarket[]; marketStates: ReviewsReport["marketStates"]; filterMarkets: string[];
 }): ReviewsReport {
   const { from, to, group, market, prev, zone } = opts;
   const until = prev.until === null ? null : timeInZone(prev.until, zone);
@@ -141,7 +141,7 @@ export function reviewsReport(records: readonly ReviewRecord[], opts: {
     inviteEvents: events,
     marketStates: opts.marketStates,
     historyStart: all.reduce<DateKey | null>((m, r) => (m === null || r.date < m ? r.date : m), null),
-    negativeMaxRating: opts.negativeMaxRating, connected: opts.connected, markets: opts.filterMarkets,
+    negativeMaxRating: opts.negativeMaxRating, isSetUp: opts.isSetUp, markets: opts.filterMarkets,
   };
 }
 

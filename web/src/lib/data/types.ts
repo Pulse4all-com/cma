@@ -2041,8 +2041,8 @@ export interface ReviewsReport {
   /** The first counted review's business date; null without one */
   historyStart: DateKey | null;
   negativeMaxRating: number;
-  /** Whether the tenant has a reviews connection */
-  connected: boolean;
+  /** Whether the tenant has a reviews connection set up ("set up", never Connected: a call term) */
+  isSetUp: boolean;
   /** The markets of the counted channels, for the filter */
   markets: string[];
 }

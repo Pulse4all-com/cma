@@ -44607,7 +44607,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -44745,7 +44745,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -44883,7 +44883,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45021,7 +45021,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45160,7 +45160,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45299,7 +45299,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45439,7 +45439,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45574,7 +45574,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45709,7 +45709,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45844,7 +45844,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -45984,7 +45984,7 @@
           "check": "review_channel_unmapped"
         },
         {
-          "item": "A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11)",
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
           "check": "market_without_review_channel"
         }
       ],
@@ -59710,7 +59710,7 @@
       "status": [
         "verified"
       ],
-      "notes": "Sort 220. Pulse4all: no Trusted Shops channel yet for IE, BE, CH, DK, NO, FI, ES and IT (kpis.md 11)."
+      "notes": "Sort 220. Which active markets have no channel is the tenant's state, not the catalog's: kpis.md 11 names Pulse4all's."
     },
     {
       "key": "messages.sent.recipients",

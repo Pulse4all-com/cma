@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * counted channels, by the submission's date in the tenant's zone. `current` and `previous` (reviews, averageRating,
  * negative, linkedOrder, linkedContact, unlinked; the previous period like for like); `distribution` (per whole star);
  * `byPeriod`; `byMarket`; `byChannel`; `linkLevels`; `inviteEvents`; `marketStates` (every active market: no_channel,
- * channel_no_reviews, has_reviews); `historyStart`; `negativeMaxRating`; `connected`; `markets`. Needs reports.view or
+ * channel_no_reviews, has_reviews); `historyStart`; `negativeMaxRating`; `isSetUp`; `markets`. Needs reports.view or
  * performance.team, here and again in the database. Team figures only; never a reviewer, a title or a text.
  */
 export async function GET(request: Request) {

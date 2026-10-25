@@ -1566,12 +1566,12 @@ const RV_STATES = reviewMarketStates(RV_MARKETS, RV_CHANNELS);
 const RV_RECORDS = reviewRecords(RV_SOURCES, AMS_AT, 2);
 const rvPage = (market, group = "day") => reviewsReport(RV_RECORDS, { from: "2026-10-01", to: "2026-10-14", group, market,
   prev: funnelPrevious(previousPeriod({ from: "2026-10-01", to: "2026-10-14" }, dateKeyInZone(RV_NOW, AMS_AT)), RV_NOW), zone: AMS_AT, negativeMaxRating: 2,
-  connected: true, markets: RV_MARKETS, marketStates: RV_STATES, filterMarkets: ["FR", "GB", "NL"] });
+  isSetUp: true, markets: RV_MARKETS, marketStates: RV_STATES, filterMarkets: ["FR", "GB", "NL"] });
 const rvFig = (f) => `${f.reviews}/${f.averageRating === null ? "-" : f.averageRating.toFixed(2)}/${f.negative}/${f.linkedOrder}/${f.linkedContact}/${f.unlinked}`;
 const rvAll = rvPage(null);
 expect("reviews: the figures, the previous period like for like, per whole star, the link levels, the history start, as 105's B11",
   `${rvFig(rvAll.current)} prev ${rvFig(rvAll.previous)} ${rvAll.previousFrom}..${rvAll.previousTo}:${rvAll.previousPartial} stars ${rvAll.distribution.map((d) => `${d.reviews}/${d.previous}`).join(",")} `
-    + `links ${rvAll.linkLevels.map((l) => `${l.level}:${l.reviews}/${l.previous}`).join(",")} start ${rvAll.historyStart} neg ${rvAll.negativeMaxRating} ${rvAll.connected}`,
+    + `links ${rvAll.linkLevels.map((l) => `${l.level}:${l.reviews}/${l.previous}`).join(",")} start ${rvAll.historyStart} neg ${rvAll.negativeMaxRating} ${rvAll.isSetUp}`,
   "4/3.13/2/2/1/1 prev 2/3.00/1/0/0/2 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/0 links order:2/0,contact:1/0,none:1/2 start 2026-08-01 neg 2 true",
   "4/3.13/2/2/1/1 prev 3/3.67/1/0/0/3 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/1 links order:2/0,contact:1/0,none:1/3 start 2026-08-01 neg 2 true");
 const rvWeek = rvPage(null, "week");

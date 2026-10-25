@@ -21,7 +21,7 @@ import { resolve } from "../../access";
 
 /**
  * Reviews (Report, addition 0008ze, 25 October 2026; brief B18; KPI 3): the reviews the review platform holds of the
- * tenant's channels (Trusted Shops for Pulse4all Subscriptions, polled hourly). A review counts when it is published and its
+ * tenant's channels (polled hourly by the platform's adapter). A review counts when it is published and its
  * channel is counted (Configuration, Sources); its market is its channel's, its day the submission's in the tenant's zone.
  * Tiles for the reviews, the average rating, the negative reviews (at or below reviews.negative_max_rating) and the linked
  * reviews, each with its change against the previous period like for like; the reviews per whole star, per market, per day
@@ -100,10 +100,10 @@ export default async function ReviewsPage({ searchParams }: PageProps<"/reports/
           <Notice tone="warning">{copy.funnel.filterIgnored}</Notice>
         </div>
       ) : null}
-      {!report.connected ? (
-        <div className="mb-6" data-testid="reviews-not-connected">
+      {!report.isSetUp ? (
+        <div className="mb-6" data-testid="reviews-not-set-up">
           <Notice tone="info">
-            {t.notConnected}{" "}
+            {t.notSetUp}{" "}
             {holdsAny(me, "tenant.configure") ? <Link href="/configuration/sources" className="font-semibold text-p4a-deepblue underline">{t.configureLink}</Link> : null}
           </Notice>
         </div>

@@ -116,11 +116,11 @@ const conn = await asAdmin(async () => {
   return { h: h.connection_id, s: s.connection_id, t: t.connection_id, tKey: t.key, account: `acc-fixture-${RUN}` };
 });
 await asAdmin(() => q("select cma.set_connection_settings($1, $2::jsonb)", [conn.t, SETTINGS(conn)]));
-// The store's customer linked to contact 5100000071 (0008h) and its order P4ANL-71001 (as the owner: 0007b's upserts are not under test)
+// The store's customer linked to contact 5100000071 (0008h) and its order TESTNL-71001 (as the owner: 0007b's upserts are not under test)
 await q(`insert into cma.commerce_customer (tenant_id, connection_id, source_system, source_id, crm_connection_id, crm_contact_source_id, matched_at)
          values ($1, $2, 'shopify', 'cu-flow-1', $3, '5100000071', now())`, [t1, conn.s, conn.h]);
 await q(`insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at)
-         values ($1, $2, 'shopify', 'so-flow-1', 'P4ANL-71001', 'cu-flow-1', now() - interval '20 days')`, [t1, conn.s]);
+         values ($1, $2, 'shopify', 'so-flow-1', 'TESTNL-71001', 'cu-flow-1', now() - interval '20 days')`, [t1, conn.s]);
 
 const reviewsOf = async () => q(`select r.source_id, r.link_level, r.crm_contact_source_id as contact, r.commerce_order_id is not null as has_order, r.state,
     r.is_published, r.has_reply, r.rating::text, ch.source_id as channel
@@ -183,7 +183,7 @@ expect("C3 only the new review is written; the two of the overlap read again unc
 const msgs = await q(`select m.title, m.body, m.ref_url, m.ref_system from cma.message m join cma.message_rule r on r.id = m.rule_id
   where m.tenant_id = $1 and m.ref_type = 'review' order by m.created_at`, [t1]);
 expect("C4 the negative review of a counted channel raised one alert: market, channel, rating, time and the link only",
-  msgs.map((m) => [m.title, /^NL · shop-nl\.example · rating 1 of 5 · submitted \d\d:\d\d$/.test(m.body), m.ref_url, m.ref_system]),
+  msgs.map((m) => [m.title, /^NL · shop-nl\.example · rating 1 of 5 · submitted \d{4}-\d\d-\d\d \d\d:\d\d$/.test(m.body), m.ref_url, m.ref_system]),
   [["New review", true, `https://reviews.example.invalid/${conn.account}/reviews/rev-fixture-new-1`, "trustedshops"]], []);
 
 // ---- D. A 429; the reconcile ----------------------------------------------------------------------------------------

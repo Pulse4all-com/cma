@@ -62,8 +62,8 @@ const order = mapped[0];
 expect("A3 the order review: its fields, published, the email beside the item (not in it)",
   [order.item.reviewId, order.item.channelId, order.item.rating, order.item.isPublished, order.item.inviteEventType, order.item.transactionRef,
     order.item.hasReply, order.email, "email" in order.item],
-  ["rev-fixture-order-1", "chl-fixture-nl", 5, true, "checkout", "P4ANL-71001", false, "order-buyer@example.com", false],
-  ["rev-fixture-order-1", "chl-fixture-nl", 5, true, "checkout", "P4ANL-71001", false, null, true]);
+  ["rev-fixture-order-1", "chl-fixture-nl", 5, true, "checkout", "TESTNL-71001", false, "order-buyer@example.com", false],
+  ["rev-fixture-order-1", "chl-fixture-nl", 5, true, "checkout", "TESTNL-71001", false, null, true]);
 expect("A4 published only in the state APPROVED; a decimal rating kept; a reply that is null is no reply",
   [PUBLISHED_STATE, mapped[6].item.isPublished, mapped[3].item.rating, mapped[2].item.hasReply, reviewOf({ ...source.reviews[2], reply: { comment: "x" } }).item.hasReply],
   ["APPROVED", false, 3.5, false, true], ["APPROVED", true, 3, true, false]);

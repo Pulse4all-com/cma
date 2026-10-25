@@ -973,7 +973,7 @@ type ReviewsPageDb = {
   link_levels: { level: ReviewLinkLevel; reviews: number; previous: number }[];
   invite_events: { event_type: string | null; reviews: number; previous: number }[];
   market_states: { market: string; name: string; state: ReviewMarketState; channels: number; reviews: number }[];
-  history_start: string | null; negative_max_rating: number; connected: boolean; filter_markets: string[];
+  history_start: string | null; negative_max_rating: number; is_set_up: boolean; filter_markets: string[];
 };
 
 function toReviewFigures(f: ReviewFiguresDb): ReviewFigures {
@@ -2289,7 +2289,7 @@ export const postgresData: CmaData = {
         byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, current: toReviewFigures(m.current), previous: toReviewFigures(m.previous) })),
         byChannel: j.channels.map((c) => ({ channel: c.channel, name: c.name, market: c.market, current: toReviewFigures(c.current), previous: toReviewFigures(c.previous) })),
         linkLevels: j.link_levels, inviteEvents: j.invite_events.map((e) => ({ eventType: e.event_type, reviews: e.reviews, previous: e.previous })),
-        marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, connected: j.connected, markets: j.filter_markets,
+        marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, isSetUp: j.is_set_up, markets: j.filter_markets,
       };
     });
   },

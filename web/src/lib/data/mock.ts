@@ -4263,7 +4263,7 @@ export const mockData: CmaData = {
       publishedReviews: mockReviewSources(me).filter((r) => r.channel === ch.channelId && r.isPublished).length })));
     const prev = funnelPrevious(previousPeriod(range, mockToday(me)), new Date().toISOString());
     return reviewsReport(records, { from: range.from, to: range.to, group, market, prev, zone: MOCK_TENANT_ZONE, negativeMaxRating: negative,
-      connected: channels.length > 0, markets, marketStates: states,
+      isSetUp: channels.length > 0, markets, marketStates: states,
       filterMarkets: [...new Set(channels.filter((ch) => ch.isCounted).map((ch) => ch.market ?? "unknown"))]
         .sort((a, b) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0) || a.localeCompare(b)) });
   },

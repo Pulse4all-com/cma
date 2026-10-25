@@ -13,12 +13,12 @@
   "reviews": [
     { "id": "rev-fixture-order-1", "channelRef": "chl-fixture-nl", "rating": 5, "type": "SERVICE_REVIEW", "state": "APPROVED",
       "submittedAt": "ago:600", "updatedAt": "ago:590", "inviteRef": "inv-fixture-1", "verificationType": "VERIFIED",
-      "transaction": { "reference": "P4ANL-71001", "date": "2026-10-01T10:00:00Z" }, "event": { "type": "checkout", "id": "evt-fixture-1" },
+      "transaction": { "reference": "TESTNL-71001", "date": "2026-10-01T10:00:00Z" }, "event": { "type": "checkout", "id": "evt-fixture-1" },
       "customer": { "fullName": "Invented Reviewer One", "email": "order-buyer@example.com", "mobile": "+44 20 0000 0901" },
       "title": "Fixture title that must not be stored", "comment": "Fixture text that must not be stored" },
     { "id": "rev-fixture-contact-1", "channelRef": "chl-fixture-nl", "rating": 2, "type": "SERVICE_REVIEW", "state": "APPROVED",
       "submittedAt": "ago:300", "updatedAt": "ago:300", "inviteRef": "inv-fixture-2",
-      "transaction": { "reference": "6044272197712" }, "event": { "type": "klaviyo-integration" },
+      "transaction": { "reference": "9900000000017" }, "event": { "type": "klaviyo-integration" },
       "customer": { "fullName": "Invented Reviewer Two", "email": "Known@Example.com", "mobile": "+44 20 0000 0902" },
       "title": "Fixture title two", "comment": "Fixture text two" },
     { "id": "rev-fixture-none-1", "channelRef": "chl-fixture-gb", "rating": 4, "type": "SERVICE_REVIEW", "state": "APPROVED",
@@ -36,7 +36,7 @@
     { "id": "rev-fixture-rejected-1", "channelRef": "chl-fixture-nl", "rating": 1, "type": "SERVICE_REVIEW", "state": "REJECTED",
       "submittedAt": "ago:400", "updatedAt": "ago:380", "customer": { "email": "rejected@example.com" }, "title": "Fixture title seven" },
     { "id": "rev-fixture-old-1", "channelRef": "chl-fixture-nl", "rating": 4, "type": "SERVICE_REVIEW", "state": "APPROVED",
-      "submittedAt": "ago:600000", "updatedAt": "ago:600000", "transaction": { "reference": "P4ANL-70001" }, "event": { "type": "checkout" },
+      "submittedAt": "ago:600000", "updatedAt": "ago:600000", "transaction": { "reference": "TESTNL-70001" }, "event": { "type": "checkout" },
       "customer": { "fullName": "Invented Reviewer Eight", "email": "old@example.com" } },
     { "id": "rev-fixture-bad-1", "channelRef": "chl-fixture-nl", "rating": 0, "type": "SERVICE_REVIEW", "state": "APPROVED",
       "submittedAt": "ago:250", "updatedAt": "ago:250", "customer": { "email": "bad@example.com" } }
