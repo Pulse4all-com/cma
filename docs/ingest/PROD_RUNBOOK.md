@@ -1168,7 +1168,7 @@ Expected: "Saved" after each; the settings table below lists `forms_poll_interva
 
 # 13. Trusted Shops reviews in prod (brief B18, addition 0008ze)
 
-The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shops reviews are phase 13, after phase 12. Written on 25 October 2026 (PR #192), before anything ran in dev or prod. The reviews of Pulse4all Subscriptions' Trusted Shops account, read through the eTrusted API into `cma.review_channel` and `cma.review` (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: reviews): read only, metadata only, never the reviewer's name, email or phone, nor a review's title or text. Order: the migration in dev with its verifies, the data map's snapshot and the migration in prod, all three before the merge (13.1 to 13.3); then the merge, the API client and its secret, the ingest from `main` with its jobs, the connection and its settings, the first poll, the channels' markets, the backfill with its check against the Control Centre, day one (13.4 to 13.11). The ingest is deployed before the connection exists, so no job of an older image meets a connection of an adapter it does not know. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<hubspot conn>` is the live portal's HubSpot connection (7.3), `<reviews conn>` the connection of 13.7. The Terminal blocks of this phase run from the Chromebook, in `~/cma`.
+The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shops reviews are phase 13, after phase 12. Written on 25 October 2026 (PR #192), before anything ran in dev or prod. The reviews of Pulse4all Subscriptions' Trusted Shops account, read through the eTrusted API into `cma.review_channel` and `cma.review` (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: reviews): read only, metadata only, never the reviewer's name, email or phone, nor a review's title or text. Order: the migration in dev with its verifies, the data map's snapshot and the migration in prod, all three before the merge (13.1 to 13.3); then the merge, the existing API client's secret, the ingest from `main` with its jobs, the connection and its settings, the first poll, the channels' markets, the backfill with its check against the Control Centre, day one (13.4 to 13.11). The ingest is deployed before the connection exists, so no job of an older image meets a connection of an adapter it does not know. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<hubspot conn>` is the live portal's HubSpot connection (7.3), `<reviews conn>` the connection of 13.7. The Terminal blocks of this phase run from the Chromebook, in `~/cma`.
 
 **To confirm on the live account.** The adapter follows the prod discovery of 25 October 2026 and the developer reference as far as it could be read; none of these is proven against the live API yet: the page size 100 (`count`), the cursor field of the reviews' paging (`after`: the answer's cursor, else the last review's id), `ignoreStatements=false` (asks for the star-only reviews; setting `etrusted_include_statements`) and the rate limits (not documented: the adapter paces itself at `etrusted_max_per_minute`, default 60). A first poll or backfill that fails with `http_<status>` on `/reviews` points at one of them: report the code, never a body.
 
@@ -1293,7 +1293,11 @@ Expected: the build ends `SUCCESS`; Workspace → Reports → **Reviews** opens 
 
 ## 13.5 The API client and its secret
 
-**Browser:** the eTrusted Control Centre of Pulse4all's Trusted Shops account → the page where an API client is created: a client named `CMA ingest (prod)` with read access to the channels and the reviews. The page shows the client id and its secret once; keep it open until the next step is done, and note the account's id as eTrusted shows it (for 13.7). The click path has not been walked through in Pulse4all's account: say so in the record.
+The API client exists: Martin created it on 25 October 2026 during the discovery, in the eTrusted Control Centre → Settings → SSO-clientbeheer (the Dutch interface's name for API client management): name `CMA prod ingest`, identifier `CMAprodIngest`, client id `<prefix>__CMAprodIngest`. It took the account's last free client slot (5 of 5): do not create another one. An eTrusted API client has no scopes, so this one can read and write (invites, replies, vetoes); the adapter only reads, and only `cma-ingest` can read the secret from Secret Manager (the accessor of 13.6). The client id is not a secret: it goes into the connection's settings in 13.7, never into the repository.
+
+**Browser:** eTrusted Control Centre → Settings → SSO-clientbeheer → the row `CMA prod ingest` → the arrow → **Tonen**. Keep the page open until the next block is done. Note two values for 13.7: the client id, and the account id as Instellingen → Accountmanagement shows it; if it shows none, the account id is the client id's prefix before `__`. The record of this phase says which one was used.
+
+Expected: the row with identifier `CMAprodIngest` and client id `<prefix>__CMAprodIngest`; **Tonen** shows the secret (it can be shown again at any time, not only once).
 
 **Terminal** (on its own line; the value is the client's secret)
 ```bash
@@ -1313,7 +1317,7 @@ Expected: `main`'s ingest tag first (the squash commit's short sha); the image b
 
 ## 13.7 The connection and its settings
 
-**Studio (cma-prod-pg)** in one Run (`<eTrusted account id>` from 13.5)
+**Studio (cma-prod-pg)** in one Run (`<eTrusted account id>` from 13.5: the id Instellingen → Accountmanagement shows, else the client id's prefix before `__`)
 ```sql
 set role cma_app;
 select set_config('app.tenant_id', '<tenant_id>', false),
@@ -1325,7 +1329,7 @@ reset role;
 ```
 Expected: one row of three values, then one row with `connection_id` (`<reviews conn>`) and `key`. There is no signing secret (the adapter has no route), so the fourth argument is null; the fifth is the connection's access secret name. The key is not used.
 
-**Studio (cma-prod-pg)** in one Run (the kind and the settings; the client id from 13.5)
+**Studio (cma-prod-pg)** in one Run (the kind and the settings; the client id `<prefix>__CMAprodIngest` from 13.5)
 ```sql
 set role cma_app;
 select set_config('app.tenant_id', '<tenant_id>', false),
