@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 108_legacy_call_outcome.sql: addition 0008zg, call outcomes imported from a former telephony system
+-- 108_legacy_call_outcome.sql: addition 0008zg, legacy call outcomes imported from a former telephony system
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
 -- 106_review_reference_guard.sql (0008zf). Rerunnable, forward-only, in one transaction. Run as your own IAM login:
@@ -9,8 +9,7 @@
 --
 -- Why (Decision log, 25 October 2026): the outcomes of the calls a former telephony system made (the first file holds
 -- a business line's courtesy completions of 14 May 2025 to 31 August 2026) exist only in a file exported from that
--- system. They
--- are imported once, as their own facts, each matched to at most one CRM contact. The current telephony system's
+-- system. They are imported once, as their own facts (legacy call outcomes), each matched to at most one CRM contact. The current telephony system's
 -- calls are never copied: they stay in cma.telephony_call and cma.telephony_call_tag and are read through the tag
 -- meanings (docs/definitions.md, R1 and Tag). Nothing personal is stored: an outcome holds its date, its meaning, the
 -- old system's tag text and an optional contact id; the email, phone, names and customer id of the file live in the
@@ -105,7 +104,7 @@ create table if not exists cma.legacy_call_batch (
   foreign key (tenant_id, crm_connection_id) references cma.integration_connection (tenant_id, id),
   foreign key (tenant_id, withdrawn_by) references cma.app_user (tenant_id, id)
 );
-comment on table cma.legacy_call_batch is 'One imported file of a former telephony system''s call outcomes: source system, CRM connection, the file''s SHA-256, the cutover date, counts, times, and its withdrawal. No personal data (0008zg)';
+comment on table cma.legacy_call_batch is 'One imported file of a former telephony system''s legacy call outcomes: source system, CRM connection, the file''s SHA-256, the cutover date, counts, times, and its withdrawal. No personal data (0008zg)';
 comment on column cma.legacy_call_batch.source_system is 'The former telephony system: a data value, a lower-case key given by the import';
 comment on column cma.legacy_call_batch.file_sha256 is 'The SHA-256 of the imported file, lower-case hex: one live batch per file and tenant, so a second run of the same file reuses the batch';
 comment on column cma.legacy_call_batch.cutover_date is 'The first day of the current telephony system: a row of the former system is dated before it, a row of the current one on or after it';
@@ -136,7 +135,7 @@ create table if not exists cma.legacy_call_outcome (
   foreign key (tenant_id, batch_id, crm_connection_id) references cma.legacy_call_batch (tenant_id, id, crm_connection_id),
   foreign key (tenant_id, crm_connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.legacy_call_outcome is 'A former telephony system''s call outcome, one per imported row: date, meaning, the old system''s tag text and the CRM contact matched (or none). Never an email, a phone number, a name or a customer id (0008zg)';
+comment on table cma.legacy_call_outcome is 'A legacy call outcome of a former telephony system, one per imported row: date, meaning, the old system''s tag text and the CRM contact matched (or none). Never an email, a phone number, a name or a customer id (0008zg)';
 comment on column cma.legacy_call_outcome.source_row is 'The row number in the imported file (the header is row 1), unique per batch';
 comment on column cma.legacy_call_outcome.meaning is 'The tag meaning of the row''s label, by the import''s mapping: one of the seven keys of cma.telephony_tag.meaning';
 comment on column cma.legacy_call_outcome.source_label is 'The former system''s tag text as the file holds it, trimmed and with inner white space collapsed: at most 100 characters, never an @';

@@ -1,6 +1,6 @@
 # Legacy call import (addition 0008zg)
 
-How the call outcomes of a former telephony system become legacy call outcomes in the CMA, each matched
+How the outcomes of a former telephony system's calls become legacy call outcomes in the CMA, each matched
 to at most one CRM contact, with nothing personal stored or logged. For Pulse4all: Steam's courtesy
 completions of 14 May 2025 to 31 August 2026, into Pulse4all Subscriptions (docs/architecture/data-model/0008.md,
 Data model: legacy call outcomes; docs/decisions.md, 25 October 2026). Aircall's courtesy calls are not
@@ -147,7 +147,7 @@ gcloud storage cp ingest/verify/fixtures/legacy-calls/legacy-calls.csv gs://cma-
 ```
 Expected: `Copying file://…`. Then the run of step 6 in dev: `--project=p4a-cma-dev`, `--connection` the dev HubSpot
 connection (step 3's Studio block on cma-dev-pg with the dev tenant's slug), `--file gs://cma-import-p4a-cma-dev/legacy-calls.csv`,
-`--source-system steamfixture`, the other values as in the table, and
+`--source-system legacyfixture`, the other values as in the table, and
 `--meanings 'Courtesy positief=courtesy_completed_positive;Courtesy neutraal=courtesy_completed_neutral;Courtesy negatief=courtesy_completed_negative'`.
 Expected in the finished line: `total` 19, `legacy` 16, `current` 3, `refused` 4 (rows 13 and 14 `cutover`, 15
 `unmapped`, 16 `date`), and among the stored rows row 3 `email`, row 4 `phone` and row 5 `email`, with `lookups.phone.one`
@@ -210,8 +210,11 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 Expected within a few minutes: `lastRow` growing, and `lookups.email.one` and `lookups.phone.one` above 0. When the
 first lines show many phone or email lookups (`searched`) and none that found anything (`one` and `several` 0), stop
-the run (`gcloud run jobs executions cancel <execution> --project=p4a-cma-prod --region=europe-west4`) and report it: the
-rows written so far read `none` and a later run matches them again.
+the run (`gcloud run jobs executions cancel <execution> --project=p4a-cma-prod --region=europe-west4`), report it and
+withdraw the batch (Withdraw a batch): rows the working key matched are stored as `email` or `phone` and a rerun never
+matches them again, though some should read `email_phone` or `conflict`. Once the lookup is fixed, import the file again
+(steps 4 to 8). A cancelled execution leaves its run row `running`, so System health shows the job stuck until the next
+run of it.
 
 The run ends with the finished line of step 5's logging block: `"batchOutcome": "started"`, the same four counts as
 the dry run, `"methods"` (the stored rows per match method: `email_phone`, `email`, `phone`, `customer_id`, `none`,

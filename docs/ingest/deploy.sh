@@ -72,7 +72,7 @@
 #                                     resume ingest-outbox … turns it on again when a write-back is configured)
 #   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
 #   ingest-import-legacy-calls  no schedule  the legacy call import (addition 0008zg; docs/import/legacy-calls.md): one file
-#                                     of a former telephony system's call outcomes, read from the private bucket
+#                                     of a former telephony system's legacy call outcomes, read from the private bucket
 #                                     cma-import-<project>. The service account gets roles/storage.objectViewer on that
 #                                     bucket only (a binding on the bucket, never on the project); a bucket that does not
 #                                     exist yet is named with the runbook that creates it, and nothing is granted
@@ -322,7 +322,7 @@ if [ "$JOBS" = 1 ]; then
   echo "== jobs on ${IMAGE}"
   echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
   echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history)"
-  echo "import:    gcloud run jobs execute ingest-import-legacy-calls --project=${PROJECT} --region=${REGION} --wait --args='^|^--connection|<CRM connection id>|--file|gs://${IMPORT_BUCKET}/<object>|--source-system|<name>|--cutover|<YYYY-MM-DD>|--date-format|<DD-MM-YYYY>|--columns|<role=header,…>|--meanings|<label>=<meaning>;…[|--dry-run]'  (docs/import/legacy-calls.md)"
+  echo "import:    gcloud run jobs execute ingest-import-legacy-calls --project=${PROJECT} --region=${REGION} --wait --args='^|^--connection|<CRM connection id>|--file|gs://${IMPORT_BUCKET}/<object>|--source-system|<name>|--cutover|<YYYY-MM-DD>|--date-format|<DD-MM-YYYY>|--columns|<role=header,…>|--meanings|<label>=<meaning>;…[|--min-customer-id-digits|<n>][|--dry-run]'  (docs/import/legacy-calls.md)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0

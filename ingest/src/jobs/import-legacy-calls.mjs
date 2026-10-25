@@ -1,5 +1,5 @@
 /**
- * The legacy call import (addition 0008zg; manual, no schedule): one file of call outcomes exported from a former
+ * The legacy call import (addition 0008zg; manual, no schedule): one file of legacy call outcomes exported from a former
  * telephony system, read from a private Cloud Storage bucket into memory, checked row by row, each row of the former
  * system matched to at most one contact of a CRM connection and stored as a legacy call outcome; the rows of the
  * current telephony system are only reconciled against its calls. Nothing personal is stored or logged.

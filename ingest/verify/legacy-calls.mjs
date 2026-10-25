@@ -6,17 +6,18 @@
  *
  *   node verify/legacy-calls.mjs [--provoke]
  *
- * Proves: the arguments (columns, meanings, the date format, the file's address); the CSV (a byte order mark, ;, quotes
+ * Proves: the arguments (columns, meanings, the date format, the file's address, --min-customer-id-digits); the CSV (a byte order mark, ;, quotes
  * with a ; and a quote inside, CRLF, a blank row); the rows (the source by the marker, the cutover both ways, a date that
  * is no date, an unmapped label, the row numbers); E.164 only; the lookups (the primary email in any case, an additional
  * email confirmed by its list, a decoy refused, two contacts with one email; the phone by its national number with the
  * same national number in NL and GB, a national-format number confirmed with the row's region, more than five
  * candidates read as several); every match path through a whole run (email_phone, email, phone, customer_id by a store
- * customer and by a ref field, conflict, none) with the counts and the row numbers; the reconciliation of the current
+ * customer and by a ref field, conflict, none) with the counts, the row numbers and the lookups counted per key in the
+ * finished line and the progress line; the reconciliation of the current
  * rows; a rerun (the batch reused, the rows with a contact not searched again, a none filled); a dry run (no search, no
  * write, no run row); a pause at the daily floor and its resume; a portal without a property; the Cloud Storage reader;
- * and that the captured log, the job's answers and the stored rows hold none of the fixture's names, emails, phones or
- * customer ids.
+ * and that the captured log, every run's answer and everything every store was given or holds (rows, upserts, the
+ * reconciliation's items, counts, run rows, batches) hold none of the fixture's names, emails, phones or customer ids.
  */
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -119,7 +120,7 @@ const CRM = { tenantId: "00000000-0000-7000-8000-00000000f001", tenantSlug: "fix
   adapter: "hubspot", externalAccountId: "fixture-portal", tokenSecretName: "fixture-hubspot-token", ingestUserId: "00000000-0000-7000-8000-00000000f003" };
 const PEPPER = "fixture-pepper-not-a-secret";
 const ARGS = {
-  connection: CRM.connectionId, file: "gs://cma-import-fixture/legacy-calls.csv", "source-system": "steamfixture", cutover: "2026-09-01",
+  connection: CRM.connectionId, file: "gs://cma-import-fixture/legacy-calls.csv", "source-system": "legacyfixture", cutover: "2026-09-01",
   "date-format": "DD-MM-YYYY", columns: "tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum",
   meanings: "Courtesy positief=courtesy_completed_positive;Courtesy neutraal=courtesy_completed_neutral;Courtesy negatief=courtesy_completed_negative",
 };
@@ -223,10 +224,10 @@ expect("A5 --min-customer-id-digits: 10 by default, 1 to 20; 13 digits taken at 
     rowsOf(parseCsv(FIXTURE.toString("utf8")), configOf({ ...ARGS, "min-customer-id-digits": "14" })).find((x) => x.row === 7).customerId],
   [10, 13, "usage", "usage", "usage", "1234567890123", null, null], [13, 10, "ok", "ok", "ok", null, "1234567890123", "1234567890123"]);
 expect("A4 the file's address and the source system: gs:// only; a bad bucket, an http address, a bad source system refused",
-  [JSON.stringify(parseGsUri("gs://cma-import-p4a-cma-prod/steam/courtesy.csv")), parseGsUri("gs://A/b"), parseGsUri("https://x/y"),
-    usage(() => configOf({ ...ARGS, file: "/home/someone/file.csv" })), usage(() => configOf({ ...ARGS, "source-system": "Steam" })),
+  [JSON.stringify(parseGsUri("gs://cma-import-fixture/calls/courtesy.csv")), parseGsUri("gs://A/b"), parseGsUri("https://x/y"),
+    usage(() => configOf({ ...ARGS, file: "/home/someone/file.csv" })), usage(() => configOf({ ...ARGS, "source-system": "Legacy" })),
     usage(() => configOf({ ...ARGS, cutover: undefined })), usage(() => configOf(ARGS))],
-  [JSON.stringify({ bucket: "cma-import-p4a-cma-prod", object: "steam/courtesy.csv" }), null, null, "usage", "usage", "usage", "ok"],
+  [JSON.stringify({ bucket: "cma-import-fixture", object: "calls/courtesy.csv" }), null, null, "usage", "usage", "usage", "ok"],
   ["null", {}, {}, "ok", "ok", "ok", "usage"]);
 
 // ---- B. The file and its rows --------------------------------------------------------------------------------------------
@@ -315,7 +316,7 @@ expect("E5 the lookups counted per key (rows looked up, one, several), in the fi
 expect("E4 the batch's counts and the run's row: legacy_call_import, its stream, succeeded; commits in parts of at most 100",
   [JSON.stringify(store.db.finished), JSON.stringify(store.db.runs), store.db.writes.filter((w) => w[0] === "upsert").map((w) => w[2].length).join(",")],
   [JSON.stringify({ total: 19, legacy: 16, current: 3, refused: 4, current_found: 1, current_not_found: 1, stored: 13 }),
-    JSON.stringify([{ job: "legacy_call_import", stream: "steamfixture", status: "succeeded", counts: { fetched: 19, upserted: 13, stale: 0, skipped: 2, failed: 4 }, error: null }]),
+    JSON.stringify([{ job: "legacy_call_import", stream: "legacyfixture", status: "succeeded", counts: { fetched: 19, upserted: 13, stale: 0, skipped: 2, failed: 4 }, error: null }]),
     "13"],
   ["{}", "[]", "100"]);
 
@@ -361,7 +362,7 @@ expect("H1 a missing property: the run fails with property_missing before any se
 // ---- I. The Cloud Storage reader -------------------------------------------------------------------------------------------
 const gcs = http.createServer((req, res) => {
   if (req.headers.authorization !== "Bearer fixture-gcs-token") return res.writeHead(401).end();
-  if (req.url === "/storage/v1/b/cma-import-fixture/o/steam%2Fcalls.csv?alt=media") return res.writeHead(200).end("a;b\n1;2\n");
+  if (req.url === "/storage/v1/b/cma-import-fixture/o/calls%2Fcalls.csv?alt=media") return res.writeHead(200).end("a;b\n1;2\n");
   if (req.url.startsWith("/storage/v1/b/cma-import-fixture/o/big.csv")) return res.writeHead(200).end("x".repeat(2048));
   return res.writeHead(404).end();
 });
@@ -370,7 +371,7 @@ process.env.INGEST_STORAGE_API_BASE = `http://127.0.0.1:${gcs.address().port}`;
 const token = async () => "fixture-gcs-token";
 const codeOf = async (p) => p.then(() => "ok", (e) => e.code ?? "error");
 expect("I1 the object read with the bearer token, its path encoded; 404 object_not_found; over the cap object_too_large",
-  [(await readObject({ bucket: "cma-import-fixture", object: "steam/calls.csv" }, { token })).toString(),
+  [(await readObject({ bucket: "cma-import-fixture", object: "calls/calls.csv" }, { token })).toString(),
     await codeOf(readObject({ bucket: "cma-import-fixture", object: "missing.csv" }, { token })),
     await codeOf(readObject({ bucket: "cma-import-fixture", object: "big.csv" }, { token, maxBytes: 1024 }))],
   ["a;b\n1;2\n", "object_not_found", "object_too_large"], ["", "ok", "ok"]);
