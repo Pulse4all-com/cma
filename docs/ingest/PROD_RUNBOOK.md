@@ -1311,19 +1311,19 @@ Expected: **Tonen** shows the new secret.
 ```bash
 put_secret p4a-cma-prod ingest-trustedshops-subs-token
 ```
-Expected: the hidden prompt; paste the new secret, Enter; `stored ingest-trustedshops-subs-token (version added)`: version 2 is added.
+Expected: the hidden prompt; paste the new secret, Enter; `stored ingest-trustedshops-subs-token (version added)`: a new version is added (version 2 at the first rotation).
 
 **Terminal**
 ```bash
 gcloud secrets versions list ingest-trustedshops-subs-token --project=p4a-cma-prod
 ```
-Expected: two versions, 2 enabled and 1 enabled.
+Expected: the new version and the old one, both `enabled`; the old one is the number before the new (1 at the first rotation).
 
 **Terminal**
 ```bash
-gcloud secrets versions destroy 1 --secret=ingest-trustedshops-subs-token --project=p4a-cma-prod
+gcloud secrets versions destroy <old version> --secret=ingest-trustedshops-subs-token --project=p4a-cma-prod
 ```
-Expected: version 1 destroyed.
+Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the secret [ingest-trustedshops-subs-token].` The list of the previous block now shows the old version `destroyed` and the new one `enabled`.
 
 ## 13.6 The ingest from `main`: the service and the jobs
 
