@@ -20,7 +20,7 @@ import type {
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls, TagMeaning,
-  CancellationFigures, CancellationsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
+  CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
@@ -957,7 +957,29 @@ type CatalogsJson = {
   lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
   tags: { tagRef: string; name: string; isCounted: boolean; meaning: TagMeaning | null; status: string }[];
   sampleIds: Record<string, string>;
+  // addition 0008zd: a reviews connection's channels
+  reviewChannels?: { channelId: string; name: string; locale: string | null; market: string | null; isCounted: boolean; firstSeenAt: string;
+    deletedAt: string | null; reviews: number; lastSubmittedAt: string | null }[];
 };
+
+/** cma.reviews_page's answer (addition 0008zd): figures as the database names them */
+type ReviewFiguresDb = { reviews: number; average_rating: number | null; negative: number; linked_order: number; linked_contact: number; unlinked: number };
+type ReviewsPageDb = {
+  figures: ReviewFiguresDb; previous: ReviewFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
+  distribution: { stars: number; reviews: number; previous: number }[];
+  groups: (ReviewFiguresDb & { key: string })[];
+  markets: { market: string; name: string | null; current: ReviewFiguresDb; previous: ReviewFiguresDb }[];
+  channels: { channel: string; name: string; market: string; current: ReviewFiguresDb; previous: ReviewFiguresDb }[];
+  link_levels: { level: ReviewLinkLevel; reviews: number; previous: number }[];
+  invite_events: { event_type: string | null; reviews: number; previous: number }[];
+  market_states: { market: string; name: string; state: ReviewMarketState; channels: number; reviews: number }[];
+  history_start: string | null; negative_max_rating: number; connected: boolean; filter_markets: string[];
+};
+
+function toReviewFigures(f: ReviewFiguresDb): ReviewFigures {
+  return { reviews: f.reviews, averageRating: f.average_rating === null ? null : Number(f.average_rating), negative: f.negative, linkedOrder: f.linked_order,
+    linkedContact: f.linked_contact, unlinked: f.unlinked };
+}
 
 async function readConfig(q: Querier, id: string): Promise<ConfigJson> {
   const r = await q.query<{ c: ConfigJson }>(`select cma.connection_config($1::uuid) as c`, [id]);
@@ -1236,6 +1258,8 @@ type RuleDbRow = {
   rule_id: string; name: string; trigger: AlertRule["trigger"]; record_type: string; pipeline_ids: string[]; audience_permission: string;
   match_language: boolean; only_clocked_in: boolean; fallback_permission: string | null; urgency: AlertRule["urgency"]; enabled: boolean;
   max_age_minutes: number | null; alerts_30d: number; last_alert_at: Date | null;
+  // addition 0008zd: numeric, which the driver hands over as text
+  max_rating: string | null;
 };
 
 function toRule(r: RuleDbRow): AlertRule {
@@ -1243,6 +1267,7 @@ function toRule(r: RuleDbRow): AlertRule {
     id: r.rule_id, name: r.name, trigger: r.trigger, recordType: r.record_type, pipelineIds: r.pipeline_ids ?? [], audiencePermission: r.audience_permission,
     matchLanguage: r.match_language, onlyClockedIn: r.only_clocked_in, fallbackPermission: r.fallback_permission, urgency: r.urgency, enabled: r.enabled,
     maxAgeMinutes: r.max_age_minutes, alerts30d: r.alerts_30d, lastAlertAt: r.last_alert_at ? r.last_alert_at.toISOString() : null,
+    maxRating: r.max_rating === null || r.max_rating === undefined ? null : Number(r.max_rating),
   };
 }
 
@@ -2003,6 +2028,8 @@ export const postgresData: CmaData = {
         mailboxes: crm ? (config.inboxAccounts ?? []).map((a) => ({ accountId: a.accountId, name: a.name, label: a.label, inboxId: a.inboxId, channelId: a.channelId,
           isCounted: a.isCounted, market: a.market, isActive: a.status === "active" })) : [],
         inboxChannels: crm ? (config.inboxChannels ?? []).map((k) => ({ channelId: k.channelId, name: k.name, kind: k.kind, isCounted: k.isCounted, isActive: k.status === "active" })) : [],
+        reviewChannels: (cat.reviewChannels ?? []).map((c) => ({ channelId: c.channelId, name: c.name, locale: c.locale, market: c.market, isCounted: c.isCounted,
+          firstSeenAt: isoAny(c.firstSeenAt)!, deletedAt: isoAny(c.deletedAt), reviews: c.reviews, lastSubmittedAt: isoAny(c.lastSubmittedAt) })),
       };
     });
   },
@@ -2249,6 +2276,24 @@ export const postgresData: CmaData = {
     });
   },
 
+  async getReviews(me, range, group, market): Promise<ReviewsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days, the market and the group first (addition 0008zd)
+      const j = one((await q.query<{ j: ReviewsPageDb }>(`select cma.reviews_page($1::date, $2::date, $3, $4) as j`,
+        [range.from, range.to, market, group])).rows, "reviews_page").j;
+      return {
+        ...range, group, market, current: toReviewFigures(j.figures), previous: toReviewFigures(j.previous),
+        previousFrom: j.previous_from, previousTo: j.previous_to, previousPartial: j.previous_partial,
+        distribution: j.distribution, byPeriod: j.groups.map((g) => ({ key: g.key, ...toReviewFigures(g) })),
+        byMarket: j.markets.map((m) => ({ market: m.market, name: m.name, current: toReviewFigures(m.current), previous: toReviewFigures(m.previous) })),
+        byChannel: j.channels.map((c) => ({ channel: c.channel, name: c.name, market: c.market, current: toReviewFigures(c.current), previous: toReviewFigures(c.previous) })),
+        linkLevels: j.link_levels, inviteEvents: j.invite_events.map((e) => ({ eventType: e.event_type, reviews: e.reviews, previous: e.previous })),
+        marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, connected: j.connected, markets: j.filter_markets,
+      };
+    });
+  },
+
   async getDealsPerPerson(me, range, filter): Promise<DealsPerPerson> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
@@ -2342,6 +2387,10 @@ export const postgresData: CmaData = {
 
   async setSourceMailbox(me, id, input): Promise<void> {
     await withTenant(ctx(me), (q) => q.query(`select cma.set_inbox_account($1::uuid, $2, $3, $4, $5)`, [id, input.accountId, input.label, input.isCounted, input.market]));
+  },
+
+  async setSourceReviewChannel(me, id, input): Promise<void> {
+    await withTenant(ctx(me), (q) => q.query(`select cma.set_review_channel($1::uuid, $2, $3, $4)`, [id, input.channelId, input.market, input.isCounted]));
   },
 
   async setSourceInboxChannel(me, id, input): Promise<void> {
@@ -2519,8 +2568,10 @@ export const postgresData: CmaData = {
           pipelines.push({ connectionName: row.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted });
         }
       }
-      const age = await q.query<{ value: string | null }>(`select value from cma.tenant_settings() where key = 'alerts.max_age_minutes'`);
-      return { rules, pipelines, defaultMaxAgeMinutes: Number(age.rows[0]?.value ?? 60) };
+      // the age limit's default and, for a new review rule, the negative threshold (addition 0008zd), in one statement
+      const set = new Map((await q.query<{ key: string; value: string | null }>(
+        `select key, value from cma.tenant_settings() where key in ('alerts.max_age_minutes', 'reviews.negative_max_rating')`)).rows.map((x) => [x.key, x.value]));
+      return { rules, pipelines, defaultMaxAgeMinutes: Number(set.get("alerts.max_age_minutes") ?? 60), negativeMaxRating: Number(set.get("reviews.negative_max_rating") ?? 2) };
     });
   },
 
@@ -2531,6 +2582,11 @@ export const postgresData: CmaData = {
       const r = input.trigger === "record_assigned"
         ? await q.query<{ id: string }>(`select cma.upsert_assignment_rule($1, $2, $3::text[], $4, $5) as id`,
             [input.name, input.recordType, input.pipelineIds, input.urgency, input.maxAgeMinutes])
+        // a review rule (addition 0008zd): record type review, no pipelines, the audience as a created-record rule's, a highest rating
+        : input.trigger === "review_submitted"
+        ? await q.query<{ id: string }>(`select cma.upsert_review_rule($1, $2, $3, $4, $5, $6, $7, $8) as id`,
+            [input.name, input.audiencePermission, input.matchLanguage, input.onlyClockedIn, input.fallbackPermission, input.urgency, input.maxRating,
+             input.maxAgeMinutes])
         : await q.query<{ id: string }>(`select cma.upsert_message_rule($1, $2, $3::text[], $4, $5, $6, $7, $8, $9) as id`,
             [input.name, input.recordType, input.pipelineIds, input.audiencePermission, input.matchLanguage, input.onlyClockedIn,
              input.fallbackPermission, input.urgency, input.maxAgeMinutes]);

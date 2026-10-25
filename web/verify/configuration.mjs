@@ -92,7 +92,9 @@ expect("a tag's seven meanings, incorrect data after not reached; the talk-time-
     "courtesy_completed_negative"], true, false],
   [["not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative"],
     false, false]);
-expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation"], ["crm"]);
+// since addition 0008ze a reviews connection, with its review channels as its one section
+expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation", "reviews"], ["crm", "telephony", "commerce", "automation"]);
+expect("a reviews connection has its review channels", sourceSections("reviews", []), ["reviewChannels"], []);
 expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);
 expect("a settings key in the right form", settingKeyProblem("record_url_deal", ["app_host"], true), null, "key");
 expect("a secret-looking key is refused", settingKeyProblem("api_token", [], true), "secret", null);
@@ -167,11 +169,25 @@ expect("contact cannot raise alerts", alertRuleProblem({ ...newRule("record_crea
 const words = { effectCreated: "A new {record} in {where} alerts {who}.", effectAssigned: "When a {record} in {where} gets an owner, that owner's person is alerted.",
   effectEveryPipeline: "any counted pipeline", effectPipelines: "{pipelines}", effectAudience: "the holders of {permission}", effectClockedIn: "clocked in",
   effectLanguage: "with the language", effectFallback: "Else {permission}.", effectNoFallback: "Else nobody.", effectAge: "At most {minutes} minutes old.",
-  effectAgeDefault: "At most {minutes} minutes old (default).", soundNormal: "One tone.", soundUrgent: "A chime.", effectOff: "Off." };
+  effectAgeDefault: "At most {minutes} minutes old (default).", soundNormal: "One tone.", soundUrgent: "A chime.", effectOff: "Off.",
+  effectReview: "A published review {ratings} alerts {who}.", effectAnyRating: "with any rating", effectRatingAtMost: "rated {rating} or lower" };
 expect("the effect of a created-record rule", ruleEffect({ ...newRule("record_created", "deal"), enabled: true }, choices, 60, words),
   ["A new deal in any counted pipeline alerts the holders of leads.accept, clocked in, with the language.", "Else leads.manage.", "At most 60 minutes old (default).", "One tone."], []);
 expect("the effect of an assignment rule, switched off", ruleEffect({ ...newRule("record_assigned", "deal"), pipelineIds: ["p1"], maxAgeMinutes: 30, enabled: false }, choices, 60, words),
   ["Off.", "When a deal in Sales gets an owner, that owner's person is alerted.", "At most 30 minutes old.", "A chime."], ["Off."]);
+// Review rules (addition 0008zd): seed 02's Negative review as the start, the tenant's threshold as the highest rating
+expect("a new review rule starts as seed 02's", newRule("review_submitted", "deal", 2),
+  { name: "", trigger: "review_submitted", recordType: "review", pipelineIds: [], urgency: "normal", maxAgeMinutes: 1440, audiencePermission: "performance.team",
+    matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, maxRating: 2 }, null);
+expect("other rules have no highest rating", newRule("record_created", "deal", 2).maxRating, null, 2);
+expect("a review rule is about reviews", alertRuleProblem({ ...newRule("review_submitted", "deal"), name: "x", recordType: "deal" }, rules, true), "recordType", null);
+expect("a review rule's highest rating is 1 to 5", [0, 1, 5, 6, 2.5].map((maxRating) => alertRuleProblem({ ...newRule("review_submitted", "deal"), name: "x", maxRating }, rules, true)),
+  ["rating", null, null, "rating", null], [null, null, null, null, null]);
+expect("a review rule may alert on any rating", alertRuleProblem({ ...newRule("review_submitted", "deal"), name: "x", maxRating: null }, rules, true), null, "rating");
+expect("the effect of a review rule", ruleEffect({ ...newRule("review_submitted", "deal", 2), enabled: true }, choices, 60, words),
+  ["A published review rated 2 or lower alerts the holders of performance.team.", "Else nobody.", "At most 1440 minutes old.", "One tone."], []);
+expect("the effect of a review rule on any rating", ruleEffect({ ...newRule("review_submitted", "deal"), enabled: true }, choices, 60, words)[0],
+  "A published review with any rating alerts the holders of performance.team.", "");
 
 // Forms reporting (addition 0008p): polled and counted, the category choices and the category catalog
 expect("a counted form that is not polled is refused", formEditProblem({ isCounted: true, isPolled: false, leadSource: "" }), "polled", null);

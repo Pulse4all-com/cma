@@ -10,6 +10,10 @@ import type { AlertPipelineChoice, AlertRule, AlertRuleInput, AlertTrigger } fro
 export type EffectWords = {
   effectCreated: string;
   effectAssigned: string;
+  /** A review rule (addition 0008zd): "A published review {ratings} on a counted channel alerts {who}." */
+  effectReview: string;
+  effectAnyRating: string;
+  effectRatingAtMost: string;
   effectEveryPipeline: string;
   effectPipelines: string;
   effectAudience: string;
@@ -24,6 +28,9 @@ export type EffectWords = {
   effectOff: string;
 };
 
+/** The highest ratings a review rule can name (addition 0008zd); none is any rating */
+export const REVIEW_RULE_RATINGS: readonly number[] = [1, 2, 3, 4, 5];
+
 const fill = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/g, (m, k: string) => values[k] ?? m);
 
 /** A record type as a word: deal, ticket, follow_up → follow up */
@@ -37,7 +44,7 @@ export function pipelineLabels(ids: readonly string[], choices: readonly AlertPi
 }
 
 /** The rule's effect in plain words, one sentence per part */
-export function ruleEffect(rule: Pick<AlertRule, "trigger" | "recordType" | "pipelineIds" | "audiencePermission" | "matchLanguage" | "onlyClockedIn" | "fallbackPermission" | "urgency" | "maxAgeMinutes" | "enabled">,
+export function ruleEffect(rule: Pick<AlertRule, "trigger" | "recordType" | "pipelineIds" | "audiencePermission" | "matchLanguage" | "onlyClockedIn" | "fallbackPermission" | "urgency" | "maxAgeMinutes" | "enabled" | "maxRating">,
                            choices: readonly AlertPipelineChoice[], defaultMaxAge: number, w: EffectWords): string[] {
   const record = recordWord(rule.recordType);
   const where = rule.pipelineIds.length === 0
@@ -50,7 +57,12 @@ export function ruleEffect(rule: Pick<AlertRule, "trigger" | "recordType" | "pip
     const who = [fill(w.effectAudience, { permission: rule.audiencePermission })];
     if (rule.onlyClockedIn) who.push(w.effectClockedIn);
     if (rule.matchLanguage) who.push(w.effectLanguage);
-    out.push(fill(w.effectCreated, { record, where, who: who.join(", ") }));
+    if (rule.trigger === "review_submitted") {
+      const ratings = rule.maxRating === null ? w.effectAnyRating : fill(w.effectRatingAtMost, { rating: String(rule.maxRating) });
+      out.push(fill(w.effectReview, { ratings, who: who.join(", ") }));
+    } else {
+      out.push(fill(w.effectCreated, { record, where, who: who.join(", ") }));
+    }
     out.push(rule.fallbackPermission ? fill(w.effectFallback, { permission: rule.fallbackPermission }) : w.effectNoFallback);
   }
   out.push(rule.maxAgeMinutes === null ? fill(w.effectAgeDefault, { minutes: String(defaultMaxAge) }) : fill(w.effectAge, { minutes: String(rule.maxAgeMinutes) }));
@@ -59,17 +71,21 @@ export function ruleEffect(rule: Pick<AlertRule, "trigger" | "recordType" | "pip
   return out;
 }
 
-/** Why the database would refuse a rule, or null: the name, the record type, the age limit, a permission, a name another rule holds */
+/**
+ * Why the database would refuse a rule, or null: the name, the record type, the age limit, a permission, a name another rule
+ * holds, a review rule's highest rating (1 to 5, or none for any rating; addition 0008zd)
+ */
 export function alertRuleProblem(f: AlertRuleInput, rules: readonly Pick<AlertRule, "name" | "trigger">[], isNew: boolean):
-    "name" | "duplicate" | "trigger" | "recordType" | "age" | "audience" | null {
+    "name" | "duplicate" | "trigger" | "recordType" | "age" | "audience" | "rating" | null {
   const name = f.name.trim();
   if (name.length === 0 || name.length > 80) return "name";
   const same = rules.find((r) => r.name === name);
   if (isNew && same) return "duplicate";
   if (!isNew && same && same.trigger !== f.trigger) return "trigger";
-  if (!/^[a-z][a-z0-9_]*$/.test(f.recordType) || f.recordType === "contact") return "recordType";
+  if (!/^[a-z][a-z0-9_]*$/.test(f.recordType) || f.recordType === "contact" || (f.trigger === "review_submitted" && f.recordType !== "review")) return "recordType";
   if (f.maxAgeMinutes !== null && (!Number.isInteger(f.maxAgeMinutes) || f.maxAgeMinutes < 1 || f.maxAgeMinutes > 10080)) return "age";
-  if (f.trigger === "record_created" && !/^[a-z_]+(\.[a-z_]+)+$/.test(f.audiencePermission)) return "audience";
+  if ((f.trigger === "record_created" || f.trigger === "review_submitted") && !/^[a-z_]+(\.[a-z_]+)+$/.test(f.audiencePermission)) return "audience";
+  if (f.trigger === "review_submitted" && f.maxRating !== null && !(f.maxRating >= 1 && f.maxRating <= 5)) return "rating";
   return null;
 }
 
@@ -93,10 +109,21 @@ export function parseAge(text: string): number | null | "invalid" {
   return n >= 1 && n <= 10080 ? n : "invalid";
 }
 
-/** A new rule's starting values: everything the database's defaults say, for the trigger chosen */
-export function newRule(trigger: AlertTrigger, recordType: string): AlertRuleInput {
+/**
+ * A new rule's starting values: everything the database's defaults say, for the trigger chosen. A review rule (addition
+ * 0008zd) starts as seed 02's Negative review: record type review, the team's performance as the audience, without the
+ * language or clocked-in conditions, no fallback, a day as its age limit (the poll is hourly) and the tenant's negative
+ * threshold (reviews.negative_max_rating) as its highest rating
+ */
+export function newRule(trigger: AlertTrigger, recordType: string, negativeMaxRating: number | null = null): AlertRuleInput {
+  if (trigger === "review_submitted") {
+    return {
+      name: "", trigger, recordType: "review", pipelineIds: [], urgency: "normal", maxAgeMinutes: 1440, audiencePermission: "performance.team",
+      matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, maxRating: negativeMaxRating,
+    };
+  }
   return {
     name: "", trigger, recordType, pipelineIds: [], urgency: trigger === "record_assigned" ? "urgent" : "normal", maxAgeMinutes: null,
-    audiencePermission: "leads.accept", matchLanguage: true, onlyClockedIn: true, fallbackPermission: "leads.manage",
+    audiencePermission: "leads.accept", matchLanguage: true, onlyClockedIn: true, fallbackPermission: "leads.manage", maxRating: null,
   };
 }

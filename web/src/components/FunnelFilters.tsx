@@ -15,7 +15,7 @@ import { Keycap } from "./primitives";
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
 
 export function FunnelFilters({ pathname, markets, pipelines, sourceChannels, filter, query, copy, marketOnly = false }: {
-  pathname: "/reports/funnel" | "/reports/cancellations";
+  pathname: "/reports/funnel" | "/reports/cancellations" | "/reports/reviews";
   /** Market codes, "unknown" for a record without one */
   markets: string[];
   pipelines: { key: string; label: string }[];

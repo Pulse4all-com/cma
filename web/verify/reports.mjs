@@ -94,6 +94,7 @@ import {
   answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
+import { fmtRating, marketsWithoutChannel, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
 import { readFileSync } from "node:fs";
 import { addDays, dateKeyInZone } from "../src/lib/time.ts";
 import { WITHDRAW_PERMISSION } from "../src/lib/messages.ts";
@@ -1543,6 +1544,69 @@ const fnNoP80 = { "db/98_funnel.sql": src("../../db/98_funnel.sql"), "lib/data/t
 const P80_IN_FUNNEL = /p80_?days|P80Days|percentile_cont\(0\.8\)|percentileCont\([^)]*0\.8\)|80th percentile days|80e percentiel/i;
 expect("funnel: the median only, no 80th percentile of days in stage in the read, the type, the data layer, the mirror, the table, the file or the copy",
   Object.entries(fnNoP80).filter(([, text]) => P80_IN_FUNNEL.test(text)).map(([f]) => f), [], ["lib/funnel.ts"]);
+
+// ---- Reviews (addition 0008zd, brief B18) on 103's own scenario -------------------------------------------------
+// Tenant one's review channels and reviews as 103's B1 to B9 leave them (chl-nl NL and chl-gb GB counted, chl-fr FR
+// counted without reviews, chl-x without a market, chl-old gone; rev-3 linked to a contact by B5), seen on Wednesday 14
+// October 2026 at 10:00 UTC (12:00 in Amsterdam); the active markets DE, FR, GB and NL; the negative threshold 2
+const RV_NOW = "2026-10-14T10:00:00Z";
+const rvCh = { "chl-nl": ["Shop NL renamed", "NL", true], "chl-gb": ["Shop GB", "GB", true], "chl-x": ["Shop X", null, false] };
+const rv = (reviewId, channel, rating, at, isPublished = true, linkLevel = "none", inviteEventType = null) => ({ reviewId, channel, channelName: rvCh[channel][0],
+  market: rvCh[channel][1], channelCounted: rvCh[channel][2], isPublished, rating, submittedAt: `2026-${at}Z`, linkLevel, inviteEventType });
+const RV_SOURCES = [rv("rev-1", "chl-nl", 5, "10-02T09:00:00", true, "order", "checkout"), rv("rev-2", "chl-nl", 2, "10-05T10:00:00", true, "order", "checkout"),
+  rv("rev-3", "chl-gb", 4.5, "10-14T09:00:00", true, "contact", "klaviyo-integration"), rv("rev-4", "chl-gb", 1, "10-13T22:30:00"),
+  rv("rev-5", "chl-x", 3, "10-03T10:00:00"), rv("rev-6", "chl-nl", 1, "10-04T10:00:00", false), rv("pre-1", "chl-nl", 4, "09-20T10:00:00", true, "none", "checkout"),
+  rv("pre-2", "chl-gb", 2, "09-30T09:00:00"), rv("pre-3", "chl-nl", 5, "09-30T11:00:00"), rv("old-1", "chl-nl", 3, "08-01T10:00:00")];
+const RV_MARKETS = [{ code: "NL", name: "Netherlands", sortOrder: 40 }, { code: "DE", name: "Germany", sortOrder: 10 }, { code: "GB", name: "United Kingdom", sortOrder: 30 },
+  { code: "FR", name: "France", sortOrder: 20 }];
+const RV_CHANNELS = [{ market: "NL", isCounted: true, deleted: false, publishedReviews: 5 }, { market: "GB", isCounted: true, deleted: false, publishedReviews: 3 },
+  { market: "FR", isCounted: true, deleted: false, publishedReviews: 0 }, { market: null, isCounted: false, deleted: false, publishedReviews: 1 },
+  { market: null, isCounted: false, deleted: true, publishedReviews: 0 }];
+const RV_STATES = reviewMarketStates(RV_MARKETS, RV_CHANNELS);
+const RV_RECORDS = reviewRecords(RV_SOURCES, AMS_AT, 2);
+const rvPage = (market, group = "day") => reviewsReport(RV_RECORDS, { from: "2026-10-01", to: "2026-10-14", group, market,
+  prev: funnelPrevious(previousPeriod({ from: "2026-10-01", to: "2026-10-14" }, dateKeyInZone(RV_NOW, AMS_AT)), RV_NOW), zone: AMS_AT, negativeMaxRating: 2,
+  connected: true, markets: RV_MARKETS, marketStates: RV_STATES, filterMarkets: ["FR", "GB", "NL"] });
+const rvFig = (f) => `${f.reviews}/${f.averageRating === null ? "-" : f.averageRating.toFixed(2)}/${f.negative}/${f.linkedOrder}/${f.linkedContact}/${f.unlinked}`;
+const rvAll = rvPage(null);
+expect("reviews: the figures, the previous period like for like, per whole star, the link levels, the history start, as 103's B11",
+  `${rvFig(rvAll.current)} prev ${rvFig(rvAll.previous)} ${rvAll.previousFrom}..${rvAll.previousTo}:${rvAll.previousPartial} stars ${rvAll.distribution.map((d) => `${d.reviews}/${d.previous}`).join(",")} `
+    + `links ${rvAll.linkLevels.map((l) => `${l.level}:${l.reviews}/${l.previous}`).join(",")} start ${rvAll.historyStart} neg ${rvAll.negativeMaxRating} ${rvAll.connected}`,
+  "4/3.13/2/2/1/1 prev 2/3.00/1/0/0/2 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/0 links order:2/0,contact:1/0,none:1/2 start 2026-08-01 neg 2 true",
+  "4/3.13/2/2/1/1 prev 3/3.67/1/0/0/3 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/1 links order:2/0,contact:1/0,none:1/3 start 2026-08-01 neg 2 true");
+const rvWeek = rvPage(null, "week");
+expect("reviews: by day and week (22:30 UTC on the 13th is the 14th), markets, channels, invite events, the states, a market, as 103's B12",
+  `${rvAll.byPeriod.length} ${rvAll.byPeriod.filter((g) => g.reviews > 0).map((g) => `${g.key}=${g.reviews}`).join(",")} week ${rvWeek.byPeriod.map((g) => `${g.key}=${g.reviews}`).join(",")} `
+    + `markets ${rvAll.byMarket.map((m) => `${m.market}:${rvFig(m.current)}<${rvFig(m.previous)}`).join(" ")} `
+    + `channels ${rvAll.byChannel.map((c) => `${c.channel}:${c.name}:${c.market}:${c.current.reviews}`).join(" ")} `
+    + `events ${rvAll.inviteEvents.map((e) => `${e.eventType ?? "none"}:${e.reviews}/${e.previous}`).join(",")} `
+    + `states ${rvAll.marketStates.map((m) => `${m.market}:${m.state}:${m.channels}`).join(" ")} filter ${rvAll.markets.join(",")} `
+    + `NL ${rvFig(rvPage("NL").current)} unknown ${rvFig(rvPage("unknown").current)}`,
+  "14 2026-10-02=1,2026-10-05=1,2026-10-14=2 week 2026-09-28=1,2026-10-05=1,2026-10-12=2 markets GB:2/2.75/1/0/1/1<1/2.00/1/0/0/1 NL:2/3.50/1/2/0/0<1/4.00/0/0/0/1 "
+    + "channels chl-gb:Shop GB:GB:2 chl-nl:Shop NL renamed:NL:2 events checkout:2/1,klaviyo-integration:1/0,none:1/1 "
+    + "states DE:no_channel:0 FR:channel_no_reviews:1 GB:has_reviews:1 NL:has_reviews:1 filter FR,GB,NL NL 2/3.50/1/2/0/0 unknown 0/-/0/0/0/0",
+  "14 2026-10-02=1,2026-10-05=1,2026-10-13=1,2026-10-14=1 week 2026-09-28=1,2026-10-05=1,2026-10-12=2 markets GB:2/2.75/1/0/1/1<1/2.00/1/0/0/1 NL:2/3.50/1/2/0/0<1/4.00/0/0/0/1 "
+    + "channels chl-gb:Shop GB:GB:2 chl-nl:Shop NL renamed:NL:2 events checkout:2/1,klaviyo-integration:1/0,none:1/1 "
+    + "states DE:no_channel:0 FR:channel_no_reviews:1 GB:has_reviews:1 NL:has_reviews:1 filter FR,GB,NL NL 2/3.50/1/2/0/0 unknown 0/-/0/0/0/0");
+expect("reviews: a rating as a whole star (rounded up), the rating in both languages, a share, the markets without a channel",
+  [[1, 1.2, 2, 4.5, 5].map(starsOf), fmtRating(3.125, "en"), fmtRating(3.13, "nl"), fmtRating(null, "en"), reviewShare(1, 4), reviewShare(0, 0), marketsWithoutChannel(RV_STATES)],
+  [[1, 2, 2, 5, 5], "3.13", "3,13", "–", 0.25, null, ["DE"]],
+  [[1, 1, 2, 4, 5], "3.13", "3,13", "–", 0.25, null, ["DE"]]);
+// the route and the data layer, from their source: the market only (a pipeline or source is a 400), the report's
+// permissions, the read with its four parameters; the review channels' write a same-site PUT for tenant.configure
+const rvRoute = src("../src/app/api/v1/reports/reviews/route.ts");
+const rvWrite = src("../src/app/api/v1/configuration/sources/[id]/review-channels/route.ts");
+expect("reviews routes: the market only, reports.view or performance.team, the read with its parameters; the channels' write for tenant.configure",
+  [rvRoute.includes("{ marketOnly: true }"), rvRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"),
+    pgLayer.includes("cma.reviews_page($1::date, $2::date, $3, $4)"),
+    /export async function PUT\(/.test(rvWrite) && rvWrite.includes("assertSameSiteWrite(request);") && rvWrite.includes('requireAnyPermission(me, ["tenant.configure"]);')],
+  [true, true, true, true], [false, true, true, true]);
+// no reviewer and no review text anywhere in the report's type, data layer, mirror, parts, page or copy keys
+const rvNoText = { "lib/reviews.ts": src("../src/lib/reviews.ts"), "components/ReviewParts.tsx": src("../src/components/ReviewParts.tsx"),
+  "app/reports/reviews/page.tsx": src("../src/app/reports/reviews/page.tsx") };
+const RV_PERSONAL = /fullName|\.email\b|mobile|\.comment\b|\.title\b(?!\s*=)|reviewerName|reviewText/;
+expect("reviews: no reviewer's name, email, phone, title or text in the mirror, the parts or the page",
+  Object.entries(rvNoText).filter(([, text]) => RV_PERSONAL.test(text.replace(/t\.title|copy\.[a-zA-Z.]+title/gi, ""))).map(([f]) => f), [], ["lib/reviews.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

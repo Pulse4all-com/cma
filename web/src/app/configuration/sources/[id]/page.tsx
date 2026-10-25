@@ -58,6 +58,9 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     startDate: valueOf("email.start_date") || null, replyTargetMinutes: numberOf(valueOf("email.reply_target_minutes")),
     noResponseDays: numberOf(valueOf("email.no_response_days")), marketOrder: valueOf("email.market_order"),
   };
+  // the tenant's review settings (addition 0008zd), on a reviews connection
+  const reviews = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("reviewChannels")
+    ? { negativeMaxRating: Number(valueOf("reviews.negative_max_rating") ?? 2), historyStartDate: valueOf("reviews.history_start_date") || null } : null;
   // the reasons and the record kind rules (addition 0008zb), for a connection with customer records
   const crm = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("fields");
   const kinds = crm ? await data().getRecordKinds(me) : [];
@@ -66,7 +69,7 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
       {/* keyed by the settings, so the editor starts again from the database's answer after a save */}
       <SourceConfig key={JSON.stringify(detail.connection.settings)} detail={detail} markets={markets} categories={categories} copy={copy} locale={me.locale} timeZone={me.timeZone}
         connectedMinSeconds={threshold === undefined ? null : Number(threshold)}
-        conversationMinSeconds={conversation === undefined ? null : Number(conversation)} email={email} />
+        conversationMinSeconds={conversation === undefined ? null : Number(conversation)} email={email} reviews={reviews} />
       {crm ? <SourceReasons key={`reasons:${JSON.stringify(detail.fields)}`} detail={detail} copy={copy} /> : null}
       {crm ? <SourceKindRules detail={detail} kinds={kinds} copy={copy} /> : null}
     </ConfigurationPage>

@@ -2000,6 +2000,53 @@ export interface RecordKind {
   status: "active" | "archived";
 }
 
+/** A set of counted reviews' figures (cma.review_figures): published reviews of counted channels, by the submission's business date */
+export interface ReviewFigures {
+  reviews: number;
+  /** The mean rating, two decimals; null without a review */
+  averageRating: number | null;
+  /** Rated at or below reviews.negative_max_rating */
+  negative: number;
+  linkedOrder: number;
+  linkedContact: number;
+  unlinked: number;
+}
+
+export type ReviewLinkLevel = "order" | "contact" | "none";
+/** A market's review channel (cma.review_market_states_of): no counted channel, a channel without a published review, or reviews */
+export type ReviewMarketState = "no_channel" | "channel_no_reviews" | "has_reviews";
+
+/** Reports → Reviews (addition 0008zd, cma.reviews_page): team figures only, never per person; no review text or reviewer */
+export interface ReviewsReport {
+  from: DateKey;
+  to: DateKey;
+  group: FunnelGroup;
+  market: string | null;
+  current: ReviewFigures;
+  previous: ReviewFigures;
+  previousFrom: DateKey;
+  previousTo: DateKey;
+  previousPartial: boolean;
+  /** Per whole star (a rating rounded up: 4.5 is a 5), 1 to 5, with the previous period */
+  distribution: { stars: number; reviews: number; previous: number }[];
+  /** Every day or ISO week of the period, empty ones too */
+  byPeriod: (ReviewFigures & { key: DateKey })[];
+  byMarket: { market: string; name: string | null; current: ReviewFigures; previous: ReviewFigures }[];
+  byChannel: { channel: string; name: string; market: string; current: ReviewFigures; previous: ReviewFigures }[];
+  linkLevels: { level: ReviewLinkLevel; reviews: number; previous: number }[];
+  /** Per invite event type (null: none), most reviews first */
+  inviteEvents: { eventType: string | null; reviews: number; previous: number }[];
+  /** Every active market with its review-channel state, whatever the filter */
+  marketStates: { market: string; name: string; state: ReviewMarketState; channels: number; reviews: number }[];
+  /** The first counted review's business date; null without one */
+  historyStart: DateKey | null;
+  negativeMaxRating: number;
+  /** Whether the tenant has a reviews connection */
+  connected: boolean;
+  /** The markets of the counted channels, for the filter */
+  markets: string[];
+}
+
 export interface CancellationsReport {
   from: DateKey;
   to: DateKey;
@@ -2056,7 +2103,7 @@ export interface DealsPerPerson extends FunnelLists {
  * The kind of source a connection is in the data model's terms (the tables its data lands in), never
  * a vendor: which sections the Sources screen shows and which id a person can hold come from it
  */
-export type SourceKind = "crm" | "telephony" | "commerce" | "automation";
+export type SourceKind = "crm" | "telephony" | "commerce" | "automation" | "reviews";
 
 /** A connection's non-secret settings (cma.integration_connection.settings): a flat object of scalars */
 export type SourceSettingValue = string | number | boolean;
@@ -2304,6 +2351,31 @@ export interface SourceDetail {
   inboxes: SourceInbox[];
   mailboxes: SourceMailbox[];
   inboxChannels: SourceInboxChannel[];
+  /** A reviews connection's channels (addition 0008zd); empty for another kind */
+  reviewChannels: SourceReviewChannel[];
+}
+
+/**
+ * A review channel of a reviews connection (addition 0008zd): source id, name and locale from the review platform; market
+ * and counted as configuration (a new channel has no market and is not counted); the reviews held and the newest
+ */
+export interface SourceReviewChannel {
+  channelId: string;
+  name: string;
+  locale: string | null;
+  market: string | null;
+  isCounted: boolean;
+  firstSeenAt: Instant;
+  /** When the platform's list no longer held it; null while it does */
+  deletedAt: Instant | null;
+  reviews: number;
+  lastSubmittedAt: Instant | null;
+}
+
+export interface SourceReviewChannelInput {
+  channelId: string;
+  market: string | null;
+  isCounted: boolean;
 }
 
 /** An inbox of a CRM connection's conversations (0008m): name from the source; counted and market as configuration */
@@ -2533,7 +2605,8 @@ export interface MarketsConfig {
   holidays: MarketHoliday[];
 }
 
-export type AlertTrigger = "record_created" | "record_assigned";
+/** record_created and record_assigned (0008, 0008a); review_submitted (addition 0008zd): a review of a counted channel */
+export type AlertTrigger = "record_created" | "record_assigned" | "review_submitted";
 
 /** One rule of cma.message_rule (0008, 0008a) with its alerts in the last 30 days */
 export interface AlertRule {
@@ -2553,6 +2626,8 @@ export interface AlertRule {
   maxAgeMinutes: number | null;
   alerts30d: number;
   lastAlertAt: Instant | null;
+  /** review_submitted only: the highest rating that raises it (1 to 5); null for any rating, and for the other triggers */
+  maxRating: number | null;
 }
 
 /** A new or changed rule; the audience fields are read for created-record rules only */
@@ -2567,6 +2642,8 @@ export interface AlertRuleInput {
   matchLanguage: boolean;
   onlyClockedIn: boolean;
   fallbackPermission: string | null;
+  /** review_submitted only: the highest rating that raises it; null for any rating */
+  maxRating: number | null;
 }
 
 /** A pipeline a rule can name: from the tenant's customer-record connections */
@@ -2583,6 +2660,8 @@ export interface AlertRulesConfig {
   pipelines: AlertPipelineChoice[];
   /** alerts.max_age_minutes, the age limit of a rule without its own */
   defaultMaxAgeMinutes: number;
+  /** reviews.negative_max_rating (addition 0008zd): a new review rule's highest rating */
+  negativeMaxRating: number;
 }
 
 /** An id a person can hold in another system: <adapter>_owner for a CRM, <adapter>_user for telephony */
@@ -3116,6 +3195,8 @@ export interface CmaData {
   setSourceMailbox(me: Principal, id: string, input: SourceMailboxInput): Promise<void>;
   /** One channel of the conversations (set_inbox_channel, 0008m: counted; its tenant channel kept) */
   setSourceInboxChannel(me: Principal, id: string, input: SourceInboxChannelInput): Promise<void>;
+  /** A review channel's market and counted flag (cma.set_review_channel, addition 0008zd; tenant.configure) */
+  setSourceReviewChannel(me: Principal, id: string, input: SourceReviewChannelInput): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
   getMarkets(me: Principal): Promise<MarketsConfig>;
   /** Adds or changes a market (upsert_market) and its status (set_market_status) */
@@ -3199,6 +3280,8 @@ export interface CmaData {
   getLostReasons(me: Principal, range: HoursRange, group: FunnelGroup, filter: FunnelFilter): Promise<LostReasonsReport>;
   /** Reports → Cancellations: the requests of reports.cancellation_kind (cma.cancellations_page). Needs reports.view or performance.team */
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
+  /** Reports → Reviews (cma.reviews_page, addition 0008zd; reports.view or performance.team; at most 92 days) */
+  getReviews(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<ReviewsReport>;
   /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
   getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;
   // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days

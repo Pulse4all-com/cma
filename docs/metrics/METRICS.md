@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-489 figures. Statuses: verified 429 · discrepancy 18 · ambiguous 35 · prerequisite_missing 14 · cadence_unconfirmed 68.
+502 figures. Statuses: verified 432 · discrepancy 18 · ambiguous 35 · prerequisite_missing 24 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -23678,6 +23678,789 @@ select r.source_id, r.market, r.is_closed, r.created_at, r.closed_at, r.reason f
 
 Ids, codes, times and links only - no customer data (verified). The state badge is the only computed cell (is_closed now).
 
+### /reports/reviews
+
+#### `reviews.count`
+
+**Reviews** on /reports/reviews · Reviews (Reviews)
+
+Reviews tile: the published reviews of the counted review channels submitted in the period.
+
+**Formula as computed**
+
+```
+reviews = count(published reviews of a counted channel with the submission's business date in the period)
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select count(*) as reviews from r
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+Delta neutral. Zero until the Trusted Shops connection exists and its channels are mapped and counted (prerequisite_missing).
+
+#### `reviews.average_rating`
+
+**Average rating** on /reports/reviews · Average rating (review score) (Gemiddelde score)
+
+Reviews tile: the mean rating of the period's reviews, from 1 to 5, two decimals; also called the review score.
+
+**Formula as computed**
+
+```
+average_rating = round(avg(rating), 2) over the period's counted reviews; null (a dash) without reviews
+```
+
+**Unit** average · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `fmtRating` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select round(avg(r.rating), 2) as average_rating from r
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+Delta neutral (higher is not marked better). The window is the page's period; which window Kira wants for the KPI is an open decision.
+
+#### `reviews.negative`
+
+**Rated {rating} or lower** on /reports/reviews · Negative reviews (Score {rating} of lager)
+
+Reviews tile: of the period's reviews, those rated at or below reviews.negative_max_rating; the detail line gives their share of the reviews.
+
+**Formula as computed**
+
+```
+negative = count(*) filter (where rating <= reviews.negative_max_rating); share = negative / reviews
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select count(*) filter (where r.is_negative) as negative, count(*) as reviews from r
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+Delta better down. The threshold is tenant configuration (Configuration -> Sources, the review platform's page); the alert rule Negative review (seed 02, off) starts from the same threshold.
+
+#### `reviews.linked`
+
+**Linked reviews** on /reports/reviews · Linked reviews (Gekoppelde reviews)
+
+Reviews tile: of the period's reviews, those linked to one of the tenant's orders or to a CRM contact; the detail line gives their share.
+
+**Formula as computed**
+
+```
+linked = count(*) filter (where link_level in ('order', 'contact')); share = linked / reviews
+```
+
+**Unit** count · **Grain** period · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.commerce_order` | order_name, source_id | Shopify | Shopify webhooks -> ingest service -> cma.ingest_upsert_orders(); the review's transaction reference matched by cma.review_order_of | seconds; the review links when it is written |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select count(*) filter (where r.link_level in ('order', 'contact')) as linked, count(*) as reviews from r
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+Order: the transaction reference names exactly one of the tenant's orders (order_name, else source_id). Contact: no order, and the reviewer's email (in memory only, never stored) finds exactly one CRM contact. The contact's privacy deletion clears the link (cma.forget_review_contact_links).
+
+#### `reviews.distribution`
+
+**Per rating** on /reports/reviews · Reviews per whole rating (Per score)
+
+Bars of the period's reviews per whole rating, 5 to 1; a rating with decimals is rounded up (4.5 counts as 5). The bar's title gives the previous period.
+
+**Formula as computed**
+
+```
+group by ceil(rating) over the period's counted reviews, 1 to 5, empty ratings shown
+```
+
+**Unit** count · **Grain** period, per_rating · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `starsOf` in src/lib/reviews.ts; `ReviewDistribution` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 order by 1 desc
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+#### `reviews.by_market`
+
+**Per market** on /reports/reviews · Reviews per market (Per markt)
+
+Table of the period's reviews per market (the channel's market; unknown last): reviews, average rating and negative, with the previous period's reviews and average.
+
+**Formula as computed**
+
+```
+group by the channel's market over the period's counted reviews; each figure as its tile defines it
+```
+
+**Unit** count · **Grain** period, per_market · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewsReport` in src/lib/reviews.ts; `ReviewMarkets` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating, count(*) filter (where r.is_negative) as negative from r group by 1 order by r.market = 'unknown', 1
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+#### `reviews.by_period`
+
+**Reviews per week** on /reports/reviews · Reviews per day or week (Reviews per week)
+
+Table of the period's reviews per day or ISO week (G switches), every day or week of the period, empty ones too: reviews, average rating, negative and linked.
+
+**Formula as computed**
+
+```
+group by the submission's business date or its ISO week (Monday) over the period's counted reviews
+```
+
+**Unit** count · **Grain** period, per_day, per_iso_week · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewsReport` in src/lib/reviews.ts; `ReviewPeriods` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1 order by 1
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+#### `reviews.link_levels`
+
+**Link levels** on /reports/reviews · Reviews per link level (Koppelniveaus)
+
+Bars of the period's reviews by link level: to an order, to a contact, and not linked (in the neutral hue).
+
+**Formula as computed**
+
+```
+group by link_level (order, contact, none) over the period's counted reviews
+```
+
+**Unit** count · **Grain** period, per_level · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewLinkLevels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select r.link_level, count(*) as reviews from r group by 1
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+#### `reviews.invite_events`
+
+**Invitation events** on /reports/reviews · Reviews per invitation event (Uitnodigingsgebeurtenissen)
+
+Bars of the period's reviews by the event that sent the invitation, in the platform's own words (for example checkout); reviews without an invitation event apart, in the neutral hue.
+
+**Formula as computed**
+
+```
+group by invite_event_type over the period's counted reviews; null as No invitation event
+```
+
+**Unit** count · **Grain** period, per_category · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewInviteEvents` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select r.invite_event_type, count(*) as reviews from r group by 1 order by 2 desc
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+The event type is the platform's word as it sends it (event.type, at most 60 characters), never translated.
+
+#### `reviews.by_channel`
+
+**Per review channel** on /reports/reviews · Reviews per review channel (Per reviewkanaal)
+
+Table of the period's reviews per counted review channel, with the channel's market, the reviews, average rating and negative, and the previous period's reviews.
+
+**Formula as computed**
+
+```
+group by review_channel over the period's counted reviews
+```
+
+**Unit** count · **Grain** period, per_channel · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Previous period** Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `reviews.negative_max_rating` | 2 | 2 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewChannels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+r as (
+  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,
+         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,
+         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative
+  from cma.review rv
+  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id
+  cross join t
+  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted
+    and (rv.submitted_at at time zone t.zone)::date between :from and :to)
+select r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1, 2, 3 order by 2, 1
+```
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+#### `reviews.market_states`
+
+**Markets and review channels** on /reports/reviews · Active markets in their review-channel state (Markten en reviewkanalen)
+
+Every active market, whatever the filter and period: no counted review channel (No channel), a counted channel without published reviews (Channel without reviews) or one with reviews (Has reviews), with its channels and all its published reviews.
+
+**Formula as computed**
+
+```
+per active market: channels = count(counted, not gone channels with that market); reviews = count(published reviews of those channels, all time); state from the two
+```
+
+**Unit** text · **Grain** now, per_market · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.review` | review_channel_id, rating, is_published, submitted_at, link_level, invite_event_type | Trusted Shops | ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again | hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days |
+| `cma.market` | code, name, status, sort_order | CMA | Configuration -> Markets (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)
+- population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count
+- period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days
+- market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike
+
+**Time** Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL page read per view). No polling.
+
+**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `cma.review_market_states_of` (0008zd); `reviewMarketStates` in src/lib/reviews.ts; `ReviewMarketStates` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+
+**Data prerequisites**
+
+- A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)
+- Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
+- A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
+
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+
+**Notes**
+
+Not limited to the period or the market filter on purpose (KPI 11, data first). verify_sql is the read's own definition: select m.code, count(ch.id) filter (where ch.is_counted and ch.source_deleted_at is null) from cma.market m left join cma.review_channel ch on ch.tenant_id = m.tenant_id and ch.market = m.code where m.tenant_id = :tenant_id and m.status = 'active' group by 1; null here because the states have no period to recompute.
+
 ### /reports/forms
 
 #### `forms.submissions`
@@ -30171,6 +30954,99 @@ where o.tenant_id = :tenant_id and o.status in ('pending', 'failed', 'in_flight'
 **Notes**
 
 src/lib/reports.ts:230-247 (OUTBOX_PENDING_CHECK, OUTBOX_LATE_MINUTES = 10), postgres.ts:2533-2542; brief A5 / FIND-05 (13 Oct 2026). Not in cma.data_quality() (no migration); the API route returns it too, after the DB rows. The 10 minutes is a hardcoded product constant (not a tenant setting) and also written literally into the copy's fix line in both languages - flagged low (audit rule 14 is about tenant values; this is cross-tenant product behaviour, but the copy would silently drift if the constant changed). The row's description text comes from the TS constant, in English only; copy.ts does carry check_/fix_ labels for it, which the page prefers.
+
+#### `data_quality.review_channel_unmapped`
+
+**Review channels without a market** on /reports/data-quality · Review channels without a market (Reviewkanalen zonder markt)
+
+Review channels the platform holds without a market: their reviews cannot count for a country. The value of each row is the reviews held of the channel.
+
+**Formula as computed**
+
+```
+count of review_channel rows not gone (source_deleted_at is null) with market null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zd); `cma.data_quality_of` (0008zd); `cma.data_quality_reviews_checks` (0008zd); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.review_channel ch where ch.tenant_id = :tenant_id and ch.source_deleted_at is null and ch.market is null
+```
+
+**Fixture check** Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zd
+
+**Notes**
+
+Sort 210; shown once the tenant has a reviews connection, or while it finds something.
+
+#### `data_quality.market_without_review_channel`
+
+**Active markets without a review channel** on /reports/data-quality · Active markets without a review channel (Actieve markten zonder reviewkanaal)
+
+Active markets without a counted review channel, once the tenant has a reviews connection: they have no reviews to show (KPI 11).
+
+**Formula as computed**
+
+```
+count of active markets with no counted, not gone review_channel of that market; 0 while the tenant has no reviews connection
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.review_channel` | source_id, name, market, is_counted, source_deleted_at | Trusted Shops | Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel) | catalog hourly; the configuration on change |
+| `cma.market` | code, name, status, sort_order | CMA | Configuration -> Markets (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zd); `cma.data_quality_of` (0008zd); `cma.data_quality_reviews_checks` (0008zd); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 'active' and exists (select 1 from cma.integration_connection c where c.tenant_id = m.tenant_id and c.status = 'active' and (c.kind = 'reviews' or exists (select 1 from cma.review_channel x where x.tenant_id = c.tenant_id and x.connection_id = c.id))) and not exists (select 1 from cma.review_channel ch where ch.tenant_id = m.tenant_id and ch.market = m.code and ch.is_counted and ch.source_deleted_at is null)
+```
+
+**Fixture check** Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zd
+
+**Notes**
+
+Sort 220. Pulse4all: no Trusted Shops channel yet for IE, BE, CH, DK, NO, FI, ES and IT (kpis.md 11).
 
 ### /messages/send
 

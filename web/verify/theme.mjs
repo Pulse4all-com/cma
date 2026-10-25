@@ -186,6 +186,10 @@ const pages = [
   { path: "/reports/funnel?range=month&group=day", subject: "reader", tables: true },
   { path: "/reports/cancellations?range=month", subject: "manager", tables: true },
   { path: "/reports/cancellations?range=month&group=day", subject: "analyst", tables: true },
+  // Reviews (addition 0008zd): the tiles, the bars per rating, link level and invitation event (Deep Blue, the unlinked and
+  // the reviews without an event in the neutral hue), the tables per market, week or day and channel, the markets' states
+  { path: "/reports/reviews?range=month", subject: "manager", tables: true },
+  { path: "/reports/reviews?range=month&group=day", subject: "reader", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
   { path: "/campaigns", subject: "manager" },

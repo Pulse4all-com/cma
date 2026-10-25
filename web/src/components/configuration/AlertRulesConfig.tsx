@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Alert rules (brief B14, addition 0008e): the rules of both triggers, each with its effect in plain
+ * Alert rules (brief B14, addition 0008e): the rules of every trigger, each with its effect in plain
  * words, its alerts of the last 30 days and its sound (which follows the urgency); add and edit through
- * upsert_message_rule (a record is created) or upsert_assignment_rule (a record gets an owner), switch
+ * upsert_message_rule (a record is created), upsert_assignment_rule (a record gets an owner) or
+ * upsert_review_rule (a review of a counted channel, at or below a highest rating; addition 0008zd), switch
  * off and on through set_message_rule_enabled. A rule is never deleted, so its earlier alerts stay
  * explained; its name and trigger are fixed once it exists. Pipelines come from the tenant's
  * customer-record connections; nothing here names a pipeline, a permission or a record type.
@@ -13,7 +14,7 @@
 import { useRef, useState } from "react";
 import type { Copy, Locale } from "@/lib/copy";
 import type { AlertRule, AlertRuleInput, AlertRulesConfig as Data, AlertTrigger, PermissionInfo } from "@/lib/data";
-import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, recordWord, ruleEffect } from "@/lib/alertRules";
+import { alertRuleProblem, newRule, parseAge, pipelineLabels, pipelinesFor, recordTypes, recordWord, REVIEW_RULE_RATINGS, ruleEffect } from "@/lib/alertRules";
 import { HeaderHint } from "../HeaderHint";
 import { HintLabel } from "../HintLabel";
 import { Badge, Button } from "../primitives";
@@ -28,7 +29,8 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
   const seq = useRef(0);
   const tick = () => ++seq.current;
   const hint = (labelText: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", labelText)} text={text} />;
-  const types = recordTypes(data.pipelines, data.rules.map((r) => r.recordType));
+  // a review rule's record type is review, never a choice of the pipelines' (addition 0008zd)
+  const types = recordTypes(data.pipelines, data.rules.filter((r) => r.trigger !== "review_submitted").map((r) => r.recordType));
   const [target, setTarget] = useState<{ rule: AlertRule | null; opened: number } | null>(null);
   const [form, setForm] = useState<AlertRuleInput>(newRule("record_created", types[0] ?? "deal"));
   const [ageText, setAgeText] = useState("");
@@ -38,7 +40,8 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
     setForm(rule ? {
       name: rule.name, trigger: rule.trigger, recordType: rule.recordType, pipelineIds: [...rule.pipelineIds], urgency: rule.urgency, maxAgeMinutes: rule.maxAgeMinutes,
       audiencePermission: rule.audiencePermission, matchLanguage: rule.matchLanguage, onlyClockedIn: rule.onlyClockedIn, fallbackPermission: rule.fallbackPermission,
-    } : newRule(trigger, types[0] ?? "deal"));
+      maxRating: rule.maxRating,
+    } : newRule(trigger, types[0] ?? "deal", data.negativeMaxRating));
     setAgeText(rule?.maxAgeMinutes ? String(rule.maxAgeMinutes) : "");
     setProblem(null);
     setTarget({ rule, opened: tick() });
@@ -50,7 +53,8 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
     const input = { ...form, name: form.name.trim(), maxAgeMinutes: age };
     const p = alertRuleProblem(input, data.rules, target?.rule === null);
     if (p) {
-      setProblem({ name: t.problemName, duplicate: t.problemDuplicate, trigger: t.problemTrigger, recordType: t.problemRecordType, age: t.problemAge, audience: t.problemAudience }[p]);
+      setProblem({ name: t.problemName, duplicate: t.problemDuplicate, trigger: t.problemTrigger, recordType: t.problemRecordType, age: t.problemAge, audience: t.problemAudience,
+        rating: t.problemRating }[p]);
       return;
     }
     if (await save(() => send("PUT", "/api/v1/configuration/alert-rules", input), t.problemTrigger)) setTarget(null);
@@ -85,7 +89,8 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
                   <span className="ml-2">{r.enabled ? <Badge tone="success">{t.enabled}</Badge> : <Badge tone="neutral">{t.disabled}</Badge>}</span>
                 </td>
                 <td className="px-3 pt-3 align-top text-small">{(t as Record<string, string>)[`trigger_${r.trigger}`] ?? r.trigger}<span className="block text-caption text-p4a-muted">{recordWord(r.recordType)}</span></td>
-                <td className="px-3 pt-3 align-top text-small">{r.pipelineIds.length === 0 ? t.everyPipeline : pipelineLabels(r.pipelineIds, data.pipelines, r.recordType).join(", ")}</td>
+                <td className="px-3 pt-3 align-top text-small">{r.trigger === "review_submitted" ? t.everyCountedChannel
+                  : r.pipelineIds.length === 0 ? t.everyPipeline : pipelineLabels(r.pipelineIds, data.pipelines, r.recordType).join(", ")}</td>
                 <td className="px-3 pt-3 align-top">
                   {r.urgency === "urgent" ? <Badge tone="warning">{t.urgency_urgent}</Badge> : <Badge tone="info">{t.urgency_normal}</Badge>}
                   <span className="block text-caption text-p4a-muted">{r.urgency === "urgent" ? t.soundChime : t.soundOne}</span>
@@ -125,17 +130,30 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
             <label className={label}>
               {t.trigger}
               <select className={field} value={form.trigger} disabled={target.rule !== null}
-                onChange={(e) => setForm({ ...newRule(e.target.value as AlertTrigger, form.recordType), name: form.name })}>
+                onChange={(e) => setForm({ ...newRule(e.target.value as AlertTrigger, types[0] ?? "deal", data.negativeMaxRating), name: form.name })}>
                 <option value="record_created">{t.trigger_record_created}</option>
                 <option value="record_assigned">{t.trigger_record_assigned}</option>
+                <option value="review_submitted">{t.trigger_review_submitted}</option>
               </select>
             </label>
-            <label className={label}>
-              {t.recordType}
-              <select className={field} value={form.recordType} onChange={(e) => setForm({ ...form, recordType: e.target.value, pipelineIds: [] })}>
-                {types.map((x) => <option key={x} value={x}>{recordWord(x)}</option>)}
-              </select>
-            </label>
+            {form.trigger === "review_submitted" ? (
+              <label className={label}>
+                {t.maxRating}
+                <select className={field} value={form.maxRating === null ? "" : String(form.maxRating)}
+                  onChange={(e) => setForm({ ...form, maxRating: e.target.value === "" ? null : Number(e.target.value) })}>
+                  <option value="">{t.anyRating}</option>
+                  {REVIEW_RULE_RATINGS.map((x) => <option key={x} value={String(x)}>{t.ratingAtMost.replace("{rating}", String(x))}</option>)}
+                </select>
+                <span className="font-normal text-caption text-p4a-muted">{t.maxRatingHint.replace("{rating}", String(data.negativeMaxRating))}</span>
+              </label>
+            ) : (
+              <label className={label}>
+                {t.recordType}
+                <select className={field} value={form.recordType} onChange={(e) => setForm({ ...form, recordType: e.target.value, pipelineIds: [] })}>
+                  {types.map((x) => <option key={x} value={x}>{recordWord(x)}</option>)}
+                </select>
+              </label>
+            )}
             <label className={label}>
               {t.urgency}
               <select className={field} value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value as AlertRuleInput["urgency"] })}>
@@ -144,6 +162,9 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
               </select>
             </label>
           </div>
+          {form.trigger === "review_submitted" ? (
+            <p className="text-small text-p4a-muted" data-testid="review-rule-channels">{t.reviewChannelsHint}</p>
+          ) : (
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-small font-semibold">{t.choosePipelines}</legend>
             <span className="text-caption text-p4a-muted">{t.pipelinesHint}</span>
@@ -158,7 +179,8 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
               </div>
             )}
           </fieldset>
-          {form.trigger === "record_created" ? (
+          )}
+          {form.trigger === "record_created" || form.trigger === "review_submitted" ? (
             <div className="grid grid-cols-2 gap-4">
               <label className={label}>
                 {t.audience}
