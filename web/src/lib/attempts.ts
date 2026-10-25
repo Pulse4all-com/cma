@@ -16,8 +16,8 @@
  *   attempt      telephony (attempts.source, the default): an outbound telephony call on a counted line whose CRM call is
  *                associated with the deal or its contacts; crm: every outbound CRM call; in the window
  *   conversation (0008zc; docs/definitions.md) the linked telephony call is connected (cma.is_connected), has at least
- *                calls.conversation_min_talk_seconds of talk time and carries no tag meaning not reached
- *                (cma.is_conversation); the CRM call's outcome decides nothing, and a call without a telephony call is none
+ *                calls.conversation_min_talk_seconds of talk time and carries no tag meaning not reached or
+ *                incorrect data (cma.is_conversation); the CRM call's outcome decides nothing, and a call without a telephony call is none
  *   speed        business seconds from the creation to the first attempt (0007d's business time); called before the next
  *                business noon as 0007d
  *   outcome      won by the stage; else ordered (the window ended at an order); else lost by the stage; else unknown
@@ -118,7 +118,7 @@ export interface AttemptCallFixture {
   connected: boolean;
   /** Ended - answered of the linked telephony call; null without one, unanswered or not ended */
   talkSeconds: number | null;
-  /** The linked telephony call carries a current tag meaning not reached (cma.call_not_reached_of) */
+  /** The linked telephony call carries a current tag meaning not reached or incorrect data (cma.call_not_reached_of) */
   notReached?: boolean;
   /** The person behind the telephony user, else the CRM call's owner; null when nobody */
   agentName: string | null;
@@ -259,7 +259,7 @@ export function attemptWindow(d: AttemptDealFixture, now: Instant): { orderedAt:
 /**
  * A deal's calls in its window that are attempts, numbered in order of their start (then the CRM call's id), each a conversation
  * or not (cma.deal_attempts_of): from the linked telephony call only, connected with at least the threshold of talk time and no
- * tag meaning not reached
+ * tag meaning not reached or incorrect data
  */
 export function dealAttemptCalls(d: AttemptDealFixture, o: Pick<AttemptOptions, "source" | "preWindowMinutes" | "conversationMinTalkSeconds">, end: number):
   { attempts: (AttemptCallFixture & { n: number; conversation: boolean })[]; withoutAircall: number } {

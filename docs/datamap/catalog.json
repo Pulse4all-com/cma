@@ -99,7 +99,7 @@
         },
         {
           "name": "telephony_tag",
-          "what": "The tag catalog, whether a tag counts and what it means (not reached, call type, courtesy attempt, courtesy completed positive, neutral or negative; 0008zc)",
+          "what": "The tag catalog, whether a tag counts and what it means (not reached, incorrect data, call type, courtesy attempt, courtesy completed positive, neutral or negative; 0008zc, incorrect data 0008zd)",
           "how": "Catalog at most hourly; counting and meaning set on Configuration, Sources, ingest never writes the meaning"
         },
         {
@@ -570,7 +570,7 @@
     },
     {
       "name": "attempts_per_deal",
-      "what": "Per sales deal (a lead pipeline, never an order pipeline) since the intake start: market, pipeline, stage, the owner's person by id, created, closed, the contacts' first order after the creation (ordered_at) and why the window ended (closed, ordered or open), the outcome (won, lost, ordered, unknown, open), the attempts in the window (outbound Aircall calls on the deal or its contacts; every outbound HubSpot call when attempts.source is crm), those that were a conversation (from the linked Aircall call only: connected, at least calls.conversation_min_talk_seconds of talk and no tag meaning not reached) and the first that was, talk time in all and on conversations, the first and last attempt, the speed to lead in business seconds and called before the next noon, for open deals the business days since the last attempt with its bucket, the attempts without an outcome and the HubSpot calls logged without an Aircall call. From HubSpot deals, contacts and calls, Aircall calls with their link, and shop orders; computed on read, so as current as the mirror (0008y, for sales since 0008z, conversations since 0008zc)"
+      "what": "Per sales deal (a lead pipeline, never an order pipeline) since the intake start: market, pipeline, stage, the owner's person by id, created, closed, the contacts' first order after the creation (ordered_at) and why the window ended (closed, ordered or open), the outcome (won, lost, ordered, unknown, open), the attempts in the window (outbound Aircall calls on the deal or its contacts; every outbound HubSpot call when attempts.source is crm), those that were a conversation (from the linked Aircall call only: connected, at least calls.conversation_min_talk_seconds of talk and no tag meaning not reached or incorrect data) and the first that was, talk time in all and on conversations, the first and last attempt, the speed to lead in business seconds and called before the next noon, for open deals the business days since the last attempt with its bucket, the attempts without an outcome and the HubSpot calls logged without an Aircall call. From HubSpot deals, contacts and calls, Aircall calls with their link, and shop orders; computed on read, so as current as the mirror (0008y, for sales since 0008z, conversations since 0008zc)"
     },
     {
       "name": "deal_funnel_rows",

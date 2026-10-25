@@ -1039,7 +1039,7 @@ export interface CallsFigures {
   connected: number;
   /** The connected rate: connected of all outbound, 0 to 100 with one decimal; null without an outbound call */
   connectedRate: number | null;
-  /** Conversations (0008zc): connected outbound and answered inbound calls with at least calls.conversation_min_talk_seconds of talk, no tag meaning not reached */
+  /** Conversations (0008zc): connected outbound and answered inbound calls with at least calls.conversation_min_talk_seconds of talk, no tag meaning not reached or incorrect data */
   conversations: number;
   /** Talk time (answer to end) over the answered calls with talk time, in seconds */
   talkSeconds: number;
@@ -1728,7 +1728,7 @@ export interface DealAttempt {
   /** The linked telephony call connected: outbound and answered (Connected, 0008zc) */
   connected: boolean;
   talkSeconds: number | null;
-  /** A conversation: connected, at least calls.conversation_min_talk_seconds of talk and no tag meaning not reached (0008zc) */
+  /** A conversation: connected, at least calls.conversation_min_talk_seconds of talk and no tag meaning not reached or incorrect data (0008zc, 0008zd) */
   conversation: boolean;
   /** The outcome's label from the catalog; null without an outcome */
   outcomeLabel: string | null;
@@ -1746,7 +1746,7 @@ export interface AttemptSettings {
   /** follow_up.list_rows: the list's cap */
   listRows: number;
   source: AttemptSource;
-  /** calls.conversation_min_talk_seconds: a connected call is a conversation at this much talk time, without a tag meaning not reached */
+  /** calls.conversation_min_talk_seconds: a connected call is a conversation at this much talk time, without a tag meaning not reached or incorrect data */
   conversationMinTalkSeconds: number;
   /** attempts.speed_buckets_business_minutes, such as "5,15,60,240,1440" */
   speedBuckets: string;
@@ -2170,11 +2170,13 @@ export interface SourceLine {
 }
 
 /**
- * What a tag means (addition 0008zc; docs/definitions.md, Tag): a fixed set of keys, one per tag, configuration only.
- * not_reached keeps a call from being a conversation; the others are kept for the courtesy figures
+ * What a tag means (addition 0008zc; incorrect_data 0008zd; docs/definitions.md, Tag): a fixed set of keys, one per tag,
+ * configuration only. not_reached and incorrect_data keep a call from being a conversation; the others are kept for the
+ * courtesy figures
  */
 export type TagMeaning =
-  | "not_reached" | "call_type" | "courtesy_attempt" | "courtesy_completed_positive" | "courtesy_completed_neutral" | "courtesy_completed_negative";
+  | "not_reached" | "incorrect_data" | "call_type" | "courtesy_attempt" | "courtesy_completed_positive" | "courtesy_completed_neutral"
+  | "courtesy_completed_negative";
 
 export interface SourceTag {
   tagRef: string;

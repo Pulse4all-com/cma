@@ -31,6 +31,8 @@
  * telephony user id in an answer. Since addition 0008zc the calls follow docs/definitions.md (63 amended to match, and 101's
  * own calls: connected at any talk time, Conversation at the threshold without a tag meaning not reached, inbound alike,
  * the settings moving the edges, talk time over the answered calls, untagged over every call, no untagged tag row).
+ * Since addition 0008zd also 103's own calls: a tag meaning incorrect data keeps a call out of Conversation like not reached
+ * (on a tag that does not count, next to another tag, inbound alike), Connected unchanged, and again once the tag is removed.
  * Since addition 0008k (brief B16.1) also the telephony history start on
  * 65's own dataset (the earliest business date in its line's zone; deleted calls, calls without a start
  * and calls on a line that does not count left out; a later call on an earlier date) and what a tile
@@ -88,6 +90,7 @@ import {
   barShare, callRecords, callsChange, callsDelta, callsFigures, callsPerPerson, callsPerPersonTags, callsTagUse, chartGroups, columnMaxima, CONVERSATION_CLASS, countAxis, filterQuery,
   fmtShare, fmtTalk, groupCalls, INBOUND_CLASS, nextCallsGroup, OTHER_TAGS_CLASS, OUTBOUND_CLASS, parseCallsFilter, parseCallsGroup, PER_AGENT_BAR_CLASS,
   historyStartOf, personSplit, previousBeforeHistory, previousCalls, previousPeriod, TAG_CLASS, TAG_NOT_COUNTED_CLASS, tagTable, topTags, untaggedPct, callRules,
+  CONVERSATION_EXCLUDING_MEANINGS,
   answerGroups, formsAnswersOf, formsByCategory, formsByMarket, formsFigures, formsFilterQuery, formsHistoryStart, formsLines, formsSeries, formsSum,
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
@@ -628,6 +631,39 @@ expect("without a tag meaning not reached, Conversation counts on talk time alon
   [zcPerCall(zcRecords(0, 30, tagsZc.map((t) => ({ ...t, meaning: t.meaning === "not_reached" ? null : t.meaning })))), callRules(0, 30, []).notReachedTags.size],
   ["i1:-- i2:-v i3:-v i4:-- o1:c- o2:c- o3:c- o4:cv o5:cv o6:cv o7:cv o8:-- o9:cv", 0],
   ["i1:-- i2:-v i3:-- i4:-- o1:c- o2:c- o3:c- o4:cv o5:c- o6:cv o7:c- o8:-- o9:cv", 0]);
+// The tag meaning incorrect data (addition 0008zd) on 103's own calls of 6 October 2026: tags Wrong Number (meaning
+// incorrect_data), Incorrect Data off (incorrect_data, not counted), Not Reached (not_reached) and Type (call_type); o7
+// nobody answered; then o1 and i1 with their tag removed (their current tags none)
+const tagsZd = [
+  { connectionId: CONN, tagRef: "tg-wrong", name: "Wrong Number", isCounted: true, meaning: "incorrect_data" },
+  { connectionId: CONN, tagRef: "tg-wrong-off", name: "Incorrect Data off", isCounted: false, meaning: "incorrect_data" },
+  { connectionId: CONN, tagRef: "tg-nr", name: "Not Reached", isCounted: true, meaning: "not_reached" },
+  { connectionId: CONN, tagRef: "tg-type", name: "Type", isCounted: true, meaning: "call_type" },
+];
+const calls103 = (removed) => [
+  zcall("o1", "outbound", 0, 45, "tu-1", removed ? [] : ["tg-wrong"]), zcall("o2", "outbound", 10, 45, "tu-1"),
+  zcall("o3", "outbound", 20, 45, "tu-1", ["tg-nr"]), zcall("o4", "outbound", 30, 45, "tu-1", ["tg-wrong-off"]),
+  zcall("o5", "outbound", 40, 45, "tu-1", ["tg-type"]), zcall("o6", "outbound", 50, 10, "tu-1", ["tg-wrong"]),
+  zcall("o7", "outbound", 60, undefined, "tu-1", ["tg-wrong"]), zcall("o8", "outbound", 70, 45, "tu-1", ["tg-type", "tg-wrong"]),
+  zcall("o9", "outbound", 80, 60, "tu-1", ["tg-wrong"]), zcall("i1", "inbound", 90, 45, "tu-2", removed ? [] : ["tg-wrong"]),
+  zcall("i2", "inbound", 100, 45, "tu-2"), zcall("i3", "inbound", 110, 45, "tu-2", ["tg-nr"]),
+];
+const zdRecords = (removed = false) => callRecords(calls103(removed), callLines, "Europe/Amsterdam", callRules(0, 30, tagsZd));
+const zdPerCall = (removed = false) => zdRecords(removed).map((c, i) => `${calls103(removed)[i].sourceId}:${c.isConnectedOutbound ? "c" : "-"}${c.isConversation ? "v" : "-"}`).sort().join(" ");
+expect("incorrect data: connected, no conversation (uncounted tag, next to another tag, inbound alike); not reached as before, as 103 B1",
+  [zdPerCall(), CONVERSATION_EXCLUDING_MEANINGS],
+  ["i1:-- i2:-v i3:-- o1:c- o2:cv o3:c- o4:c- o5:cv o6:c- o7:-- o8:c- o9:c-", ["not_reached", "incorrect_data"]],
+  ["i1:-v i2:-v i3:-- o1:cv o2:cv o3:c- o4:cv o5:cv o6:c- o7:-- o8:cv o9:cv", ["not_reached"]]);
+const zdf = callsFigures(zdRecords());
+const zdPeopleRows = callsPerPerson(zdRecords(), "2026-10-06", "2026-10-06", zcPersonOf);
+expect("Calls, tag use and per person count no conversation with a tag meaning incorrect data, as 103 B2",
+  [zdf.calls, zdf.inbound, zdf.outbound, zdf.answeredInbound, zdf.connected, zdf.connectedRate, zdf.conversations, zdf.untagged].join("/")
+    + ` | ${callsTagUse(zdRecords(), "2026-10-05", "2026-10-11", "week", tagsZd).map((r) => `${r.groupKey ?? "all"}:${r.tagName}=${r.conversations}`).join(",")}`
+    + ` | ${[...zdPeopleRows.rows, zdPeopleRows.total].map((p) => `${p.name ?? p.kind}:${p.answeredInbound}/${p.outboundCalls}/${p.connected}/${p.conversations}/${p.untagged}`).join(" ")}`,
+  "12/3/9/3/8/88.9/3/2 | 2026-10-05:Type=1,all:Type=1 | Anna Verify:0/9/8/2/1 Bram Verify:3/0/0/1/1 total:3/9/8/3/2",
+  "12/3/9/3/8/88.9/6/2 | 2026-10-05:Type=2,2026-10-05:Wrong Number=4,all:Type=2,all:Wrong Number=4 | Anna Verify:0/9/8/5/1 Bram Verify:3/0/0/2/1 total:3/9/8/7/2");
+expect("the same call is a conversation once its incorrect-data tag is removed, as 103 B5",
+  zdPerCall(true).split(" ").filter((x) => /^(o1|i1):/.test(x)).join(" "), "i1:-v o1:cv", "i1:-- o1:c-");
 expect("talk time: seconds under a minute, minutes and seconds under an hour, hours and minutes from an hour",
   [fmtTalk(45, "en"), fmtTalk(88.75, "en"), fmtTalk(3725, "nl"), fmtTalk(null, "en"), fmtShare(0.375, "en"), fmtShare(null, "en")],
   ["45 s", "1m 29s", "1h 02m", "–", "38%", "–"], ["45.0 s", "88 s", "62m 05s", "0 s", "37.5%", "0%"]);

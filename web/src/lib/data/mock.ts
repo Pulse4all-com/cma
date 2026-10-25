@@ -377,7 +377,7 @@ function mockConversationMin(): number {
   return Number(list.find((x) => x.key === "calls.conversation_min_talk_seconds")?.value ?? 30);
 }
 
-/** The rules that classify the fixture's calls: both thresholds and the tags meaning not reached (addition 0008zc) */
+/** The rules that classify the fixture's calls: both thresholds and the tags meaning not reached or incorrect data (0008zc, 0008zd) */
 function mockCallRules(me: Principal): CallRules {
   return callRules(mockConnectedMin(), mockConversationMin(), mockCallTags(me));
 }

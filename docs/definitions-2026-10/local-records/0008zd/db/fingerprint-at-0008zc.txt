@@ -1,0 +1,7 @@
+SET
+ functions |          functions_md5           | views | tables | meaning_keys | additions 
+-----------+----------------------------------+-------+--------+--------------+-----------
+       519 | d51f57c99cc14377d1323f5cf29f3331 |   126 |     85 |            6 | 0008zc
+(1 row)
+
+RESET
