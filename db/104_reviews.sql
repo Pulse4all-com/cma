@@ -5,7 +5,8 @@
 -- 102_tag_meaning_incorrect_data.sql (0008zd). Rerunnable, forward-only, in one transaction. Run as your own IAM login:
 -- dev first, then 105_verify_reviews.sql (dev), then 103, 101, 99, 79, 75 and 41 again (dev; 99 from the Terminal); then
 -- prod.
--- Nothing in the web of main reads what this adds, so the script may run before or after the web deploy.
+-- The web of main reads nothing this adds; the web of this change reads it (the alert rules' max_rating, the reviews
+-- page, the review channels), so in prod the script runs before that web is merged.
 --
 -- Why (Decision log, 25 October 2026): the review platform owns the reviews of a business line (the platform and its
 -- adapter are the tenant's choice); the CMA polls them into Postgres, maps them to markets through their channel, links them

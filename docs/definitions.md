@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the review terms of 25 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -380,6 +380,124 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Used by | Every figure that ties a call to a deal or contact: `attempts.*`, `speed_to_lead.*`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`, `callbacks.*`, `data_quality.telephony_call_unlinked` |
 | As built today | `cma.call_link` with `method` `hash_time` only (`34`): the equal keyed hash of the other party's number, the same direction, at most 120 seconds apart, nearest first, each side once; the CRM call's time and direction are used for that pairing. The hash normalises a number with a default region (the line's or market's country) before it is hashed, so a national-format number is hashed too, and a number that is not a possible phone number gets none (`ingest/src/core/hash.mjs`). The HubSpot adapter reads no Aircall call id from the logged call (`CALL_PROPERTIES`) |
 
+## Review terms
+
+Decided with addition 0008ze (brief B18, 25 October 2026). The review platform owns its reviews and the CMA reads them: for Pulse4all Subscriptions that is Trusted Shops (the eTrusted API). The CMA holds no reviewer's name, email or phone and no review title or text (docs/decisions.md, 25 Oct 2026, "Data protection (hard rules)"). A tenant's flag for having a reviews connection is "set up" (`isSetUp`, `is_set_up`), never "connected": Connected is a call term (W19).
+
+### Review
+
+| Field | Value |
+|---|---|
+| Term | Review (nl: Review) |
+| Key | `review`, `reviews`; API `reviews`; settings `reviews.negative_max_rating`, `reviews.history_start_date` |
+| Definition | A review the review platform holds of one of the tenant's review channels. It counts when the platform has published it and its review channel is counted. |
+| Source | The review platform; for Pulse4all Subscriptions Trusted Shops, the eTrusted API, polled hourly into `cma.review` (the channels into `cma.review_channel`). The adapter decides published from the platform's state (eTrusted: APPROVED), so no vendor word is in SQL |
+| Counts / does not count | Counts a published review of a counted review channel. Does not count an unpublished review or one of a channel that is not counted; both stay stored. A review of a counted channel without a market counts, its market unknown. The reviewer and the review's title and text are never stored |
+| Unit and display | A count; each review has a rating from 1 to 5 |
+| Time rule | Day: the date of the review's submission in the tenant's zone |
+| Scope | The tenant's reviews connection and its counted review channels; another business line's channels stay out by their Counted switch |
+| Equivalent in the source system | A review in Trusted Shops' eTrusted account; its API parameters are to confirm on the live account (docs/open-decisions.md) |
+| Not to use | The reviewer, the reviewer's email or the review's text in any figure, label, alert or log |
+| Status | Decided |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
+| Used by | `reviews.count`, `reviews.average_rating`, `reviews.negative`, `reviews.linked`, `reviews.distribution`, `reviews.by_market`, `reviews.by_period`, `reviews.link_levels`, `reviews.invite_events`, `reviews.by_channel`, `reviews.market_states`; Reports → Reviews (`/reports/reviews`) |
+| As built today | `cma.reviews_of` (`104`): a review with `is_published` of a counted `cma.review_channel`, its market the channel's else unknown, its business date the submission's in the tenant's zone, its rating a number (a whole star is the rating rounded up). Matches the definition |
+
+### Review channel
+
+| Field | Value |
+|---|---|
+| Term | Review channel (nl: Reviewkanaal) |
+| Key | `review_channel`; API `byChannel`, `channel` |
+| Definition | A shop or a country the review platform collects reviews for. Its market and its counted switch are configuration (Configuration → Sources); a new channel arrives without a market and not counted. |
+| Source | The platform's channel catalog (eTrusted channels), read hourly into `cma.review_channel` (name, language and country, whether the platform still lists it); the market and the counted switch are people's |
+| Counts / does not count | Counts a channel the platform lists, mapped to a market or not. A channel that is not counted is read and its reviews are stored, but they count nowhere and cannot alert (another business line's channels, test channels) |
+| Unit and display | A count per market; a channel is shown by its name at the platform and its market. A channel the platform no longer lists shows "Gone at the platform", a new one "New, choose a market" |
+| Time rule | Not applicable |
+| Scope | Per tenant's reviews connection |
+| Equivalent in the source system | A channel of the Trusted Shops account (to confirm on the live account) |
+| Not to use | "Channel" alone, which is a customer contact channel (phone, email, chat; the `channel` table); "shop" or "country" for the channel |
+| Status | Decided |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
+| Used by | `reviews.by_channel`, `reviews.market_states`, `data_quality.review_channel_unmapped`, `data_quality.market_without_review_channel`; Reports → Reviews, Data quality; Configuration → Sources (Review channels), Alert rules (Every counted review channel) |
+| As built today | `cma.review_channel` (`104`): `market` and `is_counted` (default false), set by `cma.set_review_channel` (`tenant.configure`; `PUT /api/v1/configuration/sources/{id}/review-channels`); the ingest writes only name, language and deletion, so a catalog read keeps both. Data quality lists unmapped channels and active markets without a counted one. Matches the definition |
+
+### Average rating
+
+| Field | Value |
+|---|---|
+| Term | Average rating (nl: Gemiddelde score), also the review score |
+| Key | `average_rating`; API `averageRating` |
+| Definition | The mean rating, from 1 to 5, of the counted reviews of the scope and period, rounded to two decimals. |
+| Source | The ratings of the counted reviews (`cma.review.rating`) |
+| Counts / does not count | Counts the published reviews of counted review channels. Does not count unpublished reviews or those of a channel that is not counted. Without a review there is no average |
+| Unit and display | A number from 1 to 5 with two decimals ("Out of 5") |
+| Time rule | Day of the review's submission |
+| Scope | The tenant, the period, optionally one market; per market, per day or week and per review channel |
+| Equivalent in the source system | None read: the CMA computes it from the counted reviews |
+| Not to use | An average over unpublished reviews or reviews of a channel that is not counted |
+| Status | Decided; which window the review score KPI means is open for Kira (Open decisions), the report uses the page's period |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
+| Used by | `reviews.average_rating` and the averages of `reviews.by_market`, `reviews.by_period` and `reviews.by_channel`; KPI 3; Reports → Reviews |
+| As built today | `cma.review_figures` (`104`): the mean of the ratings of `cma.reviews_of`, rounded to two decimals over the page's period. Matches the definition |
+
+### Negative review
+
+| Field | Value |
+|---|---|
+| Term | Negative review (nl: Negatieve review) |
+| Key | `negative`; setting `reviews.negative_max_rating`; API `negative`; the alert rule's `max_rating` |
+| Definition | A counted review rated at or below `reviews.negative_max_rating` (1 to 4, default 2). |
+| Source | The review's rating and the tenant setting, set on Configuration → Sources (Review settings) |
+| Counts / does not count | Counts a counted review whose rating, decimals included, is at or below the setting. Does not count unpublished reviews or those of a channel that is not counted |
+| Unit and display | A count, with its share of the reviews |
+| Time rule | Day of the review's submission |
+| Scope | The tenant's setting; the alert rule "Negative review" starts from it as its highest rating |
+| Equivalent in the source system | None |
+| Not to use | A threshold of the alert rule other than its own Ratings that alert: the rule's highest rating can differ and never changes what the report counts as negative |
+| Status | Decided; the threshold (default 2) and the alert audience are for Kira to confirm before the rule is switched on (Open decisions) |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Reports → Reviews shows team figures only" |
+| Used by | `reviews.negative`; the alert rule "Negative review" and its highest rating; Reports → Reviews; Configuration → Alert rules |
+| As built today | `cma.reviews_of` flags `is_negative` against the setting, validated 1 to 4 (`cma.check_tenant_setting`, `104`); seed `02` adds the rule "Negative review" switched off with the setting's value as its highest rating. Matches the definition |
+
+### Link level
+
+| Field | Value |
+|---|---|
+| Term | Link level (nl: Koppelniveau; `reviews.linkCard` "Koppelniveaus") |
+| Key | `link_level` with the values `order`, `contact` and `none`; `reviews.link_levels`; API `linkLevels` |
+| Definition | How a review is tied to the tenant's own records: order (its transaction reference names exactly one of the tenant's orders), contact (no order; the reviewer's email, in memory only, finds exactly one CRM contact) or none. |
+| Source | The review's transaction reference against the orders' name, else their source id (a Klaviyo invite's reference is the Shopify order's id, to confirm with the first real data); the CRM contact search by the reviewer's email, the email never stored |
+| Counts / does not count | One level per review. The contact search runs only for reviews without an order or contact and respects the CRM connection's `api_daily_floor_pct`. A reference or an email that finds none or more than one links to nothing. A contact's privacy deletion clears a review's contact link; an order link stays |
+| Unit and display | A count per level, as bars: To an order, To a contact, Not linked |
+| Time rule | Day of the review's submission |
+| Scope | Per tenant: its orders and its CRM contacts |
+| Equivalent in the source system | None: the CMA's own join (Call link is the call terms' join, another term) |
+| Not to use | The reviewer's name, email or the transaction reference as a shown value |
+| Status | Decided |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders" |
+| Used by | `reviews.link_levels`, `reviews.linked`; Reports → Reviews |
+| As built today | `cma.review.link_level` (`104`), set by `cma.ingest_upsert_reviews` (the order, through `cma.review_order_of`) and `cma.set_review_contact` (the contact), cleared by `cma.forget_review_contact_links`; check constraints keep an order id only with `order` and a contact only with `contact`. Matches the definition |
+
+### Linked review
+
+| Field | Value |
+|---|---|
+| Term | Linked review (nl: Gekoppelde review; `reviews.linked` "Gekoppelde reviews") |
+| Key | `linked`; API `linkedOrder`, `linkedContact`, `unlinked` |
+| Definition | A counted review whose link level is order or contact. |
+| Source | The review's link level |
+| Counts / does not count | Counts counted reviews linked to an order or a contact. A review with the level none is not linked |
+| Unit and display | A count, with its share of the reviews ("to an order or a contact") |
+| Time rule | Day of the review's submission |
+| Scope | As Review |
+| Equivalent in the source system | None |
+| Not to use | "Connected" for a link or for a tenant's reviews connection ("set up", W19); Call link is another term |
+| Status | Decided |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders" and "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
+| Used by | `reviews.linked`; Reports → Reviews |
+| As built today | `cma.review_figures` (`104`) counts the levels order and contact (`linkedOrder`, `linkedContact`) and none (`unlinked`); the tile shows the first two together with their share. Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -416,7 +534,7 @@ Workday, clocked in, hours worked, status, working status, business minutes, off
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like.
 
 ### Other
-Forms, reviews, AED maintenance, data quality.
+Forms, AED maintenance, data quality.
 
 ## Gaps against the definitions
 
@@ -433,7 +551,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W13 | `web/src/lib/copy.ts` | `attempts.noteCrm` | Attempts are outbound calls logged in the customer records | Attempts come from the telephony system only (R1) |
 | W17 | `web/src/lib/copy.ts` | `speedToLead.intro` "first outbound call"; Dutch `speedToLead.intro`, `speedToLead.minutesNote` "belpoging"; Dutch `attempts.speed`, `attempts.colMedianSpeed`, `attempts.speedTitle`, `attempts.speedCol`, `hints.atOutcomes` "speed to lead" | The first outbound (CRM) call; two Dutch labels for one term | The first attempt; one Dutch label, "Snelheid tot lead", and one Dutch word for attempt, "poging" |
 | W18 | `web/src/lib/copy.ts` | `email.conversation`, `email.opened` "Conversations opened" ("Gesprekken geopend"), `email.waitingIntro`, `emailPerAgent.intro`, hints `emailOpened`, `emailOpenedCol`, `emailClosedCol`, `emailWait*`, `emailAgentReplies`, `emailAgentClosed` | Conversation for an inbox thread | Another word for the email thread: Conversation is a call term (to settle when Email is defined) |
-| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term |
+| W19 | `web/src/lib/copy.ts`; `web/src/app/api/v1/reports/first-orders/route.ts`, `callbacks-kept/route.ts`; `web/src/app/reports/orders-per-person/page.tsx` | `reports.noTelephony` "No telephony connected", `noShop`, `noEmail`, `noOrders`, `noTelephonyHint`, `noShopHint`, `noFormsHint`; the API field `connected` of First orders, Callbacks kept and Orders per person | Connected for a source that is set up | Another word, to choose in the definitions brief (for example "set up"): Connected is a call term. Reports → Reviews already says "set up" (`isSetUp`, `is_set_up`; Review terms) |
 | W20 | `web/src/lib/copy.ts`; `web/src/lib/csv.ts` | `funnel.colReachedWon`, `funnelFile.reachedWon`, `hints.fnColReachedWon` ("Reached won", "Gewonnen bereikt"); API `reachedWon` | Reached for a deal won now | A word that is not retired (for example "Won now") |
 | W21 | `web/src/lib/data/types.ts` | API fields `unanswered`, `unansweredByReason` (Inbound) | 0008i's words (the Calls, Calls per agent and Attempts per deal fields took the terms' keys in addition 0008zc) | The term's camelCase key (`missedInbound`) |
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |
