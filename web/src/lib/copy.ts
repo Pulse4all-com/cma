@@ -1160,7 +1160,7 @@ const en = {
     downloadHint: "Download the requests per day or week and market as a file in your organisation's export format",
   },
 
-  /** Reviews (addition 0008zd, brief B18; KPI 3): the review platform's reviews per market; counts and ratings only */
+  /** Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market; counts and ratings only */
   reviews: {
     title: "Reviews",
     intro: "How customers rate us on the review platform, per market and per week. The platform holds the reviews; the Workspace reads them every hour and shows counts and ratings only, never a reviewer or what they wrote. Each review's day in your organisation's time zone.",

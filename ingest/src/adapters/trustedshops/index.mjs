@@ -1,5 +1,5 @@
 /**
- * The Trusted Shops adapter (eTrusted API) as the jobs see it (addition 0008zd, brief B18). Polling only: a review
+ * The Trusted Shops adapter (eTrusted API) as the jobs see it (addition 0008ze, brief B18). Polling only: a review
  * platform sends no webhook, so the server answers 404 on /trustedshops/<key> (kind poll) and nothing is written
  * through a route.
  *

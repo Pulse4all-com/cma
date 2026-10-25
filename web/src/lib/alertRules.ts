@@ -10,7 +10,7 @@ import type { AlertPipelineChoice, AlertRule, AlertRuleInput, AlertTrigger } fro
 export type EffectWords = {
   effectCreated: string;
   effectAssigned: string;
-  /** A review rule (addition 0008zd): "A published review {ratings} on a counted channel alerts {who}." */
+  /** A review rule (addition 0008ze): "A published review {ratings} on a counted channel alerts {who}." */
   effectReview: string;
   effectAnyRating: string;
   effectRatingAtMost: string;
@@ -28,7 +28,7 @@ export type EffectWords = {
   effectOff: string;
 };
 
-/** The highest ratings a review rule can name (addition 0008zd); none is any rating */
+/** The highest ratings a review rule can name (addition 0008ze); none is any rating */
 export const REVIEW_RULE_RATINGS: readonly number[] = [1, 2, 3, 4, 5];
 
 const fill = (text: string, values: Record<string, string>) => text.replace(/\{(\w+)\}/g, (m, k: string) => values[k] ?? m);
@@ -73,7 +73,7 @@ export function ruleEffect(rule: Pick<AlertRule, "trigger" | "recordType" | "pip
 
 /**
  * Why the database would refuse a rule, or null: the name, the record type, the age limit, a permission, a name another rule
- * holds, a review rule's highest rating (1 to 5, or none for any rating; addition 0008zd)
+ * holds, a review rule's highest rating (1 to 5, or none for any rating; addition 0008ze)
  */
 export function alertRuleProblem(f: AlertRuleInput, rules: readonly Pick<AlertRule, "name" | "trigger">[], isNew: boolean):
     "name" | "duplicate" | "trigger" | "recordType" | "age" | "audience" | "rating" | null {
@@ -111,7 +111,7 @@ export function parseAge(text: string): number | null | "invalid" {
 
 /**
  * A new rule's starting values: everything the database's defaults say, for the trigger chosen. A review rule (addition
- * 0008zd) starts as seed 02's Negative review: record type review, the team's performance as the audience, without the
+ * 0008ze) starts as seed 02's Negative review: record type review, the team's performance as the audience, without the
  * language or clocked-in conditions, no fallback, a day as its age limit (the poll is hourly) and the tenant's negative
  * threshold (reviews.negative_max_rating) as its highest rating
  */

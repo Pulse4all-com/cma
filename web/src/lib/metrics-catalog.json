@@ -44569,19 +44569,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -44596,7 +44596,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) as reviews from r",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -44615,7 +44615,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -44703,19 +44703,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -44734,7 +44734,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect round(avg(r.rating), 2) as average_rating from r",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -44753,7 +44753,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -44841,19 +44841,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -44872,7 +44872,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) filter (where r.is_negative) as negative, count(*) as reviews from r",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -44891,7 +44891,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -44979,19 +44979,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45010,7 +45010,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) filter (where r.link_level in ('order', 'contact')) as linked, count(*) as reviews from r",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45029,7 +45029,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45118,19 +45118,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45149,7 +45149,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 order by 1 desc",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45168,7 +45168,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45257,19 +45257,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45288,7 +45288,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating, count(*) filter (where r.is_negative) as negative from r group by 1 order by r.market = 'unknown', 1",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45307,7 +45307,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45397,19 +45397,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45428,7 +45428,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1 order by 1",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45447,7 +45447,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45536,19 +45536,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45563,7 +45563,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.link_level, count(*) as reviews from r group by 1",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45582,7 +45582,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45671,19 +45671,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45698,7 +45698,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.invite_event_type, count(*) as reviews from r group by 1 order by 2 desc",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45717,7 +45717,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45806,19 +45806,19 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45833,7 +45833,7 @@
         ]
       },
       "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1, 2, 3 order by 2, 1",
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45852,7 +45852,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -45938,23 +45938,23 @@
         "sql": [
           {
             "object": "cma.reviews_page",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_page_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.reviews_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_figures",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.review_market_states_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -45973,7 +45973,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
       "prerequisites": [
         {
           "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
@@ -45992,7 +45992,7 @@
         "features.md 5 (Reports -> Reviews)",
         "kpis.md 3",
         "api.md, GET /api/v1/reports/reviews",
-        "data-model/0008.md, 0008zd",
+        "data-model/0008.md, 0008ze",
         "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
       ],
       "status": [
@@ -59587,15 +59587,15 @@
         "sql": [
           {
             "object": "cma.data_quality",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.data_quality_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.data_quality_reviews_checks",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -59606,13 +59606,13 @@
         ]
       },
       "verify_sql": "select count(*) from cma.review_channel ch where ch.tenant_id = :tenant_id and ch.source_deleted_at is null and ch.market is null",
-      "fixture_check": "Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
+      "fixture_check": "Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
       "prerequisites": [],
       "docs": [
         "kpis.md paragraph 11 (Data first)",
         "api.md, GET /api/v1/reports/data-quality",
         "features.md paragraph 5 (Data -> Data quality)",
-        "data-model/0008.md, 0008zd"
+        "data-model/0008.md, 0008ze"
       ],
       "status": [
         "verified"
@@ -59680,15 +59680,15 @@
         "sql": [
           {
             "object": "cma.data_quality",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.data_quality_of",
-            "migration": "0008zd"
+            "migration": "0008ze"
           },
           {
             "object": "cma.data_quality_reviews_checks",
-            "migration": "0008zd"
+            "migration": "0008ze"
           }
         ],
         "ts": [
@@ -59699,13 +59699,13 @@
         ]
       },
       "verify_sql": "select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 'active' and exists (select 1 from cma.integration_connection c where c.tenant_id = m.tenant_id and c.status = 'active' and (c.kind = 'reviews' or exists (select 1 from cma.review_channel x where x.tenant_id = c.tenant_id and x.connection_id = c.id))) and not exists (select 1 from cma.review_channel ch where ch.tenant_id = m.tenant_id and ch.market = m.code and ch.is_counted and ch.source_deleted_at is null)",
-      "fixture_check": "Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
+      "fixture_check": "Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
       "prerequisites": [],
       "docs": [
         "kpis.md paragraph 11 (Data first)",
         "api.md, GET /api/v1/reports/data-quality",
         "features.md paragraph 5 (Data -> Data quality)",
-        "data-model/0008.md, 0008zd"
+        "data-model/0008.md, 0008ze"
       ],
       "status": [
         "verified"

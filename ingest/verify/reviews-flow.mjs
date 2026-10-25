@@ -1,5 +1,5 @@
 /**
- * Verifier: the Trusted Shops adapter end to end (addition 0008zd, brief B18), against a local PostgreSQL with db/00…102
+ * Verifier: the Trusted Shops adapter end to end (addition 0008ze, brief B18), against a local PostgreSQL with db/00…104
  * and the fake eTrusted API with HubSpot's contact search (verify/etrusted-fake.mjs). Everything is invented: tenants,
  * channels, reviews, orders, contacts, emails (example.com), names, numbers in the +44 20 0000 09xx range.
  *
@@ -34,7 +34,7 @@ console.log(`verify/reviews-flow.mjs${PROVOKE ? "  (--provoke: every check must 
 
 for (const v of ["CMA_DB_HOST", "CMA_DB_USER"]) {
   if (!process.env[v]) {
-    console.error(`${v} is required (a local PostgreSQL with db/00…102; see the header)`);
+    console.error(`${v} is required (a local PostgreSQL with db/00…104; see the header)`);
     process.exit(2);
   }
 }

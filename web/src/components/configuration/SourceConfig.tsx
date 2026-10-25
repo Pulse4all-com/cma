@@ -48,7 +48,7 @@ export interface EmailSettingsInWords {
   marketOrder: string | null;
 }
 
-/** The tenant's review settings (addition 0008zd), on a reviews connection: the negative threshold and the backfill's start */
+/** The tenant's review settings (addition 0008ze), on a reviews connection: the negative threshold and the backfill's start */
 export interface ReviewSettingsValues {
   negativeMaxRating: number;
   historyStartDate: string | null;
@@ -61,7 +61,7 @@ const EMAIL_NUMBER_MAX = { reply: 10080, days: 90 } as const;
 export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, conversationMinSeconds = null, email = null,
   reviews = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
-  /** The tenant's review settings (addition 0008zd), on a reviews connection */
+  /** The tenant's review settings (addition 0008ze), on a reviews connection */
   reviews?: ReviewSettingsValues | null;
   /** The tenant's email settings (addition 0008t), shown in words on a CRM connection */
   email?: EmailSettingsInWords | null;

@@ -340,7 +340,7 @@ export function checkInboxChannelInput(b: Record<string, unknown>): SourceInboxC
   return { channelId: ref(b.channelId, "channelId"), isCounted: flag(b, "isCounted") };
 }
 
-/** A review channel's market and counted flag (addition 0008zd): the channel by its source id, a market code or none */
+/** A review channel's market and counted flag (addition 0008ze): the channel by its source id, a market code or none */
 export function checkReviewChannelInput(b: Record<string, unknown>): SourceReviewChannelInput {
   return { channelId: ref(b.channelId, "channelId"), market: marketOrNull(b.market, "market"), isCounted: flag(b, "isCounted") };
 }
@@ -419,7 +419,7 @@ export function checkAlertRuleInput(b: Record<string, unknown>): AlertRuleInput 
     if (typeof v !== "string" || !/^[a-z_]+(\.[a-z_]+)+$/.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be a permission key${nullable ? " or empty" : ""}`);
     return v;
   };
-  // a review rule (addition 0008zd) has an audience as a created-record rule, the record type review, no pipelines and a highest rating
+  // a review rule (addition 0008ze) has an audience as a created-record rule, the record type review, no pipelines and a highest rating
   const review = trigger === "review_submitted";
   const created = trigger === "record_created" || review;
   const rating = b.maxRating ?? null;

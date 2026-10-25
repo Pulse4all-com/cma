@@ -20,7 +20,7 @@ import { metricsMore } from "@/lib/metrics";
 import { resolve } from "../../access";
 
 /**
- * Reviews (Report, addition 0008zd, 25 October 2026; brief B18; KPI 3): the reviews the review platform holds of the
+ * Reviews (Report, addition 0008ze, 25 October 2026; brief B18; KPI 3): the reviews the review platform holds of the
  * tenant's channels (Trusted Shops for Pulse4all Subscriptions, polled hourly). A review counts when it is published and its
  * channel is counted (Configuration, Sources); its market is its channel's, its day the submission's in the tenant's zone.
  * Tiles for the reviews, the average rating, the negative reviews (at or below reviews.negative_max_rating) and the linked

@@ -1,5 +1,5 @@
 /**
- * Building blocks of Reports → Reviews (addition 0008zd, brief B18; KPI 3): the reviews per whole star, per market with
+ * Building blocks of Reports → Reviews (addition 0008ze, brief B18; KPI 3): the reviews per whole star, per market with
  * the previous period, the markets with their review-channel state, per day or week, per review channel, by link level
  * and by invite event. Server components, plain CSS; Pulse4all-Style 7.5 to 7.7 as Reports → Cancellations: horizontal
  * bars in Deep Blue, the reviews without a link or an invite event in the neutral hue, never a red stack; every header

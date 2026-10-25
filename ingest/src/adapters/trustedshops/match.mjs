@@ -1,5 +1,5 @@
 /**
- * A review's CRM contact (addition 0008zd), kept in the CMA, never written to the CRM. The order comes first: the
+ * A review's CRM contact (addition 0008ze), kept in the CMA, never written to the CRM. The order comes first: the
  * database links a review whose transaction reference names one commerce order of the tenant to that order, and to its
  * customer's contact (0008h), in cma.ingest_upsert_reviews. A review without an order and without a contact is then
  * looked up by the reviewer's email in the CRM connection the reviews connection names (setting crm_connection_id),

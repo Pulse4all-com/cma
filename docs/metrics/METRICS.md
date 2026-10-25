@@ -23723,7 +23723,7 @@ reviews = count(published reviews of a counted channel with the submission's bus
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewFigures` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -23741,7 +23741,7 @@ r as (
 select count(*) as reviews from r
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -23749,7 +23749,7 @@ select count(*) as reviews from r
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -23798,7 +23798,7 @@ average_rating = round(avg(rating), 2) over the period's counted reviews; null (
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `fmtRating` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewFigures` in src/lib/reviews.ts; `fmtRating` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -23816,7 +23816,7 @@ r as (
 select round(avg(r.rating), 2) as average_rating from r
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -23824,7 +23824,7 @@ select round(avg(r.rating), 2) as average_rating from r
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -23873,7 +23873,7 @@ negative = count(*) filter (where rating <= reviews.negative_max_rating); share 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -23891,7 +23891,7 @@ r as (
 select count(*) filter (where r.is_negative) as negative, count(*) as reviews from r
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -23899,7 +23899,7 @@ select count(*) filter (where r.is_negative) as negative, count(*) as reviews fr
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -23948,7 +23948,7 @@ linked = count(*) filter (where link_level in ('order', 'contact')); share = lin
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewFigures` in src/lib/reviews.ts; `reviewShare` in src/lib/reviews.ts; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -23966,7 +23966,7 @@ r as (
 select count(*) filter (where r.link_level in ('order', 'contact')) as linked, count(*) as reviews from r
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -23974,7 +23974,7 @@ select count(*) filter (where r.link_level in ('order', 'contact')) as linked, c
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -24023,7 +24023,7 @@ group by ceil(rating) over the period's counted reviews, 1 to 5, empty ratings s
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `starsOf` in src/lib/reviews.ts; `ReviewDistribution` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `starsOf` in src/lib/reviews.ts; `ReviewDistribution` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24041,7 +24041,7 @@ r as (
 select ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 order by 1 desc
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24049,7 +24049,7 @@ select ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 orde
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 #### `reviews.by_market`
 
@@ -24094,7 +24094,7 @@ group by the channel's market over the period's counted reviews; each figure as 
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewsReport` in src/lib/reviews.ts; `ReviewMarkets` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewsReport` in src/lib/reviews.ts; `ReviewMarkets` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24112,7 +24112,7 @@ r as (
 select r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating, count(*) filter (where r.is_negative) as negative from r group by 1 order by r.market = 'unknown', 1
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24120,7 +24120,7 @@ select r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating,
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 #### `reviews.by_period`
 
@@ -24163,7 +24163,7 @@ group by the submission's business date or its ISO week (Monday) over the period
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `reviewsReport` in src/lib/reviews.ts; `ReviewPeriods` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `reviewsReport` in src/lib/reviews.ts; `ReviewPeriods` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24181,7 +24181,7 @@ r as (
 select date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1 order by 1
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24189,7 +24189,7 @@ select date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, 
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 #### `reviews.link_levels`
 
@@ -24234,7 +24234,7 @@ group by link_level (order, contact, none) over the period's counted reviews
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewLinkLevels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `ReviewLinkLevels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24252,7 +24252,7 @@ r as (
 select r.link_level, count(*) as reviews from r group by 1
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24260,7 +24260,7 @@ select r.link_level, count(*) as reviews from r group by 1
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 #### `reviews.invite_events`
 
@@ -24305,7 +24305,7 @@ group by invite_event_type over the period's counted reviews; null as No invitat
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewInviteEvents` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `ReviewInviteEvents` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24323,7 +24323,7 @@ r as (
 select r.invite_event_type, count(*) as reviews from r group by 1 order by 2 desc
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24331,7 +24331,7 @@ select r.invite_event_type, count(*) as reviews from r group by 1 order by 2 des
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -24380,7 +24380,7 @@ group by review_channel over the period's counted reviews
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `ReviewChannels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `ReviewChannels` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -24398,7 +24398,7 @@ r as (
 select r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1, 2, 3 order by 2, 1
 ```
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24406,7 +24406,7 @@ select r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rat
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 #### `reviews.market_states`
 
@@ -24443,11 +24443,11 @@ per active market: channels = count(counted, not gone channels with that market)
 
 **Refresh** On page load (server component; one SQL page read per view). No polling.
 
-**Computed in** `cma.reviews_page` (0008zd); `cma.reviews_page_of` (0008zd); `cma.reviews_of` (0008zd); `cma.review_figures` (0008zd); `cma.review_market_states_of` (0008zd); `reviewMarketStates` in src/lib/reviews.ts; `ReviewMarketStates` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
+**Computed in** `cma.reviews_page` (0008ze); `cma.reviews_page_of` (0008ze); `cma.reviews_of` (0008ze); `cma.review_figures` (0008ze); `cma.review_market_states_of` (0008ze); `reviewMarketStates` in src/lib/reviews.ts; `ReviewMarketStates` in src/components/ReviewParts.tsx; `default (ReviewsPage)` in src/app/reports/reviews/page.tsx
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 103_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
+**Fixture check** Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.
 
 **Data prerequisites**
 
@@ -24455,7 +24455,7 @@ per active market: channels = count(counted, not gone channels with that market)
 - Every review channel mapped to its market and counted (kpis.md 11) (data quality check `review_channel_unmapped`)
 - A Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT; kpis.md 11) (data quality check `market_without_review_channel`)
 
-**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008zd; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
+**Documented in** features.md 5 (Reports -> Reviews); kpis.md 3; api.md, GET /api/v1/reports/reviews; data-model/0008.md, 0008ze; decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)
 
 **Notes**
 
@@ -30985,7 +30985,7 @@ count of review_channel rows not gone (source_deleted_at is null) with market nu
 
 **Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
 
-**Computed in** `cma.data_quality` (0008zd); `cma.data_quality_of` (0008zd); `cma.data_quality_reviews_checks` (0008zd); `getDataQuality` in src/lib/data/postgres.ts
+**Computed in** `cma.data_quality` (0008ze); `cma.data_quality_of` (0008ze); `cma.data_quality_reviews_checks` (0008ze); `getDataQuality` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -30993,9 +30993,9 @@ count of review_channel rows not gone (source_deleted_at is null) with market nu
 select count(*) from cma.review_channel ch where ch.tenant_id = :tenant_id and ch.source_deleted_at is null and ch.market is null
 ```
 
-**Fixture check** Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
+**Fixture check** Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
 
-**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zd
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008ze
 
 **Notes**
 
@@ -31032,7 +31032,7 @@ count of active markets with no counted, not gone review_channel of that market;
 
 **Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
 
-**Computed in** `cma.data_quality` (0008zd); `cma.data_quality_of` (0008zd); `cma.data_quality_reviews_checks` (0008zd); `getDataQuality` in src/lib/data/postgres.ts
+**Computed in** `cma.data_quality` (0008ze); `cma.data_quality_of` (0008ze); `cma.data_quality_reviews_checks` (0008ze); `getDataQuality` in src/lib/data/postgres.ts
 
 **Verification query** (Studio, with the tenant id and the period's business dates filled in)
 
@@ -31040,9 +31040,9 @@ count of active markets with no counted, not gone review_channel of that market;
 select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 'active' and exists (select 1 from cma.integration_connection c where c.tenant_id = m.tenant_id and c.status = 'active' and (c.kind = 'reviews' or exists (select 1 from cma.review_channel x where x.tenant_id = c.tenant_id and x.connection_id = c.id))) and not exists (select 1 from cma.review_channel ch where ch.tenant_id = m.tenant_id and ch.market = m.code and ch.is_counted and ch.source_deleted_at is null)
 ```
 
-**Fixture check** Not run here (no database in this session); 103_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
+**Fixture check** Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.
 
-**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zd
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008ze
 
 **Notes**
 

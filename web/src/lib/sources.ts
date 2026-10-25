@@ -20,7 +20,7 @@ const SECTIONS: Record<SourceKind, SourceSection[]> = {
   telephony: ["lines", "tags", "missedReasons"],
   commerce: ["store"],
   automation: [],
-  // reviewChannels: a review platform's channels with their market and counted flag, and the reviews' settings (addition 0008zd)
+  // reviewChannels: a review platform's channels with their market and counted flag, and the reviews' settings (addition 0008ze)
   reviews: ["reviewChannels"],
 };
 

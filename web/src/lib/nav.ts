@@ -52,7 +52,7 @@ export type ShellPage =
   | "attempts" | "attempts-per-agent"
   /** Funnel and Cancellations (addition 0008zb): the deals through their stages with the lost reasons, and the cancellation requests */
   | "funnel" | "cancellations"
-  /** Reviews (addition 0008zd, brief B18): the review platform's reviews per market, channel and week */
+  /** Reviews (addition 0008ze, brief B18): the review platform's reviews per market, channel and week */
   | "reviews"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
@@ -211,7 +211,7 @@ export function navEntries(copy: Copy): NavEntry[] {
         // (off for Pulse4all until Yordi confirms it, README Open decisions)
         { page: "first-orders", href: "/reports/first-orders", label: copy.nav.firstOrders, permission: ["reports.view", "performance.team"] },
         { page: "orders-per-person", href: "/reports/orders-per-person", label: copy.nav.ordersPerPerson, permission: "performance.team", perPerson: "orders" },
-        // Reviews (addition 0008zd, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
+        // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact; team figures only, as every report
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },

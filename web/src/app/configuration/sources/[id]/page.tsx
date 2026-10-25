@@ -58,7 +58,7 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     startDate: valueOf("email.start_date") || null, replyTargetMinutes: numberOf(valueOf("email.reply_target_minutes")),
     noResponseDays: numberOf(valueOf("email.no_response_days")), marketOrder: valueOf("email.market_order"),
   };
-  // the tenant's review settings (addition 0008zd), on a reviews connection
+  // the tenant's review settings (addition 0008ze), on a reviews connection
   const reviews = sourceSections(detail.connection.kind, detail.connection.heldKinds).includes("reviewChannels")
     ? { negativeMaxRating: Number(valueOf("reviews.negative_max_rating") ?? 2), historyStartDate: valueOf("reviews.history_start_date") || null } : null;
   // the reasons and the record kind rules (addition 0008zb), for a connection with customer records

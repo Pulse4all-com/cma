@@ -1,5 +1,5 @@
 {
-  "_about": "Invented eTrusted channels, reviews and HubSpot contacts for verify/reviews-mapping.mjs and verify/reviews-flow.mjs (addition 0008zd). Times as ago:<minutes>. The customer fields, titles and texts are here so the verifiers can prove none of them is kept.",
+  "_about": "Invented eTrusted channels, reviews and HubSpot contacts for verify/reviews-mapping.mjs and verify/reviews-flow.mjs (addition 0008ze). Times as ago:<minutes>. The customer fields, titles and texts are here so the verifiers can prove none of them is kept.",
   "channels": [
     { "id": "chl-fixture-nl", "name": "shop-nl.example", "locale": "nl_NL", "url": "https://shop-nl.example" },
     { "id": "chl-fixture-gb", "name": "shop-gb.example", "locale": "en_GB" },

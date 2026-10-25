@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 103_verify_reviews.sql: verifies addition 0008zd, reviews (channels, reviews, links, alerts and reports)
+-- 105_verify_reviews.sql: verifies addition 0008ze, reviews (channels, reviews, links, alerts and reports)
 -- =============================================================================================
 -- Dev only: the script refuses a database that does not hold the dev seed's active test person
 -- (agent.two@example.com, db/03); prod never holds example.com people. Block A checks structure and privileges;
@@ -7,8 +7,8 @@
 -- nothing of the seed is used; adapters, channels, reviews, orders, contacts and people are invented data values, and
 -- no row carries a name of a customer, an address, an email or a phone number. Every check writes one row, PASS or
 -- FAIL, and the last result lists them with the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM
--- login in dev, after 102_reviews.sql; then 101, 99, 79, 75 and 41 again.
---   A  structure and privileges: the addition row after 0008zc; the two tables' columns, keys and checks (the link
+-- login in dev, after 104_reviews.sql; then 103, 101, 99, 79, 75 and 41 again.
+--   A  structure and privileges: the addition row after 0008zd; the two tables' columns, keys and checks (the link
 --      rules, the filtered raw, the market's foreign key); the connection kind reviews, the trigger review_submitted
 --      and max_rating; row-level security with the tenant policy, the audit trigger, no delete for the application and
 --      nothing for the readers on the tables; every function the application's only and in the caller's rights, the
@@ -49,16 +49,16 @@ select set_config('verify.is_dev', (exists (select 1 from cma.app_user u join cm
 do $$
 begin
   if not current_setting('verify.is_dev')::boolean then
-    raise exception 'REFUSED: the connected database is not dev (no active agent.two@example.com); 103 runs in dev only';
+    raise exception 'REFUSED: the connected database is not dev (no active agent.two@example.com); 105 runs in dev only';
   end if;
 end
 $$;
 
-drop table if exists pg_temp.verify_0008zd;
-create temp table verify_0008zd (ord int, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0008ze;
+create temp table verify_0008ze (ord int, check_name text, result text, detail text);
 
 -- The error code a statement raises, or 'ok'
-create or replace function pg_temp.v0008zd_code(p_sql text)
+create or replace function pg_temp.v0008ze_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -71,7 +71,7 @@ end
 $$;
 
 -- The fastest of p_runs runs of a read, in milliseconds, every row fetched (as 91)
-create or replace function pg_temp.v0008zd_best_ms(p_sql text, p_runs integer)
+create or replace function pg_temp.v0008ze_best_ms(p_sql text, p_runs integer)
 returns numeric
 language plpgsql
 as $$
@@ -94,7 +94,7 @@ end
 $$;
 
 -- A figures object as one line: reviews/average/negative/order/contact/none (- for no average)
-create or replace function pg_temp.v0008zd_fig(j jsonb)
+create or replace function pg_temp.v0008ze_fig(j jsonb)
 returns text
 language sql
 as $$
@@ -113,10 +113,10 @@ begin
   if not current_setting('verify.is_dev')::boolean then
     return;
   end if;
-  -- A1. the addition is recorded, after 0008zc
-  insert into verify_0008zd values (1, 'A1 addition 0008zd recorded, after 0008zc',
-    case when exists (select 1 from cma.schema_migration where version = '0008zd')
-              and exists (select 1 from cma.schema_migration where version = '0008zc') and not v_provoke then 'PASS' else 'FAIL' end,
+  -- A1. the addition is recorded, after 0008zd
+  insert into verify_0008ze values (1, 'A1 addition 0008ze recorded, after 0008zd',
+    case when exists (select 1 from cma.schema_migration where version = '0008ze')
+              and exists (select 1 from cma.schema_migration where version = '0008zd') and not v_provoke then 'PASS' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
   -- A2. the tables: columns with types and nullability
@@ -142,7 +142,7 @@ begin
          where table_schema = 'cma' and table_name = 'message_rule' and column_name = 'max_rating') is distinct from '3,2' then
     v_bad := v_bad || 'rating or max_rating not numeric(3,2); ';
   end if;
-  insert into verify_0008zd values (2, 'A2 the two tables'' columns, types and nullability; rating and max_rating numeric(3,2)',
+  insert into verify_0008ze values (2, 'A2 the two tables'' columns, types and nullability; rating and max_rating numeric(3,2)',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A3. keys and checks: one review per connection and source id, one channel likewise; the link rules; the filtered
@@ -178,7 +178,7 @@ begin
      or cma.review_raw_ok('{"event": {"type": "checkout", "email": "x"}}') or cma.review_raw_ok('[]') then
     v_bad := v_bad || 'review_raw_ok; ';
   end if;
-  insert into verify_0008zd values (3, 'A3 keys, the link rules, the filtered raw, the market''s key, the kind and the trigger',
+  insert into verify_0008ze values (3, 'A3 keys, the link rules, the filtered raw, the market''s key, the kind and the trigger',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A4. tenant-aware as every table: row-level security with the tenant policy, the audit trigger; the application may
@@ -194,7 +194,7 @@ begin
       v_bad := v_bad || v_t || '; ';
     end if;
   end loop;
-  insert into verify_0008zd values (4, 'A4 row-level security, the audit trigger, no delete for the application, nothing for the readers',
+  insert into verify_0008ze values (4, 'A4 row-level security, the audit trigger, no delete for the application, nothing for the readers',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A5. every function the application's only and in the caller's rights; the readers' functions definer, the owner's,
@@ -228,7 +228,7 @@ begin
       v_bad := v_bad || v_fn || '; ';
     end if;
   end loop;
-  insert into verify_0008zd values (5, 'A5 every function the application''s only and invoker; the readers'' functions definer, the owner''s, pinned, theirs only',
+  insert into verify_0008ze values (5, 'A5 every function the application''s only and invoker; the readers'' functions definer, the owner''s, pinned, theirs only',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A6. the reporting views' exact columns, readable by the readers; no raw, name of a person, email, phone, title or text
@@ -273,7 +273,7 @@ begin
       v_bad := v_bad || v_t || ' not readable; ';
     end if;
   end loop;
-  insert into verify_0008zd values (6, 'A6 the reporting views'' exact columns, readable; no raw, person''s name, email, phone, title or text',
+  insert into verify_0008ze values (6, 'A6 the reporting views'' exact columns, readable; no raw, person''s name, email, phone, title or text',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A7. the two settings (2; empty), the job name reviews_poll, the data-quality catalog (210, 220), nothing twice
@@ -288,10 +288,10 @@ begin
   end if;
   if (select string_agg(check_key || ':' || sort_order, ',' order by sort_order) from cma.data_quality_reviews_checks())
      is distinct from 'review_channel_unmapped:210,market_without_review_channel:220'
-     or (select count(*) from cma.schema_migration where version = '0008zd') <> 1 then
+     or (select count(*) from cma.schema_migration where version = '0008ze') <> 1 then
     v_bad := v_bad || 'the data-quality catalog or something twice; ';
   end if;
-  insert into verify_0008zd values (7, 'A7 the two settings, the job reviews_poll, the data-quality catalog, nothing twice',
+  insert into verify_0008ze values (7, 'A7 the two settings, the job reviews_poll, the data-quality catalog, nothing twice',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 
   -- A8. the redefinitions carry what came before: 0008n's held kinds (tasks, email) with reviews; 0008zc's data quality
@@ -316,7 +316,7 @@ begin
      or (select prosrc from pg_proc where oid = 'cma.connection_catalogs(uuid)'::regprocedure) !~ '''reviewChannels''' then
     v_bad := v_bad || 'connection_catalogs; ';
   end if;
-  insert into verify_0008zd values (8, 'A8 the redefinitions carry 0008n''s kinds, 0008zc''s data quality, 0008p''s checks, the tag meaning',
+  insert into verify_0008ze values (8, 'A8 the redefinitions carry 0008n''s kinds, 0008zc''s data quality, 0008p''s checks, the tag meaning',
     case when v_bad = '' and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
@@ -343,8 +343,8 @@ begin
   end if;
   begin
     -- tenants, people and roles (as the owner)
-    v_t1 := cma.create_tenant('verify-0008zd-one', 'Verify 0008zd one', 'Europe/Amsterdam');
-    v_t2 := cma.create_tenant('verify-0008zd-two', 'Verify 0008zd two', 'Europe/Amsterdam');
+    v_t1 := cma.create_tenant('verify-0008ze-one', 'Verify 0008ze one', 'Europe/Amsterdam');
+    v_t2 := cma.create_tenant('verify-0008ze-two', 'Verify 0008ze two', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-analyst1@example.invalid', 'analyst1') returning id into v_analyst1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-reader1@example.invalid', 'reader1') returning id into v_reader1;
@@ -412,11 +412,11 @@ begin
                                    ' ' order by ch.source_id) from cma.review_channel ch where ch.tenant_id = v_t1);
     perform set_config('app.user_id', v_admin1::text, true);
     perform cma.set_review_channel(v_rev, 'chl-fr', 'FR', true);
-    v_txt := v_txt || ' | ' || pg_temp.v0008zd_code(format('select cma.set_review_channel(%L, %L, null, true)', v_rev, 'chl-none'))
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_review_channel(%L, %L, %L, true)', v_rev, 'chl-x', 'XX'))
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_review_channel(%L, %L, null, null)', v_rev, 'chl-x'));
+    v_txt := v_txt || ' | ' || pg_temp.v0008ze_code(format('select cma.set_review_channel(%L, %L, null, true)', v_rev, 'chl-none'))
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_review_channel(%L, %L, %L, true)', v_rev, 'chl-x', 'XX'))
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_review_channel(%L, %L, null, null)', v_rev, 'chl-x'));
     perform set_config('app.user_id', v_agent1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code(format('select cma.set_review_channel(%L, %L, null, false)', v_rev, 'chl-x'));
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code(format('select cma.set_review_channel(%L, %L, null, false)', v_rev, 'chl-x'));
     v_rows := v_rows || array['11', 'B1 the channel catalog: new unmapped and not counted, renamed, gone, an empty list, the configuration kept, the refusals',
       case when v_txt = '4 chl-gb:-:false:en_GB chl-nl:-:false:nl_NL chl-old:-:false:de_DE chl-x:-:false:- | 3 0 chl-fr:-:false:false:Shop FR '
                         || 'chl-gb:GB:true:false:Shop GB chl-nl:NL:true:false:Shop NL renamed chl-old:-:false:true:Old shop chl-x:-:false:false:Shop X'
@@ -427,12 +427,12 @@ begin
     --     or automation connection takes no channel or review (CMA04)
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := array_to_string(cma.connection_held_kinds_of(v_t1, v_rev), ',')
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_connection_kind(%L, %L)', v_rev, 'crm'))
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_connection_kind(%L, %L)', v_rev, 'reviews'));
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_connection_kind(%L, %L)', v_rev, 'crm'))
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_connection_kind(%L, %L)', v_rev, 'reviews'));
     v_txt := v_txt || ' ' || coalesce((select c.kind from cma.integration_connection c where c.id = v_rev), '-');
     perform set_config('app.user_id', v_ing1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code(format('select cma.ingest_upsert_review_channels(%L, %L)', v_crm, '[{"channelId": "chl-a", "name": "A"}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_auto, '[]'));
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code(format('select cma.ingest_upsert_review_channels(%L, %L)', v_crm, '[{"channelId": "chl-a", "name": "A"}]'))
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_auto, '[]'));
     v_rows := v_rows || array['12', 'B2 the kind reviews from the rows, set and kept; a CRM or automation connection takes none (CMA04)',
       case when v_txt = 'reviews CMA03 ok reviews CMA04 CMA04' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -502,19 +502,19 @@ begin
 
     -- B5. the refusals (CMA04): a raw with a text, a customer, an email in the event; a rating of 6; no submitted time; an
     --     unpublished flag that is no boolean; more than 500 items. Nothing is stored
-    v_txt := pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+    v_txt := pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-1", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": true, "rating": 3, "submittedAt": "2026-10-01T00:00:00Z", "raw": {"comment": "a text"}}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-2", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": true, "rating": 3, "submittedAt": "2026-10-01T00:00:00Z", "raw": {"customer": {"email": "x@example.invalid"}}}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-3", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": true, "rating": 3, "submittedAt": "2026-10-01T00:00:00Z", "raw": {"event": {"type": "checkout", "email": "x"}}}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-4", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": true, "rating": 6, "submittedAt": "2026-10-01T00:00:00Z"}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-5", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": true, "rating": 3}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                '[{"reviewId": "bad-6", "channelId": "chl-nl", "type": "S", "state": "A", "isPublished": "yes", "rating": 3, "submittedAt": "2026-10-01T00:00:00Z"}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev,
                (select jsonb_agg(jsonb_build_object('reviewId', 'many-' || g)) from generate_series(1, 501) g)))
              || ' ' || (select count(*) from cma.review r where r.tenant_id = v_t1 and (r.source_id like 'bad-%' or r.source_id like 'many-%'));
     v_rows := v_rows || array['15', 'B5 a raw with a text, a customer or an email, a rating of 6, no time, a flag that is no boolean, 501 items: CMA04, nothing stored',
@@ -529,7 +529,7 @@ begin
              || ' ' || cma.set_review_contact(v_rev, 'rev-4', v_crm, 'c-8')
              || ' ' || cma.set_review_contact(v_rev, 'rev-1', v_crm, 'c-7')
              || ' ' || cma.set_review_contact(v_rev, 'rev-none', v_crm, 'c-7')
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_review_contact(%L, %L, %L, %L)', v_rev, 'rev-3', v_shop, 'c-7'));
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_review_contact(%L, %L, %L, %L)', v_rev, 'rev-3', v_shop, 'c-7'));
     select v_txt || ' ' || string_agg(x.outcome || ':' || x.link_level || ':' || x.has_contact, ',') into v_txt
     from cma.ingest_upsert_reviews(v_rev, jsonb_build_array(
       jsonb_build_object('reviewId', 'rev-4', 'channelId', 'chl-gb', 'type', 'SERVICE_REVIEW', 'state', 'APPROVED', 'isPublished', true,
@@ -589,14 +589,14 @@ begin
     --     date or nothing (a wrong date refused); the defaults 2 and empty
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := cma.setting_of(v_t1, 'reviews.negative_max_rating') || ' ' || coalesce(nullif(cma.setting_of(v_t1, 'reviews.history_start_date'), ''), 'empty')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''0'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''5'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''two'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''3'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.history_start_date'', ''2026-13-01'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.history_start_date'', '' 2024-01-01 '')');
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''0'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''5'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''two'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.negative_max_rating'', ''3'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.history_start_date'', ''2026-13-01'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.history_start_date'', '' 2024-01-01 '')');
     v_txt := v_txt || ' ' || cma.setting_of(v_t1, 'reviews.history_start_date')
-             || ' ' || pg_temp.v0008zd_code('select cma.set_tenant_setting(''reviews.history_start_date'', '''')');
+             || ' ' || pg_temp.v0008ze_code('select cma.set_tenant_setting(''reviews.history_start_date'', '''')');
     perform cma.set_tenant_setting('reviews.negative_max_rating', '2');
     v_rows := v_rows || array['19', 'B9 the settings: the threshold 1 to 4, the history start a date or nothing',
       case when v_txt = '2 empty CMA04 CMA04 CMA04 ok CMA04 ok 2024-01-01 ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -610,11 +610,11 @@ begin
     perform cma.upsert_review_rule('Negative review', 'performance.team', false, false, null, 'urgent', 2, 1440);
     select string_agg(r.name || ':' || r.trigger || ':' || r.record_type || ':' || coalesce(r.max_rating::text, '-') || ':' || r.urgency, ' ' order by r.name)
     into v_txt from cma.message_rules() r;
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code('select cma.upsert_review_rule(''Verify new deal'', ''performance.team'', false, false, null, ''normal'', 2)')
-             || ' ' || pg_temp.v0008zd_code('select cma.upsert_review_rule(''Bad'', ''performance.team'', false, false, null, ''normal'', 6)')
-             || ' ' || pg_temp.v0008zd_code('select cma.upsert_assignment_rule(''Negative review'', ''deal'', ''{}'', ''normal'')');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Verify new deal'', ''performance.team'', false, false, null, ''normal'', 2)')
+             || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Bad'', ''performance.team'', false, false, null, ''normal'', 6)')
+             || ' ' || pg_temp.v0008ze_code('select cma.upsert_assignment_rule(''Negative review'', ''deal'', ''{}'', ''normal'')');
     perform set_config('app.user_id', v_agent1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code('select cma.upsert_review_rule(''Agent'', ''performance.team'', false, false, null, ''normal'', 2)');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.upsert_review_rule(''Agent'', ''performance.team'', false, false, null, ''normal'', 2)');
     perform set_config('app.user_id', v_admin1::text, true);
     v_rows := v_rows || array['20', 'B10 review rules with and without a highest rating, listed; another trigger''s name, a rating of 6, an agent refused',
       case when v_txt = 'Every review:review_submitted:review:-:normal Negative review:review_submitted:review:2.00:urgent Verify new deal:record_created:deal:-:normal '
@@ -627,7 +627,7 @@ begin
     --      only in the history start
     perform set_config('app.user_id', v_analyst1::text, true);
     j := cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', null, 'day', v_now);
-    v_txt := pg_temp.v0008zd_fig(j -> 'figures') || ' prev ' || pg_temp.v0008zd_fig(j -> 'previous')
+    v_txt := pg_temp.v0008ze_fig(j -> 'figures') || ' prev ' || pg_temp.v0008ze_fig(j -> 'previous')
              || ' ' || (j ->> 'previous_from') || '..' || (j ->> 'previous_to') || ':' || (j ->> 'previous_partial')
              || ' stars ' || (select string_agg((d ->> 'reviews') || '/' || (d ->> 'previous'), ',' order by (d ->> 'stars')::int) from jsonb_array_elements(j -> 'distribution') d)
              || ' links ' || (select string_agg((d ->> 'level') || ':' || (d ->> 'reviews') || '/' || (d ->> 'previous'), ',') from jsonb_array_elements(j -> 'link_levels') d)
@@ -645,15 +645,15 @@ begin
              || ' ' || (select string_agg((g ->> 'key') || '=' || (g ->> 'reviews'), ',' order by g ->> 'key') from jsonb_array_elements(j -> 'groups') g where (g ->> 'reviews')::int > 0)
              || ' week ' || (select string_agg((g ->> 'key') || '=' || (g ->> 'reviews'), ',' order by g ->> 'key')
                              from jsonb_array_elements(cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', null, 'week', v_now) -> 'groups') g)
-             || ' markets ' || (select string_agg((m ->> 'market') || ':' || pg_temp.v0008zd_fig(m -> 'current') || '<' || pg_temp.v0008zd_fig(m -> 'previous'), ' ')
+             || ' markets ' || (select string_agg((m ->> 'market') || ':' || pg_temp.v0008ze_fig(m -> 'current') || '<' || pg_temp.v0008ze_fig(m -> 'previous'), ' ')
                                 from jsonb_array_elements(j -> 'markets') m)
              || ' channels ' || (select string_agg((c ->> 'channel') || ':' || (c ->> 'name') || ':' || (c ->> 'market') || ':' || ((c -> 'current') ->> 'reviews'), ' ')
                                  from jsonb_array_elements(j -> 'channels') c)
              || ' events ' || (select string_agg(coalesce(e ->> 'event_type', 'none') || ':' || (e ->> 'reviews') || '/' || (e ->> 'previous'), ',') from jsonb_array_elements(j -> 'invite_events') e)
              || ' states ' || (select string_agg((s ->> 'market') || ':' || (s ->> 'state') || ':' || (s ->> 'channels'), ' ') from jsonb_array_elements(j -> 'market_states') s)
              || ' filter ' || (select string_agg(f #>> '{}', ',') from jsonb_array_elements(j -> 'filter_markets') f)
-             || ' NL ' || pg_temp.v0008zd_fig(cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', 'NL', 'day', v_now) -> 'figures')
-             || ' unknown ' || pg_temp.v0008zd_fig(cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', 'unknown', 'day', v_now) -> 'figures');
+             || ' NL ' || pg_temp.v0008ze_fig(cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', 'NL', 'day', v_now) -> 'figures')
+             || ' unknown ' || pg_temp.v0008ze_fig(cma.reviews_page_of(v_t1, '2026-10-01', '2026-10-14', 'unknown', 'day', v_now) -> 'figures');
     v_rows := v_rows || array['22', 'B12 the groups by day and week, markets, channels, invite events, the markets'' states, the filter',
       case when v_txt = '14 2026-10-02=1,2026-10-05=1,2026-10-14=2 week 2026-09-28=1,2026-10-05=1,2026-10-12=2 '
                         || 'markets GB:2/2.75/1/0/1/1<1/2.00/1/0/0/1 NL:2/3.50/1/2/0/0<1/4.00/0/0/0/1 '
@@ -665,16 +665,16 @@ begin
 
     -- B13. the page's parameters and permissions: 93 days, a market of three letters, a group of month (CMA04); an agent
     --      (CMA06); the reader with reports.view, the supervisor with performance.team and the analyst read it
-    v_txt := pg_temp.v0008zd_code('select cma.reviews_page(''2026-07-01'', ''2026-10-01'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', ''NLD'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', null, ''month'')')
-             || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', ''unknown'', ''day'')');
+    v_txt := pg_temp.v0008ze_code('select cma.reviews_page(''2026-07-01'', ''2026-10-01'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', ''NLD'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', null, ''month'')')
+             || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'', ''unknown'', ''day'')');
     perform set_config('app.user_id', v_agent1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
     perform set_config('app.user_id', v_reader1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
     perform set_config('app.user_id', v_super1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_code('select cma.reviews_page(''2026-10-01'', ''2026-10-14'')');
     v_rows := v_rows || array['23', 'B13 the page''s range, market and group (CMA04), an agent (CMA06), reports.view and performance.team read it',
       case when v_txt = 'CMA04 CMA04 CMA04 ok CMA06 ok ok' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
@@ -764,12 +764,12 @@ begin
     --      holds nothing of tenant one; tenant one's channels and reviews are invisible from tenant two
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_ing2::text, true);
-    v_txt := pg_temp.v0008zd_code(format('select cma.ingest_upsert_review_channels(%L, %L)', v_rev, '[{"channelId": "chl-z", "name": "Z"}]'))
-             || ' ' || pg_temp.v0008zd_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev, '[]'))
-             || ' ' || pg_temp.v0008zd_code(format('select cma.set_review_contact(%L, %L, %L, %L)', v_rev, 'rev-1', v_crm, 'c-1'))
+    v_txt := pg_temp.v0008ze_code(format('select cma.ingest_upsert_review_channels(%L, %L)', v_rev, '[{"channelId": "chl-z", "name": "Z"}]'))
+             || ' ' || pg_temp.v0008ze_code(format('select * from cma.ingest_upsert_reviews(%L, %L)', v_rev, '[]'))
+             || ' ' || pg_temp.v0008ze_code(format('select cma.set_review_contact(%L, %L, %L, %L)', v_rev, 'rev-1', v_crm, 'c-1'))
              || ' ' || (select count(*) from cma.review r) || '/' || (select count(*) from cma.review_channel ch);
     perform set_config('app.user_id', v_analyst2::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zd_fig(cma.reviews_page('2026-10-01', '2026-10-14') -> 'figures');
+    v_txt := v_txt || ' ' || pg_temp.v0008ze_fig(cma.reviews_page('2026-10-01', '2026-10-14') -> 'figures');
     perform set_config('app.tenant_id', v_t1::text, true);
     v_rows := v_rows || array['27', 'B17 tenant isolation: tenant two writes nothing into tenant one''s connection and sees none of it',
       case when v_txt = 'CMA02 CMA02 CMA02 0/0 0/-/0/0/0/0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -798,11 +798,11 @@ begin
     when others then
       v_rows := v_rows || array['59', 'B the block ran to the end', 'FAIL', sqlerrm];
   end;
-  insert into verify_0008zd (ord, check_name, result, detail)
+  insert into verify_0008ze (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008zd values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008ze values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
@@ -820,7 +820,7 @@ begin
     return;
   end if;
   begin
-    v_t := cma.create_tenant('verify-0008zd-volume', 'Verify 0008zd volume', 'Europe/Amsterdam');
+    v_t := cma.create_tenant('verify-0008ze-volume', 'Verify 0008ze volume', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-admin-volume@example.invalid', 'admin') returning id into v_admin;
     insert into cma.user_role (tenant_id, user_id, role_id) select v_t, v_admin, ar.id from cma.app_role ar where ar.tenant_id = v_t and ar.key = 'admin';
     insert into cma.market (tenant_id, code, name, time_zone, language_code, currency)
@@ -839,7 +839,7 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t::text, true);
     perform set_config('app.user_id', v_admin::text, true);
-    v_ms := pg_temp.v0008zd_best_ms(format('select cma.reviews_page_of(%L, %L, %L, null, %L, %L)', v_t, '2026-07-15', '2026-10-14', 'week',
+    v_ms := pg_temp.v0008ze_best_ms(format('select cma.reviews_page_of(%L, %L, %L, null, %L, %L)', v_t, '2026-07-15', '2026-10-14', 'week',
                                            '2026-10-14 10:00:00+00'), 3);
     v_rows := v_rows || array['41', 'C1 the page of 92 days over 20,000 reviews, as the application, under verify.max_ms',
       case when v_ms < v_max and not v_provoke then 'PASS' else 'FAIL' end, v_ms || ' ms'];
@@ -849,29 +849,29 @@ begin
     when others then
       v_rows := v_rows || array['79', 'C the block ran to the end', 'FAIL', sqlerrm];
   end;
-  insert into verify_0008zd (ord, check_name, result, detail)
+  insert into verify_0008ze (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008zd values (79, 'C the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008ze values (79, 'C the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
 
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
-from (select ord, check_name, result, detail from verify_0008zd
+from (select ord, check_name, result, detail from verify_0008ze
       union all
       select 99, 'verdict',
              case when not current_setting('verify.is_dev')::boolean then 'REFUSED: not dev'
                   when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zd where result = 'PASS') = 27
-                       and not exists (select 1 from verify_0008zd where result <> 'PASS') then 'PASS'
+                  when (select count(*) from verify_0008ze where result = 'PASS') = 27
+                       and not exists (select 1 from verify_0008ze where result <> 'PASS') then 'PASS'
                   else 'FAIL' end,
-             format('103_verify_reviews: %s PASS, %s FAIL', (select count(*) from verify_0008zd where result = 'PASS'),
-                                                            (select count(*) from verify_0008zd where result <> 'PASS'))) x
+             format('105_verify_reviews: %s PASS, %s FAIL', (select count(*) from verify_0008ze where result = 'PASS'),
+                                                            (select count(*) from verify_0008ze where result <> 'PASS'))) x
 order by ord;
-drop function if exists pg_temp.v0008zd_code(text);
-drop function if exists pg_temp.v0008zd_best_ms(text, integer);
-drop function if exists pg_temp.v0008zd_fig(jsonb);
+drop function if exists pg_temp.v0008ze_code(text);
+drop function if exists pg_temp.v0008ze_best_ms(text, integer);
+drop function if exists pg_temp.v0008ze_fig(jsonb);
 reset role;

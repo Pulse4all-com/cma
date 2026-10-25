@@ -175,7 +175,7 @@ expect("the effect of a created-record rule", ruleEffect({ ...newRule("record_cr
   ["A new deal in any counted pipeline alerts the holders of leads.accept, clocked in, with the language.", "Else leads.manage.", "At most 60 minutes old (default).", "One tone."], []);
 expect("the effect of an assignment rule, switched off", ruleEffect({ ...newRule("record_assigned", "deal"), pipelineIds: ["p1"], maxAgeMinutes: 30, enabled: false }, choices, 60, words),
   ["Off.", "When a deal in Sales gets an owner, that owner's person is alerted.", "At most 30 minutes old.", "A chime."], ["Off."]);
-// Review rules (addition 0008zd): seed 02's Negative review as the start, the tenant's threshold as the highest rating
+// Review rules (addition 0008ze): seed 02's Negative review as the start, the tenant's threshold as the highest rating
 expect("a new review rule starts as seed 02's", newRule("review_submitted", "deal", 2),
   { name: "", trigger: "review_submitted", recordType: "review", pipelineIds: [], urgency: "normal", maxAgeMinutes: 1440, audiencePermission: "performance.team",
     matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, maxRating: 2 }, null);

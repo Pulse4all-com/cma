@@ -4,7 +4,7 @@
 -- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
 -- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
--- (after 0008v) its journeys of Campaign monitoring and (after 0008zd) its negative-review alert rule.
+-- (after 0008v) its journeys of Campaign monitoring and (after 0008ze) its negative-review alert rule.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -432,7 +432,7 @@ begin
 end
 $$;
 
--- The negative-review alert rule (after addition 0008zd, brief B18, 25 October 2026): Pulse4all Subscriptions gets one
+-- The negative-review alert rule (after addition 0008ze, brief B18, 25 October 2026): Pulse4all Subscriptions gets one
 -- rule, Negative review, switched off until Kira decides the threshold and the audience (README Open decisions). Once on,
 -- a published review of a counted review channel rated at or below reviews.negative_max_rating alerts the holders of
 -- performance.team, without the language or clocked-in conditions and without a fallback, at most a day old. Only where
@@ -440,12 +440,12 @@ $$;
 do $$
 begin
   if to_regclass('cma.message_rule') is null then
-    raise notice 'the alert rules do not exist yet (addition 0008zd): rerun this seed after 102_reviews.sql';
+    raise notice 'the alert rules do not exist yet (addition 0008ze): rerun this seed after 104_reviews.sql';
     return;
   end if;
   if not exists (select 1 from information_schema.columns
                  where table_schema = 'cma' and table_name = 'message_rule' and column_name = 'max_rating') then
-    raise notice 'the review alert rule does not exist yet (addition 0008zd): rerun this seed after 102_reviews.sql';
+    raise notice 'the review alert rule does not exist yet (addition 0008ze): rerun this seed after 104_reviews.sql';
     return;
   end if;
   insert into cma.message_rule (tenant_id, name, trigger, record_type, pipeline_ids, audience_permission, match_language,

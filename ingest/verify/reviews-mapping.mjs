@@ -1,5 +1,5 @@
 /**
- * Verifier: the Trusted Shops adapter without a database (addition 0008zd, brief B18), against verify/etrusted-fake.mjs
+ * Verifier: the Trusted Shops adapter without a database (addition 0008ze, brief B18), against verify/etrusted-fake.mjs
  * and the invented fixture verify/fixtures/trustedshops/reviews-source.json.
  *
  *   node verify/reviews-mapping.mjs [--provoke]

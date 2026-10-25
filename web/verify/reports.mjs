@@ -1545,8 +1545,8 @@ const P80_IN_FUNNEL = /p80_?days|P80Days|percentile_cont\(0\.8\)|percentileCont\
 expect("funnel: the median only, no 80th percentile of days in stage in the read, the type, the data layer, the mirror, the table, the file or the copy",
   Object.entries(fnNoP80).filter(([, text]) => P80_IN_FUNNEL.test(text)).map(([f]) => f), [], ["lib/funnel.ts"]);
 
-// ---- Reviews (addition 0008zd, brief B18) on 103's own scenario -------------------------------------------------
-// Tenant one's review channels and reviews as 103's B1 to B9 leave them (chl-nl NL and chl-gb GB counted, chl-fr FR
+// ---- Reviews (addition 0008ze, brief B18) on 105's own scenario -------------------------------------------------
+// Tenant one's review channels and reviews as 105's B1 to B9 leave them (chl-nl NL and chl-gb GB counted, chl-fr FR
 // counted without reviews, chl-x without a market, chl-old gone; rev-3 linked to a contact by B5), seen on Wednesday 14
 // October 2026 at 10:00 UTC (12:00 in Amsterdam); the active markets DE, FR, GB and NL; the negative threshold 2
 const RV_NOW = "2026-10-14T10:00:00Z";
@@ -1569,13 +1569,13 @@ const rvPage = (market, group = "day") => reviewsReport(RV_RECORDS, { from: "202
   connected: true, markets: RV_MARKETS, marketStates: RV_STATES, filterMarkets: ["FR", "GB", "NL"] });
 const rvFig = (f) => `${f.reviews}/${f.averageRating === null ? "-" : f.averageRating.toFixed(2)}/${f.negative}/${f.linkedOrder}/${f.linkedContact}/${f.unlinked}`;
 const rvAll = rvPage(null);
-expect("reviews: the figures, the previous period like for like, per whole star, the link levels, the history start, as 103's B11",
+expect("reviews: the figures, the previous period like for like, per whole star, the link levels, the history start, as 105's B11",
   `${rvFig(rvAll.current)} prev ${rvFig(rvAll.previous)} ${rvAll.previousFrom}..${rvAll.previousTo}:${rvAll.previousPartial} stars ${rvAll.distribution.map((d) => `${d.reviews}/${d.previous}`).join(",")} `
     + `links ${rvAll.linkLevels.map((l) => `${l.level}:${l.reviews}/${l.previous}`).join(",")} start ${rvAll.historyStart} neg ${rvAll.negativeMaxRating} ${rvAll.connected}`,
   "4/3.13/2/2/1/1 prev 2/3.00/1/0/0/2 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/0 links order:2/0,contact:1/0,none:1/2 start 2026-08-01 neg 2 true",
   "4/3.13/2/2/1/1 prev 3/3.67/1/0/0/3 2026-09-17..2026-09-30:true stars 1/0,1/1,0/0,0/1,2/1 links order:2/0,contact:1/0,none:1/3 start 2026-08-01 neg 2 true");
 const rvWeek = rvPage(null, "week");
-expect("reviews: by day and week (22:30 UTC on the 13th is the 14th), markets, channels, invite events, the states, a market, as 103's B12",
+expect("reviews: by day and week (22:30 UTC on the 13th is the 14th), markets, channels, invite events, the states, a market, as 105's B12",
   `${rvAll.byPeriod.length} ${rvAll.byPeriod.filter((g) => g.reviews > 0).map((g) => `${g.key}=${g.reviews}`).join(",")} week ${rvWeek.byPeriod.map((g) => `${g.key}=${g.reviews}`).join(",")} `
     + `markets ${rvAll.byMarket.map((m) => `${m.market}:${rvFig(m.current)}<${rvFig(m.previous)}`).join(" ")} `
     + `channels ${rvAll.byChannel.map((c) => `${c.channel}:${c.name}:${c.market}:${c.current.reviews}`).join(" ")} `

@@ -162,7 +162,7 @@ const cases = [
   ["reader", "/reports/funnel?range=month&group=day", 45, 10],
   ["manager", "/reports/cancellations?range=month", 15, 4],
   ["reader", "/reports/cancellations?range=week&group=day", 15, 4],
-  // Reviews (addition 0008zd): four tiles; per market six headers, per week or day five, per review channel six, the
+  // Reviews (addition 0008ze): four tiles; per market six headers, per week or day five, per review channel six, the
   // markets' states four
   ["manager", "/reports/reviews?range=month", 15, 4],
   ["reader", "/reports/reviews?range=week&group=day", 15, 4],

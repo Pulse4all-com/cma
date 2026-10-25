@@ -1,11 +1,11 @@
 /**
- * Reviews (addition 0008zd, brief B18; KPI 3): Reports → Reviews. The review platform (Trusted Shops for Pulse4all
+ * Reviews (addition 0008ze, brief B18; KPI 3): Reports → Reviews. The review platform (Trusted Shops for Pulse4all
  * Subscriptions) owns the reviews; the CMA polls them in hourly, maps them to markets through their channel and links
  * them to an order or a CRM contact where it can. The figures come from the database (cma.reviews_page); this module
  * mirrors their definitions for the mock and for verify/reports.mjs, and arranges them for the screen. Pure, with no
  * runtime imports beyond time.ts, reports.ts and funnel.ts, so the verifier runs it under Node's type stripping.
  *
- * The definitions (docs/definitions.md, Review terms; 102_reviews.sql):
+ * The definitions (docs/definitions.md, Review terms; 104_reviews.sql):
  *   review          a review the platform holds of a channel; counted when it is published (the adapter reads the
  *                   platform's published state) and its channel is counted (configuration)
  *   day             the submission's date in the tenant's zone; the ISO week (Monday) likewise

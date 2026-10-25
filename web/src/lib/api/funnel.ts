@@ -7,7 +7,7 @@ import { MAX_REPORT_DAYS } from "@/lib/reports";
  * The query of the Funnel and Cancellations routes (addition 0008zb): ?from&to (at most 92 days), &market (a market code
  * or unknown), &pipeline (a connection id and a lead pipeline's id joined by ':') and &source (a source channel, 1 to 100
  * characters), each optional, and &group=week|day (week when left out) where the route groups by time. Cancellations and
- * Reviews (addition 0008zd) take the market only: a pipeline or a source there is a 400. Anything the database would
+ * Reviews (addition 0008ze) take the market only: a pipeline or a source there is a 400. Anything the database would
  * refuse is a 400 here first.
  */
 export function funnelParams(sp: URLSearchParams, o: { marketOnly?: boolean } = {}): { range: HoursRange; filter: FunnelFilter; group: FunnelGroup } {

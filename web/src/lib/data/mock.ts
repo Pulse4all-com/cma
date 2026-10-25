@@ -225,7 +225,7 @@ const MOCK_CHECKS: [string, string][] = [
   ["customer_in_two_stores", "Commerce customer ids present in more than one store"],
   ["pipeline_unreviewed", "Pipelines seen but never reviewed by a person (counted by default)"],
   ["form_without_market", "Counted forms without a market"],
-  // the reviews' checks (addition 0008zd), listed once the tenant has a reviews connection
+  // the reviews' checks (addition 0008ze), listed once the tenant has a reviews connection
   ["review_channel_unmapped", "Review channels without a market, with the reviews held of each"],
   ["market_without_review_channel", "Active markets without a counted review channel"],
 ];
@@ -1327,7 +1327,7 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "reports.per_person", value: "email,orders,attempts,deals", isDefault: false },
   // the cancellation requests (addition 0008zb): the fixture's kind, as Configuration → Sources sets it
   { key: "reports.cancellation_kind", value: "cancellation", isDefault: false },
-  // reviews (addition 0008zd): the negative threshold and the backfill's history start at their defaults
+  // reviews (addition 0008ze): the negative threshold and the backfill's history start at their defaults
   { key: "reviews.negative_max_rating", value: "2", isDefault: true },
   { key: "reviews.history_start_date", value: "", isDefault: true },
   // first orders (addition 0008u): the attribution settings at their catalog defaults
@@ -2209,7 +2209,7 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       store: { handle: "shop-nl-test", name: "Shop NL (test)", market: "NL", currency: "EUR", timeZone: "Europe/Amsterdam" },
     }, { api_version: "2026-10", client_id: "test-client-id" }));
     sources.push(mockSource(t, 4, "automationtest", "Automations (test)", "100200300", null, {}, { record_url_deal: "https://crm.example.com/records/{account}/deal/{id}" }));
-    // a reviews connection (addition 0008zd): two channels mapped and counted, one new from the source (no market, not counted)
+    // a reviews connection (addition 0008ze): two channels mapped and counted, one new from the source (no market, not counted)
     sources.push(mockSource(t, 5, "reviewtest", "Reviews (test)", "acc-test", "reviews", {
       reviewChannels: MOCK_REVIEW_CHANNELS.map((c) => ({ channelId: c.channelId, name: c.name, locale: c.locale, market: c.market, isCounted: c.isCounted,
         firstSeenAt: new Date(Date.now() - 40 * 86_400_000).toISOString(), deletedAt: null, reviews: 0, lastSubmittedAt: null })),
@@ -2238,7 +2238,7 @@ function seedIntakeConfig(me: Principal): MockIntakeConfig {
       { id: "00000000-0000-7000-8000-0000000a0002", name: "Assigned deal", trigger: "record_assigned", recordType: "deal", pipelineIds: ["p-sales"], audiencePermission: "leads.accept",
         matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, urgency: "urgent", enabled: true, maxAgeMinutes: 60, alerts30d: 168,
         lastAlertAt: new Date(Date.now() - 12 * 60_000).toISOString(), maxRating: null },
-      // the negative-review rule of seed 02 (addition 0008zd): disabled until Kira confirms it
+      // the negative-review rule of seed 02 (addition 0008ze): disabled until Kira confirms it
       ...(t === MOCK_TENANT_2 ? [] : [{ id: "00000000-0000-7000-8000-0000000a0003", name: "Negative review", trigger: "review_submitted" as const, recordType: "review",
         pipelineIds: [], audiencePermission: "performance.team", matchLanguage: false, onlyClockedIn: false, fallbackPermission: null, urgency: "normal" as const,
         enabled: false, maxAgeMinutes: 1440, alerts30d: 0, lastAlertAt: null, maxRating: 2 }]),
@@ -2295,7 +2295,7 @@ function assertMockMarket(me: Principal, code: string | null, allowDefault = fal
   if (!seedIntakeConfig(me).markets.some((m) => m.code === code)) throw new CmaDbError("CMA02", "no such market");
 }
 
-// ---- Reviews fixture (addition 0008zd, brief B18) ---------------------------------------------------------------
+// ---- Reviews fixture (addition 0008ze, brief B18) ---------------------------------------------------------------
 // Invented channels and reviews of the main tenant's reviews connection: per day of the last 120 days, a few reviews on
 // the NL and GB channels (the ratings, links and invite events spread by a hash) and one a week on the channel the source
 // added without a market. Ids, ratings, times and codes only: no reviewer and no text exist here.
@@ -3798,7 +3798,7 @@ export const mockData: CmaData = {
     if (input.trigger === "review_submitted" && input.maxRating !== null && !(input.maxRating >= 1 && input.maxRating <= 5)) {
       throw new CmaDbError("CMA04", "the highest rating is 1 to 5, or none for any rating");
     }
-    // a review rule (addition 0008zd) is of record type review, without pipelines; the other triggers keep no highest rating
+    // a review rule (addition 0008ze) is of record type review, without pipelines; the other triggers keep no highest rating
     const values = input.trigger === "review_submitted"
       ? { ...input, name, recordType: "review", pipelineIds: [] }
       : { ...input, name, pipelineIds: [...new Set(input.pipelineIds)].sort(), maxRating: null };
@@ -3891,7 +3891,7 @@ export const mockData: CmaData = {
     assertAny(me, ["reports.view", "tenant.configure"]);
     // The main tenant has something to fix in every check; the second tenant has nothing yet
     const main = me.tenantId === MOCK_PRINCIPAL.tenantId;
-    // the reviews' checks (addition 0008zd) count the fixture: its unmapped channel, and the active markets without a counted channel
+    // the reviews' checks (addition 0008ze) count the fixture: its unmapped channel, and the active markets without a counted channel
     const reviews: Record<string, number> = main ? reviewChecksOf(me) : {};
     return MOCK_CHECKS.filter(([key]) => main || !key.includes("review"))
       .map(([key, description], i) => ({ key, description, total: key in reviews ? reviews[key]! : main ? 1 + Math.floor(hashOf(key) * 40) + (i === 3 ? 3 : 0) : 0 }));

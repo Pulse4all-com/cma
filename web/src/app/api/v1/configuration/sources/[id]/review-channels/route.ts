@@ -5,7 +5,7 @@ import { data } from "@/lib/data";
 export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
-/** { channelId, market, isCounted }: one review channel of a reviews connection (cma.set_review_channel, addition 0008zd). Answers the connection with its catalogs */
+/** { channelId, market, isCounted }: one review channel of a reviews connection (cma.set_review_channel, addition 0008ze). Answers the connection with its catalogs */
 export async function PUT(request: Request, { params }: Params) {
   return forPrincipal(async (me) => {
     assertSameSiteWrite(request);

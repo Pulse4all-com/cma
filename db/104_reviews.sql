@@ -1,9 +1,10 @@
 -- =============================================================================================
--- 102_reviews.sql: addition 0008zd, reviews from a review platform: channels, reviews, links, alerts and reports
+-- 104_reviews.sql: addition 0008ze, reviews from a review platform: channels, reviews, links, alerts and reports
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
--- 100_definitions_calls.sql (0008zc). Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev
--- first, then 103_verify_reviews.sql (dev), then 101, 99, 79, 75 and 41 again (dev; 99 from the Terminal); then prod.
+-- 102_tag_meaning_incorrect_data.sql (0008zd). Rerunnable, forward-only, in one transaction. Run as your own IAM login:
+-- dev first, then 105_verify_reviews.sql (dev), then 103, 101, 99, 79, 75 and 41 again (dev; 99 from the Terminal); then
+-- prod.
 -- Nothing in the web of main reads what this adds, so the script may run before or after the web deploy.
 --
 -- Why (Decision log, 25 October 2026): the review platform owns the reviews of a business line (Trusted Shops for
@@ -79,8 +80,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0008zc') then
-    raise exception 'addition 0008zc (100_definitions_calls.sql) must run before 0008zd';
+  if not exists (select 1 from cma.schema_migration where version = '0008zd') then
+    raise exception 'addition 0008zd (102_tag_meaning_incorrect_data.sql) must run before 0008ze';
   end if;
 end
 $$;
@@ -102,7 +103,7 @@ begin
 end
 $$;
 comment on column cma.integration_connection.kind is
-  'The kind of source in the data model''s terms (crm, telephony, commerce, automation, reviews), never a vendor; null until set (0008e; reviews 0008zd)';
+  'The kind of source in the data model''s terms (crm, telephony, commerce, automation, reviews), never a vendor; null until set (0008e; reviews 0008ze)';
 
 -- ---------------------------------------------------------------------------------------------
 -- 2. Channels and reviews
@@ -127,7 +128,7 @@ create table if not exists cma.review_channel (
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id),
   foreign key (tenant_id, market) references cma.market (tenant_id, code)
 );
-comment on table cma.review_channel is 'A review platform''s channels per connection: name and locale from the source, the market served and whether its reviews count (configuration). A new channel has no market and is not counted (0008zd)';
+comment on table cma.review_channel is 'A review platform''s channels per connection: name and locale from the source, the market served and whether its reviews count (configuration). A new channel has no market and is not counted (0008ze)';
 comment on column cma.review_channel.market is 'The catalog market the channel serves (configuration, a market code); null: not mapped yet';
 comment on column cma.review_channel.is_counted is 'Whether the channel''s published reviews count in reporting and alerts (configuration; false for a new channel)';
 create or replace trigger set_updated_at before update on cma.review_channel
@@ -186,7 +187,7 @@ create table if not exists cma.review (
   foreign key (tenant_id, commerce_order_id) references cma.commerce_order (tenant_id, id),
   foreign key (tenant_id, crm_connection_id) references cma.integration_connection (tenant_id, id)
 );
-comment on table cma.review is 'Reviews of a review platform per connection: channel, type, state, published, rating, times, reply, invite event type, transaction reference and the link to an order or a CRM contact. Never the reviewer''s name, email or phone, nor a title or text. Owned by the review platform (0008zd)';
+comment on table cma.review is 'Reviews of a review platform per connection: channel, type, state, published, rating, times, reply, invite event type, transaction reference and the link to an order or a CRM contact. Never the reviewer''s name, email or phone, nor a title or text. Owned by the review platform (0008ze)';
 comment on column cma.review.is_published is 'Whether the review is published at the source; the adapter decides it from the source''s state. Reporting counts published reviews of counted channels only';
 comment on column cma.review.link_level is 'order: the transaction reference names one commerce order of the tenant; contact: no order, a CRM contact found by the reviewer''s email (in memory, never stored); none';
 comment on column cma.review.crm_contact_source_id is 'The CRM contact: the linked order''s customer''s contact (0008h), or the contact the email matched; an id, kept in the CMA only';
@@ -443,7 +444,7 @@ begin
                                        where k.tenant_id = new.tenant_id and k.key = new.value and k.status = 'active') then
       raise exception 'Setting % takes the key of an active record kind, or nothing', new.key using errcode = 'CMA04';
     end if;
-  -- reviews (0008zd): the highest rating that is a negative review, a whole star from 1 to 4
+  -- reviews (0008ze): the highest rating that is a negative review, a whole star from 1 to 4
   elsif new.key = 'reviews.negative_max_rating'
         and (case when length(new.value) > 1 then true else new.value::integer not between 1 and 4 end) then
     raise exception 'Setting % takes a whole number of stars from 1 to 4', new.key using errcode = 'CMA04';
@@ -792,8 +793,8 @@ begin
   end if;
 end
 $$;
-comment on column cma.message_rule.trigger is 'record_created: a new record alerts an audience; record_assigned: a record alerts the person its owner maps to (0008a); review_submitted: a published review of a counted channel alerts an audience (0008zd)';
-comment on column cma.message_rule.max_rating is 'review_submitted only: the highest rating that raises the alert (1 to 5); null: any rating (0008zd)';
+comment on column cma.message_rule.trigger is 'record_created: a new record alerts an audience; record_assigned: a record alerts the person its owner maps to (0008a); review_submitted: a published review of a counted channel alerts an audience (0008ze)';
+comment on column cma.message_rule.max_rating is 'review_submitted only: the highest rating that raises the alert (1 to 5); null: any rating (0008ze)';
 
 -- A review rule (tenant.configure), identified by name like every rule: record type review, no pipelines, an audience as
 -- a created-record rule's, and the highest rating that raises it (null: any). A name that belongs to a rule of another
@@ -1259,13 +1260,13 @@ begin
                                                                        else '[]'::jsonb end) x) a
                     where not (a.v = any (ff.options || ff.retired_options))))
   union all
-  -- review channels the source holds without a market (0008zd), with how many reviews the CMA holds of each
+  -- review channels the source holds without a market (0008ze), with how many reviews the CMA holds of each
   select 'review_channel_unmapped', ch.connection_id, 'review_channel', ch.source_id,
          (select count(*) from cma.review r where r.tenant_id = ch.tenant_id and r.review_channel_id = ch.id)::text
   from cma.review_channel ch
   where ch.tenant_id = p_tenant_id and ch.source_deleted_at is null and ch.market is null
   union all
-  -- active markets without a counted review channel, once the tenant has a reviews connection (0008zd)
+  -- active markets without a counted review channel, once the tenant has a reviews connection (0008ze)
   select 'market_without_review_channel', null::uuid, 'market', m.code, null::text
   from cma.market m
   where m.tenant_id = p_tenant_id and m.status = 'active' and cma.reviews_connected_of(p_tenant_id)
@@ -1690,7 +1691,7 @@ create or replace view cma_read.dq_market_without_review_channel as
 -- 13. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zd', 'Reviews: the connection kind reviews; cma.review_channel (source id, name, locale, market and is_counted as configuration, a new channel unmapped and not counted) and cma.review (type, state, published, rating 1 to 5, times, reply, invite event type, transaction reference, the link level order, contact or none with the order, the CRM contact and matched_at, a filtered raw; never a name, an email, a phone, a title or a text); the settings reviews.negative_max_rating and reviews.history_start_date; ingest of the channel catalog and of reviews with a stale guard, the order link by order name then source id and the order''s customer''s contact, the contact found by email in memory, and the CRM''s privacy deletion; the alert trigger review_submitted with max_rating and cma.ingest_review_alerts; review channels on Sources; Reports, Reviews (cma.reviews_page); the data-quality checks review_channel_unmapped and market_without_review_channel; the reader views; sync_run job reviews_poll')
+values ('0008ze', 'Reviews: the connection kind reviews; cma.review_channel (source id, name, locale, market and is_counted as configuration, a new channel unmapped and not counted) and cma.review (type, state, published, rating 1 to 5, times, reply, invite event type, transaction reference, the link level order, contact or none with the order, the CRM contact and matched_at, a filtered raw; never a name, an email, a phone, a title or a text); the settings reviews.negative_max_rating and reviews.history_start_date; ingest of the channel catalog and of reviews with a stale guard, the order link by order name then source id and the order''s customer''s contact, the contact found by email in memory, and the CRM''s privacy deletion; the alert trigger review_submitted with max_rating and cma.ingest_review_alerts; review channels on Sources; Reports, Reviews (cma.reviews_page); the data-quality checks review_channel_unmapped and market_without_review_channel; the reader views; sync_run job reviews_poll')
 on conflict (version) do nothing;
 
 commit;

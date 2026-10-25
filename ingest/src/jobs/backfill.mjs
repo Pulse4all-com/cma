@@ -14,7 +14,7 @@
  * succeeded with error daily_floor, logs "backfill paused" and exits 0; the same command later continues
  * from the cursor. The log line carries the run's requests per endpoint and the daily limit stated.
  *
- * An adapter may read all history for an object (Trusted Shops' review, addition 0008zd: without --from and with
+ * An adapter may read all history for an object (Trusted Shops' review, addition 0008ze: without --from and with
  * reviews.history_start_date empty, its backfillFrom answers { allHistory: true }): the run has no start, the adapter
  * walks from its own floor, and the cursor's from is null.
  *

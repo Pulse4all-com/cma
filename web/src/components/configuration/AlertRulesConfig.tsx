@@ -4,7 +4,7 @@
  * Alert rules (brief B14, addition 0008e): the rules of every trigger, each with its effect in plain
  * words, its alerts of the last 30 days and its sound (which follows the urgency); add and edit through
  * upsert_message_rule (a record is created), upsert_assignment_rule (a record gets an owner) or
- * upsert_review_rule (a review of a counted channel, at or below a highest rating; addition 0008zd), switch
+ * upsert_review_rule (a review of a counted channel, at or below a highest rating; addition 0008ze), switch
  * off and on through set_message_rule_enabled. A rule is never deleted, so its earlier alerts stay
  * explained; its name and trigger are fixed once it exists. Pipelines come from the tenant's
  * customer-record connections; nothing here names a pipeline, a permission or a record type.
@@ -29,7 +29,7 @@ export function AlertRulesConfig({ data, permissions, copy, locale, timeZone }: 
   const seq = useRef(0);
   const tick = () => ++seq.current;
   const hint = (labelText: string, text: string) => <HeaderHint label={copy.hints.about.replace("{label}", labelText)} text={text} />;
-  // a review rule's record type is review, never a choice of the pipelines' (addition 0008zd)
+  // a review rule's record type is review, never a choice of the pipelines' (addition 0008ze)
   const types = recordTypes(data.pipelines, data.rules.filter((r) => r.trigger !== "review_submitted").map((r) => r.recordType));
   const [target, setTarget] = useState<{ rule: AlertRule | null; opened: number } | null>(null);
   const [form, setForm] = useState<AlertRuleInput>(newRule("record_created", types[0] ?? "deal"));

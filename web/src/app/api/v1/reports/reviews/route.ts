@@ -6,7 +6,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * Reviews (cma.reviews_page, addition 0008zd) for ?from&to (at most 92 days), &group=week|day (week when left out) and the
+ * Reviews (cma.reviews_page, addition 0008ze) for ?from&to (at most 92 days), &group=week|day (week when left out) and the
  * optional &market (a market code or unknown; a &pipeline or &source is a 400): the review platform's published reviews of
  * counted channels, by the submission's date in the tenant's zone. `current` and `previous` (reviews, averageRating,
  * negative, linkedOrder, linkedContact, unlinked; the previous period like for like); `distribution` (per whole star);

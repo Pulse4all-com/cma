@@ -957,12 +957,12 @@ type CatalogsJson = {
   lines: { lineRef: string; name: string; digits: string | null; market: string | null; isCounted: boolean; status: string }[];
   tags: { tagRef: string; name: string; isCounted: boolean; meaning: TagMeaning | null; status: string }[];
   sampleIds: Record<string, string>;
-  // addition 0008zd: a reviews connection's channels
+  // addition 0008ze: a reviews connection's channels
   reviewChannels?: { channelId: string; name: string; locale: string | null; market: string | null; isCounted: boolean; firstSeenAt: string;
     deletedAt: string | null; reviews: number; lastSubmittedAt: string | null }[];
 };
 
-/** cma.reviews_page's answer (addition 0008zd): figures as the database names them */
+/** cma.reviews_page's answer (addition 0008ze): figures as the database names them */
 type ReviewFiguresDb = { reviews: number; average_rating: number | null; negative: number; linked_order: number; linked_contact: number; unlinked: number };
 type ReviewsPageDb = {
   figures: ReviewFiguresDb; previous: ReviewFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
@@ -1258,7 +1258,7 @@ type RuleDbRow = {
   rule_id: string; name: string; trigger: AlertRule["trigger"]; record_type: string; pipeline_ids: string[]; audience_permission: string;
   match_language: boolean; only_clocked_in: boolean; fallback_permission: string | null; urgency: AlertRule["urgency"]; enabled: boolean;
   max_age_minutes: number | null; alerts_30d: number; last_alert_at: Date | null;
-  // addition 0008zd: numeric, which the driver hands over as text
+  // addition 0008ze: numeric, which the driver hands over as text
   max_rating: string | null;
 };
 
@@ -2279,7 +2279,7 @@ export const postgresData: CmaData = {
   async getReviews(me, range, group, market): Promise<ReviewsReport> {
     assertReportRange(range);
     return withTenant(ctx(me), async (q) => {
-      // the function checks the permission, the 92 days, the market and the group first (addition 0008zd)
+      // the function checks the permission, the 92 days, the market and the group first (addition 0008ze)
       const j = one((await q.query<{ j: ReviewsPageDb }>(`select cma.reviews_page($1::date, $2::date, $3, $4) as j`,
         [range.from, range.to, market, group])).rows, "reviews_page").j;
       return {
@@ -2568,7 +2568,7 @@ export const postgresData: CmaData = {
           pipelines.push({ connectionName: row.name, recordType: p.recordType, pipelineId: p.pipelineId, label: p.label, isCounted: p.isCounted });
         }
       }
-      // the age limit's default and, for a new review rule, the negative threshold (addition 0008zd), in one statement
+      // the age limit's default and, for a new review rule, the negative threshold (addition 0008ze), in one statement
       const set = new Map((await q.query<{ key: string; value: string | null }>(
         `select key, value from cma.tenant_settings() where key in ('alerts.max_age_minutes', 'reviews.negative_max_rating')`)).rows.map((x) => [x.key, x.value]));
       return { rules, pipelines, defaultMaxAgeMinutes: Number(set.get("alerts.max_age_minutes") ?? 60), negativeMaxRating: Number(set.get("reviews.negative_max_rating") ?? 2) };
@@ -2582,7 +2582,7 @@ export const postgresData: CmaData = {
       const r = input.trigger === "record_assigned"
         ? await q.query<{ id: string }>(`select cma.upsert_assignment_rule($1, $2, $3::text[], $4, $5) as id`,
             [input.name, input.recordType, input.pipelineIds, input.urgency, input.maxAgeMinutes])
-        // a review rule (addition 0008zd): record type review, no pipelines, the audience as a created-record rule's, a highest rating
+        // a review rule (addition 0008ze): record type review, no pipelines, the audience as a created-record rule's, a highest rating
         : input.trigger === "review_submitted"
         ? await q.query<{ id: string }>(`select cma.upsert_review_rule($1, $2, $3, $4, $5, $6, $7, $8) as id`,
             [input.name, input.audiencePermission, input.matchLanguage, input.onlyClockedIn, input.fallbackPermission, input.urgency, input.maxRating,

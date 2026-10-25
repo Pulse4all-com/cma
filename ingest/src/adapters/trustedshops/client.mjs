@@ -1,5 +1,5 @@
 /**
- * The eTrusted API (Trusted Shops) for one reviews connection (addition 0008zd, brief B18; prod discovery of
+ * The eTrusted API (Trusted Shops) for one reviews connection (addition 0008ze, brief B18; prod discovery of
  * 25 October 2026):
  *
  *   token     OAuth2 client credentials: POST https://login.etrusted.com/oauth/token, form-encoded,

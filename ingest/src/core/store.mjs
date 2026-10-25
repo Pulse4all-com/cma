@@ -46,7 +46,7 @@
  *   heldRefContacts({...})      the contacts the CMA holds whose refs hold a customer id (crm_contact_ref)
  *   connectionKey()             the connection's key (the address of its webhooks; an identifier)
  *
- * For a reviews source (addition 0008zd), each its own short transaction; never an email, a name or a text:
+ * For a reviews source (addition 0008ze), each its own short transaction; never an email, a name or a text:
  *   upsertReviewChannels(items) cma.ingest_upsert_review_channels: the source's whole channel list
  *   reviewChannels()            the connection's channels: { channelId, deleted }
  *   upsertReviews(items)        cma.ingest_upsert_reviews in parts of at most 500: per review { sourceId, outcome,
@@ -79,7 +79,7 @@
  * 0008h) after them, writes.writebacks enqueues CRM contact write-backs ({ connectionId, contactId,
  * values, reason }, cma.enqueue_contact_writeback of 0007c; generic, no commerce use since 0008h),
  * writes.forgets runs a CRM privacy deletion (0007, and the commerce links to the contact, 0008h, and the reviews'
- * links to it, 0008zd),
+ * links to it, 0008ze),
  * writes.tally adds named counts to the run's counts (no ids), writes.cursors moves sync cursors in
  * the same transaction as the writes they describe.
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
@@ -492,7 +492,7 @@ async function writeRecordStages(q, connectionId, units, counts) {
   }
 }
 
-// Whether the database holds 0008zd's cma.forget_review_contact_links: an ingest image may reach a database before its
+// Whether the database holds 0008ze's cma.forget_review_contact_links: an ingest image may reach a database before its
 // migration, and a privacy deletion must not fail for it. Known once true; asked again while false
 let reviewLinks = false;
 async function reviewLinksKnown(q) {
@@ -546,7 +546,7 @@ async function writeAll(q, connectionId, units, counts) {
     const r = await q.query("select cma.forget_commerce_contact_links($1, $2) as n", [connectionId, contactId]);
     counts.forgotten = (counts.forgotten ?? 0) + 1;
     counts.linksForgotten = (counts.linksForgotten ?? 0) + Number(r.rows[0]?.n ?? 0);
-    // and the reviews linked to the contact (0008zd), once the database holds the addition
+    // and the reviews linked to the contact (0008ze), once the database holds the addition
     if (await reviewLinksKnown(q)) {
       const v = await q.query("select cma.forget_review_contact_links($1, $2) as n", [connectionId, contactId]);
       counts.reviewLinksForgotten = (counts.reviewLinksForgotten ?? 0) + Number(v.rows[0]?.n ?? 0);

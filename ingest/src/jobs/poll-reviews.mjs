@@ -1,5 +1,5 @@
 /**
- * The reviews poll (addition 0008zd, brief B18; hourly at minute 7, Europe/Amsterdam): per active connection whose
+ * The reviews poll (addition 0008ze, brief B18; hourly at minute 7, Europe/Amsterdam): per active connection whose
  * adapter polls reviews (Trusted Shops today) and is due on its reviews_poll_interval_minutes (default 60), one
  * sync_run row (job reviews_poll, stream reviews): the channel catalog, then each channel's reviews submitted after its
  * cursor less two hours, upserted with their order links, the new ones without a contact looked up by email (in

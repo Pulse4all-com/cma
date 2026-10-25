@@ -158,7 +158,7 @@ r = await run(["prod", "--jobs"]);
 expect("prod --jobs schedules the reconcile at 30 3 * * * Europe/Amsterdam by default", [schedule("ingest-reconcile"), r.out.includes("schedule ingest-reconcile: 30 3 * * * (Europe/Amsterdam)")],
   [["30 3 * * *", "Europe/Amsterdam"], true], [["30 2 * * *", "Europe/Amsterdam"], false]);
 expect("…the every-minute jobs as before", ["ingest-sweep", "ingest-poll-forms", "ingest-poll-email"].map((j) => schedule(j)[0]), ["* * * * *", "* * * * *", "* * * * *"], []);
-expect("…the reviews poll hourly at minute 7, Europe/Amsterdam (addition 0008zd)", [schedule("ingest-poll-reviews"), r.out.includes("schedule ingest-poll-reviews: 7 * * * * (Europe/Amsterdam)")],
+expect("…the reviews poll hourly at minute 7, Europe/Amsterdam (addition 0008ze)", [schedule("ingest-poll-reviews"), r.out.includes("schedule ingest-poll-reviews: 7 * * * * (Europe/Amsterdam)")],
   [["7 * * * *", "Europe/Amsterdam"], true], [["* * * * *", "Europe/Amsterdam"], false]);
 r = await run(["dev", "--jobs", "--reconcile-every", "*/2 * * * *", "--reconcile-lookback", "10"]);
 expect("--reconcile-every and --reconcile-lookback still set the polling fallback", [schedule("ingest-reconcile")[0], (r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-reconcile ")) ?? "").includes("--args=--lookback-minutes,10")],

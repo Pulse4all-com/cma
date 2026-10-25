@@ -187,7 +187,7 @@ async function expectNavigation() {
     // Follow-up, Attempts per deal, Attempts per agent, Forms, Intake, Inbound, First orders, Orders per person, Data quality,
     // so the digit keys after Speed to lead move for everyone who sees Reports. Since 0008zb Funnel and Cancellations
     // (reports.view or performance.team) follow Attempts per agent (Attempts per deal for the reader)
-    // Since 0008zd Reviews (reports.view or performance.team) follows Orders per person (First orders for the reader)
+    // Since 0008ze Reviews (reports.view or performance.team) follows Orders per person (First orders for the reader)
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
       "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms",
       "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/reviews", "/reports/data-quality",
@@ -1699,7 +1699,7 @@ async function expectFrame() {
   // the manager's rail holds 25 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
   // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
-  // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008zd Reviews
+  // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews
   for (const [subject, pages] of [["manager", 28], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();

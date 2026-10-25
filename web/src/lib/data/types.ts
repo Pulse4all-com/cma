@@ -2016,7 +2016,7 @@ export type ReviewLinkLevel = "order" | "contact" | "none";
 /** A market's review channel (cma.review_market_states_of): no counted channel, a channel without a published review, or reviews */
 export type ReviewMarketState = "no_channel" | "channel_no_reviews" | "has_reviews";
 
-/** Reports → Reviews (addition 0008zd, cma.reviews_page): team figures only, never per person; no review text or reviewer */
+/** Reports → Reviews (addition 0008ze, cma.reviews_page): team figures only, never per person; no review text or reviewer */
 export interface ReviewsReport {
   from: DateKey;
   to: DateKey;
@@ -2351,12 +2351,12 @@ export interface SourceDetail {
   inboxes: SourceInbox[];
   mailboxes: SourceMailbox[];
   inboxChannels: SourceInboxChannel[];
-  /** A reviews connection's channels (addition 0008zd); empty for another kind */
+  /** A reviews connection's channels (addition 0008ze); empty for another kind */
   reviewChannels: SourceReviewChannel[];
 }
 
 /**
- * A review channel of a reviews connection (addition 0008zd): source id, name and locale from the review platform; market
+ * A review channel of a reviews connection (addition 0008ze): source id, name and locale from the review platform; market
  * and counted as configuration (a new channel has no market and is not counted); the reviews held and the newest
  */
 export interface SourceReviewChannel {
@@ -2605,7 +2605,7 @@ export interface MarketsConfig {
   holidays: MarketHoliday[];
 }
 
-/** record_created and record_assigned (0008, 0008a); review_submitted (addition 0008zd): a review of a counted channel */
+/** record_created and record_assigned (0008, 0008a); review_submitted (addition 0008ze): a review of a counted channel */
 export type AlertTrigger = "record_created" | "record_assigned" | "review_submitted";
 
 /** One rule of cma.message_rule (0008, 0008a) with its alerts in the last 30 days */
@@ -2660,7 +2660,7 @@ export interface AlertRulesConfig {
   pipelines: AlertPipelineChoice[];
   /** alerts.max_age_minutes, the age limit of a rule without its own */
   defaultMaxAgeMinutes: number;
-  /** reviews.negative_max_rating (addition 0008zd): a new review rule's highest rating */
+  /** reviews.negative_max_rating (addition 0008ze): a new review rule's highest rating */
   negativeMaxRating: number;
 }
 
@@ -3195,7 +3195,7 @@ export interface CmaData {
   setSourceMailbox(me: Principal, id: string, input: SourceMailboxInput): Promise<void>;
   /** One channel of the conversations (set_inbox_channel, 0008m: counted; its tenant channel kept) */
   setSourceInboxChannel(me: Principal, id: string, input: SourceInboxChannelInput): Promise<void>;
-  /** A review channel's market and counted flag (cma.set_review_channel, addition 0008zd; tenant.configure) */
+  /** A review channel's market and counted flag (cma.set_review_channel, addition 0008ze; tenant.configure) */
   setSourceReviewChannel(me: Principal, id: string, input: SourceReviewChannelInput): Promise<void>;
   /** Markets with their aliases, office hours and holidays */
   getMarkets(me: Principal): Promise<MarketsConfig>;
@@ -3280,7 +3280,7 @@ export interface CmaData {
   getLostReasons(me: Principal, range: HoursRange, group: FunnelGroup, filter: FunnelFilter): Promise<LostReasonsReport>;
   /** Reports → Cancellations: the requests of reports.cancellation_kind (cma.cancellations_page). Needs reports.view or performance.team */
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
-  /** Reports → Reviews (cma.reviews_page, addition 0008zd; reports.view or performance.team; at most 92 days) */
+  /** Reports → Reviews (cma.reviews_page, addition 0008ze; reports.view or performance.team; at most 92 days) */
   getReviews(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<ReviewsReport>;
   /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
   getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;

@@ -1,5 +1,5 @@
 /**
- * The eTrusted reads (addition 0008zd): the channel list and the reviews of one channel in a window of submission
+ * The eTrusted reads (addition 0008ze): the channel list and the reviews of one channel in a window of submission
  * times, page by page.
  *
  *   channels  GET /channels: every channel of the account (id chl-…, name, locale)

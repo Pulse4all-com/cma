@@ -1,5 +1,5 @@
 /**
- * The reviews' poll, reconcile and backfill (addition 0008zd, brief B18). No webhook exists for reviews, so a review
+ * The reviews' poll, reconcile and backfill (addition 0008ze, brief B18). No webhook exists for reviews, so a review
  * reaches the CMA only by these reads. Every page takes one path: mapped (map.mjs: the reviewer's email in memory only),
  * upserted (cma.ingest_upsert_reviews: the stale guard, the order link and the order's customer's contact), the
  * alerts raised for what was written (cma.ingest_review_alerts), the contacts of the reviews without one looked up by

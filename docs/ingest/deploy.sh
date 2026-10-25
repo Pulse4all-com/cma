@@ -58,7 +58,7 @@
 #   ingest-poll-email  every minute   HubSpot email engagements and inbox conversations (brief B17b), for connections
 #                                     whose settings hold email_poll true: catalogs and owners hourly, threads and
 #                                     messages after their cursors, the open check every email_open_check_minutes (default 15)
-#   ingest-poll-reviews hourly at :07 the reviews connections (addition 0008zd, brief B18): the channel catalog, then each
+#   ingest-poll-reviews hourly at :07 the reviews connections (addition 0008ze, brief B18): the channel catalog, then each
 #                                     channel's reviews submitted after its cursor less two hours, on the connection's
 #                                     reviews_poll_interval_minutes (default 60); polling only, a review platform sends no webhook
 #   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,

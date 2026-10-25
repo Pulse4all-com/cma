@@ -1,6 +1,6 @@
 /**
  * eTrusted channels and reviews → the canonical shapes of cma.ingest_upsert_review_channels and
- * cma.ingest_upsert_reviews (addition 0008zd). An allow list: only the fields named here are read, so the reviewer's
+ * cma.ingest_upsert_reviews (addition 0008ze). An allow list: only the fields named here are read, so the reviewer's
  * name and phone number, the review's title and text, and anything the API adds later never reach a canonical item,
  * raw, a log or the database. The reviewer's email is the one exception: it is handed back next to the item, for the
  * CRM contact match in memory (match.mjs), and is never part of the item.
