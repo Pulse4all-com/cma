@@ -52,7 +52,8 @@ Succeeded: 41 fetched and 41 upserted; 7 channels; links: order 14, contact 27.
 ## 13.9 The channels
 
 DE, FR, NL, AT, SE and GB mapped to their market and counted. The channel for defibserviceplus.com left without a
-market and off.
+market and off. Martin decided on 25 October 2026 that defibserviceplus.com is a legacy site: it stays that way
+(Decision log, 25 Oct 2026).
 
 ## 13.10 The backfill
 
