@@ -33,9 +33,9 @@ ALL 36 PASS
 > node verify/reviews-mapping.mjs
 ALL 27 PASS
 > node verify/legacy-calls.mjs
-ALL 28 PASS
+ALL 30 PASS
 ## eslint
 eslint: no problems
 ## provoked
-verify/legacy-calls.mjs --provoke: ALL 28 PROVOKED CHECKS FAILED, as they must
+verify/legacy-calls.mjs --provoke: ALL 30 PROVOKED CHECKS FAILED, as they must
 verify/deploy-script.mjs --provoke: ALL 26 PROVOKED CHECKS FAILED, as they must

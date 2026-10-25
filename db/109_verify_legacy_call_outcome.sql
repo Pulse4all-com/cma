@@ -295,15 +295,15 @@ begin
     --     telephony connection (CMA04), an inactive connection (CMA02), a bad SHA-256 and a bad source system (CMA04),
     --     an agent (CMA06)
     perform set_config('app.user_id', v_ing1::text, true);
-    select s.batch_id, s.outcome into v_b1, v_a from cma.legacy_call_batch_start(v_crm, 'steamtest', v_sha1, '2026-09-01') s;
-    v_txt := v_a || ' ' || (select s.outcome || ':' || (s.batch_id = v_b1)::text from cma.legacy_call_batch_start(v_crm, 'steamtest', upper(v_sha1), '2026-09-01') s)
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'steamtest', v_sha1, '2026-08-01'))
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_tel, 'steamtest', v_sha2, '2026-09-01'))
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm_off, 'steamtest', v_sha2, '2026-09-01'))
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'steamtest', 'abc', '2026-09-01'))
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'Steam Test', v_sha2, '2026-09-01'));
+    select s.batch_id, s.outcome into v_b1, v_a from cma.legacy_call_batch_start(v_crm, 'legacytest', v_sha1, '2026-09-01') s;
+    v_txt := v_a || ' ' || (select s.outcome || ':' || (s.batch_id = v_b1)::text from cma.legacy_call_batch_start(v_crm, 'legacytest', upper(v_sha1), '2026-09-01') s)
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'legacytest', v_sha1, '2026-08-01'))
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_tel, 'legacytest', v_sha2, '2026-09-01'))
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm_off, 'legacytest', v_sha2, '2026-09-01'))
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'legacytest', 'abc', '2026-09-01'))
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'Legacy Test', v_sha2, '2026-09-01'));
     perform set_config('app.user_id', v_agent1::text, true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'steamtest', v_sha2, '2026-09-01'));
+    v_txt := v_txt || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'legacytest', v_sha2, '2026-09-01'));
     perform set_config('app.user_id', v_ing1::text, true);
     v_txt := v_txt || ' ' || (select count(*) || ':' || bool_and(b.file_sha256 = v_sha1)::text || ':' || min(b.counts::text) || ':' || min(b.cutover_date::text)
                               from cma.legacy_call_batch b where b.tenant_id = v_t1);
@@ -410,7 +410,7 @@ begin
              || ' ' || pg_temp.v0008zg_code(format('insert into cma.legacy_call_outcome (tenant_id, batch_id, source_row, occurred_on, meaning, source_label, crm_connection_id, match_method) values (%L, %L, 2, %L, %L, %L, %L, %L)',
                v_t1, v_b1, '2025-01-01', 'courtesy_attempt', 'x', v_crm, 'none'))
              || ' ' || pg_temp.v0008zg_code(format('insert into cma.legacy_call_batch (tenant_id, source_system, crm_connection_id, file_sha256, cutover_date) values (%L, %L, %L, %L, %L)',
-               v_t1, 'steamtest', v_crm, v_sha1, '2026-09-01'));
+               v_t1, 'legacytest', v_crm, v_sha1, '2026-09-01'));
     perform set_config('role', 'cma_app', true);
     v_rows := v_rows || array['16', 'B6 the table''s own checks: contact and method, matched_at, the label, the batch''s CRM connection, duplicates',
       case when v_txt = '23514 23514 23514 23514 23503 23505 23505' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
@@ -481,7 +481,7 @@ begin
     v_txt := v_txt || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_outcomes_upsert(%L, %L)', v_b1, jsonb_build_array(
                pg_temp.v0008zg_row(9, '2025-09-01', 'courtesy_completed_positive', 'Courtesy positief', null, 'none'))))
              || ' ' || pg_temp.v0008zg_code(format('select cma.legacy_call_batch_finish(%L, %L)', v_b1, '{"total": 1}'));
-    select s.batch_id, s.outcome into v_b2, v_a from cma.legacy_call_batch_start(v_crm, 'steamtest', v_sha1, '2026-09-01') s;
+    select s.batch_id, s.outcome into v_b2, v_a from cma.legacy_call_batch_start(v_crm, 'legacytest', v_sha1, '2026-09-01') s;
     perform cma.legacy_call_outcomes_upsert(v_b2, jsonb_build_array(
       pg_temp.v0008zg_row(3, '2025-06-01', 'courtesy_completed_neutral', 'Courtesy neutraal', 'c-2', 'email')));
     v_txt := v_txt || ' ' || v_a || ':' || (v_b2 <> v_b1)::text;
@@ -507,8 +507,8 @@ begin
              || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_outcomes_upsert(%L, %L)', v_b2, jsonb_build_array(
                          pg_temp.v0008zg_row(9, '2025-09-01', 'courtesy_completed_positive', 'Courtesy positief', null, 'none'))))
              || ' ' || pg_temp.v0008zg_code(format('select cma.legacy_call_batch_finish(%L, %L)', v_b2, '{"total": 1}'))
-             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'steamtest', v_sha2, '2026-09-01'))
-             || ' ' || (select s.outcome from cma.legacy_call_batch_start(v_crm2, 'steamtest', v_sha1, '2026-09-01') s)
+             || ' ' || pg_temp.v0008zg_code(format('select * from cma.legacy_call_batch_start(%L, %L, %L, %L)', v_crm, 'legacytest', v_sha2, '2026-09-01'))
+             || ' ' || (select s.outcome from cma.legacy_call_batch_start(v_crm2, 'legacytest', v_sha1, '2026-09-01') s)
              || ' ' || (select count(*) from cma.legacy_call_reconcile(jsonb_build_array(jsonb_build_object('item', 1, 'hash', v_h1, 'date', '2026-09-03'))) r
                         where r.calls > 0);
     perform set_config('app.user_id', v_admin2::text, true);
@@ -521,14 +521,14 @@ begin
 
     -- B12. the job's run: sync_run takes legacy_call_import with its stream, finished with its counts; the audit names the
     --      Ingest user for the rows and the batch it wrote
-    v_run := cma.ingest_sync_run_start(v_crm, 'legacy_call_import', 'steamtest', null, null);
+    v_run := cma.ingest_sync_run_start(v_crm, 'legacy_call_import', 'legacytest', null, null);
     perform cma.ingest_sync_run_finish(v_run, 'succeeded', '{"fetched": 9, "upserted": 6, "skipped": 2, "failed": 1}');
     v_txt := (select r.job || ':' || r.stream || ':' || r.status || ':' || (r.counts ->> 'upserted') from cma.sync_run r where r.id = v_run)
              || ' ' || (select count(*) || ':' || bool_and(a.actor_user_id = v_ing1)::text from cma.audit_log a
                         where a.tenant_id = v_t1 and a.table_name = 'legacy_call_outcome' and a.action = 'insert')
              || ' ' || (select count(*) from cma.audit_log a where a.tenant_id = v_t1 and a.table_name = 'legacy_call_outcome' and a.action = 'delete');
     v_rows := v_rows || array['22', 'B12 the job''s sync run; the audit of the rows',
-      case when v_txt = 'legacy_call_import:steamtest:succeeded:6 7:true 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'legacy_call_import:legacytest:succeeded:6 7:true 0' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

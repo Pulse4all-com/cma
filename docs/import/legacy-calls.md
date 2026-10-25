@@ -18,12 +18,15 @@ What the job `ingest-import-legacy-calls` does with the file (`ingest/src/jobs/i
   date with that hash and a current courtesy-completed tag are counted (found or not found); nothing is stored;
 - a legacy row is matched to exactly one contact per key: the email (the primary, then the additional emails)
   and the phone (E.164 only, confirmed by the full number); the same contact `email_phone`, one of them `email`
-  or `phone`, different contacts `conflict` (left unlinked); neither: the customer id when it has 10 or more
-  digits, first among the store customers the CMA already linked (0008h), then in the HubSpot connection's
-  contact ref fields, `customer_id`; otherwise `none`. Unmatched rows are stored without a contact;
+  or `phone`, different contacts `conflict` (left unlinked); neither: the customer id when it has at least
+  `--min-customer-id-digits` digits (default 10), first among the store customers the CMA already linked (0008h),
+  then in the HubSpot connection's contact ref fields, `customer_id`; otherwise `none`. Unmatched rows are stored
+  without a contact;
 - it writes every 100 rows, at HubSpot's search pace and above the connection's `api_daily_floor_pct`; a run
   that reaches the floor stops as succeeded with `daily_floor` and the same command later continues;
-- the email, phone, names and customer id stay in the job's memory; the log holds counts and row numbers only.
+- the email, phone, names and customer id stay in the job's memory; the log holds counts and row numbers only;
+- a row's date is the date the file writes, taken as the tenant's local date (Europe/Amsterdam for Pulse4all, as
+  Steam's session export of 0008d was); the reconciliation compares it with the Aircall call's Day in that zone.
 
 Rules for the file: the export stays on your own machine in `~/import`, **never in `~/cma` or the repository**,
 and in the bucket only for the run; both copies are deleted afterwards (step 8). The bucket deletes any object
@@ -117,11 +120,41 @@ Pulse4all's arguments (file name as you upload it in step 4):
 | `--date-format` | `DD-MM-YYYY` (a time after the date is ignored) |
 | `--columns` | `tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum` |
 | `--meanings` | `<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative` |
+| `--min-customer-id-digits` | left out: 10, the Shopify customer ids; the shorter WooCommerce ids and Stripe's `cus_` ids are never looked up (no HubSpot property holds them) |
 
 In `--meanings` each `<… text>` is one line of the Python block's output without its count, exactly as printed
 (inner spaces count as one, case counts). A text with no mapping is refused by row number in step 5, so a
 missing one shows there. The first name, last name and `Inlaaddatum` columns are never read beyond whether
 `Inlaaddatum` is filled.
+
+## 3a. Rehearsal in dev, once (the lookups on a live HubSpot portal)
+
+The phone lookup relies on how HubSpot fills `hs_searchable_calculated_phone_number` and
+`hs_searchable_calculated_mobile_number` (the number without its country code), and the additional-email lookup on
+how it tokenises `hs_additional_emails`; the job checks that the properties exist, not what they hold. This rehearsal
+proves both on the dev portal with invented people, before any real file.
+
+**Browser** (the dev HubSpot portal, Contacts → Create contact; invented people only):
+- Fixture Drie, email `fx.three@example.invalid`;
+- Fixture Vier, no email, phone number `+31 20 111 0004`;
+- Fixture Vijf, email `fx.old@example.invalid`, and on the record a second email `fx.five@example.invalid`.
+
+Expected: three contacts. The run needs the dev tenant's pepper (it exists with Aircall in dev). Then step 1 for
+`cma-import-p4a-cma-dev`, `bash docs/ingest/deploy.sh dev --jobs`, and in
+**Terminal** (`~/cma`) the fixture into the dev bucket:
+```bash
+gcloud storage cp ingest/verify/fixtures/legacy-calls/legacy-calls.csv gs://cma-import-p4a-cma-dev/legacy-calls.csv --project=p4a-cma-dev
+```
+Expected: `Copying file://…`. Then the run of step 6 in dev: `--project=p4a-cma-dev`, `--connection` the dev HubSpot
+connection (step 3's Studio block on cma-dev-pg with the dev tenant's slug), `--file gs://cma-import-p4a-cma-dev/legacy-calls.csv`,
+`--source-system steamfixture`, the other values as in the table, and
+`--meanings 'Courtesy positief=courtesy_completed_positive;Courtesy neutraal=courtesy_completed_neutral;Courtesy negatief=courtesy_completed_negative'`.
+Expected in the finished line: `total` 19, `legacy` 16, `current` 3, `refused` 4 (rows 13 and 14 `cutover`, 15
+`unmapped`, 16 `date`), and among the stored rows row 3 `email`, row 4 `phone` and row 5 `email`, with `lookups.phone.one`
+and `lookups.email.one` at least 1. Row 4 found by phone proves the searchable phone property; row 5 found by its second
+email proves the additional emails. If row 4 or 5 reads `none`, stop and report it: the prod run would miss every
+such match. Afterwards the dev batch may be withdrawn (Withdraw a batch, on cma-dev-pg) and the object deleted (step 8
+with the dev names).
 
 ## 4. Upload
 
@@ -168,15 +201,33 @@ gcloud run jobs execute ingest-import-legacy-calls --project=p4a-cma-prod --regi
   --args='^|^--connection|<connection id>|--file|gs://cma-import-p4a-cma-prod/steam-courtesy.csv|--source-system|steam|--cutover|2026-09-01|--date-format|DD-MM-YYYY|--columns|tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum|--meanings|<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative'
 ```
 Expected: `Execution [ingest-import-legacy-calls-…] is being started`. Progress lines (`import-legacy-calls:
-progress`, every 100 rows, the last row number) appear in the log; the job ends with the finished line of step 5's
-logging block: `"batchOutcome": "started"`, the same four counts as the dry run, `"methods"` (the stored rows per
-match method: `email_phone`, `email`, `phone`, `customer_id`, `none`, `conflict`, `forgotten`), `"conflictRows"`
-and `"noneRows"` (row numbers), `"counts"` (what the batch stores) and `"failed": 0`.
+progress`, every 100 rows, the last row number and the lookups so far) appear in the log:
+
+**Terminal**
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-import-legacy-calls" AND jsonPayload.message="import-legacy-calls: progress"' \
+  --project=p4a-cma-prod --limit=1 --format='json(jsonPayload.lastRow,jsonPayload.lookups)'
+```
+Expected within a few minutes: `lastRow` growing, and `lookups.email.one` and `lookups.phone.one` above 0. When the
+first lines show many phone or email lookups (`searched`) and none that found anything (`one` and `several` 0), stop
+the run (`gcloud run jobs executions cancel <execution> --project=p4a-cma-prod --region=europe-west4`) and report it: the
+rows written so far read `none` and a later run matches them again.
+
+The run ends with the finished line of step 5's logging block: `"batchOutcome": "started"`, the same four counts as
+the dry run, `"methods"` (the stored rows per match method: `email_phone`, `email`, `phone`, `customer_id`, `none`,
+`conflict`, `forgotten`), `"lookups"`, `"conflictRows"` and `"noneRows"` (row numbers), `"counts"` (what the batch
+stores) and `"failed": 0`.
 
 When it ends with `"paused": true, "error": "daily_floor"`, the portal's remaining daily calls fell below the
 connection's floor: run the same command after midnight (HubSpot's day); it answers `"batchOutcome":
-"reused"`, skips the rows that hold a contact and goes on. A run that ends `"failed": 1` with another code
+"reused"`, skips the rows that hold a contact and goes on (the rows without one are looked up again). Keep every
+argument as it was: a row stored under another `--meanings` refuses the run (`CMA03`); to change a mapping, withdraw
+the batch and import the file again. A run that ends `"failed": 1` with another code
 (`rate_limited`, `timeout`, `http_5xx`) has kept what it matched; run the same command again.
+
+While the job runs, System health shows the HubSpot connection's job `legacy_call_import` as running, after 15 minutes
+as stuck, and the connection as failing until the run ends; a failed run keeps it failing until a later run of the
+same job succeeds. The Workspace has no label for the job yet and shows its key.
 
 ## 7. Read the result
 
@@ -241,7 +292,8 @@ Expected: one row of three values, then the time of the withdrawal. A second wit
 
 - The file holds names, emails, phone numbers and customer ids. It exists on your machine in `~/import` and, for
   the run, in the private EU bucket; both copies are deleted in step 8, and the bucket deletes any object after a
-  day. Only you and the job's service account (`storage.objectViewer` on this bucket) read the bucket.
+  day. The bucket admits no public access; it is read by the job's service account (`storage.objectViewer` on this
+  bucket) and by whoever holds a storage role on the project (its owners and editors).
 - The CMA stores per row the date, the tag meaning, the former system's tag text, the CRM connection and, when one
   contact matched, its id. A contact the CRM later deletes for privacy loses the link (`forgotten`), and a rerun
   never sets it again.

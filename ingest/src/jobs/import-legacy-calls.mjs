@@ -6,7 +6,7 @@
  *
  *   node jobs/import-legacy-calls.mjs --connection <CRM connection uuid> --file gs://<bucket>/<object>
  *     --source-system <name> --cutover <YYYY-MM-DD> --date-format <DD-MM-YYYY> --columns <role=header,…>
- *     --meanings "<label>=<meaning key>;…" [--dry-run]
+ *     --meanings "<label>=<meaning key>;…" [--min-customer-id-digits <n>] [--dry-run]
  *
  * Every argument is configuration; nothing of a tenant, a vendor or a file is in the code:
  *   --columns    the file's headers per role: tag (the old system's tag text), date (the call's date), source_marker (a
@@ -15,6 +15,8 @@
  *   --meanings   the old system's tag texts and the tag meaning each one has (docs/definitions.md, Tag): the seven keys
  *                of cma.telephony_tag.meaning. A text is compared trimmed, with inner spaces collapsed, case included
  *   --cutover    the first day of the current telephony system
+ *   --min-customer-id-digits   the fewest digits a customer id has to be looked up (1 to 20, default 10); a shorter id,
+ *                or one that is not all digits, is not used
  *
  * Per row (the header is row 1; an empty row is skipped and not counted):
  *   source        a filled marker is the former system (legacy), an empty one the current system (current). A legacy
@@ -28,9 +30,12 @@
  *                 lookups (HubSpot: match.mjs): the email (the primary email, then the additional emails) and the
  *                 phone (E.164 only: searched by its national number, the candidates confirmed by their full number).
  *                 Both find the same contact: email_phone; only one finds exactly one: that key's method; they find
- *                 different contacts: conflict (left unlinked). Neither: the customer id, when it is 10 or more digits,
- *                 first among the tenant's store customers linked to a contact of this CRM connection (0008h, no API
- *                 call), then in the CRM connection's contact ref fields: customer_id. Otherwise none
+ *                 different contacts: conflict (left unlinked). Neither: the customer id, when it has at least
+ *                 --min-customer-id-digits digits, first among the tenant's store customers linked to a contact of
+ *                 this CRM connection (0008h, no API call), then in the CRM connection's contact ref fields:
+ *                 customer_id. Otherwise none. The lookups are counted (lookups: per key the rows looked up and those
+ *                 that found one contact or several) in every progress line and the finished line, so a lookup that
+ *                 never finds anything shows within the first hundred rows
  *
  * Pace and resume: the CRM's searches at its adapter's search pace and every request guarded by the connection's
  * api_daily_floor_pct, as a backfill; the outcomes written every 100 rows, each part its own transaction; one sync_run
@@ -69,7 +74,7 @@ export const METHODS = ["email_phone", "email", "phone", "customer_id", "none", 
 /** Methods a rerun never matches again: a contact is set, or the CRM deleted it for privacy */
 const FINAL = new Set(["email_phone", "email", "phone", "customer_id", "forgotten"]);
 export const COMMIT_EVERY = 100;
-const MIN_CUSTOMER_ID_DIGITS = 10;
+export const MIN_CUSTOMER_ID_DIGITS = 10;
 
 // ---- The arguments -------------------------------------------------------------------------------------------------
 
@@ -146,9 +151,12 @@ export function configOf(a) {
   const sourceSystem = String(a["source-system"] ?? "");
   if (!/^[a-z0-9_]{1,40}$/.test(sourceSystem)) throw new UsageError("--source-system: 1 to 40 lower-case letters, digits or _");
   if (!a.cutover) throw new UsageError("--cutover is required (YYYY-MM-DD)");
+  const given = a["min-customer-id-digits"];
+  const digits = given === undefined ? MIN_CUSTOMER_ID_DIGITS : /^\d{1,2}$/.test(String(given)) ? Number(given) : Number.NaN;
+  if (!(digits >= 1 && digits <= 20)) throw new UsageError("--min-customer-id-digits: a whole number from 1 to 20");
   return {
     connectionId: a.connection, file, sourceSystem, cutover: a.cutover, readDate: dateReader(a["date-format"]),
-    columns: parseColumns(a.columns), meanings: parseMeanings(a.meanings), dryRun: a["dry-run"] === true,
+    columns: parseColumns(a.columns), meanings: parseMeanings(a.meanings), minCustomerIdDigits: digits, dryRun: a["dry-run"] === true,
   };
 }
 
@@ -208,10 +216,10 @@ export function e164Of(cell) {
   return toE164(text) === text ? text : null;
 }
 
-/** A customer id of at least MIN_CUSTOMER_ID_DIGITS digits (spaces allowed), or null */
-export function customerIdOf(cell) {
+/** A customer id of at least minDigits digits and at most 20 (spaces allowed), or null */
+export function customerIdOf(cell, minDigits = MIN_CUSTOMER_ID_DIGITS) {
   const text = String(cell ?? "").replace(/\s/g, "");
-  return new RegExp(`^\\d{${MIN_CUSTOMER_ID_DIGITS},20}$`).test(text) ? text : null;
+  return /^\d{1,20}$/.test(text) && text.length >= minDigits ? text : null;
 }
 
 /**
@@ -244,7 +252,7 @@ export function rowsOf(records, config) {
         row.label = label;
         row.meaning = config.meanings.get(label);
         row.email = cellOf(record, "email").trim() || null;
-        row.customerId = customerIdOf(cellOf(record, "customer_id"));
+        row.customerId = customerIdOf(cellOf(record, "customer_id"), config.minCustomerIdDigits);
       }
     }
     if (!row.refused) row.phone = e164Of(cellOf(record, "phone"));
@@ -255,25 +263,39 @@ export function rowsOf(records, config) {
 
 // ---- Matching ------------------------------------------------------------------------------------------------------
 
+/** The lookups' counts: per key the rows looked up and those that found one contact or several */
+export const emptyLookups = () => ({ email: { searched: 0, one: 0, several: 0 }, phone: { searched: 0, one: 0, several: 0 },
+  customerId: { searched: 0, one: 0, several: 0 } });
+
+function tally(lookups, key, ids) {
+  if (!lookups || ids === null) return;
+  lookups[key].searched += 1;
+  if (ids.length === 1) lookups[key].one += 1;
+  else if (ids.length > 1) lookups[key].several += 1;
+}
+
 /**
  * One legacy row's contact: { method, contactId }. crm: the CRM adapter's lookups; connection: the CRM connection;
- * refProperties: its contact ref fields. Throws the lookups' SourceError (daily_floor among them).
+ * refProperties: its contact ref fields; lookups: the counts to add to (emptyLookups()). Throws the lookups'
+ * SourceError (daily_floor among them).
  */
-export async function matchRow({ row, crm, connection, store, refProperties, budget }) {
-  const byEmail = row.email ? await crm.findContactsByAnyEmail({ connection, email: row.email, budget }) : [];
-  const byPhone = row.phone ? await crm.findContactsByPhone({ connection, e164: row.phone, budget }) : [];
-  const email = byEmail.length === 1 ? byEmail[0] : null;
-  const phone = byPhone.length === 1 ? byPhone[0] : null;
+export async function matchRow({ row, crm, connection, store, refProperties, budget, lookups = null }) {
+  const byEmail = row.email ? await crm.findContactsByAnyEmail({ connection, email: row.email, budget }) : null;
+  tally(lookups, "email", byEmail);
+  const byPhone = row.phone ? await crm.findContactsByPhone({ connection, e164: row.phone, budget }) : null;
+  tally(lookups, "phone", byPhone);
+  const email = byEmail?.length === 1 ? byEmail[0] : null;
+  const phone = byPhone?.length === 1 ? byPhone[0] : null;
   if (email && phone) return email === phone ? { method: "email_phone", contactId: email } : { method: "conflict", contactId: null };
   if (email) return { method: "email", contactId: email };
   if (phone) return { method: "phone", contactId: phone };
   if (row.customerId) {
-    const held = await store.customerContacts(row.customerId);
-    if (held.length === 1) return { method: "customer_id", contactId: held[0] };
-    if (!held.length && refProperties.length) {
-      const found = await crm.findContactsByProperties({ connection, properties: refProperties, value: row.customerId, budget });
-      if (found.length === 1) return { method: "customer_id", contactId: found[0] };
+    let found = await store.customerContacts(row.customerId);
+    if (!found.length && refProperties.length) {
+      found = await crm.findContactsByProperties({ connection, properties: refProperties, value: row.customerId, budget });
     }
+    tally(lookups, "customerId", found);
+    if (found.length === 1) return { method: "customer_id", contactId: found[0] };
   }
   return { method: "none", contactId: null };
 }
@@ -368,13 +390,15 @@ export async function runImportLegacyCalls(opts, {
     const stored = await store.legacyBatchRows(batch.batchId);
     const refProperties = await store.contactRefProperties();
     const outcomes = {};
+    out.lookups = emptyLookups();
     let buffer = [];
     const flush = async () => {
       if (!buffer.length) return;
       const part = buffer;
       buffer = [];
       for (const [k, v] of Object.entries(await store.upsertLegacyOutcomes(batch.batchId, part))) outcomes[k] = (outcomes[k] ?? 0) + v;
-      info("import-legacy-calls: progress", { connection: c.connectionId, batch: batch.batchId, written: part.length, lastRow: part[part.length - 1].sourceRow });
+      info("import-legacy-calls: progress", { connection: c.connectionId, batch: batch.batchId, written: part.length, lastRow: part[part.length - 1].sourceRow,
+        lookups: out.lookups });
     };
     let error = null;
     try {
@@ -386,7 +410,7 @@ export async function runImportLegacyCalls(opts, {
         }
         let m;
         try {
-          m = await matchRow({ row: r, crm, connection: c, store, refProperties, budget });
+          m = await matchRow({ row: r, crm, connection: c, store, refProperties, budget, lookups: out.lookups });
         } catch (err) {
           if (err instanceof SourceError && err.code === PAUSE_CODE) {
             pausedAt = r.row;

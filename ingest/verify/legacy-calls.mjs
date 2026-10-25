@@ -189,6 +189,13 @@ const seams = (store) => ({
   adapters: ADAPTERS, read: async () => Buffer.from(FIXTURE), secret: async () => PEPPER,
   served: async ({ connectionId }) => (connectionId === CRM.connectionId ? [CRM] : []), storeOf: () => store,
 });
+// Every run's answer and the store it wrote to, for the privacy checks of section J
+const seen = [];
+async function importRun(args, store) {
+  const out = await runImportLegacyCalls(args, seams(store));
+  seen.push({ out, db: store.db });
+  return out;
+}
 const rowsText = (db) => [...db.rows].sort(([a], [b]) => a - b).map(([k, v]) => `${k}:${v.method}:${v.contact ?? "-"}`).join(" ");
 
 // ---- A. The arguments --------------------------------------------------------------------------------------------------
@@ -209,6 +216,12 @@ expect("A3 the date format: a time ignored, one digit allowed, 31 February and o
     dateReader("MM/DD/YYYY")("05/14/2025"), usage(() => dateReader("DD-MM-YY")), usage(() => dateReader("DD-DD-YYYY"))],
   ["2025-05-14", "2025-06-01", null, null, null, "2025-05-14", "2025-05-14", "usage", "usage"],
   [null, null, "2026-03-03", "2025-05-14", "", null, null, "ok", "ok"]);
+expect("A5 --min-customer-id-digits: 10 by default, 1 to 20; 13 digits taken at 13, refused at 14",
+  [configOf(ARGS).minCustomerIdDigits, configOf({ ...ARGS, "min-customer-id-digits": "13" }).minCustomerIdDigits,
+    usage(() => configOf({ ...ARGS, "min-customer-id-digits": "0" })), usage(() => configOf({ ...ARGS, "min-customer-id-digits": "21" })),
+    usage(() => configOf({ ...ARGS, "min-customer-id-digits": "1e1" })), customerIdOf("1234567890123", 13), customerIdOf("1234567890123", 14),
+    rowsOf(parseCsv(FIXTURE.toString("utf8")), configOf({ ...ARGS, "min-customer-id-digits": "14" })).find((x) => x.row === 7).customerId],
+  [10, 13, "usage", "usage", "usage", "1234567890123", null, null], [13, 10, "ok", "ok", "ok", null, "1234567890123", "1234567890123"]);
 expect("A4 the file's address and the source system: gs:// only; a bad bucket, an http address, a bad source system refused",
   [JSON.stringify(parseGsUri("gs://cma-import-p4a-cma-prod/steam/courtesy.csv")), parseGsUri("gs://A/b"), parseGsUri("https://x/y"),
     usage(() => configOf({ ...ARGS, file: "/home/someone/file.csv" })), usage(() => configOf({ ...ARGS, "source-system": "Steam" })),
@@ -269,7 +282,7 @@ expect("C3 the properties the lookups rely on, checked on the portal", LOOKUP_PR
 // ---- D. A dry run: no search, no write, no run row ------------------------------------------------------------------------
 let store = fakeStore();
 fake.searches = 0;
-let r = await runImportLegacyCalls({ ...ARGS, "dry-run": true }, seams(store));
+let r = await importRun({ ...ARGS, "dry-run": true }, store);
 expect("D1 a dry run: the counts; refused rows per reason; the reconciliation; nothing searched, written or run",
   [r.total, r.legacy, r.current, r.refused, JSON.stringify(r.refusedRows), JSON.stringify(r.reconciliation), fake.searches,
     store.db.writes.filter((w) => w[0] !== "reconcile").length, store.db.runs.length, r.failed, r.methods],
@@ -281,7 +294,7 @@ expect("D2 …the SHA-256 of the file, the reconciliation sent as hashes and dat
 
 // ---- E. A whole run: every match path ------------------------------------------------------------------------------------
 store = fakeStore();
-r = await runImportLegacyCalls(ARGS, seams(store));
+r = await importRun(ARGS, store);
 const EXPECTED_ROWS = "2:email_phone:102 3:email:103 4:phone:104 5:email:105 6:conflict:- 7:customer_id:107 8:customer_id:108 9:none:- 10:none:- "
   + "18:phone:118 19:email_phone:119 20:email:120 21:email:121";
 expect("E1 every match path stored: email_phone, email (primary and additional), phone (collision, national format), customer_id (store, ref field), conflict, none",
@@ -295,6 +308,10 @@ expect("E3 the finished line: the counts per source and method, the row numbers 
   [r.batchOutcome, r.total, r.legacy, r.current, r.refused, JSON.stringify(r.methods), r.conflictRows.join(","), r.noneRows.join(","), r.failed, r.error ?? null],
   ["started", 19, 16, 3, 4, JSON.stringify({ email_phone: 2, email: 4, phone: 2, customer_id: 2, none: 2, conflict: 1, forgotten: 0 }), "6", "9,10", 0, null],
   ["reused", 0, 0, 0, 0, "{}", "", "", 1, "x"]);
+expect("E5 the lookups counted per key (rows looked up, one, several), in the finished line and the progress line",
+  [JSON.stringify(r.lookups), logs.some((l) => l.includes("import-legacy-calls: progress") && l.includes(JSON.stringify(r.lookups)))],
+  [JSON.stringify({ email: { searched: 10, one: 7, several: 1 }, phone: { searched: 6, one: 5, several: 1 }, customerId: { searched: 2, one: 2, several: 0 } }), true],
+  ["{}", false]);
 expect("E4 the batch's counts and the run's row: legacy_call_import, its stream, succeeded; commits in parts of at most 100",
   [JSON.stringify(store.db.finished), JSON.stringify(store.db.runs), store.db.writes.filter((w) => w[0] === "upsert").map((w) => w[2].length).join(",")],
   [JSON.stringify({ total: 19, legacy: 16, current: 3, refused: 4, current_found: 1, current_not_found: 1, stored: 13 }),
@@ -305,7 +322,7 @@ expect("E4 the batch's counts and the run's row: legacy_call_import, its stream,
 // ---- F. A rerun: the batch reused, the rows with a contact not searched again, a none filled --------------------------------
 fake.contacts = fake.contacts.filter((c) => c.id !== "210");
 fake.searches = 0;
-r = await runImportLegacyCalls(ARGS, seams(store));
+r = await importRun(ARGS, store);
 expect("F1 a rerun: the batch reused; row 10 filled (its email now one contact); conflict and none searched again, the rest not",
   [r.batchOutcome, rowsText(store.db), fake.searches, JSON.stringify(r.written), store.db.batches.length],
   ["reused", EXPECTED_ROWS.replace("10:none:-", "10:email:110"), 5, JSON.stringify({ unchanged: 2, filled: 1 }), 1],
@@ -316,14 +333,14 @@ fake.contacts.push({ id: "210", email: "fx.ten@example.invalid" });
 store = fakeStore();
 let n = 0;
 fake.dailyRemaining = () => (n++ < 12 ? 900 : 100);
-r = await runImportLegacyCalls(ARGS, seams(store));
+r = await importRun(ARGS, store);
 const partial = store.db.rows.size;
 expect("G1 below the daily floor: the run pauses as succeeded with daily_floor, keeps what it matched, the batch not finished",
   [r.paused, r.error, r.failed, store.db.runs[0].status, store.db.runs[0].error, partial > 0 && partial < 13, store.db.finished, typeof r.pausedAtRow],
   [true, "daily_floor", 0, "succeeded", "daily_floor", true, null, "number"],
   [undefined, null, 1, "failed", null, false, {}, "undefined"]);
 fake.dailyRemaining = () => 900;
-r = await runImportLegacyCalls(ARGS, seams(store));
+r = await importRun(ARGS, store);
 expect("G2 …the same command later continues and ends where a whole run ends",
   [r.paused, r.batchOutcome, rowsText(store.db), store.db.finished?.stored, store.db.runs.map((x) => x.status).join(",")],
   [undefined, "reused", EXPECTED_ROWS, 13, "succeeded,succeeded"],
@@ -333,8 +350,8 @@ expect("G2 …the same command later continues and ends where a whole run ends",
 store = fakeStore();
 fake.missing.add("hs_searchable_calculated_mobile_number");
 fake.searches = 0;
-r = await runImportLegacyCalls(ARGS, seams(store));
-const dry = await runImportLegacyCalls({ ...ARGS, "dry-run": true }, seams(fakeStore()));
+r = await importRun(ARGS, store);
+const dry = await importRun({ ...ARGS, "dry-run": true }, fakeStore());
 fake.missing.clear();
 expect("H1 a missing property: the run fails with property_missing before any search or batch; the dry run says so too",
   [r.error, r.failed, JSON.stringify(r.missingProperties), fake.searches, store.db.batches.length, store.db.runs[0].status, dry.error, dry.failed],
@@ -367,14 +384,17 @@ const PERSONAL = [
   ...new Set([...text.matchAll(/\+31[\d ]+/g)].map((x) => x[0].replace(/\s/g, ""))), "201110002", "111 0002", "1110018",
   "1234567890123", "9876543210987", "cus_FX10",
 ];
-const answers = JSON.stringify([r, dry]);
-const stored = JSON.stringify([...store.db.rows.values(), store.db.finished, store.db.runs]);
+// every run of this file (dry, whole, rerun, paused and resumed, property missing): its answer, and everything its store
+// was given or holds (the rows, the upserts, the reconciliation items, the finishes, the run rows)
+const answers = JSON.stringify(seen.map((x) => x.out));
+const stored = JSON.stringify(seen.map((x) => [[...x.db.rows.values()], x.db.writes, x.db.finished, x.db.runs, x.db.batches]));
 const logText = logs.join("\n");
 const leaks = (s) => PERSONAL.filter((p) => s.toLowerCase().includes(p.toLowerCase()));
 expect("J1 the fixture holds the values the check looks for (emails, names, numbers, customer ids)", PERSONAL.length > 30, true, false);
 expect("J2 the captured log holds none of them", leaks(logText), [], PERSONAL);
-expect("J3 the job's answers (the finished line) hold none of them", leaks(answers), [], PERSONAL);
-expect("J4 the stored rows, counts and run rows hold none of them", leaks(stored + JSON.stringify(fakeStore().db)), [], PERSONAL);
+expect("J3 every run's answer (the finished line) holds none of them; seven runs scanned", [leaks(answers), seen.length], [[], 7], [PERSONAL, 0]);
+expect("J4 everything the stores were given or hold (rows, upserts, reconciliation, counts, run rows) holds none of them; rows present",
+  [leaks(stored), seen.reduce((n, x) => n + x.db.rows.size, 0) > 30], [[], true], [PERSONAL, false]);
 expect("J5 the log has progress and nothing but counts, row numbers and ids: no email, no +",
   [logs.some((l) => l.includes("import-legacy-calls: progress")), /@|\+\d/.test(logText)], [true, false], [false, true]);
 

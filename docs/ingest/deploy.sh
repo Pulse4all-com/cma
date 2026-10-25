@@ -279,15 +279,6 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-backfill backfill.mjs 24h ""
   deploy_job ingest-import-legacy-calls import-legacy-calls.mjs 6h ""
 
-  # The import bucket (addition 0008zg): the job's service account reads its objects, on this bucket only
-  IMPORT_BUCKET="cma-import-${PROJECT}"
-  if gcloud storage buckets describe "gs://${IMPORT_BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
-    gcloud storage buckets add-iam-policy-binding "gs://${IMPORT_BUCKET}" --project="$PROJECT" \
-      --member="serviceAccount:${SA}" --role=roles/storage.objectViewer --quiet >/dev/null && echo "storage.objectViewer on gs://${IMPORT_BUCKET}"
-  else
-    echo "bucket gs://${IMPORT_BUCKET} does not exist yet: create it (docs/import/legacy-calls.md, step 1), then rerun with --jobs"
-  fi
-
   # Cloud Scheduler calls each scheduled job's run endpoint as the scheduler account (run.invoker on those jobs only)
   schedule () {  # <job> <cron>
     gcloud run jobs add-iam-policy-binding "$1" --project="$PROJECT" --region="$REGION" \
@@ -312,6 +303,16 @@ if [ "$JOBS" = 1 ]; then
     gcloud scheduler jobs pause ingest-outbox --project="$PROJECT" --location="$REGION" --quiet >/dev/null && echo "schedule ingest-outbox: paused (nothing to deliver since 0008h)"
   else
     echo "schedule ingest-outbox: none (the job runs only when executed)"
+  fi
+
+  # The import bucket (addition 0008zg): the job's service account reads its objects, on this bucket only. After the
+  # schedules, so a binding the deploying person may not make (storage.buckets.setIamPolicy) stops nothing scheduled
+  IMPORT_BUCKET="cma-import-${PROJECT}"
+  if gcloud storage buckets describe "gs://${IMPORT_BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
+    gcloud storage buckets add-iam-policy-binding "gs://${IMPORT_BUCKET}" --project="$PROJECT" \
+      --member="serviceAccount:${SA}" --role=roles/storage.objectViewer --quiet >/dev/null && echo "storage.objectViewer on gs://${IMPORT_BUCKET}"
+  else
+    echo "bucket gs://${IMPORT_BUCKET} does not exist yet: create it (docs/import/legacy-calls.md, step 1), then rerun with --jobs"
   fi
 
   echo

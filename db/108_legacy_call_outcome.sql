@@ -7,8 +7,9 @@
 -- prod. Nothing in the web reads what this adds, and the ingest of main calls none of it, so prod may run it before
 -- or after the merge; the job ingest-import-legacy-calls needs it.
 --
--- Why (Decision log, 25 October 2026): the outcomes of the calls a former telephony system made (for Pulse4all:
--- Steam's courtesy completions, 14 May 2025 to 31 August 2026) exist only in a file exported from that system. They
+-- Why (Decision log, 25 October 2026): the outcomes of the calls a former telephony system made (the first file holds
+-- a business line's courtesy completions of 14 May 2025 to 31 August 2026) exist only in a file exported from that
+-- system. They
 -- are imported once, as their own facts, each matched to at most one CRM contact. The current telephony system's
 -- calls are never copied: they stay in cma.telephony_call and cma.telephony_call_tag and are read through the tag
 -- meanings (docs/definitions.md, R1 and Tag). Nothing personal is stored: an outcome holds its date, its meaning, the
@@ -16,8 +17,8 @@
 -- import job's memory only.
 --
 -- What it adds
---   batches            cma.legacy_call_batch: one imported file per row. The source system (a data value, e.g.
---                      steam), the CRM connection it was matched against, the file's SHA-256 (one live batch per
+--   batches            cma.legacy_call_batch: one imported file per row. The source system (a data value, the
+--                      import's key), the CRM connection it was matched against, the file's SHA-256 (one live batch per
 --                      file and tenant: a second run of the same file reuses the batch; a withdrawn batch frees the
 --                      file for a new one), the cutover date (the first day of the current telephony system), the
 --                      row counts per source and per match method (counts), started_at, finished_at, withdrawn_at
@@ -105,7 +106,7 @@ create table if not exists cma.legacy_call_batch (
   foreign key (tenant_id, withdrawn_by) references cma.app_user (tenant_id, id)
 );
 comment on table cma.legacy_call_batch is 'One imported file of a former telephony system''s call outcomes: source system, CRM connection, the file''s SHA-256, the cutover date, counts, times, and its withdrawal. No personal data (0008zg)';
-comment on column cma.legacy_call_batch.source_system is 'The former telephony system, a data value (for Pulse4all steam)';
+comment on column cma.legacy_call_batch.source_system is 'The former telephony system: a data value, a lower-case key given by the import';
 comment on column cma.legacy_call_batch.file_sha256 is 'The SHA-256 of the imported file, lower-case hex: one live batch per file and tenant, so a second run of the same file reuses the batch';
 comment on column cma.legacy_call_batch.cutover_date is 'The first day of the current telephony system: a row of the former system is dated before it, a row of the current one on or after it';
 comment on column cma.legacy_call_batch.counts is 'Whole numbers: total, legacy, current, refused, current_found, current_not_found (the import job''s), and stored with the stored rows per match method (taken from the rows at finish)';
@@ -138,7 +139,7 @@ create table if not exists cma.legacy_call_outcome (
 comment on table cma.legacy_call_outcome is 'A former telephony system''s call outcome, one per imported row: date, meaning, the old system''s tag text and the CRM contact matched (or none). Never an email, a phone number, a name or a customer id (0008zg)';
 comment on column cma.legacy_call_outcome.source_row is 'The row number in the imported file (the header is row 1), unique per batch';
 comment on column cma.legacy_call_outcome.meaning is 'The tag meaning of the row''s label, by the import''s mapping: one of the seven keys of cma.telephony_tag.meaning';
-comment on column cma.legacy_call_outcome.source_label is 'The former system''s tag text as the file holds it: at most 100 characters, never an @';
+comment on column cma.legacy_call_outcome.source_label is 'The former system''s tag text as the file holds it, trimmed and with inner white space collapsed: at most 100 characters, never an @';
 comment on column cma.legacy_call_outcome.crm_contact_source_id is 'The CRM contact matched, kept in the CMA only; null for none, conflict and forgotten';
 comment on column cma.legacy_call_outcome.match_method is 'email_phone, email, phone or customer_id (exactly one contact found that way), none, conflict (email and phone found different contacts) or forgotten (the CRM deleted the contact for privacy)';
 comment on column cma.legacy_call_outcome.matched_at is 'When the contact was set; null without a contact';

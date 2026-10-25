@@ -15,5 +15,5 @@ B8 the reconciliation read: a current courtesy completed tag on the tenant's day
 B9 the privacy deletion: forgotten, counted, never filled again by a rerun | FAIL | {"refs": 0, "calls": 0, "contacts": 0, "submissions": 0, "legacy_calls": 2} | 2:forgotten:-:false 3:email:c-2:true 4:phone:c-3:true 5:forgotten:-:false 6:email:c-6:true 7:none:-:false | 2:forgotten 5:forgotten | {"refs": 0, "calls": 0, "contacts": 0, "submissions": 0} 2:forgotten:-:false 3:email:c-2:true 4:phone:c-3:true 5:forgotten:-:false 6:email:c-6:true 7:none:-:false
 B10 the withdrawal: once by the admin, audited; no more rows; left out of the readers; the file again | FAIL | CMA06 CMA06 true CMA03 CMA02 true 1:true CMA03 CMA03 started:true 1:0:2:1 2 3:forgotten,3:forgotten
 B11 tenant isolation: nothing of tenant one seen or reached from tenant two | FAIL | 0:0 CMA02 CMA02 CMA02 started 0 CMA02 2
-B12 the job's sync run; the audit of the rows | FAIL | legacy_call_import:steamtest:succeeded:6 7:true 0
+B12 the job's sync run; the audit of the rows | FAIL | legacy_call_import:legacytest:succeeded:6 7:true 0
 verdict | PROVOKED, NOT A PASS | 109_verify_legacy_call_outcome: 0 PASS, 18 FAIL
