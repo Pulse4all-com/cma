@@ -17,7 +17,7 @@ Kira steers the call center on six outcomes: **conversion (speed to lead), indir
 |---|------|-------|---------|
 | 1 | Conversion and speed to lead | Report, Live | HubSpot, Aircall, CMA |
 | 2 | Indirect sales | Report, Agent | Shopify (via HubSpot), HubSpot |
-| 3 | Reviews | Report, Live | Review platform (to decide), HubSpot |
+| 3 | Reviews | Report, Live | Trusted Shops (Pulse4all Subscriptions), HubSpot |
 | 4 | Churn and contract length | Report | HubSpot, Shopify / Juo |
 | 5 | Reasons for not buying | Report, Agent | HubSpot, CMA result codes |
 | 6 | Complaints and vulnerability (GB) | Live, Report | HubSpot tickets and contacts |
@@ -50,6 +50,8 @@ The CMA's assignment, accept click and 5-minute rule (see Speed to lead) are the
 - Score and number of reviews per country per week.
 - Reviews following deal stage 4.4 Completed Happy.
 - Negative review flagged within one day (live alert).
+- **As built (addition 0008ze, brief B18):** Reports → Reviews shows the count, the average rating, the negative reviews and the linked reviews, each with the previous period like for like; per rating, link level, market, day or week, review channel and invitation event; every active market in its review-channel state. The alert rule "Negative review" exists and is switched off.
+- **Needs:** the Trusted Shops connection in prod; every channel mapped to its market and counted on Configuration → Sources; a channel per active market; Kira's threshold and audience before the alert rule is switched on. Reviews after 4.4 Completed Happy need the HubSpot-triggered invite (open: Open decisions).
 
 ### 4. Churn and contract length
 - Cancellations per country per week, with Cancellation Reason (the ticket property `cancellation_reason`, Dropdown select, 11 options, in the live portal since Joshua's task: Martin, 21 October 2026). Since brief B17d (addition 0008p) the cancellation forms' submissions per market and week, with the answers of `cancellation_reason`, are on Reports → Forms; since addition 0008zb (brief N21) Reports → Cancellations counts the cancellation requests (the tickets of the kind `reports.cancellation_kind` names, by a pipeline or category rule on Configuration → Sources) per market and per ISO week or day, open and closed with the median days to close and the tickets' Cancellation Reason (a dropdown only). It counts requests, not contracts; cancellations as contract events come with the subscription data later.
@@ -127,6 +129,7 @@ These are prerequisites in HubSpot, Aircall and every source that joins later. W
 - For the callbacks kept (addition 0008w): every callback task typed as a callback in HubSpot, the type marked on Sources, with a due time and the contact associated.
 - For the funnel and the lost reasons (additions 0008za and 0008zb): HubSpot's calculated stage properties present for the counted pipelines' stages (HubSpot fills `hs_v2_date_entered_<stage id>` and `hs_v2_date_exited_<stage id>` only where the pipeline's stage calculated properties are switched on (Settings → Objects → Pipelines, column "Stage calculated properties"), per pipeline and per stage; once switched on, it fills them retroactively, and a new stage may come without them. The gap query of `docs/funnel-2026-10/RUNBOOK.md`, step 16, finds such stages; prod's of 21 October 2026 are in Open decisions); the Closed Lost Reason as a dropdown filled on every lost deal (Reports → Funnel counts the lost deals without a reason, and lists them with their links); the data-quality reasons flagged on Sources; the source channel on the deals. For the cancellations: the rule that marks a cancellation ticket set on Sources, and the tickets' Cancellation Reason filled. Owners: Kira and Joshua; the rule with Arno.
 - For the FCA journey (addition 0008v): a consumer or business flag on every GB contact, the agreement date on the contract, a call tag that proves the welcome call, template ids on the journey's emails, the call-recording consent decided (the journey's prerequisites on Campaign monitoring).
+- For reviews (addition 0008ze): a Trusted Shops channel per active market (none yet for IE, BE, CH, DK, NO, FI, ES, IT), each mapped to its market and counted on Configuration → Sources; Data quality lists unmapped channels and active markets without one.
 
 ### 12. Cohorts
 A cohort is a group of customers (or agents) that share an entry point; the report follows the group over time instead of reporting a period. Cohort definitions are tenant configuration in the metric catalog; Kira and Peter confirm Pulse4all's.

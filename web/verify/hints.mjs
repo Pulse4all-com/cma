@@ -162,6 +162,10 @@ const cases = [
   ["reader", "/reports/funnel?range=month&group=day", 45, 10],
   ["manager", "/reports/cancellations?range=month", 15, 4],
   ["reader", "/reports/cancellations?range=week&group=day", 15, 4],
+  // Reviews (addition 0008ze): four tiles; per market six headers, per week or day five, per review channel six, the
+  // markets' states four
+  ["manager", "/reports/reviews?range=month", 15, 4],
+  ["reader", "/reports/reviews?range=week&group=day", 15, 4],
 ];
 let headers = 0;
 let tiles = 0;
@@ -251,7 +255,7 @@ let barCards = 0;
 // Funnel and Cancellations (addition 0008zb): each card with an intro (per stage, per pipeline, why deals are lost and
 // never a lead; per market and the reasons) names its figure in one described mark at the end of its intro
 let funnelIntros = 0;
-for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2]]) {
+for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2], ["/reports/reviews?range=month", 6]]) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);

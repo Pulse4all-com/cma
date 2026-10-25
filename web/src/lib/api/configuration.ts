@@ -3,7 +3,7 @@ import { ApiError } from "@/lib/api/respond";
 import type {
   AbsenceTypeInput, AlertRuleInput, ConfigAppLinkInput, ConfigStatusInput, FormCategoryInput, MarketInput, SkillDimension, SkillInputRow, SkillLevel, SourceConnectionInput,
   SourceFormChange, SourceKind, SourceLineInput, SourceMissedReasonInput, SourceOutcomeChange, SourcePipelineInput, SourcePipelineSlaInput, SourceSettings, SourceStageOutcomeInput,
-  SourceStore, SourceTagInput, SourceTagMeaningInput, SourceTaskStatusInput, SourceTaskTypeInput, TagMeaning, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput,
+  SourceStore, SourceTagInput, SourceTagMeaningInput, SourceTaskStatusInput, SourceTaskTypeInput, TagMeaning, TeamInput, SourceInboxChannelInput, SourceInboxInput, SourceMailboxInput, SourceReviewChannelInput,
   RecordKindInput, RecordKindRuleInput, SourceReasonFieldInput, SourceReasonFlagInput, SourceStageReadTimesInput,
 } from "@/lib/data";
 import { normalizeAlias, parseDay, parseOfficeHours, settingsProblem, TAG_MEANINGS } from "@/lib/sources";
@@ -117,7 +117,7 @@ export function checkSettingInput(b: Record<string, unknown>): { key: string; va
 // Shape and bounds only; whether a market, a pipeline, a form or a person exists, and whether a kind
 // fits the connection's rows, is the database's answer.
 
-const KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
+const KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation", "reviews"];
 const REF = /^[A-Za-z0-9_.:@\/+=-]{1,100}$/;
 const MARKET = /^[A-Z]{2}$/;
 
@@ -141,7 +141,7 @@ export function checkSourceConnectionInput(b: Record<string, unknown>): SourceCo
   if (b.name !== undefined) out.name = text(b, "name", 100);
   if (b.isActive !== undefined) out.isActive = flag(b, "isActive");
   if (b.kind !== undefined) {
-    if (typeof b.kind !== "string" || !KINDS.includes(b.kind as SourceKind)) throw new ApiError(400, "invalid_kind", "kind must be crm, telephony, commerce or automation");
+    if (typeof b.kind !== "string" || !KINDS.includes(b.kind as SourceKind)) throw new ApiError(400, "invalid_kind", "kind must be crm, telephony, commerce, automation or reviews");
     out.kind = b.kind as SourceKind;
   }
   if (Object.keys(out).length === 0) throw new ApiError(400, "invalid_body", "name, isActive or kind is required");
@@ -340,6 +340,11 @@ export function checkInboxChannelInput(b: Record<string, unknown>): SourceInboxC
   return { channelId: ref(b.channelId, "channelId"), isCounted: flag(b, "isCounted") };
 }
 
+/** A review channel's market and counted flag (addition 0008ze): the channel by its source id, a market code or none */
+export function checkReviewChannelInput(b: Record<string, unknown>): SourceReviewChannelInput {
+  return { channelId: ref(b.channelId, "channelId"), market: marketOrNull(b.market, "market"), isCounted: flag(b, "isCounted") };
+}
+
 export function checkStoreInput(b: Record<string, unknown>): SourceStore {
   const handle = b.handle;
   if (typeof handle !== "string" || !/^[a-z0-9-]{1,60}$/.test(handle)) throw new ApiError(400, "invalid_handle", "handle is 1 to 60 lower-case letters, digits or hyphens");
@@ -400,7 +405,9 @@ export function checkHolidayInput(b: Record<string, unknown>): { market: string;
 
 export function checkAlertRuleInput(b: Record<string, unknown>): AlertRuleInput {
   const trigger = b.trigger;
-  if (trigger !== "record_created" && trigger !== "record_assigned") throw new ApiError(400, "invalid_trigger", "trigger is record_created or record_assigned");
+  if (trigger !== "record_created" && trigger !== "record_assigned" && trigger !== "review_submitted") {
+    throw new ApiError(400, "invalid_trigger", "trigger is record_created, record_assigned or review_submitted");
+  }
   const urgency = b.urgency;
   if (urgency !== "normal" && urgency !== "urgent") throw new ApiError(400, "invalid_urgency", "urgency is normal or urgent");
   const pipelineIds = b.pipelineIds ?? [];
@@ -412,14 +419,22 @@ export function checkAlertRuleInput(b: Record<string, unknown>): AlertRuleInput 
     if (typeof v !== "string" || !/^[a-z_]+(\.[a-z_]+)+$/.test(v)) throw new ApiError(400, `invalid_${name}`, `${name} must be a permission key${nullable ? " or empty" : ""}`);
     return v;
   };
-  const created = trigger === "record_created";
+  // a review rule (addition 0008ze) has an audience as a created-record rule, the record type review, no pipelines and a highest rating
+  const review = trigger === "review_submitted";
+  const created = trigger === "record_created" || review;
+  const rating = b.maxRating ?? null;
+  if (review && rating !== null && (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 5)) {
+    throw new ApiError(400, "invalid_max_rating", "maxRating is a whole number of stars from 1 to 5, or empty for any rating");
+  }
   return {
-    name: text(b, "name", 80), trigger, recordType: checkKey(b.recordType, /^[a-z][a-z0-9_]*$/), pipelineIds: pipelineIds.map((p) => ref(p, "pipelineId")),
+    name: text(b, "name", 80), trigger, recordType: review ? "review" : checkKey(b.recordType, /^[a-z][a-z0-9_]*$/),
+    pipelineIds: review ? [] : pipelineIds.map((p) => ref(p, "pipelineId")),
     urgency, maxAgeMinutes: age as number | null,
     audiencePermission: created ? permission(b.audiencePermission, "audiencePermission", false)! : "leads.accept",
     matchLanguage: created ? flag(b, "matchLanguage") : false,
     onlyClockedIn: created ? flag(b, "onlyClockedIn") : false,
     fallbackPermission: created ? permission(b.fallbackPermission, "fallbackPermission", true) : null,
+    maxRating: review ? (rating as number | null) : null,
   };
 }
 

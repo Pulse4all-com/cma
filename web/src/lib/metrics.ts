@@ -379,6 +379,19 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "cancellations.by_period",
     "cancellations.list",
   ],
+  "/reports/reviews": [
+    "reviews.count",
+    "reviews.average_rating",
+    "reviews.negative",
+    "reviews.linked",
+    "reviews.distribution",
+    "reviews.by_market",
+    "reviews.by_period",
+    "reviews.link_levels",
+    "reviews.invite_events",
+    "reviews.by_channel",
+    "reviews.market_states",
+  ],
   "/reports/forms": [
     "forms.submissions",
     "forms.forms_with_submissions",
@@ -479,6 +492,8 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "data_quality.crm_task_owner_unlinked",
     "data_quality.form_answer_not_in_options",
     "data_quality.outbox_pending",
+    "data_quality.review_channel_unmapped",
+    "data_quality.market_without_review_channel",
   ],
   "/messages/send": [
     "messages.sent.recipients",

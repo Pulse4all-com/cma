@@ -142,7 +142,7 @@ export function runDurationMs(run: HealthRun): number | null {
 
 /** Every job name the page lists, in the order shown; the scheduled ones first */
 export const JOB_ORDER: readonly string[] = [
-  "link_calls", "forms_poll", "email_poll", "reconcile", "close_forgotten_workdays", "refresh_follow_up", "subscriptions_check", "backfill",
+  "link_calls", "forms_poll", "email_poll", "reconcile", "close_forgotten_workdays", "refresh_follow_up", "subscriptions_check", "reviews_poll", "backfill",
 ];
 
 /** The runs grouped per job, in JOB_ORDER then alphabetically for jobs the list does not know */

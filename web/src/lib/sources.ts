@@ -7,9 +7,10 @@
  */
 import type { MarketConfig, SourceForm, SourceKind, SourceSettingValue, SourceSettings, SourceTag, TagMeaning } from "@/lib/data/types";
 
-export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation"];
+export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation", "reviews"];
 
-export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "taskStatuses" | "taskTypes" | "email" | "lines" | "tags" | "missedReasons" | "store";
+export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "taskStatuses" | "taskTypes" | "email" | "lines" | "tags" | "missedReasons" | "store"
+  | "reviewChannels";
 
 const SECTIONS: Record<SourceKind, SourceSection[]> = {
   // taskStatuses, taskTypes: the task catalogs of Follow-up and KPI 5 (addition 0008n)
@@ -19,6 +20,8 @@ const SECTIONS: Record<SourceKind, SourceSection[]> = {
   telephony: ["lines", "tags", "missedReasons"],
   commerce: ["store"],
   automation: [],
+  // reviewChannels: a review platform's channels with their market and counted flag, and the reviews' settings (addition 0008ze)
+  reviews: ["reviewChannels"],
 };
 
 /** The sections of a connection's page: its kind's, or while the kind is unset those of the kinds its rows imply */

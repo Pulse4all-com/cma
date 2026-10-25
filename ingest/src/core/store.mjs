@@ -46,6 +46,15 @@
  *   heldRefContacts({...})      the contacts the CMA holds whose refs hold a customer id (crm_contact_ref)
  *   connectionKey()             the connection's key (the address of its webhooks; an identifier)
  *
+ * For a reviews source (addition 0008ze), each its own short transaction; never an email, a name or a text:
+ *   upsertReviewChannels(items) cma.ingest_upsert_review_channels: the source's whole channel list
+ *   reviewChannels()            the connection's channels: { channelId, deleted }
+ *   upsertReviews(items)        cma.ingest_upsert_reviews in parts of at most 500: per review { sourceId, outcome,
+ *                               linkLevel, hasContact }
+ *   setReviewContact(id, crm, contact)   cma.set_review_contact: the contact an email matched (in memory)
+ *   reviewAlerts(ids)           cma.ingest_review_alerts, at most 500 ids a call: the messages written
+ *   reviewChannelSummary(id)    one channel's reviews held: count, link levels, oldest and newest submission
+ *
  * For the outbox job (migration 0007c): outboxClaim(limit), outboxFinish(groups).
  * For the sweep's outbox guard: outboxLate(lateBy, connectionId)   per active connection, the tenant's
  *                               actions the outbox still has to deliver (pending, failed, or a claim that
@@ -69,7 +78,8 @@
  * contact link ({ customerId, crmConnectionId, contactId }, cma.set_commerce_customer_contact of
  * 0008h) after them, writes.writebacks enqueues CRM contact write-backs ({ connectionId, contactId,
  * values, reason }, cma.enqueue_contact_writeback of 0007c; generic, no commerce use since 0008h),
- * writes.forgets runs a CRM privacy deletion (0007, and the commerce links to the contact, 0008h),
+ * writes.forgets runs a CRM privacy deletion (0007, and the commerce links to the contact, 0008h, and the reviews'
+ * links to it, 0008ze),
  * writes.tally adds named counts to the run's counts (no ids), writes.cursors moves sync cursors in
  * the same transaction as the writes they describe.
  * applyUnits() writes all units in one transaction and finishes their events; when that fails it
@@ -367,6 +377,50 @@ export function storeFor(ctx, connectionId) {
       });
       return n;
     },
+    async upsertReviewChannels(items) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_upsert_review_channels($1, $2::jsonb) as n",
+        [connectionId, JSON.stringify(items)])).rows[0].n);
+    },
+    async reviewChannels() {
+      return withTenant(ctx, async (q) => (await q.query(
+        `select source_id, source_deleted_at is not null as deleted from cma.review_channel
+          where tenant_id = cma.current_tenant_id() and connection_id = $1 order by source_id`, [connectionId])).rows
+        .map((r) => ({ channelId: r.source_id, deleted: r.deleted })));
+    },
+    async upsertReviews(items) {
+      const out = [];
+      for (const part of chunks(items)) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query("select source_id, outcome, link_level, has_contact from cma.ingest_upsert_reviews($1, $2::jsonb)",
+            [connectionId, JSON.stringify(part)]);
+          for (const x of r.rows) out.push({ sourceId: x.source_id, outcome: x.outcome, linkLevel: x.link_level, hasContact: x.has_contact });
+        });
+      }
+      return out;
+    },
+    async setReviewContact(reviewId, crmConnectionId, contactId) {
+      return withTenant(ctx, async (q) => (await q.query("select cma.set_review_contact($1, $2, $3, $4) as r",
+        [connectionId, reviewId, crmConnectionId, contactId])).rows[0].r);
+    },
+    async reviewAlerts(ids) {
+      let n = 0;
+      for (const part of chunks([...new Set(ids)])) {
+        n += await withTenant(ctx, async (q) => Number((await q.query("select cma.ingest_review_alerts($1, $2::text[]) as n", [connectionId, part])).rows[0].n));
+      }
+      return n;
+    },
+    async reviewChannelSummary(channelId) {
+      return withTenant(ctx, async (q) => {
+        const r = (await q.query(
+          `select count(*)::int as reviews, count(*) filter (where r.link_level = 'order')::int as linked_order,
+                  count(*) filter (where r.link_level = 'contact')::int as linked_contact, count(*) filter (where r.link_level = 'none')::int as unlinked,
+                  min(r.submitted_at) as oldest, max(r.submitted_at) as newest
+             from cma.review r join cma.review_channel ch on ch.tenant_id = r.tenant_id and ch.id = r.review_channel_id
+            where r.tenant_id = cma.current_tenant_id() and r.connection_id = $1 and ch.source_id = $2`, [connectionId, channelId])).rows[0];
+        return { held: r.reviews, linkedOrder: r.linked_order, linkedContact: r.linked_contact, unlinked: r.unlinked,
+          oldestSubmittedAt: r.oldest ? new Date(r.oldest).toISOString() : null, newestSubmittedAt: r.newest ? new Date(r.newest).toISOString() : null };
+      });
+    },
     async lineMarkets(numberRefs) {
       if (!numberRefs.length) return new Map();
       return withTenant(ctx, async (q) => new Map((await q.query(
@@ -438,6 +492,16 @@ async function writeRecordStages(q, connectionId, units, counts) {
   }
 }
 
+// Whether the database holds 0008ze's cma.forget_review_contact_links: an ingest image may reach a database before its
+// migration, and a privacy deletion must not fail for it. Known once true; asked again while false
+let reviewLinks = false;
+async function reviewLinksKnown(q) {
+  if (!reviewLinks) {
+    reviewLinks = (await q.query("select to_regprocedure('cma.forget_review_contact_links(uuid,text)') is not null as ok")).rows[0].ok === true;
+  }
+  return reviewLinks;
+}
+
 // The links of one batch, the last one per customer: after the customers they belong to (0008h)
 async function writeContactLinks(q, connectionId, units, counts) {
   const last = new Map();
@@ -482,6 +546,11 @@ async function writeAll(q, connectionId, units, counts) {
     const r = await q.query("select cma.forget_commerce_contact_links($1, $2) as n", [connectionId, contactId]);
     counts.forgotten = (counts.forgotten ?? 0) + 1;
     counts.linksForgotten = (counts.linksForgotten ?? 0) + Number(r.rows[0]?.n ?? 0);
+    // and the reviews linked to the contact (0008ze), once the database holds the addition
+    if (await reviewLinksKnown(q)) {
+      const v = await q.query("select cma.forget_review_contact_links($1, $2) as n", [connectionId, contactId]);
+      counts.reviewLinksForgotten = (counts.reviewLinksForgotten ?? 0) + Number(v.rows[0]?.n ?? 0);
+    }
   }
   // Record alerts (migration 0008): after the records are in, per record type, at most 500 ids a call;
   // the function resolves the rules and recipients and writes nothing for a record already alerted

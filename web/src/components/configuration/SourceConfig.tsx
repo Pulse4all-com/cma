@@ -33,7 +33,7 @@ import { HeaderHint } from "../HeaderHint";
 import { HintLabel } from "../HintLabel";
 import { Badge, Button, Card, Keycap, Notice } from "../primitives";
 import { FormRuleDialog } from "./SourceRules";
-import { kindLabel } from "./SourcesList";
+import { fmtWhen, kindLabel } from "./SourcesList";
 import { FlagField, FormDialog, SaveNote, field, label, send, td, th, tr, useSave } from "./shared";
 
 const EXAMPLE_ID = "123456789";
@@ -48,11 +48,21 @@ export interface EmailSettingsInWords {
   marketOrder: string | null;
 }
 
+/** The tenant's review settings (addition 0008ze), on a reviews connection: the negative threshold and the backfill's start */
+export interface ReviewSettingsValues {
+  negativeMaxRating: number;
+  historyStartDate: string | null;
+}
+const NEGATIVE_CHOICES = [1, 2, 3, 4] as const;
+
 const EMAIL_NUMBER_KEYS = { reply: "email.reply_target_minutes", days: "email.no_response_days" } as const;
 const EMAIL_NUMBER_MAX = { reply: 10080, days: 90 } as const;
 
-export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, conversationMinSeconds = null, email = null }: {
+export function SourceConfig({ detail, markets, categories = [], copy, locale, timeZone, connectedMinSeconds = null, conversationMinSeconds = null, email = null,
+  reviews = null }: {
   detail: SourceDetail; markets: MarketConfig[]; copy: Copy; locale: Locale; timeZone: string;
+  /** The tenant's review settings (addition 0008ze), on a reviews connection */
+  reviews?: ReviewSettingsValues | null;
   /** The tenant's email settings (addition 0008t), shown in words on a CRM connection */
   email?: EmailSettingsInWords | null;
   /** The tenant's form categories (addition 0008p), for a form's category */
@@ -1059,6 +1069,75 @@ export function SourceConfig({ detail, markets, categories = [], copy, locale, t
               <dt className="font-semibold">{t.timeZone}</dt><dd>{detail.store.timeZone}</dd>
             </dl>
           ) : <p className="text-body text-p4a-muted">{t.storeEmpty}</p>}
+        </Card>
+      ) : null}
+
+      {sections.includes("reviewChannels") ? (
+        <Card title={t.sectionReviewChannels}>
+          <p className="-mt-2 mb-4 max-w-3xl text-small text-p4a-muted">{t.reviewChannelsIntro}</p>
+          {detail.reviewChannels.length === 0 ? <p className="mb-6 text-body text-p4a-muted">{t.reviewChannelsEmpty}</p> : (
+            <div className="mb-6 overflow-x-auto">
+              <table className="w-full border-collapse text-body leading-table" data-testid="source-review-channels">
+                <thead className="bg-p4a-bgblue text-small text-p4a-heading">
+                  <tr>
+                    <th className={th}><HintLabel label={t.reviewChannel}>{hint(t.reviewChannel, t.hintReviewChannel)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.locale}>{hint(t.locale, t.hintReviewLocale)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.market}>{hint(t.market, t.hintReviewMarket)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.counted}>{hint(t.counted, t.hintReviewCounted)}</HintLabel></th>
+                    <th className={`${th} text-right`}><HintLabel label={t.reviewsHeld}>{hint(t.reviewsHeld, t.hintReviewsHeld)}</HintLabel></th>
+                    <th className={th}><HintLabel label={t.lastReview}>{hint(t.lastReview, t.hintLastReview)}</HintLabel></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.reviewChannels.map((ch) => (
+                    <tr key={ch.channelId} className={`${tr} ${ch.deletedAt === null ? "" : "text-p4a-muted"}`} data-review-channel={ch.channelId}>
+                      <td className={td}>
+                        <span className="font-semibold">{ch.name}</span> <span className="text-caption text-p4a-muted">({ch.channelId})</span>
+                        {ch.deletedAt !== null ? <span className="ml-2"><Badge tone="neutral">{t.reviewChannelGone}</Badge></span>
+                          : ch.market === null ? <span className="ml-2"><Badge tone="warning">{t.reviewChannelNew}</Badge></span> : null}
+                      </td>
+                      <td className={td}>{ch.locale ?? "–"}</td>
+                      <td className={td}>
+                        <select className={`${field} w-36`} aria-label={`${t.market}: ${ch.name}`} value={ch.market ?? ""}
+                          onChange={(e) => save(() => send("PUT", `${base}/review-channels`, { channelId: ch.channelId, market: e.target.value || null, isCounted: ch.isCounted }))}>
+                          <option value="">{t.noMarket}</option>
+                          {[...new Set([...marketCodes, ...(ch.market ? [ch.market] : [])])].map((m) => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                      </td>
+                      <td className={td}>
+                        <input type="checkbox" className="h-4 w-4 accent-p4a-deepblue" aria-label={`${t.counted}: ${ch.name}`} checked={ch.isCounted}
+                          onChange={(e) => save(() => send("PUT", `${base}/review-channels`, { channelId: ch.channelId, market: ch.market, isCounted: e.target.checked }))} />
+                      </td>
+                      <td className={`${td} text-right tabular-nums`}>{ch.reviews}</td>
+                      <td className={td}>{ch.lastSubmittedAt ? fmtWhen(ch.lastSubmittedAt, locale, timeZone) : "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {reviews ? (
+            <section className="max-w-3xl" data-testid="source-review-settings">
+              <h3 className="mb-2 text-body font-semibold text-p4a-heading">{t.reviewSettings}</h3>
+              <p className="mb-4 text-small text-p4a-muted">{t.reviewSettingsIntro}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <label className={label}>
+                  {t.negativeMaxRating}
+                  <select className={field} value={String(reviews.negativeMaxRating)}
+                    onChange={(e) => save(() => send("PUT", "/api/v1/configuration/settings", { key: "reviews.negative_max_rating", value: e.target.value }))}>
+                    {NEGATIVE_CHOICES.map((x) => <option key={x} value={String(x)}>{t.negativeAtMost.replace("{rating}", String(x))}</option>)}
+                  </select>
+                  <span className="font-normal text-caption text-p4a-muted">{t.hintNegativeMaxRating}</span>
+                </label>
+                <label className={label}>
+                  {t.historyStartDate}
+                  <input type="date" className={field} defaultValue={reviews.historyStartDate ?? ""}
+                    onBlur={(e) => { if (e.target.value !== (reviews.historyStartDate ?? "")) void save(() => send("PUT", "/api/v1/configuration/settings", { key: "reviews.history_start_date", value: e.target.value || null })); }} />
+                  <span className="font-normal text-caption text-p4a-muted">{t.hintHistoryStartDate}</span>
+                </label>
+              </div>
+            </section>
+          ) : null}
         </Card>
       ) : null}
 

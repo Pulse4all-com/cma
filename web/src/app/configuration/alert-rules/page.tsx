@@ -11,7 +11,7 @@ export default async function AlertRulesPage() {
   const t = copy.configAlertRules;
   const [rules, permissions] = mayConfigure(me)
     ? await Promise.all([data().getAlertRules(me), data().listPermissions(me)])
-    : [{ rules: [], pipelines: [], defaultMaxAgeMinutes: 60 }, []];
+    : [{ rules: [], pipelines: [], defaultMaxAgeMinutes: 60, negativeMaxRating: 2 }, []];
   return (
     <ConfigurationPage me={me} copy={copy} active="config-alert-rules" title={t.title} intro={t.intro}>
       <AlertRulesConfig data={rules} permissions={permissions} copy={copy} locale={me.locale} timeZone={me.timeZone} />

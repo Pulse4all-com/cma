@@ -25,7 +25,7 @@ import { join, relative } from "node:path";
 
 const root = new URL("../src/", import.meta.url).pathname;
 const PURE = ["csv", "dashboard", "team", "roster", "live", "reports", "messages", "configuration", "follow-up",
-  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics"];
+  "invitations", "sources", "period", "time", "nav", "alertRules", "corrections", "logout", "origin", "health", "email", "first-orders", "callbacks", "attempts", "funnel", "metrics", "reviews"];
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {

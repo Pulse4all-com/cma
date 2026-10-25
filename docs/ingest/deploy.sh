@@ -58,10 +58,14 @@
 #   ingest-poll-email  every minute   HubSpot email engagements and inbox conversations (brief B17b), for connections
 #                                     whose settings hold email_poll true: catalogs and owners hourly, threads and
 #                                     messages after their cursors, the open check every email_open_check_minutes (default 15)
+#   ingest-poll-reviews hourly at :07 the reviews connections (addition 0008ze, brief B18): the channel catalog, then each
+#                                     channel's reviews submitted after its cursor less two hours, on the connection's
+#                                     reviews_poll_interval_minutes (default 60); polling only, a review platform sends no webhook
 #   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,
 #                                     email engagements and inbox threads, and the inbox trash); Aircall: calls of the last
 #                                     26 hours and the webhook;
-#                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions
+#                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions;
+#                                     reviews: those submitted in the connection's last reviews_reconcile_days (default 30)
 #   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
 #                                     Generic and unused since 0008h (the CMA writes nothing back for commerce), so it is deployed
 #                                     without a schedule, and a schedule an earlier deploy made is paused (gcloud scheduler jobs
@@ -264,6 +268,7 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-sweep sweep.mjs 10m ""
   deploy_job ingest-poll-forms poll-forms.mjs 10m ""
   deploy_job ingest-poll-email poll-email.mjs 10m ""
+  deploy_job ingest-poll-reviews poll-reviews.mjs 30m ""
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
   deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
@@ -285,6 +290,7 @@ if [ "$JOBS" = 1 ]; then
   schedule ingest-sweep "* * * * *"
   schedule ingest-poll-forms "* * * * *"
   schedule ingest-poll-email "* * * * *"
+  schedule ingest-poll-reviews "7 * * * *"
   schedule ingest-reconcile "$RECONCILE_EVERY"
   # The outbox has nothing to deliver since 0008h: no schedule, and one left by an earlier deploy is paused
   if gcloud scheduler jobs describe ingest-outbox --project="$PROJECT" --location="$REGION" --format='value(state)' 2>/dev/null | grep -qx ENABLED; then
@@ -298,8 +304,8 @@ if [ "$JOBS" = 1 ]; then
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas)"
+  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0

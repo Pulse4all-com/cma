@@ -1,6 +1,6 @@
 # Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9) and the email poll (phase 10, brief B17b, 15 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026) and the Trusted Shops reviews (phase 13, brief B18, 25 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -1163,3 +1163,276 @@ Expected: three rows, `crm_email`, `form_submission` and `inbox_thread`, each `s
 **Browser:** Workspace → Configuration → Sources → the HubSpot connection → Settings → How often this connection is read: set "Forms that don't count in Intake are read every" to `1` and "Inbox conversations closed or reassigned without a new message are checked every" to `1`, each saved with Enter. No deploy: the jobs read the settings every minute.
 
 Expected: "Saved" after each; the settings table below lists `forms_poll_interval_minutes` 1 and `email_open_check_minutes` 1; from the next minute every polled form is read every minute again and the open check runs every minute. Report 12.4's counts (the rows as Studio showed them, no ids) for the follow-up.
+
+---
+
+# 13. Trusted Shops reviews in prod (brief B18, addition 0008ze)
+
+The brief asked for "phase 10", but phase 10 is the email poll: the Trusted Shops reviews are phase 13, after phase 12. Written on 25 October 2026 (PR #192), before anything ran in dev or prod. The reviews of Pulse4all Subscriptions' Trusted Shops account, read through the eTrusted API into `cma.review_channel` and `cma.review` (`docs/ingest/README.md`, section Trusted Shops; `docs/architecture/data-model/0008.md`, Data model: reviews): read only, metadata only, never the reviewer's name, email or phone, nor a review's title or text. Order: the migration in dev with its verifies, the data map's snapshot and the migration in prod, all three before the merge (13.1 to 13.3); then the merge, the existing API client's secret, the ingest from `main` with its jobs, the connection and its settings, the first poll, the channels' markets, the backfill with its check against the Control Centre, day one (13.4 to 13.11). The ingest is deployed before the connection exists, so no job of an older image meets a connection of an adapter it does not know. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<hubspot conn>` is the live portal's HubSpot connection (7.3), `<reviews conn>` the connection of 13.7. The Terminal blocks of this phase run from the Chromebook, in `~/cma`.
+
+**To confirm on the live account.** The adapter follows the prod discovery of 25 October 2026 and the developer reference as far as it could be read; none of these is proven against the live API yet: the page size 100 (`count`), the cursor field of the reviews' paging (`after`: the answer's cursor, else the last review's id), `ignoreStatements=false` (asks for the star-only reviews; setting `etrusted_include_statements`) and the rate limits (not documented: the adapter paces itself at `etrusted_max_per_minute`, default 60). A first poll or backfill that fails with `http_<status>` on `/reviews` points at one of them: report the code, never a body.
+
+**Data prerequisites** (the counts mean nothing without them):
+- The reviews' transaction reference names the shop's order (an order name, else the order's id) for the order link. A review without one links to a CRM contact by the reviewer's email, else to nothing.
+- The HubSpot connection is the CRM the contacts are looked up in (`crm_connection_id`). Its daily floor (`api_daily_floor_pct`, default 25) pauses the reconcile and the backfill's lookups, never the poll.
+- Every channel is given its market and switched on (13.9); a channel that is not switched on does not count.
+- The alert rule Negative review stays off until Kira decides (13.11).
+
+## 13.1 The migration in dev and its verifies (before the merge)
+
+**File:** `db/104_reviews.sql`: open it and copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error; the last result is `reset role`. A second run ends the same and changes nothing. `addition 0008zd (102_tag_meaning_incorrect_data.sql) must run before 0008ze` means dev lacks 0008zd: run `docs/definitions-2026-10/RUNBOOK-0008zd.md` first.
+
+**File:** `db/02_seed_pulse4all.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run (the seed adds the alert rule Negative review, which needs `104`).
+
+Expected: no error. Studio shows no notices, so the next block checks the rule.
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version = '0008ze';
+select t.slug, r.name, r.trigger, r.enabled, r.max_rating, r.audience_permission, r.max_age_minutes
+from cma.message_rule r join cma.tenant t on t.id = r.tenant_id
+where r.trigger = 'review_submitted' order by 1;
+reset role;
+```
+Expected: `0008ze`, then one rule: `pulse4all-subscriptions | Negative review | review_submitted | false | 2.00 | performance.team | 1440`.
+
+**File:** `db/105_verify_reviews.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run. Open the results dropdown at the verdict table.
+
+Expected: rows `A1` to `A8`, `B1` to `B18` and `C1`, each `PASS`, and `verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL` (locally, on PostgreSQL 16 built from `00` to `105` with the seeds, the same). `REFUSED: not dev` means the instance is not dev's. C1 names the page's milliseconds, under 1000; dev's shared core may fail C1 on time alone: report the row. Any other `FAIL`: report the row.
+
+**Studio (cma-dev-pg):** `105` again, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run. Result 1 in the dropdown must read `true`.
+
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 105_verify_reviews: 0 PASS, 27 FAIL`. Blocks B and C roll back.
+
+**Studio (cma-dev-pg):** the earlier verifies again, each pasted whole and Run: `103`, `101`, `79`, `75` and `41`.
+
+Expected, each as it passed before this change: `103` 12 PASS, `101` 18 PASS, `79` 13 PASS, `75` 24 PASS, `41` both tenant rows PASS.
+
+`99` builds a volume tenant, so it runs from the Terminal:
+
+**Terminal** (in `~/cma`, on the branch)
+```bash
+cma_db dev && time psql "$PGCONN" -X -v ON_ERROR_STOP=1 -f db/99_verify_funnel.sql > /tmp/99.txt 2>&1; grep -E "^ *(A|B|C)[0-9]+ |verdict" /tmp/99.txt | cut -c1-160
+```
+Expected: rows `A1` to `A8`, `B1` to `B23` and `C1` to `C2`, each `PASS`; `verdict | PASS | 33 PASS, 0 FAIL`.
+
+## 13.2 The data map (before the merge)
+
+`docs/datamap/catalog.json` describes the two new tables, the five computed views and the flow `trustedshops`; `verify:datamap` fails on this branch until the snapshot is refreshed from dev, as `docs/datamap/README.md` (Refreshing the snapshot) says. Martin refreshes `docs/datamap/schema.json` from dev on this branch after running the migration there (13.1), before merging.
+
+**Terminal** (first tab; leave it running)
+```bash
+cloud-sql-proxy --auto-iam-authn --port 5433 p4a-cma-dev:europe-west4:cma-dev-pg
+```
+Expected: `The proxy has started successfully and is ready for new connections!`
+
+**Terminal** (second tab, in `~/cma`, on this branch)
+```bash
+psql "host=127.0.0.1 port=5433 dbname=cma user=$(gcloud config get-value account) sslmode=disable" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
+```
+Expected: nothing printed; `docs/datamap/schema.json` is one line of JSON whose `latest_migration` is `0008ze`.
+
+**Terminal** (`~/cma`)
+```bash
+node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
+```
+Expected: `datamap: wrote docs/datamap/index.html (<n> tables, <m> views)`, then `datamap: <n> tables, <m> views, all described; index.html current`. A problem list instead names what the catalog lacks.
+
+**Terminal** (`~/cma`)
+```bash
+git add docs/datamap && git commit -m "Data map: snapshot after 0008ze" && git push
+```
+Expected: the push names this branch; the PR now passes `verify:datamap`. After the merge: in the Claude project, say "republish the data map".
+
+## 13.3 The migration in prod (before the merge)
+
+`main`'s web before this change reads nothing `104` adds, so prod runs it before the merge; the web of this change needs it. `105` refuses a database without the dev seed, so prod gets a read-only check instead.
+
+**Terminal** (point-in-time recovery on, as before every prod migration)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zc' order by 1;
+reset role;
+```
+Expected: `0008zc` and `0008zd`. Without `0008zd`, run `docs/definitions-2026-10/RUNBOOK-0008zd.md` first; with `0008ze` already there, stop and report it.
+
+**Studio (cma-prod-pg):** `db/104_reviews.sql` as one script, as your own login.
+
+Expected: no error; the last result is `reset role`. A second run ends the same and changes nothing.
+
+**Studio (cma-prod-pg):** `db/02_seed_pulse4all.sql` again (the rule Negative review, switched off, only where missing).
+
+Expected: no error, and nothing else changes.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version = '0008ze';
+select to_regclass('cma.review') is not null as reviews, to_regclass('cma.review_channel') is not null as channels,
+       to_regprocedure('cma.reviews_page(date,date,text,text)') is not null as page;
+select t.slug, r.name, r.trigger, r.enabled from cma.message_rule r join cma.tenant t on t.id = r.tenant_id
+where r.trigger = 'review_submitted' order by 1;
+reset role;
+```
+Expected: `0008ze`; `true | true | true`; one rule `pulse4all-subscriptions | Negative review | review_submitted | false`.
+
+## 13.4 The merge
+
+**Browser:** Martin reviews and squash-merges PR #192 on GitHub (13.1 to 13.3 done). The merge touches `web/`, so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
+
+Expected: the build ends `SUCCESS`; Workspace → Reports → **Reviews** opens and says `No review platform is set up yet, so there are no reviews to show.`
+
+## 13.5 The API client and its secret
+
+The API client exists: Martin created it on 25 October 2026 during the discovery, in the eTrusted Control Centre → Settings → SSO-clientbeheer (the Dutch interface's name for API client management): name `CMA prod ingest`, identifier `CMAprodIngest`, client id `<prefix>__CMAprodIngest`. It took the account's last free client slot (5 of 5): do not create another one. An eTrusted API client has no scopes, so this one can read and write (invites, replies, vetoes); the adapter only reads, and only `cma-ingest` can read the secret from Secret Manager (the accessor of 13.6). The client id is not a secret: it goes into the connection's settings in 13.7, never into the repository.
+
+**Browser:** eTrusted Control Centre → Settings → SSO-clientbeheer → the row `CMA prod ingest` → the arrow → **Tonen**. Keep the page open until the next block is done. Note two values for 13.7: the client id, and the account id as Instellingen → Accountmanagement shows it; if it shows none, the account id is the client id's prefix before `__`. The record of this phase says which one was used.
+
+Expected: the row with identifier `CMAprodIngest` and client id `<prefix>__CMAprodIngest`; **Tonen** shows the secret (it can be shown again at any time, not only once).
+
+**Terminal** (on its own line; the value is the client's secret)
+```bash
+put_secret p4a-cma-prod ingest-trustedshops-subs-token
+```
+Expected: the hidden prompt; paste, Enter; `stored ingest-trustedshops-subs-token (version added)`. Then close the Control Centre page. The client id is not a secret: it goes into the connection's settings (13.7). A connection setting never holds the secret, and the connection's settings refuse a key that contains "secret": the connection reaches it only by its name, the access secret name of 13.7.
+
+## 13.6 The ingest from `main`: the service and the jobs
+
+`--front` goes with the service deploy and never with `--jobs` (as 11.2 and 12.1). The service deploy grants the accessor on the new secret and answers `404` on `/trustedshops/<key>` (the adapter has no route); the jobs deploy adds `ingest-poll-reviews`.
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-trustedshops-subs-token && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `accessor on ingest-trustedshops-subs-token`; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`): seven job deploys, `schedule ingest-poll-reviews: 7 * * * * (Europe/Amsterdam)` next to the others, the sweep, `ingest-poll-forms` and `ingest-poll-email` every minute, `ingest-reconcile` at 03:30.
+
+## 13.7 The connection and its settings
+
+**Studio (cma-prod-pg)** in one Run (`<eTrusted account id>` from 13.5: the id Instellingen → Accountmanagement shows, else the client id's prefix before `__`)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select * from cma.upsert_connection('trustedshops', 'Trusted Shops Subscriptions', '<eTrusted account id>',
+                                    null, 'ingest-trustedshops-subs-token');
+reset role;
+```
+Expected: one row of three values, then one row with `connection_id` (`<reviews conn>`) and `key`. There is no signing secret (the adapter has no route), so the fourth argument is null; the fifth is the connection's access secret name. The key is not used.
+
+**Studio (cma-prod-pg)** in one Run (the kind and the settings; the client id `<prefix>__CMAprodIngest` from 13.5)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select cma.set_connection_kind('<reviews conn>', 'reviews');
+select cma.set_connection_settings('<reviews conn>',
+  coalesce((select settings from cma.integration_connection where id = '<reviews conn>'), '{}'::jsonb)
+  || '{"client_id": "<client id from 13.5>", "crm_connection_id": "<hubspot conn>"}'::jsonb);
+select name, adapter, external_account_id, kind, status, signing_secret_name, token_secret_name
+from cma.sources() where connection_id = '<reviews conn>';
+reset role;
+```
+Expected: one row of three values, two empty results, then one row: `Trusted Shops Subscriptions`, `trustedshops`, the account id, `reviews`, `active`, an empty signing secret name, `ingest-trustedshops-subs-token`. `crm_connection_id` names the HubSpot connection whose contacts a review's email is looked up in; the match stays in the CMA (nothing is written to HubSpot or to eTrusted).
+
+The other connection settings keep their defaults (`reviews_poll_interval_minutes` 60, `reviews_reconcile_days` 30, `etrusted_max_per_minute` 60, `etrusted_include_statements` true; `docs/ingest/README.md`, section Trusted Shops). They can be changed without a deploy.
+
+**Browser:** `https://workspace.pulse4all.app/configuration/sources` → **Trusted Shops Subscriptions**.
+
+Expected: the connection with kind Reviews, the secret name (name only) and the Review channels section saying `No channels read yet. They arrive with the next hourly read.` Setting `record_url_review` (Settings → Add setting; `{id}` is a review's id, `{account}` the account id, and the page previews the link) is for later, when the address of a review in the Control Centre is confirmed: until then an alert holds no link.
+
+## 13.8 The first poll
+
+**Terminal** (now, or wait for minute 7 of the next hour; an execution that finds one running logs `poll-reviews skipped` and exits 0)
+```bash
+gcloud run jobs execute ingest-poll-reviews --project=p4a-cma-prod --region=europe-west4 --wait
+```
+Expected: `Execution [ingest-poll-reviews-…] has successfully completed.`
+
+**Studio (cma-prod-pg)** (read only; counts and ids only)
+```sql
+set role cma_owner;
+select job, stream, status, counts, error, started_at, finished_at from cma.sync_run
+where connection_id = '<reviews conn>' order by started_at desc limit 5;
+select source_id, name, locale, market, is_counted, source_deleted_at from cma.review_channel
+where connection_id = '<reviews conn>' order by name;
+select count(*) as reviews, count(*) filter (where is_published) as published, min(submitted_at), max(submitted_at)
+from cma.review where connection_id = '<reviews conn>';
+select link_level, count(*) from cma.review where connection_id = '<reviews conn>' group by 1 order by 1;
+reset role;
+```
+Expected: a `reviews_poll` row `succeeded`, stream `reviews`, with `fetched` and `upserted` counts (the first poll reads the last 30 days of every channel); the account's channels (seven in the discovery of 25 October 2026), each with an empty `market`, `is_counted` false and no `source_deleted_at`; reviews stored with `submitted_at` inside the last 30 days; link levels `order`, `contact` and `none` (a contact only where the reviewer's email found exactly one HubSpot contact). No alert is raised: no channel counts yet and the rule is off. A `failed` row names the cause: `client_id_not_set` (13.7's setting), `client_secret_unavailable` (the secret or its accessor, 13.5 and 13.6), `token_http_<status>` (a client id or secret of another client), `rate_limited` (resolves on the next run), `http_<status>` on the reviews call (the parameters to confirm, above).
+
+**Browser:** Workspace → Reports → **Data quality**.
+
+Expected: `Review channels without a market` lists the channels with the reviews held of each, and `Active markets without a review channel` lists every active market: both checks appear once the tenant has a reviews connection.
+
+## 13.9 The channels: market and counted
+
+**Browser:** Configuration → Sources → **Trusted Shops Subscriptions** → Review channels: per channel choose the market its reviews count for and switch **Counted** on. Leave off the channels of another business line and test channels (their reviews stay stored either way). Below, the review settings: the threshold for a negative review (default: rated 2 or lower) and the history start date (default empty: the backfill reads all history; leave it empty for 13.10).
+
+Expected: each change saved and still there after a reload; the `New, choose a market` badge gone from every channel you mapped. A channel switched on without a market counts under the market `unknown`: give every counted channel its market. Reports → Data quality: `Review channels without a market` at 0 for the mapped channels; a market with no Trusted Shops channel stays listed under `Active markets without a review channel` (a decision for Kira, not a fault).
+
+The fallback in **Studio (cma-prod-pg)**, one statement per channel:
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select cma.set_review_channel('<reviews conn>', '<channel id>', '<market code>', true);
+reset role;
+```
+Expected: one row of three values, then an empty result. An unknown channel id is refused (`no review channel … in connection …`).
+
+## 13.10 The backfill and the check against the Control Centre
+
+After the channels are mapped: one full backfill without `--from`, then check Reports → Reviews against the totals per channel in the eTrusted Control Centre.
+
+**Terminal** (`<reviews conn>` from 13.7)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args=--connection,<reviews conn>,--object,review
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` Without `--from` and with `reviews.history_start_date` empty the run reads all history: per channel in id order, a year at a time from 1 January 2000, at `etrusted_max_per_minute` (default 60 requests a minute), so at least one request per channel and year (about 190 for seven channels, three minutes at the default pace) plus one per hundred reviews. A failed execution is run again with the same arguments: it continues from the cursor `backfill:review`. A run that paused below the CRM's daily floor finishes as succeeded with the error `daily_floor`: run the same command later. A finished backfill with the same start reads nothing again; `--again` walks it again and stores nothing new.
+
+**Terminal** (the summary line per channel; ids, counts and times only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill: review channel"' --project=p4a-cma-prod --freshness=3h --limit=20 --format='value(jsonPayload.channel,jsonPayload.read,jsonPayload.stored,jsonPayload.held,jsonPayload.linkedOrder,jsonPayload.linkedContact,jsonPayload.unlinked,jsonPayload.oldestSubmittedAt,jsonPayload.newestSubmittedAt)'
+```
+Expected: one line per channel: the reviews read and stored in this run, what it holds, its link levels and its oldest and newest submission.
+
+**Studio (cma-prod-pg)** (read only; per channel)
+```sql
+set role cma_owner;
+select ch.name, ch.market, ch.is_counted, count(r.id) as reviews, count(r.id) filter (where r.is_published) as published,
+       min(r.submitted_at)::date as oldest, max(r.submitted_at)::date as newest
+from cma.review_channel ch
+left join cma.review r on r.tenant_id = ch.tenant_id and r.review_channel_id = ch.id
+where ch.connection_id = '<reviews conn>'
+group by ch.name, ch.market, ch.is_counted order by ch.name;
+reset role;
+```
+Expected: per channel `reviews` and `published`, `oldest` the channel's first review.
+
+**Browser:** the eTrusted Control Centre: per channel, the number of reviews (the total, and the same for the last 92 days); then Workspace → Reports → **Reviews**, period the last 92 days, the card Per review channel.
+
+Expected: per channel the Control Centre's total equals the Studio row's `published` (or `reviews`, whichever the Control Centre counts: note which), and its last 92 days equal the report's count for the channel; the report counts published reviews of counted channels only, by the day they were submitted in the Amsterdam zone. A channel that differs is the finding of this step: report the channel, both numbers and the oldest date of each (a missing statements-only review points at `ignoreStatements`, a missing tail at the paging; both are to confirm, above). The pages of the whole history are Studio's: a report page covers at most 92 days.
+
+## 13.11 Day one
+
+- **Runs:** **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select status, error, count(*) from cma.sync_run where job = 'reviews_poll' and started_at > now() - interval '1 day' group by 1, 2;`. Expected: about 24 `succeeded` (hourly at minute 7); a `failed` with `rate_limited` now and then is fine (the next run carries on); a run of `token_http_<status>` or `http_403` means the client.
+- **The nightly reconcile** after 03:30: `reconcile` rows with stream `review`, `succeeded` (or `daily_floor`: the CRM's floor paused the contact lookups; the next night's run reads the window again).
+- **Reports → Reviews** as Kira and Arno will read it: the period bar, the market filter, the per market and per channel cards, the link levels, the invite events and the card Markets and review channels.
+- **No personal data:** **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select count(*) from cma.review where raw::text like '%@%';`. Expected: 0 (counts only).
+- **Reports → Data quality:** `Review channels without a market` at 0; `Active markets without a review channel` lists the markets Trusted Shops does not serve.
+- **The alert rule:** **Browser:** Configuration → Alert rules: `Negative review` is listed and switched off. It stays off until Kira decides the threshold (the review settings on Configuration → Sources: rated 2 or lower by default) and the audience (seeded: the holders of `performance.team`, no language or clocked-in condition, no fallback, reviews at most a day old; `docs/open-decisions.md`). A rule's name and trigger cannot be changed once it exists. Once it is on, a published review of a counted channel at or below the threshold alerts within the hour (title `New review`: market, channel, rating, time, and the link when `record_url_review` is set; never the review's text or the reviewer).
+- **Records:** the outputs of 13.3 and 13.5 to 13.10 into `records/reviews-prod-<date>/`, in a separate pull request, written from your report (ids, counts, dates and times only; no key, secret or personal data), and the eTrusted parameters confirmed or corrected (page size, cursor field, `ignoreStatements`, rate limits).

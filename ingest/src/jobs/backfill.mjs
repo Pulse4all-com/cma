@@ -14,6 +14,10 @@
  * succeeded with error daily_floor, logs "backfill paused" and exits 0; the same command later continues
  * from the cursor. The log line carries the run's requests per endpoint and the daily limit stated.
  *
+ * An adapter may read all history for an object (Trusted Shops' review, addition 0008ze: without --from and with
+ * reviews.history_start_date empty, its backfillFrom answers { allHistory: true }): the run has no start, the adapter
+ * walks from its own floor, and the cursor's from is null.
+ *
  * Since addition 0008za (brief N21) --object takes a comma-separated list (deal,ticket): the objects run one after
  * the other on one budget (the daily floor's reading carries over), each its own sync_run row and its own log line
  * with its requests per endpoint; a pause stops the objects after it, which the same command continues later. An
@@ -86,10 +90,12 @@ export async function runBackfill({ connectionId, object, from = null, again = f
     throw new UsageError(`the ${c.adapter} adapter backfills ${(adapter?.backfillObjects ?? []).join(", ") || "nothing"}`);
   }
   const store = storeFor(contextOf(c), c.connectionId);
-  // An adapter may name an object's own default start (HubSpot's email objects: cma.email_start_date_of)
-  const date = from ?? (await adapter.backfillFrom?.(object, store)) ?? (await store.settings())["intake.start_date"];
-  if (!date) throw new UsageError("no --from and no intake.start_date setting");
-  const fromAt = await store.tenantStartOf(date);
+  // An adapter may name an object's own default start (HubSpot's email objects: cma.email_start_date_of), or all history
+  const own = from ? null : await adapter.backfillFrom?.(object, store);
+  const allHistory = own?.allHistory === true;
+  const date = from ?? (allHistory ? null : (own ?? (await store.settings())["intake.start_date"]));
+  if (!date && !allHistory) throw new UsageError("no --from and no intake.start_date setting");
+  const fromAt = date ? await store.tenantStartOf(date) : null;
   const untilMs = Date.now();
   const floorPct = adapter.dailyFloor ? await adapter.dailyFloor({ store, connection: c, job: "backfill" }) : null;
   const budget = given ?? new JobBudget(adapter.rates, undefined, { floorPct });
@@ -97,10 +103,10 @@ export async function runBackfill({ connectionId, object, from = null, again = f
   const mark = budget.mark();
   const r = await withRun(store, { job: "backfill", stream: object, from: fromAt, to: new Date(untilMs) }, async (counts) => {
     const process = async (type, items) => addCounts(counts, await recordAndProcess(adapter, c, type, items, budget, { job: "backfill" }));
-    return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt.getTime(), untilMs, process, counts,
+    return adapter.backfill({ connection: c, store: again ? walkAgain(store) : store, budget, object, fromMs: fromAt ? fromAt.getTime() : null, untilMs, process, counts,
       again, runAt: untilMs });
   });
-  const total = { connection: c.connectionId, object, from: date, again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
+  const total = { connection: c.connectionId, object, from: date ?? "all history", again, ...r.counts, error: r.error, paused: r.paused || undefined, failed: r.ok ? 0 : 1 };
   info(r.paused ? "backfill paused" : "backfill", { ...total, ...budget.usage(mark), ms: Date.now() - started });
   return total;
 }

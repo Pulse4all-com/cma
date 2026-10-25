@@ -37,8 +37,14 @@ async function clientOf(connection, budget) {
   } catch (err) {
     throw new SourceError(err instanceof SecretUnavailable ? "token_unavailable" : "secret_error");
   }
-  // The search slot above is this module's pace; the client itself does not pace again
-  return hubspotClient(token, { signal: (ms) => budget.signal(ms), remaining: () => budget.remaining() });
+  // The search slot above is this module's pace; the client itself does not pace again. A job's budget also counts the
+  // requests, takes HubSpot's daily reading and pauses below its floor (the reviews' lookups, addition 0008ze); a
+  // webhook's budget has none of the three
+  return hubspotClient(token, {
+    signal: (ms) => budget.signal(ms), remaining: () => budget.remaining(),
+    guard: () => budget.guard?.(), count: (endpoint) => budget.count?.(endpoint),
+    ...(budget.observeDaily ? { observeDaily: (reading) => budget.observeDaily(reading) } : {}),
+  });
 }
 
 /** The contact ids (at most two) whose email equals the given one, compared in lower case. */

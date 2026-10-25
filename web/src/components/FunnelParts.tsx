@@ -35,7 +35,7 @@ function hintOf(copy: Copy): Hint {
 
 /** Week or day as links; G moves to the next */
 export function FunnelGroupSwitch({ pathname, group, query, copy }: {
-  pathname: "/reports/funnel" | "/reports/cancellations"; group: FunnelGroup; query: Record<string, string>; copy: Copy;
+  pathname: "/reports/funnel" | "/reports/cancellations" | "/reports/reviews"; group: FunnelGroup; query: Record<string, string>; copy: Copy;
 }) {
   const t = copy.funnel;
   const labels: Record<FunnelGroup, string> = { week: t.week, day: t.day };

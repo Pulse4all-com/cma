@@ -44490,6 +44490,1517 @@
       "notes": "Ids, codes, times and links only - no customer data (verified). The state badge is the only computed cell (is_closed now)."
     },
     {
+      "key": "reviews.count",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Reviews",
+      "title": {
+        "en": "Reviews",
+        "nl": "Reviews"
+      },
+      "definition": "Reviews tile: the published reviews of the counted review channels submitted in the period.",
+      "formula": "reviews = count(published reviews of a counted channel with the submission's business date in the period)",
+      "unit": "count",
+      "grain": [
+        "period"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewFigures"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) as reviews from r",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": "Delta neutral. Zero until the Trusted Shops connection exists and its channels are mapped and counted (prerequisite_missing)."
+    },
+    {
+      "key": "reviews.average_rating",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Average rating",
+      "title": {
+        "en": "Average rating (review score)",
+        "nl": "Gemiddelde score"
+      },
+      "definition": "Reviews tile: the mean rating of the period's reviews, from 1 to 5, two decimals; also called the review score.",
+      "formula": "average_rating = round(avg(rating), 2) over the period's counted reviews; null (a dash) without reviews",
+      "unit": "average",
+      "grain": [
+        "period"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewFigures"
+          },
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "fmtRating"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect round(avg(r.rating), 2) as average_rating from r",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": "Delta neutral (higher is not marked better). The window is the page's period; which window Kira wants for the KPI is an open decision."
+    },
+    {
+      "key": "reviews.negative",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Rated {rating} or lower",
+      "title": {
+        "en": "Negative reviews",
+        "nl": "Score {rating} of lager"
+      },
+      "definition": "Reviews tile: of the period's reviews, those rated at or below reviews.negative_max_rating; the detail line gives their share of the reviews.",
+      "formula": "negative = count(*) filter (where rating <= reviews.negative_max_rating); share = negative / reviews",
+      "unit": "count",
+      "grain": [
+        "period"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewFigures"
+          },
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewShare"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) filter (where r.is_negative) as negative, count(*) as reviews from r",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": "Delta better down. The threshold is tenant configuration (Configuration -> Sources, the review platform's page); the alert rule Negative review (seed 02, off) starts from the same threshold."
+    },
+    {
+      "key": "reviews.linked",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Linked reviews",
+      "title": {
+        "en": "Linked reviews",
+        "nl": "Gekoppelde reviews"
+      },
+      "definition": "Reviews tile: of the period's reviews, those linked to one of the tenant's orders or to a CRM contact; the detail line gives their share.",
+      "formula": "linked = count(*) filter (where link_level in ('order', 'contact')); share = linked / reviews",
+      "unit": "count",
+      "grain": [
+        "period"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.commerce_order",
+          "columns": [
+            "order_name",
+            "source_id"
+          ],
+          "owner": "Shopify",
+          "fed_by": "Shopify webhooks -> ingest service -> cma.ingest_upsert_orders(); the review's transaction reference matched by cma.review_order_of",
+          "cadence": "seconds; the review links when it is written"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewFigures"
+          },
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewShare"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect count(*) filter (where r.link_level in ('order', 'contact')) as linked, count(*) as reviews from r",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": "Order: the transaction reference names exactly one of the tenant's orders (order_name, else source_id). Contact: no order, and the reviewer's email (in memory only, never stored) finds exactly one CRM contact. The contact's privacy deletion clears the link (cma.forget_review_contact_links)."
+    },
+    {
+      "key": "reviews.distribution",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Per rating",
+      "title": {
+        "en": "Reviews per whole rating",
+        "nl": "Per score"
+      },
+      "definition": "Bars of the period's reviews per whole rating, 5 to 1; a rating with decimals is rounded up (4.5 counts as 5). The bar's title gives the previous period.",
+      "formula": "group by ceil(rating) over the period's counted reviews, 1 to 5, empty ratings shown",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_rating"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "starsOf"
+          },
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewDistribution"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect ceil(r.rating)::int as rating, count(*) as reviews from r group by 1 order by 1 desc",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": ""
+    },
+    {
+      "key": "reviews.by_market",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Per market",
+      "title": {
+        "en": "Reviews per market",
+        "nl": "Per markt"
+      },
+      "definition": "Table of the period's reviews per market (the channel's market; unknown last): reviews, average rating and negative, with the previous period's reviews and average.",
+      "formula": "group by the channel's market over the period's counted reviews; each figure as its tile defines it",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_market"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewsReport"
+          },
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewMarkets"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating, count(*) filter (where r.is_negative) as negative from r group by 1 order by r.market = 'unknown', 1",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": ""
+    },
+    {
+      "key": "reviews.by_period",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Reviews per week",
+      "title": {
+        "en": "Reviews per day or week",
+        "nl": "Reviews per week"
+      },
+      "definition": "Table of the period's reviews per day or ISO week (G switches), every day or week of the period, empty ones too: reviews, average rating, negative and linked.",
+      "formula": "group by the submission's business date or its ISO week (Monday) over the period's counted reviews",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_day",
+        "per_iso_week"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewsReport"
+          },
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewPeriods"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect date_trunc('week', r.submitted_date)::date as week, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1 order by 1",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": ""
+    },
+    {
+      "key": "reviews.link_levels",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Link levels",
+      "title": {
+        "en": "Reviews per link level",
+        "nl": "Koppelniveaus"
+      },
+      "definition": "Bars of the period's reviews by link level: to an order, to a contact, and not linked (in the neutral hue).",
+      "formula": "group by link_level (order, contact, none) over the period's counted reviews",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_level"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewLinkLevels"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.link_level, count(*) as reviews from r group by 1",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": ""
+    },
+    {
+      "key": "reviews.invite_events",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Invitation events",
+      "title": {
+        "en": "Reviews per invitation event",
+        "nl": "Uitnodigingsgebeurtenissen"
+      },
+      "definition": "Bars of the period's reviews by the event that sent the invitation, in the platform's own words (for example checkout); reviews without an invitation event apart, in the neutral hue.",
+      "formula": "group by invite_event_type over the period's counted reviews; null as No invitation event",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_category"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewInviteEvents"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.invite_event_type, count(*) as reviews from r group by 1 order by 2 desc",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": "The event type is the platform's word as it sends it (event.type, at most 60 characters), never translated."
+    },
+    {
+      "key": "reviews.by_channel",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Per review channel",
+      "title": {
+        "en": "Reviews per review channel",
+        "nl": "Per reviewkanaal"
+      },
+      "definition": "Table of the period's reviews per counted review channel, with the channel's market, the reviews, average rating and negative, and the previous period's reviews.",
+      "formula": "group by review_channel over the period's counted reviews",
+      "unit": "count",
+      "grain": [
+        "period",
+        "per_channel"
+      ],
+      "sources": [
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": "Previous span like for like (cma.forms_previous_of), cut at now's time of day while the period runs; computed over the market-filtered set; history_start = the first counted review's business date, null before the first review.",
+      "settings": [
+        {
+          "key": "reviews.negative_max_rating",
+          "default": "2"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewChannels"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\nr as (\n  select rv.rating, rv.link_level, rv.invite_event_type, ch.source_id as channel, ch.name as channel_name,\n         coalesce(ch.market, 'unknown') as market, (rv.submitted_at at time zone t.zone)::date as submitted_date,\n         rv.rating <= cma.setting_of(:tenant_id, 'reviews.negative_max_rating')::numeric as is_negative\n  from cma.review rv\n  join cma.review_channel ch on ch.tenant_id = rv.tenant_id and ch.id = rv.review_channel_id\n  cross join t\n  where rv.tenant_id = :tenant_id and rv.is_published and ch.is_counted\n    and (rv.submitted_at at time zone t.zone)::date between :from and :to)\nselect r.channel, r.channel_name, r.market, count(*) as reviews, round(avg(r.rating), 2) as average_rating from r group by 1, 2, 3 order by 2, 1",
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "prerequisite_missing"
+      ],
+      "notes": ""
+    },
+    {
+      "key": "reviews.market_states",
+      "surface": "report",
+      "page": "/reports/reviews",
+      "tile": "Markets and review channels",
+      "title": {
+        "en": "Active markets in their review-channel state",
+        "nl": "Markten en reviewkanalen"
+      },
+      "definition": "Every active market, whatever the filter and period: no counted review channel (No channel), a counted channel without published reviews (Channel without reviews) or one with reviews (Has reviews), with its channels and all its published reviews.",
+      "formula": "per active market: channels = count(counted, not gone channels with that market); reviews = count(published reviews of those channels, all time); state from the two",
+      "unit": "text",
+      "grain": [
+        "now",
+        "per_market"
+      ],
+      "sources": [
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.review",
+          "columns": [
+            "review_channel_id",
+            "rating",
+            "is_published",
+            "submitted_at",
+            "link_level",
+            "invite_event_type"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "ingest-poll-reviews (Cloud Run job) -> trustedshops adapter, GET /channels and GET /reviews per channel -> cma.ingest_upsert_review_channels() and cma.ingest_upsert_reviews(); the contact link by cma.set_review_contact() after an in-memory email lookup in the CRM; ingest-reconcile reads the last reviews_reconcile_days again",
+          "cadence": "hourly at minute 7 Europe/Amsterdam with a 2-hour overlap (docs/ingest/deploy.sh); the nightly reconcile at 03:30 Europe/Amsterdam re-reads the last 30 days"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "name",
+            "status",
+            "sort_order"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.reviews_page under RLS + current tenant (cma.reviews_page_of with the tenant passed explicitly)",
+        "population: reviews the platform has published (is_published, decided by the adapter from the platform's state) of a counted review channel (review_channel.is_counted); an unpublished review, a review of an uncounted channel and a channel the catalog lacks never count",
+        "period: by the SUBMISSION business date in the tenant's zone (submitted_at), at most 92 days",
+        "market filter only (a pipeline or source filter is a 400): the channel's market, unknown for a counted channel without one; applied to current and previous alike"
+      ],
+      "time": "Business date = submitted_at in the tenant's zone; ISO week = Monday. now = now() at read time.",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL page read per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.reviews_page",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_page_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.reviews_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_figures",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.review_market_states_of",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/reviews.ts",
+            "export": "reviewMarketStates"
+          },
+          {
+            "file": "src/components/ReviewParts.tsx",
+            "export": "ReviewMarketStates"
+          },
+          {
+            "file": "src/app/reports/reviews/page.tsx",
+            "export": "default (ReviewsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: no database in this session and no Trusted Shops data in dev; 105_verify_reviews B11 and B12 check the read on a fixed scenario and web/verify/reports.mjs checks the mock's mirror against the same figures. Martin runs the query in Studio after the first full backfill.",
+      "prerequisites": [
+        {
+          "item": "A Trusted Shops connection with its client id and secret (Configuration -> Sources; PROD_RUNBOOK phase 10)",
+          "check": null
+        },
+        {
+          "item": "Every review channel mapped to its market and counted (kpis.md 11)",
+          "check": "review_channel_unmapped"
+        },
+        {
+          "item": "A Trusted Shops channel per active market (kpis.md 11 names the markets still without one)",
+          "check": "market_without_review_channel"
+        }
+      ],
+      "docs": [
+        "features.md 5 (Reports -> Reviews)",
+        "kpis.md 3",
+        "api.md, GET /api/v1/reports/reviews",
+        "data-model/0008.md, 0008ze",
+        "decisions.md, 25 Oct 2026 (reviews from Trusted Shops, polled hourly)"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Not limited to the period or the market filter on purpose (KPI 11, data first). verify_sql is the read's own definition: select m.code, count(ch.id) filter (where ch.is_counted and ch.source_deleted_at is null) from cma.market m left join cma.review_channel ch on ch.tenant_id = m.tenant_id and ch.market = m.code where m.tenant_id = :tenant_id and m.status = 'active' group by 1; null here because the states have no period to recompute."
+    },
+    {
       "key": "forms.submissions",
       "surface": "report",
       "page": "/reports/forms",
@@ -58026,6 +59537,180 @@
         "verified"
       ],
       "notes": "src/lib/reports.ts:230-247 (OUTBOX_PENDING_CHECK, OUTBOX_LATE_MINUTES = 10), postgres.ts:2533-2542; brief A5 / FIND-05 (13 Oct 2026). Not in cma.data_quality() (no migration); the API route returns it too, after the DB rows. The 10 minutes is a hardcoded product constant (not a tenant setting) and also written literally into the copy's fix line in both languages - flagged low (audit rule 14 is about tenant values; this is cross-tenant product behaviour, but the copy would silently drift if the constant changed). The row's description text comes from the TS constant, in English only; copy.ts does carry check_/fix_ labels for it, which the page prefers."
+    },
+    {
+      "key": "data_quality.review_channel_unmapped",
+      "surface": "report",
+      "page": "/reports/data-quality",
+      "tile": "Review channels without a market",
+      "title": {
+        "en": "Review channels without a market",
+        "nl": "Reviewkanalen zonder markt"
+      },
+      "definition": "Review channels the platform holds without a market: their reviews cannot count for a country. The value of each row is the reviews held of the channel.",
+      "formula": "count of review_channel rows not gone (source_deleted_at is null) with market null",
+      "unit": "count",
+      "grain": [
+        "now",
+        "per_check"
+      ],
+      "sources": [
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)"
+      ],
+      "time": "counts are as of the query's now(); no period",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "tenant.configure"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component); counts are recomputed live from the base tables on every read, no snapshot",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.data_quality",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.data_quality_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.data_quality_reviews_checks",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getDataQuality"
+          }
+        ]
+      },
+      "verify_sql": "select count(*) from cma.review_channel ch where ch.tenant_id = :tenant_id and ch.source_deleted_at is null and ch.market is null",
+      "fixture_check": "Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
+      "prerequisites": [],
+      "docs": [
+        "kpis.md paragraph 11 (Data first)",
+        "api.md, GET /api/v1/reports/data-quality",
+        "features.md paragraph 5 (Data -> Data quality)",
+        "data-model/0008.md, 0008ze"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Sort 210; shown once the tenant has a reviews connection, or while it finds something."
+    },
+    {
+      "key": "data_quality.market_without_review_channel",
+      "surface": "report",
+      "page": "/reports/data-quality",
+      "tile": "Active markets without a review channel",
+      "title": {
+        "en": "Active markets without a review channel",
+        "nl": "Actieve markten zonder reviewkanaal"
+      },
+      "definition": "Active markets without a counted review channel, once the tenant has a reviews connection: they have no reviews to show (KPI 11).",
+      "formula": "count of active markets with no counted, not gone review_channel of that market; 0 while the tenant has no reviews connection",
+      "unit": "count",
+      "grain": [
+        "now",
+        "per_check"
+      ],
+      "sources": [
+        {
+          "table": "cma.review_channel",
+          "columns": [
+            "source_id",
+            "name",
+            "market",
+            "is_counted",
+            "source_deleted_at"
+          ],
+          "owner": "Trusted Shops",
+          "fed_by": "Channel catalog read by ingest-poll-reviews (cma.ingest_upsert_review_channels); market and is_counted set on Configuration -> Sources (cma.set_review_channel)",
+          "cadence": "catalog hourly; the configuration on change"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "name",
+            "status",
+            "sort_order"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)"
+      ],
+      "time": "counts are as of the query's now(); no period",
+      "comparison": null,
+      "settings": [],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "tenant.configure"
+        ],
+        "perPerson": null
+      },
+      "refresh": "on page load (server component); counts are recomputed live from the base tables on every read, no snapshot",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.data_quality",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.data_quality_of",
+            "migration": "0008ze"
+          },
+          {
+            "object": "cma.data_quality_reviews_checks",
+            "migration": "0008ze"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/data/postgres.ts",
+            "export": "getDataQuality"
+          }
+        ]
+      },
+      "verify_sql": "select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 'active' and exists (select 1 from cma.integration_connection c where c.tenant_id = m.tenant_id and c.status = 'active' and (c.kind = 'reviews' or exists (select 1 from cma.review_channel x where x.tenant_id = c.tenant_id and x.connection_id = c.id))) and not exists (select 1 from cma.review_channel ch where ch.tenant_id = m.tenant_id and ch.market = m.code and ch.is_counted and ch.source_deleted_at is null)",
+      "fixture_check": "Not run here (no database in this session); 105_verify_reviews B14 checks both counts on a fixed scenario. Martin runs the query in Studio.",
+      "prerequisites": [],
+      "docs": [
+        "kpis.md paragraph 11 (Data first)",
+        "api.md, GET /api/v1/reports/data-quality",
+        "features.md paragraph 5 (Data -> Data quality)",
+        "data-model/0008.md, 0008ze"
+      ],
+      "status": [
+        "verified"
+      ],
+      "notes": "Sort 220. Which active markets have no channel is the tenant's state, not the catalog's: kpis.md 11 names Pulse4all's."
     },
     {
       "key": "messages.sent.recipients",
