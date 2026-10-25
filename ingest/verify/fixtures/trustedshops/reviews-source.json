@@ -1,0 +1,44 @@
+{
+  "_about": "Invented eTrusted channels, reviews and HubSpot contacts for verify/reviews-mapping.mjs and verify/reviews-flow.mjs (addition 0008zd). Times as ago:<minutes>. The customer fields, titles and texts are here so the verifiers can prove none of them is kept.",
+  "channels": [
+    { "id": "chl-fixture-nl", "name": "shop-nl.example", "locale": "nl_NL", "url": "https://shop-nl.example" },
+    { "id": "chl-fixture-gb", "name": "shop-gb.example", "locale": "en_GB" },
+    { "id": "chl-fixture-x", "name": "shop-x.example", "locale": "de_DE" }
+  ],
+  "contacts": {
+    "5100000072": { "email": "known@example.com" },
+    "5100000081": { "email": "twice@example.com" },
+    "5100000082": { "email": "TWICE@example.com" }
+  },
+  "reviews": [
+    { "id": "rev-fixture-order-1", "channelRef": "chl-fixture-nl", "rating": 5, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:600", "updatedAt": "ago:590", "inviteRef": "inv-fixture-1", "verificationType": "VERIFIED",
+      "transaction": { "reference": "P4ANL-71001", "date": "2026-10-01T10:00:00Z" }, "event": { "type": "checkout", "id": "evt-fixture-1" },
+      "customer": { "fullName": "Invented Reviewer One", "email": "order-buyer@example.com", "mobile": "+44 20 0000 0901" },
+      "title": "Fixture title that must not be stored", "comment": "Fixture text that must not be stored" },
+    { "id": "rev-fixture-contact-1", "channelRef": "chl-fixture-nl", "rating": 2, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:300", "updatedAt": "ago:300", "inviteRef": "inv-fixture-2",
+      "transaction": { "reference": "6044272197712" }, "event": { "type": "klaviyo-integration" },
+      "customer": { "fullName": "Invented Reviewer Two", "email": "Known@Example.com", "mobile": "+44 20 0000 0902" },
+      "title": "Fixture title two", "comment": "Fixture text two" },
+    { "id": "rev-fixture-none-1", "channelRef": "chl-fixture-gb", "rating": 4, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:200", "updatedAt": "ago:200", "event": { "type": "order_status_from_woocommerce" }, "reply": null,
+      "customer": { "fullName": "Invented Reviewer Three", "email": "nobody@example.com", "mobile": "+44 20 0000 0903" },
+      "title": "Fixture title three", "comment": "Fixture text three" },
+    { "id": "rev-fixture-twice-1", "channelRef": "chl-fixture-gb", "rating": 3.5, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:100", "updatedAt": "ago:100",
+      "customer": { "fullName": "Invented Reviewer Four", "email": "twice@example.com" }, "comment": "Fixture text four" },
+    { "id": "rev-fixture-statement-1", "channelRef": "chl-fixture-gb", "rating": 5, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:50", "updatedAt": "ago:50", "statement": true,
+      "customer": { "fullName": "Invented Reviewer Five", "email": "star@example.com" } },
+    { "id": "rev-fixture-x-1", "channelRef": "chl-fixture-x", "rating": 1, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:150", "updatedAt": "ago:150", "customer": { "email": "shopx@example.com" }, "comment": "Fixture text six" },
+    { "id": "rev-fixture-rejected-1", "channelRef": "chl-fixture-nl", "rating": 1, "type": "SERVICE_REVIEW", "state": "REJECTED",
+      "submittedAt": "ago:400", "updatedAt": "ago:380", "customer": { "email": "rejected@example.com" }, "title": "Fixture title seven" },
+    { "id": "rev-fixture-old-1", "channelRef": "chl-fixture-nl", "rating": 4, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:600000", "updatedAt": "ago:600000", "transaction": { "reference": "P4ANL-70001" }, "event": { "type": "checkout" },
+      "customer": { "fullName": "Invented Reviewer Eight", "email": "old@example.com" } },
+    { "id": "rev-fixture-bad-1", "channelRef": "chl-fixture-nl", "rating": 0, "type": "SERVICE_REVIEW", "state": "APPROVED",
+      "submittedAt": "ago:250", "updatedAt": "ago:250", "customer": { "email": "bad@example.com" } }
+  ]
+}

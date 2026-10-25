@@ -485,7 +485,7 @@ const pollRun = await withRun(sp, { job: "forms_poll", stream: "forms" }, async 
 });
 expect("the forms poll never pauses: every form read with 10 calls left", [pollRun.ok, pollRun.paused, fake.requests.slice(n3).filter((r) => r.path.startsWith("/form-integrations")).length],
   [true, false, 50], [false, true, 1]);
-const jobSource = ["poll-forms.mjs", "poll-email.mjs", "sweep.mjs"].map((f) => readFileSync(new URL(`../src/jobs/${f}`, import.meta.url), "utf8")).join("\n");
+const jobSource = ["poll-forms.mjs", "poll-email.mjs", "poll-reviews.mjs", "sweep.mjs"].map((f) => readFileSync(new URL(`../src/jobs/${f}`, import.meta.url), "utf8")).join("\n");
 expect("the poll jobs and the sweep give their budgets no floor", /floorPct|dailyFloor/.test(jobSource), false, true);
 
 // A backfill paused below the floor and resumed from its cursor

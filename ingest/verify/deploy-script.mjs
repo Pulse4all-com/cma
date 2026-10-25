@@ -114,8 +114,8 @@ expect("prod --jobs --front → refused as before (--front is the service's)", [
 
 // ---- B. What still runs: prod's jobs, dev's service, prod's service with --front ----------------------
 r = await run(["prod", "--jobs"]);
-expect("prod --jobs → exit 0: the six jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
-  [0, 6, 0], [2, 0, 1]);
+expect("prod --jobs → exit 0: the seven jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
+  [0, 7, 0], [2, 0, 1]);
 r = await run(["dev"]);
 let d = serviceDeploy(r);
 expect("dev → exit 0: ingress all, the run.app addresses, replay on", [r.code, d.ingress, d.vars.INGEST_PUBLIC_URLS, d.vars.INGEST_ALLOW_REPLAY], [0, "all", RUNAPP.join(","), "1"],
@@ -158,6 +158,8 @@ r = await run(["prod", "--jobs"]);
 expect("prod --jobs schedules the reconcile at 30 3 * * * Europe/Amsterdam by default", [schedule("ingest-reconcile"), r.out.includes("schedule ingest-reconcile: 30 3 * * * (Europe/Amsterdam)")],
   [["30 3 * * *", "Europe/Amsterdam"], true], [["30 2 * * *", "Europe/Amsterdam"], false]);
 expect("…the every-minute jobs as before", ["ingest-sweep", "ingest-poll-forms", "ingest-poll-email"].map((j) => schedule(j)[0]), ["* * * * *", "* * * * *", "* * * * *"], []);
+expect("…the reviews poll hourly at minute 7, Europe/Amsterdam (addition 0008zd)", [schedule("ingest-poll-reviews"), r.out.includes("schedule ingest-poll-reviews: 7 * * * * (Europe/Amsterdam)")],
+  [["7 * * * *", "Europe/Amsterdam"], true], [["* * * * *", "Europe/Amsterdam"], false]);
 r = await run(["dev", "--jobs", "--reconcile-every", "*/2 * * * *", "--reconcile-lookback", "10"]);
 expect("--reconcile-every and --reconcile-lookback still set the polling fallback", [schedule("ingest-reconcile")[0], (r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-reconcile ")) ?? "").includes("--args=--lookback-minutes,10")],
   ["*/2 * * * *", true], ["30 3 * * *", false]);

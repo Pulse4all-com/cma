@@ -199,7 +199,8 @@ export function createIngestServer({ adapters = ADAPTERS } = {}) {
     }
     const m = ROUTE.exec(path);
     const adapter = m && Object.hasOwn(adapters, m[1]) ? adapters[m[1]] : null;
-    if (req.method !== "POST" || !adapter) {
+    // A polling-only adapter (kind poll: Trusted Shops, brief B18) has no route: 404, as for an unknown adapter
+    if (req.method !== "POST" || !adapter || adapter.kind === "poll") {
       req.resume();
       send(res, 404);
       return;
