@@ -34,3 +34,5 @@ verify:health exit=0
 verify:boundaries exit=0
 verify:jobs exit=0
 verify:metrics exit=0
+## after the docs (docs/datamap/catalog.json names the two new tables)
+verify:datamap exit=1: catalog legacy_call_batch and legacy_call_outcome not tables in schema.json, index.html not current (expected until Martin refreshes schema.json from dev and rebuilds); the other nineteen exit 0

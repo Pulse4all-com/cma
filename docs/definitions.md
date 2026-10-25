@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the review terms of 25 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -255,8 +255,8 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Equivalent in the source system | Aircall's tags (the tags chart in the Analytics article on the tags and missed-call reasons charts) |
 | Not to use | "call outcome" or "disposition" for an Aircall tag; a HubSpot call outcome in its place (R1) |
 | Status | Decided; the tag-meaning mapping built in addition 0008zc, incorrect data in addition 0008zd |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1", "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" and "Definitions: tag meanings, one per tag, configuration only"; 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning" |
-| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R1", "Definitions: Conversation = connected call with ≥ 30 s talk and no tag meaning *not reached*" and "Definitions: tag meanings, one per tag, configuration only"; 25 October 2026 (Martin), docs/decisions.md, 25 Oct 2026, "Definitions: incorrect data as its own tag meaning"; the courtesy tags of the Subscriptions connection, docs/decisions.md, 25 Oct 2026, "The courtesy tags of the Subscriptions Aircall connection got their meanings in prod" |
+| Used by | `calls.tag_bars`, `calls.tags_by_group`, `calls_per_agent.tag_split`, `intake.tagged_calls`, and through the meanings "not reached" and "incorrect data" every Conversation figure; the `meaning` of every Legacy call outcome; Reports → Calls, Calls per agent, Intake; Configuration → Sources, Tags |
 | As built today | `cma.telephony_tag` holds each tag's name with `is_counted`, and `cma.telephony_call_tag` the tagging history (`34`). Since `100` each tag has one `meaning` (null or one of the seven keys; `incorrect_data` since `102`), set in Configuration → Sources, Tags by `cma.set_telephony_tag_meaning` (`tenant.configure`, audited, the same gate as `is_counted`); ingest never writes it and a catalog refresh keeps it. Only `not_reached` and `incorrect_data` are read, by Conversation (`cma.tag_meaning_excludes_conversation`, `102`), and `is_counted` has no effect on them; no figure counts the calls tagged incorrect data apart yet (Gaps, D32); the courtesy meanings and call type wait for their figures. The labels (Configuration → Sources, Tags, Meaning): None (Geen), Not reached (Niet bereikt), Incorrect data (Onjuiste gegevens), Call type (Gesprekstype), Courtesy attempt (Courtesy-poging), Courtesy completed, positive / neutral / negative (Courtesy afgerond, positief / neutraal / negatief; the Dutch proposed). Matches the definition |
 
 **Pulse4all Subscriptions mapping.** The tag meanings of the Subscriptions Aircall connection, set on Configuration → Sources, Tags (configuration, never code); a tag name with `*` stands for every tag whose name starts with it. Every other tag has the meaning None until a figure needs it. The meaning of the Data Issue Escalate tags is an Open decision (docs/open-decisions.md, the courtesy definitions).
@@ -384,6 +384,39 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Decided | Not yet (Proposed) |
 | Used by | Every figure that ties a call to a deal or contact: `attempts.*`, `speed_to_lead.*`, `first_orders.*`, `orders_per_person.*`, `email.not_responding.*`, `callbacks.*`, `data_quality.telephony_call_unlinked` |
 | As built today | `cma.call_link` with `method` `hash_time` only (`34`): the equal keyed hash of the other party's number, the same direction, at most 120 seconds apart, nearest first, each side once; the CRM call's time and direction are used for that pairing. The hash normalises a number with a default region (the line's or market's country) before it is hashed, so a national-format number is hashed too, and a number that is not a possible phone number gets none (`ingest/src/core/hash.mjs`). The HubSpot adapter reads no Aircall call id from the logged call (`CALL_PROPERTIES`) |
+
+## Legacy call terms
+
+Decided with addition 0008zg (25 October 2026). The calls a former telephony system made before the current one are not in `cma.telephony_call`; what that system recorded for them is imported once from its export as legacy call outcomes. The current telephony system's calls are never copied: they stay Calls and are read through the tag meanings (Tag).
+
+### Legacy call outcome
+
+| Field | Value |
+|---|---|
+| Term | Legacy call outcome (no Dutch label in `copy.ts`; nothing shows it yet) |
+| Key | `legacy_call_outcome`; tables `cma.legacy_call_outcome` and `cma.legacy_call_batch`; the match methods `email_phone`, `email`, `phone`, `customer_id`, `none`, `conflict`, `forgotten` (the key list below) |
+| Definition | What a former telephony system recorded for one of its calls, imported once from its export as a fact of its own: the call's date, the tag meaning of the former system's tag text and, when exactly one CRM contact is found, that contact's id. It is neither an Aircall call nor a HubSpot call outcome; the compound name is Martin's decision. |
+| Source | A file exported from the former telephony system (for Pulse4all Subscriptions Steam: the courtesy completions of 14 May 2025 to 31 August 2026), read once by the job `ingest-import-legacy-calls` from a private EU bucket into memory, never stored. The tag meaning of each of the file's tag texts is an argument of the job (the tag meanings of Tag). The contact is found in the CRM by the file's email, phone or customer id, which are never stored or logged |
+| Counts / does not count | Counts one row per imported row of a former-system call in a batch that is not withdrawn, matched or not, for volume and outcome; only a row with a contact counts for coverage. Does not count a row of the current telephony system (the import only reconciles those against the Aircall calls and stores nothing), a row of a withdrawn batch, or a row the job refused (dated on or after the cutover date, a date that does not read, a tag text without a meaning) |
+| Unit and display | A count of rows, per meaning and per match method; nothing shows it yet (readers: `cma_read.legacy_call_batch` and `cma_read.legacy_call_outcome`) |
+| Time rule | The date the file writes, taken as the tenant's local date (Europe/Amsterdam for Pulse4all); no time of day is kept. A row is dated before the batch's cutover date, the first day of the current telephony system (1 September 2026 for Pulse4all's courtesy calls) |
+| Scope | Per tenant and the batch's CRM connection; one live batch per file |
+| Equivalent in the source system | The former system's tag on the call (Steam: the tag text); none in Aircall |
+| Not to use | "call outcome" alone or "disposition": a HubSpot call outcome is the retired word of R1 and its Retired words row stays as it is; "tag" for the former system's text (Tag is Aircall's label); "call" for a legacy call outcome (Call is Aircall's) |
+| Status | Decided; the courtesy figures built on it wait for the courtesy definitions (docs/open-decisions.md) |
+| Decided | 25 October 2026 (Martin); docs/decisions.md, 25 Oct 2026, "Steam's courtesy history is imported as legacy call outcomes", "A legacy call outcome is matched to a HubSpot contact by email and phone first", "Legacy call outcomes that match no contact are imported without one" and "Definitions: Legacy call outcome is a new term" |
+| Used by | No figure yet: the courtesy definitions are open (docs/open-decisions.md). No catalog key and no page; the tables `cma.legacy_call_batch` and `cma.legacy_call_outcome` and their `cma_read` views |
+| As built today | Addition 0008zg (`108`): `cma.legacy_call_outcome` holds per row its batch, the file's row number, `occurred_on`, `meaning` (one of the seven keys of `cma.telephony_tag.meaning`), `source_label` (the former system's tag text, at most 100 characters, never an @), the batch's CRM connection, `crm_contact_source_id`, `match_method` and `matched_at` (set exactly with a contact). The job matches each former-system row to at most one contact (the email, the primary then the additional emails; the phone, E.164 only, confirmed by its full number; then the customer id of at least `--min-customer-id-digits` digits, 10 by default) and writes it through `cma.legacy_call_outcomes_upsert`; a rerun never changes a stored row's date, meaning or label and never refills a forgotten row. The CRM's privacy deletion of a contact sets its rows to `forgotten`. No email, phone, name or customer id is stored or logged. Nothing reads the rows yet: no screen, API field or catalog entry. Matches the definition |
+
+**Match methods** (`match_method`; a stored row has exactly one, and a contact exactly when it is one of the first four):
+
+- `email_phone`: the email and the phone each found exactly one contact, the same one.
+- `email`: the email found exactly one contact (the primary email, else an additional one) and the phone did not find exactly one, or the row has no phone.
+- `phone`: the phone found exactly one contact (searched by its national number, confirmed by the full number) and the email did not find exactly one, or the row has no email.
+- `customer_id`: neither found exactly one contact and the customer id did, first among the store customers the CMA already linked (addition 0008h), then in the CRM connection's contact ref fields.
+- `none`: no key found exactly one contact; the row is stored without a contact.
+- `conflict`: the email and the phone each found exactly one contact, but different ones; the row is left unlinked.
+- `forgotten`: the CRM deleted the contact for privacy; the link is removed and a rerun never sets it again.
 
 ## Review terms
 

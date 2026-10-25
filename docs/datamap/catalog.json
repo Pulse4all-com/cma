@@ -270,7 +270,7 @@
     },
     {
       "key": "import",
-      "label": "Legacy time import",
+      "label": "Legacy imports",
       "tables": [
         {
           "name": "import_batch",
@@ -291,6 +291,16 @@
           "name": "import_session",
           "what": "Raw login sessions from the export (2 January to 9 October 2026)",
           "how": "One-off"
+        },
+        {
+          "name": "legacy_call_batch",
+          "what": "One imported file of a former telephony system's legacy call outcomes: the source system, the CRM connection it was matched against, the file's SHA-256 (one live batch per file), the cutover date, row counts per match method, times and the withdrawal; no personal data (0008zg)",
+          "how": "Legacy import (one-off job), on demand: the job ingest-import-legacy-calls started by hand on one export file in a private bucket; the same file again reuses its batch; an admin withdraws a batch once"
+        },
+        {
+          "name": "legacy_call_outcome",
+          "what": "Legacy call outcomes of a former telephony system, one row per imported row: the date, the tag meaning, the former system's tag text, the CRM contact matched (by id) or none, and the match method (email and phone, email, phone, customer id, none, conflict or forgotten); never an email, phone number, name or customer id (0008zg)",
+          "how": "Legacy import (one-off job), on demand: ingest-import-legacy-calls matches each row of the file to at most one HubSpot contact in memory and writes it; a rerun fills a contact only where none is set and never refills a forgotten row; the CRM's privacy deletion of a contact sets forgotten"
         }
       ]
     },
@@ -697,7 +707,8 @@
     "legacy": {
       "src": "s-legacy",
       "ways": [
-        "w-oneoff"
+        "w-oneoff",
+        "w-jobs"
       ],
       "doms": [
         "import"
