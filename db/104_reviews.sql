@@ -797,10 +797,11 @@ $$;
 comment on column cma.message_rule.trigger is 'record_created: a new record alerts an audience; record_assigned: a record alerts the person its owner maps to (0008a); review_submitted: a published review of a counted channel alerts an audience (0008ze)';
 comment on column cma.message_rule.max_rating is 'review_submitted only: the highest rating that raises the alert (1 to 5); null: any rating (0008ze)';
 
--- A rule's trigger is fixed once the rule exists (README, Alert rules: name and trigger fixed). The upserts of 0008 and
--- 0008a match a rule by name, and 0008a's sets the trigger on a conflict, so it would turn a review rule without a
--- highest rating into an assignment rule; the data layer refuses another trigger's name first (CMA03), and this keeps
--- that true for every caller. A trigger function: it runs whoever updates the row, so nobody gets execute on it
+-- A rule's trigger is fixed once the rule exists (docs/architecture/api.md, Alert rules of 13 October 2026: name and
+-- trigger fixed). The upserts of 0008 and 0008a match a rule by name, and 0008a's sets the trigger on a conflict, so it
+-- would turn a review rule without a highest rating into an assignment rule; the data layer refuses another trigger's
+-- name first (CMA03), and this keeps that true for every caller. A trigger function: it runs whoever updates the row,
+-- so nobody gets execute on it
 create or replace function cma.message_rule_trigger_fixed()
 returns trigger
 language plpgsql
