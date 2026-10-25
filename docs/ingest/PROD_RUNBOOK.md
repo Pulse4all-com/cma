@@ -1267,7 +1267,7 @@ Expected: `0008zc` and `0008zd`. Without `0008zd`, run `docs/definitions-2026-10
 
 **Studio (cma-prod-pg):** `db/104_reviews.sql` as one script, as your own login.
 
-Expected: `INSERT 0 1` near the end and `COMMIT`; a second run ends with `INSERT 0 0` and changes nothing.
+Expected: no error; the last result is `reset role`. A second run ends the same and changes nothing.
 
 **Studio (cma-prod-pg):** `db/02_seed_pulse4all.sql` again (the rule Negative review, switched off, only where missing).
 
