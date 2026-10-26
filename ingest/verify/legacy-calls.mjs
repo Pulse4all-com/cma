@@ -14,7 +14,9 @@
  * candidates read as several); every match path through a whole run (email_phone, email, phone, customer_id by a store
  * customer and by a ref field, conflict, none) with the counts, the row numbers and the lookups counted per key in the
  * finished line and the progress line; the reconciliation of the current
- * rows; a rerun (the batch reused, the rows with a contact not searched again, a none filled); a dry run (no search, no
+ * rows; a rerun (the batch reused, the rows with a contact not searched again, a none filled); --unmatched skip (no none
+ * or conflict row stored, the skipped counts and row numbers in the finished and the progress line, a rerun that inserts a
+ * row that now matches, a row a store run wrote earlier left as it is); a dry run (no search, no
  * write, no run row); a pause at the daily floor and its resume; a portal without a property; the Cloud Storage reader;
  * and that the captured log, every run's answer and everything every store was given or holds (rows, upserts, the
  * reconciliation's items, counts, run rows, batches) hold none of the fixture's names, emails, phones or customer ids.
@@ -223,6 +225,10 @@ expect("A5 --min-customer-id-digits: 10 by default, 1 to 20; 13 digits taken at 
     usage(() => configOf({ ...ARGS, "min-customer-id-digits": "1e1" })), customerIdOf("1234567890123", 13), customerIdOf("1234567890123", 14),
     rowsOf(parseCsv(FIXTURE.toString("utf8")), configOf({ ...ARGS, "min-customer-id-digits": "14" })).find((x) => x.row === 7).customerId],
   [10, 13, "usage", "usage", "usage", "1234567890123", null, null], [13, 10, "ok", "ok", "ok", null, "1234567890123", "1234567890123"]);
+expect("A6 --unmatched: store by default, store or skip taken; anything else, or the bare flag, refused",
+  [configOf(ARGS).unmatched, configOf({ ...ARGS, unmatched: "skip" }).unmatched, configOf({ ...ARGS, unmatched: "store" }).unmatched,
+    usage(() => configOf({ ...ARGS, unmatched: "drop" })), usage(() => configOf({ ...ARGS, unmatched: true }))],
+  ["store", "skip", "store", "usage", "usage"], ["skip", "store", "skip", "ok", "ok"]);
 expect("A4 the file's address and the source system: gs:// only; a bad bucket, an http address, a bad source system refused",
   [JSON.stringify(parseGsUri("gs://cma-import-fixture/calls/courtesy.csv")), parseGsUri("gs://A/b"), parseGsUri("https://x/y"),
     usage(() => configOf({ ...ARGS, file: "/home/someone/file.csv" })), usage(() => configOf({ ...ARGS, "source-system": "Legacy" })),
@@ -330,6 +336,35 @@ expect("F1 a rerun: the batch reused; row 10 filled (its email now one contact);
   ["started", EXPECTED_ROWS, 25, "{}", 2]);
 fake.contacts.push({ id: "210", email: "fx.ten@example.invalid" });
 
+// ---- F2. --unmatched skip: only the rows matched to exactly one contact are written --------------------------------------
+const MATCHED_ROWS = EXPECTED_ROWS.split(" ").filter((x) => !/:(none|conflict):/.test(x)).join(" ");
+const skipArgs = { ...ARGS, unmatched: "skip" };
+store = fakeStore();
+logs.length = 0;
+r = await importRun(skipArgs, store);
+expect("F2 skip: no none or conflict row stored; the skipped counts and row numbers in the finished line and the progress line; the batch's counts keep their keys",
+  [rowsText(store.db), r.skipped_none, r.skipped_conflict, r.skippedNoneRows.join(","), r.skippedConflictRows.join(","), r.methods.none, r.methods.conflict,
+    Object.keys(store.db.finished).sort().join(","), store.db.runs[0].counts.skipped, r.failed,
+    logs.some((l) => l.includes("import-legacy-calls: progress") && l.includes('"skipped_none":2') && l.includes('"skipped_conflict":1'))],
+  [MATCHED_ROWS, 2, 1, "9,10", "6", 0, 0, "current,current_found,current_not_found,legacy,refused,stored,total", 5, 0, true],
+  [EXPECTED_ROWS, 0, 0, "", "", 2, 1, "", 2, 1, false]);
+fake.contacts = fake.contacts.filter((c) => c.id !== "210");
+r = await importRun(skipArgs, store);
+expect("F3 a rerun with skip after a fixture contact gains the email (row 10's second contact gone): that row is inserted, the batch reused, the others as they were",
+  [r.batchOutcome, rowsText(store.db), r.skipped_none, r.skippedNoneRows.join(","), r.skipped_conflict, JSON.stringify(r.written)],
+  ["reused", `${MATCHED_ROWS} 10:email:110`.split(" ").sort((x, y) => parseInt(x) - parseInt(y)).join(" "), 1, "9", 1, JSON.stringify({ inserted: 1 })],
+  ["started", MATCHED_ROWS, 2, "9,10", 0, "{}"]);
+fake.contacts.push({ id: "210", email: "fx.ten@example.invalid" });
+// a row a store run wrote earlier is left as it is by a skip run
+const kept = fakeStore();
+await importRun(ARGS, kept);
+const before0 = rowsText(kept.db);
+const writes0 = kept.db.writes.length;
+r = await importRun(skipArgs, kept);
+expect("F4 a skip run after a store run: the none and conflict rows it wrote stay as they are, and nothing about them is written again",
+  [rowsText(kept.db), kept.db.writes.slice(writes0).filter((w) => w[0] === "upsert").flatMap((w) => w[2]).filter((x) => x.matchMethod === "none" || x.matchMethod === "conflict").length],
+  [before0, 0], ["", 3]);
+
 // ---- G. A pause at the daily floor, then the same command again ------------------------------------------------------------
 store = fakeStore();
 let n = 0;
@@ -393,7 +428,7 @@ const logText = logs.join("\n");
 const leaks = (s) => PERSONAL.filter((p) => s.toLowerCase().includes(p.toLowerCase()));
 expect("J1 the fixture holds the values the check looks for (emails, names, numbers, customer ids)", PERSONAL.length > 30, true, false);
 expect("J2 the captured log holds none of them", leaks(logText), [], PERSONAL);
-expect("J3 every run's answer (the finished line) holds none of them; seven runs scanned", [leaks(answers), seen.length], [[], 7], [PERSONAL, 0]);
+expect("J3 every run's answer (the finished line) holds none of them; eleven runs scanned", [leaks(answers), seen.length], [[], 11], [PERSONAL, 0]);
 expect("J4 everything the stores were given or hold (rows, upserts, reconciliation, counts, run rows) holds none of them; rows present",
   [leaks(stored), seen.reduce((n, x) => n + x.db.rows.size, 0) > 30], [[], true], [PERSONAL, false]);
 expect("J5 the log has progress and nothing but counts, row numbers and ids: no email, no +",

@@ -20,8 +20,9 @@ What the job `ingest-import-legacy-calls` does with the file (`ingest/src/jobs/i
   and the phone (E.164 only, confirmed by the full number); the same contact `email_phone`, one of them `email`
   or `phone`, different contacts `conflict` (left unlinked); neither: the customer id when it has at least
   `--min-customer-id-digits` digits (default 10), first among the store customers the CMA already linked (0008h),
-  then in the HubSpot connection's contact ref fields, `customer_id`; otherwise `none`. Unmatched rows are stored
-  without a contact;
+  then in the HubSpot connection's contact ref fields, `customer_id`; otherwise `none`. By default unmatched rows
+  (`none` and `conflict`) are stored without a contact; with `--unmatched skip` they are not written, so only rows
+  matched to exactly one contact are stored (Pulse4all's value, below);
 - it writes every 100 rows, at HubSpot's search pace and above the connection's `api_daily_floor_pct`; a run
   that reaches the floor stops as succeeded with `daily_floor` and the same command later continues;
 - the email, phone, names and customer id stay in the job's memory; the log holds counts and row numbers only;
@@ -121,6 +122,7 @@ Pulse4all's arguments (file name as you upload it in step 4):
 | `--columns` | `tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum` |
 | `--meanings` | `<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative` |
 | `--min-customer-id-digits` | left out: 10, the Shopify customer ids; the shorter WooCommerce ids and Stripe's `cus_` ids are never looked up (no HubSpot property holds them) |
+| `--unmatched` | `skip`: Pulse4all imports only the Steam rows it finds in HubSpot (docs/decisions.md, 26 October 2026); the default `store` writes `none` and `conflict` rows without a contact |
 
 In `--meanings` each `<… text>` is one line of the Python block's output without its count, exactly as printed
 (inner spaces count as one, case counts). A text with no mapping is refused by row number in step 5, so a
@@ -175,7 +177,7 @@ properties the lookups rely on (`hs_additional_emails`, `hs_searchable_calculate
 **Terminal** (any folder; the values of step 3 in place of the `<…>`)
 ```bash
 gcloud run jobs execute ingest-import-legacy-calls --project=p4a-cma-prod --region=europe-west4 --wait \
-  --args='^|^--connection|<connection id>|--file|gs://cma-import-p4a-cma-prod/steam-courtesy.csv|--source-system|steam|--cutover|2026-09-01|--date-format|DD-MM-YYYY|--columns|tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum|--meanings|<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative|--dry-run'
+  --args='^|^--connection|<connection id>|--file|gs://cma-import-p4a-cma-prod/steam-courtesy.csv|--source-system|steam|--cutover|2026-09-01|--date-format|DD-MM-YYYY|--columns|tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum|--meanings|<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative|--unmatched|skip|--dry-run'
 ```
 `^|^` makes `|` the separator, because gcloud splits `--args` on commas. Expected: `Execution
 [ingest-import-legacy-calls-…] has successfully completed.`
@@ -194,11 +196,11 @@ refuse in the same way.
 
 ## 6. Run
 
-**Terminal**: the command of step 5 without `|--dry-run` at its end, and with `--async` in place of `--wait`
+**Terminal**: the command of step 5 without `|--dry-run` at its end (it keeps `|--unmatched|skip`), and with `--async` in place of `--wait`
 (the searches take one 400 ms slot each; about an hour for 2019 rows).
 ```bash
 gcloud run jobs execute ingest-import-legacy-calls --project=p4a-cma-prod --region=europe-west4 --async \
-  --args='^|^--connection|<connection id>|--file|gs://cma-import-p4a-cma-prod/steam-courtesy.csv|--source-system|steam|--cutover|2026-09-01|--date-format|DD-MM-YYYY|--columns|tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum|--meanings|<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative'
+  --args='^|^--connection|<connection id>|--file|gs://cma-import-p4a-cma-prod/steam-courtesy.csv|--source-system|steam|--cutover|2026-09-01|--date-format|DD-MM-YYYY|--columns|tag=tags,date=timestamp call,phone=Phone,email=Email,customer_id=Customer ID,source_marker=Inlaaddatum|--meanings|<positive text>=courtesy_completed_positive;<neutral text>=courtesy_completed_neutral;<negative text>=courtesy_completed_negative|--unmatched|skip'
 ```
 Expected: `Execution [ingest-import-legacy-calls-…] is being started`. Progress lines (`import-legacy-calls:
 progress`, every 100 rows, the last row number and the lookups so far) appear in the log:
@@ -219,7 +221,10 @@ run of it.
 The run ends with the finished line of step 5's logging block: `"batchOutcome": "started"`, the same four counts as
 the dry run, `"methods"` (the stored rows per match method: `email_phone`, `email`, `phone`, `customer_id`, `none`,
 `conflict`, `forgotten`), `"lookups"`, `"conflictRows"` and `"noneRows"` (row numbers), `"counts"` (what the batch
-stores) and `"failed": 0`.
+stores) and `"failed": 0`. With `--unmatched skip` the progress lines and the finished line also hold
+`skipped_none` and `skipped_conflict` (the rows not written, per method), and the finished line their row numbers
+(`skippedNoneRows`, `skippedConflictRows`); `none` and `conflict` stay 0 in `methods` unless an earlier run stored
+them. These counts are in the log only: the batch's `counts` have no key for them.
 
 When it ends with `"paused": true, "error": "daily_floor"`, the portal's remaining daily calls fell below the
 connection's floor: run the same command after midnight (HubSpot's day); it answers `"batchOutcome":
@@ -240,17 +245,26 @@ select b.id, b.source_system, b.cutover_date, b.started_at, b.finished_at, b.wit
 from cma_read.legacy_call_batch b order by b.started_at desc;
 ```
 Expected: one row for `steam`, `finished_at` set, `withdrawn_at` empty, and `counts` with `total` 2144,
-`legacy` 2019, `current` 125, `refused` 0, `stored` 2019 and the stored rows per match method (as the finished
-line's `methods`).
+`legacy` 2019, `current` 125, `refused` 0, `stored` the matched rows only and the stored rows per match method (as
+the finished line's `methods`; `none` and `conflict` 0). Legacy minus `stored` is the skipped number, and it equals
+`skipped_none` plus `skipped_conflict` of the finished line.
 
 **Studio (cma-prod-pg)**
 ```sql
 select o.match_method, o.meaning, count(*) as rows, min(o.occurred_on) as first_day, max(o.occurred_on) as last_day
 from cma_read.legacy_call_outcome o group by 1, 2 order by 1, 2;
 ```
-Expected: counts only, the days between 2025-05-14 and 2026-08-31, the methods adding up to 2019.
+Expected: counts only, the days between 2025-05-14 and 2026-08-31, the methods adding up to `stored`.
 
+Before step 8, spot-check a few of the skipped row numbers (the finished line's `skippedNoneRows` and
+`skippedConflictRows`) in HubSpot, by the email, phone or customer id the row holds in the file in `~/import`. A
+contact you find for a skipped row is a HubSpot data problem to fix there: after fixing a contact in HubSpot, run the
+same command again with the same file (upload it again when the bucket deleted it, step 4): the batch is reused and
+the newly matched rows are added; rows stored earlier stay as they are. Only when the skipped rows are as expected,
+go on to step 8.
 ## 8. Delete the file
+
+Only after the spot-check of step 7: once the file is deleted, a skipped row can no longer be matched.
 
 **Terminal**
 ```bash
@@ -298,6 +312,6 @@ Expected: one row of three values, then the time of the withdrawal. A second wit
   day. The bucket admits no public access; it is read by the job's service account (`storage.objectViewer` on this
   bucket) and by whoever holds a storage role on the project (its owners and editors).
 - The CMA stores per row the date, the tag meaning, the former system's tag text, the CRM connection and, when one
-  contact matched, its id. A contact the CRM later deletes for privacy loses the link (`forgotten`), and a rerun
+  contact matched, its id (with `--unmatched skip` a row matched to no single contact is not stored at all). A contact the CRM later deletes for privacy loses the link (`forgotten`), and a rerun
   never sets it again.
 - The job's log holds counts, row numbers and ids of the CMA's own records; never a value of the file.
