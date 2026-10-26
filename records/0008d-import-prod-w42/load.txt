@@ -1,0 +1,15 @@
+Legacy time import in prod, the week of 12 to 18 October 2026 (addition 0008d, docs/import/README.md)
+
+Written down by Claude Code at Martin's request from his report of the run; the numbers below are his.
+No name, email address or Steam id appears here.
+
+Batch             steam-2026-w42, staged, then voided after the guard refused it (the batch's work
+                  status, legacy_session, was inactive and already held the first import's days)
+Reload            as steam-2026-w42-2, into the one-off work status legacy_session_w42 (Steam
+                  session), created and retired for it
+
+Period            2026-10-12 to 2026-10-18
+People            11
+Person-days       51
+Working hours     379.1
+To review         8 days: 3 closed at 17:00, 5 clipped to 22:00
