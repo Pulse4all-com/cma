@@ -300,7 +300,7 @@
         {
           "name": "legacy_call_outcome",
           "what": "Legacy call outcomes of a former telephony system, one row per imported row: the date, the tag meaning, the former system's tag text, the CRM contact matched (by id) or none, and the match method (email and phone, email, phone, customer id, none, conflict or forgotten); never an email, phone number, name or customer id (0008zg)",
-          "how": "Legacy import (one-off job), on demand: ingest-import-legacy-calls matches each row of the file to at most one HubSpot contact in memory and writes it; a rerun fills a contact only where none is set and never refills a forgotten row; the CRM's privacy deletion of a contact sets forgotten"
+          "how": "Legacy import (one-off job), on demand: ingest-import-legacy-calls matches each row of the file to at most one HubSpot contact in memory and writes it; a rerun fills a contact only where none is set and never refills a forgotten row; with the job option --unmatched skip (Pulse4all's choice) only rows matched to exactly one contact are written, none and conflict rows are not stored; the CRM's privacy deletion of a contact sets forgotten"
         }
       ]
     },

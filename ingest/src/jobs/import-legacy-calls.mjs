@@ -6,7 +6,7 @@
  *
  *   node jobs/import-legacy-calls.mjs --connection <CRM connection uuid> --file gs://<bucket>/<object>
  *     --source-system <name> --cutover <YYYY-MM-DD> --date-format <DD-MM-YYYY> --columns <role=header,…>
- *     --meanings "<label>=<meaning key>;…" [--min-customer-id-digits <n>] [--dry-run]
+ *     --meanings "<label>=<meaning key>;…" [--min-customer-id-digits <n>] [--unmatched store|skip] [--dry-run]
  *
  * Every argument is configuration; nothing of a tenant, a vendor or a file is in the code:
  *   --columns    the file's headers per role: tag (the old system's tag text), date (the call's date), source_marker (a
@@ -17,6 +17,9 @@
  *   --cutover    the first day of the current telephony system
  *   --min-customer-id-digits   the fewest digits a customer id has to be looked up (1 to 20, default 10); a shorter id,
  *                or one that is not all digits, is not used
+ *   --unmatched  store (default): a row matched to no single contact (none, conflict) is stored without one; skip: such a
+ *                row is not written, only rows matched to exactly one contact are (a rerun with skip inserts a row that now
+ *                matches; a row a store run wrote earlier is left as it is)
  *
  * Per row (the header is row 1; an empty row is skipped and not counted):
  *   source        a filled marker is the former system (legacy), an empty one the current system (current). A legacy
@@ -50,7 +53,8 @@
  * Privacy: the email, the phone, the names and the customer id stay in memory only, in this run, and are dropped once
  * a row is matched; nothing here logs or stores them. The log lines and the finished line hold counts and row numbers
  * only: total, legacy, current, refused (with the row numbers per reason), the reconciliation's found and not found,
- * the stored rows per match method, and the row numbers of conflict and none.
+ * the stored rows per match method, and the row numbers of conflict and none; with --unmatched skip also the skipped rows
+ * per method (skipped_none, skipped_conflict: in the log only, never in the batch's counts) and their row numbers.
  */
 import { createHash } from "node:crypto";
 import { ADAPTERS } from "../adapters/index.mjs";
@@ -75,6 +79,8 @@ export const METHODS = ["email_phone", "email", "phone", "customer_id", "none", 
 const FINAL = new Set(["email_phone", "email", "phone", "customer_id", "forgotten"]);
 export const COMMIT_EVERY = 100;
 export const MIN_CUSTOMER_ID_DIGITS = 10;
+/** What --unmatched takes: store the rows matched to no single contact (default) or skip them */
+export const UNMATCHED = ["store", "skip"];
 
 // ---- The arguments -------------------------------------------------------------------------------------------------
 
@@ -154,9 +160,11 @@ export function configOf(a) {
   const given = a["min-customer-id-digits"];
   const digits = given === undefined ? MIN_CUSTOMER_ID_DIGITS : /^\d{1,2}$/.test(String(given)) ? Number(given) : Number.NaN;
   if (!(digits >= 1 && digits <= 20)) throw new UsageError("--min-customer-id-digits: a whole number from 1 to 20");
+  const unmatched = a.unmatched === undefined ? "store" : a.unmatched;
+  if (!UNMATCHED.includes(unmatched)) throw new UsageError(`--unmatched: ${UNMATCHED.join(" or ")}`);
   return {
     connectionId: a.connection, file, sourceSystem, cutover: a.cutover, readDate: dateReader(a["date-format"]),
-    columns: parseColumns(a.columns), meanings: parseMeanings(a.meanings), minCustomerIdDigits: digits, dryRun: a["dry-run"] === true,
+    columns: parseColumns(a.columns), meanings: parseMeanings(a.meanings), minCustomerIdDigits: digits, unmatched, dryRun: a["dry-run"] === true,
   };
 }
 
@@ -378,6 +386,8 @@ export async function runImportLegacyCalls(opts, {
   let batch = null;
   let missing = [];
   let pausedAt = null;
+  const skipping = config.unmatched === "skip";
+  const skipped = { none: [], conflict: [] };
   const run = await withRun(store, { job: JOB, stream: config.sourceSystem }, async (counts) => {
     // sync_run's counts: every row read; the refused ones failed; the current system's rows (reconciled, not stored)
     // and the rows not written again skipped; the rows written upserted
@@ -392,13 +402,15 @@ export async function runImportLegacyCalls(opts, {
     const outcomes = {};
     out.lookups = emptyLookups();
     let buffer = [];
-    const flush = async () => {
-      if (!buffer.length) return;
+    let handled = 0;
+    // the progress line: with skip, a line every 100 rows handled too, so a lookup that finds nothing still shows early
+    const flush = async (lastRow, force = false) => {
+      if (!buffer.length && !force) return;
       const part = buffer;
       buffer = [];
-      for (const [k, v] of Object.entries(await store.upsertLegacyOutcomes(batch.batchId, part))) outcomes[k] = (outcomes[k] ?? 0) + v;
-      info("import-legacy-calls: progress", { connection: c.connectionId, batch: batch.batchId, written: part.length, lastRow: part[part.length - 1].sourceRow,
-        lookups: out.lookups });
+      if (part.length) for (const [k, v] of Object.entries(await store.upsertLegacyOutcomes(batch.batchId, part))) outcomes[k] = (outcomes[k] ?? 0) + v;
+      info("import-legacy-calls: progress", { connection: c.connectionId, batch: batch.batchId, written: part.length, lastRow: part.at(-1)?.sourceRow ?? lastRow,
+        lookups: out.lookups, ...(skipping ? { skipped_none: skipped.none.length, skipped_conflict: skipped.conflict.length } : {}) });
     };
     let error = null;
     try {
@@ -421,12 +433,19 @@ export async function runImportLegacyCalls(opts, {
         } finally {
           forget(r);
         }
-        buffer.push({ sourceRow: r.row, occurredOn: r.date, meaning: r.meaning, sourceLabel: r.label, contactId: m.contactId, matchMethod: m.method });
-        if (buffer.length >= COMMIT_EVERY) await flush();
+        handled += 1;
+        if (skipping && (m.method === "none" || m.method === "conflict")) {
+          skipped[m.method].push(r.row);
+          counts.skipped += 1;
+        } else {
+          buffer.push({ sourceRow: r.row, occurredOn: r.date, meaning: r.meaning, sourceLabel: r.label, contactId: m.contactId, matchMethod: m.method });
+        }
+        if (buffer.length >= COMMIT_EVERY) await flush(r.row);
+        else if (skipping && handled % COMMIT_EVERY === 0) await flush(r.row, true);
       }
     } finally {
       for (const r of legacy) forget(r);
-      await flush();
+      await flush(null);
     }
     counts.upserted = (outcomes.inserted ?? 0) + (outcomes.filled ?? 0) + (outcomes.updated ?? 0);
     counts.skipped += (outcomes.unchanged ?? 0) + (outcomes.kept ?? 0) + (outcomes.forgotten ?? 0);
@@ -449,6 +468,12 @@ export async function runImportLegacyCalls(opts, {
     const rowsWith = (m) => [...stored].filter(([, v]) => v === m).map(([k]) => k).sort((x, y) => x - y);
     out.conflictRows = rowsWith("conflict");
     out.noneRows = rowsWith("none");
+  }
+  if (skipping) {
+    out.skipped_none = skipped.none.length;
+    out.skipped_conflict = skipped.conflict.length;
+    out.skippedNoneRows = skipped.none;
+    out.skippedConflictRows = skipped.conflict;
   }
   return {
     ...out, ...(missing.length ? { missingProperties: missing } : {}), ...(pausedAt ? { pausedAtRow: pausedAt } : {}),
