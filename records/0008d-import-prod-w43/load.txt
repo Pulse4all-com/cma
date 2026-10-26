@@ -1,0 +1,21 @@
+Legacy time import in prod, the week of 19 to 23 October 2026 (addition 0008d, docs/import/README.md)
+
+Written down by Claude Code at Martin's request from his report of the run; the numbers below are his.
+No name, email address or Steam id appears here.
+
+Batch             steam-2026-w43, into the work status legacy_session (reused, addition 0008zh),
+                  loaded on 26 October 2026 at 08:09 UTC
+
+Period            2026-10-19 to 2026-10-23
+
+Tool              rows_read 84, sessions_written 84, sessions_open 6, accounts_written 11,
+                  accounts_absent_from_map 0
+Person map        11 accounts, 11 rows written, 0 emails without a person
+Before the load   0 days the CMA already had
+
+Load counts       sessions_in 84, sessions_merged 31, days_written 50, events_written 106,
+                  days_closed_by_rule 6, days_clipped 2, days_dropped 0, days_skipped_existing 0,
+                  the other counts 0
+
+Result            11 people, 50 days, 350.8 hours, 8 days to review
+                  legacy_session inactive afterwards

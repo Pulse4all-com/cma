@@ -255,10 +255,36 @@ cleaned or renamed copy of the export goes too.
 ## A weekly batch
 
 Each week's export is loaded as a batch of its own, into the status the first batch used, after the
-tenant's people are in place (People, above). The steps are 1 to 11 above with the changes below; every
-Studio block starts with the context block, as in steps 5 and 7 to 10. A weekly batch needs `110`
-(0008zh) and `111` run in prod, `111` returning `PASS`: before it, the load refuses the status
-`legacy_session` once it holds the first batch's days (`CMA04`).
+tenant's people are in place (People, above). The steps are 1 to 11 above with the changes below. A
+weekly batch runs from the Terminal only: Studio's CSV export failed on the Chromebook, and the
+context block never survives between Studio runs. Every database block below is one run of
+
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+...
+SQL
+```
+
+with the context block as its first lines, so the whole block is one session. The context block
+uses the actor label `terminal:martin` and the two ids of step A (`<tenant_id>`, `<user_id>`):
+
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'terminal:martin', false);
+```
+
+It prints one row of three values; each step's expected output follows it. The `cma_db` helper is in
+`docs/night-2026-10-10/MORNING_RUNBOOK.md` (Helpers); it prints `connected to cma as <your email>`
+first.
+
+A weekly batch needs `110` (0008zh) and `111` run in prod, `111` returning `PASS`: before it, the load
+refuses the status `legacy_session` once it holds the first batch's days (`CMA04`).
+
+Run-time note: `run_migration` (the same runbook) ends with a verify step that runs `109`, which
+refuses in prod by design ("the connected database is not dev"; it is dev-only). For 0008zg in prod,
+the `108` line alone is the step: run the migration, expect `COMMIT`, and do not run `109` there.
 
 - **Batch key** `steam-<yyyy>-w<ww>`: the ISO year and ISO week number of the week's first login, the
   number with two digits (`steam-2026-w43`). A batch that is voided and loaded again takes the key with
@@ -279,30 +305,67 @@ Studio block starts with the context block, as in steps 5 and 7 to 10. A weekly 
   first and last login of an included account), not the calendar week. Use them in step 5. The period
   must have ended: the last login day is before today.
 
-**2. The map, rebuilt.** The accounts are the same people from week to week, so the map is not made
-from scratch: it is read from the person map of the latest loaded batch.
+**A. The ids**: once. The step 5 lookup; keep both ids for every block below.
 
-**Studio (cma-prod-pg)**
-```sql
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+set role cma_owner;
+select t.id as tenant_id, u.id as user_id
+from cma.tenant t join cma.app_user u on u.tenant_id = t.id
+where t.slug = 'pulse4all-subscriptions' and u.email = '<your_email>';
+reset role;
+SQL
+```
+Expected: one row.
+
+**1. A folder outside the repository.** The export goes in through Linux files on the Chromebook
+(Files → Linux files; no upload to Cloud Shell). The export's name has spaces, so move it with a glob:
+
+**Terminal**
+```bash
+mkdir -p ~/import && chmod 700 ~/import && mv ~/Agent*uren*week*.csv ~/import/steam-export.csv && ls -la ~/import
+```
+Expected: the folder lists `steam-export.csv`. If the glob matches two files, `mv` refuses; leave one.
+
+**2. The map, rebuilt.** The accounts are the same people from week to week, so the map is read from
+the database, not made from scratch: the latest mapping of each account across every loaded
+`steam_connect` batch, not the last batch alone (an account that is new this week, or missing from
+last week's batch, is still in the map when an earlier batch mapped it). The file is written straight
+from psql; `\o /dev/null` keeps the `set role` result and the context block's row out of it, so it
+holds only the header and one row per account.
+
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X --csv -v ON_ERROR_STOP=1 -f - > ~/import/steam-map.csv <<'SQL'
+\o /dev/null
 set role cma_app;
 select set_config('app.tenant_id', '<tenant_id>', false),
        set_config('app.user_id', '<user_id>', false),
-       set_config('app.actor_label', 'studio:martin', false);
-select m.external_person_id as steam_pid, u.email as work_email, 'yes' as include
+       set_config('app.actor_label', 'terminal:martin', false);
+\o
+select distinct on (m.external_person_id)
+       m.external_person_id as steam_pid, u.email as work_email, 'yes' as include
 from cma.import_person_map m
+join cma.import_batch b on b.tenant_id = m.tenant_id and b.id = m.batch_id
 join cma.app_user u on u.tenant_id = m.tenant_id and u.id = m.user_id
-where m.batch_id = (select b.id from cma.import_batch b
-                    where b.source_system = 'steam_connect' and b.status = 'loaded'
-                    order by b.loaded_at desc limit 1)
-order by m.external_person_id;
-reset role;
+where b.source_system = 'steam_connect' and b.status = 'loaded'
+order by m.external_person_id, b.loaded_at desc;
+SQL
+head -1 ~/import/steam-map.csv; echo "accounts: $(($(wc -l < ~/import/steam-map.csv) - 1))"
 ```
-Expected: after the context block's row of three values, one row per person of the last batch with
-`steam_pid`, `work_email` and `include` = `yes`. Download the result as CSV, upload it to Cloud Shell as
-`~/import/steam-map.csv` and check that its header reads `steam_pid,work_email,include`. An account in
-this week's export that is not in the map is dropped and counted (`accounts_absent_from_map`): add its
-row by hand, with the person added first (People), if it belongs in the import. The file holds emails and
-goes in step 11 with the rest.
+Expected: `head -1` prints `steam_pid,work_email,include`, then the number of accounts: every account any loaded batch mapped, so also people without sessions this week (13 or more as of week 43).
+The file holds exactly the header and one `<steam_pid>,<work_email>,yes` row per account; tested on a local
+database, where it came out as (the values are placeholders here):
+```
+steam_pid,work_email,include
+<steam_pid>,<work_email>,yes
+<steam_pid>,<work_email>,yes
+```
+An account in this week's export that is not in the map is dropped and counted
+(`accounts_absent_from_map`): when it belongs in the import, add the person first (Team → People),
+then add its row to the map by hand. If `accounts_absent_from_map` is not 0 in step 4, a person has to
+be added first. The file holds emails and goes in step 11 with the rest.
 
 **4. The staging file**
 
@@ -312,37 +375,117 @@ cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv 
 ```
 Expected: the counts, with `sessions_written` above 0, `sessions_deduplicated 0`, `period_from` and
 `period_to` the week's first and last login, `accounts_written` the number of people with sessions
-that week (at most the rows of the map), and the two file paths.
+that week (at most the rows of the map), `accounts_absent_from_map` 0, `map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
 
-**5. Stage the batch**: the block of step 5 with `'steam-<yyyy>-w<ww>'`, `'legacy_session'`, `'break'`
-and the two dates step 4 printed. Expected: `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> |
-Europe/Amsterdam`.
+**5. Stage the batch**
+
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'terminal:martin', false);
+select key, status, period_from, period_to, timezone
+from cma.stage_import_batch('steam-<yyyy>-w<ww>', 'steam_connect', 'steam-export.csv',
+                            '<period_from>', '<period_to>', 'Europe/Amsterdam', 'legacy_session', 'break');
+SQL
+```
+Expected: the context row, then `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> | Europe/Amsterdam`.
 
 **6. Copy the sessions in**: as step 6. Expected: `COPY <n>` with `n` = `sessions_written`, one row
 `steam-<yyyy>-w<ww> | <n> | <accounts_written> | <period_from> | <period_to>`, `COMMIT`.
 
-**7. The person map**: as step 7. Expected: `accounts_in_map <a> | rows_written <a> | emails_without_person 0`,
-`a` = `accounts_written` of step 4.
+**7. The person map**: the statement of step 4 is a file, so the context goes in with `-c` and the file
+with `-f`, in one session:
 
-**8. Before the load**: the query of step 8 with `b.key = 'steam-<yyyy>-w<ww>'`. Expected: `0` accounts
-without a person, and in `days_the_cma_already_has` the person-days of this week that agents clocked in
-themselves in the CMA (the periods of weekly batches do not overlap, so no earlier batch's day is in
-it). Those days stay as they are: the load skips them (the CMA's own days win) and counts them in
-`days_skipped_existing`, which equals this figure. A figure above 0 is normal when agents already
-use the CMA.
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 \
+  -c "set role cma_app" \
+  -c "select set_config('app.tenant_id', '<tenant_id>', false), set_config('app.user_id', '<user_id>', false), set_config('app.actor_label', 'terminal:martin', false)" \
+  -f ~/import/person-map.sql
+```
+Expected: `SET`, the context row, then `accounts_in_map <a> | rows_written <a> | emails_without_person 0`,
+`a` = `accounts_written` of step 4. It is rerun-safe (a second run writes 0).
 
-**9. Load**: the block of step 9 with the batch key. Expected: `loaded` with the counts as in step 9:
-`sessions_in` = step 6's `n`, `accounts_skipped` 0, `days_skipped_existing` = step 8's second figure,
-and the other counts. `CMA04` naming `legacy_session` means time was booked in that status outside an
-import: stop and report it, do not move the batch to another status.
+**8. Before the load**: the query of step 8 with the batch key, and the same person-days per date.
 
-**10. Read the result**: the block of step 10 with the batch key. Expected: one row per person with days,
-hours and days to review (days closed at 17:00 or clipped to 22:00), then `legacy_session | inactive`.
-Write the counts, the batch key, the period and the times (no names, emails or Steam ids) down as
-`records/0008d-import-prod-w<ww>/load.txt`, as for the first batches.
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'terminal:martin', false);
+select count(distinct s.external_person_id) filter (where m.user_id is null) as accounts_without_person,
+       count(distinct (m.user_id, s.login_local::date)) filter (where w.id is not null) as days_the_cma_already_has
+from cma.import_session s
+join cma.import_batch b on b.id = s.batch_id and b.key = 'steam-<yyyy>-w<ww>'
+left join cma.import_person_map m on m.batch_id = s.batch_id and m.external_person_id = s.external_person_id
+left join cma.workday w on w.user_id = m.user_id and w.business_date = s.login_local::date;
+select s.login_local::date as business_date,
+       count(distinct m.user_id) as person_days_the_cma_already_has
+from cma.import_session s
+join cma.import_batch b on b.id = s.batch_id and b.key = 'steam-<yyyy>-w<ww>'
+join cma.import_person_map m on m.batch_id = s.batch_id and m.external_person_id = s.external_person_id
+join cma.workday w on w.user_id = m.user_id and w.business_date = s.login_local::date
+group by 1
+order by 1;
+SQL
+```
+Expected: `0` accounts without a person, and in `days_the_cma_already_has` the person-days of this week
+that agents clocked in themselves in the CMA (the periods of weekly batches do not overlap, so no
+earlier batch's day is in it); then one row per date that holds such days, adding up to that figure
+(`(0 rows)` when it is `0`). Those days stay as they are: the load skips them (the CMA's own days win)
+and counts them in `days_skipped_existing`, which equals this figure. A figure above 0 is normal when
+agents already use the CMA.
+
+**9. Load**
+
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'terminal:martin', false);
+select key, status, loaded_at, jsonb_pretty(counts) as counts from cma.load_import_batch('steam-<yyyy>-w<ww>');
+SQL
+```
+Expected: `loaded` with the counts as in step 9: `sessions_in` = step 6's `n`, `accounts_skipped` 0,
+`days_skipped_existing` = step 8's second figure, and the other counts. `CMA04` naming
+`legacy_session` means time was booked in that status outside an import: stop and report it, do not
+move the batch to another status.
+
+**10. Read the result**
+
+**Terminal**
+```bash
+cma_db prod && psql "$PGCONN" -X -v ON_ERROR_STOP=1 <<'SQL'
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'terminal:martin', false);
+select u.display_name, count(*) as days, round(sum(s.working_seconds) / 3600.0, 1) as hours,
+       count(*) filter (where s.needs_correction) as to_review
+from cma.import_day d
+join cma.import_batch b on b.id = d.batch_id and b.key = 'steam-<yyyy>-w<ww>'
+join cma.workday_summary s on s.workday_id = d.workday_id
+join cma.app_user u on u.id = d.user_id
+group by u.display_name
+order by u.display_name;
+select key, status from cma.work_status where key = 'legacy_session';
+SQL
+```
+Expected: one row per person with days, hours and days to review (days closed at 17:00 or clipped to
+22:00), then `legacy_session | inactive`. The names stay in the terminal. Write the counts, the batch
+key, the period and the times (no names, emails or Steam ids) down as
+`records/0008d-import-prod-w<ww>/load.txt`, as for the first batches, from the values Martin reports.
 
 **11. Delete the files**: as step 11, so the map file with its emails goes too. Expected:
-`ls: cannot access '/home/…/import': No such file or directory`.
+`ls: cannot access '/home/…/import': No such file or directory`. Also delete the export from Linux
+files on the Chromebook (the copy you moved is gone, but check Downloads and empty the bin).
 
 ---
 

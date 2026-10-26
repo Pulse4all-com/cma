@@ -1,0 +1,13 @@
+Legacy call outcomes, addition 0008zg (db/108, db/109), dev and prod, 26 October 2026
+
+Written down by Claude Code at Martin's request from his report of the runs; the results below are his.
+No name, email address or Steam id appears here.
+
+dev   108   ran clean
+dev   109   PASS (18 PASS, 0 FAIL)
+dev   109   provoked: PROVOKED, NOT A PASS (0 PASS, 18 FAIL)
+prod  108   ran clean (INSERT 0 1, COMMIT)
+prod  109   refused with "the connected database is not dev"; it is dev-only by design
+
+Note: only the migration ran in prod. The legacy calls run (docs/import/legacy-calls.md, steps 1 to 8)
+has not started.
