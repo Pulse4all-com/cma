@@ -28,6 +28,13 @@
  *                                        each time with the same account and login, keeps the row
  *                                        with the latest logout (no logout counts as latest); the
  *                                        rows dropped are counted as sessions_deduplicated
+ *   --session-id-from person-login       for an export without a session id column (the column is not
+ *                                        read, even when there is one): the session id is
+ *                                        "<person id>@<login as in the file>", the login text exactly
+ *                                        as the file has it, trimmed. The ids must be unique: two rows
+ *                                        of one account with the same login refuse the file, naming
+ *                                        their lines (no row is dropped as a duplicate, so it cannot
+ *                                        be combined with --dedupe-sessions)
  * Line ends CRLF or LF, an optional UTF-8 byte order mark, quoted fields as in RFC 4180.
  *
  * The map (a header, then one row per account): steam_pid,work_email,include
@@ -37,7 +44,8 @@
  *
  * Refuses (exit 1, nothing written) a row without a person id, session id or login, a time that
  * does not parse, a logout before its login, a duplicate session id (with --dedupe-sessions: one
- * whose rows differ in account or login), and a local time that does not exist in the zone (the
+ * whose rows differ in account or login; with --session-id-from: a derived id that is not unique,
+ * the lines named), and a local time that does not exist in the zone (the
  * spring clock change); the database refuses the last one too. Prints counts
  * only, never a name or an email.
  */
@@ -206,7 +214,7 @@ export function readMap(text) {
 
 /**
  * The export and the map to staging rows and counts. Pure: no file access.
- * options: { batch, zone, columns, dateFormat, delimiter, dedupeSessions }
+ * options: { batch, zone, columns, dateFormat, delimiter, dedupeSessions, sessionIdFrom }
  * dedupeSessions "latest-logout": per session id the row with the latest logout (an open one counts
  * as latest; on a tie the first), when every row of that id has the same account and login.
  */
@@ -218,20 +226,27 @@ export function convert(exportText, mapText, options) {
   const rows = parseCsv(exportText, delimiter);
   const header = (rows.shift() ?? []).map((h) => h.trim());
   const col = Object.fromEntries(Object.entries(columns).map(([k, name]) => [k, header.indexOf(name)]));
-  for (const k of ["personId", "login", "logout", "sessionId"]) {
+  const derived = options.sessionIdFrom === "person-login";
+  for (const k of ["personId", "login", "logout", ...(derived ? [] : ["sessionId"])]) {
     if (col[k] < 0) problems.push(`the export has no column "${columns[k]}" (${k})`);
   }
   if (problems.length) return { problems, rows: [], counts: null };
 
   const sessions = new Map();
+  const derivedLines = new Map();
   let deduplicated = 0;
   rows.forEach((r, i) => {
     const line = i + 2;
     const cell = (k) => (col[k] >= 0 ? (r[col[k]] ?? "").trim() : "");
     const pid = cell("personId");
-    const sid = cell("sessionId");
+    const sid = derived ? (cell("login") ? `${pid}@${cell("login")}` : "") : cell("sessionId");
     if (!pid) { problems.push(`line ${line}: no person id`); return; }
-    if (!sid) { problems.push(`line ${line}: no session id`); return; }
+    if (!sid) { problems.push(derived ? `line ${line}: no login` : `line ${line}: no session id`); return; }
+    if (derived) {
+      const seen = derivedLines.get(sid);
+      if (seen) { seen.push(line); return; }
+      derivedLines.set(sid, [line]);
+    }
     const earlier = sessions.get(sid);
     if (earlier && options.dedupeSessions !== "latest-logout") { problems.push(`line ${line}: session id ${sid} appears twice`); return; }
     const login = parse(cell("login"));
@@ -253,6 +268,10 @@ export function convert(exportText, mapText, options) {
     }
     sessions.set(sid, session);
   });
+
+  for (const lines of derivedLines.values()) {
+    if (lines.length > 1) problems.push(`lines ${lines.join(", ")}: one account and login give the same session id`);
+  }
 
   const accounts = new Set();
   const dropped = { absent: new Set(), excluded: new Set() };
@@ -379,10 +398,20 @@ export function main(argv) {
     return 0;
   }
   if (!exportPath || !o.map || !o.zone || !o.batch || !o.out) {
-    console.error("usage: legacy-sessions-to-staging.mjs <export.csv> --map <map.csv> --zone <IANA zone> --batch <key> --out <staging.csv> [--map-sql <file>] [--dedupe-sessions latest-logout]");
+    console.error("usage: legacy-sessions-to-staging.mjs <export.csv> --map <map.csv> --zone <IANA zone> --batch <key> --out <staging.csv> [--map-sql <file>] [--dedupe-sessions latest-logout | --session-id-from person-login]");
     return 2;
   }
-  if (o["dedupe-sessions"] !== undefined && o["dedupe-sessions"] !== "latest-logout") {
+  const hasDedupe = "dedupe-sessions" in o;
+  const hasDerived = "session-id-from" in o;
+  if (hasDerived && o["session-id-from"] !== "person-login") {
+    console.error("--session-id-from takes one value: person-login");
+    return 2;
+  }
+  if (hasDerived && hasDedupe) {
+    console.error("--session-id-from derives ids that must be unique, so no session is deduplicated: drop --dedupe-sessions");
+    return 2;
+  }
+  if (hasDedupe && o["dedupe-sessions"] !== "latest-logout") {
     console.error("--dedupe-sessions takes one value: latest-logout");
     return 2;
   }
@@ -392,7 +421,8 @@ export function main(argv) {
   }
   try { new Intl.DateTimeFormat("en", { timeZone: o.zone }); } catch { console.error(`unknown time zone ${o.zone}`); return 2; }
   const result = convert(readFileSync(exportPath, "utf8"), readFileSync(o.map, "utf8"),
-    { batch: o.batch, zone: o.zone, columns, dateFormat: o["date-format"], delimiter, dedupeSessions: o["dedupe-sessions"] });
+    { batch: o.batch, zone: o.zone, columns, dateFormat: o["date-format"], delimiter, dedupeSessions: o["dedupe-sessions"],
+      sessionIdFrom: o["session-id-from"] });
   if (result.problems.length) {
     console.error(`refused, nothing written: ${result.problems.length} problem(s)`);
     for (const p of result.problems.slice(0, 20)) console.error(`  ${p}`);

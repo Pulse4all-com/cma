@@ -12,7 +12,9 @@
  * refusals (the spring gap, a duplicate session, a logout before its login, a time that does not
  * read, a malformed batch key), each without writing a file; the map template; duplicated session ids
  * with --dedupe-sessions latest-logout (the latest logout kept, an open one as latest, counted), and
- * refused without it or when the rows of one id differ in account or login.
+ * refused without it or when the rows of one id differ in account or login; and --session-id-from
+ * person-login (ids derived without a session id column, a derived id that is not unique refused
+ * with its lines named, the option refused with --dedupe-sessions).
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -128,6 +130,34 @@ expect("refused with the option: one id, another login or account",
   [[1, true], [1, true]], [[0, false], [0, false]]);
 const badRule = run(duplicates, ["--dedupe-sessions", "first"]);
 expect("refused: an unknown dedupe rule", [badRule.code, badRule.out === null], [2, true], [0, false]);
+
+// ---- an export without a session id column: --session-id-from person-login ---------------------------
+const noIdHeader = "PersoneelsPID;Personeel;Ingelogd;Uitgelogd;Ingelogde tijd;Functie";
+const noId = join(dir, "no-session-id.csv");
+writeFileSync(noId, `${noIdHeader}\r\n1001;A;2-3-2026 09:00:00;2-3-2026 12:00:00;3:00:00;Agent\r\n1002;B;2-3-2026 09:00:00;;;Agent\r\n1001;A;3-3-2026 9:00:00;3-3-2026 10:00:00;1:00:00;Agent\r\n`);
+const derivedRun = run(noId, ["--session-id-from", "person-login"]);
+expect("derived ids: person id @ login as in the file", [derivedRun.code, (derivedRun.out ?? "").split("\n").slice(1, 4).map((l) => l.split(",")[3])],
+  [0, ["1001@2-3-2026 09:00:00", "1002@2-3-2026 09:00:00", "1001@3-3-2026 9:00:00"]], [1, []]);
+expect("without the option the missing column refuses", [run(noId).code, run(noId).out === null], [1, true], [0, false]);
+const withColumn = run(join(FIXTURES, "legacy-sessions-sample.csv"), ["--session-id-from", "person-login"]);
+expect("the option ignores a session id column the export has",
+  [withColumn.code, (withColumn.out ?? "").split("\n")[1]],
+  [0, "verify-sample,1001,Test Account A,1001@2-1-2026 08:59:12,2026-01-02T08:59:12,2026-01-02T12:30:00,Agent"], [1, undefined]);
+const sameLogin = join(dir, "same-login.csv");
+writeFileSync(sameLogin, `${noIdHeader}\r\n1001;A;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;Agent\r\n1002;B;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;Agent\r\n`);
+expect("one login of two accounts gives two ids", [run(sameLogin, ["--session-id-from", "person-login"]).code], [0], [1]);
+const notUnique = join(dir, "not-unique.csv");
+writeFileSync(notUnique, `${noIdHeader}\r\n1001;A;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;Agent\r\n1002;B;2-3-2026 09:00:00;2-3-2026 10:00:00;1:00:00;Agent\r\n1001;A;2-3-2026 09:00:00;2-3-2026 11:00:00;2:00:00;Agent\r\n1001;A;2-3-2026 09:00:00;;;Agent\r\n`);
+const dup = run(notUnique, ["--session-id-from", "person-login"]);
+expect("refused: a derived id that is not unique, the lines named, nothing written",
+  [dup.code, dup.out === null, dup.mapSql === null, /lines 2, 4, 5: one account and login give the same session id/.test(dup.printed), /1002/.test(dup.printed)],
+  [1, true, true, true, false], [0, false, false, false, true]);
+const bothOptions = run(notUnique, ["--session-id-from", "person-login", "--dedupe-sessions", "latest-logout"]);
+const badSource = run(noId, ["--session-id-from", "login"]);
+const bareLast = run(join(FIXTURES, "legacy-sessions-sample.csv"), ["--session-id-from"]);
+expect("refused: --session-id-from with --dedupe-sessions, with another value, or without one",
+  [bothOptions.code, bothOptions.out === null, badSource.code, badSource.out === null, bareLast.code, bareLast.out === null],
+  [2, true, 2, true, 2, true], [0, false, 0, false, 0, false]);
 
 const template = join(dir, "template.csv");
 const tpl = spawnSync(process.execPath, [TOOL, join(FIXTURES, "legacy-sessions-sample.csv"), "--map-template", template], { encoding: "utf8" });

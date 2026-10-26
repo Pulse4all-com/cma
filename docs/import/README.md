@@ -14,8 +14,9 @@ What the database does with the file (`cma.load_import_batch`), per person and l
 - a date that already has a CMA day is skipped (the CMA's own days win); a day under one minute is
   dropped;
 - a day closed by the 17:00 rule or clipped is flagged for review (Team hours, needs correction);
-- the import status (Steam session) is seeded inactive and never offered; the load accepts it because
-  nothing was ever booked on it.
+- the import status (Steam session) is seeded inactive and never offered; the load accepts it as long as
+  no effective time in it lies on a day that no import batch wrote, so every later batch reuses it, and time
+  clocked live never lands in it (addition 0008zh).
 
 Rules for the files: the export, the map, the staging file and the person map statement stay in
 `~/import` in Cloud Shell, never in `~/cma`, and are deleted after the load (step 11). Real files are
@@ -251,6 +252,100 @@ cleaned or renamed copy of the export goes too.
 
 ---
 
+## A weekly batch
+
+Each week's export is loaded as a batch of its own, into the status the first batch used, after the
+tenant's people are in place (People, above). The steps are 1 to 11 above with the changes below; every
+Studio block starts with the context block, as in steps 5 and 7 to 10. A weekly batch needs `110`
+(0008zh) and `111` run in prod, `111` returning `PASS`: before it, the load refuses the status
+`legacy_session` once it holds the first batch's days (`CMA04`).
+
+- **Batch key** `steam-<yyyy>-w<ww>`: the ISO year and ISO week number of the week's first login, the
+  number with two digits (`steam-2026-w43`). A batch that is voided and loaded again takes the key with
+  `-2` (`steam-2026-w43-2`), as in the void section.
+- **Status** `legacy_session` stays the work status of step 5 and `break` the gap status. The load
+  refuses an inactive status only when it holds effective time on a workday that no import wrote. The
+  days of earlier batches, with the corrections made to them since, do not count; a day clocked live in
+  the status would, and the load then refuses with `inactive and has time recorded in it on days no
+  import wrote`. `legacy_session_w42`, the one-off status of the week of 12 to 18 October 2026, is not
+  used again.
+- **Session ids** `--session-id-from person-login` on step 4: a weekly export has no session id column,
+  so the tool derives `<person id>@<login as in the file>` for every row. If two rows of one account
+  have the same login text, the ids collide and the tool refuses, writes nothing and names the lines
+  (`lines 12, 40: one account and login give the same session id`). Open the export at those lines: if they
+  are the same session twice, delete the shorter row in your copy (the load would merge them anyway),
+  and run the line again; the check covers every row of the export, also those of accounts the map leaves out. The option is not combined with `--dedupe-sessions`.
+- **Period** the week's first to last login: the `period_from` and `period_to` that step 4 prints (the
+  first and last login of an included account), not the calendar week. Use them in step 5. The period
+  must have ended: the last login day is before today.
+
+**2. The map, rebuilt.** The accounts are the same people from week to week, so the map is not made
+from scratch: it is read from the person map of the latest loaded batch.
+
+**Studio (cma-prod-pg)**
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select m.external_person_id as steam_pid, u.email as work_email, 'yes' as include
+from cma.import_person_map m
+join cma.app_user u on u.tenant_id = m.tenant_id and u.id = m.user_id
+where m.batch_id = (select b.id from cma.import_batch b
+                    where b.source_system = 'steam_connect' and b.status = 'loaded'
+                    order by b.loaded_at desc limit 1)
+order by m.external_person_id;
+reset role;
+```
+Expected: after the context block's row of three values, one row per person of the last batch with
+`steam_pid`, `work_email` and `include` = `yes`. Download the result as CSV, upload it to Cloud Shell as
+`~/import/steam-map.csv` and check that its header reads `steam_pid,work_email,include`. An account in
+this week's export that is not in the map is dropped and counted (`accounts_absent_from_map`): add its
+row by hand, with the person added first (People), if it belongs in the import. The file holds emails and
+goes in step 11 with the rest.
+
+**4. The staging file**
+
+**Terminal**
+```bash
+cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv --map ~/import/steam-map.csv --zone Europe/Amsterdam --batch steam-<yyyy>-w<ww> --session-id-from person-login --out ~/import/staging.csv --map-sql ~/import/person-map.sql
+```
+Expected: the counts, with `sessions_written` above 0, `sessions_deduplicated 0`, `period_from` and
+`period_to` the week's first and last login, `accounts_written` the number of people with sessions
+that week (at most the rows of the map), and the two file paths.
+
+**5. Stage the batch**: the block of step 5 with `'steam-<yyyy>-w<ww>'`, `'legacy_session'`, `'break'`
+and the two dates step 4 printed. Expected: `steam-<yyyy>-w<ww> | staged | <period_from> | <period_to> |
+Europe/Amsterdam`.
+
+**6. Copy the sessions in**: as step 6. Expected: `COPY <n>` with `n` = `sessions_written`, one row
+`steam-<yyyy>-w<ww> | <n> | <accounts_written> | <period_from> | <period_to>`, `COMMIT`.
+
+**7. The person map**: as step 7. Expected: `accounts_in_map <a> | rows_written <a> | emails_without_person 0`,
+`a` = `accounts_written` of step 4.
+
+**8. Before the load**: the query of step 8 with `b.key = 'steam-<yyyy>-w<ww>'`. Expected: `0` accounts
+without a person, and in `days_the_cma_already_has` the person-days of this week that agents clocked in
+themselves in the CMA (the periods of weekly batches do not overlap, so no earlier batch's day is in
+it). Those days stay as they are: the load skips them (the CMA's own days win) and counts them in
+`days_skipped_existing`, which equals this figure. A figure above 0 is normal when agents already
+use the CMA.
+
+**9. Load**: the block of step 9 with the batch key. Expected: `loaded` with the counts as in step 9:
+`sessions_in` = step 6's `n`, `accounts_skipped` 0, `days_skipped_existing` = step 8's second figure,
+and the other counts. `CMA04` naming `legacy_session` means time was booked in that status outside an
+import: stop and report it, do not move the batch to another status.
+
+**10. Read the result**: the block of step 10 with the batch key. Expected: one row per person with days,
+hours and days to review (days closed at 17:00 or clipped to 22:00), then `legacy_session | inactive`.
+Write the counts, the batch key, the period and the times (no names, emails or Steam ids) down as
+`records/0008d-import-prod-w<ww>/load.txt`, as for the first batches.
+
+**11. Delete the files**: as step 11, so the map file with its emails goes too. Expected:
+`ls: cannot access '/home/…/import': No such file or directory`.
+
+---
+
 ## Withdraw a batch (the void)
 
 The void adds one void correction per effective event of every day the batch wrote (your name as
@@ -272,4 +367,4 @@ Expected: `steam-2026 | voided | <now> | <events_written of step 9>`. A second v
 
 To load again: steps 1 to 11 with a new key (`--batch steam-2026-2` in step 4, `'steam-2026-2'` in
 steps 5 and 7 to 10). The import status stays inactive; the load accepts it because the void left no
-effective event in it.
+effective event in it, and because no effective time in it lies on a day no import wrote.
