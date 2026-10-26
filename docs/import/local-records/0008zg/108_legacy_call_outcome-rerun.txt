@@ -1,0 +1,60 @@
+DO
+BEGIN
+SET
+DO
+CREATE FUNCTION
+REVOKE
+GRANT
+psql:db/108_legacy_call_outcome.sql:107: NOTICE:  relation "legacy_call_batch" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+psql:db/108_legacy_call_outcome.sql:115: NOTICE:  relation "legacy_call_batch_file_idx" already exists, skipping
+CREATE INDEX
+psql:db/108_legacy_call_outcome.sql:138: NOTICE:  relation "legacy_call_outcome" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+psql:db/108_legacy_call_outcome.sql:146: NOTICE:  relation "legacy_call_outcome_date_idx" already exists, skipping
+CREATE INDEX
+psql:db/108_legacy_call_outcome.sql:148: NOTICE:  relation "legacy_call_outcome_contact_idx" already exists, skipping
+CREATE INDEX
+psql:db/108_legacy_call_outcome.sql:150: NOTICE:  policy "tenant_readonly" for relation "legacy_call_batch" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/108_legacy_call_outcome.sql:151: NOTICE:  policy "tenant_readonly" for relation "legacy_call_outcome" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+DO
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET
+exit=0

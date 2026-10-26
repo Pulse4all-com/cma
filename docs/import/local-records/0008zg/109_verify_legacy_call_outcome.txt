@@ -1,0 +1,19 @@
+A1 addition 0008zg recorded, after 0008zf | PASS | 
+A2 the two tables and their columns | PASS | 
+A3 row-level security, the audit, no delete for the application, nothing for readers | PASS | 
+A4 one live batch per file, one row per source row, the checks, the meaning's keys | PASS | 
+A5 the functions the application's only, invoker's rights; the privacy deletion's body | PASS | 
+A6 the reporting views, the withdrawn filter, the job name | PASS | 
+B1 a batch started, the same file reused, the refusals | PASS | started reused:true CMA03 CMA04 CMA02 CMA04 CMA04 CMA06 1:true:{}:2026-09-01
+B2 a row of every match method stored; a contact and matched_at exactly with the four | PASS | 2:inserted 3:inserted 4:inserted 5:inserted 6:inserted 7:inserted | 2:email_phone:c-1:true 3:email:c-2:true 4:phone:c-3:true 5:customer_id:c-1:true 6:none:-:false 7:conflict:-:false | true:courtesy_completed_positive
+B3 an idempotent rerun: unchanged, nothing written | PASS | unchanged,unchanged,unchanged true 6
+B4 a contact filled only where none is set, a set one kept, a changed fact refused | PASS | 3:kept 4:kept 6:filled 7:updated | CMA03 CMA03 CMA03 | 2:email_phone:c-1:true 3:email:c-2:true 4:phone:c-3:true 5:customer_id:c-1:true 6:email:c-6:true 7:none:-:false
+B5 the upsert's refusals, nothing stored | PASS | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA02 CMA06 6
+B6 the table's own checks: contact and method, matched_at, the label, the batch's CRM connection, duplicates | PASS | 23514 23514 23514 23514 23503 23505 23505
+B7 the finish: the job's counts and the stored rows per method; the refusals; a second finish | PASS | {"none": 1, "email": 2, "phone": 1, "total": 9, "legacy": 7, "stored": 6, "current": 2, "refused": 1, "conflict": 0, "forgotten": 0, "customer_id": 1, "email_phone": 1, "current_found": 1, "current_not_found": 1} true:6 CMA04 CMA04 CMA04 9 true:6
+B8 the reconciliation read: a current courtesy completed tag on the tenant's day; the refusals | PASS | 1:1 2:0 3:0 4:1 5:0 CMA04 CMA04 CMA06
+B9 the privacy deletion: forgotten, counted, never filled again by a rerun | PASS | {"refs": 0, "calls": 0, "contacts": 0, "submissions": 0, "legacy_calls": 2} | 2:forgotten:-:false 3:email:c-2:true 4:phone:c-3:true 5:forgotten:-:false 6:email:c-6:true 7:none:-:false | 2:forgotten 5:forgotten | {"refs": 0, "calls": 0, "contacts": 0, "submissions": 0} 2:forgotten:-:false 3:email:c-2:true 4:phone:c-3:true 5:forgotten:-:false 6:email:c-6:true 7:none:-:false
+B10 the withdrawal: once by the admin, audited; no more rows; left out of the readers; the file again | PASS | CMA06 CMA06 true CMA03 CMA02 true 1:true CMA03 CMA03 started:true 1:0:2:1 2 3:forgotten,3:forgotten
+B11 tenant isolation: nothing of tenant one seen or reached from tenant two | PASS | 0:0 CMA02 CMA02 CMA02 started 0 CMA02 2
+B12 the job's sync run; the audit of the rows | PASS | legacy_call_import:legacytest:succeeded:6 7:true 0
+verdict | PASS | 109_verify_legacy_call_outcome: 18 PASS, 0 FAIL

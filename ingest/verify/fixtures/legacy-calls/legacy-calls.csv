@@ -1,0 +1,21 @@
+﻿Voornaam;Achternaam;tags;timestamp call;Phone;Email;Customer ID;Inlaaddatum
+Fixture;Persoon Twee;Courtesy positief;14-05-2025 10:23:00;+31 20 111 0002;fx.two@example.invalid;;01-06-2025
+Fixture;Persoon Drie;Courtesy neutraal;01-06-2025 11:00:00;;FX.Three@example.invalid;;01-06-2025
+Fixture;Persoon Vier;Courtesy negatief;01-07-2025;+31201110004;fx.unknown.four@example.invalid;;01-07-2025
+Fixture;Persoon Vijf;Courtesy positief;01-08-2025;;fx.five@example.invalid;;01-08-2025
+Fixture;Persoon Zes;Courtesy neutraal;02-08-2025;+31201110006;fx.six@example.invalid;;02-08-2025
+Fixture;Persoon Zeven;Courtesy negatief;03-08-2025;;;1234567890123;03-08-2025
+Fixture;Persoon Acht;Courtesy positief;04-08-2025;;;9876543210987;04-08-2025
+Fixture;Persoon Negen;Courtesy neutraal;05-08-2025;020 111 0009;fx.unknown.nine@example.invalid;12345;05-08-2025
+Fixture;Persoon Tien;Courtesy negatief;06-08-2025;;fx.ten@example.invalid;cus_FX10;06-08-2025
+Fixture;Persoon Elf;;03-09-2026 09:15:00;+31201110011;fx.eleven@example.invalid;;
+Fixture;Persoon Twaalf;Courtesy positief;04-09-2026;+31201110012;;;
+Fixture;Persoon Dertien;Courtesy positief;02-09-2026;+31201110013;fx.thirteen@example.invalid;;02-09-2026
+Fixture;Persoon Veertien;;30-08-2026;+31201110014;;;
+Fixture;Persoon Vijftien;Onbekende tag;07-08-2025;+31201110015;fx.fifteen@example.invalid;;07-08-2025
+Fixture;Persoon Zestien;Courtesy positief;31-02-2026;+31201110016;;;31-02-2026
+;;;;;;;
+Fixture;Persoon Achttien;Courtesy neutraal;08-08-2025;+31 30 111 0018;;;08-08-2025
+"Fixture; ""Negentien""";"Persoon; Negentien";"Courtesy  positief";09-08-2025;+31201110019;fx.nineteen@example.invalid;;09-08-2025
+Fixture;Persoon Twintig;Courtesy positief;10-08-2025;+31201110020;fx.twenty@example.invalid;;10-08-2025
+Fixture;Persoon Eenentwintig;Courtesy neutraal;11-08-2025;;fx.twentyone@example.invalid;;11-08-2025

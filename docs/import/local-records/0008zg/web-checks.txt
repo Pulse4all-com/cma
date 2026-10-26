@@ -1,0 +1,38 @@
+## web-ci
+
+Run `npm audit` for details.
+ci exit=0
+## web-build
+ƒ  (Dynamic)  server-rendered on demand
+
+build exit=0
+## web-typecheck
+Generating route types...
+✓ Types generated successfully
+typecheck exit=0
+## web-lint
+✖ 2 problems (0 errors, 2 warnings)
+
+lint exit=0
+verify:copy exit=0
+verify:corrections exit=0
+verify:csv exit=0
+verify:dashboard exit=0
+verify:live exit=0
+verify:team exit=0
+verify:roster exit=0
+verify:configuration exit=0
+verify:messages exit=0
+verify:import exit=0
+verify:datamap exit=0
+verify:signed-out exit=0
+verify:invitations exit=0
+verify:preview exit=0
+verify:follow-up exit=0
+verify:reports exit=0
+verify:health exit=0
+verify:boundaries exit=0
+verify:jobs exit=0
+verify:metrics exit=0
+## after the docs (docs/datamap/catalog.json names the two new tables)
+verify:datamap exit=1: catalog legacy_call_batch and legacy_call_outcome not tables in schema.json, index.html not current (expected until Martin refreshes schema.json from dev and rebuilds); the other nineteen exit 0

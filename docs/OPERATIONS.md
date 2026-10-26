@@ -31,7 +31,7 @@ record or a runbook. Where a pull request of the audit changes a step, the step 
 |---|---|---|---|
 | `cma-web` (the Workspace, `workspace.pulse4all.app`, behind IAP) | Cloud Run service, `p4a-cma-prod` | the Cloud Build trigger `cma-web-main` on every merge to `main` that touches `web/**` or `cloudbuild.yaml` (RUNBOOK 2 and 3; dev first with RUNBOOK 4) | `europe-west4-docker.pkg.dev/p4a-cma-prod/cma/web:<short sha>` |
 | `cma-ingest` (`ingest.pulse4all.app`, no IAP, Cloud Armor) | Cloud Run service | `bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app …` by hand, dev first from the same commit (`docs/ingest/README.md`, Deploy) | `…/cma/ingest:<short sha>` of the last commit under `ingest/` |
-| `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-reconcile`, `ingest-outbox`, `ingest-backfill` | Cloud Run jobs | `bash docs/ingest/deploy.sh prod --jobs` | the ingest image |
+| `ingest-sweep`, `ingest-poll-forms`, `ingest-poll-email`, `ingest-poll-reviews`, `ingest-reconcile`, `ingest-outbox`, `ingest-backfill`, `ingest-import-legacy-calls` | Cloud Run jobs | `bash docs/ingest/deploy.sh prod --jobs` | the ingest image |
 | `cma-close-forgotten-workdays` | Cloud Run job | `bash docs/scheduler/deploy.sh prod <short sha>` after a web deploy that changes the job | the web image |
 | `cma-refresh-follow-up` (since addition 0008s, Pulse4all-com/cma#166, 18 October 2026) | Cloud Run job | `bash docs/scheduler/deploy-follow-up.sh prod <short sha>` right after the web deploy of a merge that changes the job (RUNBOOK 7a) | the web image |
 | Cloud Scheduler: the three per-minute ingest jobs, `ingest-reconcile` (03:30 Europe/Amsterdam, `deploy.sh`'s default since #158; that prod's schedule says so is Martin's to confirm, section 5), `cma-close-forgotten-workdays-hourly` (`0 * * * *`, UTC), `cma-refresh-follow-up-minutely` (`* * * * *`, UTC, since 0008s); `ingest-outbox` has no schedule or a paused one | `europe-west4` | the three deploy scripts | |
@@ -157,13 +157,13 @@ Which tag runs now:
 
 **Terminal**
 ```bash
-for j in ingest-sweep ingest-poll-forms ingest-poll-email ingest-reconcile ingest-outbox ingest-backfill; do echo "$j $(gcloud run jobs describe "$j" --project=p4a-cma-prod --region=europe-west4 --format='value(template.template.containers[0].image)')"; done
+for j in ingest-sweep ingest-poll-forms ingest-poll-email ingest-poll-reviews ingest-reconcile ingest-outbox ingest-backfill ingest-import-legacy-calls; do echo "$j $(gcloud run jobs describe "$j" --project=p4a-cma-prod --region=europe-west4 --format='value(template.template.containers[0].image)')"; done
 ```
-Expected: six lines, all the same `…/cma/ingest:<short sha>`.
+Expected: eight lines, all the same `…/cma/ingest:<short sha>`.
 
 Preferred: `bash docs/ingest/deploy.sh prod --jobs` from the previous good commit (the same `git switch`
 pattern as 3.2), so the jobs' environment (`INGEST_VERSION`, pool size, the reconcile's look-back) matches
-the image. Expected: `no build`, six job deploys, the schedules unchanged, `schedule ingest-outbox: none` or
+the image. Expected: `no build`, eight job deploys, the schedules unchanged, `schedule ingest-outbox: none` or
 `paused`.
 
 Quick alternative, one job at a time (the job keeps its command, arguments and environment; only the image
@@ -222,7 +222,7 @@ with the page's button, not by reloading in a loop.
 | Source `Off` | the connection is inactive | Configuration → Sources | section 6 says what stopped and how it catches up |
 | Job `Failed` | the last execution exited 1: at least one connection failed | the error code on the row; the job's log (section 8) | the next schedule is the retry; a daily or hourly job: run it by hand once (section 5) after the cause is gone |
 | Job `Stuck` (running over 15 minutes) | an execution did not finish its run row (the task timeout is 10 minutes for the per-minute jobs, 60 for the reconcile) | Console → Cloud Run → Jobs → the job → executions | a killed execution leaves the row `running`; since #157 a second execution of the same ingest job exits at once instead of piling up; the row ages out of the page's 30-day window |
-| Job `Never ran` | no run row in 30 days | is the job expected? (`ingest-backfill` and `ingest-outbox` run by hand only) | for a scheduled job: section 5 |
+| Job `Never ran` | no run row in 30 days | is the job expected? (`ingest-backfill`, `ingest-outbox` and `ingest-import-legacy-calls` run by hand only) | for a scheduled job: section 5 |
 | Outbox `needs_review` or `failed` rows | contact write-backs the outbox gave up on, or failed and waiting | Reports → Data quality: "Updates still waiting" (`outbox_pending`) and `writeback_parked` | `ingest-outbox` has no schedule since 0008h: a pending row older than ten minutes is expected until a schedule or a manual run exists; parked rows need a person (`docs/ingest/README.md`, Outbox) |
 
 Every state is also a Studio question, counts and codes only:

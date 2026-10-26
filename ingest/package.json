@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The CMA ingest service and its jobs: webhooks from connected systems (HubSpot, Aircall, Shopify), read-back and upsert into Postgres, sweep, forms poll, email poll, reviews poll (Trusted Shops), reconcile, backfill and the outbox (README Architecture, Ingest API)",
+  "description": "The CMA ingest service and its jobs: webhooks from connected systems (HubSpot, Aircall, Shopify), read-back and upsert into Postgres, sweep, forms poll, email poll, reviews poll (Trusted Shops), reconcile, backfill, the outbox and the legacy call import (README Architecture, Ingest API)",
   "scripts": {
     "start": "node src/server.mjs",
     "lint": "eslint",
-    "test": "npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:api-budget && npm run verify:deploy-script && npm run verify:funnel-mapping && npm run verify:reviews-mapping",
+    "test": "npm run verify:signature && npm run verify:mapping && npm run verify:hash && npm run verify:forms && npm run verify:aircall-token && npm run verify:aircall-mapping && npm run verify:aircall-scripts && npm run verify:shopify-signature && npm run verify:shopify-mapping && npm run verify:shopify-client && npm run verify:shopify-scripts && npm run verify:outbox && npm run verify:email-mapping && npm run verify:api-budget && npm run verify:deploy-script && npm run verify:funnel-mapping && npm run verify:reviews-mapping && npm run verify:legacy-calls",
     "verify:signature": "node verify/signature.mjs",
     "verify:mapping": "node verify/mapping.mjs",
     "verify:hash": "node verify/hash.mjs",
@@ -25,6 +25,7 @@
     "verify:deploy-script": "node verify/deploy-script.mjs",
     "verify:funnel-mapping": "node verify/funnel-mapping.mjs",
     "verify:reviews-mapping": "node verify/reviews-mapping.mjs",
+    "verify:legacy-calls": "node verify/legacy-calls.mjs",
     "verify:flow": "node verify/flow.mjs",
     "verify:jobs-flow": "node verify/jobs-flow.mjs",
     "verify:aircall-flow": "node verify/aircall-flow.mjs",
@@ -39,7 +40,8 @@
     "job:poll-reviews": "node jobs/poll-reviews.mjs",
     "job:reconcile": "node jobs/reconcile.mjs",
     "job:backfill": "node jobs/backfill.mjs",
-    "job:outbox": "node jobs/outbox.mjs"
+    "job:outbox": "node jobs/outbox.mjs",
+    "job:import-legacy-calls": "node jobs/import-legacy-calls.mjs"
   },
   "engines": {
     "node": ">=22"

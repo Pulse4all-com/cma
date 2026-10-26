@@ -71,6 +71,11 @@
 #                                     without a schedule, and a schedule an earlier deploy made is paused (gcloud scheduler jobs
 #                                     resume ingest-outbox … turns it on again when a write-back is configured)
 #   ingest-backfill    no schedule    gcloud run jobs execute ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>
+#   ingest-import-legacy-calls  no schedule  the legacy call import (addition 0008zg; docs/import/legacy-calls.md): one file
+#                                     of a former telephony system's legacy call outcomes, read from the private bucket
+#                                     cma-import-<project>. The service account gets roles/storage.objectViewer on that
+#                                     bucket only (a binding on the bucket, never on the project); a bucket that does not
+#                                     exist yet is named with the runbook that creates it, and nothing is granted
 # The arguments of an execution are appended to the job's command (node jobs/<name>.mjs).
 #
 # The image is built once, in p4a-cma-prod, never in dev (README Architecture, Build and deploy;
@@ -272,6 +277,7 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
   deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
+  deploy_job ingest-import-legacy-calls import-legacy-calls.mjs 6h ""
 
   # Cloud Scheduler calls each scheduled job's run endpoint as the scheduler account (run.invoker on those jobs only)
   schedule () {  # <job> <cron>
@@ -299,13 +305,24 @@ if [ "$JOBS" = 1 ]; then
     echo "schedule ingest-outbox: none (the job runs only when executed)"
   fi
 
+  # The import bucket (addition 0008zg): the job's service account reads its objects, on this bucket only. After the
+  # schedules, so a binding the deploying person may not make (storage.buckets.setIamPolicy) stops nothing scheduled
+  IMPORT_BUCKET="cma-import-${PROJECT}"
+  if gcloud storage buckets describe "gs://${IMPORT_BUCKET}" --project="$PROJECT" >/dev/null 2>&1; then
+    gcloud storage buckets add-iam-policy-binding "gs://${IMPORT_BUCKET}" --project="$PROJECT" \
+      --member="serviceAccount:${SA}" --role=roles/storage.objectViewer --quiet >/dev/null && echo "storage.objectViewer on gs://${IMPORT_BUCKET}"
+  else
+    echo "bucket gs://${IMPORT_BUCKET} does not exist yet: create it (docs/import/legacy-calls.md, step 1), then rerun with --jobs"
+  fi
+
   echo
   echo "== Studio (${INSTANCE_NAME}), once per database: the service's database user joins cma_app (the jobs run as it too)"
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox and ingest-backfill (manual)"
+  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
   echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history)"
+  echo "import:    gcloud run jobs execute ingest-import-legacy-calls --project=${PROJECT} --region=${REGION} --wait --args='^|^--connection|<CRM connection id>|--file|gs://${IMPORT_BUCKET}/<object>|--source-system|<name>|--cutover|<YYYY-MM-DD>|--date-format|<DD-MM-YYYY>|--columns|<role=header,…>|--meanings|<label>=<meaning>;…[|--min-customer-id-digits|<n>][|--dry-run]'  (docs/import/legacy-calls.md)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
   exit 0

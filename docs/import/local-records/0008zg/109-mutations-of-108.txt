@@ -1,0 +1,9 @@
+forget: caught by A5 the functions the application's only, invoker's rights; the privacy deletion's body;B9 the privacy deletion: forgotten, counted, never filled again by a rerun;B10 the withdrawal: once by the admin, audited; no more rows; left out of the readers; the file again;verdict;
+overwrite: caught by B3 an idempotent rerun: unchanged, nothing written;B the block ran to the end;verdict;
+view: caught by A6 the reporting views, the withdrawn filter, the job name;B10 the withdrawal: once by the admin, audited; no more rows; left out of the readers; the file again;verdict;
+withdraw_twice: caught by B10 the withdrawal: once by the admin, audited; no more rows; left out of the readers; the file again;verdict;
+untagged: caught by B8 the reconciliation read: a current courtesy completed tag on the tenant's day; the refusals;verdict;
+no_reuse: caught by B the block ran to the end;verdict;
+finish_keys: caught by B7 the finish: the job's counts and the stored rows per method; the refusals; a second finish;verdict;
+cutover: caught by B5 the upsert's refusals, nothing stored;B7 the finish: the job's counts and the stored rows per method; the refusals; a second finish;B9 the privacy deletion: forgotten, counted, never filled again by a rerun;B12 the job's sync run; the audit of the rows;verdict;
+restored: verdict | PASS | 109_verify_legacy_call_outcome: 18 PASS, 0 FAIL
