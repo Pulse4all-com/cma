@@ -354,7 +354,7 @@ order by m.external_person_id, b.loaded_at desc;
 SQL
 head -1 ~/import/steam-map.csv; echo "accounts: $(($(wc -l < ~/import/steam-map.csv) - 1))"
 ```
-Expected: `head -1` prints `steam_pid,work_email,include`, then the number of accounts (11 in week 43).
+Expected: `head -1` prints `steam_pid,work_email,include`, then the number of accounts: every account any loaded batch mapped, so also people without sessions this week (13 or more as of week 43).
 The file holds exactly the header and one `<steam_pid>,<work_email>,yes` row per account; tested on a local
 database, where it came out as (the values are placeholders here):
 ```
@@ -375,7 +375,7 @@ cd ~/cma && node tools/legacy-sessions-to-staging.mjs ~/import/steam-export.csv 
 ```
 Expected: the counts, with `sessions_written` above 0, `sessions_deduplicated 0`, `period_from` and
 `period_to` the week's first and last login, `accounts_written` the number of people with sessions
-that week (at most the rows of the map), `accounts_absent_from_map` 0, and the two file paths.
+that week (at most the rows of the map), `accounts_absent_from_map` 0, `map_rows_without_sessions` 0 or more (accounts in the map without sessions this week are counted there and ignored, which is fine), and the two file paths.
 
 **5. Stage the batch**
 
