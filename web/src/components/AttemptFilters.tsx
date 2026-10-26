@@ -3,7 +3,7 @@
 /**
  * The filters of Reports → Attempts per deal and Attempts per agent (addition 0008y; 0008z): market (K), pipeline (P, the
  * lead pipelines only), attempts (A: every deal, the deals with no attempt yet, those with at least one) and outcome (O:
- * open, won, lost or ordered another way). The period bar holds T, W, M and C, the grouping G, the rail its digits and the
+ * open, won, lost or ordered another way). The period bar holds Y, T, W, M and C, the grouping G, the rail its digits and the
  * top bar L. Choosing keeps the period and the grouping and loads the page with the filter; the address keys are market,
  * pipeline, attempted and outcome.
  */

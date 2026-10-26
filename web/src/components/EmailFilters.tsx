@@ -4,7 +4,7 @@
  * The filters of Reports → Email and Email per agent (addition 0008t), next to the period bar: market (K), inbox
  * (I) and mailbox (B). The lists hold what the period's emails have, so a chosen value without email stays in its
  * list. Choosing keeps the period and the grouping and loads the page with the filter. B, not M, for the mailbox:
- * the period bar holds T, W, M (this month) and C, the grouping G, the rail its digits and the top bar L.
+ * the period bar holds Y, T, W, M (this month) and C, the grouping G, the rail its digits and the top bar L.
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";

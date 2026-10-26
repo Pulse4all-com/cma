@@ -5,8 +5,8 @@
  * the period bar. The lists hold the markets and lines with calls in the period (the lines within the
  * chosen market), so they need no catalog read; a chosen value that has no calls stays in its list.
  * Choosing keeps the period and the grouping and loads the page with the filter; a new market clears the
- * line. K and N are free on both pages: the period bar holds T, W, M and C, the grouping G, the rail its
- * digits and the top bar L.
+ * line. K and N are free on both pages: the period bar holds Y, T, W, M and C, the grouping G, the rail
+ * its digits and the top bar L.
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
