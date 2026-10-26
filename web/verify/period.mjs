@@ -148,7 +148,9 @@ expect("Forms: Category answers to A, with its keycap",
   [filterLetters, [...fnBody(filtersSource, "FormsFilters").matchAll(/<Keycap>([^<]+)<\/Keycap>/g)].map((m) => m[1].toLowerCase()),
     /data-shortcut="a" data-testid="forms-category"/.test(filtersSource)],
   [["k", "a", "f"], ["k", "a", "f"], true], [["k", "y", "f"], ["k", "y", "f"], false]);
-// The shell's letters: Log out, the rail's digits and group letters, the rail toggle and the hints toggle
+// The shell's letters: Log out, the rail's digits and group letters, the rail toggle and the hints toggle. The urgent
+// message's A (MessageCenter) is not among them: it renders only inside its open dialog, where the hook counts the
+// dialog's own shortcuts alone
 const shellLetters = [
   ...lettersIn(src("../src/components/Shell.tsx")),
   ...Array.from({ length: MAX_DIGIT_KEYS }, (_, i) => String(i + 1)),
