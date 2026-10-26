@@ -1,0 +1,12 @@
+Import status reuse, addition 0008zh (db/110, db/111), dev and prod, 26 October 2026
+
+Written down by Claude Code at Martin's request from his report of the runs; the results below are his.
+No name, email address or Steam id appears here.
+
+dev   110   clean (its first run refused, because 0008zg had not run in dev yet; it ran clean after it)
+dev   111   PASS
+dev   51    PASS for both tenants
+prod  110   clean (INSERT 0 1, COMMIT)
+prod  111   PASS
+prod  111   provoked: PROVOKED, NOT A PASS (2 FAIL lines)
+prod  51    2 PASS rows
