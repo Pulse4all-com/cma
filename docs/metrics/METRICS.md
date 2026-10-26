@@ -2749,7 +2749,7 @@ sum over cma.intake_per_day rows of form_submissions (intakeTotals); counts only
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Settings**
 
@@ -2816,7 +2816,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'deal') = sum of records over cma.crm
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Who may see it** `performance.team`
 
@@ -2874,7 +2874,7 @@ recordsOfType(getCrmRecordsPerDay(period), 'ticket') = sum of records over cma.c
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Who may see it** `performance.team`
 
@@ -2934,7 +2934,7 @@ value = round1(percentileCont(businessSeconds of the rows, 0.5) / 60) over getSp
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Settings**
 
@@ -3039,7 +3039,7 @@ value = (totals.callsIn ?? 0) + (totals.callsOut ?? 0) over cma.intake_per_day, 
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Settings**
 
@@ -3108,7 +3108,7 @@ value = totals.firstOrders over cma.intake_per_day when connections.commerce; hi
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Settings**
 
@@ -3180,7 +3180,7 @@ value = keptShare(total) = kept / (kept + not_kept), null (dash) when none decid
 - page gate: performance.team only (page.tsx:34); the intake/speed/callbacks SQL functions would also accept reports.view, but this page never renders without performance.team
 - the Dashboard's person filter does NOT apply to the Intake row (whole tenant)
 
-**Time** period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
+**Time** period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)
 
 **Settings**
 
