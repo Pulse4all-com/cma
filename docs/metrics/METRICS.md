@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-502 figures. Statuses: verified 432 · discrepancy 18 · ambiguous 35 · prerequisite_missing 24 · cadence_unconfirmed 68.
+544 figures. Statuses: verified 440 · discrepancy 18 · ambiguous 35 · prerequisite_missing 58 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -24461,6 +24461,1149 @@ per active market: channels = count(counted, not gone channels with that market)
 
 Not limited to the period or the market filter on purpose (KPI 11, data first). verify_sql is the read's own definition: select m.code, count(ch.id) filter (where ch.is_counted and ch.source_deleted_at is null) from cma.market m left join cma.review_channel ch on ch.tenant_id = m.tenant_id and ch.market = m.code where m.tenant_id = :tenant_id and m.status = 'active' group by 1; null here because the states have no period to recompute.
 
+### /reports/maintenance
+
+#### `maintenance.past_due`
+
+**Past due** on /reports/maintenance · Past due (Achterstallig)
+
+The Past due column: per market and model, the planned exchanges (or, in Components, the due items) whose action date lies before the current month.
+
+**Formula as computed**
+
+```
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Past due: action_on < first day of the tenant's current month. Exchanges view: count(distinct exchange_key) whose exchange's first action date is before the current month; Components view: component items + end-of-life items past due.
+```
+
+**Unit** count · **Grain** now, per_market, per_model · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.tenant_setting` | key, value | CMA | seed 02 (assets.bundle_window_days 90 for Pulse4all Subscriptions); Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.bundle_window_days` | 0 | 90 (seed 02) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),
+d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
+      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
+      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
+      where c.id is not null or r.id is not null or d.model_key is null
+      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
+select coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as past_due_items
+from i join d on d.id = i.id cross join t
+where i.action_on < date_trunc('month', t.today)
+group by 1, 2 order by 1, 2
+```
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day a snapshot first showed the new serial, so it lags the swap by up to the time between loads) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
+
+#### `maintenance.by_month`
+
+**{month}** on /reports/maintenance · Due per month (Vervalt per maand)
+
+A month column of the grid: per market and model, the planned exchanges (or due items) whose action date falls in that month of the horizon.
+
+**Formula as computed**
+
+```
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Bucket: the first day of the action date's month when it lies in [from month, from month + months). Exchanges counted in the month of their first action date.
+```
+
+**Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.tenant_setting` | key, value | CMA | seed 02 (assets.bundle_window_days 90 for Pulse4all Subscriptions); Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+- horizon: from the first day of a month, the current one or later, for 6, 12 or 24 months
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.bundle_window_days` | 0 | 90 (seed 02) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),
+d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
+      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
+      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
+      where c.id is not null or r.id is not null or d.model_key is null
+      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
+select date_trunc('month', i.action_on)::date as month, coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as items
+from i join d on d.id = i.id
+where i.action_on >= :from and i.action_on < :to
+group by 1, 2, 3 order by 1, 2, 3
+```
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+Months between the current month and a later from month are left out of the grid (not past due, not in the horizon). verify_sql recomputes the Components view for :from (a month's first day) to :to (the horizon's end).
+
+#### `maintenance.exchanges`
+
+**Planned exchanges** on /reports/maintenance · Planned exchanges (Geplande wissels)
+
+The Planned exchanges view: the due items of one device whose action dates fall within the bundling window of the earliest one; counted once, in the month of that earliest action date.
+
+**Formula as computed**
+
+```
+per device in action-date order: an item starts a new exchange when its action date lies more than assets.bundle_window_days after the current exchange's first action date; exchange_key = device id + first action date; cell = count(distinct exchange_key) in the bucket of the exchange's first action date
+```
+
+**Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.tenant_setting` | key, value | CMA | seed 02 (assets.bundle_window_days 90 for Pulse4all Subscriptions); Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.bundle_window_days` | 0 | 90 (seed 02) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+verify_sql is null: the bundling is an ordered pass (cma.maintenance_items_of) a plain query does not reproduce faithfully; 113 B8 checks it within and outside the window and with a window of 0. Default view of the page.
+
+#### `maintenance.components`
+
+**Components** on /reports/maintenance · Components (Onderdelen)
+
+The Components view: the due components and the devices at their end of life whose action date falls in the bucket.
+
+**Formula as computed**
+
+```
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Cell = component_items + end_of_life; the figure's title lists them per kind.
+```
+
+**Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),
+d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
+      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
+      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
+      where c.id is not null or r.id is not null or d.model_key is null
+      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
+select date_trunc('month', i.action_on)::date as month, i.component, count(*) as items
+from i where i.action_on >= :from and i.action_on < :to
+group by 1, 2 order by 1, 2
+```
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+#### `maintenance.total`
+
+**Total** on /reports/maintenance · Total (Totaal)
+
+The Total column (a row's figures over Past due and the months) and the All markets and models row (each column's figure over the rows).
+
+**Formula as computed**
+
+```
+row total = sum over the buckets of the view's figure; column total = sum over the rows; computed in the web from the cells (maintenanceGrid)
+```
+
+**Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.tenant_setting` | key, value | CMA | seed 02 (assets.bundle_window_days 90 for Pulse4all Subscriptions); Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `assets.bundle_window_days` | 0 | 90 (seed 02) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceGrid` in src/lib/maintenance.ts; `MaintenanceGrid` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A sum of the cells shown; no recomputation of its own. A planned exchange is counted once in one bucket, so the totals never count it twice.
+
+#### `maintenance.unknown_items`
+
+**{n} due items have no due date** on /reports/maintenance · Due items without a due date (Vervallende onderdelen zonder vervaldatum)
+
+The note's count: due items of tracked devices without a due date (no recorded expiry, and no anchor date or no rule for the model).
+
+**Formula as computed**
+
+```
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). count of items with basis unknown after the filters
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),
+d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
+      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
+      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
+      where c.id is not null or r.id is not null or d.model_key is null
+      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
+select count(*) as unknown_items from i where i.action_on is null and i.component <> 'device'
+```
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+The same items as data_quality.component_due_unknown (before the page's filters). The note links to Data quality and to the device list of the unknown bucket.
+
+#### `maintenance.devices`
+
+**{n} tracked devices** on /reports/maintenance · Tracked devices (Gevolgde apparaten)
+
+The devices line: devices in a tracked device status that the latest snapshot holds, after the filters.
+
+**Formula as computed**
+
+```
+count(device) where device_status.is_tracked and source_deleted_at is null and the scope, market and model filters hold
+```
+
+**Unit** count · **Grain** now · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_page` (0008zi); `cma.maintenance_page_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceReport` in src/lib/maintenance.ts; `maintenanceGrid` in src/lib/maintenance.ts; `default (MaintenancePage)` in src/app/reports/maintenance/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+where dv.tenant_id = :tenant_id and dv.source_deleted_at is null
+```
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+The line also states the bundling window in days (assets.bundle_window_days).
+
+#### `maintenance.list.shown`
+
+**{shown} of {total} devices** on /reports/maintenance · Device list rows shown of total ({shown} van {total} apparaten)
+
+How many rows the device list of an open figure shows against how many the figure holds.
+
+**Formula as computed**
+
+```
+total = count(*) over () of the cell's rows (total_rows); shown = min(total, 500)
+```
+
+**Unit** count · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+- the cell: its bucket (past due, a month, unknown) and, for a grid figure, its market and model
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+- Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
+- Every device's status mapped to a device status (data quality check `device_status_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+One row per planned exchange (Planned exchanges view) or per device and month (Components view); the unknown bucket per device. The file takes up to 5000 rows.
+
+#### `maintenance.list.serial`
+
+**Serial number** on /reports/maintenance · Serial number (Serienummer)
+
+The device's serial number as the register holds it; No serial number when it has none.
+
+**Formula as computed**
+
+```
+device.serial
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.model`
+
+**Model** on /reports/maintenance · Model (Model)
+
+The device's catalog model, by name; Unknown model when the register's label maps to none.
+
+**Formula as computed**
+
+```
+device_model.name of device.model_key
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_model` | key, name, aliases, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.market`
+
+**Market** on /reports/maintenance · Market (Markt)
+
+The device's market from the register's country; Unknown market when it maps to none.
+
+**Formula as computed**
+
+```
+device.market (cma.market_code_of at load)
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.device_status`
+
+**Device status** on /reports/maintenance · Device status (Apparaatstatus)
+
+The device status the register holds, by name.
+
+**Formula as computed**
+
+```
+device_status.name of device.device_status_key
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.components`
+
+**Components due** on /reports/maintenance · Components due (Vervallende onderdelen)
+
+The component kinds due in the row, and Device, end of life for the device itself.
+
+**Formula as computed**
+
+```
+array_agg(component_key order by kind sort order) of the row's items
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.due_date`
+
+**Due date** on /reports/maintenance · Due date (Vervaldatum)
+
+The earliest due date of the row's items.
+
+**Formula as computed**
+
+```
+min(due_on)
+```
+
+**Unit** date · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.basis`
+
+**Basis** on /reports/maintenance · Basis (Grondslag)
+
+How the due dates are known: Recorded expiry, By rule or No due date.
+
+**Formula as computed**
+
+```
+array_agg(distinct basis)
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.action_date`
+
+**Action date** on /reports/maintenance · Action date (Actiedatum)
+
+The earliest action date of the row's items.
+
+**Formula as computed**
+
+```
+min(action_on)
+```
+
+**Unit** date · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.customer`
+
+**Customer id** on /reports/maintenance · Customer id (Klant-id)
+
+The register's customer id (the shop's customer id), only when it is an id.
+
+**Formula as computed**
+
+```
+device.customer_ref
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.subscription`
+
+**Subscription id** on /reports/maintenance · Subscription id (Abonnements-id)
+
+The register's subscription id.
+
+**Formula as computed**
+
+```
+device.subscription_ref
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.contact`
+
+**Contact** on /reports/maintenance · Contact (Contact)
+
+The CRM contact the shop's customer with the device's customer id is matched to (0008h), when exactly one; linked through the CRM connection's record_url_contact template.
+
+**Formula as computed**
+
+```
+the one distinct (crm_connection_id, crm_contact_source_id) of commerce_customer where source_id = device.customer_ref; cma.record_url(..., 'contact', ...)
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify customer webhooks and read-back (cma.ingest_upsert_commerce_customers()); the CRM contact matched by the ingest service and kept in the CMA (0008h, cma.set_commerce_contact()) | on event; reconcile 03:30 Europe/Amsterdam |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+#### `maintenance.list.register`
+
+**Register** on /reports/maintenance · Register (Register)
+
+The device's row in the register: its record id, without a link (the Workspace links to the CRM and the telephony system only).
+
+**Formula as computed**
+
+```
+device.source_id
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceRows` in src/lib/maintenance.ts; `MaintenanceDeviceList` in src/components/MaintenanceParts.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
 ### /reports/forms
 
 #### `forms.submissions`
@@ -31048,6 +32191,392 @@ select count(*) from cma.market m where m.tenant_id = :tenant_id and m.status = 
 
 Sort 220. Which active markets have no channel is the tenant's state, not the catalog's: kpis.md 11 names Pulse4all's.
 
+#### `data_quality.device_serial_missing`
+
+**Devices without a serial number** on /reports/data-quality · Devices without a serial number (Apparaten zonder serienummer)
+
+Devices the register still holds without a serial number (none, or one that is no id and was dropped at the load).
+
+**Formula as computed**
+
+```
+count of device rows with source_deleted_at null and serial null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and serial is null
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 230; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.device_serial_duplicate`
+
+**Serial numbers two devices hold** on /reports/data-quality · Serial numbers two devices hold (Serienummers die twee apparaten hebben)
+
+Devices whose serial number another device of the tenant holds too; the value of each row is the serial.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) whose serial another device (not gone) holds
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device d where d.tenant_id = :tenant_id and d.source_deleted_at is null and d.serial is not null and exists (select 1 from cma.device o where o.tenant_id = d.tenant_id and o.serial = d.serial and o.id <> d.id and o.source_deleted_at is null)
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 240; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.device_model_unmapped`
+
+**Devices with an unknown model** on /reports/data-quality · Devices with an unknown model (Apparaten met een onbekend model)
+
+Devices whose register label maps to no catalog model; the value is the label.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) with model_key null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and model_key is null
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 250; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.device_status_unmapped`
+
+**Devices with an unknown status** on /reports/data-quality · Devices with an unknown status (Apparaten met een onbekende status)
+
+Devices whose register label maps to no device status; the value is the label. They are not forecast.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) with device_status_key null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and device_status_key is null
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 260; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.device_market_unmapped`
+
+**Devices with an unknown country** on /reports/data-quality · Devices with an unknown country (Apparaten met een onbekend land)
+
+Devices whose register country maps to no catalog market; the value is the country.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) with market null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and market is null
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 270; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.device_customer_ref_invalid`
+
+**Devices with an invalid customer id** on /reports/data-quality · Devices with an invalid customer id (Apparaten met een ongeldige klant-id)
+
+Devices whose register customer reference is no id; the reference itself is never stored, so the row has no value.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) with customer_ref_invalid
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device where tenant_id = :tenant_id and source_deleted_at is null and customer_ref_invalid
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 280; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.component_due_unknown`
+
+**Due items without a due date** on /reports/data-quality · Due items without a due date (Vervallende onderdelen zonder vervaldatum)
+
+Due items of tracked devices without a due date; the value is the component.
+
+**Formula as computed**
+
+```
+count of cma.maintenance_items_of rows with basis unknown
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),
+d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
+      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
+      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
+      where c.id is not null or r.id is not null or d.model_key is null
+      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
+select count(*) from i where i.action_on is null and i.component <> 'device'
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 290; shown once the tenant has an asset register set up, or while it finds something.
+
+#### `data_quality.field_device_without_subscription_ref`
+
+**Devices in the field without a subscription** on /reports/data-quality · Devices in the field without a subscription (Apparaten bij klanten zonder abonnement)
+
+Devices in a device status in the field without a subscription reference.
+
+**Formula as computed**
+
+```
+count of device rows (not gone) whose status has is_in_field and subscription_ref null
+```
+
+**Unit** count · **Grain** now, per_check · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+
+**Filters**
+
+- tenant: cma.current_tenant_id() passed explicitly to cma.data_quality_of under RLS; cma.data_quality checks reports.view or tenant.configure (CMA06)
+
+**Time** counts are as of the query's now(); no period
+
+**Who may see it** `reports.view` or `tenant.configure`
+
+**Refresh** on page load (server component); counts are recomputed live from the base tables on every read, no snapshot
+
+**Computed in** `cma.data_quality` (0008zi); `cma.data_quality_of` (0008zi); `cma.data_quality_assets_checks` (0008zi); `getDataQuality` in src/lib/data/postgres.ts
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+select count(*) from cma.device d join cma.device_status st on st.tenant_id = d.tenant_id and st.key = d.device_status_key and st.is_in_field where d.tenant_id = :tenant_id and d.source_deleted_at is null and d.subscription_ref is null
+```
+
+**Fixture check** Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.
+
+**Documented in** kpis.md paragraph 11 (Data first); api.md, GET /api/v1/reports/data-quality; features.md paragraph 5 (Data -> Data quality); data-model/0008.md, 0008zi
+
+**Notes**
+
+Sort 300; shown once the tenant has an asset register set up, or while it finds something.
+
 ### /messages/send
 
 #### `messages.sent.recipients`
@@ -34481,6 +36010,737 @@ days as first_orders.list.days, two decimals, export decimal mark; empty for nul
 **Notes**
 
 verify_sql null (needs the touches).
+
+### /api/v1/reports/maintenance/export
+
+#### `export.maintenance_csv.month`
+
+**Month** on /api/v1/reports/maintenance/export · Month (Maand)
+
+The row's bucket: the month (its first day in the tenant's date format), Past due or Without a due date.
+
+**Formula as computed**
+
+```
+bucket
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.serial`
+
+**Serial number** on /api/v1/reports/maintenance/export · Serial number (Serienummer)
+
+The device's serial number.
+
+**Formula as computed**
+
+```
+serial
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.model`
+
+**Model** on /api/v1/reports/maintenance/export · Model (Model)
+
+The model's name, else its key.
+
+**Formula as computed**
+
+```
+model_name or model_key
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.market`
+
+**Market** on /api/v1/reports/maintenance/export · Market (Markt)
+
+The market's code, Unknown market for none.
+
+**Formula as computed**
+
+```
+market
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.status`
+
+**Device status** on /api/v1/reports/maintenance/export · Device status (Apparaatstatus)
+
+The device status's name.
+
+**Formula as computed**
+
+```
+device_status_name
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.components`
+
+**Components due** on /api/v1/reports/maintenance/export · Components due (Vervallende onderdelen)
+
+The components due by name, joined by +.
+
+**Formula as computed**
+
+```
+components
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.due_date`
+
+**Due date** on /api/v1/reports/maintenance/export · Due date (Vervaldatum)
+
+The earliest due date.
+
+**Formula as computed**
+
+```
+due_on
+```
+
+**Unit** date · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.basis`
+
+**Basis** on /api/v1/reports/maintenance/export · Basis (Grondslag)
+
+The bases by name, joined by +.
+
+**Formula as computed**
+
+```
+bases
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.action_date`
+
+**Action date** on /api/v1/reports/maintenance/export · Action date (Actiedatum)
+
+The earliest action date.
+
+**Formula as computed**
+
+```
+action_on
+```
+
+**Unit** date · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.exchange_from`
+
+**Planned exchange from** on /api/v1/reports/maintenance/export · Planned exchange from (Geplande wissel vanaf)
+
+The planned exchange's first action date.
+
+**Formula as computed**
+
+```
+exchange_on
+```
+
+**Unit** date · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.customer`
+
+**Customer id** on /api/v1/reports/maintenance/export · Customer id (Klant-id)
+
+The register's customer id.
+
+**Formula as computed**
+
+```
+customer_ref
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.subscription`
+
+**Subscription id** on /api/v1/reports/maintenance/export · Subscription id (Abonnements-id)
+
+The register's subscription id.
+
+**Formula as computed**
+
+```
+subscription_ref
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.contact`
+
+**Contact id** on /api/v1/reports/maintenance/export · Contact id (Contact-id)
+
+The matched CRM contact's id.
+
+**Formula as computed**
+
+```
+crm_contact_source_id
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.commerce_customer` | source_id, crm_connection_id, crm_contact_source_id, source_deleted_at | Shopify | Shopify customer webhooks and read-back (cma.ingest_upsert_commerce_customers()); the CRM contact matched by the ingest service and kept in the CMA (0008h, cma.set_commerce_contact()) | on event; reconcile 03:30 Europe/Amsterdam |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
+
+#### `export.maintenance_csv.record`
+
+**Register record id** on /api/v1/reports/maintenance/export · Register record id (Id registerrij)
+
+The register's record id.
+
+**Formula as computed**
+
+```
+source_id
+```
+
+**Unit** text · **Grain** per_record · **Status** prerequisite_missing
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.device` | serial, model_key, market, device_status_key, customer_ref, subscription_ref, first_shipped_on, last_shipped_on, end_of_life_on, source_deleted_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_component` | device_id, component_key, serial, expires_on, replaced_at | Airtable | the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md | snapshot import of the register's CSV export, run by Martin; no schedule yet |
+| `cma.device_status` | key, name, is_in_field, is_in_stock, is_tracked, aliases | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration, no setter screen in V1) | on change |
+| `cma.maintenance_rule` | model_key, component_key, interval_months, lead_days | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+| `cma.device_component_kind` | key, name, status, sort_order | CMA | seed 02 for Pulse4all Subscriptions, then Studio (tenant configuration) | on change |
+
+**Filters**
+
+- tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
+- population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
+- scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
+
+**Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read per view, a second for the device list when a figure is open). No polling.
+
+**Computed in** `cma.maintenance_rows` (0008zi); `cma.maintenance_rows_of` (0008zi); `cma.maintenance_bucketed_of` (0008zi); `cma.maintenance_items_of` (0008zi); `maintenanceCsv` in src/lib/csv.ts; `GET` in src/app/api/v1/reports/maintenance/export/route.ts
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.
+
+**Data prerequisites**
+
+- The asset register's export loaded (docs/import/devices.md) into an assets connection
+
+**Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
+
+**Notes**
+
+A column of the device list's file: the rows of /rows with bucket all and up to 5000 rows when the address names none; the tenant's export format.
 
 ### /api/v1/reports/forms/export
 

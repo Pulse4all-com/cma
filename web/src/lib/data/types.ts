@@ -2047,6 +2047,91 @@ export interface ReviewsReport {
   markets: string[];
 }
 
+/** Reports → Maintenance (addition 0008zi): the scope of the tracked devices, field or stock (null: every tracked device) */
+export type MaintenanceScope = "field" | "stock";
+/** Reports → Maintenance's grid: the planned exchanges per cell, or the due components and devices at end of life */
+export type MaintenanceView = "exchanges" | "components";
+/** How a due item's due date is known: the register's recorded expiry, the anchor date plus the rule's interval, or not at all */
+export type MaintenanceBasis = "recorded" | "rule" | "unknown";
+
+/** The forecast's horizon and filters: from the first day of a month (the current one or later) for 6, 12 or 24 months */
+export interface MaintenanceFilter {
+  fromMonth: DateKey;
+  months: number;
+  /** A market code or "unknown" */
+  market: string | null;
+  /** A model's key or "unknown" */
+  model: string | null;
+  scope: MaintenanceScope | null;
+}
+
+/** One bucket (past_due or a month as its first day), market and model of the grid (cma.maintenance_page) */
+export interface MaintenanceCell {
+  bucket: string;
+  market: string;
+  model: string;
+  /** Due items per component kind whose action date falls in the bucket */
+  components: Record<string, number>;
+  componentItems: number;
+  /** Devices whose end of life falls in the bucket */
+  endOfLife: number;
+  /** Planned exchanges whose first action date falls in the bucket */
+  exchanges: number;
+}
+
+/** Reports → Maintenance (addition 0008zi, cma.maintenance_page): team figures only, never per person; ids, codes and counts only */
+export interface MaintenanceReport {
+  filter: MaintenanceFilter;
+  currentMonth: DateKey;
+  bundleWindowDays: number;
+  /** Whether the tenant has an asset register set up ("set up", never Connected: a call term) */
+  isSetUp: boolean;
+  /** "past_due", then the first day of every month of the horizon */
+  buckets: string[];
+  componentKinds: { key: string; name: string }[];
+  cells: MaintenanceCell[];
+  /** Due items without a due date per market and model */
+  unknown: { market: string; model: string; components: Record<string, number>; items: number }[];
+  unknownItems: number;
+  /** Tracked devices after the filters */
+  devices: number;
+  /** The markets of the tracked devices, for the filter, unknown last */
+  markets: string[];
+  /** The models of the tracked devices with their names, for the filter, unknown last */
+  models: { key: string; name: string | null }[];
+}
+
+/** One row of the device list of a cell (cma.maintenance_rows): a device's ids and codes, never a name, email, phone or address */
+export interface MaintenanceRow {
+  bucket: string;
+  deviceId: string;
+  sourceId: string;
+  serial: string | null;
+  model: string;
+  modelName: string | null;
+  market: string;
+  deviceStatus: string | null;
+  deviceStatusName: string | null;
+  /** The component kinds due, device for its end of life */
+  components: string[];
+  dueOn: DateKey | null;
+  bases: MaintenanceBasis[];
+  actionOn: DateKey | null;
+  exchangeOn: DateKey | null;
+  customerRef: string | null;
+  subscriptionRef: string | null;
+  /** The CRM contact the customer reference's commerce customer is linked to (0008h), an id */
+  crmContactId: string | null;
+  /** The contact's link from the CRM connection's record_url_contact template; null without one */
+  contactUrl: string | null;
+}
+
+export interface MaintenanceRows {
+  /** Every row of the cell, before the limit */
+  total: number;
+  rows: MaintenanceRow[];
+}
+
 export interface CancellationsReport {
   from: DateKey;
   to: DateKey;
@@ -2103,7 +2188,7 @@ export interface DealsPerPerson extends FunnelLists {
  * The kind of source a connection is in the data model's terms (the tables its data lands in), never
  * a vendor: which sections the Sources screen shows and which id a person can hold come from it
  */
-export type SourceKind = "crm" | "telephony" | "commerce" | "automation" | "reviews";
+export type SourceKind = "crm" | "telephony" | "commerce" | "automation" | "reviews" | "assets";
 
 /** A connection's non-secret settings (cma.integration_connection.settings): a flat object of scalars */
 export type SourceSettingValue = string | number | boolean;
@@ -3282,6 +3367,11 @@ export interface CmaData {
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
   /** Reports → Reviews (cma.reviews_page, addition 0008ze; reports.view or performance.team; at most 92 days) */
   getReviews(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<ReviewsReport>;
+  // ---- Maintenance (addition 0008zi): the database checks the permission on every call (CMA06)
+  /** Reports → Maintenance in one read (cma.maintenance_page): reports.view or performance.team; a horizon from the current month or later, 1 to 24 months */
+  getMaintenance(me: Principal, filter: MaintenanceFilter): Promise<MaintenanceReport>;
+  /** The device list of one cell (cma.maintenance_rows): bucket past_due, a month of the horizon, unknown or all; at most limit rows (1 to 5000) */
+  getMaintenanceRows(me: Principal, filter: MaintenanceFilter, bucket: string, view: MaintenanceView, limit: number): Promise<MaintenanceRows>;
   /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
   getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;
   // ---- Callbacks kept (addition 0008w): the database checks the permission on every call (CMA06); at most 92 days

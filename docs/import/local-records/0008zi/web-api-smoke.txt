@@ -1,0 +1,18 @@
+Mock mode (CMA_AUTH_MODE=mock CMA_DATA_MODE=mock), the standalone build of this branch, 2026-10-27
+manager: page 200, report 200, rows 200, export 200 text/csv; charset=utf-8
+reader: page 200, report 200, rows 200, export 200 text/csv; charset=utf-8
+agent: page 200, report 403, rows 403, export 403 application/json
+invest-analyst: page 200, report 200, rows 200, export 200 text/csv; charset=utf-8
+agent's page: Reports are for supervisors, managers and analysts
+buckets: past_due,2026-10-01,2026-11-01,2026-12-01,2027-01-01,2027-02-01,2027-03-01
+maintenance?from=2026-10-15&months=6: invalid_from 400
+maintenance?from=2026-10-01&months=30: invalid_months 400
+maintenance?from=2026-10-01&market=uk: invalid_market 400
+maintenance?from=2026-10-01&scope=all: invalid_scope 400
+maintenance/rows?from=2026-10-01&months=6: invalid_bucket 400
+maintenance/rows?from=2026-10-01&months=6&bucket=overdue: invalid_bucket 400
+maintenance/rows?from=2026-10-01&bucket=past_due&view=list: invalid_view 400
+maintenance/rows?from=2026-10-01&bucket=past_due&limit=6000: invalid_limit 400
+rows fields: bucket,deviceId,sourceId,serial,model,modelName,market,deviceStatus,deviceStatusName,components,dueOn,bases,actionOn,exchangeOn,customerRef,subscriptionRef,crmContactId,contactUrl
+export header: ﻿Month;Serial number;Model;Market;Device status;Components due;Due date;Basis;Action date;Planned exchange from;Customer id;Subscription id;Contact id;Register record id
+export bucket labels: 01-01-2027,01-02-2027,01-03-2027,01-10-2026,01-11-2026,01-12-2026,Past due,

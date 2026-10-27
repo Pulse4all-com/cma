@@ -1,0 +1,11 @@
+105_verify_reviews.sql exit=0 PASS=28 FAIL=0 last:  verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL
+75_verify_forms_reporting.sql exit=0 PASS=25 FAIL=0 last:  verdict | PASS | 24 PASS, 0 FAIL
+41_verify_lead_metrics.sql exit=0 PASS=2 FAIL=0 last:  pulse4all-subscriptions | 0 | 0 | 0 | PASS
+14_verify_tenant_settings.sql exit=0 PASS=2 FAIL=0 last:  pulse4all-subscriptions | alerts.max_age_minutes = 60 (default), assets.bundle_window_days = 90, attempts.max_bucket = 
+53_verify_sources_configuration.sql exit=0 PASS=17 FAIL=0 last:  verdict | PASS | 16 PASS, 0 FAIL
+69_verify_email_activity.sql exit=0 PASS=30 FAIL=0 last:  verdict | PASS | 29 PASS, 0 FAIL
+73_verify_follow_up.sql exit=0 PASS=22 FAIL=0 last:  verdict | PASS | 21 PASS, 0 FAIL
+79_verify_system_health.sql exit=0 PASS=14 FAIL=0 last:  verdict | PASS | 13 PASS, 0 FAIL
+101_verify_definitions_calls.sql exit=0 PASS=19 FAIL=0 last:  verdict | PASS | 18 PASS, 0 FAIL
+109_verify_legacy_call_outcome.sql exit=0 PASS=19 FAIL=0 last:  verdict | PASS | 109_verify_legacy_call_outcome: 18 PASS, 0 FAIL
+107_verify_review_reference_guard.sql exit=0 PASS=11 FAIL=0 last:  verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL

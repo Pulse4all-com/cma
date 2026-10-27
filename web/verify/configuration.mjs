@@ -92,9 +92,12 @@ expect("a tag's seven meanings, incorrect data after not reached; the talk-time-
     "courtesy_completed_negative"], true, false],
   [["not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative"],
     false, false]);
-// since addition 0008ze a reviews connection, with its review channels as its one section
-expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation", "reviews"], ["crm", "telephony", "commerce", "automation"]);
+// since addition 0008ze a reviews connection, with its review channels as its one section; since addition 0008zi an asset
+// register connection, without a section (its devices arrive by the snapshot import, its catalogs are configuration)
+expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation", "reviews", "assets"],
+  ["crm", "telephony", "commerce", "automation", "reviews"]);
 expect("a reviews connection has its review channels", sourceSections("reviews", []), ["reviewChannels"], []);
+expect("an asset register connection has no catalog section", sourceSections("assets", ["assets"]), [], ["reviewChannels"]);
 expect("held rows narrow the kinds offered", kindChoices(["crm"]), ["crm"], ["crm", "telephony", "commerce", "automation"]);
 expect("a settings key in the right form", settingKeyProblem("record_url_deal", ["app_host"], true), null, "key");
 expect("a secret-looking key is refused", settingKeyProblem("api_token", [], true), "secret", null);

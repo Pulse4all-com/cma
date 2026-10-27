@@ -1,0 +1,11 @@
+== 02_seed_pulse4all.sql run 1
+exit=0
+== 02_seed_pulse4all.sql run 2
+exit=0
+== the asset catalogs of pulse4all-subscriptions
+models 2
+kinds 2
+rules 4
+statuses 5
+bundle_window_days 90
+pulse4all-invest models 0

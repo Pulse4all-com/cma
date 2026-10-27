@@ -4,7 +4,8 @@
 -- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
 -- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
--- (after 0008v) its journeys of Campaign monitoring and (after 0008ze) its negative-review alert rule.
+-- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule and (after
+-- 0008zi) its asset register catalogs.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -455,5 +456,57 @@ begin
   from cma.tenant t
   where t.slug = 'pulse4all-subscriptions'
   on conflict (tenant_id, name) do nothing;
+end
+$$;
+
+-- The asset register's catalogs for Pulse4all Subscriptions (after addition 0008zi; Martin, 27 October 2026): the two
+-- models the register holds (Philips HS1 and FRx, with the labels its export writes), the components that come due (pads
+-- and battery), their rules for both models (pads 24 months, battery 54 months, acted on 60 days before the due date),
+-- the register's device statuses with their flags (Active/Customer in the field and tracked, In Storage in stock and
+-- tracked, Internal Usage tracked, Stolen/Missing and Decommissioned not tracked), a bundling window of 90 days, and a
+-- market alias for every country the export writes whose market the catalog holds. The lead days and the window are to
+-- confirm with Kira and Arno (README Open decisions). An alias is added only where the catalog holds its market (dev
+-- holds ES and IT since 27 October 2026; prod is to check on Configuration, Markets before the first real load), so in a
+-- catalog without ES or IT the export's Spain and Italy show under device_market_unmapped until the market is added
+-- (Configuration, Markets) and this seed runs again. Only rows the tenant does not have yet are added, so a change on
+-- Configuration or in Studio survives a rerun.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if to_regclass('cma.device_model') is null then
+    raise notice 'the asset register does not exist yet (addition 0008zi): rerun this seed after 112_assets.sql';
+    return;
+  end if;
+  insert into cma.device_model (tenant_id, key, name, brand, aliases, sort_order) values
+    (v_subs, 'hs1', 'HS1', 'Philips', array['hs1', 'heartstart hs1', 'philips heartstart hs1'], 10),
+    (v_subs, 'frx', 'FRx', 'Philips', array['frx', 'heartstart frx', 'philips heartstart frx'], 20)
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.device_component_kind (tenant_id, key, name, sort_order) values
+    (v_subs, 'pads', 'Pads', 10),
+    (v_subs, 'battery', 'Battery', 20)
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.maintenance_rule (tenant_id, model_key, component_key, interval_months, lead_days) values
+    (v_subs, 'hs1', 'pads', 24, 60),
+    (v_subs, 'hs1', 'battery', 54, 60),
+    (v_subs, 'frx', 'pads', 24, 60),
+    (v_subs, 'frx', 'battery', 54, 60)
+  on conflict (tenant_id, model_key, component_key) do nothing;
+  insert into cma.device_status (tenant_id, key, name, is_in_field, is_in_stock, is_tracked, aliases, sort_order) values
+    (v_subs, 'active_customer', 'Active/Customer', true, false, true, array['active/customer'], 10),
+    (v_subs, 'in_storage', 'In Storage', false, true, true, array['in storage'], 20),
+    (v_subs, 'internal_usage', 'Internal Usage', false, false, true, array['internal usage'], 30),
+    (v_subs, 'stolen_missing', 'Stolen/Missing', false, false, false, array['stolen/missing'], 40),
+    (v_subs, 'decommissioned', 'Decommissioned', false, false, false, array['decommissioned'], 50)
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.tenant_setting (tenant_id, key, value) values (v_subs, 'assets.bundle_window_days', '90')
+  on conflict (tenant_id, key) do nothing;
+  insert into cma.market_alias (tenant_id, alias, code)
+  select v_subs, a.alias, a.code
+  from (values ('united kingdom', 'GB'), ('ireland', 'IE'), ('netherlands', 'NL'), ('belgium', 'BE'), ('germany', 'DE'), ('austria', 'AT'),
+               ('france', 'FR'), ('sweden', 'SE'), ('denmark', 'DK'), ('norway', 'NO'), ('finland', 'FI'), ('spain', 'ES'),
+               ('italy', 'IT')) as a(alias, code)
+  where exists (select 1 from cma.market m where m.tenant_id = v_subs and m.code = a.code)
+  on conflict (tenant_id, alias) do nothing;
 end
 $$;

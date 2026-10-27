@@ -95,6 +95,10 @@ import {
   formsTableGroups, nextFormsGroup, parseAnswerFilter, parseFormsFilter, parseFormsGroup, previousForms, resolvedShare,
 } from "../src/lib/reports.ts";
 import { fmtRating, marketsWithoutChannel, reviewMarketStates, reviewRecords, reviewShare, reviewsReport, starsOf } from "../src/lib/reviews.ts";
+import {
+  addMonths as mtAddMonths, bucketProblem, cellTitle, cellValue, fmtMonth, fromMonthChoices, maintenanceGrid, maintenanceItems, maintenanceQuery,
+  maintenanceReport, maintenanceRows, nextView, parseBucket, parseMaintenanceFilter,
+} from "../src/lib/maintenance.ts";
 import { readFileSync } from "node:fs";
 import { addDays, dateKeyInZone } from "../src/lib/time.ts";
 import { WITHDRAW_PERMISSION } from "../src/lib/messages.ts";
@@ -1607,6 +1611,135 @@ const rvNoText = { "lib/reviews.ts": src("../src/lib/reviews.ts"), "components/R
 const RV_PERSONAL = /fullName|\.email\b|mobile|\.comment\b|\.title\b(?!\s*=)|reviewerName|reviewText/;
 expect("reviews: no reviewer's name, email, phone, title or text in the mirror, the parts or the page",
   Object.entries(rvNoText).filter(([, text]) => RV_PERSONAL.test(text.replace(/t\.title|copy\.[a-zA-Z.]+title/gi, ""))).map(([f]) => f), [], ["lib/reviews.ts"]);
+
+
+// ---- Maintenance (addition 0008zi) on 113's own scenario --------------------------------------------------------
+// Tenant one's devices as 113's B2 to B5 leave them (rec-1's battery replaced by B-1b, rec-7 back), its catalogs (models
+// hs1 and frx, kinds pads and battery, four rules of 60 lead days, four statuses), markets GB and NL and a window of 90
+// days, as of Tuesday 27 October 2026: the strings are the ones 113's B7 to B11 prove in the database
+const MT_TODAY = "2026-10-27";
+const mtDev = (sourceId, serial, model, market, status, o = {}) => ({ id: `id-${sourceId}`, connectionId: "c-reg", sourceId, serial, model, market, status,
+  customerRef: null, subscriptionRef: null, firstShippedOn: null, lastShippedOn: null, endOfLifeOn: null, missing: false, components: [], crmContactId: null, ...o });
+const MT_DEVICES = [
+  mtDev("rec-1", "SN-1", "hs1", "NL", "active_customer", { customerRef: "cu-1", subscriptionRef: "sub-1", firstShippedOn: "2024-11-15", crmContactId: "c-1",
+    components: [{ kind: "pads", serial: "P-1", expiresOn: "2026-12-10" }, { kind: "battery", serial: "B-1b", expiresOn: "2027-01-30" }] }),
+  mtDev("rec-2", "SN-2", "hs1", "GB", "active_customer", { firstShippedOn: "2024-03-01", lastShippedOn: "2025-02-10" }),
+  mtDev("rec-3", "SN-3", "frx", "NL", "in_storage", { firstShippedOn: "2023-01-10", endOfLifeOn: "2026-08-15", components: [{ kind: "pads", serial: "P-3", expiresOn: "2026-08-01" }] }),
+  mtDev("rec-4", "SN-1", null, null, "internal_usage"),
+  mtDev("rec-5", null, "hs1", "GB", "stolen_missing", { customerRef: "cu-9", subscriptionRef: "sub-5", firstShippedOn: "2024-05-05" }),
+  mtDev("rec-6", "SN-6", "hs1", "NL", null, { firstShippedOn: "2024-06-06" }),
+  mtDev("rec-7", null, "hs1", "NL", "in_storage"),
+];
+const mtCatalog = (windowDays) => ({
+  models: [{ key: "hs1", name: "HS1", sortOrder: 10 }, { key: "frx", name: "FRx", sortOrder: 20 }],
+  kinds: [{ key: "pads", name: "Pads", sortOrder: 10, active: true }, { key: "battery", name: "Battery", sortOrder: 20, active: true }],
+  rules: ["hs1", "frx"].flatMap((m) => [{ model: m, component: "pads", intervalMonths: 24, leadDays: 60 }, { model: m, component: "battery", intervalMonths: 54, leadDays: 60 }]),
+  statuses: [{ key: "active_customer", name: "Active/Customer", isInField: true, isInStock: false, isTracked: true },
+    { key: "in_storage", name: "In Storage", isInField: false, isInStock: true, isTracked: true },
+    { key: "internal_usage", name: "Internal Usage", isInField: false, isInStock: false, isTracked: true },
+    { key: "stolen_missing", name: "Stolen/Missing", isInField: false, isInStock: false, isTracked: false }],
+  markets: [{ code: "GB", sortOrder: 10 }, { code: "NL", sortOrder: 20 }],
+  windowDays,
+});
+const MT_CAT = mtCatalog(90);
+const mtItems = maintenanceItems(MT_DEVICES, MT_CAT, MT_TODAY).sort((a, b) => a.sourceId.localeCompare(b.sourceId) || a.componentOrder - b.componentOrder);
+expect("maintenance: the due basis (recorded, rule, unknown), the action dates, end of life, tracked statuses only, as 113's B7",
+  mtItems.map((i) => `${i.sourceId}:${i.component}:${i.basis}:${i.dueOn ?? "-"}:${i.actionOn ?? "-"}`).join(" "),
+  "rec-1:pads:recorded:2026-12-10:2026-10-11 rec-1:battery:recorded:2027-01-30:2026-12-01 rec-2:pads:rule:2027-02-10:2026-12-12 rec-2:battery:rule:2029-08-10:2029-06-11 "
+    + "rec-3:pads:recorded:2026-08-01:2026-06-02 rec-3:battery:rule:2027-07-10:2027-05-11 rec-3:device:recorded:2026-08-15:2026-08-15 "
+    + "rec-4:pads:unknown:-:- rec-4:battery:unknown:-:- rec-7:pads:unknown:-:- rec-7:battery:unknown:-:-",
+  "rec-1:pads:recorded:2026-12-10:2026-10-10");
+expect("maintenance: bundling within the window one exchange, outside it two; past due before the current month; window 0, as 113's B8",
+  `${mtItems.filter((i) => i.basis !== "unknown").map((i) => `${i.sourceId}:${i.component}:${i.exchangeOn ?? "-"}:${i.pastDue}`).join(" ")} | `
+    + `${new Set(mtItems.map((i) => i.exchangeKey).filter(Boolean)).size} ${new Set(maintenanceItems(MT_DEVICES, mtCatalog(0), MT_TODAY).map((i) => i.exchangeKey).filter(Boolean)).size}`,
+  "rec-1:pads:2026-10-11:false rec-1:battery:2026-10-11:false rec-2:pads:2026-12-12:false rec-2:battery:2029-06-11:false "
+    + "rec-3:pads:2026-06-02:true rec-3:battery:2027-05-11:false rec-3:device:2026-06-02:true | 5 7",
+  "rec-1:pads:2026-10-11:false rec-1:battery:2026-12-01:false");
+// a replacement restarts the rule, as 113's B16: rec-3's new pads without an expiry, first seen on 12 November 2026, are due
+// 24 months after that day and not past due; rec-2's battery without a predecessor keeps the shipment anchor
+const mtSecond = MT_DEVICES.map((d) => d.sourceId === "rec-3" ? { ...d, components: [{ kind: "pads", serial: "P-3c", expiresOn: null, replacementSeenOn: "2026-11-12" }] }
+  : d.sourceId === "rec-2" ? { ...d, components: [{ kind: "battery", serial: "B-2", expiresOn: null }] } : d);
+expect("maintenance: a replacement restarts the rule from the day it was first seen, not past due; no predecessor, the shipment, as 113's B16",
+  maintenanceItems(mtSecond, MT_CAT, MT_TODAY).filter((i) => (i.sourceId === "rec-3" && i.component === "pads") || (i.sourceId === "rec-2" && i.component === "battery"))
+    .map((i) => `${i.sourceId}:${i.component}:${i.basis}:${i.dueOn}:${i.pastDue}`).sort().join(" "),
+  "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2028-11-12:false",
+  "rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2025-01-10:true");
+const mtFilter = (o = {}) => ({ fromMonth: "2026-10-01", months: 12, market: null, model: null, scope: null, ...o });
+const mtMonth = (b) => /^\d/.test(b) ? b.slice(0, 7) : b;
+const mtCells = (r) => r.cells.length === 0 ? "-" : r.cells.map((c) => `${mtMonth(c.bucket)}/${c.market}/${c.model}/`
+  + `${Object.keys(c.components).sort().map((k) => `${k}:${c.components[k]}`).join("+") || "-"}/${c.endOfLife}/${c.exchanges}`).join(" ");
+const mtPage = (o) => maintenanceReport(MT_DEVICES, MT_CAT, mtFilter(o), MT_TODAY, true);
+const mtAll = mtPage();
+expect("maintenance: the page's buckets, cells, unknown items, tracked devices, filters, window, as 113's B9",
+  `${mtAll.buckets.map(mtMonth).join(",")} | ${mtCells(mtAll)} | ${mtAll.unknown.map((u) => `${u.market}/${u.model}/${u.items}`).join(" ")} | `
+    + `${mtAll.unknownItems} ${mtAll.devices} ${JSON.stringify(mtAll.markets)} ${mtAll.models.map((m) => m.key).join(",")} ${mtAll.componentKinds.map((k) => k.key).join(",")} `
+    + `${mtAll.bundleWindowDays} ${mtAll.isSetUp} ${mtAll.currentMonth}`,
+  "past_due,2026-10,2026-11,2026-12,2027-01,2027-02,2027-03,2027-04,2027-05,2027-06,2027-07,2027-08,2027-09 | "
+    + "past_due/NL/frx/pads:1/1/1 2026-10/NL/hs1/pads:1/0/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2027-05/NL/frx/battery:1/0/1 | "
+    + "NL/hs1/2 unknown/unknown/2 | 4 5 [\"GB\",\"NL\",\"unknown\"] hs1,frx,unknown pads,battery 90 true 2026-10-01",
+  "past_due | -");
+expect("maintenance: the filters field, stock, a market, a model, the model unknown, another horizon, as 113's B10",
+  `field ${mtCells(mtPage({ scope: "field" }))} ${mtPage({ scope: "field" }).devices} | stock ${mtCells(mtPage({ scope: "stock" }))} ${mtPage({ scope: "stock" }).unknownItems} | `
+    + `GB ${mtCells(mtPage({ market: "GB" }))} | frx ${mtCells(mtPage({ model: "frx" }))} | unknown ${mtCells(mtPage({ model: "unknown" }))} ${mtPage({ model: "unknown" }).unknownItems} | `
+    + `dec ${mtCells(mtPage({ fromMonth: "2026-12-01", months: 6 }))}`,
+  "field 2026-10/NL/hs1/pads:1/0/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2 | stock past_due/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 2 | "
+    + "GB 2026-12/GB/hs1/pads:1/0/1 | frx past_due/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 | unknown - 2 | "
+    + "dec past_due/NL/frx/pads:1/1/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2027-05/NL/frx/battery:1/0/1",
+  "field - 0");
+const mtRows = (bucket, view, limit = 500) => maintenanceRows(MT_DEVICES, MT_CAT, mtFilter(), MT_TODAY, bucket, view, limit);
+expect("maintenance: the device list (past due, a month's components, a month's exchange with the contact, unknown, all, the limit), as 113's B11",
+  `${mtRows("past_due", "exchanges").rows.map((r) => `${r.serial}:${r.components.join("+")}:${r.dueOn}:${r.bases.join("+")}:${r.actionOn}:${r.exchangeOn}:${r.deviceStatusName}:${r.modelName}`).join(" ")} | `
+    + `${mtRows("2026-12-01", "components").rows.map((r) => `${r.serial}:${r.components.join("+")}:${r.actionOn}`).join(" ")} | `
+    + `${mtRows("2026-10-01", "exchanges").rows.map((r) => `${r.serial}:${r.components.join("+")}:${r.customerRef}:${r.subscriptionRef}:${r.crmContactId}`).join(" ")} | `
+    + `${mtRows("unknown", "exchanges").rows.map((r) => `${r.sourceId}:${r.market}:${r.components.join("+")}:${r.bases.join("+")}`).join(" ")} | `
+    + `${mtRows("all", "exchanges").rows.map((r) => `${r.bucket}:${r.sourceId}`).join(" ")} | ${mtRows("all", "exchanges", 1).rows.map((r) => r.sourceId).join("")}:${mtRows("all", "exchanges", 1).total}`,
+  "SN-3:pads+device:2026-08-01:recorded:2026-06-02:2026-06-02:In Storage:FRx | SN-1:battery:2026-12-01 SN-2:pads:2026-12-12 | SN-1:pads+battery:cu-1:sub-1:c-1 | "
+    + "rec-7:NL:pads+battery:unknown rec-4:unknown:pads+battery:unknown | past_due:rec-3 2026-10-01:rec-1 2026-12-01:rec-2 2027-05-01:rec-3 | rec-3:4",
+  "SN-3:pads:2026-08-01");
+// the grid as the page shows it: rows per market and model in the filters' order, the view's figure, the totals; a cell's title
+const mtGridEx = maintenanceGrid(mtAll, "exchanges");
+const mtGridCo = maintenanceGrid(mtAll, "components");
+expect("maintenance: the grid's rows, the figure per view, the totals, a cell's title",
+  [mtGridEx.rows.map((r) => `${r.market}/${r.model}:${r.total}`).join(" "), mtGridEx.totals.past_due, mtGridEx.totals["2026-12-01"], mtGridEx.total,
+   mtGridCo.totals["2026-12-01"], mtGridCo.total, cellValue(undefined, "exchanges"),
+   cellTitle(mtAll.cells[0], mtAll.componentKinds, { endOfLife: "End of life", exchanges: "Planned exchanges" })],
+  ["GB/hs1:1 NL/hs1:1 NL/frx:2", 1, 1, 4, 2, 6, 0, "Pads 1 · End of life 1 · Planned exchanges 1"],
+  ["NL/hs1:1 GB/hs1:1 NL/frx:2", 1, 1, 4, 2, 6, 0, "Pads 1"]);
+// the address: the defaults, a later start, a horizon, filters; a value out of line falls back and is reported; the
+// buckets the list takes; a month's arithmetic as Postgres's (31 January plus a month is the last of February)
+expect("maintenance: the address, the buckets, months as Postgres adds them, the month in both languages",
+  [JSON.stringify(parseMaintenanceFilter({}, "2026-10-01")), JSON.stringify(parseMaintenanceFilter({ from: "2026-12-01", months: "24", market: "NL", model: "hs1", scope: "field" }, "2026-10-01")),
+   JSON.stringify(parseMaintenanceFilter({ from: "2026-09-01", months: "7", market: "NLD", scope: "all" }, "2026-10-01")),
+   JSON.stringify(maintenanceQuery(mtFilter({ months: 24, scope: "stock" }), "2026-10-01")), fromMonthChoices("2026-10-01").length,
+   parseBucket("past_due", mtAll.buckets), parseBucket("2027-09-01", mtAll.buckets), parseBucket("2027-10-01", mtAll.buckets), parseBucket("unknown", mtAll.buckets),
+   [null, "all", "2026-11-01", "2026-11-15", "x"].map(bucketProblem), mtAddMonths("2024-01-31", 1), mtAddMonths("2025-02-10", 54), nextView("exchanges"),
+   fmtMonth("2026-11-01", "en"), fmtMonth("2026-03-01", "nl")],
+  ['{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null},"problem":false}',
+   '{"filter":{"fromMonth":"2026-12-01","months":24,"market":"NL","model":"hs1","scope":"field"},"problem":false}',
+   '{"filter":{"fromMonth":"2026-10-01","months":12,"market":null,"model":null,"scope":null},"problem":true}',
+   '{"months":"24","scope":"stock"}', 13, "past_due", "2027-09-01", null, "unknown", [true, false, false, true, true], "2024-02-29", "2029-08-10", "components",
+   "Nov 2026", "mrt 2026"],
+  ["", "", "", "", 12, null, null, "2027-10-01", null, [false, false, false, false, false], "2024-03-02", "2029-08-11", "exchanges", "November 2026", "maart 2026"]);
+// the routes and the data layer, from their source: the report's permissions, the reads with their parameters, the
+// file's default bucket and size; no name, email, phone or address in the type, the mirror, the parts, the page or the file
+const mtPage0 = src("../src/app/reports/maintenance/page.tsx");
+const mtRoutes = [src("../src/app/api/v1/reports/maintenance/route.ts"), src("../src/app/api/v1/reports/maintenance/rows/route.ts"),
+  src("../src/app/api/v1/reports/maintenance/export/route.ts")];
+const mtApi = src("../src/lib/api/maintenance.ts");
+expect("maintenance routes: reports.view or performance.team, the reads with their parameters, the file's defaults",
+  [mtRoutes.every((r) => r.includes("requireAnyPermission(me, REPORT_PERMISSIONS);")), pgLayer.includes("cma.maintenance_page($1::date, $2, $3, $4, $5)"),
+   pgLayer.includes("cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8)"), pgLayer.includes("cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id)"),
+   mtRoutes[2].includes("{ file: true }") && mtApi.includes('(o.file ? "all" : null)') && mtApi.includes("o.file ? MAINTENANCE_FILE_ROWS : MAINTENANCE_LIST_ROWS"),
+   mtPage0.includes("holdsAny(me, REPORT_PERMISSIONS)")],
+  [true, true, true, true, true, true], [false, true, true, true, true, true]);
+const mtNoPersonal = { "lib/maintenance.ts": src("../src/lib/maintenance.ts"), "components/MaintenanceParts.tsx": src("../src/components/MaintenanceParts.tsx"),
+  "app/reports/maintenance/page.tsx": mtPage0, "lib/csv.ts (maintenanceCsv)": src("../src/lib/csv.ts").split("// ---- Reports > Maintenance")[1] ?? "",
+  "lib/data/types.ts (MaintenanceRow)": (src("../src/lib/data/types.ts").split("export interface MaintenanceRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
+const MT_PERSONAL = /firstName|lastName|first_name|last_name|fullName|\.email\b|email:|phone|address|postcode|customerName|customer_name/i;
+expect("maintenance: no customer's name, email, phone or address in the type, the mirror, the parts, the page or the file",
+  // comments are left out: they say what is never there
+  Object.entries(mtNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
+  [], ["lib/maintenance.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

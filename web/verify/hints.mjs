@@ -166,6 +166,10 @@ const cases = [
   // markets' states four
   ["manager", "/reports/reviews?range=month", 15, 4],
   ["reader", "/reports/reviews?range=week&group=day", 15, 4],
+  // Maintenance (addition 0008zi): the grid's market, model, Past due, the twelve months and the total; with a figure open the
+  // device list's twelve headers
+  ["manager", "/reports/maintenance", 16, 0],
+  ["reader", "/reports/maintenance?view=components&bucket=past_due", 28, 0],
 ];
 let headers = 0;
 let tiles = 0;

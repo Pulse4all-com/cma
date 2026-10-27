@@ -157,6 +157,47 @@
       ]
     },
     {
+      "key": "assets",
+      "label": "Asset register",
+      "tables": [
+        {
+          "name": "device",
+          "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi)",
+          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+        },
+        {
+          "name": "device_component",
+          "what": "A device's components per kind (pads, battery) with serial and recorded expiry; one current row per device and kind, a changed serial an observed replacement (replaced_at) from the first load on (0008zi)",
+          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+        },
+        {
+          "name": "device_import_row",
+          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi)",
+          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet; staged by tools/devices-to-staging.mjs and psql \\copy, emptied by cma.load_device_snapshot"
+        },
+        {
+          "name": "device_model",
+          "what": "Device models with name, brand and the labels the register writes for each (aliases) (0008zi)",
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+        },
+        {
+          "name": "device_component_kind",
+          "what": "The kinds of component that come due (pads, battery), with name and sort order; the key device is reserved for a device's end of life (0008zi)",
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+        },
+        {
+          "name": "maintenance_rule",
+          "what": "Per model and component kind: the interval in months from the anchor date (the day a replacement was first seen, else the last shipment, else the first) and the lead days before the due date (0008zi)",
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+        },
+        {
+          "name": "device_status",
+          "what": "Device statuses with the flags in the field, in stock and tracked (forecast), and the labels the register writes for each; reporting reads the flags, never a name (0008zi)",
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+        }
+      ]
+    },
+    {
       "key": "connections",
       "label": "Source settings and catalogs",
       "tables": [
@@ -505,7 +546,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule"
         },
         {
           "name": "sync_cursor",
@@ -625,6 +666,14 @@
     {
       "name": "review_market_state",
       "what": "Per active market: whether it has a counted review channel and whether that channel holds published reviews (no channel, channel without reviews, has reviews), with the channels and the published reviews they hold (0008ze)"
+    },
+    {
+      "name": "maintenance_due",
+      "what": "Every due item of the tracked devices as of each tenant's date: component or end of life, due date with its basis (recorded, rule, unknown), action date and month, past due, the planned exchange it belongs to (0008zi)"
+    },
+    {
+      "name": "maintenance_per_month",
+      "what": "Per action month, market and model: due items, component items, devices at end of life, planned exchanges whose first action date falls in the month, past due (0008zi)"
     }
   ],
   "flows": {
@@ -675,6 +724,17 @@
         "reviews",
         "connections",
         "messaging",
+        "plumbing"
+      ]
+    },
+    "assets": {
+      "src": "s-assets",
+      "ways": [
+        "w-oneoff"
+      ],
+      "doms": [
+        "assets",
+        "connections",
         "plumbing"
       ]
     },
