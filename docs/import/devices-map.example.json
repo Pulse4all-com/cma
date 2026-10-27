@@ -1,0 +1,35 @@
+{
+  "_about": "Map of the asset register's CSV export to the device import's staging columns (tools/devices-to-staging.mjs, docs/import/devices.md). These are the headers of Pulse4all Subscriptions' register (the Airtable base's table 2.0 Installed Base, 27 October 2026): configuration, never code. Every header the export holds is either mapped or in ignore; the personal columns (the customer's names and email, who last changed the row) and the free-text note are ignored, so they are never read into the staging file.",
+  "columns": {
+    "source_id": "airtable_record _id",
+    "serial": "aed_sn",
+    "model": "model_aed",
+    "status": "aed_operational_status",
+    "country": "country_located",
+    "warehouse_ref": "warehouse_location",
+    "customer_ref": "customer_id",
+    "subscription_ref": "subscription_id",
+    "order_ref": "order_number",
+    "first_shipped_on": "first_shipment_date_to_customer",
+    "stock_received_on": "warehouse_received_date",
+    "last_shipped_on": "last_shipment_date",
+    "warranty_until": "aed_warranty_date_calculated",
+    "end_of_life_on": "aed_expected_end_of_life_date_calculated"
+  },
+  "components": {
+    "pads": { "serial": "pads_sn", "expires_on": "pads_expiry_date_calculated" },
+    "battery": { "serial": "battery_sn", "expires_on": "battery_expiry_date_calculated" }
+  },
+  "external_refs": {
+    "ns_internal_id": "ns_internal_id",
+    "ns_fam_id": "ns_fam_id",
+    "ns_sales_order_id": "sales_order_id"
+  },
+  "ignore": [
+    "aed_sn_check", "data_status", "pending_returns", "match_status", "review_subtype", "no_sub_type", "cancelled_sub_ids",
+    "enhanced_classification", "payment_status", "match_note", "po_number", "customer_first_name", "customer_last_name", "email",
+    "brand", "brand_ns_id", "item_ns_id", "model_aed_ns_id", "country_located_ns_id", "ownership", "ownership_ns_id", "language",
+    "language_ns_id", "aed_next_maintenance_date", "spv_id", "maatje_id", "aed_operational_status_ns_id", "last_modified",
+    "last_modified_by", "Table 26", "Test_Resync"
+  ]
+}

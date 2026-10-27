@@ -7,7 +7,7 @@
  */
 import type { MarketConfig, SourceForm, SourceKind, SourceSettingValue, SourceSettings, SourceTag, TagMeaning } from "@/lib/data/types";
 
-export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation", "reviews"];
+export const SOURCE_KINDS: readonly SourceKind[] = ["crm", "telephony", "commerce", "automation", "reviews", "assets"];
 
 export type SourceSection = "pipelines" | "forms" | "callOutcomes" | "fields" | "taskStatuses" | "taskTypes" | "email" | "lines" | "tags" | "missedReasons" | "store"
   | "reviewChannels";
@@ -22,6 +22,8 @@ const SECTIONS: Record<SourceKind, SourceSection[]> = {
   automation: [],
   // reviewChannels: a review platform's channels with their market and counted flag, and the reviews' settings (addition 0008ze)
   reviews: ["reviewChannels"],
+  // assets: the asset register (addition 0008zi); its devices arrive by the snapshot import, its catalogs are configuration in Studio
+  assets: [],
 };
 
 /** The sections of a connection's page: its kind's, or while the kind is unset those of the kinds its rows imply */

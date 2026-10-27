@@ -15,8 +15,8 @@
  * as a formula defused) and the Reports > Cancellations file (per week or day and market, Unknown market).
  */
 import {
-  cancellationsCsv, exportSettingsFrom, firstOrdersCsv, formatDate, formatDuration, formatTime, formsCsv, funnelStagesCsv, hoursCsv, lostReasonsCsv, quote,
-  safeText, statusChangesCsv, toCsv,
+  cancellationsCsv, exportSettingsFrom, firstOrdersCsv, formatDate, formatDuration, formatTime, formsCsv, funnelStagesCsv, hoursCsv, lostReasonsCsv,
+  maintenanceCsv, quote, safeText, statusChangesCsv, toCsv,
 } from "../src/lib/csv.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -191,6 +191,24 @@ const cnFile = cancellationsCsv([{ key: "2026-10-05", market: "NL", requests: 2,
 expect("cancellations file: a row per week and market, Unknown market, the median with the decimal comma, empty without one", cnFile.slice(0, 3),
   ["﻿Period;Market;Requests;Open;Closed;Median days to close", "Week of 05-10-2026;NL;2;0;2;1,3", "Week of 05-10-2026;Unknown market;1;1;0;"],
   ["Period;Market;Requests;Open;Closed;Median days to close", "2026-10-05;NL;2;0;2;1.25", "2026-10-05;unknown;1;1;0;0"]);
+
+// Reports > Maintenance (addition 0008zi): one row per row of the device list, the month or Overdue, the components and
+// bases by name, the dates in the tenant's format, Unknown market, a serial a spreadsheet would run as a formula defused
+const mtLabels = { bucket: "Month", overdue: "Overdue", unknown: "Without a due date", serial: "Serial number", model: "Model", market: "Market",
+  status: "Device status", components: "Components due", dueDate: "Due date", basis: "Basis", actionDate: "Action date", exchangeDate: "Planned exchange from",
+  customer: "Customer id", subscription: "Subscription id", contact: "Customer record id", record: "Register record id", unknownMarket: "Unknown market" };
+const mtRow = (o) => ({ bucket: "2026-12-01", deviceId: "d1", sourceId: "rec-1", serial: "SN-1", model: "hs1", modelName: "HS1", market: "NL", deviceStatus: "active_customer",
+  deviceStatusName: "Active/Customer", components: ["pads", "device"], dueOn: "2027-02-10", bases: ["recorded", "rule"], actionOn: "2026-12-12",
+  exchangeOn: "2026-12-12", customerRef: "cu-1", subscriptionRef: "sub-1", crmContactId: "c-1", contactUrl: null, deviceUrl: null, ...o });
+const mtFile = maintenanceCsv([mtRow({}), mtRow({ bucket: "overdue", serial: "=SN-2", market: "unknown", model: "unknown", modelName: null, components: ["battery"],
+  bases: ["unknown"], dueOn: null, actionOn: null, exchangeOn: null, customerRef: null, subscriptionRef: null, crmContactId: null })], DUTCH, mtLabels,
+  { components: { pads: "Pads", battery: "Battery", device: "Device, end of life" }, bases: { recorded: "Recorded expiry", rule: "By rule", unknown: "No due date" } })
+  .split("\r\n");
+expect("maintenance file: the month or Overdue, names for the components and bases, the tenant's dates, Unknown market, a serial defused", mtFile.slice(0, 3),
+  ["\uFEFFMonth;Serial number;Model;Market;Device status;Components due;Due date;Basis;Action date;Planned exchange from;Customer id;Subscription id;Customer record id;Register record id",
+   "01-12-2026;SN-1;HS1;NL;Active/Customer;Pads + Device, end of life;10-02-2027;Recorded expiry + By rule;12-12-2026;12-12-2026;cu-1;sub-1;c-1;rec-1",
+   "Overdue;'=SN-2;unknown;Unknown market;Active/Customer;Battery;;No due date;;;;;;rec-1"],
+  ["Month;Serial number", "2026-12-01;SN-1;hs1;NL;active_customer;pads device", "overdue;=SN-2;unknown;unknown"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

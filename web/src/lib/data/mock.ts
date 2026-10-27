@@ -25,7 +25,7 @@ import type {
   Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardData,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
-  ReviewsReport,
+  ReviewsReport, MaintenanceFilter, MaintenanceReport, MaintenanceRows, MaintenanceView,
 } from "./types";
 import {
   ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
@@ -64,6 +64,7 @@ import {
   type FunnelDealFixture, type FunnelOptions, type FunnelPipelineFixture, type FunnelReasonOption, type KindRuleFixture,
 } from "@/lib/funnel";
 import { reviewMarketStates, reviewRecords, reviewsReport, type ReviewSource } from "@/lib/reviews";
+import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
 // Fictional, shaped like the rows of migration 0007d: invented deal ids, fictional record links,
@@ -228,6 +229,15 @@ const MOCK_CHECKS: [string, string][] = [
   // the reviews' checks (addition 0008ze), listed once the tenant has a reviews connection
   ["review_channel_unmapped", "Review channels without a market, with the reviews held of each"],
   ["market_without_review_channel", "Active markets without a counted review channel"],
+  // the asset register's checks (addition 0008zi), listed once the tenant has an asset register
+  ["device_serial_missing", "Devices without a serial number"],
+  ["device_serial_duplicate", "Devices whose serial number another device holds too, with the serial"],
+  ["device_model_unmapped", "Devices whose model maps to no catalog model, with the register's label"],
+  ["device_status_unmapped", "Devices whose status maps to no device status, with the register's label"],
+  ["device_market_unmapped", "Devices whose country maps to no catalog market, with the register's label"],
+  ["device_customer_ref_invalid", "Devices whose customer reference is no customer id"],
+  ["component_due_unknown", "Due items of tracked devices without a due date, with the component"],
+  ["field_device_without_subscription_ref", "Devices in the field without a subscription reference"],
 ];
 
 // ---- Inbound service and callbacks fixture (addition 0008i, brief B15) ----------------------------
@@ -2299,6 +2309,58 @@ function assertMockMarket(me: Principal, code: string | null, allowDefault = fal
 // Invented channels and reviews of the main tenant's reviews connection: per day of the last 120 days, a few reviews on
 // the NL and GB channels (the ratings, links and invite events spread by a hash) and one a week on the channel the source
 // added without a market. Ids, ratings, times and codes only: no reviewer and no text exist here.
+/** Reports → Maintenance's checks as cma.maintenance_page makes them: the permission (CMA06), the horizon and the filters (CMA04) */
+function assertMaintenance(me: Principal, filter: MaintenanceFilter): void {
+  assertAny(me, ["reports.view", "performance.team"]);
+  const current = monthOf(mockToday(me));
+  if (filter.fromMonth !== monthOf(filter.fromMonth) || filter.fromMonth < current) throw new CmaDbError("CMA04", "the horizon starts on the first day of the current month or a later one");
+  if (!Number.isInteger(filter.months) || filter.months < 1 || filter.months > 24) throw new CmaDbError("CMA04", "the horizon is 1 to 24 months");
+  if (filter.market !== null && !/^([A-Z]{2}|unknown)$/.test(filter.market)) throw new CmaDbError("CMA04", "a market filter is a two-letter code or unknown");
+  if (filter.model !== null && !/^[a-z0-9]+(_[a-z0-9]+)*$/.test(filter.model)) throw new CmaDbError("CMA04", "a model filter is a model's key or unknown");
+}
+
+/**
+ * The fictional asset register of Reports → Maintenance (addition 0008zi): 36 devices of tenant one with test serials,
+ * dated from today so the grid always holds overdue items and the coming months; tenant two has none (no register).
+ * Models, kinds, rules (pads 24 months, battery 54, 60 lead days), statuses and a window of 90 days as seed 02 sets them
+ */
+function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog: MaintenanceCatalog } {
+  const catalog: MaintenanceCatalog = {
+    models: [{ key: "hs1", name: "HS1 (test)", sortOrder: 10 }, { key: "frx", name: "FRx (test)", sortOrder: 20 }],
+    kinds: [{ key: "pads", name: "Pads", sortOrder: 10, active: true }, { key: "battery", name: "Battery", sortOrder: 20, active: true }],
+    rules: ["hs1", "frx"].flatMap((m) => [{ model: m, component: "pads", intervalMonths: 24, leadDays: 60 }, { model: m, component: "battery", intervalMonths: 54, leadDays: 60 }]),
+    statuses: [{ key: "active_customer", name: "Active/Customer", isInField: true, isInStock: false, isTracked: true },
+      { key: "in_storage", name: "In Storage", isInField: false, isInStock: true, isTracked: true },
+      { key: "internal_usage", name: "Internal Usage", isInField: false, isInStock: false, isTracked: true },
+      { key: "stolen_missing", name: "Stolen/Missing", isInField: false, isInStock: false, isTracked: false }],
+    markets: seedIntakeConfig(me).markets.map((m) => ({ code: m.code, sortOrder: m.sortOrder })),
+    windowDays: 90,
+  };
+  if (me.tenantId === MOCK_TENANT_2) return { devices: [], catalog };
+  const today = mockToday(me);
+  const markets = ["NL", "GB", "BE", "DE", null];
+  const devices: MaintenanceDevice[] = Array.from({ length: 36 }, (_, i) => {
+    const n = i + 1;
+    const status = n % 12 === 0 ? "stolen_missing" : n % 5 === 0 ? "in_storage" : n % 11 === 0 ? "internal_usage" : "active_customer";
+    const padsIn = (n * 37) % 420 - 90;
+    const batteryIn = (n * 53) % 900 - 60;
+    const withComponents = n % 7 !== 0;
+    return {
+      id: `00000000-0000-7000-8000-00000d${String(n).padStart(6, "0")}`, connectionId: "00000000-0000-7000-8000-00000000d001",
+      sourceId: `recTEST${String(n).padStart(9, "0")}`, serial: n === 9 ? null : `TEST-SN-${String(n === 17 ? 3 : n).padStart(4, "0")}`,
+      model: n === 13 ? null : n % 3 === 0 ? "frx" : "hs1", market: markets[n % markets.length] ?? null, status,
+      customerRef: status === "active_customer" ? `70000${String(n).padStart(5, "0")}` : null,
+      subscriptionRef: status === "active_customer" && n !== 4 ? `91000${String(n).padStart(5, "0")}` : null,
+      firstShippedOn: n % 7 === 0 && n !== 14 ? null : addDays(today, -400 - n * 9), lastShippedOn: null,
+      endOfLifeOn: n === 6 ? addDays(today, 40) : n === 10 ? addDays(today, -20) : null, missing: false,
+      components: withComponents ? [{ kind: "pads", serial: `TEST-PAD-${n}`, expiresOn: addDays(today, padsIn) },
+        { kind: "battery", serial: `TEST-BAT-${n}`, expiresOn: addDays(today, batteryIn) }] : [],
+      crmContactId: status === "active_customer" && n % 2 === 0 ? `9000${n}` : null,
+    };
+  });
+  return { devices, catalog };
+}
+
 const MOCK_REVIEW_CHANNELS = [
   { channelId: "chl-test-nl", name: "shop-nl.example", locale: "nl_NL", market: "NL", isCounted: true },
   { channelId: "chl-test-gb", name: "shop-gb.example", locale: "en_GB", market: "GB", isCounted: true },
@@ -2327,7 +2389,28 @@ function mockReviewSources(me: Principal): ReviewSource[] {
   return out;
 }
 
-/** The two reviews' checks over the fixture, as cma.data_quality_of counts them */
+/** The keys of the asset register's eight checks (addition 0008zi) */
+const ASSET_CHECK_KEYS: Record<string, true> = Object.fromEntries(["device_serial_missing", "device_serial_duplicate", "device_model_unmapped",
+  "device_status_unmapped", "device_market_unmapped", "device_customer_ref_invalid", "component_due_unknown", "field_device_without_subscription_ref"]
+  .map((k) => [k, true]));
+
+/** The asset register's checks (addition 0008zi) on the fixture, as cma.data_quality_of counts them */
+function assetChecksOf(me: Principal): Record<string, number> {
+  const { devices, catalog } = mockMaintenance(me);
+  const live = devices.filter((d) => !d.missing);
+  const field = (d: MaintenanceDevice) => catalog.statuses.some((s) => s.key === d.status && s.isInField);
+  return {
+    device_serial_missing: live.filter((d) => d.serial === null).length,
+    device_serial_duplicate: live.filter((d) => d.serial !== null && live.some((o) => o.id !== d.id && o.serial === d.serial)).length,
+    device_model_unmapped: live.filter((d) => d.model === null).length,
+    device_status_unmapped: live.filter((d) => d.status === null).length,
+    device_market_unmapped: live.filter((d) => d.market === null).length,
+    device_customer_ref_invalid: 0,
+    component_due_unknown: maintenanceItems(devices, catalog, mockToday(me)).filter((i) => i.basis === "unknown").length,
+    field_device_without_subscription_ref: live.filter((d) => field(d) && d.subscriptionRef === null).length,
+  };
+}
+
 function reviewChecksOf(me: Principal): Record<string, number> {
   const c = seedIntakeConfig(me);
   const channels = c.sources.flatMap((x) => x.reviewChannels).filter((ch) => ch.deletedAt === null);
@@ -3892,8 +3975,8 @@ export const mockData: CmaData = {
     // The main tenant has something to fix in every check; the second tenant has nothing yet
     const main = me.tenantId === MOCK_PRINCIPAL.tenantId;
     // the reviews' checks (addition 0008ze) count the fixture: its unmapped channel, and the active markets without a counted channel
-    const reviews: Record<string, number> = main ? reviewChecksOf(me) : {};
-    return MOCK_CHECKS.filter(([key]) => main || !key.includes("review"))
+    const reviews: Record<string, number> = main ? { ...reviewChecksOf(me), ...assetChecksOf(me) } : {};
+    return MOCK_CHECKS.filter(([key]) => main || !(key.includes("review") || key in ASSET_CHECK_KEYS))
       .map(([key, description], i) => ({ key, description, total: key in reviews ? reviews[key]! : main ? 1 + Math.floor(hashOf(key) * 40) + (i === 3 ? 3 : 0) : 0 }));
   },
 
@@ -4266,6 +4349,23 @@ export const mockData: CmaData = {
       isSetUp: channels.length > 0, markets, marketStates: states,
       filterMarkets: [...new Set(channels.filter((ch) => ch.isCounted).map((ch) => ch.market ?? "unknown"))]
         .sort((a, b) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0) || a.localeCompare(b)) });
+  },
+
+  async getMaintenance(me, filter): Promise<MaintenanceReport> {
+    assertMaintenance(me, filter);
+    const { devices, catalog } = mockMaintenance(me);
+    return maintenanceReport(devices, catalog, filter, mockToday(me), me.tenantId !== MOCK_TENANT_2);
+  },
+
+  async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {
+    assertMaintenance(me, filter);
+    if (bucketProblem(bucket) || (bucket !== "overdue" && bucket !== "unknown" && bucket !== "all"
+        && (bucket < filter.fromMonth || bucket >= addMonths(filter.fromMonth, filter.months)))) {
+      throw new CmaDbError("CMA04", "the bucket is overdue, unknown, all or the first day of a month of the horizon");
+    }
+    if (limit < 1 || limit > 5000) throw new CmaDbError("CMA04", "the limit is 1 to 5000 rows");
+    const { devices, catalog } = mockMaintenance(me);
+    return maintenanceRows(devices, catalog, filter, mockToday(me), bucket, view as MaintenanceView, limit);
   },
 
   async setSourceReviewChannel(me, id, input) {

@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026 and the asset terms of 27 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -560,6 +560,162 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 
 Facts about the review platform's own figures, recorded so nobody mistakes them for CMA metrics (docs/decisions.md, 25 Oct 2026, "Definitions: "published review" is a review in the platform's state APPROVED"). Trusted Shops' Control Centre counts the reviews in the states APPROVED and MODERATION and leaves out REJECTED; its score is the simple average of the APPROVED reviews submitted in the last 12 months, apparently cut to two decimals. Reports → Reviews' average rating is per selected period (Average rating), so the two differ by design; which one the review score KPI means is an Open decision for Kira.
 
+## Asset terms
+
+Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (which system owns which field is an Open decision). The CMA mirrors it read-only through a snapshot of the register's CSV export (docs/import/devices.md) and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+
+### Device
+
+| Field | Value |
+|---|---|
+| Term | Device (nl: Apparaat) |
+| Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
+| Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
+| Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0" through its CSV export, loaded by `cma.load_device_snapshot` into `cma.device` (one row per register record id and connection) |
+| Counts / does not count | Reports → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
+| Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
+| Time rule | None of its own; a device's dates are dates as the register writes them |
+| Scope | The tenant's asset register connections; the filters market, model and scope (in the field, in stock, every tracked device) |
+| Equivalent in the source system | A record of the register's device table (Airtable: one row; its record id is `source_id`) |
+| Not to use | "Asset" for one unit in a label (the asset register is the system); "AED" in a label or a key (the model is configuration) |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register" and "Definitions: Device" |
+| Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Reports → Maintenance (`/reports/maintenance`) |
+| As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`. Matches the definition |
+
+### Component
+
+| Field | Value |
+|---|---|
+| Term | Component (nl: Onderdeel) |
+| Key | `component`, `component_key`; API `components`, `componentKinds`; SQL `cma.device_component`, `cma.device_component_kind` |
+| Definition | A part of a device that comes due on its own, of a kind from the tenant's catalog (Pulse4all: pads and battery), with its serial and its recorded expiry. A component, or the device itself at its end of life (the reserved kind `device`), is a due item. |
+| Source | The register's component columns, mapped per kind by the import's map (`docs/import/devices-map.example.json`) into `cma.device_component`; the kinds are tenant configuration (`cma.device_component_kind`, seed `02` for Pulse4all) |
+| Counts / does not count | A due item counts for every active kind the device carries, its model has a maintenance rule for, or every kind while the model is unknown; and the device itself when the register records its end of life. A replaced component (`replaced_at`) does not count |
+| Unit and display | A count per kind (`maintenance.components`); the list names the kinds due ("Components due"); the device's own item reads "Device, end of life" |
+| Time rule | Its due date and action date (below) |
+| Scope | As Device |
+| Equivalent in the source system | The register's component columns (Airtable: `pads_sn`, `pads_expiry_date_calculated`, `battery_sn`, `battery_expiry_date_calculated`) |
+| Not to use | "Part" or "consumable" in a label; a vendor's own component word in a key |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A component serial that differs from the previous snapshot's is an observed replacement" and "Definitions: Component" |
+| Used by | `maintenance.components`, `maintenance.by_month`, `maintenance.list.components`; `cma_read.device_component`, `cma_read.maintenance_due`; Reports → Maintenance |
+| As built today | `cma.device_component` (`112`): at most one current row per device and kind; a serial that differs from the stored one closes the old row (`replaced_at`) and inserts a new one. `cma.maintenance_items_of` builds the due items. Matches the definition |
+
+### Device status
+
+| Field | Value |
+|---|---|
+| Term | Device status (nl: Apparaatstatus) |
+| Key | `device_status`, `device_status_key`; API `deviceStatus`; flags `is_in_field`, `is_in_stock`, `is_tracked` |
+| Definition | The register's state of a device, mapped to the tenant's catalog of device statuses, each with the flags in the field (at a customer), in stock and tracked (forecast for maintenance). Reporting reads the flags, never a status name. |
+| Source | The register's status column, mapped through the catalog's aliases (`cma.device_status_key_of`); the catalog is tenant configuration (`cma.device_status`, seed `02` for Pulse4all) |
+| Counts / does not count | Only devices in a tracked status are forecast; the scope filter takes in the field or in stock from the flags. A label no alias holds leaves the device without a status (`device_status_unmapped`), not forecast |
+| Unit and display | The status's name from the catalog |
+| Time rule | As of the latest snapshot; no history is kept |
+| Scope | As Device |
+| Equivalent in the source system | The register's operational status (Airtable: `aed_operational_status`) |
+| Not to use | A status name in SQL or code; "connected" or "active" for a device's state |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Device status is a catalog with the flags" and "Definitions: Device status" |
+| Used by | `maintenance.devices`, `maintenance.list.device_status`, the scope filter; `device_status_unmapped`, `field_device_without_subscription_ref`; Reports → Maintenance |
+| As built today | `cma.device_status` (`112`), its flags read by `cma.maintenance_items_of` and `cma.maintenance_bucketed_of`. Matches the definition |
+
+### Due date
+
+| Field | Value |
+|---|---|
+| Term | Due date (nl: Vervaldatum) |
+| Key | `due_on`, `basis`; API `dueOn`, `bases`; basis values `recorded`, `rule`, `unknown` |
+| Definition | The date a due item comes due: the component's recorded expiry (basis `recorded`), else the anchor date (the device's last shipment, else its first) plus the maintenance rule's interval for the model and kind (basis `rule`), else none (basis `unknown`). A device's end of life is its recorded date (basis `recorded`). |
+| Source | The register's expiry and shipment dates; the rule's interval (`cma.maintenance_rule.interval_months`, tenant configuration) |
+| Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`) |
+| Unit and display | A date in the tenant's date format; the basis as "Recorded expiry", "By rule" or "No due date" |
+| Time rule | A date as the register writes it; a month added as Postgres adds months (the 31st of a month plus one month is the last day of the shorter month) |
+| Scope | As Device |
+| Equivalent in the source system | The register's calculated expiry dates (Airtable: `pads_expiry_date_calculated`, `battery_expiry_date_calculated`) |
+| Not to use | "Expiry" for a date the rule worked out; "deadline" |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Due date" |
+| Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
+
+### Action date
+
+| Field | Value |
+|---|---|
+| Term | Action date (nl: Actiedatum) |
+| Key | `action_on`; API `actionOn` |
+| Definition | The due date less the maintenance rule's lead days for the model and kind: the day to act on a due item. A due item without a rule, and a device's end of life, have no lead days. The month of a due item on Reports → Maintenance is its action date's month. |
+| Source | The due date and `cma.maintenance_rule.lead_days` (tenant configuration; 60 for Pulse4all, to confirm, docs/open-decisions.md) |
+| Counts / does not count | Every due item with a due date has one; an item of basis `unknown` has none |
+| Unit and display | A date in the tenant's date format |
+| Time rule | Its month is the calendar month of the date; the current month is the tenant's, in its zone |
+| Scope | As Device |
+| Equivalent in the source system | None: the register holds no action date |
+| Not to use | "Due date" for the action date; "reminder date" |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Action date" |
+| Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
+
+### Overdue
+
+| Field | Value |
+|---|---|
+| Term | Overdue (nl: Achterstallig), for maintenance |
+| Key | `overdue`; API bucket `overdue` |
+| Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Overdue column comes before the months; a planned exchange is overdue when its first action date is. |
+| Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
+| Counts / does not count | Counts every overdue item of a tracked device that the latest full snapshot holds, whatever the horizon. A component the register shows as replaced (a new serial or a new expiry in a later snapshot) carries its new dates and is no longer overdue |
+| Unit and display | A count in the Overdue column (`maintenance.overdue`) |
+| Time rule | The tenant's current month, in its zone |
+| Scope | As Device; this entry fixes the word for maintenance only. Overdue for tasks and tickets (Reports → Follow-up) is still to define (Domains still to define, Tickets and tasks) |
+| Equivalent in the source system | None |
+| Not to use | "Late" or "expired" for an overdue item |
+| Status | Decided (for maintenance) |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Overdue" |
+| Used by | `maintenance.overdue`, the bucket `overdue` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`112`): `overdue` when the action date is before the month of the tenant's today. Matches the definition |
+
+### Exchange (planned)
+
+| Field | Value |
+|---|---|
+| Term | Planned exchange (nl: Geplande wissel) |
+| Key | `exchange_key`, `exchange_on`, `exchanges`; API `exchanges`, view `exchanges` |
+| Definition | The due items of one device whose action dates fall within the bundling window of the earliest one: one exchange, counted once, in the month of that earliest action date. The next item beyond the window starts the device's next planned exchange. |
+| Source | The due items' action dates and the setting `assets.bundle_window_days` |
+| Counts / does not count | Counts each planned exchange once, in its first action date's month (or Overdue). An item of basis `unknown` belongs to no exchange |
+| Unit and display | A count (`maintenance.exchanges`), the grid's default view "Planned exchanges" |
+| Time rule | The month of the exchange's first action date |
+| Scope | As Device |
+| Equivalent in the source system | None |
+| Not to use | "Exchange" alone for this term: the exchange form is service intake (docs/decisions.md, 12 Oct 2026) and Exchange is a journey of Campaign monitoring (docs/open-decisions.md); "swap", "visit" |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Exchange (planned)" |
+| Used by | `maintenance.exchanges`, `maintenance.by_month`, `maintenance.total`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`112`): one ordered pass per device in action-date order. Matches the definition |
+
+### Bundling window
+
+| Field | Value |
+|---|---|
+| Term | Bundling window (nl: Bundelvenster) |
+| Key | `assets.bundle_window_days`; API `bundleWindowDays` |
+| Definition | The days after a device's earliest action date within which its other due items join the same planned exchange. |
+| Source | Tenant setting `assets.bundle_window_days`, a whole number from 0 to 365, default 0 (only items with the same action date bundle); 90 for Pulse4all Subscriptions (seed `02`, to confirm, docs/open-decisions.md) |
+| Counts / does not count | An item whose action date is at most the window after the exchange's first action date joins it; a later one starts a new exchange |
+| Unit and display | Days ("bundling window {days} days") |
+| Time rule | Calendar days |
+| Scope | The tenant |
+| Equivalent in the source system | None |
+| Not to use | "Grace period" |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Bundling window" |
+| Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Reports → Maintenance |
+| As built today | `cma.check_tenant_setting` and `cma.maintenance_items_of` (`112`). Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -596,7 +752,7 @@ Workday, clocked in, hours worked, status, working status, business minutes, off
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like.
 
 ### Other
-Forms, AED maintenance, data quality.
+Forms, data quality. AED maintenance is defined under Asset terms (addition 0008zi).
 
 ## Gaps against the definitions
 

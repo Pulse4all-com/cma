@@ -187,31 +187,32 @@ async function expectNavigation() {
     // Follow-up, Attempts per deal, Attempts per agent, Forms, Intake, Inbound, First orders, Orders per person, Data quality,
     // so the digit keys after Speed to lead move for everyone who sees Reports. Since 0008zb Funnel and Cancellations
     // (reports.view or performance.team) follow Attempts per agent (Attempts per deal for the reader)
-    // Since 0008ze Reviews (reports.view or performance.team) follows Orders per person (First orders for the reader)
+    // Since 0008ze Reviews (reports.view or performance.team) follows Orders per person (First orders for the reader); since
+    // 0008zi Maintenance (reports.view or performance.team) follows Reviews
     ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
       "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms",
-      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/reviews", "/reports/data-quality",
+      "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/reviews", "/reports/maintenance", "/reports/data-quality",
       "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
     ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/funnel",
-      "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/reviews", "/reports/data-quality", "/campaigns"], false],
+      "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
     ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
       "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent",
       "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
-      "/reports/reviews", "/campaigns"], true],
+      "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
     ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
       "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/reviews", "/reports/data-quality", "/campaigns"], true],
+      "/reports/orders-per-person", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
     ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
       "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
-      "/reports/orders-per-person", "/reports/reviews", "/reports/data-quality", "/campaigns"], true],
+      "/reports/orders-per-person", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
   ];
   for (const [subject, hrefs, clock] of cases) {
     const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": subject } });
@@ -368,7 +369,7 @@ async function expectReports() {
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
-    "/reports/first-orders", "/reports/orders-per-person", "/reports/reviews", "/reports/data-quality"]) {
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/reviews", "/reports/maintenance", "/reports/data-quality"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -1700,8 +1701,9 @@ async function expectFrame() {
   // the manager's rail holds 25 pages since Follow-up (0008o), Forms (0008p), Email and Email per agent (0008t), First
   // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
-  // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews
-  for (const [subject, pages] of [["manager", 28], ["agent-one", 5]]) {
+  // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
+  // Maintenance
+  for (const [subject, pages] of [["manager", 29], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");

@@ -20,7 +20,8 @@ import type {
   Journey, JourneyStatus, CallbackCounts, CallbackOwner, CallbacksKept,
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls, TagMeaning,
-  CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
+  CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
+  MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
 import { INVITE_TOKEN_RE, invitationFromDb, type InvitationDbRow } from "@/lib/invitations";
@@ -964,6 +965,32 @@ type CatalogsJson = {
 
 /** cma.reviews_page's answer (addition 0008ze): figures as the database names them */
 type ReviewFiguresDb = { reviews: number; average_rating: number | null; negative: number; linked_order: number; linked_contact: number; unlinked: number };
+type MaintenancePageDb = {
+  current_month: string; bundle_window_days: number; is_set_up: boolean; buckets: string[]; component_kinds: { key: string; name: string }[];
+  cells: { bucket: string; market: string; model: string; components: Record<string, number>; component_items: number; end_of_life: number; exchanges: number }[];
+  unknown: { market: string; model: string; components: Record<string, number>; items: number }[]; unknown_items: number; devices: number;
+  filter_markets: string[]; filter_models: { key: string; name: string | null }[];
+};
+type MaintenanceRowDb = {
+  bucket: string; device_id: string; connection_id: string; source_id: string; serial: string | null; model_key: string; model_name: string | null;
+  market: string; device_status_key: string | null; device_status_name: string | null; components: string[]; due_on: Date | string | null;
+  bases: string[]; action_on: Date | string | null; exchange_on: Date | string | null; customer_ref: string | null; subscription_ref: string | null;
+  crm_connection_id: string | null; crm_contact_source_id: string | null; total_rows: string | number; contact_url: string | null; device_url: string | null;
+};
+/** A date column as YYYY-MM-DD (pg returns a date as a local Date, so it is read back in local time) */
+function dateKeyOf(v: Date | string | null): string | null {
+  if (v === null) return null;
+  if (typeof v === "string") return v.slice(0, 10);
+  return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
+}
+function toMaintenanceRow(x: MaintenanceRowDb): MaintenanceRow {
+  return {
+    bucket: x.bucket, deviceId: x.device_id, sourceId: x.source_id, serial: x.serial, model: x.model_key, modelName: x.model_name, market: x.market,
+    deviceStatus: x.device_status_key, deviceStatusName: x.device_status_name, components: x.components, dueOn: dateKeyOf(x.due_on),
+    bases: x.bases as MaintenanceBasis[], actionOn: dateKeyOf(x.action_on), exchangeOn: dateKeyOf(x.exchange_on), customerRef: x.customer_ref,
+    subscriptionRef: x.subscription_ref, crmContactId: x.crm_contact_source_id, contactUrl: x.contact_url, deviceUrl: x.device_url,
+  };
+}
 type ReviewsPageDb = {
   figures: ReviewFiguresDb; previous: ReviewFiguresDb; previous_from: string; previous_to: string; previous_partial: boolean;
   distribution: { stars: number; reviews: number; previous: number }[];
@@ -2291,6 +2318,34 @@ export const postgresData: CmaData = {
         linkLevels: j.link_levels, inviteEvents: j.invite_events.map((e) => ({ eventType: e.event_type, reviews: e.reviews, previous: e.previous })),
         marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, isSetUp: j.is_set_up, markets: j.filter_markets,
       };
+    });
+  },
+
+  async getMaintenance(me, filter): Promise<MaintenanceReport> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the horizon (the tenant's current month or later, 1 to 24 months) and the filters first (addition 0008zi)
+      const j = one((await q.query<{ j: MaintenancePageDb }>(`select cma.maintenance_page($1::date, $2, $3, $4, $5) as j`,
+        [filter.fromMonth, filter.months, filter.market, filter.model, filter.scope])).rows, "maintenance_page").j;
+      return {
+        filter, currentMonth: j.current_month, bundleWindowDays: j.bundle_window_days, isSetUp: j.is_set_up, buckets: j.buckets,
+        componentKinds: j.component_kinds,
+        cells: j.cells.map((c) => ({ bucket: c.bucket, market: c.market, model: c.model, components: c.components, componentItems: c.component_items,
+          endOfLife: c.end_of_life, exchanges: c.exchanges })),
+        unknown: j.unknown, unknownItems: j.unknown_items, devices: j.devices, markets: j.filter_markets, models: j.filter_models,
+      };
+    });
+  },
+
+  async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the horizon, the filters, the bucket, the view and the limit (addition 0008zi); the
+      // links come from the connections' own templates (cma.record_url: record_url_contact, record_url_device), null without one
+      const r = await q.query<MaintenanceRowDb>(
+        `select r.*, cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id) as contact_url,
+                cma.record_url(r.connection_id, 'device', r.source_id) as device_url
+         from cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8) r`,
+        [filter.fromMonth, filter.months, bucket, filter.market, filter.model, filter.scope, view, limit]);
+      return { total: Number(r.rows[0]?.total_rows ?? 0), rows: r.rows.map(toMaintenanceRow) };
     });
   },
 

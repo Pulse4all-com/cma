@@ -1,0 +1,5 @@
+overdue by day, not by month: 113 FAIL, failing B8, B9, B10
+no replacement on a serial change: 113 FAIL, failing B5, B14
+a full snapshot marks nothing missing: 113 FAIL, failing B5
+the bundling window 40 days short: 113 FAIL, failing B8, B9, B10, B11
+112 run again afterwards: 113 0008zi verified (113_verify_assets: 24 ok, 0 FAIL)

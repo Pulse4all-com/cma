@@ -1,0 +1,176 @@
+DO
+BEGIN
+SET
+DO
+DO
+COMMENT
+CREATE FUNCTION
+REVOKE
+GRANT
+psql:db/112_assets.sql:143: NOTICE:  relation "device_model" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:db/112_assets.sql:160: NOTICE:  relation "device_component_kind" already exists, skipping
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+psql:db/112_assets.sql:178: NOTICE:  relation "maintenance_rule" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE TRIGGER
+psql:db/112_assets.sql:201: NOTICE:  relation "device_status" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+DROP TRIGGER
+CREATE TRIGGER
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/112_assets.sql:234: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:235: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+psql:db/112_assets.sql:340: NOTICE:  relation "device" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+psql:db/112_assets.sql:353: NOTICE:  relation "device_serial_idx" already exists, skipping
+CREATE INDEX
+psql:db/112_assets.sql:354: NOTICE:  relation "device_customer_idx" already exists, skipping
+CREATE INDEX
+psql:db/112_assets.sql:370: NOTICE:  relation "device_component" already exists, skipping
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+psql:db/112_assets.sql:376: NOTICE:  relation "device_component_current_idx" already exists, skipping
+CREATE INDEX
+psql:db/112_assets.sql:378: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:379: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+psql:db/112_assets.sql:414: NOTICE:  relation "device_import_row" already exists, skipping
+CREATE TABLE
+COMMENT
+psql:db/112_assets.sql:416: NOTICE:  relation "device_import_row_batch_idx" already exists, skipping
+CREATE INDEX
+psql:db/112_assets.sql:418: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE VIEW
+COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 0
+COMMIT
+RESET

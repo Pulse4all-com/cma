@@ -54,6 +54,8 @@ export type ShellPage =
   | "funnel" | "cancellations"
   /** Reviews (addition 0008ze, brief B18): the review platform's reviews per market, channel and week */
   | "reviews"
+  /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
+  | "maintenance"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
   /** Follow-up (addition 0008o, 16 October 2026): the report, and the person's own page Waiting for you (no rail item) */
@@ -70,7 +72,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/reviews" | "/reports/data-quality" | "/campaigns"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
 
@@ -214,6 +216,9 @@ export function navEntries(copy: Copy): NavEntry[] {
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact; team figures only, as every report
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },
+        // Maintenance (addition 0008zi): the asset register's devices' due components and end of life per month, market and model,
+        // bundled into planned exchanges, with the device list of a cell; team figures only, as every report
+        { page: "maintenance", href: "/reports/maintenance", label: copy.nav.maintenance, permission: ["reports.view", "performance.team"] },
         { page: "data-quality", href: "/reports/data-quality", label: copy.nav.dataQuality, permission: ["reports.view", "tenant.configure"] },
       ],
     },

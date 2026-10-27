@@ -1,0 +1,18 @@
+-- Copies a device staging file (tools/devices-to-staging.mjs) into cma.device_import_staging, in one transaction, as
+-- the application with the tenant and the acting person set (addition 0008zi). Run from the Terminal through the Cloud
+-- SQL Auth Proxy; docs/import/devices.md step 6:
+--   psql "$PGCONN" -X -v tenant_id=<uuid> -v user_id=<uuid> -f ~/cma/docs/import/copy-devices-staging.psql < <staging.csv>
+-- The staging file arrives on standard input (pstdin), because \copy does not expand psql variables. The acting person
+-- holds tenant.configure (the database checks it on every row). Nothing is loaded yet: the load is the next step.
+\set ON_ERROR_STOP on
+begin;
+set local role cma_app;
+select set_config('app.tenant_id', :'tenant_id', true) is not null as tenant_set,
+       set_config('app.user_id', :'user_id', true) is not null as user_set,
+       set_config('app.actor_label', 'import:copy-devices', true) is not null as label_set;
+\copy cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, warehouse_ref, customer_ref, subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on, warranty_until, end_of_life_on, components, external_refs) from pstdin with (format csv, header true)
+select s.batch_key, count(*) as rows, count(distinct s.source_id) as record_ids
+from cma.device_import_staging s
+group by s.batch_key
+order by s.batch_key;
+commit;

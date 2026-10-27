@@ -1,0 +1,181 @@
+DO
+BEGIN
+SET
+DO
+DO
+COMMENT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE TABLE
+COMMENT
+COMMENT
+CREATE TRIGGER
+CREATE FUNCTION
+REVOKE
+psql:db/112_assets.sql:227: NOTICE:  trigger "check_aliases" for relation "cma.device_model" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/112_assets.sql:230: NOTICE:  trigger "check_aliases" for relation "cma.device_status" does not exist, skipping
+DROP TRIGGER
+CREATE TRIGGER
+psql:db/112_assets.sql:234: NOTICE:  policy "tenant_app" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:234: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:234: NOTICE:  trigger "audit" for relation "cma.device_model" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:235: NOTICE:  policy "tenant_app" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:235: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:235: NOTICE:  trigger "audit" for relation "cma.device_component_kind" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_app" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  trigger "audit" for relation "cma.maintenance_rule" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_app" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  trigger "audit" for relation "cma.device_status" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE FUNCTION
+CREATE FUNCTION
+INSERT 0 1
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+CREATE INDEX
+CREATE TABLE
+COMMENT
+COMMENT
+COMMENT
+COMMENT
+CREATE INDEX
+psql:db/112_assets.sql:378: NOTICE:  policy "tenant_app" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:378: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:378: NOTICE:  trigger "audit" for relation "cma.device" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+psql:db/112_assets.sql:379: NOTICE:  policy "tenant_app" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:379: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:379: NOTICE:  trigger "audit" for relation "cma.device_component" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE TABLE
+COMMENT
+CREATE INDEX
+psql:db/112_assets.sql:418: NOTICE:  policy "tenant_app" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:418: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:418: NOTICE:  trigger "audit" for relation "cma.device_import_row" does not exist, skipping
+ setup_tenant_table 
+--------------------
+ 
+(1 row)
+
+REVOKE
+CREATE VIEW
+COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE TRIGGER
+REVOKE
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+DO
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE FUNCTION
+REVOKE
+GRANT
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+CREATE VIEW
+INSERT 0 1
+COMMIT
+RESET

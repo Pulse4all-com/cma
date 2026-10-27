@@ -12,7 +12,8 @@
  * spreadsheet program must never run them.
  */
 import type {
-  CancellationsReport, ExportHoursRow, FirstOrderLevel, FirstOrderListRow, FunnelGroup, FunnelStageRow, LostReasonRow, StatusChangeRow, TenantSetting,
+  CancellationsReport, ExportHoursRow, FirstOrderLevel, FirstOrderListRow, FunnelGroup, FunnelStageRow, LostReasonRow, MaintenanceRow, StatusChangeRow,
+  TenantSetting,
 } from "./data/types";
 
 export type Separator = "comma" | "semicolon" | "tab";
@@ -315,6 +316,45 @@ export function cancellationsCsv(rows: CancellationsReport["byPeriod"], group: F
     rows.map((r) => [
       `${group === "week" ? l.week : l.day} ${formatDate(r.key, s.dateFormat)}`, r.market === "unknown" ? l.unknownMarket : r.market,
       String(r.requests), String(r.open), String(r.closed), decimalOf(r.medianDaysToClose, 1, s),
+    ]),
+    s,
+  );
+}
+
+// ---- Reports > Maintenance (addition 0008zi) --------------------------------------------------------------
+
+export interface MaintenanceFileLabels {
+  bucket: string; overdue: string; unknown: string; serial: string; model: string; market: string; status: string; components: string; dueDate: string;
+  basis: string; actionDate: string; exchangeDate: string; customer: string; subscription: string; contact: string; record: string; unknownMarket: string;
+}
+
+/**
+ * The device list of Reports > Maintenance, one row per row of the list: the month (or Overdue, or Without a due date),
+ * the serial number, model, market, device status, the components due and their bases by name, the due date, the action
+ * date, the planned exchange's first action date, the customer and subscription ids, the customer record's id and the
+ * register's record id. Ids, codes and dates only: never a name, email, phone or address
+ */
+export function maintenanceCsv(rows: MaintenanceRow[], s: ExportSettings, l: MaintenanceFileLabels,
+  names: { components: Record<string, string>; bases: Record<string, string> }): string {
+  const date = (k: string | null) => (k ? formatDate(k, s.dateFormat) : "");
+  return toCsv(
+    [l.bucket, l.serial, l.model, l.market, l.status, l.components, l.dueDate, l.basis, l.actionDate, l.exchangeDate, l.customer, l.subscription, l.contact,
+      l.record],
+    rows.map((r) => [
+      r.bucket === "overdue" ? l.overdue : r.bucket === "unknown" ? l.unknown : date(r.bucket),
+      safeText(r.serial ?? ""),
+      safeText(r.modelName ?? r.model),
+      r.market === "unknown" ? l.unknownMarket : r.market,
+      safeText(r.deviceStatusName ?? r.deviceStatus ?? ""),
+      safeText(r.components.map((c) => names.components[c] ?? c).join(" + ")),
+      date(r.dueOn),
+      r.bases.map((b) => names.bases[b] ?? b).join(" + "),
+      date(r.actionOn),
+      date(r.exchangeOn),
+      safeText(r.customerRef ?? ""),
+      safeText(r.subscriptionRef ?? ""),
+      safeText(r.crmContactId ?? ""),
+      safeText(r.sourceId),
     ]),
     s,
   );

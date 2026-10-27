@@ -1,0 +1,68 @@
+== markets: dev's twelve (docs/night-2026-10-10/MORNING_RUNBOOK.md 1.4), then seed 02 again
+seed 02 exit=0
+== step B: the connection, kind assets
+
+== the tool
+rows                         30
+mapped_columns               21
+ignored_columns              31
+date_parse_failures          0
+staging file                 <scratchpad>/gen/staging-1.csv
+== copy (docs/import/copy-devices-staging.psql)
+BEGIN
+SET
+ tenant_set | user_set | label_set 
+ t          | t        | t
+COPY 30
+ batch_key | rows | record_ids 
+ fixture-1 |   30 |         30
+COMMIT
+== load fixture-1, full
+{
+    "rows": 30,
+    "updated": 0,
+    "inserted": 30,
+    "unchanged": 0,
+    "missing_now": 0,
+    "refs_dropped": 0,
+    "unmapped_model": 1,
+    "unmapped_market": 2,
+    "unmapped_status": 1,
+    "components_replaced": 0,
+    "customer_ref_invalid": 1
+}
+== the rerun: fixture-2
+rows                         30
+ tenant_set | user_set | label_set 
+ t          | t        | t
+ batch_key | rows | record_ids 
+ fixture-2 |   30 |         30
+{
+    "rows": 30,
+    "updated": 0,
+    "inserted": 0,
+    "unchanged": 30,
+    "missing_now": 0,
+    "refs_dropped": 0,
+    "unmapped_model": 1,
+    "unmapped_market": 2,
+    "unmapped_status": 1,
+    "components_replaced": 0,
+    "customer_ref_invalid": 1
+}
+== staged rows left
+0
+== Reports, Maintenance as of 2026-10-27: from the current month for 12 months, every tracked device
+devices 27, window 90, set up true
+overdue: 5 due items in 4 planned exchanges
+months: 28 due items in 23 planned exchanges
+unknown: 4 due items without a due date
+== Reports, Data quality: the asset register's checks
+component_due_unknown 4
+device_customer_ref_invalid 1
+device_market_unmapped 2
+device_model_unmapped 1
+device_serial_duplicate 2
+device_serial_missing 1
+device_status_unmapped 1
+field_device_without_subscription_ref 1
