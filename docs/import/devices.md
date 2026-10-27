@@ -168,11 +168,12 @@ SQL
 Expected: the counts. `rows` = step 6's `n`; on the first load `inserted` = `rows`; on a later one `inserted` (new
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
 `components_replaced` (a pads or battery serial that changed); `unmapped_model`, `unmapped_status` and
-`unmapped_market` (records whose label the catalogs do not know: for Pulse4all the export's Spain and Italy while the
-catalog holds no ES or IT market; add the market on Configuration → Markets and run seed `02` again for its alias),
-`customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id
-that is no id, left out). A refusal (`CMA02`, `CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of the register is in the file. A partial file
-(a filtered view) is loaded with `false`, so nothing is marked missing.
+`unmapped_market` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
+without ES and IT: dev holds both since 27 October 2026; in prod check Configuration → Markets before the first real
+load, add a missing market and run seed `02` again for its alias), `customer_ref_invalid` (a customer reference that
+is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
+`CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of
+the register is in the file. A partial file (a filtered view) is loaded with `false`, so nothing is marked missing.
 
 ## 8. Read the result
 
@@ -206,11 +207,10 @@ cd ~/cma && node tools/devices-to-staging.mjs tools/fixtures/devices-sample.csv 
 ```
 Expected: `rows 30`, `mapped_columns 21`, `ignored_columns 31`, `date_parse_failures 0`, `values_with_at 1` (a customer
 id that is an address), the path. Then steps 6 and 7 with `/tmp/devices-staging-1.csv` and the batch `fixture-1`.
-Expected counts with dev's twelve markets (the dev catalog of `docs/night-2026-10-10/MORNING_RUNBOOK.md` 1.4) and the
-seed's catalogs: `rows 30`, `inserted 30`,
-`updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `unmapped_model 1`, `unmapped_status 1`,
-`unmapped_market 2` (Spain and Italy: dev's twelve markets hold no ES or IT; with ES and IT in the catalog and seed
-`02` run again, 0), `customer_ref_invalid 1`, `refs_dropped 0`.
+Expected counts with the seed's catalogs and a market catalog that holds ES and IT, as dev does (27 October 2026):
+`rows 30`, `inserted 30`, `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `unmapped_model 1`,
+`unmapped_status 1`, `unmapped_market 0` (2 in a catalog without ES and IT: the fixture's Spain and Italy),
+`customer_ref_invalid 1`, `refs_dropped 0`.
 
 The rerun: the same two commands with `fixture-2` (and `/tmp/devices-staging-2.csv`). Expected: `rows 30`,
 `inserted 0`, `updated 0`, `unchanged 30`, the other counts as before. Then `rm /tmp/devices-staging-*.csv`.
@@ -219,9 +219,52 @@ Reports → Maintenance in October 2026, from October for 12 months, every track
 Stolen/Missing and Decommissioned are not forecast): Past due holds 5 due items in 4 planned exchanges (NL FRx 2 with
 one end of life, DE HS1 1, AT HS1 1), the months hold 28 due items in 23 planned exchanges, and 4 items have no due
 date (NL HS1 2, NL unknown model 2). From November the October items move to Past due. Reports → Data quality:
-`component_due_unknown 4`, `device_customer_ref_invalid 1`, `device_market_unmapped 2`, `device_model_unmapped 1`,
+`component_due_unknown 4`, `device_customer_ref_invalid 1`, `device_market_unmapped 0` (2 without ES and IT),
+`device_model_unmapped 1`, `device_serial_duplicate 2`, `device_serial_missing 1`, `device_status_unmapped 1`,
+`field_device_without_subscription_ref 1`.
+
+### Before the merge
+
+The page itself cannot be looked at in dev before the merge: the web cannot run locally against dev under a personal
+login. Its database client (`web/src/lib/db/client.ts`) applies no `CMA_DB_SET_ROLE`, and a personal login holds
+`cma_app` without inheritance, so a local web gets "permission denied for schema cma" (docs/open-decisions.md). Read
+the same figures in Studio instead, as the application and as the dev seed's admin (`admin@example.com`, who holds
+every report permission in Pulse4all Subscriptions; docs/RUNBOOK.md, 7. Database work):
+
+**Studio (cma-dev-pg)**
+```sql
+set role cma_owner;
+select set_config('app.tenant_id', t.id::text, false),
+       set_config('app.user_id', u.id::text, false),
+       set_config('app.actor_label', 'studio:martin', false)
+from cma.tenant t join cma.app_user u on u.tenant_id = t.id
+where t.slug = 'pulse4all-subscriptions' and u.email = 'admin@example.com';
+set role cma_app;
+with p as (select cma.maintenance_page('2026-10-01', 12, null, null, null) as j),
+     c as (select x from p, jsonb_array_elements(p.j -> 'cells') x)
+select (p.j ->> 'devices')::integer as devices,
+       (select sum((x ->> 'component_items')::integer + (x ->> 'end_of_life')::integer) from c where x ->> 'bucket' = 'past_due') as past_due_items,
+       (select sum((x ->> 'exchanges')::integer) from c where x ->> 'bucket' = 'past_due') as past_due_exchanges,
+       (select sum((x ->> 'component_items')::integer + (x ->> 'end_of_life')::integer) from c where x ->> 'bucket' <> 'past_due') as month_items,
+       (select sum((x ->> 'exchanges')::integer) from c where x ->> 'bucket' <> 'past_due') as month_exchanges,
+       (p.j ->> 'unknown_items')::integer as unknown_items,
+       (select string_agg(m, ', ' order by m) from jsonb_array_elements_text(p.j -> 'filter_markets') m) as markets
+from p;
+select check_key, total from cma.data_quality()
+where check_key in (select check_key from cma.data_quality_assets_checks())
+order by check_key;
+reset role;
+```
+Expected (October 2026; from a later month use its first day, and the October items move to past due): the context
+row; then one row: `devices 27`, `past_due_items 5`, `past_due_exchanges 4`, `month_items 28`, `month_exchanges 23`,
+`unknown_items 4`, `markets AT, BE, DE, DK, ES, FI, FR, GB, IE, IT, NL, NO, SE`; then eight rows:
+`component_due_unknown 4`, `device_customer_ref_invalid 1`, `device_market_unmapped 0`, `device_model_unmapped 1`,
 `device_serial_duplicate 2`, `device_serial_missing 1`, `device_status_unmapped 1`,
 `field_device_without_subscription_ref 1`.
+
+The on-screen check of Reports → Maintenance, its grid, a figure's device list and its file, happens in dev's
+`cma-web` after the merge, with prod's image (docs/RUNBOOK.md, 4. Try a new image in dev first), as the test user
+`admin`.
 
 ## A later snapshot
 

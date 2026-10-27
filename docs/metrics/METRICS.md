@@ -24538,7 +24538,7 @@ group by 1, 2 order by 1, 2
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -24623,7 +24623,7 @@ group by 1, 2, 3 order by 1, 2, 3
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -24686,7 +24686,7 @@ per device in action-date order: an item starts a new exchange when its action d
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -24762,7 +24762,7 @@ group by 1, 2 order by 1, 2
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -24821,7 +24821,7 @@ row total = sum over the buckets of the view's figure; column total = sum over t
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -24895,7 +24895,7 @@ select count(*) as unknown_items from i where i.action_on is null and i.componen
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
@@ -25008,7 +25008,7 @@ total = count(*) over () of the cell's rows (total_rows); shown = min(total, 500
 - The asset register's export loaded (docs/import/devices.md) into an assets connection
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
-- Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
+- Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check) (data quality check `device_market_unmapped`)
 - A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)

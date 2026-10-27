@@ -1,0 +1,32 @@
+Asset register and Reports, Maintenance, addition 0008zi (db/112, db/113), dev, 27 October 2026
+
+Written down by Claude Code at Martin's request from his report of his runs on 27 October 2026; the results below
+are his. No key, device id or customer id appears here.
+
+dev   112           clean (INSERT 0 1, COMMIT)
+dev   113           0008zi verified, 25 ok, 0 FAIL; C1 165.1 ms and 142.3 ms
+dev   113 provoked  26 FAIL lines; PROVOKED, NOT A PASS, 0 ok, 25 FAIL
+dev   reruns        PASS rows: 105 28, 75 25, 41 2, 107 11, 14 2, 53 17
+dev   seed 02       exit 0
+                    catalogs: pulse4all-subscriptions 2 models, 2 kinds, 4 rules, 5 statuses, bundle window 90;
+                    pulse4all-invest none
+
+Data map
+dev   schema.json   from dev: 96 tables and 144 views, verify:datamap PASS (commit 1c4de64)
+
+The register's connection (dev)
+dev   connection    adapter airtable, kind assets, account dev-fixture-base; created in Studio as admin@example.com
+
+The fixture (tools/fixtures/devices-sample.csv, docs/import/devices.md, The fixture in dev)
+dev   fixture-1     full: rows 30, inserted 30, updated 0, unchanged 0, missing_now 0, components_replaced 0,
+                    unmapped_model 1, unmapped_status 1, unmapped_market 0, customer_ref_invalid 1, refs_dropped 0
+dev   fixture-2     full: rows 30, inserted 0, unchanged 30, the other counts as fixture-1
+
+Reports, Maintenance (cma.maintenance_page from 2026-10-01, 12 months, as cma_app)
+dev   page          devices 27; past due 5 items in 4 exchanges; months 28 items in 23 exchanges; unknown items 4;
+                    markets AT, BE, DE, DK, ES, FI, FR, GB, IE, IT, NL, NO, SE
+
+Data quality (the eight asset checks)
+dev   checks        component_due_unknown 4, device_customer_ref_invalid 1, device_market_unmapped 0,
+                    device_model_unmapped 1, device_serial_duplicate 2, device_serial_missing 1,
+                    device_status_unmapped 1, field_device_without_subscription_ref 1

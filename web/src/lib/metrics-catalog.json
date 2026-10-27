@@ -46169,7 +46169,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -46359,7 +46359,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -46548,7 +46548,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -46722,7 +46722,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -46907,7 +46907,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -47079,7 +47079,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {
@@ -47375,7 +47375,7 @@
           "check": "device_status_unmapped"
         },
         {
-          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet)",
+          "item": "Every device's country mapped to a catalog market (the export's Spain and Italy map only where the catalog holds ES and IT: dev does since 27 October 2026, prod to check)",
           "check": "device_market_unmapped"
         },
         {

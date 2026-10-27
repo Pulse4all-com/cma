@@ -465,10 +465,11 @@ $$;
 -- the register's device statuses with their flags (Active/Customer in the field and tracked, In Storage in stock and
 -- tracked, Internal Usage tracked, Stolen/Missing and Decommissioned not tracked), a bundling window of 90 days, and a
 -- market alias for every country the export writes whose market the catalog holds. The lead days and the window are to
--- confirm with Kira and Arno (README Open decisions). An alias is added only where the catalog holds its market, so in a
--- catalog without ES or IT (dev's twelve markets) the export's Spain and Italy show under device_market_unmapped until
--- the market is added (Configuration, Markets) and this seed runs again. Only rows the tenant does not have yet are
--- added, so a change on Configuration or in Studio survives a rerun.
+-- confirm with Kira and Arno (README Open decisions). An alias is added only where the catalog holds its market (dev
+-- holds ES and IT since 27 October 2026; prod is to check on Configuration, Markets before the first real load), so in a
+-- catalog without ES or IT the export's Spain and Italy show under device_market_unmapped until the market is added
+-- (Configuration, Markets) and this seed runs again. Only rows the tenant does not have yet are added, so a change on
+-- Configuration or in Studio survives a rerun.
 do $$
 declare
   v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
