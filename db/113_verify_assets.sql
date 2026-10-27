@@ -798,6 +798,13 @@ begin
 end
 $$;
 
+-- The helpers are dropped first, so the verdict is the last thing the script prints
+drop function if exists pg_temp.v0008zi_code(text);
+drop function if exists pg_temp.v0008zi_best_ms(text, integer);
+drop function if exists pg_temp.v0008zi_stage(text, integer);
+drop function if exists pg_temp.v0008zi_counts(jsonb);
+drop function if exists pg_temp.v0008zi_cells(jsonb);
+
 -- Verdict: one row per check, then the verdict
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zi
@@ -810,9 +817,4 @@ from (select ord, check_name, result, detail from verify_0008zi
              format('113_verify_assets: %s ok, %s FAIL', (select count(*) from verify_0008zi where result = 'ok'),
                                                         (select count(*) from verify_0008zi where result <> 'ok'))) x
 order by ord;
-drop function if exists pg_temp.v0008zi_code(text);
-drop function if exists pg_temp.v0008zi_best_ms(text, integer);
-drop function if exists pg_temp.v0008zi_stage(text, integer);
-drop function if exists pg_temp.v0008zi_counts(jsonb);
-drop function if exists pg_temp.v0008zi_cells(jsonb);
 reset role;
