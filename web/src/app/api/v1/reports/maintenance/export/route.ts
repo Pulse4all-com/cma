@@ -8,7 +8,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * Reports > Maintenance's device list as a CSV file (addition 0008zi): the query of /rows, with &bucket all (overdue and
+ * Reports > Maintenance's device list as a CSV file (addition 0008zi): the query of /rows, with &bucket all (past_due and
  * every month of the horizon) and up to 5000 rows when left out. One row per row of the list, as the page shows it; the
  * format follows the tenant's export settings, the column names and the components' names the caller's language. Needs
  * reports.view or performance.team, here and again in the database. No name, email, phone or address exists to export.

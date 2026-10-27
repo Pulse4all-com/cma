@@ -324,12 +324,12 @@ export function cancellationsCsv(rows: CancellationsReport["byPeriod"], group: F
 // ---- Reports > Maintenance (addition 0008zi) --------------------------------------------------------------
 
 export interface MaintenanceFileLabels {
-  bucket: string; overdue: string; unknown: string; serial: string; model: string; market: string; status: string; components: string; dueDate: string;
+  bucket: string; pastDue: string; unknown: string; serial: string; model: string; market: string; status: string; components: string; dueDate: string;
   basis: string; actionDate: string; exchangeDate: string; customer: string; subscription: string; contact: string; record: string; unknownMarket: string;
 }
 
 /**
- * The device list of Reports > Maintenance, one row per row of the list: the month (or Overdue, or Without a due date),
+ * The device list of Reports > Maintenance, one row per row of the list: the month (or Past due, or Without a due date),
  * the serial number, model, market, device status, the components due and their bases by name, the due date, the action
  * date, the planned exchange's first action date, the customer and subscription ids, the customer record's id and the
  * register's record id. Ids, codes and dates only: never a name, email, phone or address
@@ -341,7 +341,7 @@ export function maintenanceCsv(rows: MaintenanceRow[], s: ExportSettings, l: Mai
     [l.bucket, l.serial, l.model, l.market, l.status, l.components, l.dueDate, l.basis, l.actionDate, l.exchangeDate, l.customer, l.subscription, l.contact,
       l.record],
     rows.map((r) => [
-      r.bucket === "overdue" ? l.overdue : r.bucket === "unknown" ? l.unknown : date(r.bucket),
+      r.bucket === "past_due" ? l.pastDue : r.bucket === "unknown" ? l.unknown : date(r.bucket),
       safeText(r.serial ?? ""),
       safeText(r.modelName ?? r.model),
       r.market === "unknown" ? l.unknownMarket : r.market,

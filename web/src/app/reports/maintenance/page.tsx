@@ -19,7 +19,7 @@ import { resolve } from "../../access";
  * Maintenance (Report, addition 0008zi, 27 October 2026): what comes due on the devices of the tenant's asset register (a
  * read-only mirror loaded from the register's CSV export), per month, market and model. A component is due on its
  * recorded expiry, else its anchor date plus the rule's interval for the model; its action date is the due date less the
- * rule's lead days; a device's end of life is a due item of its own. The grid shows the Overdue bucket and a column per
+ * rule's lead days; a device's end of life is a due item of its own. The grid shows the Past due bucket and a column per
  * month of a forward horizon (from a month, 6, 12 or 24 months; H), per market and model, in planned exchanges (a
  * device's items within the bundling window counted once, in the month of the earliest action date) or in components
  * (G); filtered by market (K), model (D) and scope (S: every tracked device, in the field, in stock). A figure opens its

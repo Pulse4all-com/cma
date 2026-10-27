@@ -176,7 +176,7 @@ that is no id, left out). A refusal (`CMA02`, `CMA04`, `CMA06`) writes nothing a
 
 ## 8. Read the result
 
-**Browser:** Reports → Maintenance: the Overdue bucket and the months, per market and model, Planned exchanges and
+**Browser:** Reports → Maintenance: the Past due bucket and the months, per market and model, Planned exchanges and
 Components; a cell opens the device list. Reports → Data quality: the asset register's eight checks (devices without a
 serial, a serial held twice, an unmapped model, status or country, a customer reference that is no id, due items
 without a due date, devices in the field without a subscription reference).
@@ -216,9 +216,9 @@ The rerun: the same two commands with `fixture-2` (and `/tmp/devices-staging-2.c
 `inserted 0`, `updated 0`, `unchanged 30`, the other counts as before. Then `rm /tmp/devices-staging-*.csv`.
 
 Reports → Maintenance in October 2026, from October for 12 months, every tracked device (27: the three in Returned,
-Stolen/Missing and Decommissioned are not forecast): Overdue holds 5 due items in 4 planned exchanges (NL FRx 2 with
+Stolen/Missing and Decommissioned are not forecast): Past due holds 5 due items in 4 planned exchanges (NL FRx 2 with
 one end of life, DE HS1 1, AT HS1 1), the months hold 28 due items in 23 planned exchanges, and 4 items have no due
-date (NL HS1 2, NL unknown model 2). From November the October items move to Overdue. Reports → Data quality:
+date (NL HS1 2, NL unknown model 2). From November the October items move to Past due. Reports → Data quality:
 `component_due_unknown 4`, `device_customer_ref_invalid 1`, `device_market_unmapped 2`, `device_model_unmapped 1`,
 `device_serial_duplicate 2`, `device_serial_missing 1`, `device_status_unmapped 1`,
 `field_device_without_subscription_ref 1`.
@@ -249,9 +249,11 @@ Expected: the context row, then `DELETE <n>` with the rows of step 6.
   code (`cma.market_code_of`). A new label is configuration: add it as an alias (Studio, the catalog's `aliases`).
 - **Tracked:** only devices whose status is tracked (`is_tracked`) are forecast; Reports → Maintenance shows the field
   (`is_in_field`) and the stock (`is_in_stock`) apart. A status name never decides anything.
-- **Due date:** a component's recorded expiry, else the anchor date (the last shipment, else the first) plus the rule's
-  interval for the model, else none (basis unknown). **Action date:** the due date less the rule's lead days (Pulse4all:
-  60). A device's end of life is a due item of its own, on the recorded date, without lead days. **Overdue:** the
-  action date lies before the current month.
+- **Due date:** a component's recorded expiry, else the anchor date plus the rule's interval for the model, else none
+  (basis unknown). The anchor is the day a later snapshot first showed the component's new serial when it replaced
+  another (a replacement restarts the rule), else the last shipment, else the first; the components of the first load
+  keep the shipment. **Action date:** the due date less the rule's lead days (Pulse4all: 60). A device's end of life is
+  a due item of its own, on the recorded date, without lead days. **Past due:** the action date lies before the current
+  month.
 - **Planned exchange:** a device's due items whose action dates lie within `assets.bundle_window_days` (Pulse4all: 90)
   of the earliest one are one exchange, counted in the month of that earliest action date.

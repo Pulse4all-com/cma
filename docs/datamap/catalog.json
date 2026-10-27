@@ -187,7 +187,7 @@
         },
         {
           "name": "maintenance_rule",
-          "what": "Per model and component kind: the interval in months from the anchor date (last shipment, else first) and the lead days before the due date (0008zi)",
+          "what": "Per model and component kind: the interval in months from the anchor date (the day a replacement was first seen, else the last shipment, else the first) and the lead days before the due date (0008zi)",
           "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
         },
         {
@@ -669,11 +669,11 @@
     },
     {
       "name": "maintenance_due",
-      "what": "Every due item of the tracked devices as of each tenant's date: component or end of life, due date with its basis (recorded, rule, unknown), action date and month, overdue, the planned exchange it belongs to (0008zi)"
+      "what": "Every due item of the tracked devices as of each tenant's date: component or end of life, due date with its basis (recorded, rule, unknown), action date and month, past due, the planned exchange it belongs to (0008zi)"
     },
     {
       "name": "maintenance_per_month",
-      "what": "Per action month, market and model: due items, component items, devices at end of life, planned exchanges whose first action date falls in the month, overdue (0008zi)"
+      "what": "Per action month, market and model: due items, component items, devices at end of life, planned exchanges whose first action date falls in the month, past due (0008zi)"
     }
   ],
   "flows": {

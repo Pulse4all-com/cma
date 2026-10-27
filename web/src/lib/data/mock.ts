@@ -2321,7 +2321,7 @@ function assertMaintenance(me: Principal, filter: MaintenanceFilter): void {
 
 /**
  * The fictional asset register of Reports → Maintenance (addition 0008zi): 36 devices of tenant one with test serials,
- * dated from today so the grid always holds overdue items and the coming months; tenant two has none (no register).
+ * dated from today so the grid always holds past-due items and the coming months; tenant two has none (no register).
  * Models, kinds, rules (pads 24 months, battery 54, 60 lead days), statuses and a window of 90 days as seed 02 sets them
  */
 function mockMaintenance(me: Principal): { devices: MaintenanceDevice[]; catalog: MaintenanceCatalog } {
@@ -4359,9 +4359,9 @@ export const mockData: CmaData = {
 
   async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {
     assertMaintenance(me, filter);
-    if (bucketProblem(bucket) || (bucket !== "overdue" && bucket !== "unknown" && bucket !== "all"
+    if (bucketProblem(bucket) || (bucket !== "past_due" && bucket !== "unknown" && bucket !== "all"
         && (bucket < filter.fromMonth || bucket >= addMonths(filter.fromMonth, filter.months)))) {
-      throw new CmaDbError("CMA04", "the bucket is overdue, unknown, all or the first day of a month of the horizon");
+      throw new CmaDbError("CMA04", "the bucket is past_due, unknown, all or the first day of a month of the horizon");
     }
     if (limit < 1 || limit > 5000) throw new CmaDbError("CMA04", "the limit is 1 to 5000 rows");
     const { devices, catalog } = mockMaintenance(me);

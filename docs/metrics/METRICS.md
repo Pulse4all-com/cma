@@ -24463,16 +24463,16 @@ Not limited to the period or the market filter on purpose (KPI 11, data first). 
 
 ### /reports/maintenance
 
-#### `maintenance.overdue`
+#### `maintenance.past_due`
 
-**Overdue** on /reports/maintenance · Overdue (Achterstallig)
+**Past due** on /reports/maintenance · Past due (Achterstallig)
 
-The Overdue column: per market and model, the planned exchanges (or, in Components, the due items) whose action date lies before the current month.
+The Past due column: per market and model, the planned exchanges (or, in Components, the due items) whose action date lies before the current month.
 
 **Formula as computed**
 
 ```
-Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (last shipment, else first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Overdue: action_on < first day of the tenant's current month. Exchanges view: count(distinct exchange_key) whose exchange's first action date is before the current month; Components view: component items + end-of-life items overdue.
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Past due: action_on < first day of the tenant's current month. Exchanges view: count(distinct exchange_key) whose exchange's first action date is before the current month; Components view: component items + end-of-life items past due.
 ```
 
 **Unit** count · **Grain** now, per_market, per_model · **Status** prerequisite_missing
@@ -24515,13 +24515,17 @@ with t as (select (now() at time zone timezone)::date as today from cma.tenant w
 d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
       from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
-i as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or r.id is not null or d.model_key is null
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
-select coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as overdue_items
+select coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as past_due_items
 from i join d on d.id = i.id cross join t
 where i.action_on < date_trunc('month', t.today)
 group by 1, 2 order by 1, 2
@@ -24541,7 +24545,7 @@ group by 1, 2 order by 1, 2
 
 **Notes**
 
-Overdue never ends by itself: an item stays overdue until a later snapshot gives it a later due date, a recorded expiry or a later last shipment for the rule. A new serial without a recorded expiry keeps the rule's due date from the device's shipment (docs/open-decisions.md). verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
+Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
 
 #### `maintenance.by_month`
 
@@ -24552,7 +24556,7 @@ A month column of the grid: per market and model, the planned exchanges (or due 
 **Formula as computed**
 
 ```
-Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (last shipment, else first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Bucket: the first day of the action date's month when it lies in [from month, from month + months). Exchanges counted in the month of their first action date.
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Bucket: the first day of the action date's month when it lies in [from month, from month + months). Exchanges counted in the month of their first action date.
 ```
 
 **Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
@@ -24596,10 +24600,14 @@ with t as (select (now() at time zone timezone)::date as today from cma.tenant w
 d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
       from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
-i as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or r.id is not null or d.model_key is null
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select date_trunc('month', i.action_on)::date as month, coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as items
@@ -24622,7 +24630,7 @@ group by 1, 2, 3 order by 1, 2, 3
 
 **Notes**
 
-Months between the current month and a later from month are left out of the grid (not overdue, not in the horizon). verify_sql recomputes the Components view for :from (a month's first day) to :to (the horizon's end).
+Months between the current month and a later from month are left out of the grid (not past due, not in the horizon). verify_sql recomputes the Components view for :from (a month's first day) to :to (the horizon's end).
 
 #### `maintenance.exchanges`
 
@@ -24696,7 +24704,7 @@ The Components view: the due components and the devices at their end of life who
 **Formula as computed**
 
 ```
-Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (last shipment, else first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Cell = component_items + end_of_life; the figure's title lists them per kind.
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). Cell = component_items + end_of_life; the figure's title lists them per kind.
 ```
 
 **Unit** count · **Grain** per_market, per_model, per_month · **Status** prerequisite_missing
@@ -24732,10 +24740,14 @@ with t as (select (now() at time zone timezone)::date as today from cma.tenant w
 d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
       from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
-i as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or r.id is not null or d.model_key is null
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select date_trunc('month', i.action_on)::date as month, i.component, count(*) as items
@@ -24759,7 +24771,7 @@ group by 1, 2 order by 1, 2
 
 **Total** on /reports/maintenance · Total (Totaal)
 
-The Total column (a row's figures over Overdue and the months) and the All markets and models row (each column's figure over the rows).
+The Total column (a row's figures over Past due and the months) and the All markets and models row (each column's figure over the rows).
 
 **Formula as computed**
 
@@ -24827,7 +24839,7 @@ The note's count: due items of tracked devices without a due date (no recorded e
 **Formula as computed**
 
 ```
-Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (last shipment, else first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). count of items with basis unknown after the filters
+Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). count of items with basis unknown after the filters
 ```
 
 **Unit** count · **Grain** now · **Status** prerequisite_missing
@@ -24863,10 +24875,14 @@ with t as (select (now() at time zone timezone)::date as today from cma.tenant w
 d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
       from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
-i as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or r.id is not null or d.model_key is null
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select count(*) as unknown_items from i where i.action_on is null and i.component <> 'device'
@@ -24973,7 +24989,7 @@ total = count(*) over () of the cell's rows (total_rows); shown = min(total, 500
 - tenant: cma.maintenance_page under RLS + current tenant (cma.maintenance_page_of with the tenant passed explicitly)
 - population: devices whose device status has is_tracked and that the latest full snapshot still holds (source_deleted_at is null); never a status name
 - scope filter: field (is_in_field), stock (is_in_stock) or every tracked device; market (a code or unknown) and model (a key or unknown) filters on the device's mapped values
-- the cell: its bucket (overdue, a month, unknown) and, for a grid figure, its market and model
+- the cell: its bucket (past due, a month, unknown) and, for a grid figure, its market and model
 
 **Time** Dates are calendar dates as the register holds them. Today and the current month are the tenant's (cma.tenant_today_of, the tenant's zone). The horizon starts on the first day of the current month or a later one and runs 6, 12 or 24 months (the API takes 1 to 24).
 
@@ -35997,7 +36013,7 @@ verify_sql null (needs the touches).
 
 **Month** on /api/v1/reports/maintenance/export · Month (Maand)
 
-The row's bucket: the month (its first day in the tenant's date format), Overdue or Without a due date.
+The row's bucket: the month (its first day in the tenant's date format), Past due or Without a due date.
 
 **Formula as computed**
 

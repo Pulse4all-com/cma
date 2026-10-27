@@ -1,6 +1,6 @@
 /**
  * Building blocks of Reports → Maintenance (addition 0008zi): the switches (horizon, scope, view), the grid (one row per
- * market and model, Overdue then a column per month, each figure a link to its device list) and the device list. Server
+ * market and model, Past due then a column per month, each figure a link to its device list) and the device list. Server
  * components, plain CSS; Pulse4all-Style 7.5 and 7.6: the header row Background Blue, numbers right-aligned with tabular
  * figures, zebra rows, a muted 0; every header with its hint. Team figures only, never a person's; ids, statuses, dates and
  * links only, never a customer's name, email, phone or address.
@@ -88,9 +88,9 @@ export function MaintenanceSwitches({ months, scope, view, query, copy }: {
   );
 }
 
-/** A bucket's column label: Overdue, or the month */
+/** A bucket's column label: Past due, or the month */
 export function bucketLabel(bucket: string, copy: Copy, locale: Locale): string {
-  if (bucket === "overdue") return copy.maintenance.listOverdue;
+  if (bucket === "past_due") return copy.maintenance.listPastDue;
   if (bucket === "unknown") return copy.maintenance.listUnknown;
   if (bucket === "all") return copy.maintenance.listAll;
   return fmtMonth(bucket, locale);
@@ -100,7 +100,7 @@ const marketName = (m: string, copy: Copy) => (m === "unknown" ? copy.reports.un
 const modelName = (key: string, name: string | null, copy: Copy) => (key === "unknown" ? copy.maintenance.unknownModel : name ?? key);
 
 /**
- * The grid: per market and model, Overdue then the months of the horizon and the row's total, in the view's figure; the
+ * The grid: per market and model, Past due then the months of the horizon and the row's total, in the view's figure; the
  * total per column. A figure above 0 links to its device list (the address keys bucket, cellMarket and cellModel)
  */
 export function MaintenanceGrid({ report, view, query, copy, locale }: { report: MaintenanceReport; view: MaintenanceView; query: Query; copy: Copy; locale: Locale }) {
@@ -127,7 +127,7 @@ export function MaintenanceGrid({ report, view, query, copy, locale }: { report:
           <th className={th}><Hint label={t.colModel} text={h.mtColModel} copy={copy} /></th>
           {report.buckets.map((b) => (
             <th key={b} className={`${th} text-right`} data-bucket={b}>
-              <Hint label={b === "overdue" ? t.colOverdue : fmtMonth(b, locale)} text={b === "overdue" ? h.mtColOverdue : h.mtColMonth} copy={copy} />
+              <Hint label={b === "past_due" ? t.colPastDue : fmtMonth(b, locale)} text={b === "past_due" ? h.mtColPastDue : h.mtColMonth} copy={copy} />
             </th>
           ))}
           <th className={`${th} text-right`}><Hint label={t.colTotal} text={h.mtColTotal} copy={copy} /></th>

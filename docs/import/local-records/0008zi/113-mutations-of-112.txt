@@ -1,7 +1,8 @@
-overdue by day, not by month: 113 FAIL, failing B8, B9, B10
-no replacement on a serial change: 113 FAIL, failing B5, B14
+past due by day, not by month: 113 FAIL, failing B8, B9, B10
+no replacement on a serial change: 113 FAIL, failing B5, B14, B16
 a full snapshot marks nothing missing: 113 FAIL, failing B5
 the bundling window 40 days short: 113 FAIL, failing B8, B9, B10, B11
 the audit image of a staged row in full: 113 FAIL, failing A8, B15
 a staged address kept as it is: 113 FAIL, failing B15
-112 run again afterwards: 113 0008zi verified (113_verify_assets: 24 ok, 0 FAIL)
+a replacement keeps the shipment anchor: 113 FAIL, failing B16
+112 run again afterwards: 113 0008zi verified (113_verify_assets: 25 ok, 0 FAIL)

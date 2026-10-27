@@ -627,18 +627,18 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 |---|---|
 | Term | Due date (nl: Vervaldatum) |
 | Key | `due_on`, `basis`; API `dueOn`, `bases`; basis values `recorded`, `rule`, `unknown` |
-| Definition | The date a due item comes due: the component's recorded expiry (basis `recorded`), else the anchor date (the device's last shipment, else its first) plus the maintenance rule's interval for the model and kind (basis `rule`), else none (basis `unknown`). A device's end of life is its recorded date (basis `recorded`). |
-| Source | The register's expiry and shipment dates; the rule's interval (`cma.maintenance_rule.interval_months`, tenant configuration) |
+| Definition | The date a due item comes due: the component's recorded expiry (basis `recorded`), else the anchor date plus the maintenance rule's interval for the model and kind (basis `rule`), else none (basis `unknown`). The anchor is the day the current component was first seen when it replaced another of its kind on the device (a replacement restarts the rule), else the device's last shipment, else its first. A device's end of life is its recorded date (basis `recorded`). |
+| Source | The register's expiry and shipment dates; for a replacement, when the import first saw its serial (`cma.device_component.first_seen_at` of a component with a replaced predecessor); the rule's interval (`cma.maintenance_rule.interval_months`, tenant configuration) |
 | Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`) |
 | Unit and display | A date in the tenant's date format; the basis as "Recorded expiry", "By rule" or "No due date" |
-| Time rule | A date as the register writes it; a month added as Postgres adds months (the 31st of a month plus one month is the last day of the shorter month) |
+| Time rule | A date as the register writes it; a replacement's first sighting as a date in the tenant's zone; a month added as Postgres adds months (the 31st of a month plus one month is the last day of the shorter month) |
 | Scope | As Device |
 | Equivalent in the source system | The register's calculated expiry dates (Airtable: `pads_expiry_date_calculated`, `battery_expiry_date_calculated`) |
 | Not to use | "Expiry" for a date the rule worked out; "deadline" |
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "A due item's due date is the recorded expiry" and "Definitions: Due date" |
 | Used by | `maintenance.list.due_date`, `maintenance.list.basis`, `maintenance.unknown_items`; `component_due_unknown`; `cma_read.maintenance_due`; Reports → Maintenance |
-| As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
+| As built today | `cma.maintenance_items_of` (`112`): the anchor is `first_seen_at` in the tenant's zone for a current component with a replaced row of the same device and kind, else the shipment. Components of the first load keep the shipment. Matches the definition |
 
 ### Action date
 
@@ -659,24 +659,24 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Used by | `maintenance.by_month`, `maintenance.list.action_date`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
 | As built today | `cma.maintenance_items_of` (`112`). Matches the definition |
 
-### Overdue
+### Past due
 
 | Field | Value |
 |---|---|
-| Term | Overdue (nl: Achterstallig), for maintenance |
-| Key | `overdue`; API bucket `overdue` |
-| Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Overdue column comes before the months; a planned exchange is overdue when its first action date is. |
+| Term | Past due (nl: Achterstallig) |
+| Key | `past_due`; API `pastDue`, bucket `past_due` |
+| Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
-| Counts / does not count | Counts every overdue item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays overdue until a later snapshot gives it a later due date: a recorded expiry, or a later last shipment for the rule. A new serial without a recorded expiry keeps the rule's due date from the device's shipment, so it stays overdue (whether a replacement should restart the rule is open, docs/open-decisions.md) |
-| Unit and display | A count in the Overdue column (`maintenance.overdue`) |
+| Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |
+| Unit and display | A count in the Past due column (`maintenance.past_due`) |
 | Time rule | The tenant's current month, in its zone |
-| Scope | As Device; this entry fixes the word for maintenance only. Overdue for tasks and tickets (Reports → Follow-up) is still to define (Domains still to define, Tickets and tasks) |
+| Scope | As Device |
 | Equivalent in the source system | None |
-| Not to use | "Late" or "expired" for an overdue item |
-| Status | Decided (for maintenance) |
-| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Overdue" |
-| Used by | `maintenance.overdue`, the bucket `overdue` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month`; Reports → Maintenance |
-| As built today | `cma.maintenance_items_of` (`112`): `overdue` when the action date is before the month of the tenant's today. Matches the definition |
+| Not to use | "Overdue" (undefined: it is still to define for tasks and tickets, Domains still to define); "late" or "expired" for a past-due item |
+| Status | Decided |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Past due" |
+| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); Reports → Maintenance |
+| As built today | `cma.maintenance_items_of` (`112`): `past_due` when the action date is before the month of the tenant's today. Matches the definition |
 
 ### Exchange (planned)
 
@@ -686,7 +686,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Key | `exchange_key`, `exchange_on`, `exchanges`; API `exchanges`, view `exchanges` |
 | Definition | The due items of one device whose action dates fall within the bundling window of the earliest one: one exchange, counted once, in the month of that earliest action date. The next item beyond the window starts the device's next planned exchange. |
 | Source | The due items' action dates and the setting `assets.bundle_window_days` |
-| Counts / does not count | Counts each planned exchange once, in its first action date's month (or Overdue). An item of basis `unknown` belongs to no exchange |
+| Counts / does not count | Counts each planned exchange once, in its first action date's month (or Past due). An item of basis `unknown` belongs to no exchange |
 | Unit and display | A count (`maintenance.exchanges`), the grid's default view "Planned exchanges" |
 | Time rule | The month of the exchange's first action date |
 | Scope | As Device |
@@ -775,7 +775,6 @@ Where the code or the catalog says something else than this file: every retired 
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |
 | W27 | `web/src/lib/copy.ts` | `hints.agent` (Speed to lead's grouping by agent) | "The person behind the first outbound call, else the deal's owner" (its CRM owner) | The person who placed the first attempt (the call's last participant, Aircall) |
 | W28 | `web/src/lib/copy.ts` | `speedToLead.openNotCalled` "Open, not called", `speedToLead.openTitle`, `hints.withinTarget`, `hints.openNotCalled`; no group for deals created by hand or closed before the first call | "Deals closed without a call count as missed; deals still open and not called are left out until they are called or closed" | "Not called yet" with its age, late once past the target or the cutoff; "Created by hand, not in speed to lead" and closed before first call shown apart, out of the measures |
-| W29 | `web/src/lib/copy.ts` | `welcome.attentionTasks`, `welcome.attentionTasksOne`, `followUp.tileTasksOverdue` and Reports → Follow-up's task groups ("Overdue") | Overdue for a task past its due time | A word defined for tasks (Domains still to define, Tickets and tasks); Overdue is defined for maintenance only (Asset terms), and whether tasks share its meaning or take another word is open (docs/open-decisions.md) |
 
 ### db/
 

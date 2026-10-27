@@ -22,9 +22,10 @@
 --      people and a connection of its own. Checked: the loads' counts (insert, an unchanged rerun, a serial change as a
 --      replacement, a record missing from a full snapshot, a partial snapshot), the refusals, the mapping, the raw, the
 --      kind, the run and the staged rows, the due basis (recorded, rule, unknown), bundling (pads and battery within the
---      window one exchange, outside it two), overdue, the window setting, the page and its filters, the device list and
+--      window one exchange, outside it two), past due, the window setting, the page and its filters, the device list and
 --      its buckets, the parameters and the permission refusal (CMA06), data quality, the reader views, tenant isolation,
---      a staged address kept as a bare @ and the audit images of staged rows holding their keys only
+--      a staged address kept as a bare @ and the audit images of staged rows holding their keys only, and a replacement
+--      restarting the rule (a new serial without an expiry due from the day it was first seen)
 --   C  speed: a throwaway tenant with 5,000 devices and 10,000 components; the page of 24 months and the device list of
 --      all buckets as the application (row-level security on) under verify.max_ms, the best of three
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -126,12 +127,12 @@ as $$
                    'drop=' || (j ->> 'refs_dropped'))
 $$;
 
--- A page's cells as one line: bucket/market/model/components/end of life/exchanges, the bucket's month as YYYY-MM
+-- A page's cells as one line: bucket/market/model/components/end of life/exchanges, a month's bucket as YYYY-MM
 create or replace function pg_temp.v0008zi_cells(j jsonb)
 returns text
 language sql
 as $$
-  select coalesce(string_agg(left(c ->> 'bucket', 7) || '/' || (c ->> 'market') || '/' || (c ->> 'model') || '/'
+  select coalesce(string_agg(case when c ->> 'bucket' ~ '^[0-9]' then left(c ->> 'bucket', 7) else c ->> 'bucket' end || '/' || (c ->> 'market') || '/' || (c ->> 'model') || '/'
                              || coalesce((select string_agg(k || ':' || (c -> 'components' ->> k), '+' order by k)
                                           from jsonb_object_keys(c -> 'components') k), '-')
                              || '/' || (c ->> 'end_of_life') || '/' || (c ->> 'exchanges'), ' ' order by o), '-')
@@ -292,8 +293,8 @@ begin
       || 'subscription_ref,order_ref,first_shipped_on,stock_received_on,last_shipped_on,warranty_until,end_of_life_on,external_refs,source_deleted_at,first_seen_at,synced_at',
     'device_component=id,tenant_id,device_id,component_key,serial,expires_on,first_seen_at,replaced_at',
     'maintenance_due=tenant_id,device_id,connection_id,source_id,serial,model_key,market,device_status_key,is_in_field,is_in_stock,component_key,due_on,basis,'
-      || 'action_on,action_month,overdue,exchange_key,exchange_on',
-    'maintenance_per_month=tenant_id,month,market,model_key,items,component_items,end_of_life,exchanges,overdue',
+      || 'action_on,action_month,past_due,exchange_key,exchange_on',
+    'maintenance_per_month=tenant_id,month,market,model_key,items,component_items,end_of_life,exchanges,past_due',
     'dq_device_serial_missing=tenant_id,connection_id,object_type,object_id,value', 'dq_device_serial_duplicate=tenant_id,connection_id,object_type,object_id,value',
     'dq_device_model_unmapped=tenant_id,connection_id,object_type,object_id,value', 'dq_device_status_unmapped=tenant_id,connection_id,object_type,object_id,value',
     'dq_device_market_unmapped=tenant_id,connection_id,object_type,object_id,value', 'dq_device_customer_ref_invalid=tenant_id,connection_id,object_type,object_id,value',
@@ -567,36 +568,36 @@ begin
                         || 'rec-4:pads:unknown:-:- rec-4:battery:unknown:-:- rec-7:pads:unknown:-:- rec-7:battery:unknown:-:-'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B8. bundling and overdue: rec-1's pads and battery (51 days apart, within 90) one exchange from 11 October; rec-2's
-    --     (more than 90 days apart) two; rec-3's pads and end of life (74 days) one, overdue (acted on before October), its
-    --     battery another; rec-1's pads acted on in October not overdue. With a window of 0 every item is its own exchange
-    v_txt := (select string_agg(i.source_id || ':' || i.component_key || ':' || coalesce(i.exchange_on::text, '-') || ':' || i.overdue::text, ' '
+    -- B8. bundling and past due: rec-1's pads and battery (51 days apart, within 90) one exchange from 11 October; rec-2's
+    --     (more than 90 days apart) two; rec-3's pads and end of life (74 days) one, past due (acted on before October), its
+    --     battery another; rec-1's pads acted on in October not past due. With a window of 0 every item is its own exchange
+    v_txt := (select string_agg(i.source_id || ':' || i.component_key || ':' || coalesce(i.exchange_on::text, '-') || ':' || i.past_due::text, ' '
                                 order by i.source_id, i.component_order)
               from cma.maintenance_items_of(v_t1, v_today) i where i.basis <> 'unknown')
              || ' | ' || (select count(distinct i.exchange_key) from cma.maintenance_items_of(v_t1, v_today) i);
     perform cma.set_tenant_setting('assets.bundle_window_days', '0');
     v_txt := v_txt || ' ' || (select count(distinct i.exchange_key) from cma.maintenance_items_of(v_t1, v_today) i);
     perform cma.set_tenant_setting('assets.bundle_window_days', '90');
-    v_rows := v_rows || array['18', 'B8 bundling within the window one exchange, outside it two; overdue before the current month; window 0',
+    v_rows := v_rows || array['18', 'B8 bundling within the window one exchange, outside it two; past due before the current month; window 0',
       case when v_txt = 'rec-1:pads:2026-10-11:false rec-1:battery:2026-10-11:false rec-2:pads:2026-12-12:false rec-2:battery:2029-06-11:false '
                         || 'rec-3:pads:2026-06-02:true rec-3:battery:2027-05-11:false rec-3:device:2026-06-02:true | 5 7'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B9. the page from October 2026 for 12 months (the analyst): the buckets, the cells (overdue first; rec-1's exchange
-    --     counted in October, its battery in December; rec-2's pads and exchange in December; rec-3's overdue exchange with
+    -- B9. the page from October 2026 for 12 months (the analyst): the buckets, the cells (past due first; rec-1's exchange
+    --     counted in October, its battery in December; rec-2's pads and exchange in December; rec-3's past-due exchange with
     --     its end of life, its battery in May 2027), the unknown items per market and model (unknown last), the tracked
     --     devices, the filters, the window, set up
     perform set_config('app.user_id', v_analyst1::text, true);
     j := cma.maintenance_page_of(v_t1, v_from, 12, null, null, null, v_today);
-    v_txt := (select string_agg(left(x, 7), ',') from jsonb_array_elements_text(j -> 'buckets') x) || ' | ' || pg_temp.v0008zi_cells(j) || ' | '
+    v_txt := (select string_agg(case when x ~ '^[0-9]' then left(x, 7) else x end, ',') from jsonb_array_elements_text(j -> 'buckets') x) || ' | ' || pg_temp.v0008zi_cells(j) || ' | '
              || (select string_agg((u ->> 'market') || '/' || (u ->> 'model') || '/' || (u ->> 'items'), ' ') from jsonb_array_elements(j -> 'unknown') u)
              || ' | ' || (j ->> 'unknown_items') || ' ' || (j ->> 'devices') || ' ' || (j -> 'filter_markets')::text || ' '
              || (select string_agg(m ->> 'key', ',') from jsonb_array_elements(j -> 'filter_models') m) || ' '
              || (select string_agg(k ->> 'key', ',') from jsonb_array_elements(j -> 'component_kinds') k) || ' '
              || (j ->> 'bundle_window_days') || ' ' || (j ->> 'is_set_up') || ' ' || (j ->> 'current_month');
     v_rows := v_rows || array['19', 'B9 the page: buckets, cells, the unknown items, tracked devices, filters, window, set up',
-      case when v_txt = 'overdue,2026-10,2026-11,2026-12,2027-01,2027-02,2027-03,2027-04,2027-05,2027-06,2027-07,2027-08,2027-09 | '
-                        || 'overdue/NL/frx/pads:1/1/1 2026-10/NL/hs1/pads:1/0/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 '
+      case when v_txt = 'past_due,2026-10,2026-11,2026-12,2027-01,2027-02,2027-03,2027-04,2027-05,2027-06,2027-07,2027-08,2027-09 | '
+                        || 'past_due/NL/frx/pads:1/1/1 2026-10/NL/hs1/pads:1/0/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 '
                         || '2027-05/NL/frx/battery:1/0/1 | NL/hs1/2 unknown/unknown/2 | 4 5 ["GB", "NL", "unknown"] hs1,frx,unknown pads,battery 90 true 2026-10-01'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
@@ -613,17 +614,17 @@ begin
              || ' | dec ' || pg_temp.v0008zi_cells(cma.maintenance_page_of(v_t1, '2026-12-01', 6, null, null, null, v_today));
     v_rows := v_rows || array['20', 'B10 the filters: field, stock, a market, a model, the model unknown; another horizon',
       case when v_txt = 'field 2026-10/NL/hs1/pads:1/0/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2 | '
-                        || 'stock overdue/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 2 | GB 2026-12/GB/hs1/pads:1/0/1 | '
-                        || 'frx overdue/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 | unknown - 2 | '
-                        || 'dec overdue/NL/frx/pads:1/1/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2027-05/NL/frx/battery:1/0/1'
+                        || 'stock past_due/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 2 | GB 2026-12/GB/hs1/pads:1/0/1 | '
+                        || 'frx past_due/NL/frx/pads:1/1/1 2027-05/NL/frx/battery:1/0/1 | unknown - 2 | '
+                        || 'dec past_due/NL/frx/pads:1/1/1 2026-12/GB/hs1/pads:1/0/1 2026-12/NL/hs1/battery:1/0/0 2027-05/NL/frx/battery:1/0/1'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B11. the device list: the overdue exchange (rec-3, pads and its end of life); the components of December (rec-1's
+    -- B11. the device list: the past-due exchange (rec-3, pads and its end of life); the components of December (rec-1's
     --      battery, rec-2's pads, by action date); October's exchange (rec-1 with both, its customer's CRM contact c-1); the
     --      unknown items (rec-7, then rec-4 of the unknown market); all buckets by exchange and the limit with the total
     v_txt := (select string_agg(r.serial || ':' || array_to_string(r.components, '+') || ':' || r.due_on || ':' || array_to_string(r.bases, '+') || ':'
                                 || r.action_on || ':' || r.exchange_on || ':' || r.device_status_name || ':' || r.model_name, ' ')
-              from cma.maintenance_rows_of(v_t1, v_from, 12, 'overdue', null, null, null, 'exchanges', 500, v_today) r)
+              from cma.maintenance_rows_of(v_t1, v_from, 12, 'past_due', null, null, null, 'exchanges', 500, v_today) r)
              || ' | ' || (select string_agg(r.serial || ':' || array_to_string(r.components, '+') || ':' || r.action_on, ' ')
                           from cma.maintenance_rows_of(v_t1, v_from, 12, '2026-12-01', null, null, null, 'components', 500, v_today) r)
              || ' | ' || (select string_agg(r.serial || ':' || array_to_string(r.components, '+') || ':' || coalesce(r.customer_ref, '-') || ':'
@@ -636,10 +637,10 @@ begin
                           from cma.maintenance_rows_of(v_t1, v_from, 12, 'all', null, null, null, 'exchanges', 500, v_today) r)
              || ' | ' || (select string_agg(r.source_id || ':' || r.total_rows, ' ')
                           from cma.maintenance_rows_of(v_t1, v_from, 12, 'all', null, null, null, 'exchanges', 1, v_today) r);
-    v_rows := v_rows || array['21', 'B11 the device list: overdue, a month''s components, a month''s exchange with the CRM contact, unknown, all, the limit',
+    v_rows := v_rows || array['21', 'B11 the device list: past due, a month''s components, a month''s exchange with the CRM contact, unknown, all, the limit',
       case when v_txt = 'SN-3:pads+device:2026-08-01:recorded:2026-06-02:2026-06-02:In Storage:FRx | SN-1:battery:2026-12-01 SN-2:pads:2026-12-12 | '
                         || 'SN-1:pads+battery:cu-1:sub-1:c-1:true | rec-7:NL:pads+battery:unknown rec-4:unknown:pads+battery:unknown | '
-                        || 'overdue:rec-3 2026-10-01:rec-1 2026-12-01:rec-2 2027-05-01:rec-3 | rec-3:4'
+                        || 'past_due:rec-3 2026-10-01:rec-1 2026-12-01:rec-2 2027-05-01:rec-3 | rec-3:4'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B12. the parameters and the permission (the public reads, today's month): a horizon not on the first of a month, of
@@ -654,8 +655,8 @@ begin
              || ' ' || pg_temp.v0008zi_code(format('select cma.maintenance_page(%L, 12, null, ''HS1'')', v_cur))
              || ' ' || pg_temp.v0008zi_code(format('select cma.maintenance_page(%L, 12, null, null, ''all'')', v_cur))
              || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_rows(%L, 6, %L)', v_cur, (v_cur + interval '6 months')::date::text))
-             || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_rows(%L, 6, ''overdue'', null, null, null, ''devices'')', v_cur))
-             || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_rows(%L, 6, ''overdue'', null, null, null, ''exchanges'', 0)', v_cur))
+             || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_rows(%L, 6, ''past_due'', null, null, null, ''devices'')', v_cur))
+             || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_rows(%L, 6, ''past_due'', null, null, null, ''exchanges'', 0)', v_cur))
              || ' ' || pg_temp.v0008zi_code(format('select cma.maintenance_page(%L, 12, ''unknown'', ''unknown'', ''field'')', v_cur))
              || ' ' || pg_temp.v0008zi_code(format('select * from cma.maintenance_due_of(%L, 24)', v_cur));
     perform set_config('app.user_id', v_reader1::text, true);
@@ -750,6 +751,33 @@ begin
       case when v_txt = '0/0/0/00 - false 23514 23514 @/@/{"pads": {"serial": "@", "expires_on": "2027-01-01"}}/{"ns_fam_id": "F-1", "ns_internal_id": "@"} @ true/0/0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
+    -- B16. a replacement restarts the rule: a second, partial snapshot gives rec-3 a new pads serial without an expiry and
+    --      rec-2 a battery without one. rec-3's pads (a replacement) are due on the day the new serial was first seen, in
+    --      the tenant's zone, plus the rule's 24 months, basis rule, and are not past due; rec-2's battery (no
+    --      predecessor) keeps the shipment anchor, the last shipment of 10 February 2025 plus 54 months
+    insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, warehouse_ref, customer_ref,
+                                           first_shipped_on, stock_received_on, last_shipped_on, end_of_life_on, components)
+    values ('b16', 2, 'rec-3', 'SN-3', 'FRx', 'In Storage', 'Netherlands', 'WH-B', null, '2023-01-10', '2022-12-01', null, '2026-08-15',
+            '{"pads": {"serial": "P-3c"}}'),
+           ('b16', 3, 'rec-2', 'SN-2', 'heartstart hs1', 'Active/Customer', 'United Kingdom', null, 'not an id!', '2024-03-01', null,
+            '2025-02-10', null, '{"battery": {"serial": "B-2"}}');
+    j := cma.load_device_snapshot('b16', v_reg, false);
+    v_txt := pg_temp.v0008zi_counts(j) || ' | '
+             || (select string_agg(i.source_id || ':' || i.component_key || ':' || i.basis || ':'
+                                   || case when i.due_on = ((c.first_seen_at at time zone t.timezone)::date + interval '24 months')::date
+                                           then 'seen+24' else coalesce(i.due_on::text, '-') end
+                                   || ':' || i.past_due::text, ' ' order by i.source_id)
+                 from cma.maintenance_items_of(v_t1, v_today) i
+                 join cma.tenant t on t.id = v_t1
+                 join cma.device_component c on c.tenant_id = v_t1 and c.device_id = i.device_id and c.component_key = i.component_key
+                                            and c.replaced_at is null
+                 where (i.source_id, i.component_key) in (('rec-3', 'pads'), ('rec-2', 'battery')))
+             || ' | ' || (select count(*) from cma.device_component c join cma.device d on d.id = c.device_id
+                          where d.tenant_id = v_t1 and d.source_id = 'rec-3' and c.component_key = 'pads' and c.replaced_at is not null);
+    v_rows := v_rows || array['26', 'B16 a replacement restarts the rule: a new serial without an expiry due from its first day, not past due; no predecessor, the shipment',
+      case when v_txt = 'rows=2 ins=0 upd=2 same=0 missing=0 repl=1 um=0 us=0 uk=0 cri=1 drop=0 | rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:seen+24:false | 1'
+                and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
     when sqlstate 'CMAOK' then null;
@@ -840,7 +868,7 @@ from (select ord, check_name, result, detail from verify_0008zi
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zi where result = 'ok') = 24
+                  when (select count(*) from verify_0008zi where result = 'ok') = 25
                        and not exists (select 1 from verify_0008zi where result <> 'ok') then '0008zi verified'
                   else 'FAIL' end,
              format('113_verify_assets: %s ok, %s FAIL', (select count(*) from verify_0008zi where result = 'ok'),

@@ -2065,7 +2065,7 @@ export interface MaintenanceFilter {
   scope: MaintenanceScope | null;
 }
 
-/** One bucket (overdue or a month as its first day), market and model of the grid (cma.maintenance_page) */
+/** One bucket (past_due or a month as its first day), market and model of the grid (cma.maintenance_page) */
 export interface MaintenanceCell {
   bucket: string;
   market: string;
@@ -2086,7 +2086,7 @@ export interface MaintenanceReport {
   bundleWindowDays: number;
   /** Whether the tenant has an asset register set up ("set up", never Connected: a call term) */
   isSetUp: boolean;
-  /** "overdue", then the first day of every month of the horizon */
+  /** "past_due", then the first day of every month of the horizon */
   buckets: string[];
   componentKinds: { key: string; name: string }[];
   cells: MaintenanceCell[];
@@ -3370,7 +3370,7 @@ export interface CmaData {
   // ---- Maintenance (addition 0008zi): the database checks the permission on every call (CMA06)
   /** Reports → Maintenance in one read (cma.maintenance_page): reports.view or performance.team; a horizon from the current month or later, 1 to 24 months */
   getMaintenance(me: Principal, filter: MaintenanceFilter): Promise<MaintenanceReport>;
-  /** The device list of one cell (cma.maintenance_rows): bucket overdue, a month of the horizon, unknown or all; at most limit rows (1 to 5000) */
+  /** The device list of one cell (cma.maintenance_rows): bucket past_due, a month of the horizon, unknown or all; at most limit rows (1 to 5000) */
   getMaintenanceRows(me: Principal, filter: MaintenanceFilter, bucket: string, view: MaintenanceView, limit: number): Promise<MaintenanceRows>;
   /** Reports → Funnel, deals per person: performance.team and the tenant's reports.per_person holding deals (CMA06 otherwise) */
   getDealsPerPerson(me: Principal, range: HoursRange, filter: FunnelFilter): Promise<DealsPerPerson>;

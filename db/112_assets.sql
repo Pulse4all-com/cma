@@ -46,14 +46,15 @@
 --                      missing from a full snapshot marked, one sync_run (job assets_import), the staged rows deleted;
 --                      answers the counts
 --   forecast           cma.maintenance_items_of(tenant, today): every due item of the tracked devices: a component
---                      (due on its recorded expiry, else its anchor date, the last shipment else the first, plus the
---                      rule's interval for the model, else unknown; action date the due date less the rule's lead days)
---                      or the device itself (end of life, its recorded date, no lead days); overdue when the action date
+--                      (due on its recorded expiry, else its anchor date plus the rule's interval for the model, else
+--                      unknown; the anchor the day a replacement was first seen, in the tenant's zone, else the last
+--                      shipment, else the first; action date the due date less the rule's lead days)
+--                      or the device itself (end of life, its recorded date, no lead days); past due when the action date
 --                      lies before the current month; the planned exchange (the device's due items whose action dates
 --                      fall within assets.bundle_window_days of the earliest one, counted once in the month of that
 --                      earliest action date). cma.maintenance_due_of(from month, months) reads it for the application
 --   reports            cma.maintenance_page(from month, months up to 24, market, model, scope field or stock)
---                      (reports.view or performance.team): the Overdue bucket and one cell per month, market and model
+--                      (reports.view or performance.team): the Past due bucket and one cell per month, market and model
 --                      with the items per component, the devices at end of life and the planned exchanges, and the
 --                      unknown-basis items per market and model; cma.maintenance_rows(...) the device list of one cell
 --                      (serial, model, market, device status, components due, due date, bases, action date, customer and
@@ -980,11 +981,13 @@ $$;
 -- snapshot) as of p_today (the tenant's date; a verifier gives a fixed one):
 --   a component  for every active component kind the device carries (a current component), its model has a rule for,
 --                or of every kind while the model is unknown. Due date: the recorded expiry (basis recorded), else the
---                anchor date (the last shipment, else the first) plus the rule's interval in months (basis rule), else
---                none (basis unknown). Action date: the due date less the rule's lead days (none without a rule)
+--                anchor date plus the rule's interval in months (basis rule), else none (basis unknown). The anchor:
+--                the day the current component was first seen, in the tenant's zone, when it replaced another of its
+--                kind on the device (a replacement restarts the rule); else the last shipment, else the first. Action
+--                date: the due date less the rule's lead days (none without a rule)
 --   the device   at its end of life (component device): the recorded end-of-life date, basis recorded, no lead days;
 --                no item without one
---   overdue      the action date lies before p_today's month
+--   past due     the action date lies before p_today's month
 --   exchange     the planned exchange: per device, ordered by action date, an item joins the exchange of the earliest
 --                item before it when its action date lies within assets.bundle_window_days of that exchange's first
 --                action date; else it starts a new one. exchange_on is the exchange's first action date, exchange_key the
@@ -992,13 +995,14 @@ $$;
 create or replace function cma.maintenance_items_of(p_tenant_id uuid, p_today date)
 returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
                is_in_field boolean, is_in_stock boolean, component_key text, component_order integer, due_on date, basis text,
-               action_on date, overdue boolean, exchange_key text, exchange_on date)
+               action_on date, past_due boolean, exchange_key text, exchange_on date)
 language plpgsql stable
 as $$
 #variable_conflict use_column
 declare
   v_win    integer := greatest(coalesce(nullif(cma.setting_of(p_tenant_id, 'assets.bundle_window_days'), '')::integer, 0), 0);
   v_month  date := date_trunc('month', p_today)::date;
+  v_zone   text := (select t.timezone from cma.tenant t where t.id = p_tenant_id);
   v_device uuid;
   v_start  date;
   r        record;
@@ -1012,17 +1016,25 @@ begin
       from cma.device dv
       join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null
+    ), rp as (
+      -- the devices' kinds with a replaced component: their current component is a replacement
+      select distinct p.device_id, p.component_key
+      from cma.device_component p
+      where p.tenant_id = p_tenant_id and p.replaced_at is not null
     ), it as (
       select d.id, d.connection_id, d.source_id, d.serial, d.model_key, d.market, d.device_status_key, d.is_in_field, d.is_in_stock,
              k.key as component_key, k.sort_order as component_order, c.expires_on as recorded,
-             case when ru.interval_months is not null and d.anchor is not null
-                  then (d.anchor + make_interval(months => ru.interval_months))::date end as by_rule,
+             case when ru.interval_months is not null and a.anchor is not null
+                  then (a.anchor + make_interval(months => ru.interval_months))::date end as by_rule,
              coalesce(ru.lead_days, 0) as lead_days
       from d
       join cma.device_component_kind k on k.tenant_id = p_tenant_id and k.status = 'active'
       left join cma.device_component c
         on c.tenant_id = p_tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+      left join rp on rp.device_id = c.device_id and rp.component_key = c.component_key
       left join cma.maintenance_rule ru on ru.tenant_id = p_tenant_id and ru.model_key = d.model_key and ru.component_key = k.key
+      cross join lateral (select case when rp.device_id is not null then (c.first_seen_at at time zone v_zone)::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or ru.id is not null or d.model_key is null
       union all
       select d.id, d.connection_id, d.source_id, d.serial, d.model_key, d.market, d.device_status_key, d.is_in_field, d.is_in_stock,
@@ -1039,7 +1051,7 @@ begin
     device_id := r.id; connection_id := r.connection_id; source_id := r.source_id; serial := r.serial; model_key := r.model_key;
     market := r.market; device_status_key := r.device_status_key; is_in_field := r.is_in_field; is_in_stock := r.is_in_stock;
     component_key := r.component_key; component_order := r.component_order; due_on := r.due; basis := r.how; action_on := r.act;
-    overdue := coalesce(r.act < v_month, false);
+    past_due := coalesce(r.act < v_month, false);
     if r.act is null then
       exchange_on := null;
       exchange_key := null;
@@ -1074,7 +1086,7 @@ begin
     raise exception 'the horizon starts on the first day of a month' using errcode = 'CMA04';
   end if;
   if p_from_month < date_trunc('month', p_today)::date then
-    raise exception 'the horizon starts in the current month or later (the months before are overdue)' using errcode = 'CMA04';
+    raise exception 'the horizon starts in the current month or later (the months before are past due)' using errcode = 'CMA04';
   end if;
   if p_months is null or p_months not between 1 and 24 then
     raise exception 'the horizon is 1 to 24 months' using errcode = 'CMA04';
@@ -1082,12 +1094,12 @@ begin
 end
 $$;
 
--- The due items of the horizon for the application (reports.view or performance.team): every overdue item, every item
+-- The due items of the horizon for the application (reports.view or performance.team): every past-due item, every item
 -- whose action date falls in the horizon, and every item of basis unknown
 create or replace function cma.maintenance_due_of(p_from_month date, p_months integer)
 returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
                is_in_field boolean, is_in_stock boolean, component_key text, component_order integer, due_on date, basis text,
-               action_on date, overdue boolean, exchange_key text, exchange_on date)
+               action_on date, past_due boolean, exchange_key text, exchange_on date)
 language plpgsql stable
 as $$
 #variable_conflict use_column
@@ -1100,7 +1112,7 @@ begin
   perform cma.assert_maintenance_horizon(p_from_month, p_months, v_today);
   return query
     select i.* from cma.maintenance_items_of(v_tenant, v_today) i
-    where i.basis = 'unknown' or i.overdue
+    where i.basis = 'unknown' or i.past_due
        or (i.action_on >= p_from_month and i.action_on < (p_from_month + make_interval(months => p_months))::date)
     order by i.action_on nulls last, i.market, i.model_key, i.serial, i.component_order;
 end
@@ -1125,12 +1137,12 @@ begin
 end
 $$;
 
--- The due items of a horizon after the filters, each with its bucket (overdue, or the first day of its action month
+-- The due items of a horizon after the filters, each with its bucket (past_due, or the first day of its action month
 -- within the horizon, as text; null beyond it) and its exchange's bucket (the same for the exchange's first action date)
 create or replace function cma.maintenance_bucketed_of(p_tenant_id uuid, p_from_month date, p_months integer, p_market text, p_model text,
                                                        p_scope text, p_today date)
 returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
-               component_key text, component_order integer, due_on date, basis text, action_on date, overdue boolean, exchange_key text,
+               component_key text, component_order integer, due_on date, basis text, action_on date, past_due boolean, exchange_key text,
                exchange_on date, bucket text, exchange_bucket text)
 language sql stable
 as $$
@@ -1138,10 +1150,10 @@ as $$
     select date_trunc('month', p_today)::date as month_start, (p_from_month + make_interval(months => p_months))::date as until
   )
   select i.device_id, i.connection_id, i.source_id, i.serial, coalesce(i.model_key, 'unknown'), coalesce(i.market, 'unknown'),
-         i.device_status_key, i.component_key, i.component_order, i.due_on, i.basis, i.action_on, i.overdue, i.exchange_key, i.exchange_on,
-         case when i.overdue then 'overdue'
+         i.device_status_key, i.component_key, i.component_order, i.due_on, i.basis, i.action_on, i.past_due, i.exchange_key, i.exchange_on,
+         case when i.past_due then 'past_due'
               when i.action_on >= p_from_month and i.action_on < h.until then to_char(date_trunc('month', i.action_on), 'YYYY-MM-DD') end,
-         case when i.exchange_on < h.month_start then 'overdue'
+         case when i.exchange_on < h.month_start then 'past_due'
               when i.exchange_on >= p_from_month and i.exchange_on < h.until then to_char(date_trunc('month', i.exchange_on), 'YYYY-MM-DD') end
   from cma.maintenance_items_of(p_tenant_id, p_today) i
   cross join h
@@ -1153,7 +1165,7 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 8. Reports, Maintenance (reports.view or performance.team)
 -- ---------------------------------------------------------------------------------------------
--- The page for an explicit tenant as of p_today: the buckets (overdue, then every month of the horizon), the active
+-- The page for an explicit tenant as of p_today: the buckets (past_due, then every month of the horizon), the active
 -- component kinds, one cell per bucket, market and model holding items (the components' items per kind, the devices at
 -- end of life, the planned exchanges counted in the bucket of their first action date), the unknown-basis items per
 -- market and model, the tracked devices after the filters, the bundling window, whether an asset register is set up,
@@ -1202,7 +1214,7 @@ as $$
     'bundle_window_days', greatest(coalesce(nullif(cma.setting_of(p_tenant_id, 'assets.bundle_window_days'), '')::integer, 0), 0),
     'is_set_up', cma.assets_set_up_of(p_tenant_id),
     'buckets', (select jsonb_agg(x.k order by x.o)
-                from (select 'overdue' as k, 0 as o
+                from (select 'past_due' as k, 0 as o
                       union all
                       select to_char((p_from_month + make_interval(months => g))::date, 'YYYY-MM-DD'), g + 1
                       from generate_series(0, p_months - 1) g) x),
@@ -1211,7 +1223,7 @@ as $$
     'cells', (select coalesce(jsonb_agg(jsonb_build_object('bucket', c.bucket, 'market', c.market, 'model', c.model_key,
                                                            'components', c.components, 'component_items', c.component_items,
                                                            'end_of_life', c.end_of_life, 'exchanges', c.exchanges)
-                                        order by (c.bucket <> 'overdue'), c.bucket, (c.market = 'unknown'), mk.sort_order, c.market,
+                                        order by (c.bucket <> 'past_due'), c.bucket, (c.market = 'unknown'), mk.sort_order, c.market,
                                                  (c.model_key = 'unknown'), md.sort_order, c.model_key), '[]'::jsonb)
               from cells c left join mk on mk.code = c.market left join md on md.key = c.model_key),
     'unknown', (select coalesce(jsonb_agg(jsonb_build_object('market', u.market, 'model', u.model_key, 'components', u.components, 'items', u.items)
@@ -1248,8 +1260,8 @@ begin
 end
 $$;
 
--- The device list of one cell for an explicit tenant as of p_today. p_bucket: overdue, the first day of a month of the
--- horizon (YYYY-MM-DD), unknown (the unknown-basis items) or all (overdue and every month); p_view exchanges (one row per
+-- The device list of one cell for an explicit tenant as of p_today. p_bucket: past_due, the first day of a month of the
+-- horizon (YYYY-MM-DD), unknown (the unknown-basis items) or all (past_due and every month); p_view exchanges (one row per
 -- planned exchange of the bucket, with all its items) or components (one row per device and bucket, the items whose
 -- action month is the bucket). Each row: the device's ids and serial, model, market, device status, the components due
 -- (device for its end of life), the earliest due date, the bases, the earliest action date, the exchange's first action
@@ -1298,7 +1310,7 @@ as $$
   limit p_limit
 $$;
 
--- The device list of one cell (reports.view or performance.team): the page's horizon and filters, a bucket (overdue, a
+-- The device list of one cell (reports.view or performance.team): the page's horizon and filters, a bucket (past_due, a
 -- month of the horizon as YYYY-MM-DD, unknown or all), the view exchanges or components, at most p_limit rows (1 to 5000)
 create or replace function cma.maintenance_rows(p_from_month date, p_months integer, p_bucket text, p_market text default null,
                                                 p_model text default null, p_scope text default null, p_view text default 'exchanges',
@@ -1325,15 +1337,15 @@ begin
     raise exception 'the limit is 1 to 5000 rows' using errcode = 'CMA04';
   end if;
   if p_bucket is null
-     or not (p_bucket in ('overdue', 'unknown', 'all')
+     or not (p_bucket in ('past_due', 'unknown', 'all')
              or (p_bucket ~ '^\d{4}-\d{2}-01$'
                  and p_bucket::date >= p_from_month and p_bucket::date < (p_from_month + make_interval(months => p_months))::date)) then
-    raise exception 'the bucket is overdue, unknown, all or the first day of a month of the horizon' using errcode = 'CMA04';
+    raise exception 'the bucket is past_due, unknown, all or the first day of a month of the horizon' using errcode = 'CMA04';
   end if;
   return query
     select * from cma.maintenance_rows_of(v_tenant, p_from_month, p_months, p_bucket, p_market, p_model, p_scope, p_view, p_limit, v_today);
 exception when invalid_datetime_format or datetime_field_overflow then
-  raise exception 'the bucket is overdue, unknown, all or the first day of a month of the horizon' using errcode = 'CMA04';
+  raise exception 'the bucket is past_due, unknown, all or the first day of a month of the horizon' using errcode = 'CMA04';
 end
 $$;
 
@@ -1907,12 +1919,12 @@ create or replace view cma_read.device_component as
 create or replace function cma_read.maintenance_due_rows()
 returns table (tenant_id uuid, device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text,
                device_status_key text, is_in_field boolean, is_in_stock boolean, component_key text, due_on date, basis text,
-               action_on date, action_month date, overdue boolean, exchange_key text, exchange_on date)
+               action_on date, action_month date, past_due boolean, exchange_key text, exchange_on date)
 language sql stable security definer
 set search_path = pg_catalog, cma, pg_temp
 as $$
   select t.id, i.device_id, i.connection_id, i.source_id, i.serial, i.model_key, i.market, i.device_status_key, i.is_in_field,
-         i.is_in_stock, i.component_key, i.due_on, i.basis, i.action_on, date_trunc('month', i.action_on)::date, i.overdue,
+         i.is_in_stock, i.component_key, i.due_on, i.basis, i.action_on, date_trunc('month', i.action_on)::date, i.past_due,
          i.exchange_key, i.exchange_on
   from cma.tenant t
   cross join lateral cma.maintenance_items_of(t.id, cma.tenant_today_of(t.id)) i
@@ -1926,23 +1938,23 @@ create or replace view cma_read.maintenance_due as
 
 -- Per action month, market and model (unknown for none): the due items, the components' items, the devices at end of
 -- life, the planned exchanges whose first action date falls in the month (always the month of one of its items), and
--- whether the month lies before the tenant's current one (overdue). Items of basis unknown have no month and are left out
+-- whether the month lies before the tenant's current one (past due). Items of basis unknown have no month and are left out
 create or replace view cma_read.maintenance_per_month as
   with i as (
     select r.tenant_id, r.action_month, coalesce(r.market, 'unknown') as market, coalesce(r.model_key, 'unknown') as model_key,
-           r.component_key, r.overdue, r.exchange_key, date_trunc('month', r.exchange_on)::date as exchange_month
+           r.component_key, r.past_due, r.exchange_key, date_trunc('month', r.exchange_on)::date as exchange_month
     from cma_read.maintenance_due_rows() r
     where r.action_on is not null
   ), items as (
     select tenant_id, action_month as month, market, model_key, count(*)::integer as items,
            count(*) filter (where component_key <> 'device')::integer as component_items,
-           count(*) filter (where component_key = 'device')::integer as end_of_life, bool_or(overdue) as overdue
+           count(*) filter (where component_key = 'device')::integer as end_of_life, bool_or(past_due) as past_due
     from i group by 1, 2, 3, 4
   ), ex as (
     select tenant_id, exchange_month as month, market, model_key, count(distinct exchange_key)::integer as exchanges
     from i group by 1, 2, 3, 4
   )
-  select a.tenant_id, a.month, a.market, a.model_key, a.items, a.component_items, a.end_of_life, coalesce(e.exchanges, 0) as exchanges, a.overdue
+  select a.tenant_id, a.month, a.market, a.model_key, a.items, a.component_items, a.end_of_life, coalesce(e.exchanges, 0) as exchanges, a.past_due
   from items a
   left join ex e on e.tenant_id = a.tenant_id and e.month = a.month and e.market = a.market and e.model_key = a.model_key;
 
@@ -1983,7 +1995,7 @@ create or replace view cma_read.dq_field_device_without_subscription_ref as
 -- 14. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zi', 'Asset register: the connection kind assets; the catalogs cma.device_model, cma.device_component_kind, cma.maintenance_rule and cma.device_status (flags is_in_field, is_in_stock, is_tracked; the source''s labels as aliases); the setting assets.bundle_window_days; cma.device (record id, serial, model, market, status, references, dates, named ids, raw held to a key allow-list, missing from a full snapshot) and cma.device_component (serial and recorded expiry, one current per kind, an observed replacement on a serial change); the import cma.device_import_staging (the COPY target, a view over cma.device_import_row) and cma.load_device_snapshot (tenant.configure); the forecast cma.maintenance_items_of and cma.maintenance_due_of (due date recorded, by rule or unknown, action date, overdue, planned exchanges within the bundling window); Reports, Maintenance (cma.maintenance_page, cma.maintenance_rows); eight data-quality checks; the reader views; sync_run job assets_import')
+values ('0008zi', 'Asset register: the connection kind assets; the catalogs cma.device_model, cma.device_component_kind, cma.maintenance_rule and cma.device_status (flags is_in_field, is_in_stock, is_tracked; the source''s labels as aliases); the setting assets.bundle_window_days; cma.device (record id, serial, model, market, status, references, dates, named ids, raw held to a key allow-list, missing from a full snapshot) and cma.device_component (serial and recorded expiry, one current per kind, an observed replacement on a serial change); the import cma.device_import_staging (the COPY target, a view over cma.device_import_row) and cma.load_device_snapshot (tenant.configure); the forecast cma.maintenance_items_of and cma.maintenance_due_of (due date recorded, by rule or unknown, action date, past due, planned exchanges within the bundling window); Reports, Maintenance (cma.maintenance_page, cma.maintenance_rows); eight data-quality checks; the reader views; sync_run job assets_import')
 on conflict (version) do nothing;
 
 commit;

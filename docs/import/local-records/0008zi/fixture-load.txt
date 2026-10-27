@@ -55,7 +55,7 @@ rows                         30
 0
 == Reports, Maintenance as of 2026-10-27: from the current month for 12 months, every tracked device
 devices 27, window 90, set up true
-overdue: 5 due items in 4 planned exchanges
+past due: 5 due items in 4 planned exchanges
 months: 28 due items in 23 planned exchanges
 unknown: 4 due items without a due date
 == Reports, Data quality: the asset register's checks

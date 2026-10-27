@@ -393,7 +393,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "reviews.market_states",
   ],
   "/reports/maintenance": [
-    "maintenance.overdue",
+    "maintenance.past_due",
     "maintenance.by_month",
     "maintenance.exchanges",
     "maintenance.components",

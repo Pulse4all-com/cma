@@ -190,10 +190,10 @@ const pages = [
   // the reviews without an event in the neutral hue), the tables per market, week or day and channel, the markets' states
   { path: "/reports/reviews?range=month", subject: "manager", tables: true },
   { path: "/reports/reviews?range=month&group=day", subject: "reader", tables: true },
-  // Maintenance (addition 0008zi): the grid with Overdue and the months, a figure's device list in the Components view, and a
+  // Maintenance (addition 0008zi): the grid with Past due and the months, a figure's device list in the Components view, and a
   // tenant without an asset register
   { path: "/reports/maintenance", subject: "manager", tables: true },
-  { path: "/reports/maintenance?view=components&bucket=overdue", subject: "reader", tables: true },
+  { path: "/reports/maintenance?view=components&bucket=past_due", subject: "reader", tables: true },
   { path: "/reports/maintenance", subject: "invest-analyst" },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys

@@ -10,10 +10,11 @@
  *   tracked          a device whose device status has is_tracked and that the latest full snapshot still holds
  *   due item         a component the device carries, its model has a rule for, or of every kind while the model is
  *                    unknown; and the device itself at its end of life (component "device")
- *   due date         the recorded expiry (basis recorded), else the anchor date (the last shipment, else the first) plus
- *                    the rule's interval in months (basis rule), else none (basis unknown); end of life: its recorded date
+ *   due date         the recorded expiry (basis recorded), else the anchor date plus the rule's interval in months (basis
+ *                    rule), else none (basis unknown); the anchor the day a replacement was first seen, else the last
+ *                    shipment, else the first; end of life: its recorded date
  *   action date      the due date less the rule's lead days (none without a rule; none for end of life)
- *   overdue          the action date lies before the current month
+ *   past due         the action date lies before the current month
  *   planned exchange per device in action-date order, an item joins the exchange before it while its action date lies
  *                    within assets.bundle_window_days of that exchange's first action date; counted once, in the month of
  *                    that first action date
@@ -138,16 +139,16 @@ export function maintenanceQuery(filter: MaintenanceFilter, currentMonth: DateKe
   return q;
 }
 
-/** A device-list bucket: overdue, unknown or the first day of a month of the horizon; null otherwise */
+/** A device-list bucket: past_due, unknown or the first day of a month of the horizon; null otherwise */
 export function parseBucket(value: string | string[] | undefined | null, buckets: readonly string[]): string | null {
   const v = Array.isArray(value) ? value[0] : value;
   if (!v) return null;
   return v === "unknown" || buckets.includes(v) ? v : null;
 }
 
-/** Whether a bucket the routes take is well formed: overdue, unknown, all or the first day of a month */
+/** Whether a bucket the routes take is well formed: past_due, unknown, all or the first day of a month */
 export function bucketProblem(value: string | null): boolean {
-  return !value || !(["overdue", "unknown", "all"].includes(value) || MONTH_RE.test(value));
+  return !value || !(["past_due", "unknown", "all"].includes(value) || MONTH_RE.test(value));
 }
 
 // ---- the mirror: due items, the page, the device list -------------------------------------------
@@ -168,7 +169,9 @@ export interface MaintenanceDevice {
   endOfLifeOn: DateKey | null;
   /** Missing from the latest full snapshot */
   missing: boolean;
-  components: { kind: string; serial: string | null; expiresOn: DateKey | null }[];
+  /** The current component per kind; replacementSeenOn is the day it was first seen, in the tenant's zone, when it replaced
+   *  another of its kind (a replacement restarts the rule), absent or null for a component of the first load */
+  components: { kind: string; serial: string | null; expiresOn: DateKey | null; replacementSeenOn?: DateKey | null }[];
   /** The CRM contact of the customer reference's commerce customer (0008h), when there is exactly one */
   crmContactId: string | null;
 }
@@ -198,7 +201,7 @@ export interface DueItem {
   dueOn: DateKey | null;
   basis: MaintenanceBasis;
   actionOn: DateKey | null;
-  overdue: boolean;
+  pastDue: boolean;
   exchangeKey: string | null;
   exchangeOn: DateKey | null;
 }
@@ -214,13 +217,14 @@ export function maintenanceItems(devices: readonly MaintenanceDevice[], cat: Mai
   for (const d of devices) {
     const st = cat.statuses.find((s) => s.key === d.status);
     if (!st || !st.isTracked || d.missing) continue;
-    const anchor = d.lastShippedOn ?? d.firstShippedOn;
-    const items: Omit<DueItem, "overdue" | "exchangeKey" | "exchangeOn">[] = [];
+    const shipped = d.lastShippedOn ?? d.firstShippedOn;
+    const items: Omit<DueItem, "pastDue" | "exchangeKey" | "exchangeOn">[] = [];
     for (const k of kinds) {
       const c = d.components.find((x) => x.kind === k.key);
       const rule = cat.rules.find((r) => r.model === d.model && r.component === k.key);
       if (!c && !rule && d.model !== null) continue;
       const recorded = c?.expiresOn ?? null;
+      const anchor = c?.replacementSeenOn ?? shipped;
       const byRule = rule && anchor ? addMonths(anchor, rule.intervalMonths) : null;
       const dueOn = recorded ?? byRule;
       items.push({ deviceId: d.id, sourceId: d.sourceId, serial: d.serial, model: d.model, market: d.market, status: st.key, isInField: st.isInField,
@@ -235,9 +239,9 @@ export function maintenanceItems(devices: readonly MaintenanceDevice[], cat: Mai
       || a.componentOrder - b.componentOrder || a.component.localeCompare(b.component));
     let start: DateKey | null = null;
     for (const it of items) {
-      if (it.actionOn === null) { out.push({ ...it, overdue: false, exchangeKey: null, exchangeOn: null }); continue; }
+      if (it.actionOn === null) { out.push({ ...it, pastDue: false, exchangeKey: null, exchangeOn: null }); continue; }
       if (start === null || daysBetween(start, it.actionOn) > window) start = it.actionOn;
-      out.push({ ...it, overdue: it.actionOn < monthStart, exchangeKey: `${d.id}:${start}`, exchangeOn: start });
+      out.push({ ...it, pastDue: it.actionOn < monthStart, exchangeKey: `${d.id}:${start}`, exchangeOn: start });
     }
   }
   return out;
@@ -261,8 +265,8 @@ function bucketed(items: readonly DueItem[], filter: MaintenanceFilter, today: D
     .filter((i) => filter.model === null || (i.model ?? "unknown") === filter.model)
     .map((i) => ({
       ...i, m: i.market ?? "unknown", mo: i.model ?? "unknown",
-      bucket: i.overdue ? "overdue" : within(i.actionOn) ? monthOf(i.actionOn!) : null,
-      exchangeBucket: i.exchangeOn !== null && i.exchangeOn < monthStart ? "overdue" : within(i.exchangeOn) ? monthOf(i.exchangeOn!) : null,
+      bucket: i.pastDue ? "past_due" : within(i.actionOn) ? monthOf(i.actionOn!) : null,
+      exchangeBucket: i.exchangeOn !== null && i.exchangeOn < monthStart ? "past_due" : within(i.exchangeOn) ? monthOf(i.exchangeOn!) : null,
     }));
 }
 
@@ -298,7 +302,7 @@ export function maintenanceReport(devices: readonly MaintenanceDevice[], cat: Ma
       endOfLife: own.filter((i) => i.component === END_OF_LIFE).length,
       exchanges: new Set(b.filter((i) => i.exchangeBucket === k.bucket && i.m === k.market && i.mo === k.model).map((i) => i.exchangeKey)).size,
     };
-  }).sort((x, y) => (x.bucket === "overdue" ? 0 : 1) - (y.bucket === "overdue" ? 0 : 1) || (x.bucket < y.bucket ? -1 : x.bucket > y.bucket ? 1 : 0)
+  }).sort((x, y) => (x.bucket === "past_due" ? 0 : 1) - (y.bucket === "past_due" ? 0 : 1) || (x.bucket < y.bucket ? -1 : x.bucket > y.bucket ? 1 : 0)
     || order.market(x.market, y.market) || order.model(x.model, y.model));
   const unknownItems = b.filter((i) => i.basis === "unknown");
   const unknownKeys = [...new Map(unknownItems.map((i) => [`${i.m}|${i.mo}`, { market: i.m, model: i.mo }])).values()]
@@ -309,7 +313,7 @@ export function maintenanceReport(devices: readonly MaintenanceDevice[], cat: Ma
     && (filter.market === null || (d.market ?? "unknown") === filter.market) && (filter.model === null || (d.model ?? "unknown") === filter.model));
   return {
     filter, currentMonth: monthOf(today), bundleWindowDays: Math.max(0, cat.windowDays), isSetUp,
-    buckets: ["overdue", ...Array.from({ length: filter.months }, (_, g) => addMonths(filter.fromMonth, g))],
+    buckets: ["past_due", ...Array.from({ length: filter.months }, (_, g) => addMonths(filter.fromMonth, g))],
     componentKinds: cat.kinds.filter((k) => k.active).sort((x, y) => x.sortOrder - y.sortOrder || x.key.localeCompare(y.key)).map((k) => ({ key: k.key, name: k.name })),
     cells,
     unknown: unknownKeys.map((k) => {

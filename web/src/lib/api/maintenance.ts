@@ -30,14 +30,14 @@ export function maintenanceParams(sp: URLSearchParams): MaintenanceFilter {
 }
 
 /**
- * The device list's query: the page's (maintenanceParams) and &bucket (overdue, unknown, all or a month of the horizon as
+ * The device list's query: the page's (maintenanceParams) and &bucket (past_due, unknown, all or a month of the horizon as
  * YYYY-MM-01; required for the list, all when the file leaves it out), &view (exchanges or components; exchanges when
  * left out) and &limit (1 to 5000; 500 for the list, 5000 for the file when left out)
  */
 export function maintenanceRowsParams(sp: URLSearchParams, o: { file?: boolean } = {}): { filter: MaintenanceFilter; bucket: string; view: MaintenanceView; limit: number } {
   const filter = maintenanceParams(sp);
   const bucket = sp.get("bucket") ?? (o.file ? "all" : null);
-  if (bucketProblem(bucket)) throw new ApiError(400, "invalid_bucket", "bucket must be overdue, unknown, all or the first day of a month as YYYY-MM-01");
+  if (bucketProblem(bucket)) throw new ApiError(400, "invalid_bucket", "bucket must be past_due, unknown, all or the first day of a month as YYYY-MM-01");
   const view = sp.has("view") ? parseView(sp.get("view")) : "exchanges";
   if (!view) throw new ApiError(400, "invalid_view", "view must be exchanges or components");
   const limitText = sp.get("limit");
