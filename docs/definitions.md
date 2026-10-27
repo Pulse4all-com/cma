@@ -562,7 +562,7 @@ Facts about the review platform's own figures, recorded so nobody mistakes them 
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (which system owns which field is an Open decision). The CMA mirrors it read-only through a snapshot of the register's CSV export (docs/import/devices.md) and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (which system owns which field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -579,7 +579,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Equivalent in the source system | A record of the register's device table (Airtable: one row; its record id is `source_id`) |
 | Not to use | "Asset" for one unit in a label (the asset register is the system); "AED" in a label or a key (the model is configuration) |
 | Status | Decided |
-| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register" and "Definitions: Device" |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register", "The asset register is read by scheduled API polling" (addition 0008zj) and "Definitions: Device" |
 | Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Reports → Maintenance (`/reports/maintenance`) |
 | As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_snapshot_apply` (`114`) from the API or a file. Matches the definition |
 
@@ -590,7 +590,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Term | Component (nl: Onderdeel) |
 | Key | `component`, `component_key`; API `components`, `componentKinds`; SQL `cma.device_component`, `cma.device_component_kind` |
 | Definition | A part of a device that comes due on its own, of a kind from the tenant's catalog (Pulse4all: pads and battery), with its serial and its recorded expiry. A component, or the device itself at its end of life (the reserved kind `device`), is a due item. |
-| Source | The register's component columns, mapped per kind by the import's map (`docs/import/devices-map.example.json`) into `cma.device_component`; the kinds are tenant configuration (`cma.device_component_kind`, seed `02` for Pulse4all) |
+| Source | The register's component columns, mapped per kind into `cma.device_component`: by the asset register connection's `device_component` fields for the API read (addition 0008zj; the kind in `ref_system`) and by the import's map (`docs/import/devices-map.example.json`) for the file import; the kinds are tenant configuration (`cma.device_component_kind`, seed `02` for Pulse4all) |
 | Counts / does not count | A due item counts for every active kind the device carries, its model has a maintenance rule for, or every kind while the model is unknown; and the device itself when the register records its end of life. A replaced component (`replaced_at`) does not count |
 | Unit and display | A count per kind (`maintenance.components`); the list names the kinds due ("Components due"); the device's own item reads "Device, end of life" |
 | Time rule | Its due date and action date (below) |
@@ -612,7 +612,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Source | The register's status column, mapped through the catalog's aliases (`cma.device_status_key_of`); the catalog is tenant configuration (`cma.device_status`, seed `02` for Pulse4all) |
 | Counts / does not count | Only devices in a tracked status are forecast; the scope filter takes in the field or in stock from the flags. A label no alias holds leaves the device without a status (`device_status_unmapped`), not forecast |
 | Unit and display | The status's name from the catalog |
-| Time rule | As of the latest snapshot; no history is kept |
+| Time rule | As of the latest read (the poll or the nightly snapshot, or a loaded file); no history is kept |
 | Scope | As Device |
 | Equivalent in the source system | The register's operational status (Airtable: `aed_operational_status`) |
 | Not to use | A status name in SQL or code; "connected" or "active" for a device's state |
@@ -667,7 +667,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Key | `past_due`; API bucket `past_due` |
 | Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
-| Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |
+| Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later read (the poll, the nightly snapshot or a loaded file) gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |
 | Unit and display | A count in the Past due column (`maintenance.past_due`) |
 | Time rule | The tenant's current month, in its zone |
 | Scope | As Device |
