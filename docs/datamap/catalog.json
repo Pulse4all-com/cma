@@ -546,7 +546,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule"
         },
         {
           "name": "sync_cursor",
