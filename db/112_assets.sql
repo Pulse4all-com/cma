@@ -180,8 +180,8 @@ create table if not exists cma.maintenance_rule (
   foreign key (tenant_id, model_key) references cma.device_model (tenant_id, key),
   foreign key (tenant_id, component_key) references cma.device_component_kind (tenant_id, key)
 );
-comment on table cma.maintenance_rule is 'How long a model''s component lasts from the device''s anchor date (interval in months) and how many days before its due date it is acted on (lead days). One per tenant, model and component. Tenant configuration (0008zi)';
-comment on column cma.maintenance_rule.interval_months is 'Months from the anchor date (the last shipment, else the first) to the component''s due date, when the register records no expiry';
+comment on table cma.maintenance_rule is 'How long a model''s component lasts from its anchor date (interval in months) and how many days before its due date it is acted on (lead days). One per tenant, model and component. Tenant configuration (0008zi)';
+comment on column cma.maintenance_rule.interval_months is 'Months from the anchor date (the day a replacement was first seen, in the tenant''s zone; else the last shipment, else the first) to the component''s due date, when the register records no expiry';
 comment on column cma.maintenance_rule.lead_days is 'Days before the due date the component is acted on: the action date is the due date less these days';
 create or replace trigger set_updated_at before update on cma.maintenance_rule
   for each row execute function cma.set_updated_at();
