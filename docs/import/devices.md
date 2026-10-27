@@ -25,11 +25,13 @@ Rules for the files, as for every import (docs/import/README.md): the export, th
 `~/import`, never in `~/cma`, and are deleted after the load (step 9). Real files are prod only; dev uses the synthetic
 fixture `tools/fixtures/devices-sample.csv` (The fixture in dev, below).
 
-Before you start: `112` has run, `113` returned `0008zi verified`, and `02` has run again afterwards (the catalogs of
-Pulse4all Subscriptions: models HS1 and FRx, pads and battery, the rules, the statuses, the bundling window, the market
-aliases). Every database block below is one Terminal run (the `cma_db` helper in
-`docs/night-2026-10-10/MORNING_RUNBOOK.md`, Helpers; it prints `connected to cma as <your email>` first), with the
-context block as its first lines, so the whole block is one session:
+Before you start: `112` has run, `113` returned `0008zi verified`, the reruns have run, and `02` has run again
+afterwards (the catalogs of Pulse4all Subscriptions: models HS1 and FRx, pads and battery, the rules, the statuses, the
+bundling window, the market aliases). The reruns are 105, 75, 41, 107, 14 and 53 in dev; in prod only 41 and 14, since
+105, 75, 107 and 53 are dev-only and refuse prod by design (no PASS row there). Every database block below is one
+Terminal run (the `cma_db` helper in `docs/night-2026-10-10/MORNING_RUNBOOK.md`, Helpers; it prints
+`connected to cma as <your email>` first), with the context block as its first lines, so the whole block is one
+session:
 
 ```sql
 set role cma_app;
@@ -57,7 +59,8 @@ Expected: one row. Keep both ids for every block below.
 ## B. The connection (once per environment)
 
 The register is a connection of kind `assets`; its account id is the base's id, the part of the base's address that
-starts with `app` (an identifier, not a secret). There is no secret: the import reads a file.
+starts with `app` (an identifier, not a secret). There is no secret: the import reads a file. Replace `<base id>`
+before you run the block: no function changes a connection's account id afterwards (docs/open-decisions.md).
 
 **Terminal**
 ```bash
@@ -99,14 +102,28 @@ Expected: an empty folder, readable by you only.
 
 ## 2. The export
 
-**Browser:** Airtable → base Pulse4all Assets → table 2.0 Installed Base → the grid view with every record → the view's
-menu → Download CSV. The file lands in Downloads (Files → Downloads on the Chromebook).
+The export is the live table's Grid view. The base also holds `CMA_ingest_prod`, a development copy whose record ids
+differ from the live ones; it is never imported, because its ids would make every device new.
+
+Caution: Grid view is shared. If someone shows a personal field there, the export carries it (the tool drops it, since
+it is on the map's `ignore` list).
+
+**Browser:** Airtable → base Airtable 2.0 → table 2.0 Installed Base → Grid view → the view's menu → Download CSV. The
+file lands in Downloads.
+
+On the Chromebook, the export goes from Downloads into Linux files first (**Browser:** Files → Downloads, drag the file
+onto Linux files), then:
+
+**Terminal**
+```bash
+mv ~/2.0*Installed*Base*.csv ~/import/devices-export.csv && ls -la ~/import
+```
+On the Linux machine, straight from Downloads:
 
 **Terminal**
 ```bash
 mv ~/Downloads/2.0*Installed*Base*.csv ~/import/devices-export.csv && ls -la ~/import
 ```
-(On the Chromebook drag the file from Downloads into Linux files first, then use `~/` instead of `~/Downloads/`.)
 Expected: the folder lists `devices-export.csv`. If the glob matches two files, `mv` refuses; leave one.
 
 ## 3. The map
@@ -137,7 +154,8 @@ many `date_parse_failures`.
 cd ~/cma && node tools/devices-to-staging.mjs ~/import/devices-export.csv --map ~/import/devices-map.json --date-format dmy --batch assets-<yyyy-mm-dd> --out ~/import/devices-staging.csv
 ```
 Use the format of step 4 and the export's date in the batch key (`assets-2026-10-27`). Expected: `rows` (the records
-of the export), `mapped_columns 21`, `ignored_columns 31` (with the example map), `date_parse_failures 0`,
+of the export), `mapped_columns 21`, `ignored_columns 14` (Grid view's 35 headers with the example map; more means
+someone has shown a hidden field in Grid view, step 2), `date_parse_failures 0`,
 `values_with_at` (the mapped cells holding an @, each written as a bare @; the load counts them as invalid customer
 references or dropped references) and the staging file's path. More than a few date failures mean the format is
 wrong: run again with the right one. A refusal
@@ -169,9 +187,8 @@ Expected: the counts. `rows` = step 6's `n`; on the first load `inserted` = `row
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
 `components_replaced` (a pads or battery serial that changed); `unmapped_model`, `unmapped_status` and
 `unmapped_market` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
-without ES and IT: dev holds both since 27 October 2026; in prod check Configuration → Markets before the first real
-load, add a missing market and run seed `02` again for its alias), `customer_ref_invalid` (a customer reference that
-is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
+without ES and IT: dev and prod hold both since 27 October 2026; a market added later needs seed `02` again for its
+alias), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
 `CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of
 the register is in the file. A partial file (a filtered view) is loaded with `false`, so nothing is marked missing.
 
