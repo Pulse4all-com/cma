@@ -163,37 +163,37 @@
         {
           "name": "device",
           "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi)",
-          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30; cma.ingest_load_device_snapshot, 0008zj); the CSV fallback a person loads with cma.load_device_snapshot"
         },
         {
           "name": "device_component",
           "what": "A device's components per kind (pads, battery) with serial and recorded expiry; one current row per device and kind, a changed serial an observed replacement (replaced_at) from the first load on (0008zi)",
-          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback (with its device, by the same load)"
         },
         {
           "name": "device_import_row",
           "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi)",
-          "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet; staged by tools/devices-to-staging.mjs and psql \\copy, emptied by cma.load_device_snapshot"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback; the ingest stages each run's rows under a batch key of its own and cma.ingest_load_device_snapshot empties them in the same transaction (0008zj); the CSV fallback is staged by tools/devices-to-staging.mjs and psql \\copy and emptied by cma.load_device_snapshot"
         },
         {
           "name": "device_model",
           "what": "Device models with name, brand and the labels the register writes for each (aliases) (0008zi)",
-          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every load of the register, by the API (0008zj) or from its CSV export"
         },
         {
           "name": "device_component_kind",
           "what": "The kinds of component that come due (pads, battery), with name and sort order; the key device is reserved for a device's end of life (0008zi)",
-          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every load of the register, by the API (0008zj) or from its CSV export"
         },
         {
           "name": "maintenance_rule",
           "what": "Per model and component kind: the interval in months from the anchor date (the day a replacement was first seen, else the last shipment, else the first) and the lead days before the due date (0008zi)",
-          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every load of the register, by the API (0008zj) or from its CSV export"
         },
         {
           "name": "device_status",
           "what": "Device statuses with the flags in the field, in stock and tracked (forecast), and the labels the register writes for each; reporting reads the flags, never a name (0008zi)",
-          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every snapshot import of the register's CSV export"
+          "how": "Tenant configuration: seed 02 for Pulse4all Subscriptions, changed in Studio (no configuration screen yet); read by every load of the register, by the API (0008zj) or from its CSV export"
         }
       ]
     },
@@ -203,7 +203,7 @@
       "tables": [
         {
           "name": "integration_connection",
-          "what": "One row per connected account (portal, Aircall account, store, review platform account)",
+          "what": "One row per connected account (portal, Aircall account, store, review platform account, asset register base)",
           "how": "Configuration → Sources"
         },
         {
@@ -238,8 +238,8 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb)",
-          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb)"
+          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb); on an asset register connection the register's fields: a device's staging columns, a component kind's serial and expiry, the named ids (0008zj)",
+          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb); an asset register's fields by cma.set_connection_field in Studio (0008zj)"
         },
         {
           "name": "connection_reason",
@@ -546,7 +546,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule; since 0008zj the asset register poll (job assets_poll) every 5 minutes, each connection when due, and its full snapshot in the nightly reconcile"
         },
         {
           "name": "sync_cursor",
@@ -730,6 +730,7 @@
     "assets": {
       "src": "s-assets",
       "ways": [
+        "w-jobs",
         "w-oneoff"
       ],
       "doms": [

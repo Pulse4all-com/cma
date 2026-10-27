@@ -1,10 +1,17 @@
-# Device import: the asset register's snapshot (addition 0008zi)
+# Device import: the asset register's snapshot (addition 0008zi), the fallback since 0008zj
 
 How the asset register's CSV export becomes the CMA's read-only mirror of devices and components, which Reports →
 Maintenance forecasts from. For Pulse4all Subscriptions the register is the Airtable base "Airtable 2.0" (Pulse4all
 Assets, table 2.0 Installed Base), whose rows also carry NetSuite ids (README, Source of truth; Decision log, 27
-October 2026). Nothing is written to the register, the CRM or the commerce system. There is no schedule yet: Martin
-runs the import by hand (docs/open-decisions.md, when to automate it).
+October 2026). Nothing is written to the register, the CRM or the commerce system.
+
+**Since addition 0008zj the ingest reads the register through its API on a schedule** (the changed records every 15
+minutes, a full snapshot nightly; docs/ingest/README.md, section Airtable; prod steps in docs/ingest/PROD_RUNBOOK.md
+phase 14). The import below is the fallback: for a connection without a token secret name, which the ingest never
+reads (dev's fixture connection, a business line without an API token), and for a day the API read is down. Both run
+the one load (`cma.device_snapshot_apply`), so a file loaded into a connection the ingest also reads gives the same
+devices, and the next nightly snapshot holds the register's state again. The map file of step 3 is the same mapping
+the API connection holds as connection fields (14.5); keep the two alike when the register changes.
 
 What happens to the export:
 
@@ -59,7 +66,9 @@ Expected: one row. Keep both ids for every block below.
 ## B. The connection (once per environment)
 
 The register is a connection of kind `assets`; its account id is the base's id, the part of the base's address that
-starts with `app` (an identifier, not a secret). There is no secret: the import reads a file. Replace `<base id>`
+starts with `app` (an identifier, not a secret). There is no secret: the import reads a file. A connection with a token
+secret name is read by the ingest as well (docs/ingest/README.md, section Airtable); without one it is loaded from files
+only, and the ingest's jobs skip it. Replace `<base id>`
 before you run the block: no function changes a connection's account id afterwards (docs/open-decisions.md).
 
 **Terminal**

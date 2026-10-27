@@ -571,7 +571,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Term | Device (nl: Apparaat) |
 | Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
 | Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
-| Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0" through its CSV export, loaded by `cma.load_device_snapshot` into `cma.device` (one row per register record id and connection) |
+| Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded by `cma.ingest_load_device_snapshot`, or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load into `cma.device` (one row per register record id and connection) |
 | Counts / does not count | Reports → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
 | Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
 | Time rule | None of its own; a device's dates are dates as the register writes them |
@@ -581,7 +581,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register" and "Definitions: Device" |
 | Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Reports → Maintenance (`/reports/maintenance`) |
-| As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`. Matches the definition |
+| As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_snapshot_apply` (`114`) from the API or a file. Matches the definition |
 
 ### Component
 
@@ -629,7 +629,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Key | `due_on`, `basis`; API `dueOn`, `bases`; basis values `recorded`, `rule`, `unknown` |
 | Definition | The date a due item comes due: the component's recorded expiry (basis `recorded`), else the anchor date plus the maintenance rule's interval for the model and kind (basis `rule`), else none (basis `unknown`). The anchor is the day the current component was first seen when it replaced another of its kind on the device (a replacement restarts the rule), else the device's last shipment, else its first. A device's end of life is its recorded date (basis `recorded`). |
 | Source | The register's expiry and shipment dates; for a replacement, when the import first saw its serial (`cma.device_component.first_seen_at` of a component with a replaced predecessor); the rule's interval (`cma.maintenance_rule.interval_months`, tenant configuration) |
-| Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`). A replacement's anchor is the day an import first saw its serial, so its rule-based due date lags the physical swap by up to the time between snapshots (docs/open-decisions.md, When to automate the device import) |
+| Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`). A replacement's anchor is the day an import first saw its serial, so its rule-based due date lags the physical swap by up to the time between reads (since addition 0008zj the poll reads the changed records every `assets_poll_interval_minutes`, 15 for Pulse4all Subscriptions) |
 | Unit and display | A date in the tenant's date format; the basis as "Recorded expiry", "By rule" or "No due date" |
 | Time rule | A date as the register writes it; a replacement's first sighting as a date in the tenant's zone; a month added as Postgres adds months (the 31st of a month plus one month is the last day of the shorter month) |
 | Scope | As Device |
