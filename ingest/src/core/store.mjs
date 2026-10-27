@@ -55,12 +55,13 @@
  *   reviewAlerts(ids)           cma.ingest_review_alerts, at most 500 ids a call: the messages written
  *   reviewChannelSummary(id)    one channel's reviews held: count, link levels, oldest and newest submission
  *
- * For an asset register (addition 0008zj), one transaction; never a value in a log:
- *   loadDevices(batchKey, rows, isFull)   the rows staged in cma.device_import_staging under the batch key, in parts of
- *                               at most 500, then cma.ingest_load_device_snapshot: answers the load's counts. One
- *                               transaction, so a failed load leaves no staged row behind; its statements may run for
- *                               LOAD_TIMEOUT_MS (a nightly snapshot of some 10,000 records takes seconds; the pool's
- *                               15-second statement timeout would end a first load of a new register on a cold table)
+ * For an asset register (addition 0008zj; in parts since 0008zk), each call its own transaction under the pool's statement
+ * timeout; never a value in a log:
+ *   loadDevicePart(rows)        cma.ingest_load_device_part: one part of the rows read (the adapter's assets_load_chunk,
+ *                               100 to 5,000), loaded without marking anything missing; answers the load's counts and
+ *                               phase times. A part loaded again changes nothing, so a run that stops can simply rerun
+ *   markDevicesMissing(sourceIds)   cma.ingest_mark_devices_missing: a full snapshot's final call, the connection's
+ *                               devices whose record id the run did not read marked missing; { missing_now, missing_ms }
  *
  * For the legacy call import (addition 0008zg), the store of the CRM connection the rows are matched against; each its
  * own short transaction, ids, dates, meanings and counts only (never an email, a phone number, a name or a customer id
@@ -108,8 +109,6 @@ import { withTenant, dbErrorCode } from "./db.mjs";
 import { chunks, finishEvents } from "./events.mjs";
 
 const slugs = new Map();
-/** The device load's statement timeout (addition 0008zj): two minutes, set for its own transaction only */
-export const LOAD_TIMEOUT_MS = 120_000;
 
 export function storeFor(ctx, connectionId) {
   return {
@@ -442,25 +441,13 @@ export function storeFor(ctx, connectionId) {
           oldestSubmittedAt: r.oldest ? new Date(r.oldest).toISOString() : null, newestSubmittedAt: r.newest ? new Date(r.newest).toISOString() : null };
       });
     },
-    async loadDevices(batchKey, rows, isFull) {
-      return withTenant(ctx, async (q) => {
-        await q.query(`set local statement_timeout = ${LOAD_TIMEOUT_MS}`);
-        for (const part of chunks(rows)) {
-          await q.query(
-            `insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, warehouse_ref,
-                                                    customer_ref, subscription_ref, order_ref, first_shipped_on, stock_received_on,
-                                                    last_shipped_on, warranty_until, end_of_life_on, components, external_refs)
-             select $1, x.source_row, x.source_id, x.serial, x.model, x.status, x.country, x.warehouse_ref, x.customer_ref,
-                    x.subscription_ref, x.order_ref, x.first_shipped_on, x.stock_received_on, x.last_shipped_on, x.warranty_until,
-                    x.end_of_life_on, x.components, x.external_refs
-               from jsonb_to_recordset($2::jsonb) as x(source_row integer, source_id text, serial text, model text, status text,
-                                                      country text, warehouse_ref text, customer_ref text, subscription_ref text,
-                                                      order_ref text, first_shipped_on text, stock_received_on text, last_shipped_on text,
-                                                      warranty_until text, end_of_life_on text, components text, external_refs text)`,
-            [batchKey, JSON.stringify(part)]);
-        }
-        return (await q.query("select cma.ingest_load_device_snapshot($1, $2, $3) as c", [connectionId, batchKey, isFull])).rows[0].c;
-      });
+    async loadDevicePart(rows) {
+      return withTenant(ctx, async (q) =>
+        (await q.query("select cma.ingest_load_device_part($1, $2::jsonb) as c", [connectionId, JSON.stringify(rows)])).rows[0].c);
+    },
+    async markDevicesMissing(sourceIds) {
+      return withTenant(ctx, async (q) =>
+        (await q.query("select cma.ingest_mark_devices_missing($1, $2::text[]) as c", [connectionId, sourceIds])).rows[0].c);
     },
     async legacyBatchStart(sourceSystem, sha256, cutoverDate) {
       return withTenant(ctx, async (q) => {

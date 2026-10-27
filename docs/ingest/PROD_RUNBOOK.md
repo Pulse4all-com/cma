@@ -1569,38 +1569,52 @@ Expected: the latest `reviews_poll` run `succeeded`, with its `fetched` and `ups
 
 # 14. The asset register's API sync in prod (addition 0008zj)
 
-Written on 27 October 2026, before anything ran in dev or prod. The ingest reads the asset register of Pulse4all Subscriptions (the Airtable base "Airtable 2.0", base `appsEV7MhflMLd2Xv`, table "2.0 Installed Base" `tblHVsCkAwJLqZOgu`) through the Airtable Web API: the records changed every 15 minutes (`ingest-poll-assets`) and a full snapshot nightly (`ingest-reconcile`), loaded through 0008zi's load into `cma.device` and `cma.device_component` (`docs/ingest/README.md`, section Airtable; `docs/architecture/data-model/0008.md`, Data model: asset sync). Read only: nothing is written to Airtable. The CSV import (`docs/import/devices.md`) stays as the fallback. Order: the migration in dev with its verifies, the data map and the migration in prod, all before the merge, then the merge (Before 14.1); then the service account and its token in Airtable, the secret and the ingest from `main` (14.1 to 14.3), the connection, its settings and its fields (14.4, 14.5), the dry run and the first full read (14.6, 14.7), the schedule (14.8). Do 14.4 to 14.7 in one sitting, before 03:30: from 14.4 on the nightly reconcile reads the register too. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<assets conn>` is the register's connection of 0008zi (`records/0008zi-prod-2026-10-27`), whose id 14.4 shows again. The Terminal blocks run in `~/cma`.
+Written on 27 October 2026, before anything ran in dev or prod. The ingest reads the asset register of Pulse4all Subscriptions (the Airtable base "Airtable 2.0", base `appsEV7MhflMLd2Xv`, table "2.0 Installed Base" `tblHVsCkAwJLqZOgu`) through the Airtable Web API: the records changed every 15 minutes (`ingest-poll-assets`) and a full snapshot nightly (`ingest-reconcile`), loaded through 0008zi's load into `cma.device` and `cma.device_component`, in parts of `assets_load_chunk` rows since addition 0008zk (`docs/ingest/README.md`, section Airtable; `docs/architecture/data-model/0008.md`, Data model: asset sync and Data model: asset sync load). Read only: nothing is written to Airtable. The CSV import (`docs/import/devices.md`) stays as the fallback. Order: the migrations in dev with their verifies, the data map and the migrations in prod, all before the merge, then the merge (Before 14.1); then the service account and its token in Airtable, the secret and the ingest from `main` (14.1 to 14.3), the connection, its settings and its fields (14.4, 14.5), the dry run and the first full read (14.6, 14.7), the schedule (14.8). Do 14.4 to 14.7 in one sitting, before 03:30: from 14.4 on the nightly reconcile reads the register too. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. `<assets conn>` is the register's connection of 0008zi (`records/0008zi-prod-2026-10-27`), whose id 14.4 shows again. The Terminal blocks run in `~/cma`.
 
 **Data prerequisites:**
 - An Airtable service account (Enterprise Scale) with read-only access to the one base, and its personal access token with the scopes `data.records:read` and `schema.bases:read` (14.1, 14.2).
 - The mapped fields named exactly as the base names them: a renamed field fails every read with `unknown_field` until 14.5 follows it.
 - The catalogs of 0008zi (seed `02`): models, component kinds, statuses, the market aliases.
 
-## Before 14.1: the migration, the data map, the merge
+## Before 14.1: the migrations, the data map, the merge
 
-**(a) Dev.** **File:** `db/114_asset_sync.sql`: open it and copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+Two additions: 0008zj (`114`, the asset sync) and 0008zk (`116`, the load set-based and in parts; `117` its verify). `114` runs where `0008zj` is missing; 27 October 2026 it ran in dev and prod, and prod's `115` failed C1 on time alone (a one-call snapshot of 5,000 records), which `116` answers. Every step below says which database it reads.
 
-Expected: no error and no result rows. A second run ends the same and changes nothing. `addition 0008zi (112_assets.sql) must run before 0008zj` means dev lacks 0008zi.
+**(a) Dev.** **Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zi' order by 1;
+reset role;
+```
+Expected: `0008zi` and `0008zj`. Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login. Expected: no error and no result rows; a second run ends the same. With `0008zk` already there, stop and report it.
 
-**File:** `db/115_verify_asset_sync.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run. Open the results dropdown at the verdict table.
+**File:** `db/116_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
 
-Expected: rows `A1` to `A4`, `B1` to `B9` and `C1`, each `ok`, and `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (locally, on PostgreSQL 16 built from `00` to `115` with the seeds, the same; C1 about 3,000 ms). C1 names its milliseconds, under 10,000; dev's shared core may fail C1 on time alone: report the row. Any other `FAIL`: report the row.
+Expected: no error and no result rows. A second run ends the same and changes nothing. `addition 0008zj (114_asset_sync.sql) must run before 0008zk` means dev lacks 0008zj.
 
-**Studio (cma-dev-pg):** `115` again, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+**File:** `db/117_verify_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run. Open the results dropdown at the verdict table.
 
-Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 115_verify_asset_sync: 0 ok, 14 FAIL`. Blocks B and C roll back.
+Expected: rows `A1` to `A5`, `B1` to `B6` and `C1` to `C3`, each `ok`, and `verdict | 0008zk verified | 117_verify_asset_sync_load: 14 ok, 0 FAIL` (locally, on PostgreSQL 16 built from `00` to `117` with the seeds, the same: C1 about 100 ms, C2 about 40 ms, C3 about 1,600 ms). C1, C2 and C3 name their milliseconds and phase times: copy those three details into the report. Any `FAIL`: report the row.
 
-**Studio (cma-dev-pg):** the earlier verifies of what `114` makes again, each pasted whole and Run: `113` (the load), `107` (the run's counts), `53` (a connection's kinds), `85` and `69` (the connection fields' checks).
+**Studio (cma-dev-pg):** `117` again, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
 
-Expected, each as it passed before this change: `113` `0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, `107` 10 PASS, `53` 16 PASS, `85` 26 PASS, `69` 29 PASS.
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 117_verify_asset_sync_load: 0 ok, 14 FAIL`. Blocks B and C roll back.
 
-**(b) The data map.** No table, view or column changes, so `docs/datamap/schema.json` moves its `latest_migration` only; `docs/datamap/catalog.json` says how the device tables are filled now. Martin refreshes the snapshot from dev on this branch after (a), before merging.
+**Studio (cma-dev-pg):** `db/115_verify_asset_sync.sql`, then `db/113_verify_assets.sql`, each pasted whole and Run, unchanged (the load they prove is the one `116` makes again).
+
+Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (C1 names its milliseconds, under 10,000; locally about 1,400 to 1,700), then `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`.
+
+**Studio (cma-dev-pg):** the earlier verifies of what `116` makes again, each pasted whole and Run: `107` (the run's counts) and `53` (a connection's settings).
+
+Expected, each as it passed before this change: `107` 10 PASS, `53` 16 PASS.
+
+**(b) The data map.** No table, view or column changes (`116` adds three types and functions), so `docs/datamap/schema.json` moves its `latest_migration` only; `docs/datamap/catalog.json` says how the device tables are filled now. Martin refreshes the snapshot from dev on this branch after (a), before merging.
 
 **Terminal** (in `~/cma`, on this branch)
 ```bash
 cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
 ```
-Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008zj"` (spaces around the colon).
+Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008zk"` (spaces around the colon).
 
 **Terminal** (`~/cma`)
 ```bash
@@ -1610,11 +1624,11 @@ Expected: `datamap: wrote docs/datamap/index.html (96 tables, 144 views)`, then 
 
 **Terminal** (`~/cma`)
 ```bash
-git add docs/datamap && git commit -m "Data map: snapshot after 0008zj" && git push origin HEAD:<branch>
+git add docs/datamap && git commit -m "Data map: snapshot after 0008zk" && git push origin HEAD:<branch>
 ```
 Expected: the push names `<branch>`; the PR passes `verify:datamap`.
 
-**(c) Prod.** The ingest of this change finishes runs with the device load's counts, which only `114`'s `cma.ingest_sync_run_finish()` accepts, so prod runs `114` before the merge; `main`'s web and ingest read nothing it adds.
+**(c) Prod.** The ingest of this change loads in parts (`cma.ingest_load_device_part`, `cma.ingest_mark_devices_missing`) and finishes runs with the load's counts and phase times, which only `116` provides, so prod runs `114` (where `0008zj` is missing) and `116` before the merge; `main`'s web and ingest read nothing they add.
 
 **Terminal** (point-in-time recovery on, as before every prod migration)
 ```bash
@@ -1628,17 +1642,17 @@ set role cma_owner;
 select version from cma.schema_migration where version >= '0008zh' order by 1;
 reset role;
 ```
-Expected: `0008zh` and `0008zi`. With `0008zj` already there, stop and report it.
+Expected: `0008zh`, `0008zi` and `0008zj`. Without `0008zj`: `db/114_asset_sync.sql` first, as one script, as your own login (no error, no result rows). With `0008zk` already there, stop and report it.
 
-**Studio (cma-prod-pg):** `db/114_asset_sync.sql` as one script, as your own login.
+**Studio (cma-prod-pg):** `db/116_asset_sync_load.sql` as one script, as your own login.
 
 Expected: no error and no result rows. A second run ends the same.
 
-**Studio (cma-prod-pg):** `db/115_verify_asset_sync.sql`, then `db/113_verify_assets.sql`, each pasted whole and Run (both work on throwaway tenants inside subtransactions that roll back, so nothing stays).
+**Studio (cma-prod-pg):** `db/117_verify_asset_sync_load.sql`, then `db/115_verify_asset_sync.sql`, then `db/113_verify_assets.sql`, each pasted whole and Run (all three work on throwaway tenants inside subtransactions that roll back, so nothing stays).
 
-Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (C1 names its milliseconds), then `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`.
+Expected: `verdict | 0008zk verified | 117_verify_asset_sync_load: 14 ok, 0 FAIL`, then `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL`, then `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`. Copy into the report the details of `117`'s C1, C2 and C3 (milliseconds and phase times) and `115`'s C1 (milliseconds). `115`'s C1 still `FAIL` on time alone: report its milliseconds with `117`'s C3 phases, and stop before the merge.
 
-**(d) The merge.** **Browser:** Martin reviews and squash-merges the pull request on GitHub ((a) to (c) done). The merge touches `web/` (the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
+**(d) The merge.** **Browser:** Martin reviews and squash-merges the pull request on GitHub ((a) to (c) done, every verify green). The merge touches `web/` (the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
 
 Expected: the build ends `SUCCESS`.
 
@@ -1765,7 +1779,7 @@ Expected: one line: `fetched` the register's records (9,677 in the export of 27 
 
 ## 14.7 The first full read
 
-The same full snapshot, loaded: every record of the table, `is_full` true.
+The same full snapshot, loaded: every record of the table in parts of `assets_load_chunk` rows (default 1,000: about ten parts), then the final call that marks missing what the run did not read.
 
 **Terminal**
 ```bash
@@ -1782,7 +1796,7 @@ select count(*) as devices, count(*) filter (where source_deleted_at is not null
 select count(*) as staged from cma.device_import_row;
 reset role;
 ```
-Expected: the newest row `backfill | device | succeeded` with `fetched` and `rows` as 14.6's `fetched`, `inserted` 0 (records added since the export of 27 October would show here), `missing_now` 0, `updated` up to 9,677 where a device's mapped row from the API differs from the CSV's (`unchanged` the rest), `components_replaced` 0 (a pads or battery swapped since 27 October would show here), and `unmapped_market`, `customer_ref_invalid` and `refs_dropped` as the load of 27 October counted them (8, 32 and 2) unless the register changed; below it the CSV load of 0008zi (`assets_import`). Then the devices (9,677) with 0 missing, and 0 staged rows. A `failed` row names its code: report it.
+Expected: the newest row `backfill | device | succeeded` with `fetched` and `rows` as 14.6's `fetched`, `inserted` 0 (records added since the export of 27 October would show here), `missing_now` 0, `updated` up to 9,677 where a device's mapped row from the API differs from the CSV's (`unchanged` the rest), `components_replaced` 0 (a pads or battery swapped since 27 October would show here), and `unmapped_market`, `customer_ref_invalid` and `refs_dropped` as the load of 27 October counted them (8, 32 and 2) unless the register changed; the phase times in milliseconds summed over the parts (`stage_ms`, `map_ms`, `upsert_ms`, `components_ms`, `missing_ms`; `cleanup_ms` 0); below it the CSV load of 0008zi (`assets_import`). Then the devices (9,677) with 0 missing, and 0 staged rows. A `failed` row names its code: report it.
 
 **Browser:** Reports → Maintenance and Reports → Data quality: the same figures as after the CSV load of 27 October (`records/0008zi-prod-2026-10-27`), unless the register changed since.
 

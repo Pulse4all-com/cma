@@ -31,6 +31,7 @@ function apiBase() {
 const WHOLE = {
   airtable_max_per_second: { default: 2, min: 1, max: 5 },
   assets_poll_interval_minutes: { default: 15, min: 1, max: 1440 },
+  assets_load_chunk: { default: 1000, min: 100, max: 5000 },
 };
 export const DATE_FORMATS = ["dmy", "mdy", "iso"];
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -52,9 +53,10 @@ function idOf(settings, name, fallbacks) {
 }
 
 /**
- * The connection's settings for the adapter: its pace, the poll interval, the table and view, the date format of dates
- * that arrive as text. A value out of range (or out of its form) takes the default, or none for the ids and the date
- * format, and is named in fallbacks, which the run logs once.
+ * The connection's settings for the adapter: its pace, the poll interval, the rows of a load's part (assets_load_chunk,
+ * default 1,000, 100 to 5,000; addition 0008zk), the table and view, the date format of dates that arrive as text. A
+ * value out of range (or out of its form) takes the default, or none for the ids and the date format, and is named in
+ * fallbacks, which the run logs once.
  */
 export function assetSettings(settings) {
   const fallbacks = [];
@@ -64,6 +66,7 @@ export function assetSettings(settings) {
   return {
     perSecond: whole(settings, "airtable_max_per_second", fallbacks),
     intervalMinutes: whole(settings, "assets_poll_interval_minutes", fallbacks),
+    loadChunk: whole(settings, "assets_load_chunk", fallbacks),
     tableId: idOf(settings, "table_id", fallbacks),
     viewId: idOf(settings, "view_id", fallbacks),
     dateFormat,
