@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 117_verify_asset_sync_load.sql: verifies addition 0008zk, the device load set-based and the ingest's load in parts
+-- 117_verify_asset_sync_load.sql: verifies addition 0008zk, the device load set-based and the ingest's load in chunks
 -- =============================================================================================
 -- Universal: no seed is assumed. Block A checks structure and privileges; blocks B and C work on throwaway tenants
 -- inside subtransactions that are always rolled back, so nothing stays (as 113 and 115) and the script runs in dev and in
@@ -16,14 +16,15 @@
 --      secret name; tenant one also holds a second such connection, one without a token secret name and a CRM
 --      connection. A register of 10,000 records is loaded the same way into both of tenant one's connections; then the
 --      night's full snapshot (9,000 of them, 1,440 changed, 360 with a replaced pads serial, and 1,000 new; 1,000 gone)
---      is loaded into one connection in one call (staged) and into the other in ten parts of 1,000 and the final
---      missing-marking: the same counts and the same devices and components. Then: a rerun of the same parts and the
---      final call changes nothing; a run that fails before its final call marks nothing missing, and its parts already
---      loaded are unchanged on the rerun; a part with a bad row loads nothing; row-level security across the two
+--      is loaded into one connection in one call (staged) and into the other in ten chunks of 1,000 and the final
+--      missing-marking: the same counts and the same devices and components. Then: a rerun of the same chunks and the
+--      final call changes nothing; a run that fails before its final call marks nothing missing, and its chunks already
+--      loaded are unchanged on the rerun; a chunk with a bad row loads nothing; row-level security across the two
 --      tenants' Ingest users; the refusals; the run's phase times and the setting
---   C  speed (verify.max_ms 3000 ms, a fifth of the ingest's 15-second statement timeout): on a throwaway tenant with
---      10,000 devices, one part of 1,000 unchanged rows, and the final missing-marking over the run's 9,900 record ids,
---      each under verify.max_ms. Then 115's C1 again (a full snapshot of 5,000 unchanged records staged and loaded in
+--   C  speed (verify.max_ms 3000 ms, a fifth of the ingest's 15-second statement timeout): on a throwaway tenant, a
+--      first load of 10,000 new records in chunks of 1,000 with no statistics read in between (C4, each chunk); then,
+--      its statistics read, one chunk of 1,000 unchanged rows, and the final missing-marking over the run's 9,900 record
+--      ids, each under verify.max_ms. Then 115's C1 again (a full snapshot of 5,000 unchanged records staged and loaded in
 --      one call as the Ingest user, the register loaded as 115 loads it) under verify.max_one_call_ms (115's 10000 ms),
 --      its detail the phase times: the staging insert, then the load's stage_ms, map_ms, upsert_ms, components_ms,
 --      missing_ms and cleanup_ms
@@ -39,7 +40,7 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);           -- 'true' to make every check fail
-select set_config('verify.max_ms', '3000', false);             -- one part of 1,000 rows; the final missing-marking
+select set_config('verify.max_ms', '3000', false);             -- one chunk of 1,000 rows; the final missing-marking
 select set_config('verify.max_one_call_ms', '10000', false);   -- 115's C1: 5,000 records staged and loaded in one call
 
 drop table if exists pg_temp.verify_0008zk;
@@ -95,8 +96,8 @@ as $$
   from generate_series(p_from, p_to) g
 $$;
 
--- The same records as one part for cma.ingest_load_device_part: a JSON array of objects, the staging's columns as keys
-create or replace function pg_temp.v0008zk_part(p_from integer, p_to integer, p_night boolean)
+-- The same records as one chunk for cma.ingest_load_device_chunk: a JSON array of objects, the staging's columns as keys
+create or replace function pg_temp.v0008zk_chunk(p_from integer, p_to integer, p_night boolean)
 returns jsonb
 language sql
 as $$
@@ -183,12 +184,12 @@ begin
 
   -- A3. every function the application's only and in the caller's rights, the trigger function nobody's; the load in one
   --     place, set-based: no row loop, no row lock, no helper with a subtransaction, the advisory lock; the file path and
-  --     the parts call it, neither writes a device
+  --     the chunks call it, neither writes a device
   v_bad := '';
   foreach v_fn in array array[
     'cma.device_staged_json(text)', 'cma.device_staged_date_ok(text)', 'cma.device_staged_ref(text)',
     'cma.device_rows_apply(uuid,cma.device_load_row[],boolean)', 'cma.device_snapshot_apply(text,uuid,boolean)',
-    'cma.ingest_load_device_part(uuid,jsonb)', 'cma.ingest_mark_devices_missing(uuid,text[])', 'cma.assets_settings_problem(jsonb)',
+    'cma.ingest_load_device_chunk(uuid,jsonb)', 'cma.ingest_mark_devices_missing(uuid,text[])', 'cma.assets_settings_problem(jsonb)',
     'cma.set_connection_settings(uuid,jsonb)', 'cma.ingest_sync_run_finish(uuid,text,jsonb,text)',
     'cma.load_device_snapshot(text,uuid,boolean)', 'cma.ingest_load_device_snapshot(uuid,text,boolean)'] loop
     if to_regprocedure(v_fn) is null then
@@ -211,10 +212,10 @@ begin
       v_bad := v_bad || 'the load set-based; ';
     end if;
     if pg_get_functiondef('cma.device_snapshot_apply(text,uuid,boolean)'::regprocedure) not like '%cma.device_rows_apply(%'
-       or pg_get_functiondef('cma.ingest_load_device_part(uuid,jsonb)'::regprocedure) not like '%cma.device_rows_apply(%'
+       or pg_get_functiondef('cma.ingest_load_device_chunk(uuid,jsonb)'::regprocedure) not like '%cma.device_rows_apply(%'
        or pg_get_functiondef('cma.device_snapshot_apply(text,uuid,boolean)'::regprocedure) like '%cma.device %'
-       or pg_get_functiondef('cma.ingest_load_device_part(uuid,jsonb)'::regprocedure) like '%cma.device %'
-       or pg_get_functiondef('cma.ingest_load_device_part(uuid,jsonb)'::regprocedure) like '%device_import_%' then
+       or pg_get_functiondef('cma.ingest_load_device_chunk(uuid,jsonb)'::regprocedure) like '%cma.device %'
+       or pg_get_functiondef('cma.ingest_load_device_chunk(uuid,jsonb)'::regprocedure) like '%device_import_%' then
       v_bad := v_bad || 'the load in one place; ';
     end if;
   end if;
@@ -290,7 +291,7 @@ begin
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
     values (v_t1, 'verifyregister', 'Verify register one call', 'base-one', 'assets', 'verify-register-token-one') returning id into v_one;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
-    values (v_t1, 'verifyregister', 'Verify register parts', 'base-parts', 'assets', 'verify-register-token-parts') returning id into v_parts;
+    values (v_t1, 'verifyregister', 'Verify register chunks', 'base-chunks', 'assets', 'verify-register-token-chunks') returning id into v_parts;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
     values (v_t1, 'verifyregister', 'Verify register from files', 'base-csv', 'assets') returning id into v_csv;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, token_secret_name)
@@ -313,13 +314,13 @@ begin
     insert into cma.device_component_kind (tenant_id, key, name, sort_order) values (v_t2, 'pads', 'Pads', 10), (v_t2, 'battery', 'Battery', 20);
     perform set_config('role', 'cma_app', true);
 
-    -- B1. tenant one's Ingest user loads the register's 10,000 records into both connections the same way (parts of
+    -- B1. tenant one's Ingest user loads the register's 10,000 records into both connections the same way (chunks of
     --     1,000); then the night's full snapshot into one connection in one call (staged) and into the other in ten
-    --     parts of 1,000 and the final missing-marking: the same counts, the same devices and components
+    --     chunks of 1,000 and the final missing-marking: the same counts, the same devices and components
     perform set_config('app.user_id', v_ing1::text, true);
     for p in 0 .. 9 loop
-      perform cma.ingest_load_device_part(v_one, pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, false));
-      perform cma.ingest_load_device_part(v_parts, pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, false));
+      perform cma.ingest_load_device_chunk(v_one, pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, false));
+      perform cma.ingest_load_device_chunk(v_parts, pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, false));
     end loop;
     v_txt := (pg_temp.v0008zk_fingerprint(v_one) = pg_temp.v0008zk_fingerprint(v_parts))::text;
     v_n := pg_temp.v0008zk_stage('night-one', array[int4range(1, 9001), int4range(10001, 11001)], true);
@@ -327,9 +328,9 @@ begin
     k := '{}'::jsonb;
     v_ids := '{}';
     for p in 0 .. 9 loop
-      -- the night's rows in id order, a thousand a part: records 1 to 9,000, then 10,001 to 11,000
-      k := pg_temp.v0008zk_add(k, cma.ingest_load_device_part(v_parts,
-             case when p < 9 then pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, true) else pg_temp.v0008zk_part(10001, 11000, true) end));
+      -- the night's rows in id order, a thousand a chunk: records 1 to 9,000, then 10,001 to 11,000
+      k := pg_temp.v0008zk_add(k, cma.ingest_load_device_chunk(v_parts,
+             case when p < 9 then pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, true) else pg_temp.v0008zk_chunk(10001, 11000, true) end));
     end loop;
     select array_agg(x.source_id) into v_ids
     from (select r.source_id from pg_temp.v0008zk_register(1, 9000, true) r union all select r.source_id from pg_temp.v0008zk_register(10001, 11000, true) r) x;
@@ -337,32 +338,32 @@ begin
     v_txt := v_txt || ' ' || v_n || ' ' || pg_temp.v0008zk_counts(j) || ' | ' || pg_temp.v0008zk_counts(k)
              || ' ' || (pg_temp.v0008zk_fingerprint(v_one) = pg_temp.v0008zk_fingerprint(v_parts))::text
              || ' ' || (select count(*) from cma.device_import_staging);
-    v_rows := v_rows || array['11', 'B1 the night''s full snapshot of 10,000 in ten parts and the final call: the same counts, devices and components as one call',
+    v_rows := v_rows || array['11', 'B1 the night''s full snapshot of 10,000 in ten chunks and the final call: the same counts, devices and components as one call',
       case when v_txt = 'true 10000 ' || v_expect || ' | ' || v_expect || ' true 0' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B2. a rerun of the same parts and the final call: every row unchanged, nothing marked, the devices as they were
+    -- B2. a rerun of the same chunks and the final call: every row unchanged, nothing marked, the devices as they were
     v_fp := pg_temp.v0008zk_fingerprint(v_parts);
     k := '{}'::jsonb;
     for p in 0 .. 9 loop
-      k := pg_temp.v0008zk_add(k, cma.ingest_load_device_part(v_parts,
-             case when p < 9 then pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, true) else pg_temp.v0008zk_part(10001, 11000, true) end));
+      k := pg_temp.v0008zk_add(k, cma.ingest_load_device_chunk(v_parts,
+             case when p < 9 then pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, true) else pg_temp.v0008zk_chunk(10001, 11000, true) end));
     end loop;
     k := pg_temp.v0008zk_add(k, cma.ingest_mark_devices_missing(v_parts, v_ids));
     v_txt := pg_temp.v0008zk_counts(k) || ' ' || (pg_temp.v0008zk_fingerprint(v_parts) = v_fp)::text;
-    v_rows := v_rows || array['12', 'B2 a rerun of the same parts and the final call changes nothing',
+    v_rows := v_rows || array['12', 'B2 a rerun of the same chunks and the final call changes nothing',
       case when v_txt = 'rows=10000 ins=0 upd=0 same=10000 missing=0 repl=0 um=20 us=0 uk=24 cri=14 drop=64 true' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B3. a run that fails before its final call (records 1 to 8,000 read, four parts loaded, then the failure) marks
-    --     nothing missing; the rerun reloads those four parts unchanged and its final call marks the 2,000 it did not read
-    --     (8,001 to 9,000 and 10,001 to 11,000); a part with a bad row loads nothing of the part
+    -- B3. a run that fails before its final call (records 1 to 8,000 read, four chunks loaded, then the failure) marks
+    --     nothing missing; the rerun reloads those four chunks unchanged and its final call marks the 2,000 it did not read
+    --     (8,001 to 9,000 and 10,001 to 11,000); a chunk with a bad row loads nothing of the chunk
     v_n := (select count(*) from cma.device d where d.connection_id = v_parts and d.source_deleted_at is not null);
     for p in 0 .. 3 loop
-      perform cma.ingest_load_device_part(v_parts, pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, true));
+      perform cma.ingest_load_device_chunk(v_parts, pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, true));
     end loop;
     v_txt := v_n || ' ' || (select count(*) from cma.device d where d.connection_id = v_parts and d.source_deleted_at is not null);
     k := '{}'::jsonb;
     for p in 0 .. 7 loop
-      j := cma.ingest_load_device_part(v_parts, pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, true));
+      j := cma.ingest_load_device_chunk(v_parts, pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, true));
       if p < 4 then
         k := pg_temp.v0008zk_add(k, j);
       end if;
@@ -370,14 +371,14 @@ begin
     v_txt := v_txt || ' ' || pg_temp.v0008zk_counts(k);
     j := cma.ingest_mark_devices_missing(v_parts, (select array_agg(r.source_id) from pg_temp.v0008zk_register(1, 8000, true) r));
     v_txt := v_txt || ' ' || (j ->> 'missing_now') || ' ' || (select count(*) from cma.device d where d.connection_id = v_parts and d.source_deleted_at is not null);
-    -- a part whose 500th row holds no date: refused, naming the line, and nothing of the part written
+    -- a chunk whose 500th row holds no date: refused, naming the line, and nothing of the chunk written
     v_fp := pg_temp.v0008zk_fingerprint(v_parts);
-    v_txt := v_txt || ' | ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_part(%L, %L)', v_parts,
+    v_txt := v_txt || ' | ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts,
                (select jsonb_agg(case when (e ->> 'source_row')::integer = 501 then e || '{"first_shipped_on": "15/11/2024"}'::jsonb
                                       else e || '{"subscription_ref": "sub-changed"}'::jsonb end)
-                from jsonb_array_elements(pg_temp.v0008zk_part(1, 1000, true)) e)))
+                from jsonb_array_elements(pg_temp.v0008zk_chunk(1, 1000, true)) e)))
              || ' ' || (pg_temp.v0008zk_fingerprint(v_parts) = v_fp)::text;
-    v_rows := v_rows || array['13', 'B3 a run that fails before its final call marks nothing missing; the rerun''s parts unchanged; a part with a bad row loads nothing',
+    v_rows := v_rows || array['13', 'B3 a run that fails before its final call marks nothing missing; the rerun''s chunks unchanged; a chunk with a bad row loads nothing',
       case when v_txt = '1000 1000 rows=4000 ins=0 upd=0 same=4000 missing=0 repl=0 um=8 us=0 uk=10 cri=6 drop=27 2000 3000 '
                         || '| CMA04: line 501: first_shipped_on is not a date as YYYY-MM-DD true'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
@@ -387,9 +388,9 @@ begin
     v_fp := pg_temp.v0008zk_fingerprint(v_parts);
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_ing2::text, true);
-    v_txt := pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, pg_temp.v0008zk_part(1, 3, false)))
+    v_txt := pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, pg_temp.v0008zk_chunk(1, 3, false)))
              || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_parts, array['rec-000001']));
-    j := cma.ingest_load_device_part(v_reg2, pg_temp.v0008zk_part(1, 3, false));
+    j := cma.ingest_load_device_chunk(v_reg2, pg_temp.v0008zk_chunk(1, 3, false));
     k := cma.ingest_mark_devices_missing(v_reg2, array['rec-000001', 'rec-000002']);
     v_txt := v_txt || ' ' || pg_temp.v0008zk_counts(j) || ' ' || (k ->> 'missing_now')
              || ' ' || (select count(*) from cma.device) || '/' || (select count(*) from cma.device_component)
@@ -402,35 +403,35 @@ begin
       case when v_txt = 'CMA02 CMA02 rows=3 ins=3 upd=0 same=0 missing=0 repl=0 um=3 us=3 uk=3 cri=0 drop=2 1 3/6 0 0 true'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B5. the refusals: a person (CMA06); a connection without a token secret name, a CRM connection (CMA04); a part
+    -- B5. the refusals: a person (CMA06); a connection without a token secret name, a CRM connection (CMA04); a chunk
     --     that is no array, empty, over 5,000 rows, a row no object, a key outside the staging's columns, a line outside
     --     2 to 10,000,000 or no number, a value longer than the staging takes, a record id twice, a row without one;
     --     the final call without record ids or with a null among them (CMA04). An address is kept nowhere: a bare @
-    v_txt := pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_csv, pg_temp.v0008zk_part(1, 2, false)))
+    v_txt := pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_csv, pg_temp.v0008zk_chunk(1, 2, false)))
       || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_csv, array['rec-000001']))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_crm, pg_temp.v0008zk_part(1, 2, false)))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_crm, pg_temp.v0008zk_chunk(1, 2, false)))
       || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_crm, array['rec-000001']))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '{"source_id": "rec-1"}'))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[]'))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts,
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '{"source_id": "rec-1"}'))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[]'))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts,
                   (select jsonb_agg(jsonb_build_object('source_id', 'rec-' || g)) from generate_series(1, 5001) g)))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[{"source_id": "rec-1"}, "rec-2"]'))
-      || ' ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[{"source_id": "rec-1", "serial_number": "SN-1"}]'))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[{"source_row": 1, "source_id": "rec-1"}]'))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[{"source_row": "3", "source_id": "rec-1"}]'))
-      || ' ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_part(%L, %L)', v_parts,
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[{"source_id": "rec-1"}, "rec-2"]'))
+      || ' ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[{"source_id": "rec-1", "serial_number": "SN-1"}]'))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[{"source_row": 1, "source_id": "rec-1"}]'))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[{"source_row": "3", "source_id": "rec-1"}]'))
+      || ' ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts,
                   jsonb_build_array(jsonb_build_object('source_row', 4, 'source_id', 'rec-1', 'serial', repeat('s', 501)))))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts,
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts,
                   '[{"source_row": 2, "source_id": "rec-1"}, {"source_row": 3, "source_id": "rec-1"}]'))
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, '[{"source_row": 2, "serial": "SN-1"}]'))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, '[{"source_row": 2, "serial": "SN-1"}]'))
       || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_parts, '{}'::text[]))
       || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_parts, array['rec-000001', null]));
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := v_txt
-      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_part(%L, %L)', v_parts, pg_temp.v0008zk_part(1, 2, false)))
+      || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts, pg_temp.v0008zk_chunk(1, 2, false)))
       || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_mark_devices_missing(%L, %L)', v_parts, array['rec-000001']));
     perform set_config('app.user_id', v_ing1::text, true);
-    j := cma.ingest_load_device_part(v_parts, jsonb_build_array(jsonb_build_object(
+    j := cma.ingest_load_device_chunk(v_parts, jsonb_build_array(jsonb_build_object(
            'source_row', 2, 'source_id', 'rec-at', 'serial', 'verify-serial@example.invalid', 'customer_ref', 'verify-customer@example.invalid',
            'components', '{"pads": {"serial": "verify-pads@example.invalid", "expires_on": "2027-01-01"}}',
            'external_refs', '{"ns_internal_id": "verify-ref@example.invalid"}')));
@@ -442,9 +443,9 @@ begin
              || ' ' || (select coalesce(d.serial, '-') || ':' || coalesce(d.customer_ref, '-') || ':' || d.customer_ref_invalid::text
                         from cma.device d where d.tenant_id = v_t1 and d.source_id = 'rec-at');
     perform set_config('role', 'cma_app', true);
-    v_rows := v_rows || array['15', 'B5 the refusals: a person, a file-only and a CRM connection, a part out of its form, a final call without ids; an address a bare @',
+    v_rows := v_rows || array['15', 'B5 the refusals: a person, a file-only and a CRM connection, a chunk out of its form, a final call without ids; an address a bare @',
       case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 '
-                        || 'CMA04: a part''s rows hold the staging''s columns only, not serial_number CMA04 CMA04 '
+                        || 'CMA04: a chunk''s rows hold the staging''s columns only, not serial_number CMA04 CMA04 '
                         || 'CMA04: line 4: serial is longer than the staging takes CMA04 CMA04 CMA04 CMA04 CMA06 CMA06 '
                         || '| rows=1 ins=1 upd=0 same=0 missing=0 repl=0 um=1 us=1 uk=1 cri=1 drop=3 0/0/0 -:-:true'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
@@ -482,7 +483,8 @@ begin
 end
 $$;
 
--- C. Speed: one part of 1,000 unchanged rows and the final missing-marking over 10,000 devices (rolled back)
+-- C. Speed: a first load in chunks, then one chunk of 1,000 unchanged rows and the final missing-marking over 10,000
+--    devices (rolled back)
 do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
@@ -491,6 +493,7 @@ declare
   v_t uuid; v_admin uuid; v_ing uuid; v_reg uuid;
   v_t0 timestamptz;
   v_ms numeric;
+  v_chunks numeric[] := '{}';
   j jsonb;
 begin
   begin
@@ -511,21 +514,31 @@ begin
       ('active_customer', 'Active/Customer', true, false, true, array['active/customer'], 10),
       ('in_storage', 'In Storage', false, true, true, array['in storage'], 20);
     perform set_config('app.user_id', v_ing::text, true);
-    -- the register as the mirror holds it after earlier nights: 10,000 records loaded in parts of 1,000, the tables'
-    -- statistics read after each (as autovacuum keeps them in a database that holds the devices)
+    -- C4. a first load: 10,000 new records into the empty connection in chunks of 1,000, without reading the tables'
+    --     statistics in between (the planner knows nothing of the rows the load is writing), each chunk timed
     for p in 0 .. 9 loop
-      perform cma.ingest_load_device_part(v_reg, pg_temp.v0008zk_part(p * 1000 + 1, p * 1000 + 1000, false));
-      perform set_config('role', 'cma_owner', true);
-      analyze cma.device;
-      analyze cma.device_component;
-      perform set_config('role', 'cma_app', true);
+      v_t0 := clock_timestamp();
+      perform cma.ingest_load_device_chunk(v_reg, pg_temp.v0008zk_chunk(p * 1000 + 1, p * 1000 + 1000, false));
+      v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
+      v_chunks := v_chunks || v_ms;
     end loop;
+    v_rows := v_rows || array['54', 'C4 a first load of 10,000 new records into an empty connection in chunks of 1,000, no statistics read: each chunk under verify.max_ms',
+      case when (select max(x) from unnest(v_chunks) x) < v_max and (select count(*) from cma.device d where d.connection_id = v_reg) = 10000
+                and not v_provoke then 'ok' else 'FAIL' end,
+      format('slowest %s ms (budget %s), first %s, last %s; %s devices', (select max(x) from unnest(v_chunks) x), v_max, v_chunks[1], v_chunks[10],
+             (select count(*) from cma.device d where d.connection_id = v_reg))];
+    -- then the register as the mirror holds it after earlier nights: the tables' statistics read (as autovacuum keeps
+    -- them in a database that holds the devices)
+    perform set_config('role', 'cma_owner', true);
+    analyze cma.device;
+    analyze cma.device_component;
+    perform set_config('role', 'cma_app', true);
 
-    -- C1. one part of 1,000 unchanged rows (records 4,001 to 5,000), its phase times in the detail
+    -- C1. one chunk of 1,000 unchanged rows (records 4,001 to 5,000), its phase times in the detail
     v_t0 := clock_timestamp();
-    j := cma.ingest_load_device_part(v_reg, pg_temp.v0008zk_part(4001, 5000, false));
+    j := cma.ingest_load_device_chunk(v_reg, pg_temp.v0008zk_chunk(4001, 5000, false));
     v_ms := round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1);
-    v_rows := v_rows || array['51', 'C1 one part of 1,000 unchanged rows as the Ingest user, under verify.max_ms',
+    v_rows := v_rows || array['51', 'C1 one chunk of 1,000 unchanged rows as the Ingest user, under verify.max_ms',
       case when v_ms < v_max and pg_temp.v0008zk_counts(j) = 'rows=1000 ins=0 upd=0 same=1000 missing=0 repl=0 um=2 us=0 uk=2 cri=2 drop=6'
                 and not v_provoke then 'ok' else 'FAIL' end,
       format('%s ms (budget %s), stage %s, map %s, upsert %s, components %s; %s', v_ms, v_max, j ->> 'stage_ms', j ->> 'map_ms',
@@ -543,18 +556,18 @@ begin
   exception
     when sqlstate 'CMAOK' then null;
     when others then
-      v_rows := v_rows || array['78', 'C the parts'' block ran to the end', 'FAIL', sqlerrm];
+      v_rows := v_rows || array['78', 'C the chunks'' block ran to the end', 'FAIL', sqlerrm];
   end;
   insert into verify_0008zk (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008zk values (78, 'C the parts'' block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008zk values (78, 'C the chunks'' block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
 
--- C3. 115's C1 again, with its phases: a throwaway tenant with 5,000 devices loaded as 115 loads them (staged in parts
+-- C3. 115's C1 again, with its phases: a throwaway tenant with 5,000 devices loaded as 115 loads them (staged in chunks
 --     of 500, the statistics read after each), then a nightly full snapshot of them all, unchanged, staged and loaded in
 --     one call as the Ingest user (rolled back)
 do $$
@@ -634,7 +647,7 @@ $$;
 drop function if exists pg_temp.v0008zk_code(text);
 drop function if exists pg_temp.v0008zk_error(text);
 drop function if exists pg_temp.v0008zk_stage(text, int4range[], boolean);
-drop function if exists pg_temp.v0008zk_part(integer, integer, boolean);
+drop function if exists pg_temp.v0008zk_chunk(integer, integer, boolean);
 drop function if exists pg_temp.v0008zk_register(integer, integer, boolean);
 drop function if exists pg_temp.v0008zk_add(jsonb, jsonb);
 drop function if exists pg_temp.v0008zk_counts(jsonb);
@@ -646,7 +659,7 @@ from (select ord, check_name, result, detail from verify_0008zk
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zk where result = 'ok') = 14
+                  when (select count(*) from verify_0008zk where result = 'ok') = 15
                        and not exists (select 1 from verify_0008zk where result <> 'ok') then '0008zk verified'
                   else 'FAIL' end,
              format('117_verify_asset_sync_load: %s ok, %s FAIL', (select count(*) from verify_0008zk where result = 'ok'),

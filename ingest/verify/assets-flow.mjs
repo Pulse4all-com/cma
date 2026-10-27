@@ -1,5 +1,5 @@
 /**
- * Verifier: the Airtable adapter for an asset register end to end (addition 0008zj; the load in parts, 0008zk), against a
+ * Verifier: the Airtable adapter for an asset register end to end (addition 0008zj; the load in chunks, 0008zk), against a
  * local PostgreSQL with db/00…116 and the fake Airtable (verify/airtable-fake.mjs). Everything is invented: tenants, bases, records, serials,
  * customer ids, names (Invented Person …) and addresses (example.invalid).
  *
@@ -9,8 +9,8 @@
  * Logins as in verify/flow.mjs. Two throwaway tenants per run (assets-<run>-one, assets-<run>-two); the jobs run in this
  * process; at the end this run's connections are set inactive.
  *
- * Proves: no route for the adapter (404); the first poll (no cursor: every record, in parts of the setting
- * assets_load_chunk, 100 here, so three, through cma.ingest_load_device_part into the devices: nothing missing; its
+ * Proves: no route for the adapter (404); the first poll (no cursor: every record, in chunks of the setting
+ * assets_load_chunk, 100 here, so three, through cma.ingest_load_device_chunk into the devices: nothing missing; its
  * sync_run assets_poll, stream devices, with the load's counts, its phase times and fetched; no staged row, no run of
  * job assets_import; an address as a customer id never stored); a poll not due
  * writes nothing and asks nothing; the next poll asks for the records changed since its cursor less five minutes and
@@ -176,12 +176,12 @@ expect("B3 the address as a customer id: no reference, flagged invalid; the look
 expect("B4 no staged row left, no run of the file import's job",
   [(await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n, (await runsOf(reg1.id, "assets_import")).length], [0, 0], [201, 1]);
 const pollLine = lastLog("poll-assets: connection");
-expect("B5 the run's log line: counts, the parts (three of at most 100), the details and the requests per endpoint; the cursors at the run's start",
-  [pollLine?.fetched, pollLine?.parts, pollLine?.fields, pollLine?.valuesWithAt, pollLine?.dateFailures, pollLine?.api,
+expect("B5 the run's log line: counts, the chunks (three of at most 100), the details and the requests per endpoint; the cursors at the run's start",
+  [pollLine?.fetched, pollLine?.chunks, pollLine?.fields, pollLine?.valuesWithAt, pollLine?.dateFailures, pollLine?.api,
     Number.isFinite((await cursor(reg1.id, "assets:modified"))?.at), Number.isFinite((await cursor(reg1.id, "assets:cadence"))?.at)],
   [201, 3, 20, 1, 1, { "GET /{id}/{id}": 3, "GET /meta/bases/{id}/tables": 1 }, true, true], [0, 1, 0, 0, 0, {}, false, false]);
 const PHASES = ["stage_ms", "map_ms", "upsert_ms", "components_ms", "missing_ms", "cleanup_ms"];
-expect("B6 the run's counts carry the load's phase times, whole milliseconds summed over the parts (no staging to clean up)",
+expect("B6 the run's counts carry the load's phase times, whole milliseconds summed over the chunks (no staging to clean up)",
   [PHASES.every((k) => Number.isInteger(runs[0]?.counts?.[k]) && runs[0].counts[k] >= 0), runs[0]?.counts?.cleanup_ms, runs[0]?.counts?.missing_ms],
   [true, 0, 0], [false, 1, 1]);
 

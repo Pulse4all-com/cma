@@ -10,14 +10,14 @@
  * yes/no, a lookup's list; an object or an error cell unreadable); the dates (an ISO date, a formula's timestamp, a text
  * date in the connection's format, read as tools/devices-to-staging.mjs reads it; without a format date_format_not_set
  * naming the field; one that does not read left empty and counted); a value with an @ a bare @, counted; the settings'
- * ranges and fallbacks (the part size assets_load_chunk among them); the endpoints; the skip of a connection without a
+ * ranges and fallbacks (the chunk size assets_load_chunk among them); the endpoints; the skip of a connection without a
  * token secret name; the client (the bearer token from the secret, token_unavailable without one, a 429 holding the
  * connection for the lockout, the pace, the requests per endpoint); offset paging, cellFormat json, the view; the poll
- * (no cursor: every record, in parts, nothing marked missing; the cursor less five minutes in the formula; not due within
- * the interval); the full snapshot (in parts of the setting's size, in line order, then one final call over the run's
- * record ids; the counts and phase times summed; a part that fails: no final call, the counts so far; an empty one
+ * (no cursor: every record, in chunks, nothing marked missing; the cursor less five minutes in the formula; not due within
+ * the interval); the full snapshot (in chunks of the setting's size, in line order, then one final call over the run's
+ * record ids; the counts and phase times summed; a chunk that fails: no final call, the counts so far; an empty one
  * refused); the dry run (counts, nothing loaded, no cursor); a renamed field (unknown_field, the field named, nothing
- * read); no token and no value in any log line (addition 0008zj; the parts 0008zk).
+ * read); no token and no value in any log line (addition 0008zj; the chunks 0008zk).
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -66,9 +66,9 @@ const configOf = (extra = {}, fields = FIELDS) => ({ fields, settings: { ...SETT
 const CONN = { connectionId: "00000000-0000-4000-8000-00000000a001", adapter: "airtable", externalAccountId: source.baseId, tokenSecretName: "airtable-assets-fixture" };
 const ZERO = { rows: 0, inserted: 0, updated: 0, unchanged: 0, missing_now: 0, components_replaced: 0, unmapped_model: 0, unmapped_status: 0, unmapped_market: 0,
   customer_ref_invalid: 0, refs_dropped: 0 };
-// The store's load as cma.ingest_load_device_part and cma.ingest_mark_devices_missing answer it: each part's counts
-// (every row inserted) and phase times; failPart: the part (from 1) that fails
-function memStore(config, { failPart = 0 } = {}) {
+// The store's load as cma.ingest_load_device_chunk and cma.ingest_mark_devices_missing answer it: each chunk's counts
+// (every row inserted) and phase times; failChunk: the chunk (from 1) that fails
+function memStore(config, { failChunk = 0 } = {}) {
   const cursors = new Map();
   const loads = [];
   const marks = [];
@@ -77,8 +77,8 @@ function memStore(config, { failPart = 0 } = {}) {
     async config() { return config; },
     async cursor(s) { return cursors.get(s) ?? null; },
     async setCursor(s, v) { cursors.set(s, v); },
-    async loadDevicePart(rows) {
-      if (loads.length + 1 === failPart) throw Object.assign(new Error("part refused"), { code: "CMA04" });
+    async loadDeviceChunk(rows) {
+      if (loads.length + 1 === failChunk) throw Object.assign(new Error("chunk refused"), { code: "CMA04" });
       loads.push({ rows: rows.map((r) => ({ ...r })) });
       return { ...ZERO, rows: rows.length, inserted: rows.length, stage_ms: 1, map_ms: 2, upsert_ms: 3, components_ms: 4, missing_ms: 0 };
     },
@@ -136,7 +136,7 @@ const isoOnly = rowOf({ id: "recIso", fields: { first_shipment_date_to_customer:
 expect("B6 ISO dates need no date_format", [isoOnly.row.first_shipped_on, isoOnly.row.warranty_until], ["2024-11-15", "2029-11-15"], [null, null]);
 
 // ---- C. Settings, endpoints, the skip -----------------------------------------------------------------------------------
-expect("C1 the settings' defaults: 2 per second, 15 minutes, parts of 1,000, no table, view or date format, nothing out of range",
+expect("C1 the settings' defaults: 2 per second, 15 minutes, chunks of 1,000, no table, view or date format, nothing out of range",
   assetSettings({}), { perSecond: 2, intervalMinutes: 15, loadChunk: 1000, tableId: null, viewId: null, dateFormat: null, fallbacks: [] }, {});
 const odd = assetSettings({ airtable_max_per_second: 9, assets_poll_interval_minutes: "0", assets_load_chunk: 50, table_id: "tbl x", view_id: "viwOk1", date_format: "ymd" });
 expect("C2 values out of range give the default and are named; digits as text are taken",
@@ -201,7 +201,7 @@ let counts = counts0();
 budget = new JobBudget({});
 const now1 = Date.now();
 await airtable.pollAssets({ connection: CONN, store, budget, now: now1, counts });
-expect("E1 the first poll (no cursor): every record, no formula, one part of 201 rows (parts of 1,000), nothing marked missing",
+expect("E1 the first poll (no cursor): every record, no formula, one chunk of 201 rows (chunks of 1,000), nothing marked missing",
   [fake.state.requests.at(-1).formula, store.loads.length, store.marks.length, store.loads[0]?.rows.length, counts.fetched, counts.inserted, counts.upserted],
   [null, 1, 0, 201, 201, 201, 201], ["x", 0, 1, 0, 0, 0, 0]);
 expect("E2 the rows numbered from 2 in record id order; no personal value in any row",
@@ -213,7 +213,7 @@ expect("E4 not due within the interval (15 minutes, two of slack); due after it"
 source.records[4].modifiedAt = new Date(now1 - 60_000).toISOString();
 counts = counts0();
 await airtable.pollAssets({ connection: CONN, store, budget, now: now1 + 15 * 60_000, counts });
-expect("E5 the next poll asks for the records modified after its cursor less five minutes: the one changed record, one part, nothing marked missing",
+expect("E5 the next poll asks for the records modified after its cursor less five minutes: the one changed record, one chunk, nothing marked missing",
   [fake.state.requests.at(-1).formula, store.loads.at(-1).rows.map((r) => r.source_id), store.marks.length],
   [modifiedAfter(now1 - 5 * 60_000), ["recFixture0005aaa"], 0], [null, [], 1]);
 counts = counts0();
@@ -224,25 +224,25 @@ expect("E6 a poll with nothing changed loads nothing and moves its cursor", [sto
 counts = counts0();
 const t1 = Date.now();
 await airtable.reconcile({ connection: CONN, store, budget, object: "device", counts });
-expect("E7 the full snapshot (reconcile): every record, no formula, one part, then one final call over the 201 record ids; the cursor at its start",
+expect("E7 the full snapshot (reconcile): every record, no formula, one chunk, then one final call over the 201 record ids; the cursor at its start",
   [fake.state.requests.at(-1).formula, store.loads.at(-1).rows.length, store.marks.length, store.marks[0]?.length, counts.missing_now,
     store.cursors.get(MODIFIED_STREAM).at >= t1], [null, 201, 1, 201, 3, true], ["x", 0, 0, 0, 0, false]);
 store = memStore(configOf({ assets_load_chunk: 100 }));
 counts = counts0();
 await airtable.reconcile({ connection: CONN, store, budget, object: "device", counts });
 const lines = store.loads.flatMap((l) => l.rows.map((r) => r.source_row));
-expect("E7b parts of the setting assets_load_chunk (100): three parts of 100, 100 and 1 in line order, then the final call over every record id read",
+expect("E7b chunks of the setting assets_load_chunk (100): three chunks of 100, 100 and 1 in line order, then the final call over every record id read",
   [store.loads.map((l) => l.rows.length), lines.every((v, i) => v === i + 2), store.marks.length,
     JSON.stringify([...store.marks[0]].sort()) === JSON.stringify(store.loads.flatMap((l) => l.rows.map((r) => r.source_id)).sort())],
   [[100, 100, 1], true, 1, true], [[201], false, 0, false]);
-expect("E7c the run's counts summed over the parts: the load's, upserted, missing_now from the final call, the phase times",
+expect("E7c the run's counts summed over the chunks: the load's, upserted, missing_now from the final call, the phase times",
   [counts.rows, counts.inserted, counts.upserted, counts.missing_now, Object.fromEntries(PHASE_COUNTS.map((k) => [k, counts[k]]))],
   [201, 201, 201, 3, { stage_ms: 3, map_ms: 6, upsert_ms: 9, components_ms: 12, missing_ms: 5, cleanup_ms: 0 }], [0, 0, 0, 0, {}]);
-store = memStore(configOf({ assets_load_chunk: 100 }), { failPart: 2 });
+store = memStore(configOf({ assets_load_chunk: 100 }), { failChunk: 2 });
 counts = counts0();
 const failed = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));
-expect("E7d a part that fails ends the run before the final call: nothing marked missing, the counts of the part loaded, the cursor not moved",
-  [failed, store.marks.length, counts.rows, counts.missing_now, store.cursors.has(MODIFIED_STREAM)], ["other:part refused", 0, 100, 0, false], ["ok", 1, 201, 3, true]);
+expect("E7d a chunk that fails ends the run before the final call: nothing marked missing, the counts of the chunk loaded, the cursor not moved",
+  [failed, store.marks.length, counts.rows, counts.missing_now, store.cursors.has(MODIFIED_STREAM)], ["other:chunk refused", 0, 100, 0, false], ["ok", 1, 201, 3, true]);
 const emptySource = { ...assetsSource(), baseId: "appFixtureEmpty01", records: [] };
 fake.state.bases[emptySource.baseId] = basesOf(emptySource)[emptySource.baseId];
 const emptyStore = memStore(configOf());

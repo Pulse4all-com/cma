@@ -1,11 +1,11 @@
 -- =============================================================================================
--- 116_asset_sync_load.sql: addition 0008zk, the device load set-based, and the ingest's load in bounded parts
+-- 116_asset_sync_load.sql: addition 0008zk, the device load set-based, and the ingest's load in bounded chunks
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 114_asset_sync.sql
 -- (0008zj). Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then
 -- 117_verify_asset_sync_load.sql, then 115_verify_asset_sync.sql and 113_verify_assets.sql again (the load they prove
 -- is the one this script makes again); then prod, with 117, 115 and 113. The ingest of main reads nothing this adds;
--- the ingest of this change needs it (cma.ingest_load_device_part, cma.ingest_mark_devices_missing, the run's phase
+-- the ingest of this change needs it (cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing, the run's phase
 -- times), so in prod the script runs before that ingest is deployed.
 --
 -- Why (prod, 27 October 2026: 115's C1, a nightly full snapshot of 5,000 unchanged records staged and loaded in one
@@ -29,21 +29,21 @@
 --                     5,000 rows takes 1.0 to 1.2 s locally: the audit about 0.44 s, the per-row permission check about
 --                     0.35 s, the trigger's own insert per row about 0.37 s; deleting them 0.2 to 0.3 s, nearly all
 --                     audit. Unchanged devices and components write no audit row (nothing is updated). The staging and
---                     its audit stay as 0008zi decided (113's B15 proves the staged rows' audit): the ingest's parts no
+--                     its audit stay as 0008zi decided (113's B15 proves the staged rows' audit): the ingest's chunks no
 --                     longer stage at all
---   estimates         found while bounding the parts: a load into a connection that is filling (a first load, or a
+--   estimates         found while bounding the chunks: a load into a connection that is filling (a first load, or a
 --                     throwaway tenant) has no statistics for its rows, so the planner takes it for one row and may scan
---                     the whole part once per device or component it holds; a first load of 10,000 in parts of 1,000
---                     grew from 0.5 to 2.2 s a part. The load's lookups are driven by the rows (each row looks up its
+--                     the whole chunk once per device or component it holds; a first load of 10,000 in chunks of 1,000
+--                     grew from 0.5 to 2.2 s a chunk. The load's lookups are driven by the rows (each row looks up its
 --                     device and its current components by index) and its updates select their rows by id, so no plan
---                     rests on those estimates: every part of that first load now takes about 0.4 s
+--                     rests on those estimates: every chunk of that first load now takes about 0.4 s
 --   not the cause     row-level security: cma.current_tenant_id() is a stable SQL function, inlined, and the plans use
 --                     it as an index condition (a one-time filter), never per row; indexes: every lookup of the load has
 --                     its index (device on tenant, connection and record id; the current component on tenant, device and
 --                     kind; the staging on tenant and batch key)
 -- After this script, locally: 115's C1 1,382 to 1,709 ms (the staging insert 0.95 to 1.2 s of it); a register of
 -- 10,000 records loaded in one call 12,391 ms before, 5,069 ms after; the night after it (1,000 new, 1,440 changed,
--- 1,000 gone) 5,710 ms before, 2,830 ms after, with the same counts, devices, components and audit rows; one part of
+-- 1,000 gone) 5,710 ms before, 2,830 ms after, with the same counts, devices, components and audit rows; one chunk of
 -- 1,000 unchanged rows 104 ms; the final missing-marking over 9,900 record ids 36 to 39 ms.
 --
 -- What it adds
@@ -67,15 +67,15 @@
 --                     permission still checked on every row
 --   the patterns      cma.device_staged_ref() is made again with * for {0,99} (the same result: cma.device_staged_text
 --                     already holds 1 to 100 characters); the load writes 0008zi's other patterns the same way
---   the ingest's parts cma.ingest_load_device_part(connection, rows) (ingest.write, a connection with a token secret
---                     name): one part of 1 to 5,000 rows as JSON, its own call and transaction, loaded without marking
+--   the ingest's chunks cma.ingest_load_device_chunk(connection, rows) (ingest.write, a connection with a token secret
+--                     name): one chunk of 1 to 5,000 rows as JSON, its own call and transaction, loaded without marking
 --                     anything missing; the staging's columns only, each within the staging's length, the line a whole
 --                     number from 2 to 10,000,000 (CMA04 otherwise); no staging, so no staged row is audited or
 --                     cleaned up. A value holding an @ is kept as a bare @, as the staging keeps it.
 --                     cma.ingest_mark_devices_missing(connection, record ids) (ingest.write): a full snapshot's final
 --                     call, the connection's devices whose record id the run did not read marked missing in one
 --                     statement; refused (CMA04) without a record id, so a run that fails before it marks nothing
---   settings          cma.assets_settings_problem() knows assets_load_chunk, the rows of a part (a whole number from
+--   settings          cma.assets_settings_problem() knows assets_load_chunk, the rows of a chunk (a whole number from
 --                     100 to 5,000; the adapter's default 1,000)
 --   runs              cma.ingest_sync_run_finish() takes the phase times (stage_ms, map_ms, upsert_ms, components_ms,
 --                     missing_ms, cleanup_ms) among the counts
@@ -270,15 +270,15 @@ begin
               from unnest(p_rows) u offset 0) r
         union all
         select r.source_row, e.n,
-               case when k.key is null then format('line %s: no component kind %s', coalesce(r.source_row::text, '?'), e.key)
+               case when k.key is null then format('line %s: no component kind %s', coalesce(r.source_row::text, '?'), cma.device_staged_without_at(e.key))
                     when jsonb_typeof(e.value) <> 'object'
-                      then format('line %s: component %s holds serial and expires_on only, as text', coalesce(r.source_row::text, '?'), e.key)
+                      then format('line %s: component %s holds serial and expires_on only, as text', coalesce(r.source_row::text, '?'), cma.device_staged_without_at(e.key))
                     when e.value - 'serial' - 'expires_on' <> '{}'::jsonb
                          or coalesce(jsonb_typeof(e.value -> 'serial'), 'null') not in ('string', 'null')
                          or coalesce(jsonb_typeof(e.value -> 'expires_on'), 'null') not in ('string', 'null')
-                      then format('line %s: component %s holds serial and expires_on only, as text', coalesce(r.source_row::text, '?'), e.key)
+                      then format('line %s: component %s holds serial and expires_on only, as text', coalesce(r.source_row::text, '?'), cma.device_staged_without_at(e.key))
                     when not cma.device_staged_date_ok(e.value ->> 'expires_on')
-                      then format('line %s: %s.expires_on is not a date as YYYY-MM-DD', coalesce(r.source_row::text, '?'), e.key)
+                      then format('line %s: %s.expires_on is not a date as YYYY-MM-DD', coalesce(r.source_row::text, '?'), cma.device_staged_without_at(e.key))
                end
         from unnest(p_rows) r
         cross join lateral jsonb_each(cma.device_staged_json(r.components)) with ordinality as e(key, value, n)
@@ -542,17 +542,17 @@ $$;
 revoke execute on function cma.device_import_staging_insert() from public;
 
 -- ---------------------------------------------------------------------------------------------
--- 4. The ingest's parts
+-- 4. The ingest's chunks
 -- ---------------------------------------------------------------------------------------------
--- One part of the rows the ingest read (ingest.write, the tenant's Ingest user; an active asset register connection
+-- One chunk of the rows the ingest read (ingest.write, the tenant's Ingest user; an active asset register connection
 -- with a token secret name): 1 to 5,000 rows as a JSON array of objects whose keys are the staging's columns
 -- (source_row, a whole number from 2 to 10,000,000; source_id, serial, model, status, country, warehouse_ref,
 -- customer_ref, subscription_ref, order_ref, the five dates, components and external_refs, each text), each value
--- within the staging's lengths; another key, or a value longer than the staging takes, refuses the part (CMA04). Loaded
+-- within the staging's lengths; another key, or a value longer than the staging takes, refuses the chunk (CMA04). Loaded
 -- by the set-based load without marking anything missing, in the caller's transaction. A value holding an @ is kept as
 -- a bare @, as the staging keeps it. No staging, so no staged row is written, audited or deleted. Answers the load's
--- counts with stage_ms (reading the part)
-create or replace function cma.ingest_load_device_part(p_connection_id uuid, p_rows jsonb)
+-- counts with stage_ms (reading the chunk)
+create or replace function cma.ingest_load_device_chunk(p_connection_id uuid, p_rows jsonb)
 returns jsonb
 language plpgsql
 as $$
@@ -575,7 +575,7 @@ begin
   v_n := case when jsonb_typeof(p_rows) = 'array' then jsonb_array_length(p_rows) end;
   if v_n is null or v_n not between 1 and 5000
      or exists (select 1 from jsonb_array_elements(p_rows) e where jsonb_typeof(e) <> 'object') then
-    raise exception 'a part is a JSON array of 1 to 5,000 row objects' using errcode = 'CMA04';
+    raise exception 'a chunk is a JSON array of 1 to 5,000 row objects' using errcode = 'CMA04';
   end if;
   -- the staging's columns only; the line a whole number from 2 to 10,000,000, as the staging takes it
   select string_agg(distinct k, ', ' order by k) into v_bad
@@ -584,13 +584,13 @@ begin
                   'order_ref', 'first_shipped_on', 'stock_received_on', 'last_shipped_on', 'warranty_until', 'end_of_life_on',
                   'components', 'external_refs');
   if v_bad is not null then
-    raise exception 'a part''s rows hold the staging''s columns only, not %', left(v_bad, 200) using errcode = 'CMA04';
+    raise exception 'a chunk''s rows hold the staging''s columns only, not %', left(v_bad, 200) using errcode = 'CMA04';
   end if;
   if exists (select 1 from jsonb_array_elements(p_rows) e
              where jsonb_typeof(e -> 'source_row') <> 'null'
                and (jsonb_typeof(e -> 'source_row') <> 'number' or (e ->> 'source_row') !~ '^\d{1,8}$'
                     or (e ->> 'source_row')::integer not between 2 and 10000000)) then
-    raise exception 'a part''s source_row is a whole number from 2 to 10,000,000' using errcode = 'CMA04';
+    raise exception 'a chunk''s source_row is a whole number from 2 to 10,000,000' using errcode = 'CMA04';
   end if;
   select array_agg(row(r.source_row, cma.device_staged_without_at(r.source_id), cma.device_staged_without_at(r.serial),
                        cma.device_staged_without_at(r.model), cma.device_staged_without_at(r.status), cma.device_staged_without_at(r.country),
@@ -628,7 +628,8 @@ $$;
 
 -- A full snapshot's final call (ingest.write; an active asset register connection with a token secret name): the
 -- connection's devices whose record id the run did not read are marked missing, in one statement (a hashed set of the
--- ids). CMA04 without a record id, so a run that reads nothing, or fails before this call, marks nothing. One load of
+-- ids, each read as a chunk's row reads it). CMA04 without a record id, or with a null or one that is no id among them,
+-- so a run that reads nothing, or fails before this call, marks nothing. One load of
 -- the connection at a time (the advisory lock of 0008zj). Answers { missing_now, missing_ms }
 create or replace function cma.ingest_mark_devices_missing(p_connection_id uuid, p_source_ids text[])
 returns jsonb
@@ -646,21 +647,24 @@ begin
     raise exception 'connection % has no token secret name: it is loaded from files (cma.load_device_snapshot), not by the ingest', p_connection_id
       using errcode = 'CMA04';
   end if;
-  if coalesce(cardinality(p_source_ids), 0) = 0 or array_position(p_source_ids, null) is not null then
-    raise exception 'the record ids of the run are needed (none, or a null among them)' using errcode = 'CMA04';
+  -- each id read as a chunk's row reads it (a bare @ for an address, then the record id's form), so it meets the
+  -- devices' stored record ids; one that is no id refuses the call, as it refuses its chunk
+  if coalesce(cardinality(p_source_ids), 0) = 0
+     or exists (select 1 from unnest(p_source_ids) x where cma.device_staged_text(cma.device_staged_without_at(x)) is null) then
+    raise exception 'the record ids of the run are needed (none, a null or one that is no id among them)' using errcode = 'CMA04';
   end if;
   perform pg_advisory_xact_lock(hashtext('cma-device-load'), hashtext(p_connection_id::text));
   v_t := clock_timestamp();
   update cma.device d set source_deleted_at = now(), synced_at = now()
   where d.tenant_id = v_tenant and d.connection_id = p_connection_id and d.source_deleted_at is null
-    and d.source_id not in (select x from unnest(p_source_ids) x);
+    and d.source_id not in (select cma.device_staged_text(cma.device_staged_without_at(x)) from unnest(p_source_ids) x);
   get diagnostics v_missing = row_count;
   return jsonb_build_object('missing_now', v_missing, 'missing_ms', round(extract(epoch from clock_timestamp() - v_t) * 1000));
 end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 5. Settings: the rows of a part
+-- 5. Settings: the rows of a chunk
 -- ---------------------------------------------------------------------------------------------
 -- As 0008zj (114), plus assets_load_chunk: a whole number from 100 to 5,000
 create or replace function cma.assets_settings_problem(p_settings jsonb)
@@ -766,7 +770,7 @@ begin
     'cma.device_staged_date_ok(text)',
     'cma.device_rows_apply(uuid,cma.device_load_row[],boolean)',
     'cma.device_snapshot_apply(text,uuid,boolean)',
-    'cma.ingest_load_device_part(uuid,jsonb)',
+    'cma.ingest_load_device_chunk(uuid,jsonb)',
     'cma.ingest_mark_devices_missing(uuid,text[])',
     'cma.assets_settings_problem(jsonb)',
     'cma.set_connection_settings(uuid,jsonb)',
@@ -782,7 +786,7 @@ $$;
 -- 8. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s parts cma.ingest_load_device_part (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final cma.ingest_mark_devices_missing; the setting assets_load_chunk (100 to 5,000); cma.ingest_sync_run_finish takes the phase times')
+values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final cma.ingest_mark_devices_missing; the setting assets_load_chunk (100 to 5,000); cma.ingest_sync_run_finish takes the phase times')
 on conflict (version) do nothing;
 
 commit;

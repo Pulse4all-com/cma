@@ -1,18 +1,18 @@
 /**
  * The Airtable adapter for an asset register (addition 0008zj) as the jobs see it. Polling only and read only: the
  * server answers 404 on /airtable/<key> (kind poll), and nothing is ever written to Airtable. Every read loads its rows
- * in parts (addition 0008zk): parts of the setting assets_load_chunk (default 1,000, 100 to 5,000), each its own call of
- * cma.ingest_load_device_part and its own transaction under the pool's statement timeout (store.loadDevicePart; 0008zi's
- * load, set-based), nothing marked missing by a part. A full snapshot ends with one call over the run's record ids,
+ * in chunks (addition 0008zk): chunks of the setting assets_load_chunk (default 1,000, 100 to 5,000), each its own call of
+ * cma.ingest_load_device_chunk and its own transaction under the pool's statement timeout (store.loadDeviceChunk; 0008zi's
+ * load, set-based), nothing marked missing by a chunk. A full snapshot ends with one call over the run's record ids,
  * cma.ingest_mark_devices_missing (store.markDevicesMissing). A run that fails before that call marks nothing missing,
- * and the parts it loaded change nothing when the next run loads them again.
+ * and the chunks it loaded change nothing when the next run loads them again.
  *
  *   pollDue, pollAssets   the job ingest-poll-assets (every 5 minutes): when due on assets_poll_interval_minutes
  *                         (default 15; cursor assets:cadence), the records modified after the cursor assets:modified less
- *                         five minutes (all records when there is none yet), loaded in parts (nothing marked missing);
+ *                         five minutes (all records when there is none yet), loaded in chunks (nothing marked missing);
  *                         the cursor moves to the run's start
  *   reconcileObjects, reconcile   the job ingest-reconcile (03:30): the full snapshot, every record of the table (or the
- *                         view_id setting's view), loaded in parts, then the final call (a device the register no longer
+ *                         view_id setting's view), loaded in chunks, then the final call (a device the register no longer
  *                         holds is marked missing); the cursor assets:modified moves to the snapshot's start
  *   backfillObjects, backfill, dryRun   the job ingest-backfill --object device [--dry-run]: the same full read on
  *                         demand; the dry run reads and counts (fetched, mapped, the fields, date failures, values with
@@ -25,10 +25,10 @@
  * connection's account id; the table the setting table_id (none: table_id_not_set); no mapped field: mapping_not_set.
  * A full read that finds no record fails empty_snapshot instead of marking every device missing.
  *
- * The run's counts are the load's, summed over its parts as each lands (rows, inserted, updated, unchanged, missing_now,
+ * The run's counts are the load's, summed over its chunks as each lands (rows, inserted, updated, unchanged, missing_now,
  * components_replaced, unmapped_model, unmapped_status, unmapped_market, customer_ref_invalid, refs_dropped), its phase
- * times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms, missing_ms; cleanup_ms 0, as parts stage nothing)
- * and fetched, with upserted (inserted and updated) and skipped (unchanged); the log line adds mapped, the parts, the
+ * times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms, missing_ms; cleanup_ms 0, as chunks stage nothing)
+ * and fetched, with upserted (inserted and updated) and skipped (unchanged); the log line adds mapped, the chunks, the
  * fields, date failures, values with an @, unreadable cells, duplicates and the requests per endpoint. Never a token, a
  * value or a record's content.
  */
@@ -45,7 +45,7 @@ const SLACK_MS = 2 * 60_000;
 const BASE = /^[A-Za-z0-9_-]{1,64}$/;
 export const LOAD_COUNTS = ["rows", "inserted", "updated", "unchanged", "missing_now", "components_replaced", "unmapped_model",
   "unmapped_status", "unmapped_market", "customer_ref_invalid", "refs_dropped"];
-/** The load's phase times (milliseconds, addition 0008zk), summed over a run's parts */
+/** The load's phase times (milliseconds, addition 0008zk), summed over a run's chunks */
 export const PHASE_COUNTS = ["stage_ms", "map_ms", "upsert_ms", "components_ms", "missing_ms", "cleanup_ms"];
 
 /** A connection without a token secret name is loaded from files: the jobs skip it (code csv_only). */
@@ -130,7 +130,7 @@ async function readRows({ connection, prep, formula, counts }) {
 }
 
 /**
- * A part's (or the final call's) counts added to the run's: each of the load's and its phase times, upserted (inserted
+ * A chunk's (or the final call's) counts added to the run's: each of the load's and its phase times, upserted (inserted
  * and updated) and skipped (unchanged). Called with nothing, it writes the keys as 0.
  */
 function addLoad(counts, loaded = {}) {
@@ -140,16 +140,16 @@ function addLoad(counts, loaded = {}) {
 }
 
 /**
- * The rows loaded in parts of the setting assets_load_chunk, each part its own call and transaction; the run's counts
- * follow each part, so a run that stops shows how far it got. Answers how many parts were loaded.
+ * The rows loaded in chunks of the setting assets_load_chunk, each chunk its own call and transaction; the run's counts
+ * follow each chunk, so a run that stops shows how far it got. Answers how many chunks were loaded.
  */
-async function loadInParts({ store, rows, chunk, counts }) {
-  let parts = 0;
+async function loadInChunks({ store, rows, chunk, counts }) {
+  let chunks = 0;
   for (let i = 0; i < rows.length; i += chunk) {
-    addLoad(counts, await store.loadDevicePart(rows.slice(i, i + chunk)));
-    parts += 1;
+    addLoad(counts, await store.loadDeviceChunk(rows.slice(i, i + chunk)));
+    chunks += 1;
   }
-  return parts;
+  return chunks;
 }
 
 /** The poll of one connection: the records modified since the cursor less five minutes, a partial batch. */
@@ -160,15 +160,15 @@ export async function pollAssets({ connection, store, budget, now = Date.now(), 
   const formula = Number.isFinite(cur?.at) ? modifiedAfter(cur.at - OVERLAP_MS) : null;
   const { rows, detail } = await readRows({ connection, prep, formula, counts });
   addLoad(counts);
-  const parts = await loadInParts({ store, rows, chunk: prep.s.loadChunk, counts });
+  const chunks = await loadInChunks({ store, rows, chunk: prep.s.loadChunk, counts });
   await store.setCursor(MODIFIED_STREAM, { at: now });
   await store.setCursor(CADENCE_STREAM, { at: now });
-  return { detail: { ...detail, parts, fields: prep.names.length, changedSince: formula ? new Date(cur.at - OVERLAP_MS).toISOString() : "all" } };
+  return { detail: { ...detail, chunks, fields: prep.names.length, changedSince: formula ? new Date(cur.at - OVERLAP_MS).toISOString() : "all" } };
 }
 
 /**
- * A full snapshot of one connection (the nightly reconcile, a backfill): every record loaded in parts, then the final
- * call marks the connection's devices the run did not read missing. Nothing is marked when a part fails.
+ * A full snapshot of one connection (the nightly reconcile, a backfill): every record loaded in chunks, then the final
+ * call marks the connection's devices the run did not read missing. Nothing is marked when a chunk fails.
  */
 async function fullSnapshot({ connection, store, budget, counts }) {
   const startedAt = Date.now();
@@ -177,10 +177,10 @@ async function fullSnapshot({ connection, store, budget, counts }) {
   const { rows, detail } = await readRows({ connection, prep, formula: null, counts });
   if (!rows.length) throw new SourceError("empty_snapshot");
   addLoad(counts);
-  const parts = await loadInParts({ store, rows, chunk: prep.s.loadChunk, counts });
+  const chunks = await loadInChunks({ store, rows, chunk: prep.s.loadChunk, counts });
   addLoad(counts, await store.markDevicesMissing(rows.map((r) => r.source_id)));
   await store.setCursor(MODIFIED_STREAM, { at: startedAt });
-  return { ...detail, parts, fields: prep.names.length };
+  return { ...detail, chunks, fields: prep.names.length };
 }
 
 export const RECONCILE_OBJECTS = [OBJECT_TYPE];

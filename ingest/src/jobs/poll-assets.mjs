@@ -2,10 +2,11 @@
  * The asset register poll (addition 0008zj; every 5 minutes, Europe/Amsterdam): per active connection whose adapter
  * polls an asset register (Airtable today) and holds a token secret name, when due on its assets_poll_interval_minutes
  * (default 15), one sync_run row (job assets_poll, stream devices): the records modified since the connection's cursor
- * less five minutes, staged and loaded as a partial batch, so nothing is marked missing (src/adapters/airtable). A
- * connection not due writes nothing. A connection without a token secret name is loaded from files only: one log line
- * (code csv_only) and no run. One log line per connection carries the counts (the load's and fetched), the details
- * (mapped, date failures, values with an @, unreadable cells) and the requests per endpoint. Never a token or a value.
+ * less five minutes, loaded in chunks of assets_load_chunk rows without the final call, so nothing is marked missing
+ * (src/adapters/airtable; addition 0008zk). A connection not due writes nothing. A connection without a token secret
+ * name is loaded from files only: one log line (code csv_only) and no run. One log line per connection carries the
+ * counts (the load's, its phase times and fetched), the details (mapped, chunks, date failures, values with an @,
+ * unreadable cells) and the requests per endpoint. Never a token or a value.
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";

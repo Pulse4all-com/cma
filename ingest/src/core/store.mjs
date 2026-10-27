@@ -55,11 +55,11 @@
  *   reviewAlerts(ids)           cma.ingest_review_alerts, at most 500 ids a call: the messages written
  *   reviewChannelSummary(id)    one channel's reviews held: count, link levels, oldest and newest submission
  *
- * For an asset register (addition 0008zj; in parts since 0008zk), each call its own transaction under the pool's statement
+ * For an asset register (addition 0008zj; in chunks since 0008zk), each call its own transaction under the pool's statement
  * timeout; never a value in a log:
- *   loadDevicePart(rows)        cma.ingest_load_device_part: one part of the rows read (the adapter's assets_load_chunk,
+ *   loadDeviceChunk(rows)        cma.ingest_load_device_chunk: one chunk of the rows read (the adapter's assets_load_chunk,
  *                               100 to 5,000), loaded without marking anything missing; answers the load's counts and
- *                               phase times. A part loaded again changes nothing, so a run that stops can simply rerun
+ *                               phase times. A chunk loaded again changes nothing, so a run that stops can simply rerun
  *   markDevicesMissing(sourceIds)   cma.ingest_mark_devices_missing: a full snapshot's final call, the connection's
  *                               devices whose record id the run did not read marked missing; { missing_now, missing_ms }
  *
@@ -441,9 +441,9 @@ export function storeFor(ctx, connectionId) {
           oldestSubmittedAt: r.oldest ? new Date(r.oldest).toISOString() : null, newestSubmittedAt: r.newest ? new Date(r.newest).toISOString() : null };
       });
     },
-    async loadDevicePart(rows) {
+    async loadDeviceChunk(rows) {
       return withTenant(ctx, async (q) =>
-        (await q.query("select cma.ingest_load_device_part($1, $2::jsonb) as c", [connectionId, JSON.stringify(rows)])).rows[0].c);
+        (await q.query("select cma.ingest_load_device_chunk($1, $2::jsonb) as c", [connectionId, JSON.stringify(rows)])).rows[0].c);
     },
     async markDevicesMissing(sourceIds) {
       return withTenant(ctx, async (q) =>
