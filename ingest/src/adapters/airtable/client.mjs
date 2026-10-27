@@ -53,7 +53,7 @@ function idOf(settings, name, fallbacks) {
 }
 
 /**
- * The connection's settings for the adapter: its pace, the poll interval, the rows of a load's part (assets_load_chunk,
+ * The connection's settings for the adapter: its pace, the poll interval, the rows of a load's chunk (assets_load_chunk,
  * default 1,000, 100 to 5,000; addition 0008zk), the table and view, the date format of dates that arrive as text. A
  * value out of range (or out of its form) takes the default, or none for the ids and the date format, and is named in
  * fallbacks, which the run logs once.

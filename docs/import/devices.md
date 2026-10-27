@@ -9,8 +9,9 @@ October 2026). Nothing is written to the register, the CRM or the commerce syste
 minutes, a full snapshot nightly; docs/ingest/README.md, section Airtable; prod steps in docs/ingest/PROD_RUNBOOK.md
 phase 14). The import below is the fallback: for a connection without a token secret name, which the ingest never
 reads (dev's fixture connection, a business line without an API token), and for a day the API read is down. Both run
-the one load (`cma.device_snapshot_apply`), so a file loaded into a connection the ingest also reads gives the same
-devices, and the next nightly snapshot holds the register's state again. The map file of step 3 is the same mapping
+the one set-based load (`cma.device_rows_apply`, addition 0008zk), the ingest in chunks and a file in one call through
+`cma.device_snapshot_apply`, so a file loaded into a connection the ingest also reads gives the same devices, and the
+next nightly snapshot holds the register's state again. The map file of step 3 is the same mapping
 the API connection holds as connection fields (14.5); keep the two alike when the register changes.
 
 What happens to the export:
@@ -192,7 +193,7 @@ select set_config('app.tenant_id', '<tenant_id>', false),
 select jsonb_pretty(cma.load_device_snapshot('assets-<yyyy-mm-dd>', '<connection_id>', true)) as counts;
 SQL
 ```
-Expected: the counts. `rows` = step 6's `n`; on the first load `inserted` = `rows`; on a later one `inserted` (new
+Expected: the counts and the phase times. `rows` = step 6's `n`; on the first load `inserted` = `rows`; on a later one `inserted` (new
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
 `components_replaced` (a pads or battery serial that changed); `unmapped_model`, `unmapped_status` and
 `unmapped_market` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
@@ -200,6 +201,10 @@ without ES and IT: dev and prod hold both since 27 October 2026; a market added 
 alias), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
 `CMA04`, `CMA06`) writes nothing and says why, naming the export's line. `true` is a full snapshot: every record of
 the register is in the file. A partial file (a filtered view) is loaded with `false`, so nothing is marked missing.
+The phase times are in milliseconds, beside the counts and in the same run's counts (`sync_run`, job `assets_import`):
+`stage_ms` (the staged rows read), `map_ms` (the checks and the mapping), `upsert_ms` (the devices), `components_ms`
+(the components), `missing_ms` (the missing-marking of a full snapshot) and `cleanup_ms` (the staged rows deleted).
+They vary from run to run; they are not counts of records.
 
 ## 8. Read the result
 
@@ -236,7 +241,8 @@ id that is an address), the path. Then steps 6 and 7 with `/tmp/devices-staging-
 Expected counts with the seed's catalogs and a market catalog that holds ES and IT, as dev does (27 October 2026):
 `rows 30`, `inserted 30`, `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `unmapped_model 1`,
 `unmapped_status 1`, `unmapped_market 0` (2 in a catalog without ES and IT: the fixture's Spain and Italy),
-`customer_ref_invalid 1`, `refs_dropped 0`.
+`customer_ref_invalid 1`, `refs_dropped 0`, and the six phase times in milliseconds (`stage_ms`, `map_ms`,
+`upsert_ms`, `components_ms`, `missing_ms`, `cleanup_ms`), whose values vary from run to run.
 
 The rerun: the same two commands with `fixture-2` (and `/tmp/devices-staging-2.csv`). Expected: `rows 30`,
 `inserted 0`, `updated 0`, `unchanged 30`, the other counts as before. Then `rm /tmp/devices-staging-*.csv`.

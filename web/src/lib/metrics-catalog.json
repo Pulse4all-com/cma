@@ -46033,7 +46033,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46046,7 +46046,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46222,7 +46222,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46235,7 +46235,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46412,7 +46412,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46425,7 +46425,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46601,7 +46601,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46614,7 +46614,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46775,7 +46775,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46788,7 +46788,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46958,7 +46958,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -46971,7 +46971,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47130,7 +47130,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47257,7 +47257,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47270,7 +47270,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47426,7 +47426,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -47527,7 +47527,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47640,7 +47640,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -47741,7 +47741,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47856,7 +47856,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47869,7 +47869,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47982,7 +47982,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -47995,7 +47995,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48108,7 +48108,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48121,7 +48121,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48234,7 +48234,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48247,7 +48247,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48360,7 +48360,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -48461,7 +48461,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -48562,7 +48562,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -48675,7 +48675,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62489,7 +62489,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62575,7 +62575,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62661,7 +62661,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62747,7 +62747,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62833,7 +62833,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -62919,7 +62919,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
@@ -63005,7 +63005,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -63032,7 +63032,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -63130,7 +63130,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69653,7 +69653,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69666,7 +69666,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69805,7 +69805,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69818,7 +69818,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69957,7 +69957,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -69970,7 +69970,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70109,7 +70109,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70122,7 +70122,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70261,7 +70261,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70274,7 +70274,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70413,7 +70413,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70426,7 +70426,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70565,7 +70565,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70578,7 +70578,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70717,7 +70717,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70730,7 +70730,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70869,7 +70869,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -70882,7 +70882,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71021,7 +71021,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71034,7 +71034,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71173,7 +71173,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71186,7 +71186,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71325,7 +71325,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71338,7 +71338,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71477,7 +71477,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71490,7 +71490,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71641,7 +71641,7 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
@@ -71654,7 +71654,7 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.device_import_staging -> cma.ingest_load_device_snapshot() (ingest.write; addition 0008zj, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
           "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {

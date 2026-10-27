@@ -571,7 +571,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Term | Device (nl: Apparaat) |
 | Key | `device`; API `devices`, `deviceId`; SQL `cma.device`, `cma_read.device` |
 | Definition | One record of the tenant's asset register: a serial-numbered unit with its model, market, device status, references and dates. It is tracked when its device status is tracked and the latest full snapshot holds it. |
-| Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded by `cma.ingest_load_device_snapshot`, or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load into `cma.device` (one row per register record id and connection) |
+| Source | The asset register; for Pulse4all Subscriptions the Airtable base "Airtable 2.0", read through its API by the ingest (addition 0008zj: the changed records by the poll, the full snapshot nightly) and loaded in chunks by `cma.ingest_load_device_chunk`, a full snapshot ending with `cma.ingest_mark_devices_missing` (addition 0008zk), or through its CSV export by a person with `cma.load_device_snapshot` (the fallback); both run the one load, `cma.device_rows_apply`, into `cma.device` (one row per register record id and connection) |
 | Counts / does not count | Reports → Maintenance counts tracked devices only: a device in a tracked device status that the latest full snapshot holds. A device missing from the latest full snapshot (`source_deleted_at`) and one in a status that is not tracked stay stored and are not forecast |
 | Unit and display | A count (`maintenance.devices`, "{n} tracked devices"); the list shows a device by its serial number and its register record id, never a customer's name |
 | Time rule | None of its own; a device's dates are dates as the register writes them |
@@ -581,7 +581,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Status | Decided |
 | Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "The device register is owned by the tenant's asset register", "The asset register is read by scheduled API polling" (addition 0008zj) and "Definitions: Device" |
 | Used by | `maintenance.devices`, `maintenance.list.*`; the data-quality checks `device_serial_missing`, `device_serial_duplicate`, `device_model_unmapped`, `device_status_unmapped`, `device_market_unmapped`, `device_customer_ref_invalid`, `field_device_without_subscription_ref`; Reports → Maintenance (`/reports/maintenance`) |
-| As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_snapshot_apply` (`114`) from the API or a file. Matches the definition |
+| As built today | `cma.device` (`112`) with `cma.maintenance_items_of` taking the devices of a status with `is_tracked` and no `source_deleted_at`; filled by `cma.device_rows_apply` (`116`, set-based) from the API in chunks (`cma.ingest_load_device_chunk`, then `cma.ingest_mark_devices_missing` for a full snapshot) or, through `cma.device_snapshot_apply`, from a file. Matches the definition |
 
 ### Component
 
