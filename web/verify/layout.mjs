@@ -867,7 +867,8 @@ async function expectCallbacks() {
 
 // Forms (addition 0008p, brief B17d), per identity at 1280 px: in the rail and on the page for reports.view or
 // performance.team (the agent gets the no-permission card and no figures); the page never scrolls sideways;
-// the keycaps K, Y, F, G and X next to the period bar's; four tiles; the forms table and the answers end inside
+// the keycaps K, A (Category, on Y until the period bar gained Yesterday on 26 October 2026), F, G and X next to the
+// period bar's Y, T, W, M and C; four tiles; the forms table and the answers end inside
 // their cards (they may scroll inside them); the right-most header's hint stays inside the viewport; the
 // deltas say what they compare with, and before the fixture's forms history (six weeks back) "No history to
 // compare yet" with the forms history's first date in the title. --provoke lets the forms table spill out of
@@ -912,7 +913,7 @@ async function expectForms() {
       continue;
     }
     if (m.mainX > 0) problems.push(`${where}: the main area scrolls sideways by ${m.mainX}px at 1280`);
-    for (const k of ["T", "W", "M", "C", "K", "Y", "F", "G", "X"]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
+    for (const k of ["Y", "T", "W", "M", "C", "K", "A", "F", "G", "X"]) if (!m.keycaps.includes(k)) problems.push(`${where}: keycap ${k} missing`);
     if (m.tiles !== 4) problems.push(`${where}: ${m.tiles} tiles, expected 4`);
     if (m.table !== true) problems.push(`${where}: the forms table ${m.table === null ? "is missing" : "does not end inside its card at 1280"}`);
     if (m.answers !== true) problems.push(`${where}: the answers ${m.answers === null ? "are missing" : "do not end inside their card at 1280"}`);

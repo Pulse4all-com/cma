@@ -11,6 +11,7 @@
  * that is not there. Since addition 0008i Inbound, since 0008j Calls and Calls per agent (brief B16),
  * since 0008p Forms (brief B17d).
  */
+import type { Copy, Locale } from "./copy";
 import type {
   CallsFigures, CallsFilter, CallsGroup, CallsPerson, CallsPersonTag, CallsRow, DataQualityCheck, DateKey, FormAnswerRow, FormCategory, FormsFilter,
   FormsGroup, FormsResolution, FormsRow, HoursRange, InboundFigures, InboundGroup, InboundServiceRow, Instant, IntakeDay, MissedReason,
@@ -18,7 +19,7 @@ import type {
 } from "./data/types";
 // With their extensions, so verify/reports.mjs can run this module under Node's type stripping
 import { isoWeek } from "./roster.ts";
-import { addDays, dateKeyInZone, daysBetween, fmtMinutes, hourInZone, startOfWeek } from "./time.ts";
+import { addDays, dateKeyInZone, daysBetween, fmtDate, fmtMinutes, hourInZone, startOfWeek } from "./time.ts";
 
 /** Every report function answers at most 92 days per request; the app refuses a longer range too */
 export const MAX_REPORT_DAYS = 92;
@@ -828,6 +829,22 @@ export function previousPeriod(range: HoursRange, today: DateKey): PreviousPerio
   const days = daysBetween(range.from, range.to) + 1;
   const partial = range.to >= today;
   return { from: addDays(range.from, -days), to: addDays(partial ? today : range.to, -days), partial };
+}
+
+/**
+ * What the deltas compare with, in words (README Decision log, 14 October 2026): "the previous period", or
+ * "the same point in the previous period" while this one is still running; and its dates for the title
+ * (one date, or from and to; the last day up to the current time when cut; none for a period that starts
+ * after today, which compares with nothing)
+ */
+export function previousLabel(from: string, to: string, partial: boolean, copy: Copy, locale: Locale): { text: string; dates: string | null; partial: boolean } {
+  const t = copy.calls;
+  const dates = to < from ? null : from === to ? fmtDate(from, locale, "short") : `${fmtDate(from, locale, "short")} – ${fmtDate(to, locale, "short")}`;
+  return {
+    text: partial ? t.previousPartial : t.previousWhole,
+    dates: dates !== null && partial ? t.previousUpToNow.replace("{dates}", dates) : dates,
+    partial,
+  };
 }
 
 /**

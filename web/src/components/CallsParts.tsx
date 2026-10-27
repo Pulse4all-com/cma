@@ -54,21 +54,8 @@ export function CallsGroupSwitch({ group, query, copy }: { group: CallsGroup; qu
   );
 }
 
-/**
- * What the deltas compare with, in words (README Decision log, 14 October 2026): "the previous period", or
- * "the same point in the previous period" while this one is still running; and its dates for the title
- * (one date, or from and to; the last day up to the current time when cut; none for a period that starts
- * after today, which compares with nothing)
- */
-export function previousLabel(from: string, to: string, partial: boolean, copy: Copy, locale: Locale): { text: string; dates: string | null; partial: boolean } {
-  const t = copy.calls;
-  const dates = to < from ? null : from === to ? fmtDate(from, locale, "short") : `${fmtDate(from, locale, "short")} – ${fmtDate(to, locale, "short")}`;
-  return {
-    text: partial ? t.previousPartial : t.previousWhole,
-    dates: dates !== null && partial ? t.previousUpToNow.replace("{dates}", dates) : dates,
-    partial,
-  };
-}
+// What the deltas compare with, in words; in lib/reports so verify/period.mjs tests it without a browser
+export { previousLabel } from "@/lib/reports";
 
 /**
  * A figure's change against the previous period, like for like, in words with an arrow; Muted whatever its

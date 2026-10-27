@@ -2,7 +2,7 @@
 
 /**
  * The filters of Reports → First orders and Orders per person (addition 0008u), next to the period bar: market (K)
- * and level (V, for level: the period bar holds T, W, M and C, the grouping G, the download X, the rail its digits
+ * and level (V, for level: the period bar holds Y, T, W, M and C, the grouping G, the download X, the rail its digits
  * and the top bar L). Choosing keeps the period and the grouping and loads the page with the filter.
  */
 import type { Route } from "next";

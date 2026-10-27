@@ -3,7 +3,7 @@
 /**
  * The filters of Reports → Funnel (addition 0008zb): market (K), pipeline (P, the lead pipelines only) and source (S, the
  * deal's source channel as the customer records hold it); Reports → Cancellations takes the market alone. The period bar
- * holds T, W, M and C, the grouping G, the rail its digits and the top bar L. Choosing keeps the period and the grouping
+ * holds Y, T, W, M and C, the grouping G, the rail its digits and the top bar L. Choosing keeps the period and the grouping
  * and loads the page with the filter; the address keys are market, pipeline and source.
  */
 import type { Route } from "next";

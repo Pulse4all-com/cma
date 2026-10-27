@@ -156,6 +156,7 @@ const en = {
   myHours: {
     title: "My hours",
     ownHoursOnly: "These are your own hours. Your supervisor sees the same figures.",
+    yesterday: "Yesterday",
     today: "Today",
     week: "This week",
     month: "This month",
@@ -3297,6 +3298,7 @@ const nl: Copy = {
   myHours: {
     title: "Mijn uren",
     ownHoursOnly: "Dit zijn je eigen uren. Je supervisor ziet dezelfde cijfers.",
+    yesterday: "Gisteren",
     today: "Vandaag",
     week: "Deze week",
     month: "Deze maand",

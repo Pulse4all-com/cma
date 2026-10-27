@@ -21,7 +21,7 @@ import { resolve } from "../../access";
 /**
  * Forms (Report, addition 0008p, brief B17d): every polled form's submissions for a period, whether or not
  * the form counts as leads in Intake (README Decision log, 16 October 2026), per day or ISO week (G), narrowed
- * by market (K), category (Y) and form (F). A submission's market is the form's own, else the answer to its
+ * by market (K), category (A) and form (F). A submission's market is the form's own, else the answer to its
  * market field read through the market aliases, else its contact's country, else unknown. Four tiles: the
  * submissions and the forms with submissions, each with its change against the previous period in Muted text
  * with an arrow, like for like (as Calls: while the period runs, against the same point in the previous one;

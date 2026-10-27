@@ -326,7 +326,7 @@ It refuses a database without the dev seed (exit 2). Without `CMA_DB_*` the job 
 (`gcloud scheduler jobs pause|resume cma-refresh-follow-up-minutely --project=p4a-cma-dev --location=europe-west4`),
 so a scheduled refresh does not take the lock the verifier's second session holds (section 7a, step 3).
 
-The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `jobs`, `theme`, `layout`, `hints`, `iap-token`) run locally, `theme`, `layout` and `hints` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
+The other verifiers (`copy`, `corrections`, `csv`, `dashboard`, `live`, `team`, `roster`, `configuration`, `messages`, `import`, `datamap`, `reports`, `period`, `signed-out`, `invitations`, `preview`, `follow-up`, `health`, `boundaries`, `jobs`, `theme`, `layout`, `hints`, `iap-token`) run locally, `theme`, `layout` and `hints` against a local mock server on port 8080 and `iap-token` against a local server in iap mode that reads the script's test key set; see the header
 of each script in `web/verify/` for its start command. Since B9a.1 `layout` clocks agent-two in, so it runs inside the mock's
 workday window (07:00-22:00), as `verify:api` and `verify:scheduler` do.
 

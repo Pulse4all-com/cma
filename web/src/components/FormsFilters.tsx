@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * The filters of Reports → Forms (addition 0008p), next to the period bar: market (K), category (Y) and form
+ * The filters of Reports → Forms (addition 0008p), next to the period bar: market (K), category (A) and form
  * (F); and in the answers card the question and the answer. The lists hold what the period's submissions
  * have (the categories from the tenant's catalog), so a chosen value without submissions stays in its list.
  * Choosing keeps the period and the grouping and loads the page with the filter; a new form clears the
- * question, a new question the answer. K, Y and F are free on this page: the period bar holds T, W, M and
- * C, the grouping G, the download X, the rail its digits and the top bar L.
+ * question, a new question the answer. K, A and F are free on this page: the period bar holds Y, T, W, M
+ * and C, the grouping G, the download X, the rail its digits and the top bar L. Category moved from Y to A
+ * when the period bar gained Yesterday (26 October 2026).
  */
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -56,8 +57,8 @@ export function FormsFilters({ markets, categories, forms, filter, query, copy }
         </select>
       </label>
       <label className="flex flex-col gap-2 text-small font-semibold">
-        <span className="flex items-center gap-2">{t.categoryFilter} <Keycap>Y</Keycap></span>
-        <select value={filter.category ?? ""} data-shortcut="y" data-testid="forms-category" className={select}
+        <span className="flex items-center gap-2">{t.categoryFilter} <Keycap>A</Keycap></span>
+        <select value={filter.category ?? ""} data-shortcut="a" data-testid="forms-category" className={select}
           onChange={(e) => go({ ...filter, category: e.target.value || null })}>
           <option value="">{t.allCategories}</option>
           {categoryList.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}

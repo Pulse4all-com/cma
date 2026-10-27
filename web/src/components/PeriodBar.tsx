@@ -1,6 +1,6 @@
 /**
- * Today, this week, this month and a custom range, with T, W, M and C as shortcuts. A server
- * component: every choice is a plain link or a GET form, so the period lives in the URL.
+ * Yesterday, today, this week, this month and a custom range, with Y, T, W, M and C as shortcuts. A
+ * server component: every choice is a plain link or a GET form, so the period lives in the URL.
  */
 import Link from "next/link";
 import type { Copy } from "@/lib/copy";
@@ -27,6 +27,7 @@ export function PeriodBar({
   keep?: Record<string, string>;
 }) {
   const labels: Record<Range, string> = {
+    yesterday: copy.myHours.yesterday,
     today: copy.myHours.today,
     week: copy.myHours.week,
     month: copy.myHours.month,

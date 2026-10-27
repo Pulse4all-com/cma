@@ -4868,7 +4868,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "verified"
       ],
@@ -4958,7 +4958,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "discrepancy"
       ],
@@ -5044,7 +5044,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "discrepancy"
       ],
@@ -5146,7 +5146,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "verified"
       ],
@@ -5271,7 +5271,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "verified"
       ],
@@ -5378,7 +5378,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "verified"
       ],
@@ -5476,7 +5476,7 @@
         "kpis.md paragraph 1 and paragraph 11",
         "decisions.md 12 Oct 2026 (B11), 15 Oct 2026 (p80 dropped)"
       ],
-      "time": "period from the shared period bar (T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
+      "time": "period from the shared period bar (Y/T/W/M/C, business dates in the VIEWER's zone via dateKeyInZone(now, me.timeZone), max 92 days); each read then applies its own zone rules (intake and records: tenant zone; speed to lead: tenant zone dates, market business hours)",
       "status": [
         "verified"
       ],
