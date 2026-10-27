@@ -46,8 +46,6 @@ The lint warnings (both on main):
     46:44  warning  '_p4a' is defined but never used  @typescript-eslint/no-unused-vars
   web/verify/follow-up.mjs
     50:7  warning  'uid' is assigned a value but never used  @typescript-eslint/no-unused-vars
-  
-  ✖ 2 problems (0 errors, 2 warnings)
   ✖ 2 problems (0 errors, 2 warnings)
 
 Against the mock server (CMA_AUTH_MODE=mock CMA_DATA_MODE=mock, the standalone build, BASE=http://localhost:8080):
