@@ -1,0 +1,57 @@
+web/ checks on this branch, 2026-10-27, in Claude Code's container (Node 22)
+
+npm ci, build, typecheck, lint and the pure verifiers (npm run <name>), each exit code and its last line:
+  npm-ci exit=0 :: Run `npm audit` for details.
+  build exit=0 :: ƒ  (Dynamic)  server-rendered on demand
+  typecheck exit=0 :: ✓ Types generated successfully
+  lint exit=0 :: ✖ 2 problems (0 errors, 2 warnings)
+  verify-copy exit=0 :: copy: PASS (3116 keys, en and nl)
+  verify-corrections exit=0 :: ALL 31 PASS
+  verify-csv exit=0 :: ALL 22 PASS
+  verify-dashboard exit=0 :: ALL 17 PASS
+  verify-live exit=0 :: ALL 40 PASS
+  verify-team exit=0 :: team: PASS (26 checks)
+  verify-roster exit=0 :: roster: PASS (36 checks)
+  verify-configuration exit=0 :: ALL 116 PASS
+  verify-messages exit=0 :: ALL 24 PASS
+  verify-import exit=0 :: ALL 29 PASS
+  verify-devices-import exit=0 :: ALL 12 PASS
+  verify-datamap exit=1 :: datamap: FAIL (10 problems)
+  verify-signed-out exit=0 :: signed-out: PASS (20 checks)
+  verify-invitations exit=0 :: invitations: PASS (27 checks)
+  verify-preview exit=0 :: preview: PASS (18 checks)
+  verify-follow-up exit=0 :: follow-up: PASS (34 checks)
+  verify-reports exit=0 :: ALL 200 PASS
+  verify-period exit=0 :: ALL 16 PASS
+  verify-health exit=0 :: ALL 39 PASS
+  verify-boundaries exit=0 :: boundaries: PASS (329 files)
+  verify-jobs exit=0 :: ALL 18 PASS
+  verify-metrics exit=0 :: ok
+
+verify:datamap fails as expected until Martin refreshes docs/datamap/schema.json from dev (and rebuilds index.html):
+    catalog device: not a table in cma in schema.json
+    catalog device_component: not a table in cma in schema.json
+    catalog device_import_row: not a table in cma in schema.json
+    catalog device_model: not a table in cma in schema.json
+    catalog device_component_kind: not a table in cma in schema.json
+    catalog maintenance_rule: not a table in cma in schema.json
+    catalog device_status: not a table in cma in schema.json
+    catalog maintenance_due: derived, not a view in cma_read in schema.json
+    catalog maintenance_per_month: derived, not a view in cma_read in schema.json
+    index.html: differs from a fresh build; run node tools/datamap/build.mjs
+  datamap: FAIL (10 problems)
+
+The lint warnings (both on main):
+  web/scripts/metrics-doc.mjs
+    46:44  warning  '_p4a' is defined but never used  @typescript-eslint/no-unused-vars
+  web/verify/follow-up.mjs
+    50:7  warning  'uid' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  ✖ 2 problems (0 errors, 2 warnings)
+
+Against the mock server (CMA_AUTH_MODE=mock CMA_DATA_MODE=mock, the standalone build, BASE=http://localhost:8080):
+  verify:layout exit=0 :: layout: PASS (1280, 1920, gate at 1279, Welcome, the shift line, navigation, the Configuration group and My account for 6 identities, the th
+  verify:hints exit=0 :: hints: PASS (959 headers and 177 tiles on 51 pages, 7 level bars on First orders and 6 bar cards on Attempts per deal and 12 intro cards on 
+  verify:theme exit=0 :: theme: PASS (81 pages, palette incl. chart fills, Montserrat, heading and body colours, no capitals by CSS, 123 tables per 7.6 and 3.3, a he
+  verify:layout --provoke exit=1 :: layout: FAIL (91 problems)
+  verify:hints --provoke exit=1 :: hints: FAIL (46 problems)
+  verify:theme --provoke exit=1 :: theme: FAIL (10 problems)
