@@ -7,7 +7,7 @@
 -- name of a customer, an address, an email or a phone number; the forecast is read as of a fixed date, so the verdict
 -- does not depend on the day it runs. Every check writes one row, ok or FAIL, and the last row is the verdict (0008zi
 -- verified), because Cloud SQL Studio shows no notices. Run as your own IAM login after 112_assets.sql, dev first, then
--- prod; in dev then 105, 75 and 41 again.
+-- prod; in dev then 105, 75, 41 and 107 again.
 --   A  structure and privileges: the addition row after 0008zh; the tables' columns; keys and checks (the raw's key
 --      allow-list and no @, the named ids, the customer reference, one current component per kind, the reserved kind
 --      device, the status flags); the connection kind assets, the job assets_import, the setting; row-level security with

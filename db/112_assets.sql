@@ -3,8 +3,9 @@
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after
 -- 110_import_status_reuse.sql (0008zh). Rerunnable, forward-only, in one transaction. Run as your own IAM login:
--- dev first, then 113_verify_assets.sql, then 105, 75 and 41 again (dev; the data-quality redefinition carries their
--- checks); then 02_seed_pulse4all.sql again (the catalogs of Pulse4all Subscriptions); then prod, with 113 and 02.
+-- dev first, then 113_verify_assets.sql, then 105, 75, 41 and 107 again (dev; the data-quality redefinition carries the
+-- first three's checks, cma.audit_row() 107's); then 02_seed_pulse4all.sql again (the catalogs of Pulse4all
+-- Subscriptions); then prod, with 113 and 02.
 -- The web of main reads nothing this adds; the web of this change reads it (Reports, Maintenance and its data-quality
 -- checks), so in prod the script runs before that web is merged.
 --

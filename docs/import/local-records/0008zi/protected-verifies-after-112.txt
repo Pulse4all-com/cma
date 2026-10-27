@@ -8,3 +8,4 @@
 79_verify_system_health.sql exit=0 PASS=14 FAIL=0 last:  verdict | PASS | 13 PASS, 0 FAIL
 101_verify_definitions_calls.sql exit=0 PASS=19 FAIL=0 last:  verdict | PASS | 18 PASS, 0 FAIL
 109_verify_legacy_call_outcome.sql exit=0 PASS=19 FAIL=0 last:  verdict | PASS | 109_verify_legacy_call_outcome: 18 PASS, 0 FAIL
+107_verify_review_reference_guard.sql exit=0 PASS=11 FAIL=0 last:  verdict | PASS | 107_verify_review_reference_guard: 10 PASS, 0 FAIL
