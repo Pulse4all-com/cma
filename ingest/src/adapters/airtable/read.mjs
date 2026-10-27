@@ -10,7 +10,7 @@
  *             never leaves Airtable. A record's id is the API's record.id, the RECORD_ID() the CSV export carried
  *
  * The changed records: filterByFormula IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE("<ISO>")), the instant being the
- * cursor less five minutes (reconcile.mjs). LAST_MODIFIED_TIME() moves when any field of the record is edited; a value
+ * cursor less five minutes (index.mjs, OVERLAP_MS). LAST_MODIFIED_TIME() moves when any field of the record is edited; a value
  * a lookup draws from another table does not move it, which the nightly full snapshot catches.
  */
 import { SourceError } from "../../core/http.mjs";

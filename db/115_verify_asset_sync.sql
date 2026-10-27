@@ -171,7 +171,7 @@ begin
     coalesce(cma.assets_settings_problem('{"assets_poll_interval_minutes": 1441}'), 'ok'),
     coalesce(cma.assets_settings_problem('{"assets_poll_interval_minutes": "15m"}'), 'ok'),
     coalesce(cma.assets_settings_problem('{"assets_poll_interval_minutes": 7.5}'), 'ok'),
-    coalesce(cma.assets_settings_problem('{"airtable_max_per_second": 9}'), 'ok'));
+    coalesce(cma.assets_settings_problem('{"example_max_per_second": 9}'), 'ok'));
   insert into verify_0008zj values (4, 'A4 the asset register''s settings by form: ids, the date format, the poll interval from 1 to 1440',
     case when v_bad = 'ok ok ok table_id table_id view_id date_format assets_poll_interval_minutes assets_poll_interval_minutes '
                       || 'assets_poll_interval_minutes assets_poll_interval_minutes ok'
@@ -273,18 +273,20 @@ begin
                         || 'rows=5 ins=0 upd=3 same=2 missing=0 repl=0 um=0 us=0 uk=2 cri=1 drop=0 | 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B4. the connection without a token secret name: the Ingest user's load refused (CMA04), the batch left staged;
+    -- B4. the connection without a token secret name: the Ingest user's load refused (CMA04), also when it calls the
+    --     shared load itself; the batch left staged;
     --     a person loads the same batch from files (its run assets_import), so the connection stays valid
     v_n := pg_temp.v0008zj_stage('files-b4', array['rec-1', 'rec-2']);
     v_txt := pg_temp.v0008zj_code(format('select cma.ingest_load_device_snapshot(%L, %L, true)', v_csv, 'files-b4'))
+             || ' ' || pg_temp.v0008zj_code(format('select cma.device_snapshot_apply(%L, %L, true)', 'files-b4', v_csv))
              || ' ' || (select count(*) from cma.device_import_staging s where s.batch_key = 'files-b4');
     perform set_config('app.user_id', v_admin1::text, true);
     j := cma.load_device_snapshot('files-b4', v_csv, true);
     v_txt := v_txt || ' ' || pg_temp.v0008zj_counts(j) || ' '
              || (select string_agg(r.job || '/' || r.stream || '/' || r.status, ',') from cma.sync_run r where r.connection_id = v_csv)
              || ' ' || (select count(*) from cma.sync_run r where r.connection_id = v_reg);
-    v_rows := v_rows || array['14', 'B4 a connection without a token secret name: the ingest load refused, a person''s load from files works',
-      case when v_txt = 'CMA04 2 rows=2 ins=2 upd=0 same=0 missing=0 repl=0 um=0 us=0 uk=1 cri=0 drop=0 assets_import/files-b4/succeeded 0'
+    v_rows := v_rows || array['14', 'B4 a connection without a token secret name: the ingest load and the shared one refused to the Ingest user, a person''s load from files works',
+      case when v_txt = 'CMA04 CMA04 2 rows=2 ins=2 upd=0 same=0 missing=0 repl=0 um=0 us=0 uk=1 cri=0 drop=0 assets_import/files-b4/succeeded 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B5. the permissions and the refusals: the Ingest user may not load as a person (CMA06), a person may not load as
@@ -373,7 +375,7 @@ begin
     --     kind that holds devices checked as a register
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := pg_temp.v0008zj_code(format('select cma.set_connection_settings(%L, %L)', v_reg,
-               '{"table_id": "tblVerify0001", "date_format": "dmy", "assets_poll_interval_minutes": "15", "airtable_max_per_second": 2}'))
+               '{"table_id": "tblVerify0001", "date_format": "dmy", "assets_poll_interval_minutes": "15", "example_max_per_second": 2}'))
              || ' ' || pg_temp.v0008zj_code(format('select cma.set_connection_settings(%L, %L)', v_reg, '{"table_id": "tbl verify"}'))
              || ' ' || pg_temp.v0008zj_code(format('select cma.set_connection_settings(%L, %L)', v_reg, '{"date_format": "ymd"}'))
              || ' ' || pg_temp.v0008zj_code(format('select cma.set_connection_settings(%L, %L)', v_reg, '{"assets_poll_interval_minutes": 0}'))

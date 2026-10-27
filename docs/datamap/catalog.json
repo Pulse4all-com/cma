@@ -203,7 +203,7 @@
       "tables": [
         {
           "name": "integration_connection",
-          "what": "One row per connected account (portal, Aircall account, store, review platform account, asset register base)",
+          "what": "One row per account of a source (portal, Aircall account, store, review platform account, asset register base)",
           "how": "Configuration → Sources"
         },
         {

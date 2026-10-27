@@ -33,7 +33,8 @@
 --   staging        cma.device_import_staging takes rows from a holder of tenant.configure (a person) or of ingest.write
 --                  (the tenant's Ingest user); a value with an @ is still kept as a bare @
 --   the load       cma.device_snapshot_apply(batch, connection, is_full): 0008zi's load, moved here unchanged but for
---                  the run and the permission (tenant.configure or ingest.write), one load per connection at a time
+--                  the run and the permission (tenant.configure, or ingest.write for a connection with a token secret
+--                  name), one load per connection at a time
 --                  (a transaction-level advisory lock), and the missing devices of a full snapshot found in linear time
 --                  (a hashed set; 0008zi's nested loop took some 40 seconds for 10,000 records). cma.load_device_snapshot (tenant.configure) calls it and keeps
 --                  its run of job assets_import; cma.ingest_load_device_snapshot(connection, batch, is_full)
@@ -301,7 +302,8 @@ revoke execute on function cma.device_import_staging_insert() from public;
 -- 5. The load, shared by the file import and the ingest
 -- ---------------------------------------------------------------------------------------------
 -- 0008zi's load (112, cma.load_device_snapshot) moved here unchanged, but for four things: it starts no run (its
--- callers record one), it takes a holder of tenant.configure or ingest.write, it takes a transaction-level advisory
+-- callers record one), it takes a holder of tenant.configure or ingest.write (a caller with ingest.write alone only for a
+-- connection with a token secret name), it takes a transaction-level advisory
 -- lock per connection, so two loads of one connection (the poll and the nightly full snapshot) never interleave, and a
 -- full snapshot finds its missing devices through a hashed set of the batch's record ids (the same devices, in linear
 -- time: the nightly snapshot runs under the ingest's statement timeout).
@@ -368,10 +370,18 @@ declare
   v_ucr      integer := 0;
   v_drop     integer := 0;
   v_counts   jsonb;
+  v_user     uuid;
 begin
-  perform cma.assert_any_permission(array['tenant.configure', 'ingest.write']);
+  v_user := cma.assert_any_permission(array['tenant.configure', 'ingest.write']);
   v_system := cma.active_connection_adapter(p_connection_id);
   perform cma.assert_assets_connection(p_connection_id);
+  -- a caller without tenant.configure (the Ingest user) loads only a connection the ingest reads: one with a token
+  -- secret name; a connection without one is loaded from files only (as cma.ingest_load_device_snapshot says)
+  if not cma.has_permission(v_user, 'tenant.configure')
+     and (select ic.token_secret_name from cma.integration_connection ic where ic.tenant_id = v_tenant and ic.id = p_connection_id) is null then
+    raise exception 'connection % has no token secret name: it is loaded from files (cma.load_device_snapshot), not by the ingest', p_connection_id
+      using errcode = 'CMA04';
+  end if;
   -- one load of a connection at a time: the poll and the nightly full snapshot may meet
   perform pg_advisory_xact_lock(hashtext('cma-device-load'), hashtext(p_connection_id::text));
   if p_is_full is null then
