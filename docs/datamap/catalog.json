@@ -163,17 +163,17 @@
         {
           "name": "device",
           "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30; cma.ingest_load_device_snapshot, 0008zj); the CSV fallback a person loads with cma.load_device_snapshot"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, and a full snapshot ends with cma.ingest_mark_devices_missing (0008zk); CSV fallback a person loads in one call with cma.load_device_snapshot"
         },
         {
           "name": "device_component",
           "what": "A device's components per kind (pads, battery) with serial and recorded expiry; one current row per device and kind, a changed serial an observed replacement (replaced_at) from the first load on (0008zi)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback (with its device, by the same load)"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (with its device, in chunks by cma.ingest_load_device_chunk, 0008zk); CSV fallback (with its device, by the same load)"
         },
         {
           "name": "device_import_row",
           "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback; the ingest stages each run's rows under a batch key of its own and cma.ingest_load_device_snapshot empties them in the same transaction (0008zj); the CSV fallback is staged by tools/devices-to-staging.mjs and psql \\copy and emptied by cma.load_device_snapshot"
+          "how": "CSV fallback only (0008zk): staged by tools/devices-to-staging.mjs and psql \\copy, read, loaded and emptied by cma.load_device_snapshot in one call; the Airtable API read stages nothing, it loads in chunks by cma.ingest_load_device_chunk"
         },
         {
           "name": "device_model",
