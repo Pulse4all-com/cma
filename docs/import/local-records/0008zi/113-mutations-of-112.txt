@@ -5,4 +5,5 @@ the bundling window 40 days short: 113 FAIL, failing B8, B9, B10, B11
 the audit image of a staged row in full: 113 FAIL, failing A8, B15
 a staged address kept as it is: 113 FAIL, failing B15
 a replacement keeps the shipment anchor: 113 FAIL, failing B16
+the replacement anchor in UTC: 113 FAIL, failing B16
 112 run again afterwards: 113 0008zi verified (113_verify_assets: 25 ok, 0 FAIL)

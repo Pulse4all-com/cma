@@ -24539,13 +24539,13 @@ group by 1, 2 order by 1, 2
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
 **Notes**
 
-Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
+Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day a snapshot first showed the new serial, so it lags the swap by up to the time between loads) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
 
 #### `maintenance.by_month`
 
@@ -24624,7 +24624,7 @@ group by 1, 2, 3 order by 1, 2, 3
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -24687,7 +24687,7 @@ per device in action-date order: an item starts a new exchange when its action d
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -24763,7 +24763,7 @@ group by 1, 2 order by 1, 2
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -24822,7 +24822,7 @@ row total = sum over the buckets of the view's figure; column total = sum over t
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -24896,7 +24896,7 @@ select count(*) as unknown_items from i where i.action_on is null and i.componen
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -25009,7 +25009,7 @@ total = count(*) over () of the cell's rows (total_rows); shown = min(total, 500
 - Every device's model mapped to a catalog model (data quality check `device_model_unmapped`)
 - Every device's status mapped to a device status (data quality check `device_status_unmapped`)
 - Every device's country mapped to a catalog market (the export's Spain and Italy have no market yet) (data quality check `device_market_unmapped`)
-- A recorded expiry, or a shipment date and a rule for the model, for every due item (data quality check `component_due_unknown`)
+- A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item (data quality check `component_due_unknown`)
 
 **Documented in** features.md 5 (Reports -> Maintenance); api.md, GET /api/v1/reports/maintenance; data-model/0008.md, 0008zi; docs/import/devices.md; decisions.md, 27 Oct 2026 (the asset register as a read-only mirror; due date, action date and planned exchange)
 
@@ -32509,10 +32509,14 @@ with t as (select (now() at time zone timezone)::date as today from cma.tenant w
 d as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor
       from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
       where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),
-i as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
+i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
+      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
+                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
+                                      else d.anchor end as anchor) a
       where c.id is not null or r.id is not null or d.model_key is null
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select count(*) from i where i.action_on is null and i.component <> 'device'

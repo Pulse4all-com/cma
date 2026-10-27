@@ -252,7 +252,7 @@ Expected: the context row, then `DELETE <n>` with the rows of step 6.
 - **Due date:** a component's recorded expiry, else the anchor date plus the rule's interval for the model, else none
   (basis unknown). The anchor is the day a later snapshot first showed the component's new serial when it replaced
   another (a replacement restarts the rule), else the last shipment, else the first; the components of the first load
-  keep the shipment. **Action date:** the due date less the rule's lead days (Pulse4all: 60). A device's end of life is
+  keep the shipment. The anchor is the day of the load, not of the swap, so loading often keeps it close. **Action date:** the due date less the rule's lead days (Pulse4all: 60). A device's end of life is
   a due item of its own, on the recorded date, without lead days. **Past due:** the action date lies before the current
   month.
 - **Planned exchange:** a device's due items whose action dates lie within `assets.bundle_window_days` (Pulse4all: 90)

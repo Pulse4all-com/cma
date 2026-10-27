@@ -629,7 +629,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Key | `due_on`, `basis`; API `dueOn`, `bases`; basis values `recorded`, `rule`, `unknown` |
 | Definition | The date a due item comes due: the component's recorded expiry (basis `recorded`), else the anchor date plus the maintenance rule's interval for the model and kind (basis `rule`), else none (basis `unknown`). The anchor is the day the current component was first seen when it replaced another of its kind on the device (a replacement restarts the rule), else the device's last shipment, else its first. A device's end of life is its recorded date (basis `recorded`). |
 | Source | The register's expiry and shipment dates; for a replacement, when the import first saw its serial (`cma.device_component.first_seen_at` of a component with a replaced predecessor); the rule's interval (`cma.maintenance_rule.interval_months`, tenant configuration) |
-| Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`) |
+| Counts / does not count | Every due item has one basis. An item of basis `unknown` has no due date, no action date and no exchange; it is counted apart (`maintenance.unknown_items`, `component_due_unknown`). A replacement's anchor is the day an import first saw its serial, so its rule-based due date lags the physical swap by up to the time between snapshots (docs/open-decisions.md, When to automate the device import) |
 | Unit and display | A date in the tenant's date format; the basis as "Recorded expiry", "By rule" or "No due date" |
 | Time rule | A date as the register writes it; a replacement's first sighting as a date in the tenant's zone; a month added as Postgres adds months (the 31st of a month plus one month is the last day of the shorter month) |
 | Scope | As Device |
@@ -664,7 +664,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Field | Value |
 |---|---|
 | Term | Past due (nl: Achterstallig) |
-| Key | `past_due`; API `pastDue`, bucket `past_due` |
+| Key | `past_due`; API bucket `past_due` |
 | Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
 | Counts / does not count | Counts every past-due item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule |

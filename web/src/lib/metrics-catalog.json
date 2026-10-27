@@ -46173,7 +46173,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -46187,7 +46187,7 @@
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day the new serial was first seen) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9."
+      "notes": "Past due never ends by itself: an item stays past due until a later snapshot gives it a later due date: a recorded expiry, a replacement (the rule restarts from the day a snapshot first showed the new serial, so it lags the swap by up to the time between loads) or a later last shipment for the rule. verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9."
     },
     {
       "key": "maintenance.by_month",
@@ -46363,7 +46363,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -46552,7 +46552,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -46726,7 +46726,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -46911,7 +46911,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -47083,7 +47083,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -47379,7 +47379,7 @@
           "check": "device_market_unmapped"
         },
         {
-          "item": "A recorded expiry, or a shipment date and a rule for the model, for every due item",
+          "item": "A recorded expiry, or a shipment date (or, for a replacement, the day a snapshot first showed it) and a rule for the model, for every due item",
           "check": "component_due_unknown"
         }
       ],
@@ -63084,7 +63084,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (d.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) from i where i.action_on is null and i.component <> 'device'",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) from i where i.action_on is null and i.component <> 'device'",
       "fixture_check": "Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.",
       "prerequisites": [],
       "docs": [

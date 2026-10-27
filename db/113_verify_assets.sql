@@ -752,9 +752,10 @@ begin
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B16. a replacement restarts the rule: a second, partial snapshot gives rec-3 a new pads serial without an expiry and
-    --      rec-2 a battery without one. rec-3's pads (a replacement) are due on the day the new serial was first seen, in
-    --      the tenant's zone, plus the rule's 24 months, basis rule, and are not past due; rec-2's battery (no
-    --      predecessor) keeps the shipment anchor, the last shipment of 10 February 2025 plus 54 months
+    --      rec-2 a battery without one. rec-3's new pads are dated first seen at 23:30 UTC on 11 November 2026, already 12
+    --      November in the tenant's zone (Europe/Amsterdam), so they are due on 12 November 2028 (the rule's 24 months),
+    --      basis rule, not past due; rec-2's battery (no predecessor) keeps the shipment anchor, the last shipment of 10
+    --      February 2025 plus 54 months
     insert into cma.device_import_staging (batch_key, source_row, source_id, serial, model, status, country, warehouse_ref, customer_ref,
                                            first_shipped_on, stock_received_on, last_shipped_on, end_of_life_on, components)
     values ('b16', 2, 'rec-3', 'SN-3', 'FRx', 'In Storage', 'Netherlands', 'WH-B', null, '2023-01-10', '2022-12-01', null, '2026-08-15',
@@ -762,20 +763,17 @@ begin
            ('b16', 3, 'rec-2', 'SN-2', 'heartstart hs1', 'Active/Customer', 'United Kingdom', null, 'not an id!', '2024-03-01', null,
             '2025-02-10', null, '{"battery": {"serial": "B-2"}}');
     j := cma.load_device_snapshot('b16', v_reg, false);
+    update cma.device_component c set first_seen_at = '2026-11-11 23:30:00+00'
+    where c.tenant_id = v_t1 and c.serial = 'P-3c' and c.replaced_at is null;
     v_txt := pg_temp.v0008zi_counts(j) || ' | '
-             || (select string_agg(i.source_id || ':' || i.component_key || ':' || i.basis || ':'
-                                   || case when i.due_on = ((c.first_seen_at at time zone t.timezone)::date + interval '24 months')::date
-                                           then 'seen+24' else coalesce(i.due_on::text, '-') end
+             || (select string_agg(i.source_id || ':' || i.component_key || ':' || i.basis || ':' || coalesce(i.due_on::text, '-')
                                    || ':' || i.past_due::text, ' ' order by i.source_id)
                  from cma.maintenance_items_of(v_t1, v_today) i
-                 join cma.tenant t on t.id = v_t1
-                 join cma.device_component c on c.tenant_id = v_t1 and c.device_id = i.device_id and c.component_key = i.component_key
-                                            and c.replaced_at is null
                  where (i.source_id, i.component_key) in (('rec-3', 'pads'), ('rec-2', 'battery')))
              || ' | ' || (select count(*) from cma.device_component c join cma.device d on d.id = c.device_id
                           where d.tenant_id = v_t1 and d.source_id = 'rec-3' and c.component_key = 'pads' and c.replaced_at is not null);
     v_rows := v_rows || array['26', 'B16 a replacement restarts the rule: a new serial without an expiry due from its first day, not past due; no predecessor, the shipment',
-      case when v_txt = 'rows=2 ins=0 upd=2 same=0 missing=0 repl=1 um=0 us=0 uk=0 cri=1 drop=0 | rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:seen+24:false | 1'
+      case when v_txt = 'rows=2 ins=0 upd=2 same=0 missing=0 repl=1 um=0 us=0 uk=0 cri=1 drop=0 | rec-2:battery:rule:2029-08-10:false rec-3:pads:rule:2028-11-12:false | 1'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
