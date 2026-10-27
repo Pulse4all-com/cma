@@ -1,0 +1,52 @@
+Asset register and Reports, Maintenance, addition 0008zi (db/112, db/113), prod, 27 October 2026
+
+Written down by Claude Code at Martin's request from his report of his runs on 27 October 2026; the results below
+are his. No key, device id or customer id appears here.
+
+Before the run
+prod  markets       Pulse4all Subscriptions holds 14 active markets, ES and IT among them; nothing added
+
+prod  112           clean
+prod  113           0008zi verified, 25 ok; C1 146.7 ms and 134.6 ms
+prod  113 provoked  26 FAIL lines, 0 ok, 25 FAIL
+prod  reruns        41 2 PASS, 14 2 PASS
+                    105, 75, 107 and 53: 0 PASS rows; they are dev-only and refuse prod by design (112's header
+                    names them for dev only)
+prod  seed 02       exit 0
+                    catalogs: pulse4all-subscriptions 2 models, 2 kinds, 4 rules, 5 statuses, bundle window 90,
+                    13 country aliases; pulse4all-invest none
+
+The web
+main  merge         squash-merged as 2150403; prod build SUCCESS
+dev   cma-web       on 2150403: Agent Two refused; Maintenance shows the fixture (27 tracked devices, past due
+                    4 exchanges, 4 without a due date)
+
+The register's connection (prod)
+prod  connection    adapter airtable, kind assets; created in Studio as martin@pulse4all.com
+prod  account id    first stored as the literal "<base id>"; corrected by a single audited owner-level update
+                    (actor studio:martin) to appsEV7MhflMLd2Xv. No function exists to change a connection's
+                    account id
+
+The export
+prod  source        base Airtable 2.0, table "2.0 Installed Base" (the live table), Grid view; 35 columns, none
+                    personal
+prod  tool          rows 9677, mapped 21, ignored 14, date failures 0, values with @ 0
+
+The load (full snapshot, batch prod-2026-10-27)
+prod  load          rows 9677, inserted 9677, updated 0, unchanged 0, missing_now 0, components_replaced 0,
+                    unmapped_model 0, unmapped_status 0, unmapped_market 8, customer_ref_invalid 32,
+                    refs_dropped 2 (two pads serials with a typo: '=' and a backtick)
+
+Reports, Maintenance (from 2026-10-01, 12 months, every tracked device)
+prod  page          devices 9576; past due 421 items in 420 exchanges; months 3351 items in 3340 exchanges;
+                    2426 items without a due date; markets BE, DE, ES, FR, GB, NL, SE (AT, DK, FI, IT and NO
+                    have nothing due before October 2027)
+prod  time          the Studio block with data_quality() took 2.6 s
+
+Data quality (the eight asset checks)
+prod  checks        component_due_unknown 2426, device_customer_ref_invalid 32, device_market_unmapped 8,
+                    device_model_unmapped 0, device_serial_duplicate 13, device_serial_missing 2,
+                    device_status_unmapped 0, field_device_without_subscription_ref 221
+
+The files
+prod  ~/import      the files deleted after the load
