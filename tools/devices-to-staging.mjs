@@ -24,9 +24,14 @@
  * empty and counted (date_parse_failures, with its line and column, never its value); a wrong format shows as many.
  * Line ends CRLF or LF, an optional UTF-8 byte order mark, quoted fields as in RFC 4180.
  *
+ * A mapped cell that holds an @ (an email address where an id belongs) is written as a bare @ and counted
+ * (values_with_at, never the value), so no address reaches the staging file; the load reads the bare @ as no id: an
+ * invalid customer reference, a dropped reference, an unmapped label or a date that does not read.
+ *
  * Refuses (exit 1, nothing written) an export header that is neither mapped nor ignored, a mapped header the export
  * lacks, a header both mapped and ignored, a map that names an unknown staging column or a malformed kind or name, a
- * row without a record id, a record id that appears twice (the lines named), and a cell longer than 500 characters.
+ * row without a record id, a record id that holds an @, a record id that appears twice (the lines named), and a cell
+ * longer than 500 characters.
  * Prints counts and the output path only, never a value.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -115,7 +120,10 @@ export function convert(text, map, { batch, dateFormat, delimiter }) {
   if (problems.length) return { rows: [], counts: {}, problems, failures: [] };
 
   const index = (h) => header.indexOf(h);
-  const cell = (r, h) => (h ? (r[index(h)] ?? "").trim() : "");
+  const raw = (r, h) => (h ? (r[index(h)] ?? "").trim() : "");
+  let withAt = 0;
+  // a cell holding an @ goes no further than a bare @
+  const cell = (r, h) => { const v = raw(r, h); if (!v.includes("@")) return v; withAt++; return "@"; };
   const rows = [];
   const failures = [];
   const seen = new Map();
@@ -123,10 +131,11 @@ export function convert(text, map, { batch, dateFormat, delimiter }) {
     const r = all[i];
     const line = i + 1;
     if (r.every((c) => c.trim() === "")) continue;
-    const long = mapped.find((h) => cell(r, h).length > MAX_CELL);
+    const long = mapped.find((h) => raw(r, h).length > MAX_CELL);
     if (long) { problems.push(`line ${line}: "${long}" is longer than ${MAX_CELL} characters`); continue; }
-    const id = cell(r, map.columns.source_id);
+    const id = raw(r, map.columns.source_id);
     if (id === "") { problems.push(`line ${line}: no record id`); continue; }
+    if (id.includes("@")) { problems.push(`line ${line}: the record id holds an @`); continue; }
     seen.set(id, [...(seen.get(id) ?? []), line]);
     const values = DEVICE_COLUMNS.map((col) => {
       const v = cell(r, map.columns[col]);
@@ -162,6 +171,7 @@ export function convert(text, map, { batch, dateFormat, delimiter }) {
     mapped_columns: mapped.length,
     ignored_columns: header.filter((h) => ignore.has(h)).length,
     date_parse_failures: failures.length,
+    values_with_at: withAt,
   };
   return { rows, counts, problems, failures };
 }

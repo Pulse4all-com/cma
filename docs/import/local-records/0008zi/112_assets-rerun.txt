@@ -7,22 +7,22 @@ COMMENT
 CREATE FUNCTION
 REVOKE
 GRANT
-psql:db/112_assets.sql:143: NOTICE:  relation "device_model" already exists, skipping
+psql:db/112_assets.sql:145: NOTICE:  relation "device_model" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
 CREATE TRIGGER
-psql:db/112_assets.sql:160: NOTICE:  relation "device_component_kind" already exists, skipping
+psql:db/112_assets.sql:162: NOTICE:  relation "device_component_kind" already exists, skipping
 CREATE TABLE
 COMMENT
 CREATE TRIGGER
-psql:db/112_assets.sql:178: NOTICE:  relation "maintenance_rule" already exists, skipping
+psql:db/112_assets.sql:180: NOTICE:  relation "maintenance_rule" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
 COMMENT
 CREATE TRIGGER
-psql:db/112_assets.sql:201: NOTICE:  relation "device_status" already exists, skipping
+psql:db/112_assets.sql:203: NOTICE:  relation "device_status" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
@@ -33,25 +33,25 @@ DROP TRIGGER
 CREATE TRIGGER
 DROP TRIGGER
 CREATE TRIGGER
-psql:db/112_assets.sql:234: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:235: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:238: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:239: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -67,7 +67,7 @@ GRANT
 CREATE FUNCTION
 REVOKE
 GRANT
-psql:db/112_assets.sql:340: NOTICE:  relation "device" already exists, skipping
+psql:db/112_assets.sql:342: NOTICE:  relation "device" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
@@ -81,37 +81,38 @@ COMMENT
 COMMENT
 COMMENT
 COMMENT
-psql:db/112_assets.sql:353: NOTICE:  relation "device_serial_idx" already exists, skipping
+psql:db/112_assets.sql:355: NOTICE:  relation "device_serial_idx" already exists, skipping
 CREATE INDEX
-psql:db/112_assets.sql:354: NOTICE:  relation "device_customer_idx" already exists, skipping
+psql:db/112_assets.sql:356: NOTICE:  relation "device_customer_idx" already exists, skipping
 CREATE INDEX
-psql:db/112_assets.sql:370: NOTICE:  relation "device_component" already exists, skipping
+psql:db/112_assets.sql:372: NOTICE:  relation "device_component" already exists, skipping
 CREATE TABLE
 COMMENT
 COMMENT
 COMMENT
 COMMENT
-psql:db/112_assets.sql:376: NOTICE:  relation "device_component_current_idx" already exists, skipping
+psql:db/112_assets.sql:378: NOTICE:  relation "device_component_current_idx" already exists, skipping
 CREATE INDEX
-psql:db/112_assets.sql:378: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:380: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:379: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:381: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
 REVOKE
-psql:db/112_assets.sql:414: NOTICE:  relation "device_import_row" already exists, skipping
+CREATE FUNCTION
+psql:db/112_assets.sql:468: NOTICE:  relation "device_import_row" already exists, skipping
 CREATE TABLE
 COMMENT
-psql:db/112_assets.sql:416: NOTICE:  relation "device_import_row_batch_idx" already exists, skipping
+psql:db/112_assets.sql:470: NOTICE:  relation "device_import_row_batch_idx" already exists, skipping
 CREATE INDEX
-psql:db/112_assets.sql:418: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:472: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -120,6 +121,10 @@ psql:db/112_assets.sql:418: NOTICE:  policy "tenant_readonly" for relation "cma.
 REVOKE
 CREATE VIEW
 COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
 CREATE FUNCTION
 REVOKE
 CREATE TRIGGER

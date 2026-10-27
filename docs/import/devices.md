@@ -12,7 +12,9 @@ What happens to the export:
   which header feeds which staging column, which headers hold the components (pads, battery) and which hold named ids
   of other systems (the NetSuite ids). Every other header is in the map's `ignore` list and is never read; a header
   the map neither maps nor ignores (a column added to the register) refuses the file. So the customer's names and
-  email, which the export holds, never reach the staging file, the database or the terminal.
+  email, which the export holds, never reach the staging file, the database or the terminal. A mapped cell holding an
+  @ (an email where an id belongs) is written as a bare @ and counted (`values_with_at`), and the database does the
+  same for anything staged another way; the audit log keeps a staged row's keys only.
 - The staging file is copied into `cma.device_import_staging` (`docs/import/copy-devices-staging.psql`), then
   `cma.load_device_snapshot(batch, connection, is_full)` loads it: a device per register record (the record id),
   model, status and country mapped through the catalogs' aliases (unmapped: null, and a data-quality finding), the
@@ -82,11 +84,10 @@ SQL
 ```
 Expected: the context row, an empty result, then `<connection_id> | airtable | Airtable 2.0 assets | assets | active`.
 
-Links (optional, Configuration → Sources, the connection's settings): on the register's connection a setting
-`record_url_device` with the template `https://airtable.com/{account}/<table id>/{id}` (the table id is the part of the
-table's address that starts with `tbl`) links each device of Reports → Maintenance to its register row; on the HubSpot
-connection a setting `record_url_contact` with `https://{app_host}/contacts/{account}/record/0-1/{id}` links the CRM
-contact. Without them the device list shows the ids without a link.
+The contact's link (optional, Configuration → Sources, the HubSpot connection's settings): a setting
+`record_url_contact` with `https://{app_host}/contacts/{account}/record/0-1/{id}` links the CRM contact of each device
+on Reports → Maintenance; without it the device list shows the contact's id without a link. The register's record id
+is shown without a link: the Workspace links to the CRM and the telephony system only (docs/open-decisions.md).
 
 ## 1. A folder outside the repository
 
@@ -136,8 +137,10 @@ many `date_parse_failures`.
 cd ~/cma && node tools/devices-to-staging.mjs ~/import/devices-export.csv --map ~/import/devices-map.json --date-format dmy --batch assets-<yyyy-mm-dd> --out ~/import/devices-staging.csv
 ```
 Use the format of step 4 and the export's date in the batch key (`assets-2026-10-27`). Expected: `rows` (the records
-of the export), `mapped_columns 21`, `ignored_columns 31` (with the example map), `date_parse_failures 0`, and the
-staging file's path. More than a few date failures mean the format is wrong: run again with the right one. A refusal
+of the export), `mapped_columns 21`, `ignored_columns 31` (with the example map), `date_parse_failures 0`,
+`values_with_at` (the mapped cells holding an @, each written as a bare @; the load counts them as invalid customer
+references or dropped references) and the staging file's path. More than a few date failures mean the format is
+wrong: run again with the right one. A refusal
 (`refused, nothing written`) names the headers or lines: fix the map (step 3) or the export and run again. The tool
 prints counts only, never a value.
 
@@ -201,9 +204,10 @@ the ignored columns, covering every data-quality check. Steps A and B as above i
 ```bash
 cd ~/cma && node tools/devices-to-staging.mjs tools/fixtures/devices-sample.csv --map docs/import/devices-map.example.json --date-format dmy --batch fixture-1 --out /tmp/devices-staging-1.csv
 ```
-Expected: `rows 30`, `mapped_columns 21`, `ignored_columns 31`, `date_parse_failures 0`, the path. Then steps 6 and 7
-with `/tmp/devices-staging-1.csv` and the batch `fixture-1`. Expected counts with dev's twelve markets (the dev
-catalog of `docs/night-2026-10-10/MORNING_RUNBOOK.md` 1.4) and the seed's catalogs: `rows 30`, `inserted 30`,
+Expected: `rows 30`, `mapped_columns 21`, `ignored_columns 31`, `date_parse_failures 0`, `values_with_at 1` (a customer
+id that is an address), the path. Then steps 6 and 7 with `/tmp/devices-staging-1.csv` and the batch `fixture-1`.
+Expected counts with dev's twelve markets (the dev catalog of `docs/night-2026-10-10/MORNING_RUNBOOK.md` 1.4) and the
+seed's catalogs: `rows 30`, `inserted 30`,
 `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `unmapped_model 1`, `unmapped_status 1`,
 `unmapped_market 2` (Spain and Italy: dev's twelve markets hold no ES or IT; with ES and IT in the catalog and seed
 `02` run again, 0), `customer_ref_invalid 1`, `refs_dropped 0`.

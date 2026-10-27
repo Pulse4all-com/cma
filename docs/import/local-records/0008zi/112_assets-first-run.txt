@@ -25,39 +25,39 @@ COMMENT
 CREATE TRIGGER
 CREATE FUNCTION
 REVOKE
-psql:db/112_assets.sql:227: NOTICE:  trigger "check_aliases" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:229: NOTICE:  trigger "check_aliases" for relation "cma.device_model" does not exist, skipping
 DROP TRIGGER
 CREATE TRIGGER
-psql:db/112_assets.sql:230: NOTICE:  trigger "check_aliases" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:232: NOTICE:  trigger "check_aliases" for relation "cma.device_status" does not exist, skipping
 DROP TRIGGER
 CREATE TRIGGER
-psql:db/112_assets.sql:234: NOTICE:  policy "tenant_app" for relation "cma.device_model" does not exist, skipping
-psql:db/112_assets.sql:234: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
-psql:db/112_assets.sql:234: NOTICE:  trigger "audit" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_app" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.device_model" does not exist, skipping
+psql:db/112_assets.sql:236: NOTICE:  trigger "audit" for relation "cma.device_model" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:235: NOTICE:  policy "tenant_app" for relation "cma.device_component_kind" does not exist, skipping
-psql:db/112_assets.sql:235: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
-psql:db/112_assets.sql:235: NOTICE:  trigger "audit" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_app" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_component_kind" does not exist, skipping
+psql:db/112_assets.sql:237: NOTICE:  trigger "audit" for relation "cma.device_component_kind" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:236: NOTICE:  policy "tenant_app" for relation "cma.maintenance_rule" does not exist, skipping
-psql:db/112_assets.sql:236: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
-psql:db/112_assets.sql:236: NOTICE:  trigger "audit" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:238: NOTICE:  policy "tenant_app" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:238: NOTICE:  policy "tenant_readonly" for relation "cma.maintenance_rule" does not exist, skipping
+psql:db/112_assets.sql:238: NOTICE:  trigger "audit" for relation "cma.maintenance_rule" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:237: NOTICE:  policy "tenant_app" for relation "cma.device_status" does not exist, skipping
-psql:db/112_assets.sql:237: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
-psql:db/112_assets.sql:237: NOTICE:  trigger "audit" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:239: NOTICE:  policy "tenant_app" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:239: NOTICE:  policy "tenant_readonly" for relation "cma.device_status" does not exist, skipping
+psql:db/112_assets.sql:239: NOTICE:  trigger "audit" for relation "cma.device_status" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -94,29 +94,30 @@ COMMENT
 COMMENT
 COMMENT
 CREATE INDEX
-psql:db/112_assets.sql:378: NOTICE:  policy "tenant_app" for relation "cma.device" does not exist, skipping
-psql:db/112_assets.sql:378: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
-psql:db/112_assets.sql:378: NOTICE:  trigger "audit" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:380: NOTICE:  policy "tenant_app" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:380: NOTICE:  policy "tenant_readonly" for relation "cma.device" does not exist, skipping
+psql:db/112_assets.sql:380: NOTICE:  trigger "audit" for relation "cma.device" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
-psql:db/112_assets.sql:379: NOTICE:  policy "tenant_app" for relation "cma.device_component" does not exist, skipping
-psql:db/112_assets.sql:379: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
-psql:db/112_assets.sql:379: NOTICE:  trigger "audit" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:381: NOTICE:  policy "tenant_app" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:381: NOTICE:  policy "tenant_readonly" for relation "cma.device_component" does not exist, skipping
+psql:db/112_assets.sql:381: NOTICE:  trigger "audit" for relation "cma.device_component" does not exist, skipping
  setup_tenant_table 
 --------------------
  
 (1 row)
 
 REVOKE
+CREATE FUNCTION
 CREATE TABLE
 COMMENT
 CREATE INDEX
-psql:db/112_assets.sql:418: NOTICE:  policy "tenant_app" for relation "cma.device_import_row" does not exist, skipping
-psql:db/112_assets.sql:418: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
-psql:db/112_assets.sql:418: NOTICE:  trigger "audit" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:472: NOTICE:  policy "tenant_app" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:472: NOTICE:  policy "tenant_readonly" for relation "cma.device_import_row" does not exist, skipping
+psql:db/112_assets.sql:472: NOTICE:  trigger "audit" for relation "cma.device_import_row" does not exist, skipping
  setup_tenant_table 
 --------------------
  
@@ -125,6 +126,10 @@ psql:db/112_assets.sql:418: NOTICE:  trigger "audit" for relation "cma.device_im
 REVOKE
 CREATE VIEW
 COMMENT
+CREATE FUNCTION
+REVOKE
+CREATE FUNCTION
+REVOKE
 CREATE FUNCTION
 REVOKE
 CREATE TRIGGER

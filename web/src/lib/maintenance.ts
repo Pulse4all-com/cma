@@ -348,7 +348,7 @@ export function maintenanceRows(devices: readonly MaintenanceDevice[], cat: Main
       components: sorted.map((i) => i.component), dueOn: minOf(items.map((i) => i.dueOn)),
       bases: [...new Set(items.map((i) => i.basis))].sort() as MaintenanceBasis[], actionOn: minOf(items.map((i) => i.actionOn)),
       exchangeOn: minOf(items.map((i) => i.exchangeOn)), customerRef: d.customerRef, subscriptionRef: d.subscriptionRef, crmContactId: d.crmContactId,
-      contactUrl: null, deviceUrl: null,
+      contactUrl: null,
     };
     return { row, grp: k.split("|")[2] ?? "", rawMarket: d.market, rawModel: d.model };
   });

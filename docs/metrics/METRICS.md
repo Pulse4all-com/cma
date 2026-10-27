@@ -24541,7 +24541,7 @@ group by 1, 2 order by 1, 2
 
 **Notes**
 
-Overdue never ends by itself: an item stays overdue until the register records a later expiry or another serial (an observed replacement). verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
+Overdue never ends by itself: an item stays overdue until a later snapshot gives it a later due date, a recorded expiry or a later last shipment for the rule. A new serial without a recorded expiry keeps the rule's due date from the device's shipment (docs/open-decisions.md). verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9.
 
 #### `maintenance.by_month`
 
@@ -24628,7 +24628,7 @@ Months between the current month and a later from month are left out of the grid
 
 **Planned exchanges** on /reports/maintenance · Planned exchanges (Geplande wissels)
 
-The Planned exchanges view: one visit or shipment per device, bundling its due items whose action dates fall within the bundling window of the earliest one; counted once, in the month of that earliest action date.
+The Planned exchanges view: the due items of one device whose action dates fall within the bundling window of the earliest one; counted once, in the month of that earliest action date.
 
 **Formula as computed**
 
@@ -25493,7 +25493,7 @@ A column of the device list; verify_sql null: a column of one row, read with the
 
 #### `maintenance.list.contact`
 
-**Customer record** on /reports/maintenance · Customer record (Klantgegevens)
+**Contact** on /reports/maintenance · Contact (Contact)
 
 The CRM contact the shop's customer with the device's customer id is matched to (0008h), when exactly one; linked through the CRM connection's record_url_contact template.
 
@@ -25544,12 +25544,12 @@ A column of the device list; verify_sql null: a column of one row, read with the
 
 **Register** on /reports/maintenance · Register (Register)
 
-The device's row in the register: its record id, linked through the register connection's record_url_device template.
+The device's row in the register: its record id, without a link (the Workspace links to the CRM and the telephony system only).
 
 **Formula as computed**
 
 ```
-device.source_id; cma.record_url(connection_id, 'device', source_id)
+device.source_id
 ```
 
 **Unit** text · **Grain** per_record · **Status** prerequisite_missing
@@ -36619,7 +36619,7 @@ A column of the device list's file: the rows of /rows with bucket all and up to 
 
 #### `export.maintenance_csv.contact`
 
-**Customer record id** on /api/v1/reports/maintenance/export · Customer record id (Id klantgegevens)
+**Contact id** on /api/v1/reports/maintenance/export · Contact id (Contact-id)
 
 The matched CRM contact's id.
 

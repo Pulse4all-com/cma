@@ -46187,7 +46187,7 @@
       "status": [
         "prerequisite_missing"
       ],
-      "notes": "Overdue never ends by itself: an item stays overdue until the register records a later expiry or another serial (an observed replacement). verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9."
+      "notes": "Overdue never ends by itself: an item stays overdue until a later snapshot gives it a later due date, a recorded expiry or a later last shipment for the rule. A new serial without a recorded expiry keeps the rule's due date from the device's shipment (docs/open-decisions.md). verify_sql recomputes the Components view; the exchanges' bundling is checked by 113 B8 and B9."
     },
     {
       "key": "maintenance.by_month",
@@ -46388,7 +46388,7 @@
         "en": "Planned exchanges",
         "nl": "Geplande wissels"
       },
-      "definition": "The Planned exchanges view: one visit or shipment per device, bundling its due items whose action dates fall within the bundling window of the earliest one; counted once, in the month of that earliest action date.",
+      "definition": "The Planned exchanges view: the due items of one device whose action dates fall within the bundling window of the earliest one; counted once, in the month of that earliest action date.",
       "formula": "per device in action-date order: an item starts a new exchange when its action date lies more than assets.bundle_window_days after the current exchange's first action date; exchange_key = device id + first action date; cell = count(distinct exchange_key) in the bucket of the exchange's first action date",
       "unit": "count",
       "grain": [
@@ -48535,10 +48535,10 @@
       "key": "maintenance.list.contact",
       "surface": "report",
       "page": "/reports/maintenance",
-      "tile": "Customer record",
+      "tile": "Contact",
       "title": {
-        "en": "Customer record",
-        "nl": "Klantgegevens"
+        "en": "Contact",
+        "nl": "Contact"
       },
       "definition": "The CRM contact the shop's customer with the device's customer id is matched to (0008h), when exactly one; linked through the CRM connection's record_url_contact template.",
       "formula": "the one distinct (crm_connection_id, crm_contact_source_id) of commerce_customer where source_id = device.customer_ref; cma.record_url(..., 'contact', ...)",
@@ -48653,8 +48653,8 @@
         "en": "Register",
         "nl": "Register"
       },
-      "definition": "The device's row in the register: its record id, linked through the register connection's record_url_device template.",
-      "formula": "device.source_id; cma.record_url(connection_id, 'device', source_id)",
+      "definition": "The device's row in the register: its record id, without a link (the Workspace links to the CRM and the telephony system only).",
+      "formula": "device.source_id",
       "unit": "text",
       "grain": [
         "per_record"
@@ -71450,10 +71450,10 @@
       "key": "export.maintenance_csv.contact",
       "surface": "export",
       "page": "/api/v1/reports/maintenance/export",
-      "tile": "Customer record id",
+      "tile": "Contact id",
       "title": {
-        "en": "Customer record id",
-        "nl": "Id klantgegevens"
+        "en": "Contact id",
+        "nl": "Contact-id"
       },
       "definition": "The matched CRM contact's id.",
       "formula": "crm_contact_source_id",

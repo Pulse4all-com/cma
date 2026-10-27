@@ -975,7 +975,7 @@ type MaintenanceRowDb = {
   bucket: string; device_id: string; connection_id: string; source_id: string; serial: string | null; model_key: string; model_name: string | null;
   market: string; device_status_key: string | null; device_status_name: string | null; components: string[]; due_on: Date | string | null;
   bases: string[]; action_on: Date | string | null; exchange_on: Date | string | null; customer_ref: string | null; subscription_ref: string | null;
-  crm_connection_id: string | null; crm_contact_source_id: string | null; total_rows: string | number; contact_url: string | null; device_url: string | null;
+  crm_connection_id: string | null; crm_contact_source_id: string | null; total_rows: string | number; contact_url: string | null;
 };
 /** A date column as YYYY-MM-DD (pg returns a date as a local Date, so it is read back in local time) */
 function dateKeyOf(v: Date | string | null): string | null {
@@ -988,7 +988,7 @@ function toMaintenanceRow(x: MaintenanceRowDb): MaintenanceRow {
     bucket: x.bucket, deviceId: x.device_id, sourceId: x.source_id, serial: x.serial, model: x.model_key, modelName: x.model_name, market: x.market,
     deviceStatus: x.device_status_key, deviceStatusName: x.device_status_name, components: x.components, dueOn: dateKeyOf(x.due_on),
     bases: x.bases as MaintenanceBasis[], actionOn: dateKeyOf(x.action_on), exchangeOn: dateKeyOf(x.exchange_on), customerRef: x.customer_ref,
-    subscriptionRef: x.subscription_ref, crmContactId: x.crm_contact_source_id, contactUrl: x.contact_url, deviceUrl: x.device_url,
+    subscriptionRef: x.subscription_ref, crmContactId: x.crm_contact_source_id, contactUrl: x.contact_url,
   };
 }
 type ReviewsPageDb = {
@@ -2339,10 +2339,10 @@ export const postgresData: CmaData = {
   async getMaintenanceRows(me, filter, bucket, view, limit): Promise<MaintenanceRows> {
     return withTenant(ctx(me), async (q) => {
       // the function checks the permission, the horizon, the filters, the bucket, the view and the limit (addition 0008zi); the
-      // links come from the connections' own templates (cma.record_url: record_url_contact, record_url_device), null without one
+      // contact's link comes from the CRM connection's own template (cma.record_url: record_url_contact), null without one; the
+      // register gets no link: the Workspace links to the CRM and the telephony system only
       const r = await q.query<MaintenanceRowDb>(
-        `select r.*, cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id) as contact_url,
-                cma.record_url(r.connection_id, 'device', r.source_id) as device_url
+        `select r.*, cma.record_url(r.crm_connection_id, 'contact', r.crm_contact_source_id) as contact_url
          from cma.maintenance_rows($1::date, $2, $3, $4, $5, $6, $7, $8) r`,
         [filter.fromMonth, filter.months, bucket, filter.market, filter.model, filter.scope, view, limit]);
       return { total: Number(r.rows[0]?.total_rows ?? 0), rows: r.rows.map(toMaintenanceRow) };

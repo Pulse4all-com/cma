@@ -207,7 +207,7 @@ export function MaintenanceDeviceList({ list, report, copy, locale }: { list: Ma
               {r.crmContactId ? <span className="inline-flex items-center gap-1">{r.crmContactId} <RecordLink url={r.contactUrl} label={t.openContact} /></span> : text(null)}
             </td>
             <td className="h-10 whitespace-nowrap px-2 tabular">
-              <span className="inline-flex items-center gap-1 text-p4a-muted">{r.sourceId} <RecordLink url={r.deviceUrl} label={t.openDevice} /></span>
+              <span className="text-p4a-muted">{r.sourceId}</span>
             </td>
           </tr>
         ))}

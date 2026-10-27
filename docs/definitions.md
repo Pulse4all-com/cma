@@ -667,7 +667,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Key | `overdue`; API bucket `overdue` |
 | Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Overdue column comes before the months; a planned exchange is overdue when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
-| Counts / does not count | Counts every overdue item of a tracked device that the latest full snapshot holds, whatever the horizon. A component the register shows as replaced (a new serial or a new expiry in a later snapshot) carries its new dates and is no longer overdue |
+| Counts / does not count | Counts every overdue item of a tracked device that the latest full snapshot holds, whatever the horizon. An item stays overdue until a later snapshot gives it a later due date: a recorded expiry, or a later last shipment for the rule. A new serial without a recorded expiry keeps the rule's due date from the device's shipment, so it stays overdue (whether a replacement should restart the rule is open, docs/open-decisions.md) |
 | Unit and display | A count in the Overdue column (`maintenance.overdue`) |
 | Time rule | The tenant's current month, in its zone |
 | Scope | As Device; this entry fixes the word for maintenance only. Overdue for tasks and tickets (Reports → Follow-up) is still to define (Domains still to define, Tickets and tasks) |
@@ -752,7 +752,7 @@ Workday, clocked in, hours worked, status, working status, business minutes, off
 Yesterday, Today, This week (ISO, Monday), This month, Custom range, previous period, like for like.
 
 ### Other
-Forms, data quality. AED maintenance is defined under Asset terms (addition 0008zi).
+Forms, data quality. Maintenance is defined under Asset terms (addition 0008zi).
 
 ## Gaps against the definitions
 
@@ -775,6 +775,7 @@ Where the code or the catalog says something else than this file: every retired 
 | W25 | `web/src/components/configuration/SourceConfig.tsx` (Configuration → Sources, Lines); the Data quality page | The number of counted lines | Not shown: Lines lists each line with its Counted switch, and a line Aircall adds arrives counted | Data quality or Configuration → Sources shows the number of counted lines, so the list can be compared with the 46-number filter in Aircall Analytics (Call, Scope) after a line is added in Aircall |
 | W27 | `web/src/lib/copy.ts` | `hints.agent` (Speed to lead's grouping by agent) | "The person behind the first outbound call, else the deal's owner" (its CRM owner) | The person who placed the first attempt (the call's last participant, Aircall) |
 | W28 | `web/src/lib/copy.ts` | `speedToLead.openNotCalled` "Open, not called", `speedToLead.openTitle`, `hints.withinTarget`, `hints.openNotCalled`; no group for deals created by hand or closed before the first call | "Deals closed without a call count as missed; deals still open and not called are left out until they are called or closed" | "Not called yet" with its age, late once past the target or the cutoff; "Created by hand, not in speed to lead" and closed before first call shown apart, out of the measures |
+| W29 | `web/src/lib/copy.ts` | `welcome.attentionTasks`, `welcome.attentionTasksOne`, `followUp.tileTasksOverdue` and Reports → Follow-up's task groups ("Overdue") | Overdue for a task past its due time | A word defined for tasks (Domains still to define, Tickets and tasks); Overdue is defined for maintenance only (Asset terms), and whether tasks share its meaning or take another word is open (docs/open-decisions.md) |
 
 ### db/
 

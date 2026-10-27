@@ -14,7 +14,7 @@
 --      the tenant policy, the audit trigger, no delete for the application (but on staged rows), nothing for the readers
 --      on the tables; every function the application's only and in the caller's rights, the readers' function definer,
 --      the owner's, pinned, theirs only; the reporting views' exact columns with no raw and no name of a person, email,
---      phone or address; the data-quality catalog; the redefinitions carry what came before
+--      phone or address; the data-quality catalog; the redefinitions carry what came before (the audit image too)
 --   B  behaviour, on two throwaway tenants (Europe/Amsterdam), as of Tuesday 27 October 2026 for the forecast. Tenant
 --      one holds the catalogs (models hs1 and frx, kinds pads and battery, four rules with 60 lead days, four statuses), a
 --      bundling window of 90 days, markets NL and GB with their aliases, a CRM connection, a store whose customer cu-1 is
@@ -23,7 +23,8 @@
 --      replacement, a record missing from a full snapshot, a partial snapshot), the refusals, the mapping, the raw, the
 --      kind, the run and the staged rows, the due basis (recorded, rule, unknown), bundling (pads and battery within the
 --      window one exchange, outside it two), overdue, the window setting, the page and its filters, the device list and
---      its buckets, the parameters and the permission refusal (CMA06), data quality, the reader views, tenant isolation
+--      its buckets, the parameters and the permission refusal (CMA06), data quality, the reader views, tenant isolation,
+--      a staged address kept as a bare @ and the audit images of staged rows holding their keys only
 --   C  speed: a throwaway tenant with 5,000 devices and 10,000 components; the page of 24 months and the device list of
 --      all buckets as the application (row-level security on) under verify.max_ms, the best of three
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
@@ -245,7 +246,8 @@ begin
     'cma.connection_held_kinds_of(uuid,uuid)', 'cma.set_connection_kind(uuid,text)', 'cma.asset_aliases_ok(text[])',
     'cma.device_model_key_of(uuid,text)', 'cma.device_status_key_of(uuid,text)', 'cma.device_external_refs_ok(jsonb)', 'cma.device_raw_ok(jsonb)',
     'cma.assets_set_up_of(uuid)', 'cma.assert_assets_connection(uuid)', 'cma.device_staged_text(text)', 'cma.device_staged_ref(text)',
-    'cma.device_staged_date(text,integer,text)', 'cma.device_staged_object(text,integer,text)', 'cma.load_device_snapshot(text,uuid,boolean)',
+    'cma.device_staged_date(text,integer,text)', 'cma.device_staged_object(text,integer,text)', 'cma.device_staged_without_at(text)',
+    'cma.device_staged_object_without_at(text)', 'cma.load_device_snapshot(text,uuid,boolean)',
     'cma.maintenance_items_of(uuid,date)', 'cma.tenant_today_of(uuid)', 'cma.assert_maintenance_horizon(date,integer,date)',
     'cma.maintenance_due_of(date,integer)', 'cma.assert_maintenance_filters(text,text,text)',
     'cma.maintenance_bucketed_of(uuid,date,integer,text,text,text,date)', 'cma.maintenance_page_of(uuid,date,integer,text,text,text,date)',
@@ -330,7 +332,9 @@ begin
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A8. the redefinitions carry what came before: 0008ze's held kinds (reviews, tasks, email) with assets; 0008ze's data
-  --     quality (the reviews' checks, the forms', the unlinked rule) with the asset register's; the settings' checks
+  --     quality (the reviews' checks, the forms', the unlinked rule) with the asset register's; the settings' checks;
+  --     0008zf's audit image (the uncounted lines, the invitation's hash, the ingest event's raw, the review's
+  --     reference) with the staged row's keys only
   v_bad := '';
   if (select prosrc from pg_proc where oid = 'cma.connection_held_kinds_of(uuid,uuid)'::regprocedure) !~ 'cma\.crm_task x'
      or (select prosrc from pg_proc where oid = 'cma.connection_held_kinds_of(uuid,uuid)'::regprocedure) !~ 'cma\.review_channel x'
@@ -350,7 +354,14 @@ begin
      or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'assets\.bundle_window_days' then
     v_bad := v_bad || 'settings; ';
   end if;
-  insert into verify_0008zi values (8, 'A8 the redefinitions carry 0008ze''s kinds, data quality and settings',
+  if (select prosrc from pg_proc where oid = 'cma.audit_row()'::regprocedure) !~ 'uncounted_line'
+     or (select prosrc from pg_proc where oid = 'cma.audit_row()'::regprocedure) !~ 'token_hash'
+     or (select prosrc from pg_proc where oid = 'cma.audit_row()'::regprocedure) !~ 'ingest_event'
+     or (select prosrc from pg_proc where oid = 'cma.audit_row()'::regprocedure) !~ 'review_image_without_at_reference'
+     or (select prosrc from pg_proc where oid = 'cma.audit_row()'::regprocedure) !~ 'device_import_row' then
+    v_bad := v_bad || 'audit image; ';
+  end if;
+  insert into verify_0008zi values (8, 'A8 the redefinitions carry 0008ze''s kinds, data quality and settings, 0008zf''s audit image',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 end
 $$;
@@ -707,7 +718,9 @@ begin
       case when v_txt = '7 4/1 11 1/1/0/1 22111141 2/3 two 0/0' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B15. tenant isolation (the application): tenant two sees none of tenant one's devices, components, catalogs or
-    --      staged rows, and its page holds nothing; the raw guard refuses an email key and an @ (23514)
+    --      staged rows, and its page holds nothing; the raw guard refuses an email key and an @ (23514); a staged
+    --      address is kept as a bare @ (a column, a component's serial, a named id, a key), and the audit images of every
+    --      staged row of the run hold its keys only, never an @
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_admin2::text, true);
     v_txt := (select count(*) from cma.device) || '/' || (select count(*) from cma.device_component) || '/' || (select count(*) from cma.device_model)
@@ -718,8 +731,24 @@ begin
     perform set_config('app.user_id', v_admin1::text, true);
     v_txt := v_txt || ' ' || pg_temp.v0008zi_code('update cma.device set raw = raw || ''{"email": "x"}'' where source_id = ''rec-1''')
              || ' ' || pg_temp.v0008zi_code('update cma.device set raw = raw || ''{"model": "a@b"}'' where source_id = ''rec-1''');
-    v_rows := v_rows || array['25', 'B15 tenant isolation: tenant two sees nothing of tenant one; the raw guard refuses an email key and an @',
-      case when v_txt = '0/0/0/00 - false 23514 23514' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+    insert into cma.device_import_staging (batch_key, source_row, source_id, serial, customer_ref, components, external_refs)
+    values ('b15', 2, 'rec-b15', 'sn@x.invalid', 'person@example.invalid', '{"pads": {"serial": "p@x.invalid", "expires_on": "2027-01-01"}}',
+            '{"ns_internal_id": "a@x.invalid", "ns_fam_id": "F-1"}'),
+           ('b15', 3, 'rec-b16', null, null, null, '{"a@x.invalid": "1"}');
+    v_txt := v_txt || ' ' || (select string_agg(concat_ws('/', r.serial, r.customer_ref, r.components, r.external_refs), ' ' order by r.source_row)
+                              from cma.device_import_row r where r.batch_key = 'b15');
+    delete from cma.device_import_row r where r.batch_key = 'b15';
+    perform set_config('role', 'cma_owner', true);
+    v_txt := v_txt || ' ' || (select count(*) > 0 from cma.audit_log a where a.tenant_id = v_t1 and a.table_name = 'device_import_row')
+             || '/' || (select count(*) from cma.audit_log a, jsonb_object_keys(coalesce(a.new_row, a.old_row)) k
+                        where a.tenant_id = v_t1 and a.table_name = 'device_import_row' and k not in ('id', 'tenant_id', 'batch_key', 'source_row'))
+             || '/' || (select count(*) from cma.audit_log a
+                        where a.tenant_id = v_t1 and a.table_name = 'device_import_row'
+                          and (coalesce(a.new_row::text, '') || coalesce(a.old_row::text, '')) like '%@%');
+    perform set_config('role', 'cma_app', true);
+    v_rows := v_rows || array['25', 'B15 tenant isolation: tenant two sees nothing of tenant one; the raw guard refuses an email key and an @; a staged address a bare @, the audit keys only',
+      case when v_txt = '0/0/0/00 - false 23514 23514 @/@/{"pads": {"serial": "@", "expires_on": "2027-01-01"}}/{"ns_fam_id": "F-1", "ns_internal_id": "@"} @ true/0/0'
+                and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception

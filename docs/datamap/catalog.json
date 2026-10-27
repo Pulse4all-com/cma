@@ -172,7 +172,7 @@
         },
         {
           "name": "device_import_row",
-          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; no name, email, phone or address column (0008zi)",
+          "what": "The device import's staged rows: a batch key and the export's mapped columns as text, written through the view device_import_staging (the COPY target) and deleted by the load; a value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only; no name, email, phone or address column (0008zi)",
           "how": "snapshot import of the register's CSV export, run by Martin; no schedule yet; staged by tools/devices-to-staging.mjs and psql \\copy, emptied by cma.load_device_snapshot"
         },
         {

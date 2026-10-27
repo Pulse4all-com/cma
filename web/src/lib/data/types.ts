@@ -2124,8 +2124,6 @@ export interface MaintenanceRow {
   crmContactId: string | null;
   /** The contact's link from the CRM connection's record_url_contact template; null without one */
   contactUrl: string | null;
-  /** The device's link from the register connection's record_url_device template; null without one */
-  deviceUrl: string | null;
 }
 
 export interface MaintenanceRows {

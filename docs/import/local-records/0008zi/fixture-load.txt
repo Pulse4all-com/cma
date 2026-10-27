@@ -7,6 +7,7 @@ rows                         30
 mapped_columns               21
 ignored_columns              31
 date_parse_failures          0
+values_with_at               1
 staging file                 <scratchpad>/gen/staging-1.csv
 == copy (docs/import/copy-devices-staging.psql)
 BEGIN

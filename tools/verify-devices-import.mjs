@@ -8,14 +8,16 @@
  *
  * Covers the fixture with the example map (30 rows, the counts, the staging header, the dates as YYYY-MM-DD, the
  * components and the named ids as JSON, the export's line as source_row); no ignored column ever reaches the staging
- * file (the personal columns' synthetic values are absent from it) and the tool prints no value; every data-quality
+ * file (the personal columns' synthetic values are absent from it), a mapped cell holding an @ is written as a bare @
+ * and counted, and the tool prints no value; every data-quality
  * case of 113 is in the fixture (a missing serial, a duplicate, an unmapped model, status and country, a customer
  * reference that is no id, a device without dates or components, a device in the field without a subscription); the
  * three date formats, each read strictly (a day of 31 in a 30-day month, a two-digit year and the other formats fail)
  * and the failures counted with their line and column, never their value, the cell written empty; the refusals, each
  * without writing a file: a header neither mapped nor ignored, a mapped header the export lacks, a header both mapped
  * and ignored, an unknown staging column or key in the map, a malformed kind or name, no source_id, a row without a
- * record id, a record id twice (its lines named), a cell longer than 500 characters; and the usage errors (no or an
+ * record id, a record id holding an @, a record id twice (its lines named), a cell longer than 500 characters; and the
+ * usage errors (no or an
  * unknown --date-format, a malformed batch key, a map that is no JSON).
  */
 import { spawnSync } from "node:child_process";
@@ -51,7 +53,7 @@ const mapOf = (patch) => write(`map-${results.length}-${Math.random().toString(3
 // ---- the fixture, with the example map ------------------------------------------------------------
 const sample = run(FIXTURE);
 expect("the fixture converts", sample.code, 0, 1);
-expect("counts", sample.counts, { rows: "30", mapped_columns: "21", ignored_columns: "31", date_parse_failures: "0" },
+expect("counts", sample.counts, { rows: "30", mapped_columns: "21", ignored_columns: "31", date_parse_failures: "0", values_with_at: "1" },
   { rows: "30", mapped_columns: "52" });
 const lines = (sample.out ?? "").trimEnd().split("\n");
 expect("the staging header",
@@ -65,8 +67,8 @@ expect("a row: the line, dates as YYYY-MM-DD, components and named ids as JSON",
     + '"{""pads"":{""serial"":""TEST-PAD-0001"",""expires_on"":""2027-01-10""},""battery"":{""serial"":""TEST-BAT-0001"",""expires_on"":""2027-02-20""}}",'
     + '"{""ns_internal_id"":""50001"",""ns_fam_id"":""FAM-0001"",""ns_sales_order_id"":""SO-0001""}"',
   "verify-devices,2,recTESTFIX000001,TEST-SN-0001,HS1,Active/Customer,United Kingdom,,,,,10/03/2025");
-expect("no ignored column reaches the staging file; the tool prints no value",
-  [/example\.invalid@|Person \d\d|Test Editor|checked, synthetic|Test entity|PO-TEST/.test((sample.out ?? "").replace(/test25@example\.invalid/g, "")),
+expect("no ignored column, no address reaches the staging file; no value printed",
+  [/example\.invalid|Person \d\d|Test Editor|checked, synthetic|Test entity|PO-TEST|\w@|@\w/.test(sample.out ?? ""),
    /TEST-SN|recTESTFIX|example\.invalid|Person \d\d/.test(sample.printed)],
   [false, false], [true, true]);
 // every data-quality case 113 checks is in the fixture, as the staging file carries it
@@ -78,7 +80,7 @@ expect("the fixture covers every data-quality case",
    rows.filter((r) => r[col("model")] === "model_aed").length,
    rows.filter((r) => r[col("status")] === "Returned").length,
    rows.filter((r) => ["Spain", "Italy"].includes(r[col("country")])).length,
-   rows.filter((r) => r[col("customer_ref")].includes("@")).length,
+   rows.filter((r) => r[col("customer_ref")] === "@").length,
    rows.filter((r) => r[col("status")] === "In Storage" && r[col("first_shipped_on")] === "" && r[col("last_shipped_on")] === ""
                       && !lines[rows.indexOf(r) + 1].includes("pads")).length,
    rows.filter((r) => r[col("status")] === "Active/Customer" && r[col("subscription_ref")] === "").length],
@@ -116,10 +118,11 @@ expect("refused: an unknown header, a missing one, mapped and ignored, an unknow
 const dupe = run(write("dupe.csv", `${header}\n${body.split("\n")[0]}\n${body.split("\n")[1]}\n${body.split("\n")[0]}\n`));
 const noId = run(write("noid.csv", `${header}\n${body.split("\n")[0].replace("recTESTFIX000001", "")}\n`));
 const long = run(write("long.csv", `${header}\n${body.split("\n")[0].replace("TEST-SN-0001", "X".repeat(501))}\n`));
-expect("refused: a record id twice (its lines named), no record id, a cell over 500 characters",
+const atId = run(write("atid.csv", `${header}\n${body.split("\n")[0].replace("recTESTFIX000001", "person@example.invalid")}\n`));
+expect("refused: a record id twice (its lines named), no record id, an id with an @, a cell over 500 characters",
   [dupe.code, /lines 2, 4: one record id appears 2 times/.test(dupe.printed), dupe.out, noId.code, /line 2: no record id/.test(noId.printed), noId.out,
-   long.code, long.out],
-  [1, true, null, 1, true, null, 1, null], [0, false, "x", 0, false, "x", 0, "x"]);
+   atId.code, /line 2: the record id holds an @/.test(atId.printed), /example\.invalid/.test(atId.printed), atId.out, long.code, long.out],
+  [1, true, null, 1, true, null, 1, true, false, null, 1, null], [0, false, "x", 0, false, "x", 0, false, true, "x", 0, "x"]);
 const noFormat = run(FIXTURE, []);
 const otherFormat = run(FIXTURE, ["--date-format", "auto"]);
 const badBatch = spawnSync(process.execPath, [TOOL, FIXTURE, "--map", MAP, "--date-format", "dmy", "--batch", "Bad Key", "--out", join(dir, "x.csv")], { encoding: "utf8" });

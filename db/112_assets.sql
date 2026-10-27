@@ -14,7 +14,8 @@
 -- the mirror the CMA forecasts which components and devices come due, per month, market and model, and bundles a
 -- device's due items into planned exchanges. Nothing is written to the register, the CRM or the commerce system. A
 -- device holds ids, statuses, dates and codes only: never a customer's name, email, phone or address (the import
--- never stages them, and raw is held to a key allow-list).
+-- never stages them, a staged value holding an @ is kept as a bare @, the audit log keeps a staged row's keys only,
+-- and raw is held to a key allow-list).
 --
 -- What it adds
 --   connection kind    integration_connection.kind gains assets: the connection holds devices.
@@ -37,7 +38,8 @@
 --                      stored one is an observed replacement: the old row gets replaced_at, a new row is inserted. The
 --                      replacement history starts at the first load
 --   import             cma.device_import_staging (the COPY target, a view writing cma.device_import_row: a batch key
---                      and the mapped columns as text, staged by a person holding tenant.configure) and
+--                      and the mapped columns as text, a value holding an @ as a bare @, staged by a person holding
+--                      tenant.configure; cma.audit_row() keeps a staged row's keys only, as 0008zf left it plus that) and
 --                      cma.load_device_snapshot(batch, connection, is_full) (tenant.configure): devices upserted, model,
 --                      status and market mapped through the aliases, components rotated on a serial change, devices
 --                      missing from a full snapshot marked, one sync_run (job assets_import), the staged rows deleted;
@@ -384,6 +386,58 @@ revoke delete on cma.device, cma.device_component from cma_app;
 -- ---------------------------------------------------------------------------------------------
 -- 4. The import's staging (the COPY target)
 -- ---------------------------------------------------------------------------------------------
+-- The audit image of a staged row is its keys only: as 0008zf (106) left cma.audit_row(), plus a branch that keeps
+-- id, tenant_id, batch_key and source_row of cma.device_import_row and nothing of its staged values, so the append-only
+-- audit log never holds what an export carried (the staged rows themselves are deleted by the load)
+create or replace function cma.audit_row()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_old jsonb := case when tg_op in ('UPDATE', 'DELETE') then to_jsonb(old) end;
+  v_new jsonb := case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) end;
+begin
+  if tg_op = 'DELETE' and tg_table_schema = 'cma'
+     and tg_table_name in ('telephony_call', 'telephony_call_tag', 'call_link')
+     and coalesce(current_setting('cma.audit_keys_only', true), '') = 'uncounted_line' then
+    v_old := jsonb_strip_nulls(jsonb_build_object(
+      'id', v_old -> 'id', 'tenant_id', v_old -> 'tenant_id', 'connection_id', v_old -> 'connection_id',
+      'source_id', v_old -> 'source_id', 'call_source_id', v_old -> 'call_source_id', 'tag_ref', v_old -> 'tag_ref',
+      'telephony_call_id', v_old -> 'telephony_call_id', 'crm_call_id', v_old -> 'crm_call_id',
+      'reason', 'uncounted_line'));
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'invitation' then
+    v_old := v_old - 'token_hash';
+    v_new := v_new - 'token_hash';
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'ingest_event' then
+    v_old := v_old - 'raw';
+    v_new := v_new - 'raw';
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'review' then
+    v_old := cma.review_image_without_at_reference(v_old);
+    v_new := cma.review_image_without_at_reference(v_new);
+  end if;
+  if tg_table_schema = 'cma' and tg_table_name = 'device_import_row' then
+    v_old := case when v_old is not null then jsonb_build_object('id', v_old -> 'id', 'tenant_id', v_old -> 'tenant_id',
+                                                                 'batch_key', v_old -> 'batch_key', 'source_row', v_old -> 'source_row') end;
+    v_new := case when v_new is not null then jsonb_build_object('id', v_new -> 'id', 'tenant_id', v_new -> 'tenant_id',
+                                                                 'batch_key', v_new -> 'batch_key', 'source_row', v_new -> 'source_row') end;
+  end if;
+  insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
+  values (
+    (coalesce(v_new, v_old) ->> 'tenant_id')::uuid,
+    tg_table_name,
+    lower(tg_op),
+    v_old,
+    v_new,
+    cma.current_user_id(),
+    cma.current_actor_label()
+  );
+  return null;   -- after trigger, return value is ignored
+end
+$$;
+
 -- One row per register record of a staging file (tools/devices-to-staging.mjs), every column text as mapped: the batch
 -- key, the export's line, the record id, serial, model, status and country labels, references, dates as YYYY-MM-DD,
 -- the components as a JSON object of kinds ({"pads": {"serial": .., "expires_on": ..}}) and the named ids as a JSON
@@ -431,6 +485,49 @@ create or replace view cma.device_import_staging as
   where r.tenant_id = cma.current_tenant_id();
 comment on view cma.device_import_staging is 'The device import''s COPY target (tools/devices-to-staging.mjs, docs/import/copy-devices-staging.psql): a row written here lands in cma.device_import_row for the current tenant, by a person holding tenant.configure (0008zi)';
 
+-- A staged value that holds an @ (an email address where an id belongs) is kept as a bare @, so no address is ever
+-- stored, not even in a staged row; the load reads the bare @ as it would the address: no id, an unmapped label, a date
+-- that does not read. The import tool does the same before the file is written (tools/devices-to-staging.mjs)
+create or replace function cma.device_staged_without_at(p_value text)
+returns text
+language sql immutable
+as $$
+  select case when strpos(p_value, '@') > 0 then '@' else p_value end
+$$;
+revoke execute on function cma.device_staged_without_at(text) from public;
+
+-- The same for a staged JSON object (components, external_refs): each value of one or two levels that holds an @
+-- becomes the text @; a key that holds one, or text that is no JSON object, makes the whole value a bare @ (the load
+-- then refuses it as no JSON object, as it would have)
+create or replace function cma.device_staged_object_without_at(p_value text)
+returns text
+language plpgsql immutable
+as $$
+declare
+  v jsonb;
+begin
+  if strpos(coalesce(p_value, ''), '@') = 0 then
+    return p_value;
+  end if;
+  v := btrim(p_value)::jsonb;
+  if exists (select 1 from jsonb_each(v) e
+             where strpos(e.key, '@') > 0
+                or (jsonb_typeof(e.value) = 'object' and exists (select 1 from jsonb_object_keys(e.value) k where strpos(k, '@') > 0))) then
+    return '@';
+  end if;
+  return (select jsonb_object_agg(e.key,
+                   case when jsonb_typeof(e.value) = 'object'
+                        then (select coalesce(jsonb_object_agg(f.key, case when strpos(f.value::text, '@') > 0 then to_jsonb('@'::text) else f.value end), '{}'::jsonb)
+                              from jsonb_each(e.value) f)
+                        when strpos(e.value::text, '@') > 0 then to_jsonb('@'::text)
+                        else e.value end)
+          from jsonb_each(v) e)::text;
+exception when invalid_text_representation or invalid_parameter_value then
+  return '@';
+end
+$$;
+revoke execute on function cma.device_staged_object_without_at(text) from public;
+
 -- Only a person holding tenant.configure stages rows (the database checks it on every row, as the legacy import's
 -- staging). A trigger function: it runs whoever writes the row, so nobody gets execute on it
 create or replace function cma.device_import_staging_insert()
@@ -442,9 +539,14 @@ begin
   insert into cma.device_import_row (tenant_id, batch_key, source_row, source_id, serial, model, status, country, warehouse_ref,
                                      customer_ref, subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on,
                                      warranty_until, end_of_life_on, components, external_refs)
-  values (cma.current_tenant_id(), new.batch_key, new.source_row, new.source_id, new.serial, new.model, new.status, new.country,
-          new.warehouse_ref, new.customer_ref, new.subscription_ref, new.order_ref, new.first_shipped_on, new.stock_received_on,
-          new.last_shipped_on, new.warranty_until, new.end_of_life_on, new.components, new.external_refs);
+  values (cma.current_tenant_id(), new.batch_key, new.source_row, cma.device_staged_without_at(new.source_id),
+          cma.device_staged_without_at(new.serial), cma.device_staged_without_at(new.model), cma.device_staged_without_at(new.status),
+          cma.device_staged_without_at(new.country), cma.device_staged_without_at(new.warehouse_ref),
+          cma.device_staged_without_at(new.customer_ref), cma.device_staged_without_at(new.subscription_ref),
+          cma.device_staged_without_at(new.order_ref), cma.device_staged_without_at(new.first_shipped_on),
+          cma.device_staged_without_at(new.stock_received_on), cma.device_staged_without_at(new.last_shipped_on),
+          cma.device_staged_without_at(new.warranty_until), cma.device_staged_without_at(new.end_of_life_on),
+          cma.device_staged_object_without_at(new.components), cma.device_staged_object_without_at(new.external_refs));
   return new;
 end
 $$;
@@ -1739,6 +1841,8 @@ begin
     'cma.device_staged_ref(text)',
     'cma.device_staged_date(text,integer,text)',
     'cma.device_staged_object(text,integer,text)',
+    'cma.device_staged_without_at(text)',
+    'cma.device_staged_object_without_at(text)',
     'cma.load_device_snapshot(text,uuid,boolean)',
     'cma.maintenance_items_of(uuid,date)',
     'cma.tenant_today_of(uuid)',
