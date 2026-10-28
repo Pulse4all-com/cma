@@ -67,6 +67,8 @@ const recordAsks = () => fake.state.requests.filter((r) => /^\/v0\/app[A-Za-z0-9
 process.env.INGEST_SECRETS_DIR = secretsDir;
 process.env.INGEST_AIRTABLE_API_BASE = fake.url;
 process.env.INGEST_PACE_FACTOR = "0.01";
+// a statement timeout of 3 s: the adaptive chunks halve after a call slower than a third of it (section I)
+process.env.CMA_DB_STATEMENT_TIMEOUT_MS = "3000";
 const logs = [];
 const { setLogSink } = await import("../src/core/log.mjs");
 setLogSink((line) => logs.push(line));
@@ -365,6 +367,57 @@ const logText = logs.join("\n");
 const VALUES = [...PERSONAL, TOKEN, "FX-TEST-", "cu-fixture-", "PX-0", "BX-0", "FAM-0", "15/11/2034"];
 expect("H4 the logs hold no token and no value: connection ids, counts, codes and field names", VALUES.filter((v) => logText.includes(v)), [], ["x"]);
 expect("H5 nothing written to another tenant by this run's logins", await writesOutside(q, { tenants: [T1.t, T2.t], since, logins: [ADMIN, process.env.CMA_DB_USER] }), [], ["x"]);
+
+// ---- I. Adaptive chunks: a fake slow load and a fake 57014 at the store's boundary --------------------------------------
+// Tenant one's register grows to 600 records; the reconcile runs through a copy of the adapters whose store delays a call
+// or cancels it as the statement timeout does (nothing written), so the adapter's rule is seen end to end
+const { ADAPTERS } = await import("../src/adapters/index.mjs");
+const seed = one.records[0];
+for (let n = 1; n <= 400; n += 1) {
+  const k = String(n).padStart(4, "0");
+  one.records.push({ id: `recFixtAdapt${k}a`, modifiedAt: new Date().toISOString(),
+    fields: { ...seed.fields, aed_sn: `FX-ADAPT-${k}`, pads_sn: `PX-ADAPT-${k}`, battery_sn: `BX-ADAPT-${k}` } });
+}
+await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, SETTINGS(one, { assets_load_chunk: 400 })]));
+function adaptiveRun({ slow = [], cancel = [], slowMs = 1500 }) {
+  const sent = [];
+  let slices = 0;
+  const reconcile = (args) => ADAPTERS.airtable.reconcile({ ...args, store: {
+    ...args.store,
+    async loadDeviceChunk(rows) {
+      const n = sent.push(rows.length);
+      if (cancel.includes(n)) throw Object.assign(new Error("canceling statement due to statement timeout"), { code: "57014" });
+      if (slow.includes(n)) await new Promise((r) => setTimeout(r, slowMs));
+      return args.store.loadDeviceChunk(rows);
+    },
+    async markDevicesMissing(...a) {
+      slices += 1;
+      return args.store.markDevicesMissing(...a);
+    },
+  } });
+  return { adapters: { ...ADAPTERS, airtable: { ...ADAPTERS.airtable, reconcile } }, sent, slices: () => slices };
+}
+const missingNow = async () => (await q("select count(*)::int as n from cma.device where connection_id = $1 and source_deleted_at is not null", [reg1.id]))[0].n;
+let run = adaptiveRun({ slow: [1] });
+total = await runReconcile({ connectionId: reg1.id, object: "device", adapters: run.adapters });
+let last = (await runsOf(reg1.id, "reconcile")).at(-1);
+expect("I1 a chunk slower than a third of the statement timeout halves the next (400, then 200): the run succeeds, chunk_halvings 1, chunk_size_min 200",
+  [total.failed, run.sent, last.status, last.counts.chunk_halvings, last.counts.chunk_size_min, last.counts.chunk_max_ms >= 1500, last.counts.inserted, run.slices() > 0],
+  [0, [400, 200], "succeeded", 1, 200, true, 400, true], [1, [400, 400], "failed", 0, 400, false, 0, false]);
+run = adaptiveRun({ cancel: [1] });
+const missingAtI2 = await missingNow();
+total = await runReconcile({ connectionId: reg1.id, object: "device", adapters: run.adapters });
+last = (await runsOf(reg1.id, "reconcile")).at(-1);
+expect("I2 a chunk the statement timeout cancels (57014) is sent again once at half its size (400 cancelled, then 200, 200, 200): the run succeeds, the log names it",
+  [total.failed, run.sent, last.status, last.counts.chunk_halvings, last.counts.chunk_size_min, last.counts.unchanged, last.counts.missing_now,
+    Boolean(lastLog("airtable chunk cancelled by the statement timeout: sent again at half its size"))],
+  [0, [400, 200, 200, 200], "succeeded", 1, 200, 600, 0, true], [1, [400], "failed", 0, 400, 0, 1, false]);
+run = adaptiveRun({ cancel: [1, 2] });
+total = await runReconcile({ connectionId: reg1.id, object: "device", adapters: run.adapters });
+last = (await runsOf(reg1.id, "reconcile")).at(-1);
+expect("I3 cancelled again while its rows are sent again: the run fails (db_57014) before its final step, no slice sent, nothing marked missing",
+  [total.failed, run.sent, last.status, last.error, run.slices(), await missingNow() - missingAtI2],
+  [1, [400, 200], "failed", "db_57014", 0, 0], [0, [400, 200, 200, 200], "succeeded", null, 3, 1]);
 
 // This run's connections stop being served (a later run's unfiltered jobs leave them alone)
 for (const [tenant, c] of [[T1, reg1.id], [T1, files.id], [T2, reg2.id]]) await asAdmin(tenant, () => q("select cma.set_connection_status($1, 'inactive')", [c]));

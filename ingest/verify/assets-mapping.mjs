@@ -20,7 +20,10 @@
  * snapshot (in chunks of the setting's size, in line order, then the final step in slices of the same size over the run's
  * record ids sorted by their bytes, each with its range; the counts and phase times summed; a chunk that fails: no slice,
  * the counts so far; an empty one refused; an expired paging fails it before it loads anything, and the next run reads
- * from the first page); the types recorded on the first read; the dry run (the table's fields with ids, names and types,
+ * from the first page); the adaptive chunks (a chunk slower than a third of the statement timeout halves the next, at
+ * least 100 rows; a chunk the timeout cancels sent again once at half its size, a second cancellation among its rows
+ * failing the run before the final step; chunk_size_min and chunk_halvings in the counts) and db/117's budgets held to the
+ * ingest's statement timeout; the types recorded on the first read; the dry run (the table's fields with ids, names and types,
  * counts, nothing loaded, no cursor, no type; without a mapping the fields only); a renamed field changes nothing; a
  * deleted field (unknown_field), a changed type (field_type_changed) and a mapping by name (field_not_an_id) fail the read
  * before a record is read, naming the field; the mapping step generated from the dry run's list
@@ -44,6 +47,8 @@ const fake = await startFakeAirtable({ token: TOKEN, bases: basesOf(source) });
 process.env.INGEST_SECRETS_DIR = secretsDir;
 process.env.INGEST_AIRTABLE_API_BASE = fake.url;
 process.env.INGEST_PACE_FACTOR = "0.05";
+// a third of it, 400 ms, is the slow call that halves the next chunk (section E7g)
+process.env.CMA_DB_STATEMENT_TIMEOUT_MS = "1200";
 const logs = [];
 const { setLogSink } = await import("../src/core/log.mjs");
 setLogSink((line) => logs.push(line));
@@ -54,6 +59,7 @@ const { clientFor, checkFields, modifiedAfter } = await import("../src/adapters/
 const { mappingOf, fieldNames, cellText, rowOf, parseDate, DEVICE_COLUMNS } = await import("../src/adapters/airtable/map.mjs");
 const airtableModule = await import("../src/adapters/airtable/index.mjs");
 const { airtable, skipReason, slicesOf, MODIFIED_STREAM, CADENCE_STREAM, PHASE_COUNTS } = airtableModule;
+const { DEFAULT_STATEMENT_TIMEOUT_MS, statementTimeoutMs } = await import("../src/core/db.mjs");
 const { ADAPTERS } = await import("../src/adapters/index.mjs");
 const { parseDate: toolParseDate } = await import("../../tools/devices-to-staging.mjs");
 const { mappingBlock, studioBlock, fieldsOf } = await import("../../docs/ingest/airtable-fields.mjs");
@@ -81,19 +87,24 @@ const CONN = { connectionId: "00000000-0000-4000-8000-00000000a001", adapter: "a
 const ZERO = { rows: 0, inserted: 0, updated: 0, unchanged: 0, missing_now: 0, components_replaced: 0, unmapped_model: 0, unmapped_status: 0, unmapped_market: 0,
   customer_ref_invalid: 0, refs_dropped: 0 };
 // The store as cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing and cma.ingest_record_field_types answer:
-// each chunk's counts (every row inserted) and phase times, each slice's (3 missing); failChunk: the chunk (from 1) that fails
+// each chunk's counts (every row inserted) and phase times, each slice's (3 missing); failChunk: the chunk (from 1) that fails;
+// cancelCalls: the calls (from 1, every call counted) the statement timeout cancels (57014, nothing written); sent: each
+// call's rows
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-function memStore(config, { failChunk = 0, chunkMs = [], sliceMs = [], closed = 0 } = {}) {
+function memStore(config, { failChunk = 0, chunkMs = [], sliceMs = [], closed = 0, cancelCalls = [] } = {}) {
   const cursors = new Map();
   const loads = [];
   const marks = [];
   const types = [];
+  const sent = [];
   return {
-    cursors, loads, marks, types,
+    cursors, loads, marks, types, sent,
     async config() { return config; },
     async cursor(s) { return cursors.get(s) ?? null; },
     async setCursor(s, v) { cursors.set(s, v); },
     async loadDeviceChunk(rows) {
+      sent.push(rows.length);
+      if (cancelCalls.includes(sent.length)) throw Object.assign(new Error("canceling statement due to statement timeout"), { code: "57014" });
       if (loads.length + 1 === failChunk) throw Object.assign(new Error("chunk refused"), { code: "CMA04" });
       await sleep(chunkMs[loads.length] ?? 0);
       loads.push({ rows: rows.map((r) => ({ ...r })) });
@@ -318,6 +329,46 @@ counts = counts0();
 const failed = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));
 expect("E7d a chunk that fails ends the run before the final step: no slice, nothing marked missing, the counts of the chunk loaded, the cursor not moved",
   [failed, store.marks.length, counts.rows, counts.missing_now, store.cursors.has(MODIFIED_STREAM)], ["other:chunk refused", 0, 100, 0, false], ["ok", 1, 201, 3, true]);
+// the adaptive chunks: the fixture's 201 records in chunks of 200, a third of the statement timeout (1,200 ms) 400 ms
+const slowMsNow = statementTimeoutMs() / 3;
+store = memStore(configOf({ assets_load_chunk: 200 }, typed(FIELDS)), { chunkMs: [500] });
+counts = counts0();
+await airtable.reconcile({ connection: CONN, store, budget, object: "device", counts });
+const slowLog = logOf("airtable chunk slow: the next one halved");
+const store2 = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { chunkMs: [500, 500] });
+const floorCounts = counts0();
+await airtable.reconcile({ connection: CONN, store: store2, budget, object: "device", counts: floorCounts });
+expect("E7g a chunk slower than a third of the statement timeout halves the next (200, then 100 for the last row), at least 100 rows (a slow chunk of 100 stays 100); chunk_size_min and chunk_halvings in the counts",
+  [slowMsNow, store.sent, counts.chunk_size_min, counts.chunk_halvings, counts.rows, store.marks.length, slowLog?.size,
+    store2.sent, floorCounts.chunk_size_min, floorCounts.chunk_halvings],
+  [400, [200, 1], 100, 1, 201, 2, 100, [100, 100, 1], 100, 0],
+  [5000, [200, 1], 200, 0, 0, 0, null, [100, 50, 50, 1], 50, 1]);
+store = memStore(configOf({ assets_load_chunk: 200 }, typed(FIELDS)), { cancelCalls: [1] });
+counts = counts0();
+const cancelledOnce = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));
+const cancelLog = logOf("airtable chunk cancelled by the statement timeout: sent again at half its size");
+expect("E7h a chunk the statement timeout cancels (57014) is sent again once at half its size: 200 cancelled, then 100, 100 and 1; the run completes and logs db_57014",
+  [cancelledOnce, store.sent, counts.rows, counts.chunk_size_min, counts.chunk_halvings, store.marks.length, cancelLog?.code, cancelLog?.rows],
+  ["ok", [200, 100, 100, 1], 201, 100, 1, 2, "db_57014", 200],
+  ["other:canceling statement due to statement timeout", [200], 0, 200, 0, 0, null, null]);
+for (const cancelCalls of [[1, 2], [1, 3]]) {
+  store = memStore(configOf({ assets_load_chunk: 200 }, typed(FIELDS)), { cancelCalls });
+  counts = counts0();
+  const twice = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));
+  expect(`E7i cancelled again among the rows sent again (calls ${cancelCalls.join(" and ")}): the run fails before its final step, no slice, nothing marked missing, the cursor not moved`,
+    [twice, store.sent, store.marks.length, counts.missing_now ?? 0, store.cursors.has(MODIFIED_STREAM)],
+    ["other:canceling statement due to statement timeout", cancelCalls[1] === 2 ? [200, 100] : [200, 100, 100], 0, 0, false],
+    ["ok", [200, 100, 100, 1], 2, 6, true]);
+}
+// db/117's speed budgets: half and a third of the ingest's own statement timeout, never a literal of their own
+const v117 = readFileSync(path.join(here, "../../db/117_verify_asset_sync_load.sql"), "utf8");
+const setting117 = (name) => v117.match(new RegExp(`set_config\\('verify\\.${name}', ([^\\n]*?), false\\);`))?.[1] ?? null;
+expect("E7j db/117's verify.ingest_statement_timeout_ms is the ingest's default statement timeout, and its call budget (max_ms) and slow call (slow_ms) are half and a third of it",
+  [Number(setting117("ingest_statement_timeout_ms")?.replaceAll("'", "")) === DEFAULT_STATEMENT_TIMEOUT_MS, DEFAULT_STATEMENT_TIMEOUT_MS,
+    setting117("max_ms"), setting117("slow_ms")],
+  [true, 15000,
+    "(current_setting('verify.ingest_statement_timeout_ms')::integer / 2)::text", "(current_setting('verify.ingest_statement_timeout_ms')::integer / 3)::text"],
+  [false, 3000, "'3000'", "'5000'"]);
 const odds = ["recB", "rec～", "rec\u{1F600}", "recA", "recä", "recz"];
 expect("E7e the slices sort by UTF-8 bytes, the database's collation C (not JavaScript's UTF-16 order), and cut at the size",
   [slicesOf(odds, 4).map((s) => [s.ids, s.from, s.before]), [...odds].sort()[4]],

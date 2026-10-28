@@ -116,9 +116,10 @@
 --                     asset register (CMA04): it is read whole, since a view's filter would make every device outside
 --                     it look missing at night; an asset register's stored view_id is removed
 --   runs              cma.ingest_sync_run_finish() takes the phase times (stage_ms, map_ms, upsert_ms, components_ms,
---                     missing_ms, cleanup_ms), components_closed and the slowest call of a run (chunk_max_ms, the slowest
+--                     missing_ms, cleanup_ms), components_closed, the slowest call of a run (chunk_max_ms, the slowest
 --                     chunk; slice_max_ms, the slowest slice of the final step; milliseconds as the ingest measures
---                     each call) among the counts
+--                     each call) and its adaptive chunks (chunk_size_min, the smallest chunk size in force;
+--                     chunk_halvings, how often the ingest halved it) among the counts
 --   the forecast      cma.maintenance_items_of, cma.maintenance_bucketed_of, cma.maintenance_page_of and
 --                     cma.maintenance_rows_of made again with 0008zi's results (113 passes unchanged), over the new
 --                     cma.maintenance_bucket_dates_of and the aggregate cma.maintenance_exchange_start
@@ -863,7 +864,8 @@ begin
                 where e.key not in ('fetched', 'upserted', 'stale', 'skipped', 'failed', 'dropped', 'ref_dropped',
                                     'rows', 'inserted', 'updated', 'unchanged', 'missing_now', 'components_replaced', 'components_closed',
                                     'unmapped_model', 'unmapped_status', 'unmapped_market', 'customer_ref_invalid', 'refs_dropped',
-                                    'stage_ms', 'map_ms', 'upsert_ms', 'components_ms', 'missing_ms', 'cleanup_ms', 'chunk_max_ms', 'slice_max_ms')
+                                    'stage_ms', 'map_ms', 'upsert_ms', 'components_ms', 'missing_ms', 'cleanup_ms', 'chunk_max_ms', 'slice_max_ms',
+                                    'chunk_size_min', 'chunk_halvings')
                    or jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}') !~ '^\d+$')) then
     raise exception 'counts are whole numbers for fetched, upserted, stale, skipped, failed, dropped and ref_dropped, a device load''s counts and its phase times'
       using errcode = 'CMA04';
@@ -1235,7 +1237,7 @@ $$;
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged, and a kind staged empty closes its current component with no new row (components_closed; its item due unknown); cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final step in slices cma.ingest_mark_devices_missing(connection, ids, from, before) over the index device_present_source_c_idx; cma.ingest_record_field_types; the setting assets_load_chunk (100 to 5,000), view_id refused on an asset register; cma.ingest_sync_run_finish takes the phase times, components_closed, chunk_max_ms and slice_max_ms; the forecast made again for 50,000 devices with 0008zi''s results (cma.maintenance_bucket_dates_of, the aggregate cma.maintenance_exchange_start), a kind with a closed component and none current due unknown')
+values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged, and a kind staged empty closes its current component with no new row (components_closed; its item due unknown); cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final step in slices cma.ingest_mark_devices_missing(connection, ids, from, before) over the index device_present_source_c_idx; cma.ingest_record_field_types; the setting assets_load_chunk (100 to 5,000), view_id refused on an asset register; cma.ingest_sync_run_finish takes the phase times, components_closed, chunk_max_ms, slice_max_ms, chunk_size_min and chunk_halvings; the forecast made again for 50,000 devices with 0008zi''s results (cma.maintenance_bucket_dates_of, the aggregate cma.maintenance_exchange_start), a kind with a closed component and none current due unknown')
 on conflict (version) do nothing;
 
 commit;

@@ -11,8 +11,9 @@
 -- SQL Studio shows no notices. Run as your own IAM login after 116_asset_sync_load.sql, in dev; then
 -- 115_verify_asset_sync.sql and 113_verify_assets.sql again. Adapters, models, statuses, devices,
 -- serials, customers, people and secret names are invented data values, and no row carries a name of a customer, an
--- address, an email or a phone number. Edited in place after its dev run of 27 October 2026 (records/0008zk-dev-2026-10-27),
--- which ran its work in one transaction: it has run in dev only, and CLAUDE.md forbids editing a script that has run in prod.
+-- address, an email or a phone number. Edited in place after its dev runs of 27 October 2026 (records/0008zk-dev-2026-10-27),
+-- which ran its work in one transaction, and 28 October 2026 (records/0008zk-dev-2026-10-28): it has run in dev only, and
+-- CLAUDE.md forbids editing a script that has run in prod.
 --
 -- The script mirrors production. Every step is its own transaction (begin; select …; commit;), as each of the ingest's
 -- calls is: a chunk of 1,000 rows, a slice of the final step, the one-call load, the report. Its throwaway tenants
@@ -46,11 +47,14 @@
 --      settings (view_id refused on an asset register); the mapped fields' types; a kind the register emptied closes
 --      the device's component (no new row, its item due unknown), a kind not staged or with a dropped serial and no
 --      expiry is left as it is, a rerun changes nothing; held again, another serial is inserted and the same one reopened
---   C  speed at the register's horizon, 50,000 devices (verify.max_ms 3000 ms, a fifth of the ingest's 15-second
---      statement timeout): a first load of 50,000 new records into an empty connection in 50 chunks of 1,000, with no
---      statistics read in between (C4, each chunk, its phases at the first and the last); then, the statistics read, one
---      chunk of 1,000 unchanged rows (C1); the final step over the run's 49,500 record ids in 50 slices (C2, each slice);
---      the Maintenance page of 24 months and the device list of all buckets, best of three each (C5)
+--   C  speed at the register's horizon, 50,000 devices, against the ingest's statement timeout (verify.max_ms, half of
+--      it, for every ingest call; measured on dev's shared core, where a call of half the timeout leaves the other half
+--      for a slower moment): a first load of 50,000 new records into an empty connection with no statistics read in
+--      between, in chunks from 1,000 under the adapter's rule (the next chunk half the size after a call slower than a
+--      third of the timeout, at least 100; C4, each call, its sizes, halvings and phases); then, the statistics read,
+--      one chunk of 1,000 unchanged rows (C1); the final step over the run's 49,500 record ids in 50 slices (C2, each
+--      slice); the Maintenance page of 24 months and the device list of all buckets, best of three each, under
+--      verify.max_report_ms (C5)
 --   Z  every step its own transaction; the throwaway tenants removed with their audit rows
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED instead.
 -- =============================================================================================
@@ -64,7 +68,13 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);           -- 'true' to make every check fail
-select set_config('verify.max_ms', '3000', false);             -- a chunk of 1,000 rows; a slice of the final step; the report at 50,000 devices
+-- The budgets follow the ingest's real limit, not this server's hardware (Decision log, 28 October 2026): its statement
+-- timeout, CMA_DB_STATEMENT_TIMEOUT_MS (the default in ingest/src/core/db.mjs; check E7j of ingest/verify/assets-mapping.mjs
+-- fails when this value differs from it), measured on dev's shared core; prod is measured by PROD_RUNBOOK 14.7's chunk_max_ms
+select set_config('verify.ingest_statement_timeout_ms', '15000', false);
+select set_config('verify.max_ms', (current_setting('verify.ingest_statement_timeout_ms')::integer / 2)::text, false);  -- an ingest call: a chunk, a slice
+select set_config('verify.slow_ms', (current_setting('verify.ingest_statement_timeout_ms')::integer / 3)::text, false); -- the adapter halves the next chunk after a slower call
+select set_config('verify.max_report_ms', '5000', false);      -- C5: the Maintenance page and the device list at 50,000 devices, on dev
 select set_config('verify.max_one_call_ms', '10000', false);   -- 115's C1: 5,000 records staged and loaded in one call
 -- dev or a local database only: the dev seed's agent.two@example.com active, as the ingest's flow verifiers require
 select set_config('verify.dev', (select exists (select 1 from cma.app_user u where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false);
@@ -74,6 +84,9 @@ create temp table verify_0008zk (ord int, check_name text, result text, detail t
 -- Every step's record: its name and number, its transaction, its milliseconds, its answer or its error
 drop table if exists pg_temp.v0008zk_step;
 create temp table v0008zk_step (ord bigint generated always as identity, step text, n int, xact xid8, ms numeric, answer jsonb, error text);
+-- C4's load under the adapter's rule: the next record, the chunk size in force, the halvings, the calls made
+drop table if exists pg_temp.v0008zk_c4_state;
+create temp table v0008zk_c4_state (next_from int, size int, min_size int, halvings int, calls int);
 
 -- The error code a statement raises, or 'ok'
 create or replace function pg_temp.v0008zk_code(p_sql text)
@@ -170,10 +183,15 @@ begin
 end
 $$;
 
--- Removes a throwaway tenant of this script with every row it holds (removeTenants of ingest/verify/lib.mjs): each
--- table of cma with a tenant_id but the audit log, in an order where no remaining table still points to the next (the
--- foreign keys from the catalog), then the audit rows (the deletes' own among them), then the tenant. Answers absent,
--- removed, or the error (and then removes nothing). Refused outside dev and local databases
+-- Removes a throwaway tenant of this script with every row it holds (removeTenants of ingest/verify/lib.mjs). First the
+-- tenant's row and its people's are locked (for update): every table with a tenant_id has a foreign key to cma.tenant,
+-- so no other session can add a row for the tenant until this one ends. Dev's scheduler starts runs for every tenant
+-- (refresh_follow_up, close_forgotten_workdays, a sync_run started by the tenant's Scheduler user); one committed while
+-- the cleanup was deleting the devices made app_user's delete fail (dev, 28 October 2026). Then each table of cma with
+-- a tenant_id but the audit log, in an order where no remaining table still points to the next (the foreign keys from
+-- the catalog: every foreign key into a tenant's rows comes from a table of cma with a tenant_id), then the audit rows
+-- (the deletes' own among them), then the tenant. Answers absent, removed, or the error (and then removes nothing).
+-- Refused outside dev and local databases
 create or replace function pg_temp.v0008zk_cleanup(p_slug text)
 returns text
 language plpgsql
@@ -195,6 +213,8 @@ begin
   if v_t is null then
     return 'absent';
   end if;
+  perform 1 from cma.tenant t where t.id = v_t for update;
+  perform 1 from cma.app_user u where u.tenant_id = v_t for update;
   select array_agg(c.relname::text order by c.relname) into v_left
   from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
   where c.relnamespace = 'cma'::regnamespace and c.relkind in ('r', 'p') and not c.relispartition and c.relname <> 'audit_log';
@@ -993,8 +1013,8 @@ exception when others then
 end
 $$;
 
--- B6. the run's counts take the phase times, components_closed, chunk_max_ms and slice_max_ms; another key is still
---     refused (CMA04); the setting assets_load_chunk set
+-- B6. the run's counts take the phase times, components_closed, chunk_max_ms, slice_max_ms, chunk_size_min and
+--     chunk_halvings; another key is still refused (CMA04); the setting assets_load_chunk set
 --     by form on the register (CMA04 out of it), not checked on a CRM connection; view_id refused on an asset register
 --     (CMA04, its settings as they were), still taken by a CRM connection
 create or replace function pg_temp.v0008zk_b6()
@@ -1011,9 +1031,11 @@ begin
   v_run := cma.ingest_sync_run_start(v_parts, 'assets_poll', 'devices', null, null);
   v_txt := pg_temp.v0008zk_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', %L)', v_run,
              '{"fetched": 2, "rows": 2, "inserted": 1, "updated": 1, "unchanged": 0, "missing_now": 0, "components_closed": 1, "stage_ms": 3, "map_ms": 12, '
-             || '"upsert_ms": 4, "components_ms": 5, "missing_ms": 6, "cleanup_ms": 0, "chunk_max_ms": 140, "slice_max_ms": 7}'));
+             || '"upsert_ms": 4, "components_ms": 5, "missing_ms": 6, "cleanup_ms": 0, "chunk_max_ms": 140, "slice_max_ms": 7, '
+             || '"chunk_size_min": 500, "chunk_halvings": 1}'));
   v_txt := v_txt || ' ' || (select concat_ws('/', r.counts ->> 'map_ms', r.counts ->> 'missing_ms', r.counts ->> 'components_closed',
-                                             r.counts ->> 'chunk_max_ms', r.counts ->> 'slice_max_ms') from cma.sync_run r where r.id = v_run)
+                                             r.counts ->> 'chunk_max_ms', r.counts ->> 'slice_max_ms', r.counts ->> 'chunk_size_min',
+                                             r.counts ->> 'chunk_halvings') from cma.sync_run r where r.id = v_run)
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_sync_run_finish(cma.ingest_sync_run_start(%L, ''assets_poll'', ''devices'', null, null), '
                                                  || '''succeeded'', ''{"fetched": 1, "load_ms": 1}'')', v_parts));
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
@@ -1024,8 +1046,8 @@ begin
     || ' ' || pg_temp.v0008zk_error(format('select cma.set_connection_settings(%L, %L)', v_parts, '{"table_id": "tblVerify0001", "view_id": "viwVerify0001"}'))
     || ' ' || pg_temp.v0008zk_code(format('select cma.set_connection_settings(%L, %L)', v_crm, '{"view_id": "viwVerify0001"}'));
   v_txt := v_txt || ' ' || (select c.settings::text from cma.integration_connection c where c.id = v_parts);
-  perform pg_temp.v0008zk_check(16, 'B6 the run''s counts take the phase times, components_closed and the slowest chunk and slice, another key refused; the setting assets_load_chunk by form; view_id refused on an asset register',
-    v_txt = 'ok 12/6/1/140/7 CMA04 ok CMA04 ok CMA04: an asset register is read whole: view_id is no setting of it (a view''s filter would make the devices '
+  perform pg_temp.v0008zk_check(16, 'B6 the run''s counts take the phase times, components_closed, the slowest chunk and slice and the adaptive chunks, another key refused; the setting assets_load_chunk by form; view_id refused on an asset register',
+    v_txt = 'ok 12/6/1/140/7/500/1 CMA04 ok CMA04 ok CMA04: an asset register is read whole: view_id is no setting of it (a view''s filter would make the devices '
             || 'outside it look missing) ok {"table_id": "tblVerify0001", "assets_load_chunk": 1000}', v_txt);
 exception when others then
   perform pg_temp.v0008zk_check(16, 'B6 the run''s counts and the settings', false, sqlstate || ': ' || sqlerrm);
@@ -1318,18 +1340,45 @@ begin
     ('active_customer', 'Active/Customer', true, false, true, array['active/customer'], 10),
     ('in_storage', 'In Storage', false, true, true, array['in storage'], 20);
   perform cma.set_tenant_setting('assets.bundle_window_days', '60');
+  perform set_config('role', 'cma_owner', true);
+  delete from pg_temp.v0008zk_c4_state;
+  insert into pg_temp.v0008zk_c4_state values (1, 1000, 1000, 0, 0);
   perform pg_temp.v0008zk_log('c-setup', null, null, jsonb_build_object('tenant', v_t), null);
 exception when others then
   perform pg_temp.v0008zk_log('c-setup', null, null, null, sqlstate || ': ' || sqlerrm);
 end
 $$;
 
--- C4's chunk p (from 0): records p * 1,000 + 1 to p * 1,000 + 1,000, new, into the filling connection
-create or replace function pg_temp.v0008zk_c4(p_part integer)
+-- C4's next call under the adapter's rule (ingest/src/adapters/airtable/index.mjs, loadInChunks): the next records, as
+-- many as the chunk size in force (1,000 to start, the setting's default), new, into the filling connection; a call
+-- slower than verify.slow_ms (a third of the timeout) halves the next chunk, at least 100. Each call its own step and
+-- transaction; once the 50,000 are loaded, or a call failed, the rest of C4's steps do nothing
+create or replace function pg_temp.v0008zk_c4_next()
 returns void
-language sql
+language plpgsql
 as $$
-  select pg_temp.v0008zk_load('c4', p_part, 'verify-0008zk-volume', 'base-zk-v', pg_temp.v0008zk_volume(p_part * 1000 + 1, p_part * 1000 + 1000))
+declare
+  st   record;
+  v_to integer;
+  v_ms numeric;
+  v_ok boolean;
+begin
+  select * into st from pg_temp.v0008zk_c4_state;
+  if not found or st.next_from > 50000 then
+    return;
+  end if;
+  v_to := least(st.next_from + st.size - 1, 50000);
+  perform pg_temp.v0008zk_load('c4', st.calls, 'verify-0008zk-volume', 'base-zk-v', pg_temp.v0008zk_volume(st.next_from, v_to));
+  select s.ms, s.error is null into v_ms, v_ok from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = st.calls;
+  update pg_temp.v0008zk_step s set answer = coalesce(s.answer, '{}'::jsonb) || jsonb_build_object('size', st.size, 'rows_sent', v_to - st.next_from + 1)
+  where s.step = 'c4' and s.n = st.calls;
+  update pg_temp.v0008zk_c4_state c
+     set next_from = case when v_ok then v_to + 1 else 50001 end,
+         calls = c.calls + 1,
+         size = case when v_ms > current_setting('verify.slow_ms')::numeric then greatest(100, c.size / 2) else c.size end,
+         halvings = c.halvings + (v_ms > current_setting('verify.slow_ms')::numeric and c.size > 100)::integer,
+         min_size = least(c.min_size, case when v_ms > current_setting('verify.slow_ms')::numeric then greatest(100, c.size / 2) else c.size end);
+end
 $$;
 -- C2's slice k (from 0) of the run's 49,500 record ids
 create or replace function pg_temp.v0008zk_c2(p_k integer)
@@ -1339,33 +1388,41 @@ as $$
   select pg_temp.v0008zk_mark('c2', p_k, 'verify-0008zk-volume', 'base-zk-v', pg_temp.v0008zk_volume_ids(1, 49500))
 $$;
 
--- C4. a first load: 50,000 new records into the empty connection in 50 chunks of 1,000, each its own transaction, without
---     reading the tables' statistics in between: each chunk under verify.max_ms; the detail the first, the last and the
---     slowest chunk, the first five and the last five on average, the phases of the first and the last
+-- C4. a first load: 50,000 new records into the empty connection in chunks under the adapter's rule (from 1,000; the next
+--     half the size after a call slower than a third of the timeout, at least 100), each call its own transaction,
+--     without reading the tables' statistics in between: all 50,000 loaded, each call under verify.max_ms; the detail
+--     the calls, the sizes and halvings, the first, the last and the slowest call, the first five and the last five on
+--     average, the phases of the first and the last
 create or replace function pg_temp.v0008zk_c4_check()
 returns void
 language plpgsql
 as $$
 declare
-  v_max numeric := current_setting('verify.max_ms')::numeric;
-  v_err text := pg_temp.v0008zk_failed(array['c-setup', 'c4']);
-  v_n   bigint := (select count(*) from cma.device d where d.connection_id = pg_temp.v0008zk_conn('verify-0008zk-volume', 'base-zk-v'));
-  v_txt text;
+  v_max  numeric := current_setting('verify.max_ms')::numeric;
+  v_err  text := pg_temp.v0008zk_failed(array['c-setup', 'c4']);
+  v_n    bigint := (select count(*) from cma.device d where d.connection_id = pg_temp.v0008zk_conn('verify-0008zk-volume', 'base-zk-v'));
+  st     record;
+  v_last integer := (select max(s.n) from pg_temp.v0008zk_step s where s.step = 'c4');
+  v_txt  text;
   f jsonb := (select s.answer from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = 0);
-  l jsonb := (select s.answer from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = 49);
+  l jsonb := (select s.answer from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = v_last);
 begin
-  v_txt := format('%s chunks; first %s ms, last %s, slowest %s (budget %s); first five %s on average, last five %s; '
-                  || 'phases first: map %s, upsert %s, components %s; last: map %s, upsert %s, components %s; %s devices',
-                  (select count(*) from pg_temp.v0008zk_step s where s.step = 'c4' and s.error is null),
+  select * into st from pg_temp.v0008zk_c4_state;
+  v_txt := format('%s calls, sizes 1000 to %s, %s halvings (slower than %s ms); first %s ms, last %s, slowest %s (budget %s); '
+                  || 'first five %s on average, last five %s; phases first: map %s, upsert %s, components %s; last: map %s, upsert %s, '
+                  || 'components %s; %s devices',
+                  (select count(*) from pg_temp.v0008zk_step s where s.step = 'c4' and s.error is null), st.min_size, st.halvings,
+                  current_setting('verify.slow_ms'),
                   (select s.ms from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = 0),
-                  (select s.ms from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = 49),
+                  (select s.ms from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = v_last),
                   (select max(s.ms) from pg_temp.v0008zk_step s where s.step = 'c4'), v_max,
                   (select round(avg(s.ms)) from pg_temp.v0008zk_step s where s.step = 'c4' and s.n < 5),
-                  (select round(avg(s.ms)) from pg_temp.v0008zk_step s where s.step = 'c4' and s.n >= 45),
+                  (select round(avg(s.ms)) from pg_temp.v0008zk_step s where s.step = 'c4' and s.n > v_last - 5),
                   f ->> 'map_ms', f ->> 'upsert_ms', f ->> 'components_ms', l ->> 'map_ms', l ->> 'upsert_ms', l ->> 'components_ms', v_n);
-  perform pg_temp.v0008zk_check(54, 'C4 a first load of 50,000 new records into an empty connection in 50 chunks of 1,000, each its own transaction, no statistics read: each chunk under verify.max_ms',
-    v_err is null and v_n = 50000 and (select count(*) from pg_temp.v0008zk_step s where s.step = 'c4' and s.ms < v_max) = 50,
-    coalesce(v_err || '; ', '') || v_txt);
+  perform pg_temp.v0008zk_check(54, 'C4 a first load of 50,000 new records into an empty connection in chunks under the adapter''s rule (from 1,000, halved after a call slower than a third of the timeout, at least 100), each call its own transaction, no statistics read: all loaded, each call under verify.max_ms',
+    v_err is null and v_n = 50000 and st.next_from > 50000
+    and not exists (select 1 from pg_temp.v0008zk_step s where s.step = 'c4' and (s.ms is null or s.ms >= v_max)),
+    coalesce(v_err || '; ', '') || case when st.next_from <= 50000 then format('not finished: %s of 50,000 records in %s calls; ', st.next_from - 1, st.calls) else '' end || v_txt);
 exception when others then
   perform pg_temp.v0008zk_check(54, 'C4 a first load of 50,000 new records', false, sqlstate || ': ' || sqlerrm);
 end
@@ -1448,14 +1505,14 @@ returns void
 language plpgsql
 as $$
 declare
-  v_max numeric := current_setting('verify.max_ms')::numeric;
+  v_max numeric := current_setting('verify.max_report_ms')::numeric;
   v_err text := pg_temp.v0008zk_failed(array['c5-page', 'c5-list']);
   p     record;
   l     record;
 begin
   select s.ms, s.answer into p from pg_temp.v0008zk_step s where s.step = 'c5-page';
   select s.ms, s.answer into l from pg_temp.v0008zk_step s where s.step = 'c5-list';
-  perform pg_temp.v0008zk_check(55, 'C5 the Maintenance page of 24 months and the device list of all buckets over 50,000 devices, as the application, under verify.max_ms',
+  perform pg_temp.v0008zk_check(55, 'C5 the Maintenance page of 24 months and the device list of all buckets over 50,000 devices, as the application, under verify.max_report_ms',
     v_err is null and p.ms < v_max and l.ms < v_max and (p.answer ->> 'devices')::integer = 49500 and (l.answer ->> 'rows')::integer = 500,
     coalesce(v_err, format('page %s ms, list %s ms (budget %s, best of three each); the page: %s devices, %s cells; the list: %s of %s rows',
                            p.ms, l.ms, v_max, p.answer ->> 'devices', p.answer ->> 'cells', l.answer ->> 'rows', l.answer ->> 'total_rows')));
@@ -1463,56 +1520,508 @@ end
 $$;
 
 begin; select pg_temp.v0008zk_c_setup(); commit;
-begin; select pg_temp.v0008zk_c4(0); commit;
-begin; select pg_temp.v0008zk_c4(1); commit;
-begin; select pg_temp.v0008zk_c4(2); commit;
-begin; select pg_temp.v0008zk_c4(3); commit;
-begin; select pg_temp.v0008zk_c4(4); commit;
-begin; select pg_temp.v0008zk_c4(5); commit;
-begin; select pg_temp.v0008zk_c4(6); commit;
-begin; select pg_temp.v0008zk_c4(7); commit;
-begin; select pg_temp.v0008zk_c4(8); commit;
-begin; select pg_temp.v0008zk_c4(9); commit;
-begin; select pg_temp.v0008zk_c4(10); commit;
-begin; select pg_temp.v0008zk_c4(11); commit;
-begin; select pg_temp.v0008zk_c4(12); commit;
-begin; select pg_temp.v0008zk_c4(13); commit;
-begin; select pg_temp.v0008zk_c4(14); commit;
-begin; select pg_temp.v0008zk_c4(15); commit;
-begin; select pg_temp.v0008zk_c4(16); commit;
-begin; select pg_temp.v0008zk_c4(17); commit;
-begin; select pg_temp.v0008zk_c4(18); commit;
-begin; select pg_temp.v0008zk_c4(19); commit;
-begin; select pg_temp.v0008zk_c4(20); commit;
-begin; select pg_temp.v0008zk_c4(21); commit;
-begin; select pg_temp.v0008zk_c4(22); commit;
-begin; select pg_temp.v0008zk_c4(23); commit;
-begin; select pg_temp.v0008zk_c4(24); commit;
-begin; select pg_temp.v0008zk_c4(25); commit;
-begin; select pg_temp.v0008zk_c4(26); commit;
-begin; select pg_temp.v0008zk_c4(27); commit;
-begin; select pg_temp.v0008zk_c4(28); commit;
-begin; select pg_temp.v0008zk_c4(29); commit;
-begin; select pg_temp.v0008zk_c4(30); commit;
-begin; select pg_temp.v0008zk_c4(31); commit;
-begin; select pg_temp.v0008zk_c4(32); commit;
-begin; select pg_temp.v0008zk_c4(33); commit;
-begin; select pg_temp.v0008zk_c4(34); commit;
-begin; select pg_temp.v0008zk_c4(35); commit;
-begin; select pg_temp.v0008zk_c4(36); commit;
-begin; select pg_temp.v0008zk_c4(37); commit;
-begin; select pg_temp.v0008zk_c4(38); commit;
-begin; select pg_temp.v0008zk_c4(39); commit;
-begin; select pg_temp.v0008zk_c4(40); commit;
-begin; select pg_temp.v0008zk_c4(41); commit;
-begin; select pg_temp.v0008zk_c4(42); commit;
-begin; select pg_temp.v0008zk_c4(43); commit;
-begin; select pg_temp.v0008zk_c4(44); commit;
-begin; select pg_temp.v0008zk_c4(45); commit;
-begin; select pg_temp.v0008zk_c4(46); commit;
-begin; select pg_temp.v0008zk_c4(47); commit;
-begin; select pg_temp.v0008zk_c4(48); commit;
-begin; select pg_temp.v0008zk_c4(49); commit;
+-- C4: up to 500 calls under the adapter's rule (enough for 50,000 records in chunks of 100, the floor); the calls after
+-- the last do nothing
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
+begin; select pg_temp.v0008zk_c4_next(); commit;
 begin; select pg_temp.v0008zk_c4_check(); commit;
 begin; select pg_temp.v0008zk_analyze(); commit;
 begin; select pg_temp.v0008zk_c1(); commit;
@@ -1578,14 +2087,31 @@ begin; select pg_temp.v0008zk_clean('end', 'verify-0008zk-volume'); commit;
 -- Z1. every step ran in a transaction of its own (no two steps share a transaction id); the server's version and the
 --     settings the speed depends on in the detail
 -- Z2. the throwaway tenants removed with every row and audit row of theirs, at the start (what an interrupted run left)
---     and at the end
+--     and at the end; every foreign key into a tenant's rows (into cma.tenant or a table with a tenant_id) comes from a
+--     table of cma and pairs tenant_id with the tenant's id, which is what lets the cleanup remove a tenant table by
+--     table (dev, 28 October 2026)
 do $$
 declare
   v_steps bigint := (select count(*) from pg_temp.v0008zk_step);
   v_xacts bigint := (select count(distinct s.xact) from pg_temp.v0008zk_step s);
   v_ids   uuid[] := array(select (s.answer ->> 'tenant')::uuid from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'tenant' is not null);
   v_left  text;
+  v_fks   bigint;
+  v_stray text;
 begin
+  select count(*),
+         string_agg(k.conrelid::regclass || ' ' || k.conname, ', ' order by k.conrelid::regclass::text, k.conname)
+           filter (where k.connamespace <> 'cma'::regnamespace
+                      or not exists (select 1 from unnest(k.conkey, k.confkey) as p(ch, pk)
+                                     join pg_attribute ca on ca.attrelid = k.conrelid and ca.attnum = p.ch
+                                     join pg_attribute fa on fa.attrelid = k.confrelid and fa.attnum = p.pk
+                                     where ca.attname = 'tenant_id'
+                                       and fa.attname = case when pa.relname = 'tenant' then 'id' else 'tenant_id' end))
+    into v_fks, v_stray
+  from pg_constraint k join pg_class pa on pa.oid = k.confrelid
+  where k.contype = 'f' and k.conparentid = 0 and pa.relnamespace = 'cma'::regnamespace
+    and (pa.relname = 'tenant'
+         or exists (select 1 from pg_attribute a where a.attrelid = pa.oid and a.attname = 'tenant_id' and not a.attisdropped));
   perform pg_temp.v0008zk_check(90, 'Z1 every step its own transaction, as each of the ingest''s calls is',
     v_steps > 200 and v_xacts = v_steps,
     format('%s steps, %s transactions; %s; shared_buffers %s, work_mem %s, jit %s', v_steps, v_xacts,
@@ -1595,13 +2121,14 @@ begin
     nullif((select count(*) from cma.audit_log a where a.tenant_id = any (v_ids))::text, '0') || ' audit rows',
     nullif((select count(*) from cma.device d where d.tenant_id = any (v_ids))::text, '0') || ' devices',
     (select string_agg(s.answer ->> 'slug' || ' ' || coalesce(s.error, s.answer ->> 'result'), '; ' order by s.ord) from pg_temp.v0008zk_step s
-     where s.step in ('start', 'end') and (s.error is not null or s.answer ->> 'result' not in ('absent', 'removed'))));
-  perform pg_temp.v0008zk_check(91, 'Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end',
+     where s.step in ('start', 'end') and (s.error is not null or s.answer ->> 'result' not in ('absent', 'removed'))),
+    'foreign keys the cleanup does not cover: ' || v_stray);
+  perform pg_temp.v0008zk_check(91, 'Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end; every foreign key into a tenant''s rows from a table of cma, paired on tenant_id',
     v_left = '' and (select count(*) from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'result' = 'removed') = 4,
-    coalesce(nullif(v_left, ''), format('start: %s; end: %s removed in %s ms',
+    coalesce(nullif(v_left, ''), format('start: %s; end: %s removed in %s ms; %s foreign keys into a tenant''s rows, all from cma and paired on tenant_id',
       (select string_agg(s.answer ->> 'slug' || ' ' || (s.answer ->> 'result'), ', ' order by s.ord) from pg_temp.v0008zk_step s where s.step = 'start'),
       (select count(*) from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'result' = 'removed'),
-      (select sum(s.ms) from pg_temp.v0008zk_step s where s.step = 'end'))));
+      (select sum(s.ms) from pg_temp.v0008zk_step s where s.step = 'end'), v_fks)));
 end
 $$;
 
@@ -1648,7 +2175,7 @@ drop function if exists pg_temp.v0008zk_b8_rows(text);
 drop function if exists pg_temp.v0008zk_b8_state(text);
 drop function if exists pg_temp.v0008zk_b8();
 drop function if exists pg_temp.v0008zk_c_setup();
-drop function if exists pg_temp.v0008zk_c4(integer);
+drop function if exists pg_temp.v0008zk_c4_next();
 drop function if exists pg_temp.v0008zk_c2(integer);
 drop function if exists pg_temp.v0008zk_c4_check();
 drop function if exists pg_temp.v0008zk_analyze();

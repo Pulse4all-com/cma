@@ -39,13 +39,15 @@
  * customer_ref_invalid, refs_dropped), its phase times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms,
  * missing_ms; cleanup_ms 0, as chunks stage nothing), the slowest call in milliseconds as the ingest measures it
  * (chunk_max_ms, the slowest chunk; slice_max_ms, the slowest slice of the final step: PROD_RUNBOOK 14.7 reads them
- * against 3,000 ms) and fetched, with upserted (inserted and updated) and skipped (unchanged); the log line adds
+ * against 3,000 ms), the adaptive chunks (chunk_size_min, chunk_halvings) and fetched, with upserted (inserted and
+ * updated) and skipped (unchanged); the log line adds
  * mapped, the chunks and slices, the fields, date failures, values with an @, unreadable cells, duplicates and the
  * requests per endpoint. Never a token, a value or a record's content.
  */
 import { info, warn } from "../../core/log.mjs";
 import { SourceError } from "../../core/http.mjs";
-import { assetSettings } from "./client.mjs";
+import { assetSettings, LOAD_CHUNK_MIN } from "./client.mjs";
+import { statementTimeoutMs } from "../../core/db.mjs";
 import { clientFor, checkFields, modifiedAfter, fieldError, FIELD_ID } from "./read.mjs";
 import { OBJECT_TYPE, mappingOf, fieldNames, rowOf } from "./map.mjs";
 
@@ -60,6 +62,8 @@ export const LOAD_COUNTS = ["rows", "inserted", "updated", "unchanged", "missing
 export const PHASE_COUNTS = ["stage_ms", "map_ms", "upsert_ms", "components_ms", "missing_ms", "cleanup_ms"];
 /** The slowest chunk and the slowest slice of a run (milliseconds of the call as the ingest measures it), the largest kept */
 export const MAX_COUNTS = ["chunk_max_ms", "slice_max_ms"];
+/** The adaptive chunks of a run: the smallest chunk size in force, and how often it was halved */
+export const CHUNK_COUNTS = ["chunk_size_min", "chunk_halvings"];
 
 /** A connection without a token secret name is loaded from files: the jobs skip it (code csv_only). */
 export function skipReason(connection) {
@@ -187,16 +191,51 @@ async function timed(call) {
   return [answer, performance.now() - t0];
 }
 
+const isTimeout = (err) => err?.code === "57014";
+
 /**
- * The rows loaded in chunks of the setting assets_load_chunk, each chunk its own call and transaction; the run's counts
- * follow each chunk, so a run that stops shows how far it got. Answers how many chunks were loaded.
+ * The rows loaded in chunks, each chunk its own call and transaction; the run's counts follow each chunk, so a run that
+ * stops shows how far it got. The chunk size starts at the setting assets_load_chunk and adapts to the database (Decision
+ * log, 28 October 2026): a call slower than a third of the ingest's statement timeout halves the next chunk, and a chunk
+ * the timeout cancels (57014: nothing of it was written) is sent again once at half its size; a cancellation among those
+ * rows again fails the run before its final step, so nothing is marked missing. The floor is the setting's, 100 rows.
+ * The counts keep the smallest chunk size in force (chunk_size_min) and the halvings (chunk_halvings). Answers how many
+ * chunks were loaded.
  */
-async function loadInChunks({ store, rows, chunk, counts }) {
+async function loadInChunks({ connection, store, rows, chunk, counts }) {
+  const slowMs = statementTimeoutMs() / 3;
+  let size = chunk;
   let chunks = 0;
-  for (let i = 0; i < rows.length; i += chunk) {
-    const [loaded, ms] = await timed(() => store.loadDeviceChunk(rows.slice(i, i + chunk)));
+  let retryUntil = -1;
+  counts.chunk_halvings = Number(counts.chunk_halvings ?? 0);
+  counts.chunk_size_min = Math.min(Number(counts.chunk_size_min) || size, size);
+  const halve = () => {
+    const next = Math.max(LOAD_CHUNK_MIN, Math.floor(size / 2));
+    if (next < size) counts.chunk_halvings += 1;
+    size = next;
+    counts.chunk_size_min = Math.min(counts.chunk_size_min, size);
+  };
+  for (let i = 0; i < rows.length;) {
+    const part = rows.slice(i, i + size);
+    let loaded;
+    let ms;
+    try {
+      [loaded, ms] = await timed(() => store.loadDeviceChunk(part));
+    } catch (err) {
+      if (!isTimeout(err) || i < retryUntil) throw err;
+      retryUntil = i + part.length;
+      halve();
+      warn("airtable chunk cancelled by the statement timeout: sent again at half its size",
+        { connection: connection?.connectionId, code: "db_57014", rows: part.length, size, chunk: chunks + 1 });
+      continue;
+    }
     addLoad(counts, loaded, "chunk_max_ms", ms);
+    i += part.length;
     chunks += 1;
+    if (ms > slowMs && i < rows.length) {
+      halve();
+      info("airtable chunk slow: the next one halved", { connection: connection?.connectionId, ms: Math.round(ms), size, chunk: chunks });
+    }
   }
   return chunks;
 }
@@ -233,7 +272,7 @@ export async function pollAssets({ connection, store, budget, now = Date.now(), 
   const formula = Number.isFinite(cur?.at) ? modifiedAfter(cur.at - OVERLAP_MS) : null;
   const { rows, detail } = await readRows({ connection, prep, formula, counts });
   addLoad(counts);
-  const chunks = await loadInChunks({ store, rows, chunk: prep.s.loadChunk, counts });
+  const chunks = await loadInChunks({ connection, store, rows, chunk: prep.s.loadChunk, counts });
   await store.setCursor(MODIFIED_STREAM, { at: now });
   await store.setCursor(CADENCE_STREAM, { at: now });
   return { detail: { ...detail, chunks, fields: prep.names.length, changedSince: formula ? new Date(cur.at - OVERLAP_MS).toISOString() : "all" } };
@@ -250,7 +289,7 @@ async function fullSnapshot({ connection, store, budget, counts }) {
   const { rows, detail } = await readRows({ connection, prep, formula: null, counts });
   if (!rows.length) throw new SourceError("empty_snapshot");
   addLoad(counts);
-  const chunks = await loadInChunks({ store, rows, chunk: prep.s.loadChunk, counts });
+  const chunks = await loadInChunks({ connection, store, rows, chunk: prep.s.loadChunk, counts });
   const slices = await markMissing({ store, rows, size: prep.s.loadChunk, counts });
   await store.setCursor(MODIFIED_STREAM, { at: startedAt });
   return { ...detail, chunks, slices, fields: prep.names.length };

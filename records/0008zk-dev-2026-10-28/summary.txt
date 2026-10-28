@@ -1,0 +1,27 @@
+Asset sync load, addition 0008zk, third version (db/116 and db/117 at commit 56bbb4f, as Martin named it), dev,
+28 October 2026
+
+Written down by Claude Code at Martin's request from his report of his runs on 28 October 2026; the results below
+are his. No key, device id or customer id appears here.
+
+dev   117           18 ok, 3 FAIL; the server stayed up
+                    ok    C1 775.5 ms
+                    ok    C2 slowest slice 543.4 ms (all 1,142.2 ms)
+                    ok    C3 4,882.6 ms (staging insert 3,064.4; cleanup 957)
+                    FAIL  C4 (a first load of 50,000 in chunks of 1,000): first 3,964.4 ms, last 5,976.4, slowest
+                          9,768.2; first five 4,842 on average, last five 5,664; phases first: map 181, upsert 2,227,
+                          components 1,526; last: map 760, upsert 2,465, components 2,506
+                    FAIL  C5 (50,000 devices, best of three): page 4,178.8 ms, list 4,761.5 ms
+                    FAIL  Z2 "2 tenants, 245434 audit rows, 72001 devices; verify-0008zk-one and verify-0008zk-volume
+                          23503: update or delete on table "app_user" violates foreign key constraint
+                          "sync_run_tenant_id_started_by_fkey" on table "sync_run""; those tenants are still in dev
+                    Z1    PostgreSQL 18.6, shared_buffers 128MB, work_mem 4MB, jit on
+dev   117 provoked  22 FAIL lines, 0 ok, 21 FAIL; with those leftovers in dev, its setup then hit 23505 on
+                    app_user_tenant_id_email_key
+
+Reruns after the leftovers
+dev   115           C1 27,802.5 ms (FAIL)
+dev   113           C1 269.4 ms and 267.6 ms (ok)
+
+Dev is db-g1-small (a shared core, no SLA); prod is db-custom-1-3840 (one dedicated vCPU) with regional high
+availability.

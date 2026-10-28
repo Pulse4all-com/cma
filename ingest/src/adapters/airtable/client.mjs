@@ -40,6 +40,8 @@ const WHOLE = {
   assets_poll_interval_minutes: { default: 15, min: 1, max: 1440 },
   assets_load_chunk: { default: 1000, min: 100, max: 5000 },
 };
+/** The smallest chunk: the setting's floor, and the floor the adaptive chunks halve to */
+export const LOAD_CHUNK_MIN = WHOLE.assets_load_chunk.min;
 export const DATE_FORMATS = ["dmy", "mdy", "iso"];
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
