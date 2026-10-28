@@ -105,7 +105,7 @@ Expected: `accessor on ingest-hubspot-dev-signing`, `accessor on ingest-hubspot-
 
 For prod the same with `prod` (instance `cma-prod-pg`, min instances 1, max 5, no header logging), from the same commit as the dev deploy: the image already exists, so the output says `no build` and prod runs what dev tested.
 
-The service's caps in both projects: min 1 and max 5 instances in prod, min 0 and max 2 in dev; concurrency 20; a database pool of 5 per instance (`CMA_DB_POOL_MAX`; 3 per job); 1 CPU and 512 MiB; a 30-second request timeout; and startup CPU boost (`--cpu-boost`, since 13 October 2026, sixth Gemini audit FIND-04: a new instance starts with extra CPU, so a cold start answers sooner). The route answers after its read-back, not before: Cloud Run throttles the CPU once the response is sent, so work after it would crawl (Decision log, 13 October 2026). To see the boost on the deployed service:
+The service's caps in both projects: min 1 and max 5 instances in prod, min 0 and max 2 in dev; concurrency 20; a database pool of 5 per instance (`CMA_DB_POOL_MAX`; 2 per job); 1 CPU and 512 MiB; a 30-second request timeout; and startup CPU boost (`--cpu-boost`, since 13 October 2026, sixth Gemini audit FIND-04: a new instance starts with extra CPU, so a cold start answers sooner). The route answers after its read-back, not before: Cloud Run throttles the CPU once the response is sent, so work after it would crawl (Decision log, 13 October 2026). To see the boost on the deployed service:
 
 **Terminal**
 ```bash
