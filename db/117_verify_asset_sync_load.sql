@@ -14,8 +14,8 @@
 -- (verify-0008zk-…) are committed between steps and removed by a cleanup that runs at the start (what an interrupted run
 -- left) and at the end: every row of theirs table by table (in the order the foreign keys allow), then their audit rows,
 -- then the tenants, as the ingest's flow verifiers remove theirs (ingest/verify/lib.mjs, removeTenants); the audit log is
--- append-only for the application, and only these throwaway tenants' rows go (in prod by the Decision log, 28 October
--- 2026). While the script runs, no ingest job serves their connections (their adapters are none of the ingest's), and a
+-- append-only for the application, and only these throwaway tenants' rows go (in prod only as proposed in the Decision
+-- log, 28 October 2026, to confirm with Martin: PROD_RUNBOOK 14, the Gate). While the script runs, no ingest job serves their connections (their adapters are none of the ingest's), and a
 -- reader without a tenant sees their invented rows until the end. A step never raises: an error is recorded
 -- and its check reads FAIL. Memory stays bounded by a step, so the script runs twice in a row (normal, then provoked) on
 -- a db-g1-small. Every run of either kind writes and then removes some 70,000 devices, 140,000 components and their
@@ -1044,12 +1044,13 @@ begin
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "single line"}]'))
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "", "type": "date"}]'))
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_crm, '[{"property": "fldVerify0000001", "type": "date"}]'))
-           || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_csv, '[{"property": "fldVerify0000001", "type": "date"}]'));
+           || ' ' || (select case when e like 'CMA04: connection % has no token secret name%' then 'CMA04' else e end
+                      from pg_temp.v0008zk_error(format('select cma.ingest_record_field_types(%L, %L)', v_csv, '[{"property": "fldVerify0000001", "type": "date"}]')) e);
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
   v_txt := v_txt || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "date"}]'));
   perform pg_temp.v0008zk_as('verify-0008zk-two', 'ingest');
   v_txt := v_txt || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "date"}]'));
-  perform pg_temp.v0008zk_check(17, 'B7 the mapped fields'' types: the first read recorded, a later one kept out, mapped again read afresh; the refusals',
+  perform pg_temp.v0008zk_check(17, 'B7 the mapped fields'' types: the first read recorded, a later one kept out, mapped again (another id, or the same id removed and set) read afresh; the refusals, a file-only connection''s by its message',
     v_txt = '2 0 fldVerify0000001:singlelinetext:true fldVerify0000002:date:true | fldVerify0000002:date fldVerify0000003:- 1 number '
             || '- 1 singlelinetext | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA02', v_txt);
 exception when others then

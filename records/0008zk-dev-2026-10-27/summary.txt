@@ -1,4 +1,5 @@
-Asset sync load, addition 0008zk, first version (db/116, db/117 at commit c29d838), dev, 27 October 2026
+Asset sync load, addition 0008zk, first version (db/116 and db/117 as #203 held them on 27 October 2026, last changed
+in commit 617d04e), dev, 27 October 2026
 
 Written down by Claude Code at Martin's request from his report of his runs on 27 October 2026; the results below
 are his. No key, device id or customer id appears here.

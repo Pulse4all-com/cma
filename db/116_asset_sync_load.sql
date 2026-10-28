@@ -852,11 +852,11 @@ $$;
 -- 7. The mapped fields' types
 -- ---------------------------------------------------------------------------------------------
 -- The type the ingest first read for each mapped property of an asset register connection (ingest.write; an active
--- asset register connection with a token secret name): p_items a JSON array of 1 to 200 objects { property, type }, the property as mapped (the
--- source's field id) and its type as the source's schema names it, kept in lower case in connection_field.source_type
--- (checked_at: when it was first read). Only a mapped field without a type takes one: a type that differs from the
--- stored one is the adapter's to refuse before it reads a record (field_type_changed, naming the field), never
--- overwritten here. A field mapped again with another property loses its type (0008zb), so the next run reads it afresh;
+-- asset register connection with a token secret name): p_items a JSON array of 1 to 200 objects { property, type },
+-- the property as mapped (the source's field id) and its type as the source's schema names it, kept in lower case in
+-- connection_field.source_type (checked_at: when it was first read). Only a mapped field without a type takes one: a
+-- type that differs from the stored one is the adapter's to refuse before it reads a record (field_type_changed,
+-- naming the field), never overwritten here. A field mapped again with another property loses its type (0008zb), so the next run reads it afresh;
 -- to accept a changed type for the same property, its mapping is removed and set again in one Run (the removal deletes
 -- the field's row, so the type goes with it). Answers how many fields took a type
 create or replace function cma.ingest_record_field_types(p_connection_id uuid, p_items jsonb)
