@@ -14,7 +14,9 @@
 -- (verify-0008zk-…) are committed between steps and removed by a cleanup that runs at the start (what an interrupted run
 -- left) and at the end: every row of theirs table by table (in the order the foreign keys allow), then their audit rows,
 -- then the tenants, as the ingest's flow verifiers remove theirs (ingest/verify/lib.mjs, removeTenants); the audit log is
--- append-only for the application, and only these throwaway tenants' rows go. A step never raises: an error is recorded
+-- append-only for the application, and only these throwaway tenants' rows go (in prod by the Decision log, 28 October
+-- 2026). While the script runs, no ingest job serves their connections (their adapters are none of the ingest's), and a
+-- reader without a tenant sees their invented rows until the end. A step never raises: an error is recorded
 -- and its check reads FAIL. Memory stays bounded by a step, so the script runs twice in a row (normal, then provoked) on
 -- a db-g1-small. Every run of either kind writes and then removes some 70,000 devices, 140,000 components and their
 -- audit rows.
@@ -997,7 +999,8 @@ $$;
 -- B7. the mapped fields' types: the Ingest user records the type it first read for each mapped property (in lower
 --     case; a property the connection does not map left alone); a later, different type is kept out (the stored one
 --     stays, for the adapter to refuse); a field mapped again with another property loses its type and takes the next
---     one read; the refusals
+--     one read; a field removed and set again with the same id (accepting a changed type) too; the refusals (a file-only
+--     connection among them)
 create or replace function pg_temp.v0008zk_b7()
 returns void
 language plpgsql
@@ -1005,6 +1008,7 @@ as $$
 declare
   v_parts uuid := pg_temp.v0008zk_conn('verify-0008zk-one', 'base-chunks');
   v_crm   uuid := pg_temp.v0008zk_conn('verify-0008zk-one', 'portal-1');
+  v_csv   uuid := pg_temp.v0008zk_conn('verify-0008zk-one', 'base-csv');
   v_txt   text;
 begin
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
@@ -1025,19 +1029,29 @@ begin
   v_txt := v_txt || ' | ' || (select string_agg(f.source_property || ':' || coalesce(f.source_type, '-'), ' ' order by f.source_property)
                               from cma.connection_field f where f.connection_id = v_parts);
   v_txt := v_txt || ' ' || cma.ingest_record_field_types(v_parts, '[{"property": "fldVerify0000003", "type": "number"}]')::text;
-  v_txt := v_txt || ' ' || (select f.source_type from cma.connection_field f where f.connection_id = v_parts and f.source_property = 'fldVerify0000003')
+  v_txt := v_txt || ' ' || (select f.source_type from cma.connection_field f where f.connection_id = v_parts and f.source_property = 'fldVerify0000003');
+  -- a changed type accepted: the field's mapping removed and set again with the same id in one transaction; its type
+  -- goes with the removed row, and the next read records the new one
+  perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
+  perform cma.set_connection_field(v_parts, 'device_component', 'expires_on', 'pads', '');
+  perform cma.set_connection_field(v_parts, 'device_component', 'expires_on', 'pads', 'fldVerify0000002');
+  perform pg_temp.v0008zk_as('verify-0008zk-one', 'ingest');
+  v_txt := v_txt || ' ' || coalesce((select f.source_type from cma.connection_field f where f.connection_id = v_parts and f.source_property = 'fldVerify0000002'), '-');
+  v_txt := v_txt || ' ' || cma.ingest_record_field_types(v_parts, '[{"property": "fldVerify0000002", "type": "singleLineText"}]')::text;
+  v_txt := v_txt || ' ' || (select f.source_type from cma.connection_field f where f.connection_id = v_parts and f.source_property = 'fldVerify0000002')
            || ' | ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '{"property": "fldVerify0000001"}'))
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[]'))
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "single line"}]'))
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "", "type": "date"}]'))
-           || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_crm, '[{"property": "fldVerify0000001", "type": "date"}]'));
+           || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_crm, '[{"property": "fldVerify0000001", "type": "date"}]'))
+           || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_csv, '[{"property": "fldVerify0000001", "type": "date"}]'));
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
   v_txt := v_txt || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "date"}]'));
   perform pg_temp.v0008zk_as('verify-0008zk-two', 'ingest');
   v_txt := v_txt || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_record_field_types(%L, %L)', v_parts, '[{"property": "fldVerify0000001", "type": "date"}]'));
   perform pg_temp.v0008zk_check(17, 'B7 the mapped fields'' types: the first read recorded, a later one kept out, mapped again read afresh; the refusals',
     v_txt = '2 0 fldVerify0000001:singlelinetext:true fldVerify0000002:date:true | fldVerify0000002:date fldVerify0000003:- 1 number '
-            || '| CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA02', v_txt);
+            || '- 1 singlelinetext | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA02', v_txt);
 exception when others then
   perform pg_temp.v0008zk_check(17, 'B7 the mapped fields'' types', false, sqlstate || ': ' || sqlerrm);
 end

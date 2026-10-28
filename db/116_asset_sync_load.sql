@@ -56,9 +56,11 @@
 -- 50,000 devices. Measured locally on a cluster held to db-g1-small's memory (1.5 GB, shared_buffers 560 MB, work_mem
 -- 4 MB) with a database in Cloud SQL's collation (en_US.UTF-8), where 113's C1 with 0008zi's forecast took 153 and 126 ms
 -- against dev's 146.0 and 130.8:
---   the final step    one statement over every record id of the run grows with the register: it is cut into slices of
---                     the run's chunk size, each its own call over its own range of record ids (by a partial index in
---                     byte order), about 2 ms a slice of 1,000 at 50,000 devices
+--   the final step    one statement over every record id of the run grows with the register: over 49,500 ids of
+--                     50,000 devices it took 190 ms locally, under the 3,000 ms budget, but dev ran the first 117's C2 at
+--                     710 ms against some 40 locally, and its work grows with every device. It is cut into slices of the
+--                     run's chunk size, each its own call over its own range of record ids (by a partial index in byte
+--                     order): about 2 ms a slice of 1,000 at 50,000 devices, whatever the register's size
 --   the forecast      0008zi's forecast walks every due item in a PL/pgSQL loop, builds an exchange key and two bucket
 --                     labels as text per item, and its page and list group and sort that text (a slow comparison in
 --                     en_US.UTF-8): at 50,000 devices (about 106,000 items) the page took 1,567 ms and the list 1,861 ms.
@@ -850,13 +852,13 @@ $$;
 -- 7. The mapped fields' types
 -- ---------------------------------------------------------------------------------------------
 -- The type the ingest first read for each mapped property of an asset register connection (ingest.write; an active
--- asset register connection): p_items a JSON array of 1 to 200 objects { property, type }, the property as mapped (the
+-- asset register connection with a token secret name): p_items a JSON array of 1 to 200 objects { property, type }, the property as mapped (the
 -- source's field id) and its type as the source's schema names it, kept in lower case in connection_field.source_type
 -- (checked_at: when it was first read). Only a mapped field without a type takes one: a type that differs from the
 -- stored one is the adapter's to refuse before it reads a record (field_type_changed, naming the field), never
 -- overwritten here. A field mapped again with another property loses its type (0008zb), so the next run reads it afresh;
--- to accept a changed type for the same property, its mapping is removed and set again in one Run. Answers how many
--- fields took a type
+-- to accept a changed type for the same property, its mapping is removed and set again in one Run (the removal deletes
+-- the field's row, so the type goes with it). Answers how many fields took a type
 create or replace function cma.ingest_record_field_types(p_connection_id uuid, p_items jsonb)
 returns integer
 language plpgsql
@@ -867,6 +869,11 @@ begin
   perform cma.assert_permission('ingest.write');
   perform cma.active_connection_adapter(p_connection_id);
   perform cma.assert_assets_connection(p_connection_id);
+  if (select c.token_secret_name from cma.integration_connection c
+      where c.tenant_id = cma.current_tenant_id() and c.id = p_connection_id) is null then
+    raise exception 'connection % has no token secret name: it is loaded from files (cma.load_device_snapshot), not by the ingest', p_connection_id
+      using errcode = 'CMA04';
+  end if;
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) not between 1 and 200
      or exists (select 1 from jsonb_array_elements(p_items) e
                 where jsonb_typeof(e) <> 'object' or coalesce(btrim(e ->> 'property'), '') = '' or length(e ->> 'property') > 200
@@ -1129,7 +1136,7 @@ as $$
     where case when p_bucket = 'unknown' then b.rb = 'infinity'
                when p_bucket = 'all' then b.rb is not null and b.rb <> 'infinity'
                when p_bucket = 'past_due' then b.rb = '-infinity'
-               else b.rb = case when pg_input_is_valid(p_bucket, 'date') then p_bucket::date end end
+               else b.rb = case when p_bucket ~ '^\d{4}-\d{2}-\d{2}$' and pg_input_is_valid(p_bucket, 'date') then p_bucket::date end end
     group by b.device_id, b.rb, 3, b.connection_id, b.source_id, b.serial, b.model_key, b.market, b.device_status_key
   ), r as (
     select g.*, count(*) over () as total_rows

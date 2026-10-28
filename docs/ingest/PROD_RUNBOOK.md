@@ -1585,9 +1585,10 @@ Two additions: 0008zj (`114`, the asset sync) and 0008zk (`116`, the load set-ba
 set role cma_owner;
 select version from cma.schema_migration where version >= '0008zi' order by 1;
 select pg_postmaster_start_time();
+select count(*) as assets_with_view_id from cma.integration_connection where kind = 'assets' and settings ? 'view_id';
 reset role;
 ```
-Expected: `0008zi`, `0008zj` and `0008zk` (the first `116`), then the server's start time: note it. Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login (no error, no result rows).
+Expected: `0008zi`, `0008zj` and `0008zk` (the first `116`), then the server's start time: note it; then `assets_with_view_id`, which `116` sets to 0 (report a number above 0: those connections are read whole from then on). Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login (no error, no result rows).
 
 **Terminal** (the server's log of the provoked run of 27 October; codes and the statement's start only)
 ```bash
@@ -1656,13 +1657,16 @@ Expected: `True	7`.
 ```sql
 set role cma_owner;
 select version from cma.schema_migration where version >= '0008zh' order by 1;
+select count(*) as assets_with_view_id from cma.integration_connection where kind = 'assets' and settings ? 'view_id';
 reset role;
 ```
-Expected: `0008zh`, `0008zi` and `0008zj`. Without `0008zj`: `db/114_asset_sync.sql` first, as one script, as your own login (no error, no result rows). With `0008zk` already there, stop and report it.
+Expected: `0008zh`, `0008zi` and `0008zj`, then `assets_with_view_id` `0` (14.4 sets no view; a number above 0: report it, since `116` removes them and those connections are read whole from then on). Without `0008zj`: `db/114_asset_sync.sql` first, as one script, as your own login (no error, no result rows). With `0008zk` already there, stop and report it.
 
 **Studio (cma-prod-pg):** `db/116_asset_sync_load.sql` as one script, as your own login.
 
 Expected: no error and no result rows, in a few seconds (it builds two indexes on the device tables). A second run ends the same.
+
+**Gate (Martin decides before the next step).** `117` commits its throwaway tenants and removes them at the end with their rows and their audit rows, as the owner. The Decision log row of 17 October 2026 allows that removal (the flow verifiers' `removeTenants`) in dev and local databases only, so running `117` in prod extends it to prod for `117`'s own `verify-0008zk-…` tenants. The proposed row is in `docs/decisions.md` (28 October 2026, to confirm with Martin). Confirm it, or run `117` in dev only and skip the next step (the merge then rests on dev's `117` and prod's `115` and `113`). While `117` runs (some 3 to 6 minutes) its throwaway tenants exist in prod: no job serves their connections (their adapters, `verifyregister` and `verifycrm`, are no adapter of the ingest's, which every job skips), and a reader without a tenant (`cma_read`, BigQuery) sees their invented rows until the end. Run it outside a scheduled export.
 
 **Studio (cma-prod-pg):** `db/117_verify_asset_sync_load.sql`, pasted whole and Run (not provoked).
 

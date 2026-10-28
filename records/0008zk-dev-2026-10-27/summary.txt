@@ -1,0 +1,22 @@
+Asset sync load, addition 0008zk, first version (db/116, db/117 at commit c29d838), dev, 27 October 2026
+
+Written down by Claude Code at Martin's request from his report of his runs on 27 October 2026; the results below
+are his. No key, device id or customer id appears here.
+
+dev   116           ran before the runs below (the load about twice as fast as 114's, per the report)
+dev   117           13 ok, 2 FAIL
+                    C1 773.2 ms (ok), C2 710.3 ms (ok)
+                    C3 25,021.5 ms against 10,000 (FAIL): staging insert 14,492.8; map 4,510; components 1,748;
+                    cleanup 3,273
+                    C4 chunks grew from 796.8 to 3,743.7 ms against 3,000 (FAIL)
+dev   117 provoked  provoked FAIL lines 0; psql: "/tmp/provoke.sql:484: server closed the connection unexpectedly"
+                    (the file built from 117 with only the provoke switch changed); the postmaster did not restart
+                    (pg_postmaster_start_time 2026-10-03); no throwaway tenant left
+
+Right after, on a cold cache
+dev   115           C1 29,525.9 ms
+dev   113           C1 2,006.3 ms and 1,493.1 ms (FAIL)
+
+Minutes later, warm
+dev   113           C1 146.0 ms and 130.8 ms; 25 ok
+dev   115           C1 3,549.0 ms; 14 ok (before 116, 115's C1 was 6,821.0 ms in dev)
