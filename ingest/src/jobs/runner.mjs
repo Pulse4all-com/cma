@@ -8,11 +8,14 @@
  * jobLock): Cloud Scheduler starts the next execution every minute whether or not the previous one has
  * finished, and a second one that finds the lock held logs `<job> skipped` with code locked, writes
  * nothing and exits 0 (audit 17 October 2026, 5.2-02). No sync_run row records a skip: the table knows
- * running, succeeded and failed only (migration 0007's vocabulary).
+ * running, succeeded and failed only (migration 0007's vocabulary). Each job runs with a pool of 2
+ * (docs/ingest/deploy.sh): its lock and one unit of work at a time. Its finished line states the pool's peak
+ * (poolPeak of poolMax), and a run that waited on its own pool (a checkout while its own clients filled it)
+ * logs a warning with code pool_self_wait (db.mjs measurePool; the flow verifiers check every job's run).
  */
-import { closeDb, dbErrorCode, jobLock } from "../core/db.mjs";
+import { closeDb, dbErrorCode, jobLock, measurePool, poolRuns } from "../core/db.mjs";
 import { SourceError } from "../core/http.mjs";
-import { info, error } from "../core/log.mjs";
+import { info, warn, error } from "../core/log.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -109,6 +112,13 @@ export async function withJobLock(job, fn) {
   }
 }
 
+/** The job run's pool use (db.mjs measurePool), after one warning (code pool_self_wait) when it waited on its own pool */
+function selfWaitWarned(job) {
+  const pool = poolRuns().at(-1) ?? null;
+  if (pool?.selfWaits) warn(`${job} waited on its own pool`, { job, code: "pool_self_wait", poolPeak: pool.peak, poolMax: pool.max, selfWaits: pool.selfWaits });
+  return pool;
+}
+
 /** Runs a job's main function as a process: logs, closes the pool, sets the exit code. lock: one execution at a time. */
 export async function main(job, fn, { lock = false } = {}) {
   const started = Date.now();
@@ -117,7 +127,7 @@ export async function main(job, fn, { lock = false } = {}) {
     const run = () => fn(process.argv.slice(2));
     let r;
     if (lock) {
-      const l = await withJobLock(job, run);
+      const l = await measurePool(job, () => withJobLock(job, run));
       if (!l.ran) {
         await closeDb();
         process.exitCode = 0;
@@ -125,10 +135,11 @@ export async function main(job, fn, { lock = false } = {}) {
       }
       r = l.result;
     } else {
-      r = await run();
+      r = await measurePool(job, run);
     }
     failed = r?.failed ?? 0;
-    info(`${job} finished`, { job, ...r, ms: Date.now() - started });
+    const pool = selfWaitWarned(job);
+    info(`${job} finished`, { job, ...r, poolPeak: pool?.peak, poolMax: pool?.max, ms: Date.now() - started });
   } catch (err) {
     if (err instanceof UsageError) {
       error(`${job} usage`, { job, code: "usage", detail: err.message });
@@ -136,6 +147,7 @@ export async function main(job, fn, { lock = false } = {}) {
       await closeDb();
       return;
     }
+    selfWaitWarned(job);
     error(`${job} failed`, { job, code: codeOf(err) });
   }
   await closeDb();

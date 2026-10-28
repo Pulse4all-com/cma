@@ -72,6 +72,30 @@ export async function removeTenants(q, tenants) {
   return held;
 }
 
+/**
+ * The jobs' pool of 2 (docs/ingest/deploy.sh; Gemini audit of 28 October 2026, FIND-01): every job run this verifier
+ * made (src/core/db.mjs measurePool) did its work on one connection at a time, which leaves the other to its
+ * advisory lock, and never asked for a connection while its own filled the pool (a wait on itself). Runs named
+ * verify-… are a verifier's own probes and are left out. Prints each job's runs and peaks, then the check.
+ */
+export async function poolCheck() {
+  const { poolRuns } = await import("../src/core/db.mjs");
+  const runs = poolRuns().filter((r) => !r.job.startsWith("verify-"));
+  const jobs = new Map();
+  for (const r of runs) {
+    const j = jobs.get(r.job) ?? { runs: 0, work: 0, peak: 0, selfWaits: 0 };
+    j.runs += 1;
+    j.work = Math.max(j.work, r.work);
+    j.peak = Math.max(j.peak, r.peak);
+    j.selfWaits += r.selfWaits;
+    jobs.set(r.job, j);
+  }
+  console.log(`pool: ${[...jobs].map(([job, j]) => `${job} ${j.runs} runs, peak ${j.peak}, work ${j.work}`).join("; ") || "no job run"}`);
+  const over = [...jobs].filter(([, j]) => j.work > 1 || j.selfWaits > 0).map(([job, j]) => `${job}: work ${j.work}, self-waits ${j.selfWaits}`);
+  return expect("P1 every job's run kept to the jobs' pool of 2: its work on one connection at a time (the lock the other), no wait on its own pool",
+    [runs.length > 0, over], [true, []], [false, ["provoked"]]);
+}
+
 /** Prints the verdict line and sets the exit code. */
 export function verdict() {
   const passed = results.filter(Boolean).length;

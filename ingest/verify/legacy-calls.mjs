@@ -188,9 +188,29 @@ function fakeStore() {
     async contactRefProperties() { return ["fx_shop_customer_id"]; },
   };
 }
+// The store calls in flight at once, over every run: each call of the real store is one transaction, so at most one
+// at a time is the job's one unit of work beside its advisory lock, the jobs' pool of 2 (Gemini audit of 28 October
+// 2026, FIND-01)
+const inFlight = { now: 0, peak: 0, calls: 0 };
+const counted = (store) => new Proxy(store, {
+  get(target, key, receiver) {
+    const v = Reflect.get(target, key, receiver);
+    if (typeof v !== "function") return v;
+    return async (...a) => {
+      inFlight.calls += 1;
+      inFlight.now += 1;
+      inFlight.peak = Math.max(inFlight.peak, inFlight.now);
+      try {
+        return await v.apply(target, a);
+      } finally {
+        inFlight.now -= 1;
+      }
+    };
+  },
+});
 const seams = (store) => ({
   adapters: ADAPTERS, read: async () => Buffer.from(FIXTURE), secret: async () => PEPPER,
-  served: async ({ connectionId }) => (connectionId === CRM.connectionId ? [CRM] : []), storeOf: () => store,
+  served: async ({ connectionId }) => (connectionId === CRM.connectionId ? [CRM] : []), storeOf: () => counted(store),
 });
 // Every run's answer and the store it wrote to, for the privacy checks of section J
 const seen = [];
@@ -435,5 +455,7 @@ expect("J5 the log has progress and nothing but counts, row numbers and ids: no 
   [logs.some((l) => l.includes("import-legacy-calls: progress")), /@|\+\d/.test(logText)], [true, false], [false, true]);
 
 server.close();
+expect("K1 the import calls its store one call at a time, over every run: one unit of work beside its lock, the jobs' pool of 2",
+  [inFlight.calls > 50, inFlight.peak], [true, 1], [false, 2]);
 rmSync(secretsDir, { recursive: true, force: true });
 verdict();

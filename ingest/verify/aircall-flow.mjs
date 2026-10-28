@@ -34,7 +34,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHmac, randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, PROVOKE } from "./lib.mjs";
+import { expect, verdict, poolCheck, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/aircall-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -556,4 +556,5 @@ await new Promise((r) => service.close(r));
 await new Promise((r) => fakeServer.close(r));
 await closeDb();
 rmSync(secretsDir, { recursive: true, force: true });
+await poolCheck();
 verdict();

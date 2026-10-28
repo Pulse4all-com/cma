@@ -26,7 +26,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, PROVOKE } from "./lib.mjs";
+import { expect, verdict, poolCheck, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/outbox-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -207,4 +207,5 @@ await admin.end();
 await new Promise((r) => fakeServer.close(r));
 await closeDb();
 rmSync(secretsDir, { recursive: true, force: true });
+await poolCheck();
 verdict();

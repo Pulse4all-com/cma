@@ -1569,7 +1569,7 @@ Expected: the latest `reviews_poll` run `succeeded`, with its `fetched` and `ups
 
 # 14. The asset register's API sync in prod (addition 0008zj)
 
-Written on 27 October 2026 for 0008zj; Before 14.1 also carries 0008zk, written the same day and revised on 28 October (the mapping by field id, no view, the final step in slices). The ingest reads the asset register of Pulse4all Subscriptions (the Airtable base "Airtable 2.0", base `appsEV7MhflMLd2Xv`, table "2.0 Installed Base" `tblHVsCkAwJLqZOgu`) through the Airtable Web API: the records changed every 15 minutes (`ingest-poll-assets`) and a full snapshot nightly (`ingest-reconcile`), loaded through 0008zi's load into `cma.device` and `cma.device_component`, in chunks of `assets_load_chunk` rows since addition 0008zk (`docs/ingest/README.md`, section Airtable; `docs/architecture/data-model/0008.md`, Data model: asset sync and Data model: asset sync load). Read only: nothing is written to Airtable. The CSV import (`docs/import/devices.md`) stays as the fallback. Order: the migrations in dev with their verifies, the data map and the migrations in prod, all before the merge, then the merge (Before 14.1); then the service account and its token in Airtable, the secret and the ingest from `main` (14.1 to 14.3), the connection and its settings (14.4), its fields by id from a first dry run (14.5), the dry run and the first full read (14.6, 14.7), the schedule (14.8). Do 14.4 to 14.7 in one sitting, before 03:30: from 14.4 on the nightly reconcile reads the register too. The Studio blocks that call a function carry the context block's second chunk (as 9.6); `<tenant_id>` and `<user_id>` come from its first chunk. `<assets conn>` is the register's connection of 0008zi (`records/0008zi-prod-2026-10-27`), whose id 14.4 shows again. The Terminal blocks run in `~/cma`.
+Written on 27 October 2026 for 0008zj; Before 14.1 also carries 0008zk, written the same day and revised on 28 October (the mapping by field id, no view, the final step in slices). The ingest reads the asset register of Pulse4all Subscriptions (the Airtable base "Airtable 2.0", base `appsEV7MhflMLd2Xv`, table "2.0 Installed Base" `tblHVsCkAwJLqZOgu`) through the Airtable Web API: the records changed every 15 minutes (`ingest-poll-assets`) and a full snapshot nightly (`ingest-reconcile`), loaded through 0008zi's load into `cma.device` and `cma.device_component`, in chunks of `assets_load_chunk` rows since addition 0008zk (`docs/ingest/README.md`, section Airtable; `docs/architecture/data-model/0008.md`, Data model: asset sync and Data model: asset sync load). Read only: nothing is written to Airtable. The CSV import (`docs/import/devices.md`) stays as the fallback. Order: the migrations in dev with their verifies, the data map and the migrations in prod, all before the merge, then the merge (Before 14.1); then the service account and its token in Airtable, the secret and the ingest from `main` (14.1 to 14.3), the connection and its settings (14.4), its fields by id from a first dry run (14.5), the dry run and the first full read (14.6, 14.7), the schedule (14.8); then the token's rotation every 180 days (14.9). Do 14.4 to 14.7 in one sitting, before 03:30: from 14.4 on the nightly reconcile reads the register too. The Studio blocks that call a function carry the context block's second chunk (as 9.6); `<tenant_id>` and `<user_id>` come from its first chunk. `<assets conn>` is the register's connection of 0008zi (`records/0008zi-prod-2026-10-27`), whose id 14.4 shows again. The Terminal blocks run in `~/cma`.
 
 **Data prerequisites:**
 - An Airtable service account (Enterprise Scale) with read-only access to the one base, and its personal access token with the scopes `data.records:read` and `schema.bases:read` (14.1, 14.2).
@@ -1701,6 +1701,19 @@ put_secret p4a-cma-prod airtable-assets-pulse4all-subscriptions
 ```
 Expected: the hidden prompt; paste, Enter; `stored airtable-assets-pulse4all-subscriptions (version added)`. Then close the Airtable page.
 
+**Terminal** (where the secret is held; Gemini audit of 28 October 2026, FIND-04)
+```bash
+gcloud secrets describe airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod --format="yaml(replication)"
+```
+Expected, exactly:
+```
+replication:
+  userManaged:
+    replicas:
+    - location: europe-west4
+```
+User-managed replication in europe-west4 only. An `automatic:` block or a second location: report it and stop before the deploy below.
+
 `--front` goes with the service deploy and never with `--jobs` (as 13.6). The service deploy grants `cma-ingest` the accessor on the new secret (on that secret only) and answers `404` on `/airtable/<key>`; the jobs deploy adds `ingest-poll-assets`, its schedule created paused (14.8 resumes it).
 
 **Terminal** (in `~/cma`, on `main` after the merge)
@@ -1709,11 +1722,11 @@ git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/
 ```
 Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `accessor on airtable-assets-pulse4all-subscriptions`; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`): nine job deploys, `schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam), created paused` next to the others, `ingest-reconcile` at 03:30.
 
-**Terminal** (who may read the secret)
+**Terminal** (who may read the secret, now that the service deploy granted the accessor; FIND-04)
 ```bash
 gcloud secrets get-iam-policy airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod --flatten='bindings[].members' --format='value(bindings.role,bindings.members)'
 ```
-Expected: exactly one line, `roles/secretmanager.secretAccessor	serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com`. Another member: report it and remove it before 14.4.
+Expected: exactly one line, `roles/secretmanager.secretAccessor	serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com`: the accessor for `cma-ingest@p4a-cma-prod` only. Another member or another role: report it and remove it before 14.4.
 
 ## 14.4 The connection and its settings
 
@@ -1837,3 +1850,44 @@ Expected: one `assets_poll | devices | succeeded` row with a small `fetched` (th
 Expected: the row **Asset register poll** with its last run succeeded, and the connection **Airtable 2.0 assets** OK. After 03:30 the next day: a **Nightly reconcile** run of the connection, stream `device`, succeeded, `missing_now` the records the register dropped that day (usually 0), `components_closed` the kinds the register emptied that day (their items show under `component_due_unknown`), `chunk_max_ms` and `slice_max_ms` under 7,500, and `chunk_size_min` 1000. System health's counts column shows only counts above 0, so `missing_now`, `components_closed` and `chunk_halvings` are absent on a day with none.
 
 Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<assets conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 96 `assets_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` or `paging_expired` now and then is fine (the next run carries on, or starts over). A renamed field changes nothing (its id stays). `unknown_field` means a mapped field was deleted in the register: the log line `airtable unknown field` names its id; map its replacement by id (14.5's two Terminal steps, then only that field's line in Studio). `field_type_changed` means a mapped field's type changed: the log line `airtable field type changed` names the field and both types; check its values with a dry run (14.6), then accept the new type by mapping the field again in one Run, `select cma.set_connection_field('<assets conn>', '<entity>', '<field>', '<ref_system>', '');` and then the same with its `fld…` id (after the context block); the next run records the new type. A failed poll does not move its cadence, so a lasting failure (`unknown_field`, `field_type_changed`, `token_unavailable`) writes one `failed` row every 5 minutes, about 288 a day, until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 14.3 to 14.8 into `records/0008zj-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no token or personal data).
+
+## 14.9 Rotating the token (every 180 days; owner Martin)
+
+The token of 14.2 lives until it is revoked: an Airtable personal access token does not expire on its own. Martin owns it and rotates it every 180 days (Decision log, 28 October 2026; Gemini audit of 28 October 2026, FIND-02), and at once when it may have been exposed. The ingest reads the secret's latest version and every job execution starts fresh, so the first poll after a new version uses the new token; the old one keeps working until it is revoked, so no run fails in between. `put_secret` must be defined first (14.3).
+
+**Browser:** Airtable → Admin Panel → the service account `CMA sync` → Personal access tokens → Create token: name `CMA ingest prod <YYYY-MM-DD>` (today), the same scopes as 14.2 (`data.records:read` and `schema.bases:read` only) and the base "Airtable 2.0" only. Keep the page open: the token is shown once.
+
+Expected: the new token shown once (it starts with `pat`); the old token still listed.
+
+**Terminal** (on its own line; the value is the new token)
+```bash
+put_secret p4a-cma-prod airtable-assets-pulse4all-subscriptions
+```
+Expected: the hidden prompt; paste, Enter; `stored airtable-assets-pulse4all-subscriptions (version added)`. Then close the Airtable page.
+
+**Terminal** (the secret's versions, as 13.5)
+```bash
+gcloud secrets versions list airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
+```
+Expected: the new version and the old one, both `enabled`; the old one is the number before the new (1 at the first rotation). Note both numbers.
+
+Wait for the next poll, within 15 minutes (the connection's `assets_poll_interval_minutes`).
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select job, status, error, started_at from cma.sync_run
+where connection_id = '<assets conn>' and job = 'assets_poll' and started_at > now() - interval '30 minutes' order by started_at desc limit 3;
+reset role;
+```
+Expected: an `assets_poll | succeeded` row started after the new version's time; System health shows **Asset register poll** succeeded since then (or the day-one query of 14.8). A `failed` row with `http_401` or `http_403`: the new token is wrong (a typo, a scope or the base); revoke nothing, create it again (the first block) and store it again.
+
+**Browser:** Admin Panel → `CMA sync` → Personal access tokens → revoke the old token (`CMA ingest prod`, or the previous date).
+
+Expected: only the new token listed.
+
+**Terminal** (the old version gone, as 13.5, so nothing can read the revoked token back)
+```bash
+gcloud secrets versions destroy <old version> --secret=airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
+```
+Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the secret [airtable-assets-pulse4all-subscriptions].` The list of the earlier block now shows the old version `destroyed` and the new one `enabled`. The next poll succeeds again (the Studio block above, a run after the revoke). Report the date and the two version numbers; the next rotation is due 180 days from today.

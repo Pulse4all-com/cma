@@ -30,7 +30,8 @@
  * change the webhook missed, leaves a newer row alone, reads only held contacts, honours
  * --lookback-minutes and reads nothing twice; tenant isolation; of two executions of a job started at
  * once the second finds the first one's lock and is skipped with one log line and nothing written, and
- * runs once the lock is released (audit 17 October 2026, 5.2-02); the pool's statement timeout cancels a
+ * runs once the lock is released (audit 17 October 2026, 5.2-02); the jobs' pool of 2 (the sweep under its lock
+ * peaks at 2, a run waiting on its own pool counted; Gemini audit of 28 October 2026, FIND-01); the pool's statement timeout cancels a
  * long statement (db_57014) and its idle-in-transaction timeout ends an idle transaction (db_25P03)
  * without ending the process (5.2-07); no email, token or contact id in the
  * logs, no email in the database; no row of another tenant written by this run (the audit log).
@@ -41,7 +42,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
+import { expect, verdict, poolCheck, writesOutside, PROVOKE } from "./lib.mjs";
 
 console.log(`verify/jobs-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
 
@@ -539,6 +540,22 @@ expect("lock: the skipped one logged once (code locked, no ids) and wrote no run
 expect("lock: released after the run, the next execution runs", (await withJobLock("verify-sweep", () => sweep())).ran, true, false);
 expect("lock: another job's name is another lock", (await withJobLock("verify-forms", async () => "ran")).result, "ran", null);
 
+// ---- G2. The jobs' pool of 2 (Gemini audit of 28 October 2026, FIND-01; db.mjs measurePool) ------------
+// A run measured as main measures it, its lock included: the sweep holds its lock and one unit of work at a time. A
+// probe that opens one transaction inside another under its lock until its own connections fill the pool waits on
+// itself (until the pool's connection timeout) and is counted as such; poolCheck leaves its verify-… run out
+const { measurePool, poolRuns, poolMax, withoutTenant } = await import("../src/core/db.mjs");
+await measurePool("sweep", () => withJobLock("verify-sweep", () => sweep()));
+const swept = poolRuns().at(-1);
+expect(`pool: the sweep under its lock peaks at 2 connections, the lock and one unit of work (pool ${poolMax()})`,
+  [swept.job, swept.peak, swept.work, swept.selfWaits], ["sweep", 2, 1, 0], ["sweep", 3, 2, 1]);
+const nest = (depth) => withoutTenant((c) => (depth > 1 ? nest(depth - 1) : c.query("select 1")));
+const probe = await measurePool("verify-pool-probe", () => withJobLock("verify-pool-probe", () => nest(poolMax())))
+  .then(() => "ok", (e) => String(e?.message ?? "error"));
+const probed = poolRuns().at(-1);
+expect("pool: a run that asks for a connection while its own fill the pool is counted as waiting on itself, and times out",
+  [probe.includes("timeout"), probed.job, probed.peak, probed.selfWaits], [true, "verify-pool-probe", poolMax(), 1], [false, "verify-pool-probe", poolMax(), 0]);
+
 // ---- H. The pool's timeouts (5.2-07): the pool reopened with one-second timeouts ----------------------
 await closeDb();
 process.env.CMA_DB_STATEMENT_TIMEOUT_MS = "1000";
@@ -575,4 +592,5 @@ await admin.end();
 await new Promise((r) => fakeServer.close(r));
 await closeDb();
 rmSync(secretsDir, { recursive: true, force: true });
+await poolCheck();
 verdict();

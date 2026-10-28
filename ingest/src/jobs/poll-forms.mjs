@@ -13,8 +13,13 @@ import { storeFor } from "../core/store.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
-export async function runPollForms({ connectionId = null, adapters = ADAPTERS } = {}) {
+export function runPollForms(options) {
+  return measurePool("poll-forms", () => pollFormsJob(options));
+}
+
+async function pollFormsJob({ connectionId = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:poll-forms" });
   const total = { connections: 0, fetched: 0, upserted: 0, skipped: 0, dropped: 0, failed: 0 };

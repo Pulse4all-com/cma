@@ -20,10 +20,15 @@ import { storeFor } from "../core/store.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
 const CLAIM = 50;
 
-export async function runOutbox({ connectionId = null, adapters = ADAPTERS, maxMs = 45_000, now = () => Date.now() } = {}) {
+export function runOutbox(options) {
+  return measurePool("outbox", () => outboxJob(options));
+}
+
+async function outboxJob({ connectionId = null, adapters = ADAPTERS, maxMs = 45_000, now = () => Date.now() } = {}) {
   const started = now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:outbox" });
   const total = { connections: 0, claimed: 0, sent: 0, actionsFailed: 0, errors: {}, failed: 0 };

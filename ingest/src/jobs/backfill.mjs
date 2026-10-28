@@ -41,6 +41,7 @@ import { recordAndProcess, addCounts } from "../core/sync.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info } from "../core/log.mjs";
 import { UsageError, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
 /**
  * The store as an --again run's adapter sees it: a finished backfill cursor (a stream backfill:…, done) reads
@@ -68,7 +69,11 @@ export function walkAgain(store) {
  * The objects of one command (--object deal,ticket) one after the other, on one budget: the per-object totals, and a
  * pause stops the rest (their totals say skipped_after_pause). Answers { objects: [...totals], failed }.
  */
-export async function runBackfills({ connectionId, objects, from = null, again = false, adapters = ADAPTERS }) {
+export function runBackfills(options) {
+  return measurePool("backfill", () => backfillsJob(options));
+}
+
+async function backfillsJob({ connectionId, objects, from = null, again = false, adapters = ADAPTERS }) {
   const list = String(objects ?? "").split(",").map((o) => o.trim()).filter(Boolean);
   if (!connectionId || !list.length) throw new UsageError("--connection and --object are required");
   if (new Set(list).size !== list.length) throw new UsageError("--object names an object twice");
@@ -87,7 +92,11 @@ export async function runBackfills({ connectionId, objects, from = null, again =
   return { objects: out, failed: out.reduce((n, t) => n + (t.failed ?? 0), 0) };
 }
 
-export async function runBackfill({ connectionId, object, from = null, again = false, dryRun = false, adapters = ADAPTERS, budget: given = null,
+export function runBackfill(options) {
+  return measurePool("backfill", () => backfillJob(options));
+}
+
+async function backfillJob({ connectionId, object, from = null, again = false, dryRun = false, adapters = ADAPTERS, budget: given = null,
   onBudget = null }) {
   if (!connectionId || !object) throw new UsageError("--connection and --object are required");
   const started = Date.now();

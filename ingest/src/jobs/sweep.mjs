@@ -31,13 +31,18 @@ import { recordAndProcess } from "../core/sync.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
 const PART = 100;
 const LINK_LOOKBACK_MS = 2 * 60 * 60_000;
 const REREAD_EVERY_MS = 10 * 60_000;
 export const OUTBOX_LATE = "10 minutes";
 
-export async function runSweep({ connectionId = null, adapters = ADAPTERS, maxMs = 45_000, now = () => Date.now() } = {}) {
+export function runSweep(options) {
+  return measurePool("sweep", () => sweepJob(options));
+}
+
+async function sweepJob({ connectionId = null, adapters = ADAPTERS, maxMs = 45_000, now = () => Date.now() } = {}) {
   const started = now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:sweep" });
   const total = { connections: 0, claimed: 0, processed: 0, ignored: 0, eventsFailed: 0, reread: 0, catalogs: 0, links: 0, outboxPending: 0, failed: 0 };
