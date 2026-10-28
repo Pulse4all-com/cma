@@ -1,9 +1,10 @@
 /**
  * The Airtable adapter for an asset register (addition 0008zj) as the jobs see it. Polling only and read only: the
  * server answers 404 on /airtable/<key> (kind poll), and nothing is ever written to Airtable. Every read loads its rows
- * in chunks (addition 0008zk): chunks of the setting assets_load_chunk (default 1,000, 100 to 5,000), each its own call of
- * cma.ingest_load_device_chunk and its own transaction under the pool's statement timeout (store.loadDeviceChunk; 0008zi's
- * load, set-based), nothing marked missing by a chunk. A full snapshot ends with the final step in slices: the run's
+ * in chunks (addition 0008zk): chunks from the setting assets_load_chunk (default 1,000, 100 to 5,000), halved after a
+ * call slower than a third of the statement timeout (loadInChunks), each its own call of cma.ingest_load_device_chunk and
+ * its own transaction under the pool's statement timeout (store.loadDeviceChunk; 0008zi's load, set-based), nothing
+ * marked missing by a chunk. A full snapshot ends with the final step in slices: the run's
  * record ids sorted by their bytes, cut into slices of the same size, each its own call of cma.ingest_mark_devices_missing
  * with its range (store.markDevicesMissing), so the step's work per call is bounded however large the register grows. A
  * run that fails before that step marks nothing missing, and the chunks it loaded change nothing when the next run loads
@@ -39,7 +40,8 @@
  * customer_ref_invalid, refs_dropped), its phase times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms,
  * missing_ms; cleanup_ms 0, as chunks stage nothing), the slowest call in milliseconds as the ingest measures it
  * (chunk_max_ms, the slowest chunk; slice_max_ms, the slowest slice of the final step: PROD_RUNBOOK 14.7 reads them
- * against 3,000 ms), the adaptive chunks (chunk_size_min, chunk_halvings) and fetched, with upserted (inserted and
+ * against half the statement timeout, 7,500 ms), the adaptive chunks of a read that sent any (chunk_size_min, the smallest
+ * chunk size in force; chunk_halvings) and fetched, with upserted (inserted and
  * updated) and skipped (unchanged); the log line adds
  * mapped, the chunks and slices, the fields, date failures, values with an @, unreadable cells, duplicates and the
  * requests per endpoint. Never a token, a value or a record's content.
@@ -62,8 +64,6 @@ export const LOAD_COUNTS = ["rows", "inserted", "updated", "unchanged", "missing
 export const PHASE_COUNTS = ["stage_ms", "map_ms", "upsert_ms", "components_ms", "missing_ms", "cleanup_ms"];
 /** The slowest chunk and the slowest slice of a run (milliseconds of the call as the ingest measures it), the largest kept */
 export const MAX_COUNTS = ["chunk_max_ms", "slice_max_ms"];
-/** The adaptive chunks of a run: the smallest chunk size in force, and how often it was halved */
-export const CHUNK_COUNTS = ["chunk_size_min", "chunk_halvings"];
 
 /** A connection without a token secret name is loaded from files: the jobs skip it (code csv_only). */
 export function skipReason(connection) {
@@ -207,13 +207,17 @@ async function loadInChunks({ connection, store, rows, chunk, counts }) {
   let size = chunk;
   let chunks = 0;
   let retryUntil = -1;
+  if (!rows.length) return 0;
   counts.chunk_halvings = Number(counts.chunk_halvings ?? 0);
   counts.chunk_size_min = Math.min(Number(counts.chunk_size_min) || size, size);
+  // answers whether the size dropped (at the floor it stays)
   const halve = () => {
     const next = Math.max(LOAD_CHUNK_MIN, Math.floor(size / 2));
-    if (next < size) counts.chunk_halvings += 1;
+    const dropped = next < size;
+    if (dropped) counts.chunk_halvings += 1;
     size = next;
     counts.chunk_size_min = Math.min(counts.chunk_size_min, size);
+    return dropped;
   };
   for (let i = 0; i < rows.length;) {
     const part = rows.slice(i, i + size);
@@ -225,15 +229,14 @@ async function loadInChunks({ connection, store, rows, chunk, counts }) {
       if (!isTimeout(err) || i < retryUntil) throw err;
       retryUntil = i + part.length;
       halve();
-      warn("airtable chunk cancelled by the statement timeout: sent again at half its size",
+      warn("airtable chunk cancelled by the statement timeout: sent again at half its size (at least 100 rows)",
         { connection: connection?.connectionId, code: "db_57014", rows: part.length, size, chunk: chunks + 1 });
       continue;
     }
     addLoad(counts, loaded, "chunk_max_ms", ms);
     i += part.length;
     chunks += 1;
-    if (ms > slowMs && i < rows.length) {
-      halve();
+    if (ms > slowMs && i < rows.length && halve()) {
       info("airtable chunk slow: the next one halved", { connection: connection?.connectionId, ms: Math.round(ms), size, chunk: chunks });
     }
   }

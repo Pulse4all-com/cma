@@ -240,7 +240,9 @@ exception when others then
 end
 $$;
 
--- The cleanup as a step: its answer recorded
+-- The cleanup as a step: its answer recorded. A deadlock (40P01) is tried again, up to three attempts: a scheduler run
+-- that started before the lock and finishes during the cleanup holds its run row and waits for the tenant's (its audit
+-- row's foreign key), while the cleanup waits for that run row; the attempt PostgreSQL aborts has rolled back whole
 create or replace function pg_temp.v0008zk_clean(p_step text, p_slug text)
 returns void
 language plpgsql
@@ -248,10 +250,17 @@ as $$
 declare
   v_t0 timestamptz := clock_timestamp();
   v_id uuid := pg_temp.v0008zk_tenant(p_slug);
-  v_r  text := pg_temp.v0008zk_cleanup(p_slug);
+  v_r  text;
+  v_n  integer := 0;
 begin
+  loop
+    v_n := v_n + 1;
+    v_r := pg_temp.v0008zk_cleanup(p_slug);
+    exit when v_r not like '40P01:%' or v_n >= 3;
+  end loop;
   perform pg_temp.v0008zk_log(p_step, null, round(extract(epoch from clock_timestamp() - v_t0) * 1000, 1),
-                              jsonb_build_object('slug', p_slug, 'tenant', v_id, 'result', v_r), case when v_r in ('absent', 'removed') then null else v_r end);
+                              jsonb_build_object('slug', p_slug, 'tenant', v_id, 'result', v_r, 'attempts', v_n),
+                              case when v_r in ('absent', 'removed') then null else v_r end);
 end
 $$;
 
@@ -1362,6 +1371,7 @@ declare
   v_to integer;
   v_ms numeric;
   v_ok boolean;
+  v_slow boolean;
 begin
   select * into st from pg_temp.v0008zk_c4_state;
   if not found or st.next_from > 50000 then
@@ -1370,14 +1380,16 @@ begin
   v_to := least(st.next_from + st.size - 1, 50000);
   perform pg_temp.v0008zk_load('c4', st.calls, 'verify-0008zk-volume', 'base-zk-v', pg_temp.v0008zk_volume(st.next_from, v_to));
   select s.ms, s.error is null into v_ms, v_ok from pg_temp.v0008zk_step s where s.step = 'c4' and s.n = st.calls;
+  -- as the adapter: a slow call halves the next chunk only while records remain
+  v_slow := v_ok and v_to < 50000 and coalesce(v_ms > current_setting('verify.slow_ms')::numeric, false);
   update pg_temp.v0008zk_step s set answer = coalesce(s.answer, '{}'::jsonb) || jsonb_build_object('size', st.size, 'rows_sent', v_to - st.next_from + 1)
   where s.step = 'c4' and s.n = st.calls;
   update pg_temp.v0008zk_c4_state c
      set next_from = case when v_ok then v_to + 1 else 50001 end,
          calls = c.calls + 1,
-         size = case when v_ms > current_setting('verify.slow_ms')::numeric then greatest(100, c.size / 2) else c.size end,
-         halvings = c.halvings + (v_ms > current_setting('verify.slow_ms')::numeric and c.size > 100)::integer,
-         min_size = least(c.min_size, case when v_ms > current_setting('verify.slow_ms')::numeric then greatest(100, c.size / 2) else c.size end);
+         size = case when v_slow then greatest(100, c.size / 2) else c.size end,
+         halvings = c.halvings + (v_slow and c.size > 100)::integer,
+         min_size = least(c.min_size, case when v_slow then greatest(100, c.size / 2) else c.size end);
 end
 $$;
 -- C2's slice k (from 0) of the run's 49,500 record ids
@@ -2087,9 +2099,10 @@ begin; select pg_temp.v0008zk_clean('end', 'verify-0008zk-volume'); commit;
 -- Z1. every step ran in a transaction of its own (no two steps share a transaction id); the server's version and the
 --     settings the speed depends on in the detail
 -- Z2. the throwaway tenants removed with every row and audit row of theirs, at the start (what an interrupted run left)
---     and at the end; every foreign key into a tenant's rows (into cma.tenant or a table with a tenant_id) comes from a
---     table of cma and pairs tenant_id with the tenant's id, which is what lets the cleanup remove a tenant table by
---     table (dev, 28 October 2026)
+--     and at the end; every table of cma with a tenant_id has a foreign key from it to cma.tenant (what makes the
+--     cleanup's lock hold every table), and every foreign key into a tenant's rows (into cma.tenant or a table with a
+--     tenant_id) comes from a table of cma and pairs tenant_id with the tenant's id (what lets the cleanup remove a tenant
+--     table by table); dev, 28 October 2026
 do $$
 declare
   v_steps bigint := (select count(*) from pg_temp.v0008zk_step);
@@ -2098,7 +2111,17 @@ declare
   v_left  text;
   v_fks   bigint;
   v_stray text;
+  v_tabs  bigint;
+  v_bare  text;
 begin
+  select count(*),
+         string_agg(c.relname::text, ', ' order by c.relname)
+           filter (where not exists (select 1 from pg_constraint k
+                                     where k.contype = 'f' and k.conrelid = c.oid and k.confrelid = 'cma.tenant'::regclass
+                                       and k.conkey = array[a.attnum]::int2[]))
+    into v_tabs, v_bare
+  from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
+  where c.relnamespace = 'cma'::regnamespace and c.relkind in ('r', 'p') and not c.relispartition;
   select count(*),
          string_agg(k.conrelid::regclass || ' ' || k.conname, ', ' order by k.conrelid::regclass::text, k.conname)
            filter (where k.connamespace <> 'cma'::regnamespace
@@ -2122,13 +2145,15 @@ begin
     nullif((select count(*) from cma.device d where d.tenant_id = any (v_ids))::text, '0') || ' devices',
     (select string_agg(s.answer ->> 'slug' || ' ' || coalesce(s.error, s.answer ->> 'result'), '; ' order by s.ord) from pg_temp.v0008zk_step s
      where s.step in ('start', 'end') and (s.error is not null or s.answer ->> 'result' not in ('absent', 'removed'))),
-    'foreign keys the cleanup does not cover: ' || v_stray);
-  perform pg_temp.v0008zk_check(91, 'Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end; every foreign key into a tenant''s rows from a table of cma, paired on tenant_id',
+    'foreign keys the cleanup does not cover: ' || v_stray,
+    'tables with a tenant_id and no foreign key to cma.tenant, which the cleanup''s lock does not hold: ' || v_bare);
+  perform pg_temp.v0008zk_check(91, 'Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end; every table with a tenant_id held by a foreign key to cma.tenant, every foreign key into a tenant''s rows from a table of cma, paired on tenant_id',
     v_left = '' and (select count(*) from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'result' = 'removed') = 4,
-    coalesce(nullif(v_left, ''), format('start: %s; end: %s removed in %s ms; %s foreign keys into a tenant''s rows, all from cma and paired on tenant_id',
+    coalesce(nullif(v_left, ''), format('start: %s; end: %s removed in %s ms; %s cleanups tried again after a deadlock; %s tables with a tenant_id, each with a foreign key to cma.tenant; %s foreign keys into a tenant''s rows, all from cma and paired on tenant_id',
       (select string_agg(s.answer ->> 'slug' || ' ' || (s.answer ->> 'result'), ', ' order by s.ord) from pg_temp.v0008zk_step s where s.step = 'start'),
       (select count(*) from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'result' = 'removed'),
-      (select sum(s.ms) from pg_temp.v0008zk_step s where s.step = 'end'), v_fks)));
+      (select sum(s.ms) from pg_temp.v0008zk_step s where s.step = 'end'),
+      (select count(*) from pg_temp.v0008zk_step s where s.step in ('start', 'end') and (s.answer ->> 'attempts')::integer > 1), v_tabs, v_fks)));
 end
 $$;
 

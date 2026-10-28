@@ -346,7 +346,7 @@ expect("E7g a chunk slower than a third of the statement timeout halves the next
 store = memStore(configOf({ assets_load_chunk: 200 }, typed(FIELDS)), { cancelCalls: [1] });
 counts = counts0();
 const cancelledOnce = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));
-const cancelLog = logOf("airtable chunk cancelled by the statement timeout: sent again at half its size");
+const cancelLog = logOf("airtable chunk cancelled by the statement timeout: sent again at half its size (at least 100 rows)");
 expect("E7h a chunk the statement timeout cancels (57014) is sent again once at half its size: 200 cancelled, then 100, 100 and 1; the run completes and logs db_57014",
   [cancelledOnce, store.sent, counts.rows, counts.chunk_size_min, counts.chunk_halvings, store.marks.length, cancelLog?.code, cancelLog?.rows],
   ["ok", [200, 100, 100, 1], 201, 100, 1, 2, "db_57014", 200],
