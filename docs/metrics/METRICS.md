@@ -24519,11 +24519,11 @@ i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_i
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
-      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
                                        and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
                                       then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
                                       else d.anchor end as anchor) a
-      where c.id is not null or r.id is not null or d.model_key is null
+      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as past_due_items
 from i join d on d.id = i.id cross join t
@@ -24604,11 +24604,11 @@ i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_i
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
-      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
                                        and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
                                       then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
                                       else d.anchor end as anchor) a
-      where c.id is not null or r.id is not null or d.model_key is null
+      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select date_trunc('month', i.action_on)::date as month, coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as items
 from i join d on d.id = i.id
@@ -24744,11 +24744,11 @@ i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_i
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
-      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
                                        and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
                                       then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
                                       else d.anchor end as anchor) a
-      where c.id is not null or r.id is not null or d.model_key is null
+      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select date_trunc('month', i.action_on)::date as month, i.component, count(*) as items
 from i where i.action_on >= :from and i.action_on < :to
@@ -24834,7 +24834,7 @@ A sum of the cells shown; no recomputation of its own. A planned exchange is cou
 
 **{n} due items have no due date** on /reports/maintenance · Due items without a due date (Vervallende onderdelen zonder vervaldatum)
 
-The note's count: due items of tracked devices without a due date (no recorded expiry, and no anchor date or no rule for the model).
+The note's count: due items of tracked devices without a due date (no recorded expiry, and no anchor date or no rule for the model, or a kind whose component the register emptied).
 
 **Formula as computed**
 
@@ -24879,11 +24879,11 @@ i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_i
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
-      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
                                        and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
                                       then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
                                       else d.anchor end as anchor) a
-      where c.id is not null or r.id is not null or d.model_key is null
+      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select count(*) as unknown_items from i where i.action_on is null and i.component <> 'device'
 ```
@@ -32513,11 +32513,11 @@ i as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_i
       from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'
       left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
       left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key
-      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
+      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id
                                        and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
                                       then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date
                                       else d.anchor end as anchor) a
-      where c.id is not null or r.id is not null or d.model_key is null
+      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)
       union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)
 select count(*) from i where i.action_on is null and i.component <> 'device'
 ```

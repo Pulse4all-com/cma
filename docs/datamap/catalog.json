@@ -167,7 +167,7 @@
         },
         {
           "name": "device_component",
-          "what": "A device's components per kind (pads, battery) with serial and recorded expiry; one current row per device and kind, a changed serial an observed replacement (replaced_at) from the first load on (0008zi)",
+          "what": "A device's components per kind (pads, battery) with serial and recorded expiry; one current row per device and kind, a changed serial an observed replacement (replaced_at) from the first load on (0008zi); a kind the register empties (serial and expiry both empty) closes the current row with no new one, and the same serial held again reopens it, while another serial is a replacement (0008zk)",
           "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (with its device, in chunks by cma.ingest_load_device_chunk, 0008zk); CSV fallback (with its device, by the same load)"
         },
         {

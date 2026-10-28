@@ -24,11 +24,16 @@ What happens to the export:
   the map neither maps nor ignores (a column added to the register) refuses the file. So the customer's names and
   email, which the export holds, never reach the staging file, the database or the terminal. A mapped cell holding an
   @ (an email where an id belongs) is written as a bare @ and counted (`values_with_at`), and the database does the
-  same for anything staged another way; the audit log keeps a staged row's keys only.
+  same for anything staged another way; the audit log keeps a staged row's keys only. A mapped kind with every one of
+  its cells empty is written as an empty object (`"pads": {}`): the register emptied it, so the load closes the
+  device's current component of that kind (no new row). A kind whose expiry does not parse (counted in
+  `date_parse_failures`) is not read as emptied: with a serial it is written with the serial only, without one it is
+  left out, so nothing is closed on a date the tool could not read.
 - The staging file is copied into `cma.device_import_staging` (`docs/import/copy-devices-staging.psql`), then
   `cma.load_device_snapshot(batch, connection, is_full)` loads it: a device per register record (the record id),
   model, status and country mapped through the catalogs' aliases (unmapped: null, and a data-quality finding), the
-  customer reference kept only when it is an id, a component whose serial changed recorded as a replacement, devices
+  customer reference kept only when it is an id, a component whose serial changed recorded as a replacement, a kind
+  the register emptied closed (its item has no due date until the register holds the kind again), devices
   missing from a full snapshot marked as missing, one run (`sync_run`, job `assets_import`), the staged rows deleted.
 
 Rules for the files, as for every import (docs/import/README.md): the export, the map and the staging file stay in
@@ -197,7 +202,8 @@ SQL
 ```
 Expected: the counts and the phase times. `rows` = step 6's `n`; on the first load `inserted` = `rows`; on a later one `inserted` (new
 records), `updated` (changed ones), `unchanged`, `missing_now` (devices the register no longer holds),
-`components_replaced` (a pads or battery serial that changed); `unmapped_model`, `unmapped_status` and
+`components_replaced` (a pads or battery serial that changed), `components_closed` (a kind the register emptied, its
+component closed with no new row; a replaced component counts in `components_replaced` only); `unmapped_model`, `unmapped_status` and
 `unmapped_market` (records whose label the catalogs do not know, such as the export's Spain and Italy in a catalog
 without ES and IT: dev and prod hold both since 27 October 2026; a market added later needs seed `02` again for its
 alias), `customer_ref_invalid` (a customer reference that is no id; it is never stored) and `refs_dropped` (a serial or id that is no id, left out). A refusal (`CMA02`,
@@ -241,7 +247,7 @@ cd ~/cma && node tools/devices-to-staging.mjs tools/fixtures/devices-sample.csv 
 Expected: `rows 30`, `mapped_columns 21`, `ignored_columns 31`, `date_parse_failures 0`, `values_with_at 1` (a customer
 id that is an address), the path. Then steps 6 and 7 with `/tmp/devices-staging-1.csv` and the batch `fixture-1`.
 Expected counts with the seed's catalogs and a market catalog that holds ES and IT, as dev does (27 October 2026):
-`rows 30`, `inserted 30`, `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `unmapped_model 1`,
+`rows 30`, `inserted 30`, `updated 0`, `unchanged 0`, `missing_now 0`, `components_replaced 0`, `components_closed 0`, `unmapped_model 1`,
 `unmapped_status 1`, `unmapped_market 0` (2 in a catalog without ES and IT: the fixture's Spain and Italy),
 `customer_ref_invalid 1`, `refs_dropped 0`, and the six phase times in milliseconds (`stage_ms`, `map_ms`,
 `upsert_ms`, `components_ms`, `missing_ms`, `cleanup_ms`), whose values vary from run to run.
@@ -329,7 +335,10 @@ Expected: the context row, then `DELETE <n>` with the rows of step 6.
 - **Due date:** a component's recorded expiry, else the anchor date plus the rule's interval for the model, else none
   (basis unknown). The anchor is the day a later snapshot first showed the component's new serial when it replaced
   another (a replacement restarts the rule), else the last shipment, else the first; the components of the first load
-  keep the shipment. The anchor is the day of the load, not of the swap, so loading often keeps it close.
+  keep the shipment. The anchor is the day of the load, not of the swap, so loading often keeps it close. A kind the
+  register emptied (serial and expiry both empty) closes its component and has no due date (basis unknown, also when
+  the model has no rule for it) until the register holds the kind again: the same serial back reopens the component
+  and keeps its anchor, another serial is a replacement and restarts the rule.
   **Action date:** the due date less the rule's lead days (Pulse4all: 60). A device's end of life is a due item of its
   own, on the recorded date, without lead days. **Past due:** the action date lies before the current month.
 - **Planned exchange:** a device's due items whose action dates lie within `assets.bundle_window_days` (Pulse4all: 90)
