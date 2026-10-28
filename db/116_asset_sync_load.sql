@@ -58,7 +58,7 @@
 -- 4 MB) with a database in Cloud SQL's collation (en_US.UTF-8), where 113's C1 with 0008zi's forecast took 153 and 126 ms
 -- against dev's 146.0 and 130.8:
 --   the final step    one statement over every record id of the run grows with the register: over 49,500 ids of
---                     50,000 devices it took 190 ms locally, under the 3,000 ms budget, but dev ran the first 117's C2 at
+--                     50,000 devices it took 190 ms locally, well within 117's budget, but dev ran the first 117's C2 at
 --                     710 ms against some 40 locally, and its work grows with every device. It is cut into slices of the
 --                     run's chunk size, each its own call over its own range of record ids (by a partial index in byte
 --                     order): about 2 ms a slice of 1,000 at 50,000 devices, whatever the register's size
