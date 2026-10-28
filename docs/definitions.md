@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026 and the asset terms of 27 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026 and the subscription terms of 28 October 2026 (Proposed); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -716,6 +716,86 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Used by | `maintenance.exchanges`, `maintenance.devices` (the devices line); Reports → Maintenance |
 | As built today | `cma.check_tenant_setting` and `cma.maintenance_items_of` (`112`). Matches the definition |
 
+## Subscription terms
+
+Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; no page shows them yet. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
+
+### Subscription
+
+| Field | Value |
+|---|---|
+| Term | Subscription (no Dutch label for the term in `copy.ts`; the connection kind says "Abonnementen") |
+| Key | `subscription`; SQL `cma.subscription`, `cma_read.subscription`; columns `source_id`, `customer_source_id`, `status`, `current_cycle`, `next_billing_at`, `billing_interval`, `billing_interval_count`, `amount_per_cycle`, `currency`, `payment_instrument_type`; no API field yet |
+| Definition | One subscription of a store's subscription app (Juo), one row per subscription and connection: its store customer's id, status, cycle, next billing time, billing interval, amount per cycle and currency, the type of its payment instrument and its times. A subscription the latest full read no longer returns stays stored and is marked missing (`source_deleted_at`). |
+| Source | The subscription app; for Pulse4all Subscriptions Juo's Admin API (`GET /subscriptions`, the payment method expanded for its instrument's type only), read by `ingest-poll-subscriptions` (the subscriptions the store's events touched, every `juo_poll_interval_minutes`, default 5) and by the nightly full read in `ingest-reconcile` (also `ingest-backfill --object subscription`), written by `cma.ingest_upsert_subscriptions`. The store customer's id joins `cma.commerce_customer.source_id` of the store whose handle is the connection's account id up to its first dot. Only whitelisted fields are read: a name, email, phone, address, payment detail or custom attribute never reaches a row |
+| Counts / does not count | Counts one row per subscription and connection that the latest full read still returns (`source_deleted_at` empty). A subscription missing from the latest full read stays stored and is not counted. The amount per cycle is the sum of the total prices of the items Juo has not canceled, as Juo states them, in the subscription's currency. A subscription whose customer the store's customers do not hold is still counted (the run's `customers_unmatched`) |
+| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); no page shows one yet, and a page shows a subscription by its Juo id and its status, never a customer's name or email |
+| Time rule | Instants as Juo writes them (`source_created_at`, `next_billing_at`, `canceled_at`, `source_updated_at`); `paused_at` is when the current pause began (Juo's time, else the latest pause event; empty unless paused). The day a report puts a subscription on is decided with the first report |
+| Scope | The tenant's connections of the kind `subscriptions`, one per store (the GB store is the pilot). The store is the tenant's commerce store whose handle is the connection's account id up to its first dot; a connection whose handle has no store is refused (`store_not_configured`) |
+| Equivalent in the source system | A subscription of Juo's Admin API (`GET /subscriptions`; Juo's admin shows the counts per status). Juo's help article: not checked (juo.dev was out of reach when built) |
+| Not to use | "Subscription" for a webhook subscription (Shopify's `webhookSubscriptions`, Aircall's webhook): say webhook, as System health's label "Shop webhooks check" does (Gaps D33, I7); Pulse4all Subscriptions is a business line's name, not this term |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
+| Used by | No catalog key and no page yet; `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
+| As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` `card`, `paypal` or `other`, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Matches the definition |
+
+### Subscription status
+
+| Field | Value |
+|---|---|
+| Term | Subscription status (no Dutch label in `copy.ts`) |
+| Key | `status` of `cma.subscription`; `status_from` and `status_to` of `cma.subscription_event`; values `active`, `paused`, `canceled`, `expired`, `failed`, `merged`, `never-subscribed` |
+| Definition | Juo's own status of a subscription, in Juo's words (convention 2): active, paused, canceled, expired, failed, merged or never-subscribed. The CMA stores it as Juo gives it, Juo's `cancelled` written `canceled` and `NEVER_SUBSCRIBED` written `never-subscribed`. |
+| Source | Juo's `status` on a subscription (lower case) and on a status event (upper case: `previousStatus`, `data.status` and `data.input.status`), read by the poll and the nightly full read; Juo's own move to failed arrives as an update from active to failed by the system |
+| Counts / does not count | Every subscription has one status. A subscription with status merged or never-subscribed is stored and has no payment state. The status is Juo's fact: no CMA rule changes it, and a subscription the latest full read no longer returns keeps its last status with `source_deleted_at` set. When Juo sets failed, and whether its retries continue, is an Open decision |
+| Unit and display | Juo's word in lower case; no label rewords it |
+| Time rule | As of the latest read of the subscription (the poll when an event touched it, else the nightly full read); the events `canceled`, `paused`, `resumed`, `reactivated` and `status_changed` hold the moves (`status_from`, `status_to`, `occurred_at`) |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's subscription `status` (Admin API) |
+| Not to use | "Cancelled" (Juo's spelling) in a key or a label: the CMA says canceled; Cancellation is another term, still to define (Reports → Cancellations counts cancellation requests, not statuses); "active" for a device's state (Device status) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
+| Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; no catalog key and no page yet |
+| As built today | `cma.subscription.status` written by `cma.ingest_upsert_subscriptions`, which refuses a status outside the seven (`CMA04`); the events `canceled`, `paused`, `resumed` and `reactivated` carry `status_from` and `status_to`, a `status_changed` has both (an update without a status, or with the same one, is no event of the CMA). Matches the definition |
+
+### Payment state
+
+| Field | Value |
+|---|---|
+| Term | Payment state (no Dutch label in `copy.ts`) |
+| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; no API field yet |
+| Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
+| Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
+| Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Reports → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
+| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; no page shows it yet |
+| Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `juo_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
+| Scope | As Subscription |
+| Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
+| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth); "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
+| Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
+| Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; no catalog key and no page yet (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
+| As built today | `cma.subscription_payment_state_of(tenant)` (`118`): Failed for status failed, Paused for paused, Canceled for canceled or expired, In retry for active with an open failed renewal (also `retry_cycle`, the latest open cycle, `retry_since`, its first failure, and `last_attempt`, its highest attempt), else Paid; `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function. Awaiting payment is not built: no subscription has it. Matches the definition apart from Awaiting payment (Pending) |
+
+### Failed renewal
+
+| Field | Value |
+|---|---|
+| Term | Failed renewal (no Dutch label in `copy.ts`) |
+| Key | `renew_failed` (`cma.subscription_event.event_type`); `cycle_index`, `attempt`, `error_code`, `reason_code` |
+| Definition | A renewal attempt of a subscription that Juo reports as failed, with its cycle, its attempt, an error code and a reason code (Juo's event `subscription:renew-failed`, stored as `renew_failed`). The error message is never read. |
+| Source | Juo's event `subscription:renew-failed`, read by the poll (`GET /events` for the category subscription, after its cursor less five minutes) and by `ingest-backfill --object subscription_event`: `cycleIndex`, `attempt`, `errorCode` (upper case, kept as a code), `reason` (kept only as a code of a fixed list, today `billing-attempt-failed`), the event's id and time |
+| Counts / does not count | One row per event, append-only. A failed renewal is open until a renewal of that cycle or a later one follows it, and an open one on an active subscription makes it In retry. On a subscription whose status is not active it changes no payment state: Failed, Paused and Canceled show their status. The error message, a free-text reason and any detail of the payment are not read |
+| Unit and display | A count of events per type and cycle; a code shows as the code, never a message; no page shows it yet |
+| Time rule | `occurred_at`, the instant Juo reports; the poll reads again from five minutes before its cursor, so the overlap stores nothing twice |
+| Scope | As Subscription |
+| Equivalent in the source system | Juo's event `subscription:renew-failed` (severity problem); HubSpot's copy of Juo's events stays as it is and is not read for this |
+| Not to use | "Failed" alone for it (Failed is the payment state of status failed: a failed renewal on an active subscription is In retry); "failed payment" and "dunning" (NetSuite's words, README, Source of truth) |
+| Status | Proposed (for Kira to confirm) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
+| Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); no catalog key and no page yet |
+| As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Matches the definition |
+
 ## Retired words
 
 Status: Retired. A retired word is never introduced again; where it still appears, Gaps against the definitions lists the place.
@@ -737,7 +817,7 @@ Status: Pending for every term below; none is defined yet. Each is added term by
 Lead, deal, lead pipeline, order pipeline, created deal, open deal, closed won, closed lost, lost reason, test deal, lead source.
 
 ### Customers and orders
-Contact, customer, new customer, first order, direct order, indirect order, B2B, B2C, subscription, cancellation, minimum term.
+Contact, customer, new customer, first order, direct order, indirect order, B2B, B2C, cancellation, minimum term. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled.
 
 ### Tickets and tasks
 Ticket, complaint, vulnerable case, owner, without owner, overdue, response time.
@@ -800,6 +880,7 @@ Where the code or the catalog says something else than this file: every retired 
 | D30 | `db/72_follow_up.sql`, `db/100_definitions_calls.sql` (`cma.data_quality_of`); `web/src/lib/follow-up.ts` (`DQ_UNLINKED_SKIP_DEFAULT`) | The skip value `outbound_unanswered_untagged` of the connection setting `dq_unlinked_skip` | "unanswered" for an outbound call (the rule itself is the term's since addition 0008zc: no answer and no tag) | A value named by Not connected (for example `outbound_not_connected_untagged`), the stored settings moved with it |
 | D31 | `db/100_definitions_calls.sql` (`cma.calls_of` with `cma.call_not_reached_of`, read by `cma.calls_overview` and `cma.calls_per_person`) | The speed of Reports → Calls and Calls per agent | About 565 ms for 1 to 25 October 2026 in prod as `cma_app` (`calls_overview` 565.6 ms, `calls_per_person` 564.7 ms), twice 0008zb's: Conversation reads each call's tags; a quarter's range would pass 1000 ms (`docs/definitions-2026-10/records/step1-dev-prod-2026-10-25.md`) | Under 1000 ms for a quarter's range; fixed with the step 2 work: an index on the current tags by call, or the tag rule computed once per call |
 | D32 | `db/74_forms_reporting.sql` (`cma.data_quality_of`) | The calls tagged incorrect data | Not counted apart: a call with a current tag meaning "incorrect data" is only kept out of Conversation (`102`) | Definitions step 2 (data quality checks): the calls with a current tag meaning "incorrect data" reported apart, a data-quality figure (to define with step 2) |
+| D33 | `db/118_subscriptions.sql` (the `sync_run.job` check, first made in `db/32_intake_core.sql`) | The job value `subscriptions_check` (stream `webhooks`) | "Subscriptions" for the webhook subscriptions of a shop (Shopify's nightly webhook check) | Another word, for example `webhooks_check`, the stored runs moved with it: Subscription is a subscription of a store's subscription app (Subscription terms). System health's label already says "Shop webhooks check" since addition 0008zl |
 
 ### ingest/
 
@@ -811,6 +892,7 @@ Where the code or the catalog says something else than this file: every retired 
 | I4 | `ingest/src/adapters/aircall/map.mjs` | `numberRef: call.number.id` | The call's number | The last number of a routed call (to verify) |
 | I5 | `ingest/src/adapters/aircall/map.mjs` | `callFromObject` | Every inbound or outbound call is stored, internal ones included | Internal calls left out (how Aircall marks one, to verify) |
 | I6 | `ingest/src/adapters/hubspot/map.mjs` | A deal's record-source fields | Not read: a deal brings its pipeline, stage, owner and times (and configured fields) only | The creation source mapped per CRM connection from the record-source fields (HubSpot: `hs_object_source` and `hs_created_by_user_id`, to verify) |
+| I7 | `ingest/src/adapters/shopify/reconcile.mjs` and `index.mjs` (`checkSubscriptions`); `ingest/src/adapters/shopify/map.mjs` (`SUBSCRIPTION_TOPICS`); `ingest/src/jobs/reconcile.mjs` | `checkSubscriptions`, `SUBSCRIPTION_TOPICS`, the job value `subscriptions_check` it writes and the run errors `subscriptions_recreated`, `subscriptions_missing`, `subscriptions_recreate_failed` | "Subscriptions" for Shopify's `webhookSubscriptions`, the shop's webhook subscriptions | Another word (for example webhooks): Subscription is a subscription of a store's subscription app; moves with D33 |
 
 ### docs/metrics/catalog.json
 
@@ -832,4 +914,4 @@ Where the code or the catalog says something else than this file: every retired 
 - Attempts from the telephony system only: every `attempts.*` and `attempts_per_agent.*` entry while `attempts.source` `crm` exists (C11).
 - The call outcome read no more (step 4): `attempts.without_outcome_share`, `attempts.deal.outcome_label` (C10).
 
-**Count per area:** `web/` 13, `db/` 20, `ingest/` 6, `docs/metrics/catalog.json` 9; 48 in all.
+**Count per area:** `web/` 13, `db/` 21, `ingest/` 7, `docs/metrics/catalog.json` 9; 50 in all.
