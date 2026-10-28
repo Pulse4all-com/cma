@@ -50,6 +50,7 @@ import { info, warn } from "../../core/log.mjs";
 import { SourceError } from "../../core/http.mjs";
 import { assetSettings, LOAD_CHUNK_MIN } from "./client.mjs";
 import { statementTimeoutMs } from "../../core/db.mjs";
+import { byBytes, slicesOf } from "../../core/slices.mjs";
 import { clientFor, checkFields, modifiedAfter, fieldError, FIELD_ID } from "./read.mjs";
 import { OBJECT_TYPE, mappingOf, fieldNames, rowOf } from "./map.mjs";
 
@@ -80,8 +81,8 @@ export async function pollDue({ store, now = Date.now() }) {
 /** The detail counts a run logs next to sync_run's counts. */
 export const emptyDetail = () => ({ fetched: 0, mapped: 0, duplicates: 0, dateFailures: 0, valuesWithAt: 0, unreadable: 0 });
 
-/** Text sorted by its UTF-8 bytes: the database's collation "C", the order of the final step's slices */
-export const byBytes = (a, b) => Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+/** The final step's helpers, shared with the Juo adapter since addition 0008zl (core/slices.mjs) */
+export { byBytes, slicesOf };
 
 /**
  * What every read needs: the settings, the mapping (by field id), the base and table, and the mapped fields checked
@@ -249,15 +250,6 @@ async function loadInChunks({ connection, store, rows, chunk, counts }) {
  * slice's first id; none for the last). Together the slices cover every record id once, so every device the run did not
  * read is marked missing in exactly one of them. Answers how many slices were sent.
  */
-export function slicesOf(sourceIds, size) {
-  const ids = [...sourceIds].sort(byBytes);
-  const slices = [];
-  for (let i = 0; i < ids.length; i += size) {
-    slices.push({ ids: ids.slice(i, i + size), from: i === 0 ? null : ids[i], before: i + size < ids.length ? ids[i + size] : null });
-  }
-  return slices;
-}
-
 async function markMissing({ store, rows, size, counts }) {
   const slices = slicesOf(rows.map((r) => r.source_id), size);
   for (const slice of slices) {

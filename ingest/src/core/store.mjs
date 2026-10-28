@@ -66,6 +66,17 @@
  *   recordFieldTypes(items)     cma.ingest_record_field_types: the types first read for the mapped fields without one
  *                               ([{ property, type }]); answers how many took a type
  *
+ * For a subscriptions source (addition 0008zl), each its own short transaction; ids, codes, counts and times only (never a
+ * name, an email, an address or a payment detail):
+ *   subscriptionStore()         cma.ingest_subscription_store: the store whose handle the connection's account id names,
+ *                               { handle, storeConnectionId }, or null (the adapter fails the run store_not_configured)
+ *   upsertSubscriptions(items)  cma.ingest_upsert_subscriptions in parts of at most 500: per subscription { sourceId,
+ *                               outcome, customerMatched }
+ *   upsertSubscriptionEvents(items)   cma.ingest_upsert_subscription_events in parts of at most 500: { outcome: count }
+ *   markSubscriptionsMissing(sourceIds, from, before)   cma.ingest_mark_subscriptions_missing: one slice of a full read's
+ *                               final step; { missing_now, missing_ms }
+ *   storeCustomersHeld(storeConnectionId, ids)   which of these customer ids the store's customers hold (the dry run)
+ *
  * For the legacy call import (addition 0008zg), the store of the CRM connection the rows are matched against; each its
  * own short transaction, ids, dates, meanings and counts only (never an email, a phone number, a name or a customer id
  * of the file; the reconciliation sends keyed hashes):
@@ -455,6 +466,38 @@ export function storeFor(ctx, connectionId) {
     async recordFieldTypes(items) {
       return withTenant(ctx, async (q) =>
         (await q.query("select cma.ingest_record_field_types($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
+    },
+    async subscriptionStore() {
+      return withTenant(ctx, async (q) => (await q.query("select cma.ingest_subscription_store($1) as s", [connectionId])).rows[0].s);
+    },
+    async upsertSubscriptions(items) {
+      const out = [];
+      for (const part of chunks(items)) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query("select source_id, outcome, customer_matched from cma.ingest_upsert_subscriptions($1, $2::jsonb)",
+            [connectionId, JSON.stringify(part)]);
+          for (const x of r.rows) out.push({ sourceId: x.source_id, outcome: x.outcome, customerMatched: x.customer_matched });
+        });
+      }
+      return out;
+    },
+    async upsertSubscriptionEvents(items) {
+      return outcomes(ctx, "select outcome from cma.ingest_upsert_subscription_events($1, $2::jsonb)", connectionId, items);
+    },
+    async markSubscriptionsMissing(sourceIds, from, before) {
+      return withTenant(ctx, async (q) =>
+        (await q.query("select cma.ingest_mark_subscriptions_missing($1, $2::text[], $3, $4) as c", [connectionId, sourceIds, from, before])).rows[0].c);
+    },
+    async storeCustomersHeld(storeConnectionId, ids) {
+      const held = new Set();
+      for (const part of chunks([...new Set(ids)])) {
+        await withTenant(ctx, async (q) => {
+          const r = await q.query(`select source_id from cma.commerce_customer
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and source_id = any ($2::text[])`, [storeConnectionId, part]);
+          for (const x of r.rows) held.add(x.source_id);
+        });
+      }
+      return held;
     },
     async legacyBatchStart(sourceSystem, sha256, cutoverDate) {
       return withTenant(ctx, async (q) => {

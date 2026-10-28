@@ -93,8 +93,9 @@ expect("a tag's seven meanings, incorrect data after not reached; the talk-time-
   [["not_reached", "call_type", "courtesy_attempt", "courtesy_completed_positive", "courtesy_completed_neutral", "courtesy_completed_negative"],
     false, false]);
 // since addition 0008ze a reviews connection, with its review channels as its one section; since addition 0008zi an asset
-// register connection, without a section (its devices arrive by the snapshot import, its catalogs are configuration)
-expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation", "reviews", "assets"],
+// register connection, without a section (its devices arrive by the snapshot import, its catalogs are configuration); since
+// addition 0008zl a subscriptions connection, without a section (its subscriptions and events arrive by the poll)
+expect("the kind is free while nothing is held", kindChoices([]), ["crm", "telephony", "commerce", "automation", "reviews", "assets", "subscriptions"],
   ["crm", "telephony", "commerce", "automation", "reviews"]);
 expect("a reviews connection has its review channels", sourceSections("reviews", []), ["reviewChannels"], []);
 expect("an asset register connection has no catalog section", sourceSections("assets", ["assets"]), [], ["reviewChannels"]);

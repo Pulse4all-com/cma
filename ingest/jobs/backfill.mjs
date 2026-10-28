@@ -1,5 +1,6 @@
 // Cloud Run job ingest-backfill (manual): node jobs/backfill.mjs --connection <id> --object <type>[,<type>…] [--from <YYYY-MM-DD>] [--again]
-// [--dry-run] (an adapter with a dry run: an asset register's device; reads and counts, writes nothing).
+// [--dry-run] (an adapter with a dry run: an asset register's device, a store's subscription and subscription_event; reads and
+// counts, writes nothing).
 // See src/jobs/backfill.mjs.
 import { main, parseArgs, UsageError } from "../src/jobs/runner.mjs";
 import { runBackfill, runBackfills } from "../src/jobs/backfill.mjs";
