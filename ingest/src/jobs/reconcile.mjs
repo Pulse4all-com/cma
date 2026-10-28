@@ -10,7 +10,9 @@
  * CMA-069) for every connection, every polled form's of the look-back, through the forms poll's writes.
  * An adapter with webhook subscriptions of its own to look after (Shopify) checks them after its
  * streams, one more sync_run row (job subscriptions_check, stream webhooks), unless --object narrows
- * the run.
+ * the run. An asset register's (Airtable, addition 0008zj) one stream is its nightly full snapshot; a
+ * connection the adapter does not serve (skipReason: an asset register without a token secret name,
+ * loaded from files) gets one log line and no run.
  *
  * The daily floor (backlog CMA-069): an adapter that names one (HubSpot: api_daily_floor_pct, default
  * 25) has its streams pause once the source's remaining daily calls fall below it; a paused stream is
@@ -52,11 +54,17 @@ export async function reconcileStream({ adapter, connection, store, budget, obje
 export async function runReconcile({ connectionId = null, lookbackMinutes = DEFAULT_LOOKBACK_MINUTES, object = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:reconcile" });
-  const total = { connections: 0, runs: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, eventsFailed: 0, paused: 0, failed: 0 };
+  const total = { connections: 0, notServed: 0, runs: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, eventsFailed: 0, paused: 0, failed: 0 };
   for (const c of connections) {
     const adapter = Object.hasOwn(adapters, c.adapter) ? adapters[c.adapter] : null;
     if (!adapter?.reconcile) continue;
     total.connections += 1;
+    const skip = adapter.skipReason?.(c) ?? null;
+    if (skip) {
+      total.notServed += 1;
+      info("reconcile: connection skipped", { connection: c.connectionId, code: skip });
+      continue;
+    }
     const store = storeFor(contextOf(c), c.connectionId);
     let floorPct = null;
     try {

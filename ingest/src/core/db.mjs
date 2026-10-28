@@ -49,6 +49,14 @@ function timeoutMs(name, fallback) {
   return Number.isInteger(v) && v >= 1000 && v <= 3_600_000 ? v : fallback;
 }
 
+/** The ingest's statement timeout when CMA_DB_STATEMENT_TIMEOUT_MS is not set (db/117 holds its budgets to this value) */
+export const DEFAULT_STATEMENT_TIMEOUT_MS = 15_000;
+
+/** The statement timeout every pooled session runs under, in milliseconds (the adapters' chunks adapt to it) */
+export function statementTimeoutMs() {
+  return timeoutMs("CMA_DB_STATEMENT_TIMEOUT_MS", DEFAULT_STATEMENT_TIMEOUT_MS);
+}
+
 let state = null;
 
 async function open() {
@@ -56,7 +64,7 @@ async function open() {
   const max = Number(process.env.CMA_DB_POOL_MAX ?? 5);
   // pg sends both as startup parameters: they bind every session of the pool
   const timeouts = {
-    statement_timeout: timeoutMs("CMA_DB_STATEMENT_TIMEOUT_MS", 15_000),
+    statement_timeout: statementTimeoutMs(),
     idle_in_transaction_session_timeout: timeoutMs("CMA_DB_IDLE_TX_TIMEOUT_MS", 30_000),
   };
   const setRole = process.env.CMA_DB_SET_ROLE;

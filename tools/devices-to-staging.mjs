@@ -9,7 +9,9 @@
  * source_row, source_id, serial, model, status, country, warehouse_ref, customer_ref, subscription_ref, order_ref,
  * first_shipped_on, stock_received_on, last_shipped_on, warranty_until, end_of_life_on, components (a JSON object of
  * component kinds, each with serial and expires_on) and external_refs (a JSON object of named ids), every date as
- * YYYY-MM-DD. Plain Node, no dependencies.
+ * YYYY-MM-DD. A mapped kind whose cells are all empty is written as an empty object ({"pads": {}}), so the load closes
+ * the device's current one of that kind (the register emptied it, addition 0008zk); a kind whose expiry does not read
+ * keeps what it holds, so nothing is closed on a date the tool could not read. Plain Node, no dependencies.
  *
  * The map (JSON; the export's headers are configuration, never code; docs/import/devices-map.example.json):
  *   columns        staging column -> export header, for source_id (required), serial, model, status, country,
@@ -155,7 +157,9 @@ export function convert(text, map, { batch, dateFormat, delimiter }) {
       const c = {};
       if (serial !== "") c.serial = serial;
       if (expires !== "") c.expires_on = expires;
-      if (Object.keys(c).length) components[kind] = c;
+      // every mapped cell of the kind empty: the register emptied the kind (read raw, so an @ is counted once)
+      const emptied = [spec.serial, spec.expires_on].filter(Boolean).every((h) => raw(r, h) === "");
+      if (Object.keys(c).length || emptied) components[kind] = c;
     }
     const refs = {};
     for (const [name, h] of Object.entries(map.external_refs ?? {})) {

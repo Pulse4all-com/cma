@@ -2964,6 +2964,7 @@ const en = {
     job_backfill: "Backfill",
     job_reviews_poll: "Reviews poll",
     job_assets_import: "Asset register import",
+    job_assets_poll: "Asset register poll",
     tenantWide: "All connections",
     // Outbox
     outboxTitle: "Outbox",
@@ -6217,6 +6218,7 @@ const nl: Copy = {
     job_backfill: "Terugladen",
     job_reviews_poll: "Reviews ophalen",
     job_assets_import: "Import assetregister",
+    job_assets_poll: "Assetregister ophalen",
     tenantWide: "Alle koppelingen",
     outboxTitle: "Uitgaand",
     outboxEmpty: "Niets wacht op verzending",

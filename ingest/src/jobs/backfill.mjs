@@ -25,7 +25,14 @@
  * time is unchanged is read again too: that is what fills a stored record's stage times after the adapter learned to
  * read them (a run-specific version, as the contact backfill always had; one read per object and run).
  *
+ * An adapter may read an object whole (an asset register's device, addition 0008zj: wholeObjects): the run is a full
+ * snapshot, loaded as one (the devices the register no longer holds marked missing), and takes no --from. With
+ * --dry-run (an adapter with dryRun) the run reads and counts and writes nothing: no staging, no load, no sync_run row,
+ * no cursor; one log line "backfill dry run" with the counts. A connection the adapter does not serve (skipReason: an
+ * asset register without a token secret name, loaded from files) is a usage error.
+ *
  *   gcloud run jobs execute ingest-backfill --args='^;^--connection;<id>;--object;<type>[,<type>…];--from;<date>[;--again]'
+ *   gcloud run jobs execute ingest-backfill --args='^;^--connection;<id>;--object;device[;--dry-run]'
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -80,7 +87,8 @@ export async function runBackfills({ connectionId, objects, from = null, again =
   return { objects: out, failed: out.reduce((n, t) => n + (t.failed ?? 0), 0) };
 }
 
-export async function runBackfill({ connectionId, object, from = null, again = false, adapters = ADAPTERS, budget: given = null, onBudget = null }) {
+export async function runBackfill({ connectionId, object, from = null, again = false, dryRun = false, adapters = ADAPTERS, budget: given = null,
+  onBudget = null }) {
   if (!connectionId || !object) throw new UsageError("--connection and --object are required");
   const started = Date.now();
   const [c] = await servedConnections({ connectionId, actorLabel: "ingest:backfill" });
@@ -89,7 +97,18 @@ export async function runBackfill({ connectionId, object, from = null, again = f
   if (!adapter?.backfill || !adapter.backfillObjects.includes(object)) {
     throw new UsageError(`the ${c.adapter} adapter backfills ${(adapter?.backfillObjects ?? []).join(", ") || "nothing"}`);
   }
+  const skip = adapter.skipReason?.(c) ?? null;
+  if (skip) throw new UsageError(`the connection is not read by the ingest (${skip}): it has no token secret name and is loaded from files`);
+  if (from && adapter.wholeObjects?.includes(object)) throw new UsageError(`--object ${object} is read whole: it takes no --from`);
+  if (dryRun && !adapter.dryRun) throw new UsageError(`the ${c.adapter} adapter has no dry run`);
   const store = storeFor(contextOf(c), c.connectionId);
+  if (dryRun) {
+    const budget = new JobBudget(adapter.rates);
+    const counts = await adapter.dryRun({ connection: c, store, budget, object });
+    const total = { connection: c.connectionId, object, dryRun: true, ...counts, failed: 0 };
+    info("backfill dry run", { ...total, ...budget.usage(), ms: Date.now() - started });
+    return total;
+  }
   // An adapter may name an object's own default start (HubSpot's email objects: cma.email_start_date_of), or all history
   const own = from ? null : await adapter.backfillFrom?.(object, store);
   const allHistory = own?.allHistory === true;

@@ -46544,8 +46544,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -46557,8 +46557,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -46665,7 +46665,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as past_due_items\nfrom i join d on d.id = i.id cross join t\nwhere i.action_on < date_trunc('month', t.today)\ngroup by 1, 2 order by 1, 2",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as past_due_items\nfrom i join d on d.id = i.id cross join t\nwhere i.action_on < date_trunc('month', t.today)\ngroup by 1, 2 order by 1, 2",
       "fixture_check": "Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.",
       "prerequisites": [
         {
@@ -46734,8 +46734,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -46747,8 +46747,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -46856,7 +46856,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect date_trunc('month', i.action_on)::date as month, coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as items\nfrom i join d on d.id = i.id\nwhere i.action_on >= :from and i.action_on < :to\ngroup by 1, 2, 3 order by 1, 2, 3",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect date_trunc('month', i.action_on)::date as month, coalesce(d.market, 'unknown') as market, coalesce(d.model_key, 'unknown') as model, count(*) as items\nfrom i join d on d.id = i.id\nwhere i.action_on >= :from and i.action_on < :to\ngroup by 1, 2, 3 order by 1, 2, 3",
       "fixture_check": "Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.",
       "prerequisites": [
         {
@@ -46925,8 +46925,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -46938,8 +46938,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47115,8 +47115,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -47128,8 +47128,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47220,7 +47220,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect date_trunc('month', i.action_on)::date as month, i.component, count(*) as items\nfrom i where i.action_on >= :from and i.action_on < :to\ngroup by 1, 2 order by 1, 2",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect date_trunc('month', i.action_on)::date as month, i.component, count(*) as items\nfrom i where i.action_on >= :from and i.action_on < :to\ngroup by 1, 2 order by 1, 2",
       "fixture_check": "Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.",
       "prerequisites": [
         {
@@ -47289,8 +47289,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -47302,8 +47302,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47451,7 +47451,7 @@
         "en": "Due items without a due date",
         "nl": "Vervallende onderdelen zonder vervaldatum"
       },
-      "definition": "The note's count: due items of tracked devices without a due date (no recorded expiry, and no anchor date or no rule for the model).",
+      "definition": "The note's count: due items of tracked devices without a due date (no recorded expiry, and no anchor date or no rule for the model, or a kind whose component the register emptied).",
       "formula": "Due items: per tracked device, a component of every active kind it carries, its model has a rule for, or of every kind while the model is unknown; and the device itself at its end of life (component device). Due date: the recorded expiry, else the anchor (the day a replacement was first seen, in the tenant's zone, else the last shipment, else the first) plus the rule's interval months, else none. Action date: the due date less the rule's lead days (end of life: none). count of items with basis unknown after the filters",
       "unit": "count",
       "grain": [
@@ -47473,8 +47473,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -47486,8 +47486,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47578,7 +47578,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) as unknown_items from i where i.action_on is null and i.component <> 'device'",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) as unknown_items from i where i.action_on is null and i.component <> 'device'",
       "fixture_check": "Not run here against dev or prod (no register data in this session); 113_verify_assets B7 to B11 check the reads on a fixed scenario, web/verify/reports.mjs checks the mock's mirror against the same strings, and the local run of the synthetic fixture (docs/import/devices.md, The fixture in dev) gave the documented figures. Martin runs the query in Studio after the first load.",
       "prerequisites": [
         {
@@ -47645,8 +47645,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47772,8 +47772,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -47785,8 +47785,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -47941,8 +47941,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -48042,8 +48042,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_model",
@@ -48155,8 +48155,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -48256,8 +48256,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -48371,8 +48371,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -48384,8 +48384,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component_kind",
@@ -48497,8 +48497,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -48510,8 +48510,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.maintenance_rule",
@@ -48623,8 +48623,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -48636,8 +48636,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.maintenance_rule",
@@ -48749,8 +48749,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -48762,8 +48762,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.maintenance_rule",
@@ -48875,8 +48875,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -48976,8 +48976,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -49077,8 +49077,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.commerce_customer",
@@ -49190,8 +49190,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63193,8 +63193,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63279,8 +63279,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63365,8 +63365,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63451,8 +63451,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63537,8 +63537,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63623,8 +63623,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         }
       ],
       "filters": [
@@ -63709,8 +63709,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -63736,8 +63736,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.maintenance_rule",
@@ -63788,7 +63788,7 @@
           }
         ]
       },
-      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when c.id is not null and exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) from i where i.action_on is null and i.component <> 'device'",
+      "verify_sql": "with t as (select (now() at time zone timezone)::date as today from cma.tenant where id = :tenant_id),\nd as (select dv.id, dv.market, dv.model_key, dv.end_of_life_on, coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor\n      from cma.device dv join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked\n      where dv.tenant_id = :tenant_id and dv.source_deleted_at is null),\ni as (select d.id, k.key as component, coalesce(c.expires_on, (a.anchor + make_interval(months => r.interval_months))::date) - coalesce(r.lead_days, 0) as action_on\n      from d join cma.device_component_kind k on k.tenant_id = :tenant_id and k.status = 'active'\n      left join cma.device_component c on c.tenant_id = :tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null\n      left join cma.maintenance_rule r on r.tenant_id = :tenant_id and r.model_key = d.model_key and r.component_key = k.key\n      cross join lateral (select case when exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id\n                                       and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n                                      then (c.first_seen_at at time zone (select timezone from cma.tenant where id = :tenant_id))::date\n                                      else d.anchor end as anchor) a\n      where c.id is not null or r.id is not null or d.model_key is null or exists (select 1 from cma.device_component p where p.tenant_id = :tenant_id and p.device_id = d.id and p.component_key = k.key and p.replaced_at is not null)\n      union all select d.id, 'device', d.end_of_life_on from d where d.end_of_life_on is not null)\nselect count(*) from i where i.action_on is null and i.component <> 'device'",
       "fixture_check": "Not run against dev or prod here; 113_verify_assets B13 checks every total and value on a fixed scenario, and the local load of the synthetic fixture gave the totals in docs/import/devices.md. Martin runs the query in Studio.",
       "prerequisites": [],
       "docs": [
@@ -63834,8 +63834,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -70437,8 +70437,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -70450,8 +70450,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -70589,8 +70589,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -70602,8 +70602,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -70741,8 +70741,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -70754,8 +70754,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -70893,8 +70893,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -70906,8 +70906,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71045,8 +71045,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71058,8 +71058,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71197,8 +71197,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71210,8 +71210,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71349,8 +71349,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71362,8 +71362,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71501,8 +71501,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71514,8 +71514,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71653,8 +71653,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71666,8 +71666,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71805,8 +71805,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71818,8 +71818,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -71957,8 +71957,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -71970,8 +71970,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -72109,8 +72109,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -72122,8 +72122,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -72261,8 +72261,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -72274,8 +72274,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",
@@ -72425,8 +72425,8 @@
             "source_deleted_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_component",
@@ -72438,8 +72438,8 @@
             "replaced_at"
           ],
           "owner": "Airtable",
-          "fed_by": "the register's CSV export (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) -> tools/devices-to-staging.mjs with the map's headers -> cma.device_import_staging (docs/import/copy-devices-staging.psql) -> cma.load_device_snapshot() (tenant.configure); run by Martin, docs/import/devices.md",
-          "cadence": "snapshot import of the register's CSV export, run by Martin; no schedule yet"
+          "fed_by": "the register (Pulse4all Subscriptions: the Airtable base Airtable 2.0, table 2.0 Installed Base) through the Airtable API: ingest-poll-assets and ingest-reconcile, the connection's fields as the mapping -> cma.ingest_load_device_chunk() per chunk of assets_load_chunk rows, then for a full snapshot cma.ingest_mark_devices_missing() (ingest.write; additions 0008zj and 0008zk, docs/ingest/README.md, section Airtable); the fallback its CSV export -> tools/devices-to-staging.mjs -> cma.load_device_snapshot() (tenant.configure), docs/import/devices.md",
+          "cadence": "Airtable API: changed records every 15 minutes, full snapshot nightly; CSV fallback"
         },
         {
           "table": "cma.device_status",

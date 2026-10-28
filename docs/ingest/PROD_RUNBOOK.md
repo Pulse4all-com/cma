@@ -1,6 +1,6 @@
 # Prod runbook: HubSpot, Aircall and Shopify into cma-ingest in prod
 
-The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026) and the Trusted Shops reviews (phase 13, brief B18, 25 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
+The prod phase for HubSpot (Pulse4all Subscriptions, the live portal `147946837`), then Aircall (phase 8), Shopify (phase 9), the email poll (phase 10, brief B17b, 15 October 2026), the Trusted Shops reviews (phase 13, brief B18, 25 October 2026) and the asset register's API sync (phase 14, addition 0008zj, 27 October 2026). Sections 7.1 to 7.9 replace step 3 of Phase 7 in `docs/night-2026-10-10/MORNING_RUNBOOK.md` (12 October 2026); phases 8 and 9 replace its steps 4 (the Aircall half), 5, 6 and 7 (13 October 2026). Order for HubSpot: the front and the service, the jobs, the connection, the app, the first events, the owners, the assignment rule, the backfill, day one. Every block says where it runs and ends with what you should see (the convention of `docs/night-2026-10-11/GO_LIVE_RUNBOOK.md`). SQL and shell never share a block.
 
 Before you start:
 - The gates of Phase 7 (the Yordi heads-up sent; NocoDB's visibility of the new views).
@@ -1564,3 +1564,276 @@ reset role;
 Expected: the latest `reviews_poll` run `succeeded`, with its `fetched` and `upserted` counts. `ref_dropped` appears among the counts only when a reference was left out; the reference itself is never stored or logged.
 
 **Note.** Backups and point-in-time recovery keep the old value until their retention runs out, and an extract taken through `cma_read.review` between the backfill and `106` still holds it.
+
+---
+
+# 14. The asset register's API sync in prod (addition 0008zj)
+
+Written on 27 October 2026 for 0008zj; Before 14.1 also carries 0008zk, written the same day and revised on 28 October (the mapping by field id, no view, the final step in slices). The ingest reads the asset register of Pulse4all Subscriptions (the Airtable base "Airtable 2.0", base `appsEV7MhflMLd2Xv`, table "2.0 Installed Base" `tblHVsCkAwJLqZOgu`) through the Airtable Web API: the records changed every 15 minutes (`ingest-poll-assets`) and a full snapshot nightly (`ingest-reconcile`), loaded through 0008zi's load into `cma.device` and `cma.device_component`, in chunks of `assets_load_chunk` rows since addition 0008zk (`docs/ingest/README.md`, section Airtable; `docs/architecture/data-model/0008.md`, Data model: asset sync and Data model: asset sync load). Read only: nothing is written to Airtable. The CSV import (`docs/import/devices.md`) stays as the fallback. Order: the migrations in dev with their verifies, the data map and the migrations in prod, all before the merge, then the merge (Before 14.1); then the service account and its token in Airtable, the secret and the ingest from `main` (14.1 to 14.3), the connection and its settings (14.4), its fields by id from a first dry run (14.5), the dry run and the first full read (14.6, 14.7), the schedule (14.8). Do 14.4 to 14.7 in one sitting, before 03:30: from 14.4 on the nightly reconcile reads the register too. The Studio blocks that call a function carry the context block's second chunk (as 9.6); `<tenant_id>` and `<user_id>` come from its first chunk. `<assets conn>` is the register's connection of 0008zi (`records/0008zi-prod-2026-10-27`), whose id 14.4 shows again. The Terminal blocks run in `~/cma`.
+
+**Data prerequisites:**
+- An Airtable service account (Enterprise Scale) with read-only access to the one base, and its personal access token with the scopes `data.records:read` and `schema.bases:read` (14.1, 14.2).
+- The map file's headers (`docs/import/devices-map.example.json`) named as the base names them on the day of 14.5: the mapping is generated from them once, by name, and held by field id from then on, so a later rename changes nothing; a deleted field (`unknown_field`) or a changed type (`field_type_changed`) fails every read, naming the field, until it is mapped again (14.8).
+- The catalogs of 0008zi (seed `02`): models, component kinds, statuses, the market aliases.
+
+## Before 14.1: the migrations, the data map, the merge
+
+Two additions: 0008zj (`114`, the asset sync) and 0008zk (`116`, the load set-based, in chunks and slices, and the forecast at 50,000 devices; `117` its verify). `114` runs where `0008zj` is missing; 27 October 2026 it ran in dev and prod, and prod's `115` failed C1 on time alone (a one-call snapshot of 5,000 records), which `116` answers. The first `116` and `117` ran in dev on 27 October (`records/0008zk-dev-2026-10-27`): the load was about twice as fast, but `117` did its work in one transaction, failed C3 and C4, and its provoked rerun lost the server's connection. Both were edited in place (CLAUDE.md forbids editing a script that has run in prod; these ran in dev only) and run again in dev below. `117` now mirrors production: every chunk, slice and measurement its own transaction, its throwaway tenants removed at the start and the end. `117` runs in dev (and local databases) only, never in prod (Decision log, 28 October 2026): it removes its throwaway tenants with their audit rows, which the rule of 17 October 2026 allows in dev and local databases only, and prod's audit log stays append-only; it refuses a database without the dev seed. Prod's speed check is 14.7's first full read of the real register. Every step below says which database it reads.
+
+**(a) Dev.** **Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zi' order by 1;
+select pg_postmaster_start_time();
+select count(*) as assets_with_view_id from cma.integration_connection c where c.settings ? 'view_id'
+  and (c.kind = 'assets' or (c.kind is null and 'assets' = any (cma.connection_held_kinds_of(c.tenant_id, c.id))));
+select slug from cma.tenant where slug like 'verify-0008zk-%' order by 1;
+reset role;
+```
+Expected: `0008zi`, `0008zj` and `0008zk`, then the server's start time: note it; then `assets_with_view_id`, which `116` sets to 0 (report a number above 0: those connections are read whole from then on); then the throwaway tenants an earlier `117` left, if any (after 28 October `verify-0008zk-one` and `verify-0008zk-volume`), which `117`'s start cleanup removes. Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login (no error, no result rows).
+
+**File:** `db/116_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error and no result rows. A second run ends the same and changes nothing. It replaces the first `116`'s final step (the two-argument `cma.ingest_mark_devices_missing`) with the slices', adds two indexes, makes the forecast again and lets a run's counts carry the adaptive chunks (`chunk_size_min`, `chunk_halvings`).
+
+**File:** `db/117_verify_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
+
+Expected, in some 5 to 10 minutes on dev's shared core: rows `A1` to `A6`, `B1` to `B8`, `C1` to `C5`, `Z1` and `Z2`, each `ok`, and `verdict | 0008zk verified | 117_verify_asset_sync_load: 21 ok, 0 FAIL`. `verdict | REFUSED: not dev or a local database` means the database lacks the dev seed: stop and report it.
+
+The budgets follow the ingest's statement timeout, 15 seconds, not a machine (Decision log, 28 October 2026): every ingest call (`C1`, each chunk of `C4`, each slice of `C2`) under half of it, 7,500 ms; `C4` loads under the adapter's rule (from 1,000 rows, the next chunk half the size after a call slower than a third of the timeout, 5,000 ms, at least 100), and its detail names the calls, the sizes and the halvings; `C5` under 5,000 ms; `C3`, the one-call path, under 10,000 ms.
+
+`Z2`'s detail starts with the start cleanup: `verify-0008zk-one removed` and `verify-0008zk-volume removed` are the two tenants the run of 28 October left (`absent` once they are gone), then the end cleanup, the cleanups tried again after a deadlock (usually 0), the tables with a `tenant_id` (92 locally), each with a foreign key to `cma.tenant`, and the foreign keys into a tenant's rows (220 locally), all from cma and paired on `tenant_id`. The cleanup locks the tenant and its people first, so dev's scheduler cannot add a run row while it deletes; a scheduler run that finishes during a cleanup can deadlock with it, and the cleanup then tries again (up to three attempts). A scheduler minute that falls in a cleanup may log one failure for that throwaway tenant's id (its run row is refused once the tenant is gone), and the next minute no longer lists it.
+
+Locally (PostgreSQL 16 held to db-g1-small's memory, 1.5 GB with `shared_buffers` 560 MB and `work_mem` 4 MB, a database in Cloud SQL's collation `en_US.UTF-8`) the run gave C1 137 ms; C2's slowest slice 112 ms (all 50 together 256 ms); C3 2,337 ms (its staging insert 1,253); C4 50 calls of 1,000 with no halving, its first 490 ms, its slowest 604, the first five 489 and the last five 541 on average; C5's page 747 ms and list 827 ms; Z2's end cleanup 23 s. Dev's run of 28 October (`records/0008zk-dev-2026-10-28`) took five to six times as long for `C1`, `C2` and `C5`, and eight to sixteen times for `C4`'s calls (its slowest 9,768 ms); its chunks of 1,000 took about 5,000 ms, the line where the adapter halves, so halvings in `C4` are expected on dev. Copy the details of `C1` to `C5`, `Z1` and `Z2` into the report. Any `FAIL`: report the row.
+
+**Studio (cma-dev-pg):** `117` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 117_verify_asset_sync_load: 0 ok, 21 FAIL`, in about the same time: the provoked run does the same work and removes its throwaway tenants as well. Locally the two runs in a row in one session took 232 s, a backend's memory peaked at 117 MB, and the server stayed up.
+
+**Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select pg_postmaster_start_time();
+select count(*) as throwaway_tenants from cma.tenant where slug like 'verify-0008zk-%';
+reset role;
+```
+Expected: the start time noted above (the server stayed up), then `0`.
+
+**Studio (cma-dev-pg):** `db/115_verify_asset_sync.sql`, then `db/113_verify_assets.sql`, each pasted whole and Run, unchanged (the load and the forecast they prove are the ones `116` makes again).
+
+Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (C1 names its milliseconds, under 10,000; locally 2,035 to 2,439), then `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL` (C1 names the page's and the list's milliseconds; locally 135 and 77). Copy both C1 details into the report.
+
+**Studio (cma-dev-pg):** the earlier verifies of what `116` makes again, each pasted whole and Run: `107` (the run's counts) and `53` (a connection's settings).
+
+Expected, each as it passed before this change: `107` 10 PASS, `53` 16 PASS.
+
+**(b) The data map.** No table, view or column changes (`116` adds functions, an aggregate and two indexes), so `docs/datamap/schema.json` moves its `latest_migration` only; `docs/datamap/catalog.json` says how the device tables are filled now and what an asset register's `connection_field` holds. Martin refreshes the snapshot from dev on this branch after (a), before merging.
+
+**Terminal** (in `~/cma`, on this branch)
+```bash
+cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
+```
+Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008zk"` (spaces around the colon).
+
+**Terminal** (`~/cma`)
+```bash
+node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
+```
+Expected: `datamap: wrote docs/datamap/index.html (96 tables, 144 views)`, then `datamap: 96 tables, 144 views, all described; index.html current`.
+
+**Terminal** (`~/cma`)
+```bash
+git add docs/datamap && git commit -m "Data map: snapshot after 0008zk" && git push origin HEAD:<branch>
+```
+Expected: the push names `<branch>`; the PR passes `verify:datamap`.
+
+**(c) Prod.** The ingest of this change loads in chunks and slices (`cma.ingest_load_device_chunk`, `cma.ingest_mark_devices_missing`), records the mapped fields' types (`cma.ingest_record_field_types`) and finishes runs with the load's counts, phase times and slowest calls, which only `116` provides, so prod runs `114` (where `0008zj` is missing) and `116` before the merge, then `115` and `113` (not `117`); `main`'s web and ingest read nothing they add, and the forecast `116` makes again gives the same results.
+
+**Terminal** (point-in-time recovery on, as before every prod migration)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zh' order by 1;
+select count(*) as assets_with_view_id from cma.integration_connection c where c.settings ? 'view_id'
+  and (c.kind = 'assets' or (c.kind is null and 'assets' = any (cma.connection_held_kinds_of(c.tenant_id, c.id))));
+reset role;
+```
+Expected: `0008zh`, `0008zi` and `0008zj`, then `assets_with_view_id` `0` (14.4 sets no view; a number above 0: report it, since `116` removes them and those connections are read whole from then on). Without `0008zj`: `db/114_asset_sync.sql` first, as one script, as your own login (no error, no result rows). With `0008zk` already there, stop and report it.
+
+**Studio (cma-prod-pg):** `db/116_asset_sync_load.sql` as one script, as your own login.
+
+Expected: no error and no result rows, in a few seconds (it builds two indexes on the device tables). A second run ends the same.
+
+**Studio (cma-prod-pg):** `db/115_verify_asset_sync.sql`, then `db/113_verify_assets.sql`, each pasted whole and Run (both work on throwaway tenants inside subtransactions that roll back, so nothing stays).
+
+Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL`, then `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`. Copy both C1 details (milliseconds) into the report. `115`'s C1 is expected to pass; `FAIL` on time alone with dev's `117` all `ok` retires that row (Decision log, 27 October 2026; report its milliseconds), and the merge goes ahead. `117` does not run in prod: the merge rests on dev's `117` and prod's `115` and `113`, and 14.7 measures prod's speed on the real register.
+
+**(d) The merge.** **Browser:** Martin reviews and squash-merges the pull request on GitHub ((a) to (c) done, every verify green). The merge touches `web/` (the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
+
+Expected: the build ends `SUCCESS`.
+
+## 14.1 The service account in Airtable
+
+**Gate:** the Gemini audit of this phase's new secret and IAM binding (the prompt is in the pull request's description) has answered, and every finding is checked as README, How we work, says. Martin runs it before 14.3.
+
+**Browser:** Airtable → Admin Panel (Enterprise Scale) → Service accounts → Create a service account: name `CMA sync`, an email on pulse4all.com that Martin controls. Then the base "Airtable 2.0" → Share → add the service account with the permission **Read only**. (The Admin Panel's wording may differ slightly; what counts is the account and its access.)
+
+Expected: `CMA sync` listed as an active service account; in the base's share list `CMA sync` with **Read only**, and no other base shared with it.
+
+## 14.2 Its personal access token
+
+**Browser:** Admin Panel → the service account `CMA sync` → Personal access tokens → Create token: name `CMA ingest prod`, scopes `data.records:read` and `schema.bases:read` only, access the base "Airtable 2.0" only. Keep the page open until 14.3's first block is done: the token is shown once.
+
+Expected: the token is shown once (it starts with `pat`). It is pasted only at the hidden prompt of 14.3, never into a command, a chat or a file.
+
+## 14.3 The secret, the ingest from `main` and the accessor
+
+`put_secret` must be defined first (Before you start, at the top of this runbook; `type put_secret` prints it).
+
+**Terminal** (on its own line; the value is the token of 14.2)
+```bash
+put_secret p4a-cma-prod airtable-assets-pulse4all-subscriptions
+```
+Expected: the hidden prompt; paste, Enter; `stored airtable-assets-pulse4all-subscriptions (version added)`. Then close the Airtable page.
+
+`--front` goes with the service deploy and never with `--jobs` (as 13.6). The service deploy grants `cma-ingest` the accessor on the new secret (on that secret only) and answers `404` on `/airtable/<key>`; the jobs deploy adds `ingest-poll-assets`, its schedule created paused (14.8 resumes it).
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret airtable-assets-pulse4all-subscriptions && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `accessor on airtable-assets-pulse4all-subscriptions`; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`): nine job deploys, `schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam), created paused` next to the others, `ingest-reconcile` at 03:30.
+
+**Terminal** (who may read the secret)
+```bash
+gcloud secrets get-iam-policy airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod --flatten='bindings[].members' --format='value(bindings.role,bindings.members)'
+```
+Expected: exactly one line, `roles/secretmanager.secretAccessor	serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com`. Another member: report it and remove it before 14.4.
+
+## 14.4 The connection and its settings
+
+The register's connection exists since 0008zi (adapter `airtable`, kind `assets`, account id `appsEV7MhflMLd2Xv`). `cma.upsert_connection` with the same adapter and account id updates it, adding the token secret name; from now on the ingest reads it.
+
+**Studio (cma-prod-pg)** in one Run (after the context block)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select * from cma.upsert_connection('airtable', 'Airtable 2.0 assets', 'appsEV7MhflMLd2Xv', null, 'airtable-assets-pulse4all-subscriptions');
+reset role;
+```
+Expected: one row of three values, then one row with `connection_id` (the register's connection of 0008zi: `<assets conn>`) and `key`. A connection id you do not know means the account id differs from the stored one: stop and report it.
+
+**Studio (cma-prod-pg)** in one Run (the settings; `set_connection_settings` replaces the whole object, so the current one is merged in)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select cma.set_connection_settings('<assets conn>',
+  coalesce((select settings from cma.integration_connection where id = '<assets conn>'), '{}'::jsonb)
+  || '{"table_id": "tblHVsCkAwJLqZOgu", "date_format": "dmy"}'::jsonb);
+select name, adapter, external_account_id, kind, status, signing_secret_name, token_secret_name
+from cma.sources() where connection_id = '<assets conn>';
+select cma.connection_config('<assets conn>') -> 'settings' as settings;
+reset role;
+```
+Expected: one row of three values, an empty result, then `Airtable 2.0 assets | airtable | appsEV7MhflMLd2Xv | assets | active | | airtable-assets-pulse4all-subscriptions`, then `{"table_id": "tblHVsCkAwJLqZOgu", "date_format": "dmy"}` (with any setting it held before). The other settings keep their defaults (`assets_poll_interval_minutes` 15, `assets_load_chunk` 1,000, `airtable_max_per_second` 2 for the poll and `airtable_full_max_per_second` 4 for a full read). There is no `view_id`: an asset register is read whole (the database refuses one, CMA04). The register's date fields arrive as ISO dates, so `date_format` matters only for a mapped date that arrives as text.
+
+## 14.5 The register's fields, by field id
+
+The mapping of `docs/import/devices-map.example.json` (the register's headers of 27 October 2026), carried over to the connection's fields by Airtable field id (`fld…`): 13 device columns, the pads' and the battery's serial and expiry, three named ids. The record id needs no field: it is the API's record id, the `RECORD_ID()` the export carried as `airtable_record _id`. The ids come from the live schema: a dry run without a mapping lists the table's fields (id, name, type), and `docs/ingest/airtable-fields.mjs` turns that list and the map file's headers into the Studio block. A field renamed in Airtable later keeps its id, so the mapping holds.
+
+**Terminal** (the first dry run: the connection has no fields yet, so it lists the table's fields and reads no record)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<assets conn>;--object;device;--dry-run'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` within a minute (one schema read).
+
+**Terminal** (in `~/cma` on `main`: the dry run's field list, names and types only, piped into the generator; nothing is written to a file)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run"' --project=p4a-cma-prod --freshness=1h --limit=1 --format=json | node docs/ingest/airtable-fields.mjs --connection <assets conn> --map docs/import/devices-map.example.json
+```
+Expected: a block of 27 lines: four context lines (`set role cma_app;` and the `set_config` lines with `<tenant_id>` and `<user_id>`), twenty `select cma.set_connection_field('<assets conn>', …, 'fld…');` lines, each ending in its field's name and type as a comment (`-- aed_sn (singleLineText)`), the read-back `select` over two lines and `reset role;`; then on its own line `20 fields mapped by id; the table holds 52` (52 on 27 October 2026). `no field of the table is named "…"` means the register renamed a header since 27 October: stop and report it (the map file is configuration and changes in its own pull request). `more than one field of the table is named "…"`: report it.
+
+**Studio (cma-prod-pg)** in one Run: paste the printed block, replace `<tenant_id>` and `<user_id>` from the context block's first chunk, and Run.
+
+Expected: one row of three values, twenty empty results, then 20 rows: `device` with `country`, `customer_ref`, `end_of_life_on`, `first_shipped_on`, `last_shipped_on`, `model`, `order_ref`, three `ref` rows (`ns_fam_id`, `ns_internal_id`, `ns_sales_order_id`), `serial`, `status`, `stock_received_on`, `subscription_ref`, `warehouse_ref`, `warranty_until`; `device_component` with `expires_on` and `serial` for `battery` and `pads`; every `source_property` a field id (`fld` and fourteen letters or digits). `no component kind …` means the catalog lacks the kind (seed `02`); `connection … is not an asset register connection` means the wrong connection id. **Browser:** Configuration → Sources → **Airtable 2.0 assets** lists the same fields read-only.
+
+## 14.6 The dry run
+
+The first read in prod with the mapping: the schema check and every record mapped, nothing written (no staging, no load, no run, no cursor, no recorded type). It is the API's equivalent of the staging tool's counts.
+
+**Terminal** (`<assets conn>` from 14.4)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<assets conn>;--object;device;--dry-run'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` in under a minute (some 100 pages at four a second).
+
+**Terminal** (the dry run's counts; counts and field names only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run"' --project=p4a-cma-prod --freshness=1h --limit=1 --format='value(jsonPayload.fetched,jsonPayload.mapped,jsonPayload.fields,jsonPayload.tableFields,jsonPayload.dateFailures,jsonPayload.valuesWithAt,jsonPayload.unreadable,jsonPayload.duplicates,jsonPayload.unknownFields,jsonPayload.typeChangedFields,jsonPayload.notFieldIds,jsonPayload.apiCalls)'
+```
+Expected: one line: `fetched` the register's records (9,677 in the export of 27 October 2026, `records/0008zi-prod-2026-10-27`, plus any added since), `mapped` the same, `fields` 20, `tableFields` the table's fields (52 on 27 October 2026; Grid view shows 35 of them), `dateFailures` 0, `valuesWithAt` 0 (the tool's counts of 27 October), `unreadable` 0, `duplicates` 0, `unknownFields` 0, `typeChangedFields` 0, `notFieldIds` 0, and the requests (one schema read and one per page). `unknownFields` above 0: the line `backfill dry run` names the ids in `unknownFieldNames`: a mapped field was deleted since 14.5; report it. A failed execution names its code in the log (`token_unavailable`: the secret or its accessor, 14.3; `http_401` or `http_403`: the token or its access, 14.1 and 14.2; `unknown_table`: 14.4's `table_id`; `date_format_not_set`: a mapped date arrives as text, the line names the field; `paging_expired`: Airtable let the paging expire, run it again).
+
+## 14.7 The first full read
+
+The same full snapshot, loaded: every record of the table in chunks of `assets_load_chunk` rows (default 1,000: about ten chunks; the adapter halves the next chunk after a call slower than a third of the statement timeout, 5,000 ms), then the final step in slices of the same size (about ten) that marks missing what the run did not read. The first read records the 20 mapped fields' types. A kind whose serial and expiry the register holds empty closes the device's current component of that kind (`components_closed`; its item due unknown).
+
+This read is prod's speed check (Decision log, 28 October 2026; `117` runs in dev only): the run records its phase times summed over its chunks, its slowest calls, `chunk_max_ms` (the slowest chunk) and `slice_max_ms` (the slowest slice of the final step), in milliseconds as the ingest measures each call, and its adaptive chunks, `chunk_size_min` (the smallest chunk size in force) and `chunk_halvings`. The budget is `117`'s: every call under half the ingest's 15-second statement timeout, 7,500 ms; a call slower than a third of it, 5,000 ms, halves the next chunk and shows as a halving. A chunk the timeout cancels is sent again once at half its size; cancelled again, the run fails before its final step, so nothing is marked missing.
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<assets conn>;--object;device'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Studio (cma-prod-pg)** (read only; counts only)
+```sql
+set role cma_owner;
+select job, stream, status, error, counts, started_at, finished_at from cma.sync_run
+where connection_id = '<assets conn>' order by started_at desc limit 3;
+select count(*) as devices, count(*) filter (where source_deleted_at is not null) as missing from cma.device where connection_id = '<assets conn>';
+select count(*) as staged from cma.device_import_row;
+select count(*) filter (where source_type is not null) as types_recorded from cma.connection_field where connection_id = '<assets conn>';
+select counts ->> 'chunk_max_ms' as chunk_max_ms, counts ->> 'slice_max_ms' as slice_max_ms, counts ->> 'chunk_size_min' as chunk_size_min,
+       counts ->> 'chunk_halvings' as chunk_halvings, counts ->> 'map_ms' as map_ms, counts ->> 'upsert_ms' as upsert_ms,
+       counts ->> 'components_ms' as components_ms, counts ->> 'missing_ms' as missing_ms
+from cma.sync_run where connection_id = '<assets conn>' and job = 'backfill' order by started_at desc limit 1;
+reset role;
+```
+Expected: the newest row `backfill | device | succeeded` with `fetched` and `rows` as 14.6's `fetched`, `inserted` 0 (records added since the export of 27 October would show here), `missing_now` 0, `updated` up to 9,677 where a device's mapped row from the API differs from the CSV's (`unchanged` the rest), `components_replaced` 0 (a pads or battery swapped since 27 October would show here), `components_closed` 0 (a kind the register emptied since 27 October would show here), and `unmapped_market`, `customer_ref_invalid` and `refs_dropped` as the load of 27 October counted them (8, 32 and 2) unless the register changed; the phase times in milliseconds summed over the chunks (`stage_ms`, `map_ms`, `upsert_ms`, `components_ms`, `missing_ms`; `cleanup_ms` 0); below it the CSV load of 0008zi (`assets_import`). Then the devices (9,677) with 0 missing, 0 staged rows and `types_recorded` 20. Last, the speed check: `chunk_max_ms` and `slice_max_ms` each under 7,500, `chunk_size_min` 1000 and `chunk_halvings` 0, with the four phase times; copy the line into the report. A value at or over 7,500, or a halving: report the line before 14.8. A `failed` row names its code: report it (`db_57014`: a chunk the statement timeout cancelled twice, with nothing marked missing).
+
+**Browser:** Reports → Maintenance and Reports → Data quality: the same figures as after the CSV load of 27 October (`records/0008zi-prod-2026-10-27`), unless the register changed since.
+
+## 14.8 The schedule, the first run and System health
+
+**Terminal**
+```bash
+gcloud scheduler jobs resume ingest-poll-assets --project=p4a-cma-prod --location=europe-west4 && gcloud scheduler jobs describe ingest-poll-assets --project=p4a-cma-prod --location=europe-west4 --format='value(state,schedule,timeZone)'
+```
+Expected: gcloud's confirmation that the job is resumed, then `ENABLED	*/5 * * * *	Europe/Amsterdam`. A later `deploy.sh prod --jobs` keeps the schedule as it is.
+
+Wait for the next five minutes: the first scheduled run is due at once (it has no cadence yet) and reads the records changed since 14.7 less five minutes.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select job, stream, status, error, counts ->> 'fetched' as fetched, counts ->> 'updated' as updated, counts ->> 'inserted' as inserted, started_at
+from cma.sync_run where connection_id = '<assets conn>' and job = 'assets_poll' order by started_at desc limit 3;
+select stream, cursor from cma.sync_cursor where connection_id = '<assets conn>' order by stream;
+reset role;
+```
+Expected: one `assets_poll | devices | succeeded` row with a small `fetched` (the records edited since 14.7, often 0); the cursors `assets:cadence` and `assets:modified` with that run's start as `at` (milliseconds). Then a run every 15 minutes: the job runs every 5, and a connection reads when its `assets_poll_interval_minutes` has passed.
+
+**Browser:** Workspace → Configuration → System health.
+
+Expected: the row **Asset register poll** with its last run succeeded, and the connection **Airtable 2.0 assets** OK. After 03:30 the next day: a **Nightly reconcile** run of the connection, stream `device`, succeeded, `missing_now` the records the register dropped that day (usually 0), `components_closed` the kinds the register emptied that day (their items show under `component_due_unknown`), `chunk_max_ms` and `slice_max_ms` under 7,500, and `chunk_size_min` 1000. System health's counts column shows only counts above 0, so `missing_now`, `components_closed` and `chunk_halvings` are absent on a day with none.
+
+Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<assets conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 96 `assets_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` or `paging_expired` now and then is fine (the next run carries on, or starts over). A renamed field changes nothing (its id stays). `unknown_field` means a mapped field was deleted in the register: the log line `airtable unknown field` names its id; map its replacement by id (14.5's two Terminal steps, then only that field's line in Studio). `field_type_changed` means a mapped field's type changed: the log line `airtable field type changed` names the field and both types; check its values with a dry run (14.6), then accept the new type by mapping the field again in one Run, `select cma.set_connection_field('<assets conn>', '<entity>', '<field>', '<ref_system>', '');` and then the same with its `fld…` id (after the context block); the next run records the new type. A failed poll does not move its cadence, so a lasting failure (`unknown_field`, `field_type_changed`, `token_unavailable`) writes one `failed` row every 5 minutes, about 288 a day, until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 14.3 to 14.8 into `records/0008zj-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no token or personal data).

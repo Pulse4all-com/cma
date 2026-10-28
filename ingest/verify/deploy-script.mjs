@@ -19,6 +19,10 @@
  * schedule and without the scheduler's invoker, running as cma-ingest; the service account reads the import bucket
  * cma-import-<project> through a binding on that bucket only, and a bucket that does not exist yet is named, not made.
  *
+ * The asset register poll (addition 0008zj, 27 October 2026): the ninth job, ingest-poll-assets, every 5 minutes
+ * (Europe/Amsterdam), its schedule created paused (PROD_RUNBOOK 14.8 resumes it) and an existing one updated without
+ * a pause, so a redeploy keeps the state Martin chose.
+ *
  *   node verify/deploy-script.mjs             every check must PASS
  *   node verify/deploy-script.mjs --provoke   every check must FAIL
  */
@@ -73,7 +77,7 @@ case "$1 $2 $3" in
   "artifacts repositories get-iam-policy") echo roles/artifactregistry.reader ;;
   "artifacts docker images") echo "sha256:${"0".repeat(64)}" ;;
   "run services describe") if [ "$fmt" = json ]; then cat "${bin}/service.json"; else echo "${RUNAPP[0]}"; fi ;;
-  "scheduler jobs describe") exit 1 ;;
+  "scheduler jobs describe") [ -e "${bin}/scheduler-exists" ] || exit 1 ;;
 esac
 exit 0
 `);
@@ -119,8 +123,8 @@ expect("prod --jobs --front → refused as before (--front is the service's)", [
 
 // ---- B. What still runs: prod's jobs, dev's service, prod's service with --front ----------------------
 r = await run(["prod", "--jobs"]);
-expect("prod --jobs → exit 0: the eight jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
-  [0, 8, 0], [2, 0, 1]);
+expect("prod --jobs → exit 0: the nine jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
+  [0, 9, 0], [2, 0, 1]);
 const importJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-import-legacy-calls ")) ?? "";
 expect("…the import job (0008zg): node jobs/import-legacy-calls.mjs as cma-ingest, 6 hours, no arguments",
   [importJob.includes("--command=node,jobs/import-legacy-calls.mjs"), importJob.includes("--service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com"),
@@ -184,6 +188,20 @@ expect("prod --jobs schedules the reconcile at 30 3 * * * Europe/Amsterdam by de
 expect("…the every-minute jobs as before", ["ingest-sweep", "ingest-poll-forms", "ingest-poll-email"].map((j) => schedule(j)[0]), ["* * * * *", "* * * * *", "* * * * *"], []);
 expect("…the reviews poll hourly at minute 7, Europe/Amsterdam (addition 0008ze)", [schedule("ingest-poll-reviews"), r.out.includes("schedule ingest-poll-reviews: 7 * * * * (Europe/Amsterdam)")],
   [["7 * * * *", "Europe/Amsterdam"], true], [["* * * * *", "Europe/Amsterdam"], false]);
+const assetsJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-poll-assets ")) ?? "";
+expect("…the asset register poll (0008zj): node jobs/poll-assets.mjs, 10 minutes, every 5 minutes, created paused",
+  [assetsJob.includes("--command=node,jobs/poll-assets.mjs"), assetsJob.includes("--task-timeout=10m"), schedule("ingest-poll-assets"),
+    r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-assets ")).length,
+    r.out.includes("schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam), created paused")],
+  [true, true, ["*/5 * * * *", "Europe/Amsterdam"], 1, true], [false, false, [], 0, false]);
+expect("…no other schedule paused, the outbox's aside", r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ") && !c.includes("ingest-poll-assets")).length, 0, 1);
+writeFileSync(path.join(bin, "scheduler-exists"), "");
+r = await run(["prod", "--jobs"]);
+rmSync(path.join(bin, "scheduler-exists"));
+expect("…an existing schedule updated, never paused again (a redeploy keeps the state)",
+  [r.calls.some((c) => c.startsWith("gcloud scheduler jobs update http ingest-poll-assets ")), r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-assets ")).length,
+    r.out.includes("schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam)\n")],
+  [true, 0, true], [false, 1, false]);
 r = await run(["dev", "--jobs", "--reconcile-every", "*/2 * * * *", "--reconcile-lookback", "10"]);
 expect("--reconcile-every and --reconcile-lookback still set the polling fallback", [schedule("ingest-reconcile")[0], (r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-reconcile ")) ?? "").includes("--args=--lookback-minutes,10")],
   ["*/2 * * * *", true], ["30 3 * * *", false]);

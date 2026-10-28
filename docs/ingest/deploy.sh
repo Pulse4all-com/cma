@@ -61,11 +61,15 @@
 #   ingest-poll-reviews hourly at :07 the reviews connections (addition 0008ze, brief B18): the channel catalog, then each
 #                                     channel's reviews submitted after its cursor less two hours, on the connection's
 #                                     reviews_poll_interval_minutes (default 60); polling only, a review platform sends no webhook
+#   ingest-poll-assets every 5 min    the asset register connections with a token secret name (addition 0008zj): when due on
+#                                     the connection's assets_poll_interval_minutes (default 15), the records changed since its
+#                                     cursor; created paused, resumed by PROD_RUNBOOK 14.8 (a redeploy keeps its state)
 #   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,
 #                                     email engagements and inbox threads, and the inbox trash); Aircall: calls of the last
 #                                     26 hours and the webhook;
 #                                     Shopify: customers and orders of the last 26 hours and the store's subscriptions;
-#                                     reviews: those submitted in the connection's last reviews_reconcile_days (default 30)
+#                                     reviews: those submitted in the connection's last reviews_reconcile_days (default 30);
+#                                     asset registers: the full snapshot (devices no longer held marked missing)
 #   ingest-outbox      no schedule    CRM contact write-backs (0007c): claimed, applied by mode, one batch update per connection.
 #                                     Generic and unused since 0008h (the CMA writes nothing back for commerce), so it is deployed
 #                                     without a schedule, and a schedule an earlier deploy made is paused (gcloud scheduler jobs
@@ -274,13 +278,16 @@ if [ "$JOBS" = 1 ]; then
   deploy_job ingest-poll-forms poll-forms.mjs 10m ""
   deploy_job ingest-poll-email poll-email.mjs 10m ""
   deploy_job ingest-poll-reviews poll-reviews.mjs 30m ""
+  deploy_job ingest-poll-assets poll-assets.mjs 10m ""
   deploy_job ingest-reconcile reconcile.mjs 60m "$RECONCILE_ARGS"
   deploy_job ingest-outbox outbox.mjs 10m ""
   deploy_job ingest-backfill backfill.mjs 24h ""
   deploy_job ingest-import-legacy-calls import-legacy-calls.mjs 6h ""
 
   # Cloud Scheduler calls each scheduled job's run endpoint as the scheduler account (run.invoker on those jobs only)
-  schedule () {  # <job> <cron>
+  # A schedule first created with "paused" as its third argument starts paused (ingest-poll-assets: PROD_RUNBOOK 14.8
+  # resumes it once the register's connection is ready); an update leaves a schedule's state as it is
+  schedule () {  # <job> <cron> [paused]
     gcloud run jobs add-iam-policy-binding "$1" --project="$PROJECT" --region="$REGION" \
       --member="serviceAccount:${SCHED_SA}" --role=roles/run.invoker --quiet >/dev/null
     local uri="https://${REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT}/jobs/$1:run"
@@ -291,12 +298,18 @@ if [ "$JOBS" = 1 ]; then
       --schedule="$2" --time-zone="Europe/Amsterdam" \
       --uri="$uri" --http-method=POST \
       --oauth-service-account-email="$SCHED_SA" --quiet >/dev/null
-    echo "schedule $1: $2 (Europe/Amsterdam)"
+    if [ "$verb" = create ] && [ "${3:-}" = paused ]; then
+      gcloud scheduler jobs pause "$1" --project="$PROJECT" --location="$REGION" --quiet >/dev/null
+      echo "schedule $1: $2 (Europe/Amsterdam), created paused"
+    else
+      echo "schedule $1: $2 (Europe/Amsterdam)"
+    fi
   }
   schedule ingest-sweep "* * * * *"
   schedule ingest-poll-forms "* * * * *"
   schedule ingest-poll-email "* * * * *"
   schedule ingest-poll-reviews "7 * * * *"
+  schedule ingest-poll-assets "*/5 * * * *" paused
   schedule ingest-reconcile "$RECONCILE_EVERY"
   # The outbox has nothing to deliver since 0008h: no schedule, and one left by an earlier deploy is paused
   if gcloud scheduler jobs describe ingest-outbox --project="$PROJECT" --location="$REGION" --format='value(state)' 2>/dev/null | grep -qx ENABLED; then
@@ -320,8 +333,8 @@ if [ "$JOBS" = 1 ]; then
   echo "grant cma_app to \"${DB_USER}\";"
   echo
   echo "== jobs on ${IMAGE}"
-  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
-  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history)"
+  echo "ingest-sweep, ingest-poll-forms, ingest-poll-email (every minute), ingest-poll-reviews (hourly at :07), ingest-poll-assets (every 5 minutes), ingest-reconcile (${RECONCILE_EVERY}${RECONCILE_LOOKBACK:+, look-back ${RECONCILE_LOOKBACK} minutes}), ingest-outbox, ingest-backfill and ingest-import-legacy-calls (manual)"
+  echo "backfill:  gcloud run jobs execute ingest-backfill --project=${PROJECT} --region=${REGION} --wait --args='^;^--connection;<id>;--object;<deal|ticket|crm_call|task|form_submission|contact|crm_email|inbox_thread|telephony_call|commerce_customer|commerce_order|review>[,<another>…];--from;<YYYY-MM-DD>'  (^;^: gcloud splits --args on commas; review without --from reads reviews.history_start_date, empty: all history; device reads the asset register whole, without --from, and takes --dry-run)"
   echo "import:    gcloud run jobs execute ingest-import-legacy-calls --project=${PROJECT} --region=${REGION} --wait --args='^|^--connection|<CRM connection id>|--file|gs://${IMPORT_BUCKET}/<object>|--source-system|<name>|--cutover|<YYYY-MM-DD>|--date-format|<DD-MM-YYYY>|--columns|<role=header,…>|--meanings|<label>=<meaning>;…[|--min-customer-id-digits|<n>][|--unmatched|<store or skip>][|--dry-run]'  (docs/import/legacy-calls.md)"
   echo "run now:   gcloud run jobs execute ingest-sweep --project=${PROJECT} --region=${REGION} --wait"
   echo "logs:      gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=ingest-sweep' --project=${PROJECT} --limit=20 --format='value(jsonPayload.message,jsonPayload.code)'"
