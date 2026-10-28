@@ -1587,15 +1587,10 @@ select version from cma.schema_migration where version >= '0008zi' order by 1;
 select pg_postmaster_start_time();
 select count(*) as assets_with_view_id from cma.integration_connection c where c.settings ? 'view_id'
   and (c.kind = 'assets' or (c.kind is null and 'assets' = any (cma.connection_held_kinds_of(c.tenant_id, c.id))));
+select slug from cma.tenant where slug like 'verify-0008zk-%' order by 1;
 reset role;
 ```
-Expected: `0008zi`, `0008zj` and `0008zk` (the first `116`), then the server's start time: note it; then `assets_with_view_id`, which `116` sets to 0 (report a number above 0: those connections are read whole from then on). Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login (no error, no result rows).
-
-**Terminal** (the server's log of the provoked run of 27 October; codes and the statement's start only)
-```bash
-gcloud logging read 'resource.type="cloudsql_database" AND resource.labels.database_id="p4a-cma-dev:cma-dev-pg" AND (textPayload:"terminated by signal" OR textPayload:"out of memory")' --project=p4a-cma-dev --freshness=3d --limit=5 --format='value(timestamp,textPayload)'
-```
-Expected: a line such as `server process (PID …) was terminated by signal 9: Killed` from 27 October, or nothing when the log no longer holds it. Copy the lines into the report: they say whether the backend was killed for memory.
+Expected: `0008zi`, `0008zj` and `0008zk`, then the server's start time: note it; then `assets_with_view_id`, which `116` sets to 0 (report a number above 0: those connections are read whole from then on); then the throwaway tenants an earlier `117` left, if any (after 28 October `verify-0008zk-one` and `verify-0008zk-volume`), which `117`'s start cleanup removes. Without `0008zj`: **File:** `db/114_asset_sync.sql`, copy all of it; **Studio (cma-dev-pg):** paste and Run, as your own login (no error, no result rows).
 
 **File:** `db/116_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
 
