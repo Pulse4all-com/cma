@@ -95,7 +95,7 @@ export function poolRuns() {
 /** A client of the pool, counted into the job's run when there is one; answers { client, done } */
 async function checkout(pool, { lock = false } = {}) {
   const use = jobUse.getStore() ?? null;
-  if (use && use.held >= poolMax()) use.selfWaits += 1;
+  if (use && use.held >= (pool.options?.max ?? poolMax())) use.selfWaits += 1;
   const client = await pool.connect();
   if (!use) return { client, done: () => undefined };
   use.held += 1;

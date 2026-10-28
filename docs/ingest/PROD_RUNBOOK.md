@@ -1865,11 +1865,11 @@ put_secret p4a-cma-prod airtable-assets-pulse4all-subscriptions
 ```
 Expected: the hidden prompt; paste, Enter; `stored airtable-assets-pulse4all-subscriptions (version added)`. Then close the Airtable page.
 
-**Terminal** (the secret's versions)
+**Terminal** (the secret's versions, as 13.5)
 ```bash
-gcloud secrets versions list airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod --format='value(name,state,createTime)'
+gcloud secrets versions list airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
 ```
-Expected: the new version first, `enabled`, created a minute ago; the one before it below. Note both numbers.
+Expected: the new version and the old one, both `enabled`; the old one is the number before the new (1 at the first rotation). Note both numbers.
 
 Wait for the next poll, within 15 minutes (the connection's `assets_poll_interval_minutes`).
 
@@ -1886,8 +1886,8 @@ Expected: an `assets_poll | succeeded` row started after the new version's time;
 
 Expected: only the new token listed.
 
-**Terminal** (the old version off, so nothing can read the revoked token back)
+**Terminal** (the old version gone, as 13.5, so nothing can read the revoked token back)
 ```bash
-gcloud secrets versions disable <old version> --secret=airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
+gcloud secrets versions destroy <old version> --secret=airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
 ```
-Expected: `Disabled version [<old version>] of the secret [airtable-assets-pulse4all-subscriptions].` The next poll succeeds again (the Studio block above, a run after the revoke). Report the date and the two version numbers; the next rotation is due `<cadence>` from today.
+Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the secret [airtable-assets-pulse4all-subscriptions].` The list of the earlier block now shows the old version `destroyed` and the new one `enabled`. The next poll succeeds again (the Studio block above, a run after the revoke). Report the date and the two version numbers; the next rotation is due `<cadence>` from today.

@@ -90,7 +90,7 @@ export async function poolCheck() {
     j.selfWaits += r.selfWaits;
     jobs.set(r.job, j);
   }
-  console.log(`pool: ${[...jobs].map(([job, j]) => `${job} ${j.runs} runs, work ${j.work}`).join("; ") || "no job run"}`);
+  console.log(`pool: ${[...jobs].map(([job, j]) => `${job} ${j.runs} runs, peak ${j.peak}, work ${j.work}`).join("; ") || "no job run"}`);
   const over = [...jobs].filter(([, j]) => j.work > 1 || j.selfWaits > 0).map(([job, j]) => `${job}: work ${j.work}, self-waits ${j.selfWaits}`);
   return expect("P1 every job's run kept to the jobs' pool of 2: its work on one connection at a time (the lock the other), no wait on its own pool",
     [runs.length > 0, over], [true, []], [false, ["provoked"]]);

@@ -112,6 +112,13 @@ export async function withJobLock(job, fn) {
   }
 }
 
+/** The job run's pool use (db.mjs measurePool), after one warning (code pool_self_wait) when it waited on its own pool */
+function selfWaitWarned(job) {
+  const pool = poolRuns().at(-1) ?? null;
+  if (pool?.selfWaits) warn(`${job} waited on its own pool`, { job, code: "pool_self_wait", poolPeak: pool.peak, poolMax: pool.max, selfWaits: pool.selfWaits });
+  return pool;
+}
+
 /** Runs a job's main function as a process: logs, closes the pool, sets the exit code. lock: one execution at a time. */
 export async function main(job, fn, { lock = false } = {}) {
   const started = Date.now();
@@ -131,8 +138,7 @@ export async function main(job, fn, { lock = false } = {}) {
       r = await measurePool(job, run);
     }
     failed = r?.failed ?? 0;
-    const pool = poolRuns().at(-1);
-    if (pool?.selfWaits) warn(`${job} waited on its own pool`, { job, code: "pool_self_wait", poolPeak: pool.peak, poolMax: pool.max, selfWaits: pool.selfWaits });
+    const pool = selfWaitWarned(job);
     info(`${job} finished`, { job, ...r, poolPeak: pool?.peak, poolMax: pool?.max, ms: Date.now() - started });
   } catch (err) {
     if (err instanceof UsageError) {
@@ -141,6 +147,7 @@ export async function main(job, fn, { lock = false } = {}) {
       await closeDb();
       return;
     }
+    selfWaitWarned(job);
     error(`${job} failed`, { job, code: codeOf(err) });
   }
   await closeDb();
