@@ -28,7 +28,8 @@
  * (subscriptions), upserted (inserted and updated), events_new (events stored for the first time), skipped (events of
  * another type or unreadable, and unreadable subscriptions), customers_unmatched (subscriptions written whose customer id
  * the store's customers do not hold), reason_dropped (a reason left out), missing_now and slice_max_ms (a full read's
- * final step). The log line adds the details (events read, kept, skipped, by Juo's type; subscriptions read; the
+ * final step). The log line adds the details (events read, kept, skipped, by Juo's type when it is a type name, else
+ * "unknown"; subscriptions read; the
  * instrument types known) and the requests per endpoint. It names fields, types and codes, never a value, a key or an id
  * of a customer.
  */
@@ -37,7 +38,7 @@ import { SourceError } from "../../core/http.mjs";
 import { slicesOf } from "../../core/slices.mjs";
 import { juoSettings, tenantIdOf } from "./client.mjs";
 import { clientFor, eventsQuery } from "./read.mjs";
-import { OBJECT_SUBSCRIPTION, OBJECT_EVENT, subscriptionItem, eventItem, eventSubscriptionOf, customerIdOf } from "./map.mjs";
+import { OBJECT_SUBSCRIPTION, OBJECT_EVENT, subscriptionItem, eventItem, eventSubscriptionOf, customerIdOf, eventTypeOf } from "./map.mjs";
 
 export const EVENTS_STREAM = "juo:events";
 export const CADENCE_STREAM = "juo:cadence";
@@ -101,7 +102,7 @@ async function ingestEvents({ store, page, counts, detail, touched }) {
   let latest = null;
   for (const e of page) {
     detail.eventsRead += 1;
-    const juoType = typeof e?.type === "string" ? e.type.slice(0, 60) : "unknown";
+    const juoType = eventTypeOf(e);
     detail.eventTypes[juoType] = (detail.eventTypes[juoType] ?? 0) + 1;
     const sub = eventSubscriptionOf(e);
     if (sub && touched) touched.add(sub);
@@ -224,14 +225,14 @@ export const BACKFILL_OBJECTS = [OBJECT_SUBSCRIPTION, OBJECT_EVENT];
 export async function reconcile({ connection, store, budget, object, counts }) {
   if (object !== OBJECT_SUBSCRIPTION) throw new SourceError("object_not_reconciled");
   const detail = await fullRead({ connection, store, budget, counts });
-  info("reconcile: subscriptions", { connection: connection.connectionId, ...detail });
+  info("reconcile: subscription full read", { connection: connection.connectionId, ...detail });
   return undefined;
 }
 
 export async function backfill({ connection, store, budget, object, fromMs, untilMs, counts }) {
   if (object === OBJECT_SUBSCRIPTION) {
     const detail = await fullRead({ connection, store, budget, counts });
-    info("backfill: subscriptions", { connection: connection.connectionId, ...detail });
+    info("backfill: subscription full read", { connection: connection.connectionId, ...detail });
     return undefined;
   }
   if (object === OBJECT_EVENT) {
@@ -283,7 +284,7 @@ export async function dryRun({ connection, store, budget, object, fromMs, untilM
   for await (const page of api.events(eventsQuery(fromMs, untilMs, { inclusive: true }))) {
     for (const e of page) {
       out.fetched += 1;
-      const juoType = typeof e?.type === "string" ? e.type.slice(0, 60) : "unknown";
+      const juoType = eventTypeOf(e);
       out.eventTypes[juoType] = (out.eventTypes[juoType] ?? 0) + 1;
       const customer = customerIdOf(e?.customerId);
       if (customer) customers.add(customer);

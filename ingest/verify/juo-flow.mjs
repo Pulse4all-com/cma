@@ -255,7 +255,7 @@ total = await runReconcile({ connectionId: juo1.id, object: "subscription" });
 run = (await runsOf(juo1.id, "reconcile")).at(-1);
 const goneRow = (await q("select source_deleted_at is not null as missing from cma.subscription where connection_id = $1 and source_id = $2", [juo1.id, gone.id]))[0];
 expect("E1 reconcile marks missing: the subscription Juo no longer returns gets source_deleted_at in the final step; the rest unchanged",
-  [total.failed, run.stream, run.status, run.counts.fetched, run.counts.missing_now, run.counts.unchanged, goneRow?.missing, lastLog("reconcile: subscriptions")?.slices],
+  [total.failed, run.stream, run.status, run.counts.fetched, run.counts.missing_now, run.counts.unchanged, goneRow?.missing, lastLog("reconcile: subscription full read")?.slices],
   [0, "subscription", "succeeded", 229, 1, 229, true, 1], [1, null, "failed", 230, 0, 0, false, 0]);
 const kept = one.subscriptions.splice(0, one.subscriptions.length);
 total = await runReconcile({ connectionId: juo1.id, object: "subscription" });

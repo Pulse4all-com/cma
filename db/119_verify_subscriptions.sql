@@ -7,7 +7,8 @@
 -- flow verifiers refuse one): every check reads FAIL and the verdict REFUSED. Blocks A and Z only read; block B works on
 -- throwaway tenants inside a subtransaction that is always rolled back, so nothing stays (as 115). Every check writes
 -- one row, PASS or FAIL, and the last row is the verdict, because Cloud SQL Studio shows no notices. Run as your own IAM
--- login after 118_subscriptions.sql, in dev; then 115_verify_asset_sync.sql and 105_verify_reviews.sql again. Adapters,
+-- login after 118_subscriptions.sql, in dev; then 115_verify_asset_sync.sql, 105_verify_reviews.sql,
+-- 107_verify_review_reference_guard.sql and 53_verify_sources_configuration.sql again. Adapters,
 -- handles, ids, codes, people and secret names are invented data values, and no row carries a name, an address, an
 -- email or a phone number of a customer.
 --   A  structure and privileges: the addition row after 0008zk; both tables tenant-aware (row-level security, the

@@ -1,10 +1,13 @@
 -- =============================================================================================
 -- 118_subscriptions.sql: addition 0008zl, a subscription app's subscriptions and their events, mirrored read-only
 -- =============================================================================================
--- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 116_asset_sync_load.sql
--- (0008zk). Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then
--- 119_verify_subscriptions.sql (dev and local only, as 117), then 115_verify_asset_sync.sql and 105_verify_reviews.sql
--- again (the connection's kinds, settings and run counts they read are made again here); then prod, with 115 and 105.
+-- Universal: no customer or tenant specifics. One vendor word: the two settings a subscriptions connection's adapter
+-- reads keep its name (juo_poll_interval_minutes, juo_max_per_second), as decided on 28 October 2026, and the database
+-- checks them by that name (cma.subscriptions_settings_problem); nothing else here names a vendor. Runs unchanged in
+-- every database, after 116_asset_sync_load.sql (0008zk). Rerunnable, forward-only, in one transaction. Run as your own
+-- IAM login: dev first, then 119_verify_subscriptions.sql (dev and local only, as 117), then 115_verify_asset_sync.sql,
+-- 105_verify_reviews.sql, 107_verify_review_reference_guard.sql and 53_verify_sources_configuration.sql again (the
+-- connection's kinds, settings and run counts they read are made again here); then prod, with 115 and 105.
 -- The web and the ingest of main read nothing this adds; the ingest of this change needs it (the job
 -- subscriptions_poll, the run's counts, the upserts), so in prod the script runs before that ingest is deployed.
 --

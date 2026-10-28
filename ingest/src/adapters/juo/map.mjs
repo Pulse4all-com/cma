@@ -63,6 +63,9 @@ const CODE = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
 
 export const idOf = (v) => (typeof v === "string" && ID.test(v.trim()) ? v.trim() : null);
 
+/** An event's type as the logs and the dry run count it: a type name (subscription:renewed), else "unknown". */
+export const eventTypeOf = (e) => (typeof e?.type === "string" && e.type.length <= 60 && TYPE.test(e.type) ? e.type : "unknown");
+
 /** A store's customer id as digits: from a number, a digit text or a gid (gid://shopify/Customer/123); an object's id. */
 export function customerIdOf(v) {
   if (v && typeof v === "object") return customerIdOf(v.id);

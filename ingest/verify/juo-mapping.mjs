@@ -139,6 +139,11 @@ expect("B11 raw holds the keys cma.subscription_event takes only, every value a 
   mapped.every(([, m]) => !m?.item || (Object.keys(m.item.raw).every((k) => EVENT_RAW.includes(k)) && Object.values(m.item.raw).every((v) => typeof v !== "object"))),
   true, false);
 
+expect("B12 the event types the logs and the dry run count: a type name as it is, anything else unknown (never a value)",
+  [map.eventTypeOf(eventsOf(201)[0]), map.eventTypeOf({ type: "subscription:cancellation-flow/started" }), map.eventTypeOf({ type: "person@example.invalid" }),
+    map.eventTypeOf({ type: "Too expensive" }), map.eventTypeOf({}), map.eventTypeOf({ type: `subscription:${"x".repeat(60)}` })],
+  ["subscription:renew-failed", "subscription:cancellation-flow/started", "unknown", "unknown", "unknown", "unknown"], []);
+
 // ---- C. Settings, the store's id, holds, queries ------------------------------------------------------------------------
 expect("C1 the settings: the defaults (5 minutes, 2 a second), values in range kept, out of range the default and named",
   [client.juoSettings({}), client.juoSettings({ juo_poll_interval_minutes: "60", juo_max_per_second: 10 }),
