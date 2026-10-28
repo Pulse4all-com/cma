@@ -1603,11 +1603,11 @@ Expected: no error and no result rows. A second run ends the same and changes no
 
 **File:** `db/117_verify_asset_sync_load.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
 
-Expected, in some 3 to 6 minutes: rows `A1` to `A6`, `B1` to `B7`, `C1` to `C5`, `Z1` and `Z2`, each `ok`, and `verdict | 0008zk verified | 117_verify_asset_sync_load: 20 ok, 0 FAIL`. Locally (PostgreSQL 16 held to db-g1-small's memory, 1.5 GB with `shared_buffers` 560 MB and `work_mem` 4 MB, a database in Cloud SQL's collation `en_US.UTF-8`, where `113`'s C1 with 0008zi's forecast took 153 and 126 ms against dev's 146.0 and 130.8) the run took 108 s: C1 119 ms; C2's slowest slice 90 ms (all 50 together 254 ms); C3 2,210 ms (its staging insert 1,237); C4's first chunk 471 ms, its slowest 684, the last five 492 on average (no growth); C5's page 774 ms and list 807 ms; Z2's cleanup 21 s. Copy the details of `C1` to `C5`, `Z1` and `Z2` into the report. Any `FAIL`: report the row.
+Expected, in some 3 to 6 minutes: rows `A1` to `A6`, `B1` to `B7`, `C1` to `C5`, `Z1` and `Z2`, each `ok`, and `verdict | 0008zk verified | 117_verify_asset_sync_load: 20 ok, 0 FAIL`. Locally (PostgreSQL 16 held to db-g1-small's memory, 1.5 GB with `shared_buffers` 560 MB and `work_mem` 4 MB, a database in Cloud SQL's collation `en_US.UTF-8`, where `113`'s C1 with 0008zi's forecast took 153 and 126 ms against dev's 146.0 and 130.8) the run gave C1 148 ms; C2's slowest slice 124 ms (all 50 together 271 ms); C3 2,216 ms (its staging insert 1,320); C4's first chunk 476 ms, its slowest 620, the first five 523 and the last five 549 on average (no growth); C5's page 837 ms and list 886 ms; Z2's cleanup 23 s. Copy the details of `C1` to `C5`, `Z1` and `Z2` into the report. Any `FAIL`: report the row.
 
 **Studio (cma-dev-pg):** `117` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
 
-Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 117_verify_asset_sync_load: 0 ok, 20 FAIL`, in about the same time: the provoked run does the same work and removes its throwaway tenants as well. Locally the two runs in a row in one session took 217 s, a backend's memory peaked at 84 MB, and the server stayed up.
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 117_verify_asset_sync_load: 0 ok, 20 FAIL`, in about the same time: the provoked run does the same work and removes its throwaway tenants as well. Locally the two runs in a row in one session took 224 s, a backend's memory peaked at 86 MB, and the server stayed up.
 
 **Studio (cma-dev-pg)** (read only)
 ```sql
