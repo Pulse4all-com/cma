@@ -14,8 +14,13 @@ import { storeFor } from "../core/store.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
-export async function runPollAssets({ connectionId = null, adapters = ADAPTERS } = {}) {
+export function runPollAssets(options) {
+  return measurePool("poll-assets", () => pollAssetsJob(options));
+}
+
+async function pollAssetsJob({ connectionId = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:poll-assets" });
   const total = { connections: 0, notServed: 0, notDue: 0, fetched: 0, inserted: 0, updated: 0, unchanged: 0, failed: 0 };

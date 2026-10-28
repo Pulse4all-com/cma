@@ -30,7 +30,13 @@
  *   jobLock(name)  a session-level advisory lock for a scheduled job, held on one pooled client for the
  *                  run: a second execution Cloud Scheduler starts while the first still runs finds it held
  *                  and skips (src/jobs/runner.mjs; audit 17 October 2026, 5.2-02)
+ *   measurePool(job, fn)  the clients a job's own code holds at once, its lock's among them, counted apart from
+ *                  anything else the process runs (the flow verifiers host the service beside the jobs); a
+ *                  checkout while the job's own clients already fill the pool waits on the job itself (a
+ *                  self-wait). The jobs run with a pool of 2 (docs/ingest/deploy.sh): the lock and one unit of
+ *                  work at a time (Database connection budget; Gemini audit of 28 October 2026, FIND-01)
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
 
 // A business date stays a YYYY-MM-DD string; bigint counts fit a JS number
@@ -57,11 +63,62 @@ export function statementTimeoutMs() {
   return timeoutMs("CMA_DB_STATEMENT_TIMEOUT_MS", DEFAULT_STATEMENT_TIMEOUT_MS);
 }
 
+/** The pool's size per process: CMA_DB_POOL_MAX, 5 when not set (the service; the jobs run with 2) */
+export function poolMax() {
+  return Number(process.env.CMA_DB_POOL_MAX ?? 5);
+}
+
+// A job's own clients: the run's use, set by measurePool for everything its code awaits
+const jobUse = new AsyncLocalStorage();
+const runsMeasured = [];
+
+/**
+ * Runs fn as job's run with its pool use counted (a nested call counts into the outer run) and keeps
+ * { job, peak, work, selfWaits, max }: peak the clients held at once, work the same without the advisory
+ * lock's, selfWaits the checkouts made while the job's own clients filled the pool.
+ */
+export async function measurePool(job, fn) {
+  if (jobUse.getStore()) return fn();
+  const use = { held: 0, locks: 0, peak: 0, work: 0, selfWaits: 0 };
+  try {
+    return await jobUse.run(use, fn);
+  } finally {
+    runsMeasured.push({ job, peak: use.peak, work: use.work, selfWaits: use.selfWaits, max: poolMax() });
+  }
+}
+
+/** The runs measurePool kept in this process, oldest first */
+export function poolRuns() {
+  return runsMeasured.map((r) => ({ ...r }));
+}
+
+/** A client of the pool, counted into the job's run when there is one; answers { client, done } */
+async function checkout(pool, { lock = false } = {}) {
+  const use = jobUse.getStore() ?? null;
+  if (use && use.held >= poolMax()) use.selfWaits += 1;
+  const client = await pool.connect();
+  if (!use) return { client, done: () => undefined };
+  use.held += 1;
+  if (lock) use.locks += 1;
+  use.peak = Math.max(use.peak, use.held);
+  use.work = Math.max(use.work, use.held - use.locks);
+  let open = true;
+  return {
+    client,
+    done: () => {
+      if (!open) return;
+      open = false;
+      use.held -= 1;
+      if (lock) use.locks -= 1;
+    },
+  };
+}
+
 let state = null;
 
 async function open() {
   const database = process.env.CMA_DB_NAME ?? "cma";
-  const max = Number(process.env.CMA_DB_POOL_MAX ?? 5);
+  const max = poolMax();
   // pg sends both as startup parameters: they bind every session of the pool
   const timeouts = {
     statement_timeout: statementTimeoutMs(),
@@ -107,7 +164,7 @@ async function db() {
 
 async function transaction(setContext, fn) {
   const { pool } = await db();
-  const client = await pool.connect();
+  const { client, done } = await checkout(pool);
   // A session the server ends while this client waits (the idle-in-transaction timeout, a restart)
   // arrives as an error event on the checked-out client, which pg-pool does not listen to: unheard it
   // would end the process. Heard, it is this transaction's failure (db_25P03) and the pool drops the client.
@@ -126,6 +183,7 @@ async function transaction(setContext, fn) {
   } finally {
     client.removeListener("error", onEnded);
     client.release();
+    done();
   }
 }
 
@@ -165,12 +223,13 @@ const LOCK_SPACE = "cma-ingest";
  */
 export async function jobLock(name) {
   const { pool } = await db();
-  const client = await pool.connect();
+  const { client, done: counted } = await checkout(pool, { lock: true });
   const onEnded = () => undefined; // the session ended under us: the lock went with it; the pool drops the client on release
   client.on("error", onEnded);
   const done = () => {
     client.removeListener("error", onEnded);
     client.release();
+    counted();
   };
   let ok = false;
   try {

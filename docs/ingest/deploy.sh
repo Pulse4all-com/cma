@@ -259,7 +259,7 @@ if [ "$JOBS" = 1 ]; then
   SCHED_SA="${SCHED_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
   gcloud iam service-accounts describe "$SCHED_SA" --project="$PROJECT" >/dev/null 2>&1 || \
     gcloud iam service-accounts create "$SCHED_SA_NAME" --project="$PROJECT" --display-name="CMA ingest scheduler" --quiet
-  JOB_ENV="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=3" \
+  JOB_ENV="$(env_list "CMA_DB_INSTANCE=${INSTANCE}" "CMA_DB_USER=${DB_USER}" "CMA_DB_NAME=cma" "CMA_DB_POOL_MAX=2" \
     "INGEST_VERSION=${SHA}" "INGEST_PROJECT=${PROJECT}" ${REPLAY_VARS[@]+"${REPLAY_VARS[@]}"})"
   deploy_job () {  # <job> <script> <task timeout> <args, comma-separated; empty resets them>
     gcloud run jobs deploy "$1" \

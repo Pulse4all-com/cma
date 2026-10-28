@@ -125,6 +125,12 @@ expect("prod --jobs --front → refused as before (--front is the service's)", [
 r = await run(["prod", "--jobs"]);
 expect("prod --jobs → exit 0: the nine jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
   [0, 9, 0], [2, 0, 1]);
+// The jobs' pool of 2 (Gemini audit of 28 October 2026, FIND-01): every job its lock and one unit of work; no retries,
+// so Cloud Scheduler's start is the only one (FIND-03)
+const jobDeploys = r.calls.filter((c) => c.startsWith("gcloud run jobs deploy "));
+const poolOf = (c) => ((c.match(/ --set-env-vars=\^\|\^(\S+)/) ?? [])[1] ?? "").split("|").find((kv) => kv.startsWith("CMA_DB_POOL_MAX=")) ?? null;
+expect("…each of the nine with CMA_DB_POOL_MAX=2 and --max-retries=0",
+  [jobDeploys.map(poolOf).filter((v) => v === "CMA_DB_POOL_MAX=2").length, jobDeploys.filter((c) => c.includes(" --max-retries=0 ")).length], [9, 9], [0, 0]);
 const importJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-import-legacy-calls ")) ?? "";
 expect("…the import job (0008zg): node jobs/import-legacy-calls.mjs as cma-ingest, 6 hours, no arguments",
   [importJob.includes("--command=node,jobs/import-legacy-calls.mjs"), importJob.includes("--service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com"),
@@ -152,6 +158,7 @@ r = await run(["prod", "--front", FRONT, "--tenant", "pulse4all-subscriptions"])
 d = serviceDeploy(r);
 expect("prod --front → exit 0 on the image of the last commit under ingest/", [r.code, d.vars.INGEST_VERSION, d.vars.INGEST_PROJECT], [0, SHA, "p4a-cma-prod"], [2, undefined, undefined]);
 expect("…--ingress=internal-and-cloud-load-balancing", d.ingress, "internal-and-cloud-load-balancing", "all");
+expect("…the service keeps its pool of 5 (the jobs take 2)", d.vars.CMA_DB_POOL_MAX, "5", "2");
 expect("…INGEST_PUBLIC_URLS starts with https://ingest.pulse4all.app", [(d.vars.INGEST_PUBLIC_URLS ?? "").startsWith(`https://${FRONT},`), d.vars.INGEST_PUBLIC_URLS], [true, `https://${FRONT},${RUNAPP.join(",")}`],
   [false, RUNAPP.join(",")]);
 expect("…no replay variable in prod, the run.app address refused", ["INGEST_ALLOW_REPLAY" in d.vars, r.out.includes("run.app: 404 (refused)")], [false, true], [true, false]);

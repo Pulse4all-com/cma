@@ -67,6 +67,7 @@ import { hashNumber, toE164 } from "../core/hash.mjs";
 import { parseGsUri, readObject } from "../core/storage.mjs";
 import { info } from "../core/log.mjs";
 import { UsageError, withRun, PAUSE_CODE } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
 export const JOB = "legacy_call_import";
 /** The tag meanings (docs/definitions.md, Tag): the check set of cma.telephony_tag.meaning and cma.legacy_call_outcome.meaning */
@@ -322,7 +323,11 @@ function forget(row) {
  * (the object reader), secret (the secret reader), served (the connection lookup) and storeOf (a connection's store).
  * Answers the finished line's fields and failed (0 or 1).
  */
-export async function runImportLegacyCalls(opts, {
+export function runImportLegacyCalls(opts, seams) {
+  return measurePool("import-legacy-calls", () => importLegacyCallsJob(opts, seams));
+}
+
+async function importLegacyCallsJob(opts, {
   adapters = ADAPTERS, read = readObject, secret = getSecret, served = servedConnections, storeOf = (c) => storeFor(contextOf(c), c.connectionId),
 } = {}) {
   const started = Date.now();

@@ -15,8 +15,13 @@ import { storeFor } from "../core/store.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
-export async function runPollEmail({ connectionId = null, adapters = ADAPTERS, now = null } = {}) {
+export function runPollEmail(options) {
+  return measurePool("poll-email", () => pollEmailJob(options));
+}
+
+async function pollEmailJob({ connectionId = null, adapters = ADAPTERS, now = null } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:poll-email" });
   const total = { connections: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, failed: 0 };

@@ -41,7 +41,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, writesOutside, removeTenants, PROVOKE } from "./lib.mjs";
+import { expect, verdict, poolCheck, writesOutside, removeTenants, PROVOKE } from "./lib.mjs";
 import { loadSource, startFakeHubSpot } from "./email-fake.mjs";
 
 console.log(`verify/email-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
@@ -366,4 +366,5 @@ await admin.end();
 await fake.close();
 await closeDb();
 rmSync(secretsDir, { recursive: true, force: true });
+await poolCheck();
 verdict();

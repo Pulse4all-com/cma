@@ -27,6 +27,7 @@ import { recordAndProcess, addCounts } from "../core/sync.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
 export const DEFAULT_LOOKBACK_MINUTES = 26 * 60;
 /** Where a paused stream resumes: { from: ms }, the paused run's start; { from: null } once a run finished */
@@ -51,7 +52,11 @@ export async function reconcileStream({ adapter, connection, store, budget, obje
   return { r, usage: budget.usage(mark) };
 }
 
-export async function runReconcile({ connectionId = null, lookbackMinutes = DEFAULT_LOOKBACK_MINUTES, object = null, adapters = ADAPTERS } = {}) {
+export function runReconcile(options) {
+  return measurePool("reconcile", () => reconcileJob(options));
+}
+
+async function reconcileJob({ connectionId = null, lookbackMinutes = DEFAULT_LOOKBACK_MINUTES, object = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:reconcile" });
   const total = { connections: 0, notServed: 0, runs: 0, fetched: 0, upserted: 0, stale: 0, skipped: 0, eventsFailed: 0, paused: 0, failed: 0 };
