@@ -120,7 +120,7 @@ async function asAdmin(tenant, fn) {
     throw e;
   }
 }
-const SETTINGS = (extra = {}) => JSON.stringify({ juo_max_per_second: 10, juo_poll_interval_minutes: 1, ...extra });
+const SETTINGS = (extra = {}) => JSON.stringify({ subscriptions_max_per_second: 10, subscriptions_poll_interval_minutes: 1, ...extra });
 async function connection(tenant, account, secret, name) {
   return asAdmin(tenant, async () => {
     const [c] = await q("select * from cma.upsert_connection('juo', $1, $2, null, $3)", [name, account, secret]);
@@ -243,7 +243,7 @@ expect("D3 overlap idempotency: a second poll reads the same failed renewal agai
   [total.failed, run.counts.fetched >= 2, run.counts.events_new, run.counts.updated, run.counts.inserted, run.counts.unchanged,
     [await counted("subscription", juo1.id), await counted("subscription_event", juo1.id)]],
   [0, true, 0, 0, 0, 1, rowsBefore], [1, false, 1, 1, 1, 0, [0, 0]]);
-await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [juo1.id, SETTINGS({ juo_poll_interval_minutes: 60 })]));
+await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [juo1.id, SETTINGS({ subscriptions_poll_interval_minutes: 60 })]));
 fake.state.requests.length = 0;
 total = await runPollSubscriptions({ connectionId: juo1.id });
 expect("D4 a poll not due (60 minutes): no request, no run", [total.notDue, fake.state.requests.length, (await runsOf(juo1.id, "subscriptions_poll")).length],

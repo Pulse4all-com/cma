@@ -1,14 +1,14 @@
 /**
  * The subscriptions poll (addition 0008zl, brief B20; every 5 minutes, Europe/Amsterdam): per active connection whose
  * adapter polls a store's subscriptions (Juo today) and holds a token secret name, when due on its
- * juo_poll_interval_minutes (default 5), one sync_run row (job subscriptions_poll, stream subscriptions): the events of
- * the store's subscriptions that occurred since the connection's cursor less five minutes, stored, then every
+ * subscriptions_poll_interval_minutes (default 5), one sync_run row (job subscriptions_poll, stream subscriptions): the
+ * events of the store's subscriptions that occurred since the connection's cursor less five minutes, stored, then every
  * subscription those events touched read again and upserted (src/adapters/juo). A connection not due writes nothing. A
  * connection without a token secret name is not read: one log line (code key_not_set) and no run. One log line per
  * connection carries the counts (events_new, the subscriptions' outcomes, customers_unmatched, reason_dropped), the
  * details (events read, kept and skipped, by Juo's type; subscriptions read) and the requests per endpoint. Never a key
- * or a value. Like every job it runs with a pool of 2 (docs/ingest/deploy.sh): its advisory lock and one unit of work at
- * a time (db.mjs measurePool; verify/juo-flow.mjs D5 and P1).
+ * or a value. Like every job it runs with a pool of 2 (docs/ingest/deploy.sh): its advisory lock and one unit of work
+ * at a time (db.mjs measurePool; verify/juo-flow.mjs D5 and P1).
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";

@@ -65,10 +65,10 @@
 #                                     the connection's assets_poll_interval_minutes (default 15), the records changed since its
 #                                     cursor; created paused, resumed by PROD_RUNBOOK 14.8 (a redeploy keeps its state)
 #   ingest-poll-subscriptions every 5 min  the subscriptions connections with a token secret name (addition 0008zl, brief
-#                                     B20; Juo, one per store): when due on the connection's juo_poll_interval_minutes
-#                                     (default 5), the events of the store's subscriptions since its cursor less five minutes,
-#                                     then the subscriptions they touched; created paused, resumed by PROD_RUNBOOK 15.9 (a
-#                                     redeploy keeps its state)
+#                                     B20; Juo, one per store): when due on the connection's
+#                                     subscriptions_poll_interval_minutes (default 5), the events of the store's subscriptions
+#                                     since its cursor less five minutes, then the subscriptions they touched; created paused,
+#                                     resumed by PROD_RUNBOOK 15.9 (a redeploy keeps its state)
 #   ingest-reconcile   03:30          everything modified in the last 26 hours (HubSpot also the polled forms' submissions,
 #                                     email engagements and inbox threads, and the inbox trash); Aircall: calls of the last
 #                                     26 hours and the webhook;

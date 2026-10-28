@@ -238,20 +238,22 @@ begin
   -- A7. the settings by form: each key's first fault named, the rest accepted
   v_bad := concat_ws(' ',
     coalesce(cma.subscriptions_settings_problem('{}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": 5, "juo_max_per_second": 2}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": "60", "juo_max_per_second": "10"}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": 1, "juo_max_per_second": 1}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": 0}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": 61}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": "5m"}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_poll_interval_minutes": 7.5}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_max_per_second": 0}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_max_per_second": 11}'), 'ok'),
-    coalesce(cma.subscriptions_settings_problem('{"juo_max_per_second": true}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": 5, "subscriptions_max_per_second": 2}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": "60", "subscriptions_max_per_second": "10"}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": 1, "subscriptions_max_per_second": 1}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": 0}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": 61}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": "5m"}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_poll_interval_minutes": 7.5}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_max_per_second": 0}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_max_per_second": 11}'), 'ok'),
+    coalesce(cma.subscriptions_settings_problem('{"subscriptions_max_per_second": true}'), 'ok'),
     coalesce(cma.subscriptions_settings_problem('{"example_setting": 99}'), 'ok'));
   insert into verify_0008zl values (7, 'A7 the settings by form: the poll interval from 1 to 60, the pace from 1 to 10',
-    case when v_bad = 'ok ok ok ok juo_poll_interval_minutes juo_poll_interval_minutes juo_poll_interval_minutes juo_poll_interval_minutes '
-                      || 'juo_max_per_second juo_max_per_second juo_max_per_second ok'
+    case when v_bad = 'ok ok ok ok '
+                      || 'subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes '
+                      || 'subscriptions_poll_interval_minutes subscriptions_poll_interval_minutes '
+                      || 'subscriptions_max_per_second subscriptions_max_per_second subscriptions_max_per_second ok'
               and not v_provoke then 'PASS' else 'FAIL' end, v_bad);
 end
 $$;
@@ -460,13 +462,13 @@ begin
     -- B11. the settings on the subscriptions connection (tenant.configure): in range kept, out of range refused (CMA04);
     --      on another kind's connection the keys are not checked
     perform set_config('app.user_id', v_admin1::text, true);
-    v_txt := pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"juo_poll_interval_minutes": 5, "juo_max_per_second": 2}'))
-             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"juo_poll_interval_minutes": 61}'))
-             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"juo_max_per_second": 11}'))
-             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_crm, '{"juo_max_per_second": 11}'));
+    v_txt := pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"subscriptions_poll_interval_minutes": 5, "subscriptions_max_per_second": 2}'))
+             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"subscriptions_poll_interval_minutes": 61}'))
+             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_sub1, '{"subscriptions_max_per_second": 11}'))
+             || ' ' || pg_temp.v0008zl_code(format('select cma.set_connection_settings(%L, %L)', v_crm, '{"subscriptions_max_per_second": 11}'));
     v_txt := v_txt || ' ' || (select c.settings::text from cma.integration_connection c where c.id = v_sub1);
     v_rows := v_rows || array['21', 'B11 the settings: the poll interval from 1 to 60 and the pace from 1 to 10 on a subscriptions connection',
-      case when v_txt = 'ok CMA04 CMA04 ok {"juo_max_per_second": 2, "juo_poll_interval_minutes": 5}' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
+      case when v_txt = 'ok CMA04 CMA04 ok {"subscriptions_max_per_second": 2, "subscriptions_poll_interval_minutes": 5}' and not v_provoke then 'PASS' else 'FAIL' end, v_txt];
 
     -- B12. the kinds: a connection holding subscriptions is of kind subscriptions only (CMA03 for another kind); its held
     --      kinds are subscriptions

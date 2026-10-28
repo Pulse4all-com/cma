@@ -10,9 +10,9 @@
  *             another store's id: the read fails key_rejected
  *   requests  GET https://api.juo.io/admin/v1/<path>, each one counted per endpoint on the job's budget (ids replaced,
  *             no query value: the run's log line) and paced per connection and process at the connection setting
- *             juo_max_per_second (default 2, 1 to 10). Juo states no rate limit (no rate-limit header was seen on a
- *             GET, 28 October 2026). A 429 holds the connection until its Retry-After (seconds or a date, at most a
- *             minute; five seconds without one) and the same request is sent again once the hold has passed, at
+ *             subscriptions_max_per_second (default 2, 1 to 10). Juo states no rate limit (no rate-limit header was
+ *             seen on a GET, 28 October 2026). A 429 holds the connection until its Retry-After (seconds or a date, at
+ *             most a minute; five seconds without one) and the same request is sent again once the hold has passed, at
  *             most twice: a third 429 fails the read (rate_limited), and the next run carries on
  *   paging    cursor paging: { data, hasNextPage, endCursor }; the next page with after=<endCursor>
  *
@@ -40,8 +40,8 @@ function apiBase() {
 
 // ---- Settings ------------------------------------------------------------------------------------
 const WHOLE = {
-  juo_poll_interval_minutes: { default: 5, min: 1, max: 60 },
-  juo_max_per_second: { default: 2, min: 1, max: 10 },
+  subscriptions_poll_interval_minutes: { default: 5, min: 1, max: 60 },
+  subscriptions_max_per_second: { default: 2, min: 1, max: 10 },
 };
 
 function whole(settings, name, fallbacks) {
@@ -61,8 +61,8 @@ function whole(settings, name, fallbacks) {
 export function juoSettings(settings) {
   const fallbacks = [];
   return {
-    perSecond: whole(settings, "juo_max_per_second", fallbacks),
-    intervalMinutes: whole(settings, "juo_poll_interval_minutes", fallbacks),
+    perSecond: whole(settings, "subscriptions_max_per_second", fallbacks),
+    intervalMinutes: whole(settings, "subscriptions_poll_interval_minutes", fallbacks),
     fallbacks,
   };
 }

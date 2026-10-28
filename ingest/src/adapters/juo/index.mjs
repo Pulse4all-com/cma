@@ -6,10 +6,11 @@
  * handle configured (cma.ingest_subscription_store; without one every read fails store_not_configured before a request).
  *
  *   pollDue, pollSubscriptions   the job ingest-poll-subscriptions (every 5 minutes): when due on
- *                         juo_poll_interval_minutes (default 5; cursor juo:cadence), the events of the store's
- *                         subscriptions that occurred after the cursor juo:events less five minutes (without a cursor,
- *                         the last 24 hours), stored as they come (an event held already is left as it is), then every
- *                         subscription those events touched read again and upserted; both cursors move to the run's start
+ *                         subscriptions_poll_interval_minutes (default 5; cursor juo:cadence), the events of the
+ *                         store's subscriptions that occurred after the cursor juo:events less five minutes (without a
+ *                         cursor, the last 24 hours), stored as they come (an event held already is left as it is),
+ *                         then every subscription those events touched read again and upserted; both cursors move to
+ *                         the run's start
  *   reconcileObjects, reconcile   the job ingest-reconcile (03:30): the full read of subscription, every subscription of the
  *                         store, upserted as the pages come, then the final step in slices (core/slices.mjs, SLICE_SIZE
  *                         ids each, cma.ingest_mark_subscriptions_missing): a subscription the read no longer returned

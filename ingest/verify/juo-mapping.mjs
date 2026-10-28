@@ -146,10 +146,10 @@ expect("B12 the event types the logs and the dry run count: a type name as it is
 
 // ---- C. Settings, the store's id, holds, queries ------------------------------------------------------------------------
 expect("C1 the settings: the defaults (5 minutes, 2 a second), values in range kept, out of range the default and named",
-  [client.juoSettings({}), client.juoSettings({ juo_poll_interval_minutes: "60", juo_max_per_second: 10 }),
-    client.juoSettings({ juo_poll_interval_minutes: 61, juo_max_per_second: 0 })],
+  [client.juoSettings({}), client.juoSettings({ subscriptions_poll_interval_minutes: "60", subscriptions_max_per_second: 10 }),
+    client.juoSettings({ subscriptions_poll_interval_minutes: 61, subscriptions_max_per_second: 0 })],
   [{ perSecond: 2, intervalMinutes: 5, fallbacks: [] }, { perSecond: 10, intervalMinutes: 60, fallbacks: [] },
-    { perSecond: 2, intervalMinutes: 5, fallbacks: ["juo_max_per_second", "juo_poll_interval_minutes"] }], []);
+    { perSecond: 2, intervalMinutes: 5, fallbacks: ["subscriptions_max_per_second", "subscriptions_poll_interval_minutes"] }], []);
 const idOrCode = (account) => { try { return client.tenantIdOf({ externalAccountId: account }); } catch (e) { return e.code; } };
 expect("C2 the store's id: <handle>.myshopify.com in lower case; anything else tenant_id_invalid; the handle before the first dot",
   [idOrCode(" Fixture-One.myshopify.com "), idOrCode("fixture-one"), idOrCode("fixture-one.example.com"), idOrCode("evil.myshopify.com.example.com"),
@@ -177,7 +177,7 @@ const two = juoStore({ handle: "fixture-two", key: KEY2, nowMs: NOW, prefix: "t"
 const fake = await startFakeJuo({ stores: [one, two] });
 process.env.INGEST_JUO_API_BASE = fake.url;
 const conn = (account = one.domain, secret = "ingest-juo-fixture-one-key") => ({ connectionId: `conn-${account}`, externalAccountId: account, tokenSecretName: secret });
-const settings = { juo_max_per_second: 10 };
+const settings = { subscriptions_max_per_second: 10 };
 const collect = async (iter) => { const out = []; for await (const p of iter) out.push(p); return out; };
 const codeOfRun = async (fn) => { try { await fn(); return "ok"; } catch (e) { return e.code ?? e.message; } };
 

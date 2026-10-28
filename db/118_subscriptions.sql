@@ -1,17 +1,17 @@
 -- =============================================================================================
 -- 118_subscriptions.sql: addition 0008zl, a subscription app's subscriptions and their events, mirrored read-only
 -- =============================================================================================
--- Universal: no customer or tenant specifics. One vendor word: the two settings a subscriptions connection's adapter
--- reads keep its name (juo_poll_interval_minutes, juo_max_per_second), as decided on 28 October 2026, and the database
--- checks them by that name (cma.subscriptions_settings_problem); nothing else here names a vendor. Runs unchanged in
--- every database, after 116_asset_sync_load.sql (0008zk). Rerunnable, forward-only, in one transaction. Run as your own
--- IAM login: dev first, then 119_verify_subscriptions.sql (dev and local only, as 117), then 115_verify_asset_sync.sql,
--- 105_verify_reviews.sql, 107_verify_review_reference_guard.sql and 53_verify_sources_configuration.sql again (the
--- connection's kinds, settings and run counts they read are made again here); then prod, with 115 and 105.
--- The web and the ingest of main read nothing this adds; the ingest of this change needs it (the job
--- subscriptions_poll, the run's counts, the upserts), so in prod the script runs before that ingest is deployed.
+-- Universal: no customer, tenant or vendor specifics: the settings are named after the connection kind
+-- (subscriptions_poll_interval_minutes, subscriptions_max_per_second, as assets_poll_interval_minutes in 114) and the
+-- event types are the CMA's own words. Runs unchanged in every database, after 116_asset_sync_load.sql (0008zk).
+-- Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then 119_verify_subscriptions.sql
+-- (dev and local only, as 117), then 115_verify_asset_sync.sql, 105_verify_reviews.sql,
+-- 107_verify_review_reference_guard.sql and 53_verify_sources_configuration.sql again (the connection's kinds, settings
+-- and run counts they read are made again here); then prod, with 115 and 105. The web and the ingest of main read
+-- nothing this adds; the ingest of this change needs it (the job subscriptions_poll, the run's counts, the upserts), so
+-- in prod the script runs before that ingest is deployed.
 --
--- Why (Decision log, 28 October 2026): the tenant's subscription app (for Pulse4all the app on its commerce stores)
+-- Why (Decision log, 28 October 2026): the tenant's subscription app (the app on its commerce stores)
 -- owns the subscriptions and their events; the ingest reads them directly, per store, and Postgres mirrors them read
 -- only, so the CMA can report churn (KPI 4) and each subscription's payment state. Polling only: the app sends no
 -- webhook for a failed renewal. One connection per store, its account id the store's own account (<handle>.<domain>),
@@ -52,8 +52,9 @@
 --                      or a later one), paid (status active otherwise); merged and never-subscribed are left out.
 --                      Awaiting payment (a renewal by draft order not paid yet) is not built: Pending in the
 --                      definitions, an Open decision
---   settings           cma.set_connection_settings() checks a subscriptions connection's juo_poll_interval_minutes (a
---                      whole number from 1 to 60) and juo_max_per_second (1 to 10) when present (CMA04)
+--   settings           cma.set_connection_settings() checks a subscriptions connection's
+--                      subscriptions_poll_interval_minutes (a whole number from 1 to 60) and
+--                      subscriptions_max_per_second (1 to 10) when present (CMA04)
 --   runs               sync_run.job gains subscriptions_poll; cma.ingest_sync_run_finish() takes events_new,
 --                      customers_unmatched and reason_dropped among the counts
 --   readers            cma_read.subscription and cma_read.subscription_event (no raw), cma_read.subscription_payment_state
@@ -730,24 +731,24 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 7. Settings: a subscriptions connection's own
 -- ---------------------------------------------------------------------------------------------
--- The first of a subscriptions connection's settings that is out of its form, or null: juo_poll_interval_minutes a whole
--- number from 1 to 60, juo_max_per_second one from 1 to 10 (a number or its digits as text). Both optional: the adapter
--- takes its defaults (5 minutes, 2 a second)
+-- The first of a subscriptions connection's settings that is out of its form, or null:
+-- subscriptions_poll_interval_minutes a whole number from 1 to 60, subscriptions_max_per_second one from 1 to 10 (a
+-- number or its digits as text). Both optional: the adapter takes its defaults (5 minutes, 2 a second)
 create or replace function cma.subscriptions_settings_problem(p_settings jsonb)
 returns text
 language sql immutable
 as $$
   select case
-    when p_settings ? 'juo_poll_interval_minutes'
-         and not (jsonb_typeof(p_settings -> 'juo_poll_interval_minutes') in ('number', 'string')
-                  and case when (p_settings ->> 'juo_poll_interval_minutes') ~ '^\d{1,2}$'
-                           then (p_settings ->> 'juo_poll_interval_minutes')::integer between 1 and 60 else false end)
-      then 'juo_poll_interval_minutes'
-    when p_settings ? 'juo_max_per_second'
-         and not (jsonb_typeof(p_settings -> 'juo_max_per_second') in ('number', 'string')
-                  and case when (p_settings ->> 'juo_max_per_second') ~ '^\d{1,2}$'
-                           then (p_settings ->> 'juo_max_per_second')::integer between 1 and 10 else false end)
-      then 'juo_max_per_second'
+    when p_settings ? 'subscriptions_poll_interval_minutes'
+         and not (jsonb_typeof(p_settings -> 'subscriptions_poll_interval_minutes') in ('number', 'string')
+                  and case when (p_settings ->> 'subscriptions_poll_interval_minutes') ~ '^\d{1,2}$'
+                           then (p_settings ->> 'subscriptions_poll_interval_minutes')::integer between 1 and 60 else false end)
+      then 'subscriptions_poll_interval_minutes'
+    when p_settings ? 'subscriptions_max_per_second'
+         and not (jsonb_typeof(p_settings -> 'subscriptions_max_per_second') in ('number', 'string')
+                  and case when (p_settings ->> 'subscriptions_max_per_second') ~ '^\d{1,2}$'
+                           then (p_settings ->> 'subscriptions_max_per_second')::integer between 1 and 10 else false end)
+      then 'subscriptions_max_per_second'
   end
 $$;
 
@@ -785,7 +786,7 @@ begin
   if v_kind = 'subscriptions' or (v_kind is null and 'subscriptions' = any (v_held)) then
     v_bad := cma.subscriptions_settings_problem(coalesce(p_settings, '{}'::jsonb));
     if v_bad is not null then
-      raise exception 'the setting % is out of its form: juo_poll_interval_minutes is a whole number from 1 to 60, juo_max_per_second one from 1 to 10', v_bad
+      raise exception 'the setting % is out of its form: subscriptions_poll_interval_minutes is a whole number from 1 to 60, subscriptions_max_per_second one from 1 to 10', v_bad
         using errcode = 'CMA04';
     end if;
   end if;
@@ -865,7 +866,7 @@ create or replace view cma_read.subscription_payment_state as
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zl', 'Subscriptions: a subscription app''s subscriptions and their events mirrored read-only, one connection per store (connection kind subscriptions; the store matched by the handle in the account id, cma.subscription_store_connection_of, no new link column). cma.subscription (the source''s status of seven, cycle, next billing, interval, amount per cycle, the instrument''s type, times, source_deleted_at, a checked raw) and cma.subscription_event (renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; actor type, a staff actor''s id only, cycle, attempt, error and reason codes, statuses; append-only); cma.ingest_subscription_store, cma.ingest_upsert_subscriptions (stale guard; the customer matched among the store''s customers), cma.ingest_upsert_subscription_events, cma.ingest_mark_subscriptions_missing in slices; cma.subscription_payment_state_of (failed, paused, canceled, in_retry, paid; awaiting payment not built); the settings juo_poll_interval_minutes and juo_max_per_second checked; sync_run job subscriptions_poll and the counts events_new, customers_unmatched, reason_dropped; cma_read.subscription, subscription_event, subscription_payment_state')
+values ('0008zl', 'Subscriptions: a subscription app''s subscriptions and their events mirrored read-only, one connection per store (connection kind subscriptions; the store matched by the handle in the account id, cma.subscription_store_connection_of, no new link column). cma.subscription (the source''s status of seven, cycle, next billing, interval, amount per cycle, the instrument''s type, times, source_deleted_at, a checked raw) and cma.subscription_event (renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; actor type, a staff actor''s id only, cycle, attempt, error and reason codes, statuses; append-only); cma.ingest_subscription_store, cma.ingest_upsert_subscriptions (stale guard; the customer matched among the store''s customers), cma.ingest_upsert_subscription_events, cma.ingest_mark_subscriptions_missing in slices; cma.subscription_payment_state_of (failed, paused, canceled, in_retry, paid; awaiting payment not built); the settings subscriptions_poll_interval_minutes and subscriptions_max_per_second checked; sync_run job subscriptions_poll and the counts events_new, customers_unmatched, reason_dropped; cma_read.subscription, subscription_event, subscription_payment_state')
 on conflict (version) do nothing;
 
 commit;

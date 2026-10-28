@@ -2044,7 +2044,7 @@ select set_config('app.tenant_id', '<tenant_id>', false),
        set_config('app.user_id', '<user_id>', false),
        set_config('app.actor_label', 'studio:martin', false);
 select cma.set_connection_kind('<juo conn>', 'subscriptions');
-select cma.set_connection_settings('<juo conn>', '{"juo_poll_interval_minutes": 5, "juo_max_per_second": 2}'::jsonb);
+select cma.set_connection_settings('<juo conn>', '{"subscriptions_poll_interval_minutes": 5, "subscriptions_max_per_second": 2}'::jsonb);
 select name, adapter, external_account_id, kind, status, signing_secret_name, token_secret_name
 from cma.sources() where connection_id = '<juo conn>';
 select x.handle, x.store_connection_id from cma.subscription_store_connection_of('<tenant_id>', '<juo conn>') x;
