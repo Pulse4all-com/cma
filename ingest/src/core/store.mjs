@@ -60,8 +60,11 @@
  *   loadDeviceChunk(rows)        cma.ingest_load_device_chunk: one chunk of the rows read (the adapter's assets_load_chunk,
  *                               100 to 5,000), loaded without marking anything missing; answers the load's counts and
  *                               phase times. A chunk loaded again changes nothing, so a run that stops can simply rerun
- *   markDevicesMissing(sourceIds)   cma.ingest_mark_devices_missing: a full snapshot's final call, the connection's
- *                               devices whose record id the run did not read marked missing; { missing_now, missing_ms }
+ *   markDevicesMissing(sourceIds, from, before)   cma.ingest_mark_devices_missing: one slice of a full snapshot's final
+ *                               step (at most 5,000 of the run's record ids and their range), the connection's devices in
+ *                               the range whose record id the run did not read marked missing; { missing_now, missing_ms }
+ *   recordFieldTypes(items)     cma.ingest_record_field_types: the types first read for the mapped fields without one
+ *                               ([{ property, type }]); answers how many took a type
  *
  * For the legacy call import (addition 0008zg), the store of the CRM connection the rows are matched against; each its
  * own short transaction, ids, dates, meanings and counts only (never an email, a phone number, a name or a customer id
@@ -445,9 +448,13 @@ export function storeFor(ctx, connectionId) {
       return withTenant(ctx, async (q) =>
         (await q.query("select cma.ingest_load_device_chunk($1, $2::jsonb) as c", [connectionId, JSON.stringify(rows)])).rows[0].c);
     },
-    async markDevicesMissing(sourceIds) {
+    async markDevicesMissing(sourceIds, from, before) {
       return withTenant(ctx, async (q) =>
-        (await q.query("select cma.ingest_mark_devices_missing($1, $2::text[]) as c", [connectionId, sourceIds])).rows[0].c);
+        (await q.query("select cma.ingest_mark_devices_missing($1, $2::text[], $3, $4) as c", [connectionId, sourceIds, from, before])).rows[0].c);
+    },
+    async recordFieldTypes(items) {
+      return withTenant(ctx, async (q) =>
+        (await q.query("select cma.ingest_record_field_types($1, $2::jsonb) as n", [connectionId, JSON.stringify(items)])).rows[0].n);
     },
     async legacyBatchStart(sourceSystem, sha256, cutoverDate) {
       return withTenant(ctx, async (q) => {

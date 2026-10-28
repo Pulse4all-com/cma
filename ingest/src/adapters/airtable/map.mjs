@@ -1,6 +1,8 @@
 /**
  * Airtable records → the device import's staging rows (addition 0008zj), by the mapping the connection's fields hold
- * (cma.set_connection_field on the asset register connection; the import's map file of 0008zi as configuration):
+ * (cma.set_connection_field on the asset register connection; the import's map file of 0008zi as configuration). Each
+ * property is an Airtable field id (fld…, since 0008zk: a field renamed in Airtable keeps it), generated from the dry
+ * run's list of the table's fields (docs/ingest/airtable-fields.mjs):
  *
  *   entity device             field = a staging column (serial, model, status, country, warehouse_ref, customer_ref,
  *                             subscription_ref, order_ref, first_shipped_on, stock_received_on, last_shipped_on,
@@ -9,7 +11,9 @@
  *   entity device, field ref  ref_system the id's name (ns_internal_id) → the field holding the named id
  *
  * An allow list: only the mapped fields are asked for and read, so nothing else a record holds reaches a row, a log or
- * the database. The record id is the API's record.id. No mapping means no read (mapping_not_set).
+ * the database. The record id is the API's record.id. No mapping means no read (mapping_not_set). A mapped field the
+ * API leaves out of a record (Airtable leaves empty fields out) is empty: its column is null in the row, never left
+ * out, so the load writes it empty rather than keeping the device's earlier value.
  *
  * Values as the CSV import's tool writes them (tools/devices-to-staging.mjs), so the database applies 0008zi's rules
  * unchanged (ids, unmapped labels, dropped references): text trimmed, a number or a yes/no as its text, a lookup's list

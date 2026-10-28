@@ -1,7 +1,8 @@
 /**
- * Verifier: the Airtable adapter for an asset register end to end (addition 0008zj; the load in chunks, 0008zk), against a
- * local PostgreSQL with db/00…116 and the fake Airtable (verify/airtable-fake.mjs). Everything is invented: tenants, bases, records, serials,
- * customer ids, names (Invented Person …) and addresses (example.invalid).
+ * Verifier: the Airtable adapter for an asset register end to end (addition 0008zj; the load in chunks and slices, the
+ * mapping by field id, 0008zk), against a local PostgreSQL with db/00…116 and the fake Airtable (verify/airtable-fake.mjs).
+ * Everything is invented: tenants, bases, records, serials, customer ids, names (Invented Person …) and addresses
+ * (example.invalid).
  *
  *   CMA_DB_HOST=/tmp CMA_DB_PORT=5432 CMA_DB_NAME=cma CMA_DB_USER=cma-ingest@local.iam \
  *   INGEST_FLOW_ADMIN_USER=<team login> node verify/assets-flow.mjs [--provoke]
@@ -12,16 +13,19 @@
  * Proves: no route for the adapter (404); the first poll (no cursor: every record, in chunks of the setting
  * assets_load_chunk, 100 here, so three, through cma.ingest_load_device_chunk into the devices: nothing missing; its
  * sync_run assets_poll, stream devices, with the load's counts, its phase times and fetched; no staged row, no run of
- * job assets_import; an address as a customer id never stored); a poll not due
+ * job assets_import; an address as a customer id never stored; the 20 mapped fields' types recorded); a poll not due
  * writes nothing and asks nothing; the next poll asks for the records changed since its cursor less five minutes and
- * loads only those (a pads serial changed: a replacement), never marking the record the register dropped; the nightly
- * reconcile's full snapshot marks it missing (sync_run reconcile, stream device); a connection without a token secret
- * name skipped by the poll and the reconcile (one log line, no run) and refused by the backfill; a 429 fails the run
- * (rate_limited) without moving the cursor, and the next run carries on; a renamed field fails the run unknown_field and
- * the log names the field; a text date without date_format fails date_format_not_set; the backfill's dry run reads and
- * counts and writes nothing (no run, no staging, no cursor); the backfill loads a full snapshot and takes no --from;
- * tenant two's register loads into tenant two only; the fields asked for are the mapped ones only; no token, value or
- * personal fixture text in any row of the run's tenants or in a log line; nothing written to another tenant.
+ * loads only those (a pads serial changed: a replacement; a field emptied in Airtable: written empty), never marking the
+ * record the register dropped; the nightly reconcile's full snapshot marks it missing in its final step's slices
+ * (sync_run reconcile, stream device); an expired paging fails the reconcile paging_expired, nothing marked, and the next
+ * one reads from the start; a connection without a token secret name skipped by the poll and the reconcile (one log
+ * line, no run) and refused by the backfill; a 429 fails the run (rate_limited) without moving the cursor, and the next
+ * run carries on; a field renamed in Airtable changes nothing (its id stays); a changed type fails the run
+ * field_type_changed and a deleted field unknown_field, the log naming the field; a text date without date_format fails
+ * date_format_not_set; the backfill's dry run lists the table's fields, reads and counts and writes nothing (no run, no
+ * staging, no cursor); the backfill loads a full snapshot and takes no --from; tenant two's register loads into tenant
+ * two only; the fields asked for are the mapped ids only, never a view; no token, value or personal fixture text in any
+ * row of the run's tenants or in a log line; nothing written to another tenant.
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -104,6 +108,8 @@ async function asAdmin(tenant, fn) {
     throw e;
   }
 }
+// The mapping by field id: each header of the register's map file, as the fixture's field of that name (its id)
+const idIn = (source, name) => source.fields.find((f) => f.name === name).id;
 const MAP = [
   ["device", "serial", "", "aed_sn"], ["device", "model", "", "model_aed"], ["device", "status", "", "aed_operational_status"], ["device", "country", "", "country_located"],
   ["device", "warehouse_ref", "", "warehouse_location"], ["device", "customer_ref", "", "customer_id"], ["device", "subscription_ref", "", "subscription_id"],
@@ -114,7 +120,8 @@ const MAP = [
   ["device_component", "serial", "battery", "battery_sn"], ["device_component", "expires_on", "battery", "battery_expiry_date_calculated"],
   ["device", "ref", "ns_internal_id", "ns_internal_id"], ["device", "ref", "ns_fam_id", "ns_fam_id"], ["device", "ref", "ns_sales_order_id", "sales_order_id"],
 ];
-const SETTINGS = (source, extra = {}) => JSON.stringify({ table_id: source.tableId, date_format: "dmy", airtable_max_per_second: 5, ...extra });
+const SETTINGS = (source, extra = {}) => JSON.stringify({ table_id: source.tableId, date_format: "dmy", airtable_max_per_second: 5,
+  airtable_full_max_per_second: 5, ...extra });
 async function setUp(tenant, source, secret) {
   return asAdmin(tenant, async () => {
     await q("select cma.upsert_market('NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR', null, null, 10)");
@@ -129,7 +136,7 @@ async function setUp(tenant, source, secret) {
     const [c] = await q("select * from cma.upsert_connection('airtable', 'Register flow', $1, null, $2)", [source.baseId, secret]);
     await q("select cma.set_connection_kind($1, 'assets')", [c.connection_id]);
     await q("select cma.set_connection_settings($1, $2::jsonb)", [c.connection_id, SETTINGS(source)]);
-    for (const [entity, f, ref, property] of MAP) await q("select cma.set_connection_field($1, $2, $3, $4, $5)", [c.connection_id, entity, f, ref, property]);
+    for (const [entity, f, ref, name] of MAP) await q("select cma.set_connection_field($1, $2, $3, $4, $5)", [c.connection_id, entity, f, ref, idIn(source, name)]);
     return { id: c.connection_id, key: c.key };
   });
 }
@@ -185,15 +192,24 @@ expect("B6 the run's counts carry the load's phase times, whole milliseconds sum
   [PHASES.every((k) => Number.isInteger(runs[0]?.counts?.[k]) && runs[0].counts[k] >= 0), runs[0]?.counts?.cleanup_ms, runs[0]?.counts?.missing_ms],
   [true, 0, 0], [false, 1, 1]);
 
+const types = await q(`select f.source_property, f.source_type from cma.connection_field f where f.connection_id = $1`, [reg1.id]);
+expect("B7 the first poll recorded the 20 mapped fields' types by field id, in lower case",
+  [types.length, types.every((t) => t.source_type), types.find((t) => t.source_property === idIn(one, "pads_expiry_date_calculated"))?.source_type,
+    types.find((t) => t.source_property === idIn(one, "model_aed"))?.source_type],
+  [20, true, "date", "singleselect"], [0, false, null, null]);
+
 // ---- C. Not due; the next poll from its cursor ----------------------------------------------------------------------
 const asked0 = fake.state.requests.length;
 total = await runPollAssets({ connectionId: reg1.id });
 expect("C1 a second poll within the interval (15 minutes): not due, no request, no run", [total.notDue, fake.state.requests.length - asked0, (await runsOf(reg1.id, null)).length],
   [1, 0, 1], [0, 3, 2]);
-await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, SETTINGS(one, { assets_poll_interval_minutes: 1 })]));
+await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, SETTINGS(one, { assets_poll_interval_minutes: 1, assets_load_chunk: 100 })]));
 const mod1 = (await cursor(reg1.id, "assets:modified")).at;
 const changed = one.records.find((r) => r.id === "recFixture0002aaa");
 Object.assign(changed, { modifiedAt: new Date().toISOString(), fields: { ...changed.fields, pads_sn: "PX-0002-NEW", pads_expiry_date_calculated: "2028-12-10" } });
+// a field emptied in Airtable: the API leaves it out of the record
+const emptied = one.records.find((r) => r.id === "recFixture0003aaa");
+Object.assign(emptied, { modifiedAt: new Date().toISOString(), fields: { ...emptied.fields, subscription_id: undefined } });
 const dropped = one.records.findIndex((r) => r.id === "recFixture0007aaa");
 one.records.splice(dropped, 1);
 await settle(20);
@@ -202,11 +218,14 @@ runs = await runsOf(reg1.id, "assets_poll");
 devices = await devicesOf(reg1.id);
 expect("C2 the next poll asks for the records modified after its cursor less five minutes",
   recordAsks().at(-1).formula, `IS_AFTER(LAST_MODIFIED_TIME(), DATETIME_PARSE("${new Date(mod1 - 5 * 60_000).toISOString()}"))`, null);
-expect("C3 only the changed record loaded: updated 1, its pads replaced; the record the register dropped not marked missing",
+expect("C3 only the changed records loaded: updated 2, one's pads replaced; the record the register dropped not marked missing",
   [runs.at(-1).counts.fetched, runs.at(-1).counts.updated, runs.at(-1).counts.components_replaced, by(devices, "recFixture0007aaa")?.missing,
     (await q(`select count(*)::int as n from cma.device_component c join cma.device d on d.id = c.device_id
               where d.connection_id = $1 and d.source_id = 'recFixture0002aaa' and c.component_key = 'pads'`, [reg1.id]))[0].n],
-  [1, 1, 1, false, 2], [201, 0, 0, true, 1]);
+  [2, 2, 1, false, 2], [201, 0, 0, true, 1]);
+const sub3 = (await q("select subscription_ref, serial from cma.device where connection_id = $1 and source_id = 'recFixture0003aaa'", [reg1.id]))[0];
+expect("C4 a field emptied in Airtable (left out of the record) is written empty, never kept: the subscription reference null, the serial as it was",
+  [sub3?.subscription_ref, sub3?.serial], [null, "FX-TEST-0003"], ["sub-fixture-0003", null]);
 
 // ---- D. The nightly reconcile: the full snapshot ------------------------------------------------------------------------
 total = await runReconcile({ connectionId: reg1.id, object: "device" });
@@ -216,8 +235,24 @@ expect("D1 the reconcile: one run (stream device) succeeded, every record read, 
   [total.failed, rec.map((r) => [r.stream, r.status, r.counts.fetched, r.counts.rows, r.counts.missing_now, r.counts.unchanged, r.counts.updated]),
     devices.filter((d) => d.missing).map((d) => d.source_id)],
   [0, [["device", "succeeded", 200, 200, 1, 200, 0]], ["recFixture0007aaa"]], [1, [], []]);
-expect("D2 the run's two pages asked the 20 mapped fields only, no filter, authorized",
-  recordAsks().slice(-2).map((r) => [r.fields.length, r.formula, r.authorized]), [[20, null, true], [20, null, true]], []);
+expect("D2 the run's two pages asked the 20 mapped fields only, by field id, no filter, no view, authorized",
+  recordAsks().slice(-2).map((r) => [r.fields.length, r.byId, r.formula, r.view, r.authorized]), [[20, true, null, null, true], [20, true, null, null, true]], []);
+const recLine = lastLog("reconcile: devices");
+expect("D3 the run's final step in slices of the chunk's size: two chunks of at most 100, two slices",
+  [recLine?.chunks, recLine?.slices, recLine?.fetched], [2, 2, 200], [1, 1, 0]);
+const missingBefore = (await devicesOf(reg1.id)).filter((d) => d.missing).length;
+const modBeforeExpiry = (await cursor(reg1.id, "assets:modified")).at;
+fake.state.expireOffsets = 1;
+total = await runReconcile({ connectionId: reg1.id, object: "device" });
+const expiredRun = (await runsOf(reg1.id, "reconcile")).at(-1);
+expect("D4 an expired paging fails the reconcile paging_expired before it loads anything: nothing marked missing, the cursor kept, logged",
+  [total.failed, expiredRun.status, expiredRun.error, expiredRun.counts?.rows ?? 0, (await devicesOf(reg1.id)).filter((d) => d.missing).length,
+    (await cursor(reg1.id, "assets:modified")).at === modBeforeExpiry, lastLog("airtable paging expired")?.code],
+  [1, "failed", "paging_expired", 0, missingBefore, true, "paging_expired"], [0, "succeeded", null, 200, 0, false, null]);
+const asksBefore = recordAsks().length;
+total = await runReconcile({ connectionId: reg1.id, object: "device" });
+expect("D5 the next reconcile reads from the first page again and succeeds, nothing new missing",
+  [total.failed, recordAsks()[asksBefore]?.offset, (await runsOf(reg1.id, "reconcile")).at(-1).counts.missing_now], [0, null, 0], [1, "x", 1]);
 
 // ---- E. The connection without a token secret name ---------------------------------------------------------------------
 const filesTotal = await runPollAssets({ connectionId: files.id });
@@ -241,28 +276,41 @@ await settle(400);
 total = await runPollAssets({ connectionId: reg1.id });
 expect("F2 the next run carries on", [total.failed, (await runsOf(reg1.id, "assets_poll")).at(-1).status], [0, "succeeded"], [1, "failed"]);
 fake.state.rename(one.baseId, one.tableId, "aed_sn", "aed_serial");
-const pages0 = fake.state.pagesAnswered;
+await settle(20);
 total = await runPollAssets({ connectionId: reg1.id });
 runs = await runsOf(reg1.id, "assets_poll");
-const unknownLine = lastLog("airtable unknown field");
-expect("F3 a renamed field: the run fails unknown_field before a record is read; the log names the field",
-  [runs.at(-1).status, runs.at(-1).error, unknownLine?.field, fake.state.pagesAnswered - pages0], ["failed", "unknown_field", "aed_sn", 0], ["succeeded", null, undefined, 1]);
+expect("F3 a field renamed in Airtable changes nothing (its id stays): the poll succeeds",
+  [total.failed, runs.at(-1).status, runs.at(-1).error], [0, "succeeded", null], [1, "failed", "unknown_field"]);
 fake.state.rename(one.baseId, one.tableId, "aed_serial", "aed_sn");
+fake.state.retype(one.baseId, one.tableId, "pads_expiry_date_calculated", "singleLineText");
+const pages0 = fake.state.pagesAnswered;
+await settle(20);
+total = await runPollAssets({ connectionId: reg1.id });
+runs = await runsOf(reg1.id, "assets_poll");
+const typeLine = lastLog("airtable field type changed");
+expect("F3b a changed type: the run fails field_type_changed before a record is read; the log names the field (id, name) and both types",
+  [runs.at(-1).status, runs.at(-1).error, typeLine?.field, typeLine?.fieldName, typeLine?.was, typeLine?.now, fake.state.pagesAnswered - pages0],
+  ["failed", "field_type_changed", idIn(one, "pads_expiry_date_calculated"), "pads_expiry_date_calculated", "date", "singlelinetext", 0],
+  ["succeeded", null, undefined, undefined, undefined, undefined, 1]);
+fake.state.retype(one.baseId, one.tableId, "pads_expiry_date_calculated", "date");
 await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, JSON.stringify({ table_id: one.tableId, airtable_max_per_second: 5 })]));
 let b = await runBackfill({ connectionId: reg1.id, object: "device" });
 const dfLine = lastLog("airtable read refused");
-expect("F4 a text date without date_format: the backfill fails date_format_not_set, the log names the field; nothing written",
-  [b.failed, b.error, dfLine?.field, (await runsOf(reg1.id, "backfill")).at(-1)?.status, (await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n],
-  [1, "date_format_not_set", "aed_expected_end_of_life_date_calculated", "failed", 0], [0, null, undefined, "succeeded", 1]);
-await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, SETTINGS(one, { assets_poll_interval_minutes: 1 })]));
+expect("F4 a text date without date_format: the backfill fails date_format_not_set, the log names the field (id and name); nothing written",
+  [b.failed, b.error, dfLine?.field, dfLine?.fieldName, (await runsOf(reg1.id, "backfill")).at(-1)?.status,
+    (await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n],
+  [1, "date_format_not_set", idIn(one, "aed_expected_end_of_life_date_calculated"), "aed_expected_end_of_life_date_calculated", "failed", 0],
+  [0, null, undefined, undefined, "succeeded", 1]);
+await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg1.id, SETTINGS(one, { assets_poll_interval_minutes: 1, assets_load_chunk: 100 })]));
 
 // ---- G. The backfill: the dry run, then the full read -------------------------------------------------------------------
 const runs0 = (await runsOf(reg1.id, null)).length;
 const cursor0 = await cursor(reg1.id, "assets:modified");
 b = await runBackfill({ connectionId: reg1.id, object: "device", dryRun: true });
-expect("G1 the dry run reads and counts: fetched, mapped, the fields, date failures, values with an @, unknown fields",
-  [b.fetched, b.mapped, b.fields, b.tableFields, b.dateFailures, b.valuesWithAt, b.unknownFields, Boolean(lastLog("backfill dry run"))],
-  [200, 200, 20, 25, 1, 1, 0, true], [0, 0, 0, 0, 0, 0, 1, false]);
+expect("G1 the dry run lists the table's fields (id, name, type) and reads and counts: fetched, mapped, the fields, date failures, values with an @, unknown fields",
+  [b.fetched, b.mapped, b.fields, b.tableFields, b.dateFailures, b.valuesWithAt, b.unknownFields, b.typeChangedFields,
+    lastLog("backfill dry run")?.tableFieldList?.find((f) => f.name === "aed_sn")],
+  [200, 200, 20, 25, 1, 1, 0, 0, { id: idIn(one, "aed_sn"), name: "aed_sn", type: "singleLineText" }], [0, 0, 0, 0, 0, 0, 1, 1, null]);
 expect("G2 …and writes nothing: no run, no staged row, the cursor as it was",
   [(await runsOf(reg1.id, null)).length - runs0, (await q("select count(*)::int as n from cma.device_import_row where tenant_id = $1", [T1.t]))[0].n,
     (await cursor(reg1.id, "assets:modified")).at === cursor0.at], [0, 0, true], [1, 1, false]);
@@ -281,8 +329,17 @@ expect("H1 tenant two's register loads into tenant two only; tenant one's device
   [total.failed, d2.length, d2.every((d) => d.source_id.startsWith("recFixtTwo")), (await q("select count(*)::int as n from cma.device where tenant_id = $1", [T1.t]))[0].n,
     (await q("select count(*)::int as n from cma.device where tenant_id = $1", [T2.t]))[0].n],
   [0, 30, true, 201, 30], [1, 0, false, 0, 0]);
-expect("H2 no request asked for a field outside the mapping; every one carried the token",
-  [fake.state.requests.filter((r) => r.fields.some((f) => !MAP.some((m) => m[3] === f))).length, fake.state.requests.every((r) => r.authorized)], [0, true], [1, false]);
+const removedField = fake.state.drop(two.baseId, two.tableId, "order_number");
+await asAdmin(T2, () => q("select cma.set_connection_settings($1, $2::jsonb)", [reg2.id, SETTINGS(two, { assets_poll_interval_minutes: 1 })]));
+await settle(20);
+total = await runPollAssets({ connectionId: reg2.id });
+const goneRun = (await runsOf(reg2.id, "assets_poll")).at(-1);
+expect("H1b a field deleted in tenant two's register: the poll fails unknown_field, the log naming the field's id",
+  [goneRun.status, goneRun.error, lastLog("airtable unknown field")?.field], ["failed", "unknown_field", removedField.id], ["succeeded", null, undefined]);
+const mappedIds = new Set(MAP.map((m) => idIn(one, m[3])));
+expect("H2 no request asked for a field outside the mapping or by name, none for a view; every one carried the token",
+  [fake.state.requests.filter((r) => r.fields.some((f) => !mappedIds.has(f))).length, fake.state.requests.filter((r) => r.view).length,
+    fake.state.requests.every((r) => r.authorized)], [0, 0, true], [1, 1, false]);
 const PERSONAL = ["Invented", "example.invalid", "Fixture note", "editor@", "usrFixture"];
 const dbText = JSON.stringify(await q(`select row_to_json(x)::text as r from cma.device x where tenant_id = any($1::uuid[])
   union all select row_to_json(x)::text from cma.device_component x where tenant_id = any($1::uuid[])

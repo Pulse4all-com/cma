@@ -1,12 +1,16 @@
 -- =============================================================================================
--- 116_asset_sync_load.sql: addition 0008zk, the device load set-based, and the ingest's load in bounded chunks
+-- 116_asset_sync_load.sql: addition 0008zk, the device load set-based, the ingest's load in bounded chunks and slices, and
+-- the forecast at the register's horizon of 50,000 devices
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 114_asset_sync.sql
 -- (0008zj). Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then
--- 117_verify_asset_sync_load.sql, then 115_verify_asset_sync.sql and 113_verify_assets.sql again (the load they prove
--- is the one this script makes again); then prod, with 117, 115 and 113. The ingest of main reads nothing this adds;
--- the ingest of this change needs it (cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing, the run's phase
--- times), so in prod the script runs before that ingest is deployed.
+-- 117_verify_asset_sync_load.sql, then 115_verify_asset_sync.sql and 113_verify_assets.sql again (the load and the
+-- forecast they prove are the ones this script makes again); then prod, with 117, 115 and 113. The ingest of main reads
+-- nothing this adds; the ingest of this change needs it (cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing in
+-- slices, cma.ingest_record_field_types, the run's phase times), so in prod the script runs before that ingest is deployed.
+-- Edited in place after its dev run of 27 October 2026 (records/0008zk-dev-2026-10-27): CLAUDE.md forbids editing a
+-- script that has run in prod, and this one has run in dev only; a rerun over that version replaces what it changed
+-- (the final missing-marking's two-argument form is dropped).
 --
 -- Why (prod, 27 October 2026: 115's C1, a nightly full snapshot of 5,000 unchanged records staged and loaded in one
 -- call as the Ingest user, took 14,844.5 ms; dev 6,821.0 ms). Prod's register of some 9,700 records would pass the
@@ -44,7 +48,22 @@
 -- After this script, locally: 115's C1 1,382 to 1,709 ms (the staging insert 0.95 to 1.2 s of it); a register of
 -- 10,000 records loaded in one call 12,391 ms before, 5,069 ms after; the night after it (1,000 new, 1,440 changed,
 -- 1,000 gone) 5,710 ms before, 2,830 ms after, with the same counts, devices, components and audit rows; one chunk of
--- 1,000 unchanged rows 104 ms; the final missing-marking over 9,900 record ids 36 to 39 ms.
+-- 1,000 unchanged rows 104 ms.
+--
+-- Why the second version (dev, 27 October 2026: the load about twice as fast, 115's C1 3,549.0 ms warm; 117 failed C3
+-- and C4 inside one transaction that also held its 10,000-record scenario, and its provoked rerun lost the server's
+-- connection). The register grows by thousands of devices a year, so the load and the forecast are designed and tested for
+-- 50,000 devices. Measured locally on a cluster held to db-g1-small's memory (1.5 GB, shared_buffers 560 MB, work_mem
+-- 4 MB) with a database in Cloud SQL's collation (en_US.UTF-8), where 113's C1 with 0008zi's forecast took 153 and 126 ms
+-- against dev's 146.0 and 130.8:
+--   the final step    one statement over every record id of the run grows with the register: it is cut into slices of
+--                     the run's chunk size, each its own call over its own range of record ids (by a partial index in
+--                     byte order), about 2 ms a slice of 1,000 at 50,000 devices
+--   the forecast      0008zi's forecast walks every due item in a PL/pgSQL loop, builds an exchange key and two bucket
+--                     labels as text per item, and its page and list group and sort that text (a slow comparison in
+--                     en_US.UTF-8): at 50,000 devices (about 106,000 items) the page took 1,567 ms and the list 1,861 ms.
+--                     Made again with the same results: the items as one statement with the bundling as a running
+--                     aggregate, the buckets as dates, text written for the cells and rows answered only: 738 and 817 ms
 --
 -- What it adds
 --   the load          cma.device_rows_apply(connection, rows, is_full): 0008zi's load as a handful of set-based
@@ -71,14 +90,28 @@
 --                     name): one chunk of 1 to 5,000 rows as JSON, its own call and transaction, loaded without marking
 --                     anything missing; the staging's columns only, each within the staging's length, the line a whole
 --                     number from 2 to 10,000,000 (CMA04 otherwise); no staging, so no staged row is audited or
---                     cleaned up. A value holding an @ is kept as a bare @, as the staging keeps it.
---                     cma.ingest_mark_devices_missing(connection, record ids) (ingest.write): a full snapshot's final
---                     call, the connection's devices whose record id the run did not read marked missing in one
---                     statement; refused (CMA04) without a record id, so a run that fails before it marks nothing
+--                     cleaned up. A value holding an @ is kept as a bare @, as the staging keeps it
+--   the final step    cma.ingest_mark_devices_missing(connection, record ids, from, before) (ingest.write): a full
+--                     snapshot's last step, one slice of at most 5,000 of the run's record ids (sorted by their bytes)
+--                     per call and transaction; the connection's present devices in the slice's range whose record id is
+--                     not among its ids marked missing. CMA04 without an id, with an id outside the range or bounds out of
+--                     order, so a run that fails before this step marks nothing. The index device_present_source_c_idx
+--                     (tenant, connection, record id in collation "C", present devices only) serves the ranges
+--   an index          device_component_device_idx (tenant, device): the components' foreign key to their device, so
+--                     removing a tenant's devices looks each one's components up by index
+--   field types       cma.ingest_record_field_types(connection, items) (ingest.write): the type the ingest first read
+--                     for each mapped property of an asset register (connection_field.source_type, as 0008zb keeps a
+--                     reason property's type); a type that later differs is the adapter's to refuse
 --   settings          cma.assets_settings_problem() knows assets_load_chunk, the rows of a chunk (a whole number from
---                     100 to 5,000; the adapter's default 1,000)
+--                     100 to 5,000; the adapter's default 1,000). cma.set_connection_settings() refuses view_id on an
+--                     asset register (CMA04): it is read whole, since a view's filter would make every device outside
+--                     it look missing at night; an asset register's stored view_id is removed
 --   runs              cma.ingest_sync_run_finish() takes the phase times (stage_ms, map_ms, upsert_ms, components_ms,
 --                     missing_ms, cleanup_ms) among the counts
+--   the forecast      cma.maintenance_items_of, cma.maintenance_bucketed_of, cma.maintenance_page_of and
+--                     cma.maintenance_rows_of made again with 0008zi's results (113 passes unchanged), over the new
+--                     cma.maintenance_bucket_dates_of and the aggregate cma.maintenance_exchange_start
+--                     (cma.maintenance_exchange_step)
 --
 -- Everything is SECURITY INVOKER and executable by the application only, with its permission checked inside.
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not permitted.
@@ -626,12 +659,19 @@ begin
 end
 $$;
 
--- A full snapshot's final call (ingest.write; an active asset register connection with a token secret name): the
--- connection's devices whose record id the run did not read are marked missing, in one statement (a hashed set of the
--- ids, each read as a chunk's row reads it). CMA04 without a record id, or with a null or one that is no id among them,
--- so a run that reads nothing, or fails before this call, marks nothing. One load of
--- the connection at a time (the advisory lock of 0008zj). Answers { missing_now, missing_ms }
-create or replace function cma.ingest_mark_devices_missing(p_connection_id uuid, p_source_ids text[])
+-- A full snapshot's final step, one slice at a time (ingest.write; an active asset register connection with a token
+-- secret name). The run's record ids, sorted by their bytes (collation "C"), are cut into slices of at most 5,000 (the
+-- adapter's assets_load_chunk); each slice is one call and one transaction, with its ids and its range: p_from, its
+-- first id (null for the first slice), and p_before, the next slice's first id (null for the last). The connection's
+-- devices in that range whose record id is not among the slice's ids are marked missing, by the range index; so the
+-- slices together cover every record id once, and each call's work is bounded by its slice, not by the register.
+-- Every id and both bounds are read as a chunk's row reads them (a bare @ for an address, then the record id's form).
+-- CMA04 without an id, with more than 5,000, with a null or one that is no id among them, with a bound that is no id,
+-- with p_from not before p_before, or with an id outside the range (the adapter's sort and the database's differ: nothing
+-- is marked). A run that reads nothing, or fails before this step, marks nothing. One load of the connection at a time
+-- (the advisory lock of 0008zj). Answers { missing_now, missing_ms }
+drop function if exists cma.ingest_mark_devices_missing(uuid, text[]);
+create or replace function cma.ingest_mark_devices_missing(p_connection_id uuid, p_source_ids text[], p_from text, p_before text)
 returns jsonb
 language plpgsql
 as $$
@@ -639,6 +679,9 @@ declare
   v_tenant  uuid := cma.current_tenant_id();
   v_t       timestamptz;
   v_missing integer;
+  v_ids     text[];
+  v_from    text;
+  v_before  text;
 begin
   perform cma.assert_permission('ingest.write');
   perform cma.active_connection_adapter(p_connection_id);
@@ -647,21 +690,54 @@ begin
     raise exception 'connection % has no token secret name: it is loaded from files (cma.load_device_snapshot), not by the ingest', p_connection_id
       using errcode = 'CMA04';
   end if;
-  -- each id read as a chunk's row reads it (a bare @ for an address, then the record id's form), so it meets the
-  -- devices' stored record ids; one that is no id refuses the call, as it refuses its chunk
-  if coalesce(cardinality(p_source_ids), 0) = 0
-     or exists (select 1 from unnest(p_source_ids) x where cma.device_staged_text(cma.device_staged_without_at(x)) is null) then
-    raise exception 'the record ids of the run are needed (none, a null or one that is no id among them)' using errcode = 'CMA04';
+  -- each id read as a chunk's row reads it, so it meets the devices' stored record ids; one that is no id refuses the
+  -- call, as it refuses its chunk
+  if coalesce(cardinality(p_source_ids), 0) not between 1 and 5000 then
+    raise exception 'a slice holds 1 to 5,000 record ids of the run' using errcode = 'CMA04';
+  end if;
+  v_ids := array(select cma.device_staged_text(cma.device_staged_without_at(x)) from unnest(p_source_ids) x);
+  if array_position(v_ids, null) is not null then
+    raise exception 'a slice''s record ids are ids (a null or one that is no id among them)' using errcode = 'CMA04';
+  end if;
+  v_from := cma.device_staged_text(cma.device_staged_without_at(p_from));
+  v_before := cma.device_staged_text(cma.device_staged_without_at(p_before));
+  if (p_from is not null and v_from is null) or (p_before is not null and v_before is null) or v_from >= v_before collate "C" then
+    raise exception 'a slice''s bounds are record ids, its first before the next slice''s first' using errcode = 'CMA04';
+  end if;
+  if exists (select 1 from unnest(v_ids) x where x < v_from collate "C" or x >= v_before collate "C") then
+    raise exception 'a record id lies outside its slice (from % before %): nothing is marked', coalesce(v_from, 'the start'), coalesce(v_before, 'the end')
+      using errcode = 'CMA04';
   end if;
   perform pg_advisory_xact_lock(hashtext('cma-device-load'), hashtext(p_connection_id::text));
   v_t := clock_timestamp();
-  update cma.device d set source_deleted_at = now(), synced_at = now()
-  where d.tenant_id = v_tenant and d.connection_id = p_connection_id and d.source_deleted_at is null
-    and d.source_id not in (select cma.device_staged_text(cma.device_staged_without_at(x)) from unnest(p_source_ids) x);
+  -- the range as the index's conditions ('' is the least text in byte order; the last slice has no end)
+  v_from := coalesce(v_from, '');
+  if v_before is null then
+    update cma.device d set source_deleted_at = now(), synced_at = now()
+    where d.tenant_id = v_tenant and d.connection_id = p_connection_id and d.source_deleted_at is null
+      and (d.source_id collate "C") >= v_from
+      and d.source_id not in (select x from unnest(v_ids) x);
+  else
+    update cma.device d set source_deleted_at = now(), synced_at = now()
+    where d.tenant_id = v_tenant and d.connection_id = p_connection_id and d.source_deleted_at is null
+      and (d.source_id collate "C") >= v_from and (d.source_id collate "C") < v_before
+      and d.source_id not in (select x from unnest(v_ids) x);
+  end if;
   get diagnostics v_missing = row_count;
   return jsonb_build_object('missing_now', v_missing, 'missing_ms', round(extract(epoch from clock_timestamp() - v_t) * 1000));
 end
 $$;
+
+-- The components by device: the index of their foreign key to the device. Without it, removing a tenant's devices (a
+-- tenant's offboarding; 117's cleanup of its throwaway tenants) checks each device against every component of the tenant
+-- (some eight minutes for 50,000 devices locally); with it, one lookup each
+create index if not exists device_component_device_idx on cma.device_component (tenant_id, device_id);
+
+-- The slices' range index: a connection's present devices by record id in byte order. Partial (source_deleted_at is
+-- null), so only the missing-marking can use it: a record id's lookup by equality (the load's) keeps the unique index on
+-- (tenant_id, connection_id, source_id), even while a filling connection has no statistics and both would look as cheap
+create index if not exists device_present_source_c_idx on cma.device (tenant_id, connection_id, (source_id collate "C"))
+  where source_deleted_at is null;
 
 -- ---------------------------------------------------------------------------------------------
 -- 5. Settings: the rows of a chunk
@@ -691,7 +767,9 @@ as $$
   end
 $$;
 
--- As 0008zj (114), naming assets_load_chunk among the forms
+-- As 0008zj (114), naming assets_load_chunk among the forms, and refusing view_id on an asset register connection: the
+-- asset sync reads the whole table, since a view's filter would make every device outside it look missing to the nightly
+-- full snapshot (CMA04). cma.assets_settings_problem still checks a view_id's form, as 0008zj's verify reads it
 create or replace function cma.set_connection_settings(p_connection_id uuid, p_settings jsonb)
 returns void
 language plpgsql
@@ -709,9 +787,13 @@ begin
   end if;
   select c.kind into v_kind from cma.integration_connection c where c.tenant_id = v_tenant and c.id = p_connection_id;
   if v_kind = 'assets' or (v_kind is null and 'assets' = any (cma.connection_held_kinds_of(v_tenant, p_connection_id))) then
+    if coalesce(p_settings, '{}'::jsonb) ? 'view_id' then
+      raise exception 'an asset register is read whole: view_id is no setting of it (a view''s filter would make the devices outside it look missing)'
+        using errcode = 'CMA04';
+    end if;
     v_bad := cma.assets_settings_problem(coalesce(p_settings, '{}'::jsonb));
     if v_bad is not null then
-      raise exception 'the setting % is out of its form: table_id and view_id are ids, date_format is dmy, mdy or iso, assets_poll_interval_minutes a whole number from 1 to 1440, assets_load_chunk one from 100 to 5,000', v_bad
+      raise exception 'the setting % is out of its form: table_id is an id, date_format is dmy, mdy or iso, assets_poll_interval_minutes a whole number from 1 to 1440, assets_load_chunk one from 100 to 5,000', v_bad
         using errcode = 'CMA04';
     end if;
   end if;
@@ -719,6 +801,12 @@ begin
   where c.tenant_id = v_tenant and c.id = p_connection_id;
 end
 $$;
+
+-- An asset register connection that holds a view_id from before (0008zj took one) holds it no longer: the ingest reads
+-- the whole table whatever the settings say, so the stored settings say the same. Audited as every settings change
+update cma.integration_connection c set settings = c.settings - 'view_id'
+where c.settings ? 'view_id'
+  and (c.kind = 'assets' or (c.kind is null and 'assets' = any (cma.connection_held_kinds_of(c.tenant_id, c.id))));
 
 -- ---------------------------------------------------------------------------------------------
 -- 6. A run's counts take the phase times
@@ -759,7 +847,318 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 7. Grants: the application only
+-- 7. The mapped fields' types
+-- ---------------------------------------------------------------------------------------------
+-- The type the ingest first read for each mapped property of an asset register connection (ingest.write; an active
+-- asset register connection): p_items a JSON array of 1 to 200 objects { property, type }, the property as mapped (the
+-- source's field id) and its type as the source's schema names it, kept in lower case in connection_field.source_type
+-- (checked_at: when it was first read). Only a mapped field without a type takes one: a type that differs from the
+-- stored one is the adapter's to refuse before it reads a record (field_type_changed, naming the field), never
+-- overwritten here. A field mapped again with another property loses its type (0008zb), so the next run reads it afresh;
+-- to accept a changed type for the same property, its mapping is removed and set again in one Run. Answers how many
+-- fields took a type
+create or replace function cma.ingest_record_field_types(p_connection_id uuid, p_items jsonb)
+returns integer
+language plpgsql
+as $$
+declare
+  v_n integer;
+begin
+  perform cma.assert_permission('ingest.write');
+  perform cma.active_connection_adapter(p_connection_id);
+  perform cma.assert_assets_connection(p_connection_id);
+  if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) not between 1 and 200
+     or exists (select 1 from jsonb_array_elements(p_items) e
+                where jsonb_typeof(e) <> 'object' or coalesce(btrim(e ->> 'property'), '') = '' or length(e ->> 'property') > 200
+                   or coalesce(lower(e ->> 'type'), '') !~ '^[a-z][a-z0-9_]{0,39}$') then
+    raise exception 'field types are a JSON array of 1 to 200 objects, each a mapped property and its type (a letter, then letters, digits or _; at most 40)'
+      using errcode = 'CMA04';
+  end if;
+  update cma.connection_field f set source_type = lower(e.value ->> 'type'), checked_at = now()
+  from jsonb_array_elements(p_items) e
+  where f.tenant_id = cma.current_tenant_id() and f.connection_id = p_connection_id and f.source_type is null
+    and f.source_property = btrim(e.value ->> 'property');
+  get diagnostics v_n = row_count;
+  return v_n;
+end
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 8. The forecast at the register's horizon (50,000 devices)
+-- ---------------------------------------------------------------------------------------------
+-- 0008zi's forecast (112) walks every due item of the tenant in a PL/pgSQL loop (RETURN NEXT, one row at a time) to
+-- bundle the exchanges, and its list looks up each row's names and CRM contact before it cuts the page. At 50,000
+-- devices (about 100,000 items) the page took 1.1 s and the list 2.0 s locally on a db-g1-small's memory settings.
+-- Made again with the same rows and results (113 passes unchanged): the items as one statement, the bundling as a
+-- running aggregate over each device's items in the loop's order; the bucketing a plain statement the planner inlines;
+-- the list's page cut first, its names and contacts looked up for the page's rows only.
+
+-- One step of the bundling, as 112's loop takes it: an item without an action date leaves the exchange as it is; one
+-- whose action date lies beyond the window from the exchange's first action date (or the device's first) starts a new
+-- exchange on its own action date
+create or replace function cma.maintenance_exchange_step(p_start date, p_action_on date, p_window integer)
+returns date
+language plpgsql immutable
+as $$
+begin
+  if p_action_on is null then
+    return p_start;
+  end if;
+  if p_start is null or p_action_on > p_start + p_window then
+    return p_action_on;
+  end if;
+  return p_start;
+end
+$$;
+
+-- The exchange's first action date, as a running aggregate over a device's items in action-date order
+create or replace aggregate cma.maintenance_exchange_start(date, integer) (sfunc = cma.maintenance_exchange_step, stype = date);
+
+-- As 0008zi (112), the same rows: the items of every tracked device as one statement, and each item's exchange the
+-- running aggregate over its device's items ordered as 112's loop orders them (action date, nulls last, then the kind's
+-- order and key)
+create or replace function cma.maintenance_items_of(p_tenant_id uuid, p_today date)
+returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
+               is_in_field boolean, is_in_stock boolean, component_key text, component_order integer, due_on date, basis text,
+               action_on date, past_due boolean, exchange_key text, exchange_on date)
+language sql stable
+as $$
+  with s as (
+    select greatest(coalesce(nullif(cma.setting_of(p_tenant_id, 'assets.bundle_window_days'), '')::integer, 0), 0) as win,
+           date_trunc('month', p_today)::date as month,
+           (select t.timezone from cma.tenant t where t.id = p_tenant_id) as zone
+  ), d as (
+    select dv.id, dv.connection_id, dv.source_id, dv.serial, dv.model_key, dv.market, dv.device_status_key, st.is_in_field, st.is_in_stock,
+           coalesce(dv.last_shipped_on, dv.first_shipped_on) as anchor, dv.end_of_life_on
+    from cma.device dv
+    join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+    where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null
+  ), rp as (
+    -- the devices' kinds with a replaced component: their current component is a replacement
+    select distinct p.device_id, p.component_key
+    from cma.device_component p
+    where p.tenant_id = p_tenant_id and p.replaced_at is not null
+  ), it as (
+    select d.id, d.connection_id, d.source_id, d.serial, d.model_key, d.market, d.device_status_key, d.is_in_field, d.is_in_stock,
+           k.key as component_key, k.sort_order as component_order, c.expires_on as recorded,
+           case when ru.interval_months is not null and a.anchor is not null
+                then (a.anchor + make_interval(months => ru.interval_months))::date end as by_rule,
+           coalesce(ru.lead_days, 0) as lead_days
+    from d
+    cross join s
+    join cma.device_component_kind k on k.tenant_id = p_tenant_id and k.status = 'active'
+    left join cma.device_component c
+      on c.tenant_id = p_tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
+    left join rp on rp.device_id = c.device_id and rp.component_key = c.component_key
+    left join cma.maintenance_rule ru on ru.tenant_id = p_tenant_id and ru.model_key = d.model_key and ru.component_key = k.key
+    cross join lateral (select case when rp.device_id is not null then (c.first_seen_at at time zone s.zone)::date
+                                    else d.anchor end as anchor) a
+    where c.id is not null or ru.id is not null or d.model_key is null
+    union all
+    select d.id, d.connection_id, d.source_id, d.serial, d.model_key, d.market, d.device_status_key, d.is_in_field, d.is_in_stock,
+           'device', 2147483647, d.end_of_life_on, null::date, 0
+    from d
+    where d.end_of_life_on is not null
+  ), i as (
+    select it.*, coalesce(it.recorded, it.by_rule) as due,
+           case when it.recorded is not null then 'recorded' when it.by_rule is not null then 'rule' else 'unknown' end as how,
+           coalesce(it.recorded, it.by_rule) - it.lead_days as act
+    from it
+  ), x as (
+    select i.*,
+           cma.maintenance_exchange_start(i.act, (select s.win from s))
+             over (partition by i.id order by i.act nulls last, i.component_order, i.component_key
+                   rows between unbounded preceding and current row) as xstart
+    from i
+  )
+  select x.id, x.connection_id, x.source_id, x.serial, x.model_key, x.market, x.device_status_key, x.is_in_field, x.is_in_stock,
+         x.component_key, x.component_order, x.due, x.how, x.act, coalesce(x.act < (select s.month from s), false),
+         case when x.act is not null then x.id::text || ':' || to_char(x.xstart, 'YYYY-MM-DD') end,
+         case when x.act is not null then x.xstart end
+  from x
+$$;
+
+-- The due items of a horizon after the filters, as cma.maintenance_bucketed_of answers them, but each bucket a date:
+-- -infinity for past_due, the first day of the action month within the horizon, null beyond it; the same for the
+-- exchange's bucket (from the exchange's first action date). Model and market as the device holds them (null for none).
+-- No text is built per item: the page and the list group and sort dates, ids and the device's own values, and write the
+-- buckets and the exchange keys as text for the cells and rows they answer only. The horizon's bounds are computed once
+-- (sub-selects), a month from a date without a time zone. One plain statement, inlined into them
+create or replace function cma.maintenance_bucket_dates_of(p_tenant_id uuid, p_from_month date, p_months integer, p_market text,
+                                                           p_model text, p_scope text, p_today date)
+returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
+               component_key text, component_order integer, due_on date, basis text, action_on date, past_due boolean, exchange_key text,
+               exchange_on date, bucket_on date, exchange_bucket_on date)
+language sql stable
+as $$
+  select i.device_id, i.connection_id, i.source_id, i.serial, i.model_key, i.market, i.device_status_key, i.component_key, i.component_order,
+         i.due_on, i.basis, i.action_on, i.past_due, i.exchange_key, i.exchange_on,
+         case when i.past_due then '-infinity'::date
+              when i.action_on >= p_from_month and i.action_on < (select (p_from_month + make_interval(months => p_months))::date)
+                then date_trunc('month', i.action_on::timestamp)::date end,
+         case when i.exchange_on < (select date_trunc('month', p_today::timestamp)::date) then '-infinity'::date
+              when i.exchange_on >= p_from_month and i.exchange_on < (select (p_from_month + make_interval(months => p_months))::date)
+                then date_trunc('month', i.exchange_on::timestamp)::date end
+  from cma.maintenance_items_of(p_tenant_id, p_today) i
+  where (p_scope is null or (p_scope = 'field' and i.is_in_field) or (p_scope = 'stock' and i.is_in_stock))
+    and (p_market is null or coalesce(i.market, 'unknown') = p_market)
+    and (p_model is null or coalesce(i.model_key, 'unknown') = p_model)
+$$;
+
+-- As 0008zi (112), the same rows: over cma.maintenance_bucket_dates_of, the buckets written as text (past_due, or the
+-- month's first day as YYYY-MM-DD), model and market unknown for none. One plain statement, inlined
+create or replace function cma.maintenance_bucketed_of(p_tenant_id uuid, p_from_month date, p_months integer, p_market text, p_model text,
+                                                       p_scope text, p_today date)
+returns table (device_id uuid, connection_id uuid, source_id text, serial text, model_key text, market text, device_status_key text,
+               component_key text, component_order integer, due_on date, basis text, action_on date, past_due boolean, exchange_key text,
+               exchange_on date, bucket text, exchange_bucket text)
+language sql stable
+as $$
+  select b.device_id, b.connection_id, b.source_id, b.serial, coalesce(b.model_key, 'unknown'), coalesce(b.market, 'unknown'),
+         b.device_status_key, b.component_key, b.component_order, b.due_on, b.basis, b.action_on, b.past_due, b.exchange_key, b.exchange_on,
+         case when b.bucket_on = '-infinity' then 'past_due' else to_char(b.bucket_on, 'YYYY-MM-DD') end,
+         case when b.exchange_bucket_on = '-infinity' then 'past_due' else to_char(b.exchange_bucket_on, 'YYYY-MM-DD') end
+  from cma.maintenance_bucket_dates_of(p_tenant_id, p_from_month, p_months, p_market, p_model, p_scope, p_today) b
+$$;
+
+-- As 0008zi (112), the same page: over cma.maintenance_bucket_dates_of, grouped by the buckets as dates; a cell's
+-- planned exchanges counted as its distinct devices and first action dates (an exchange key is the two as text), by
+-- hashing; the buckets written as text for the cells only
+create or replace function cma.maintenance_page_of(p_tenant_id uuid, p_from_month date, p_months integer, p_market text, p_model text,
+                                                   p_scope text, p_today date)
+returns jsonb
+language sql stable
+as $$
+  with b as materialized (
+    select x.device_id, coalesce(x.market, 'unknown') as market, coalesce(x.model_key, 'unknown') as model_key, x.component_key, x.basis,
+           x.exchange_on, x.bucket_on, x.exchange_bucket_on
+    from cma.maintenance_bucket_dates_of(p_tenant_id, p_from_month, p_months, p_market, p_model, p_scope, p_today) x
+  ), comp as (
+    select x.bucket_on, x.market, x.model_key, jsonb_object_agg(x.component_key, x.n) as components, sum(x.n)::integer as component_items
+    from (select bucket_on, market, model_key, component_key, count(*)::integer as n
+          from b where bucket_on is not null and component_key <> 'device' group by 1, 2, 3, 4) x
+    group by 1, 2, 3
+  ), eol as (
+    select bucket_on, market, model_key, count(*)::integer as n from b where bucket_on is not null and component_key = 'device' group by 1, 2, 3
+  ), exch as (
+    select x.bucket_on, x.market, x.model_key, count(*)::integer as n
+    from (select distinct exchange_bucket_on as bucket_on, market, model_key, device_id, exchange_on from b where exchange_bucket_on is not null) x
+    group by 1, 2, 3
+  ), cells as (
+    select k.bucket_on, k.market, k.model_key, coalesce(c.components, '{}'::jsonb) as components, coalesce(c.component_items, 0) as component_items,
+           coalesce(e.n, 0) as end_of_life, coalesce(x.n, 0) as exchanges
+    from (select bucket_on, market, model_key from comp union select bucket_on, market, model_key from eol
+          union select bucket_on, market, model_key from exch) k
+    left join comp c on c.bucket_on = k.bucket_on and c.market = k.market and c.model_key = k.model_key
+    left join eol e on e.bucket_on = k.bucket_on and e.market = k.market and e.model_key = k.model_key
+    left join exch x on x.bucket_on = k.bucket_on and x.market = k.market and x.model_key = k.model_key
+  ), unk as (
+    select x.market, x.model_key, jsonb_object_agg(x.component_key, x.n) as components, sum(x.n)::integer as items
+    from (select market, model_key, component_key, count(*)::integer as n from b where basis = 'unknown' group by 1, 2, 3) x
+    group by 1, 2
+  ), tracked as (
+    select coalesce(dv.market, 'unknown') as market, coalesce(dv.model_key, 'unknown') as model_key, st.is_in_field, st.is_in_stock
+    from cma.device dv
+    join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
+    where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null
+  ), mk as (
+    select m.code, m.sort_order from cma.market m where m.tenant_id = p_tenant_id
+  ), md as (
+    select m.key, m.name, m.sort_order from cma.device_model m where m.tenant_id = p_tenant_id
+  )
+  select jsonb_build_object(
+    'from_month', p_from_month, 'months', p_months, 'current_month', date_trunc('month', p_today)::date,
+    'bundle_window_days', greatest(coalesce(nullif(cma.setting_of(p_tenant_id, 'assets.bundle_window_days'), '')::integer, 0), 0),
+    'is_set_up', cma.assets_set_up_of(p_tenant_id),
+    'buckets', (select jsonb_agg(x.k order by x.o)
+                from (select 'past_due' as k, 0 as o
+                      union all
+                      select to_char((p_from_month + make_interval(months => g))::date, 'YYYY-MM-DD'), g + 1
+                      from generate_series(0, p_months - 1) g) x),
+    'component_kinds', (select coalesce(jsonb_agg(jsonb_build_object('key', k.key, 'name', k.name) order by k.sort_order, k.key), '[]'::jsonb)
+                        from cma.device_component_kind k where k.tenant_id = p_tenant_id and k.status = 'active'),
+    'cells', (select coalesce(jsonb_agg(jsonb_build_object('bucket', case when c.bucket_on = '-infinity' then 'past_due' else to_char(c.bucket_on, 'YYYY-MM-DD') end,
+                                                           'market', c.market, 'model', c.model_key,
+                                                           'components', c.components, 'component_items', c.component_items,
+                                                           'end_of_life', c.end_of_life, 'exchanges', c.exchanges)
+                                        order by c.bucket_on, (c.market = 'unknown'), mk.sort_order, c.market,
+                                                 (c.model_key = 'unknown'), md.sort_order, c.model_key), '[]'::jsonb)
+              from cells c left join mk on mk.code = c.market left join md on md.key = c.model_key),
+    'unknown', (select coalesce(jsonb_agg(jsonb_build_object('market', u.market, 'model', u.model_key, 'components', u.components, 'items', u.items)
+                                          order by (u.market = 'unknown'), mk.sort_order, u.market, (u.model_key = 'unknown'), md.sort_order, u.model_key), '[]'::jsonb)
+                from unk u left join mk on mk.code = u.market left join md on md.key = u.model_key),
+    'unknown_items', (select count(*) from b where basis = 'unknown'),
+    'devices', (select count(*) from tracked t
+                where (p_scope is null or (p_scope = 'field' and t.is_in_field) or (p_scope = 'stock' and t.is_in_stock))
+                  and (p_market is null or t.market = p_market) and (p_model is null or t.model_key = p_model)),
+    'filter_markets', (select coalesce(jsonb_agg(f.market order by (f.market = 'unknown'), mk.sort_order, f.market), '[]'::jsonb)
+                       from (select distinct t.market from tracked t) f left join mk on mk.code = f.market),
+    'filter_models', (select coalesce(jsonb_agg(jsonb_build_object('key', f.model_key, 'name', md.name)
+                                                order by (f.model_key = 'unknown'), md.sort_order, f.model_key), '[]'::jsonb)
+                      from (select distinct t.model_key from tracked t) f left join md on md.key = f.model_key))
+$$;
+
+-- As 0008zi (112), the same rows in the same order: over cma.maintenance_bucket_dates_of, each row's bucket a date
+-- (infinity for unknown), grouped by device, bucket and exchange (its first action date) with the device's values the
+-- order needs; the page of rows cut first; then the bucket written as text, the device's references, the model's and
+-- status's names and the CRM contact for the page's rows only. The order's last key, 0008zi's exchange key as text (the
+-- device id, then the date), is the device id and the exchange's first action date
+create or replace function cma.maintenance_rows_of(p_tenant_id uuid, p_from_month date, p_months integer, p_bucket text, p_market text,
+                                                   p_model text, p_scope text, p_view text, p_limit integer, p_today date)
+returns table (bucket text, device_id uuid, connection_id uuid, source_id text, serial text, model_key text, model_name text, market text,
+               device_status_key text, device_status_name text, components text[], due_on date, bases text[], action_on date,
+               exchange_on date, customer_ref text, subscription_ref text, crm_connection_id uuid, crm_contact_source_id text,
+               total_rows bigint)
+language sql stable
+as $$
+  with b as (
+    select x.device_id, x.connection_id, x.source_id, x.serial, x.model_key, x.market, x.device_status_key, x.component_key, x.component_order,
+           x.due_on, x.basis, x.action_on, x.exchange_on,
+           case when x.basis = 'unknown' then 'infinity'::date when p_view = 'exchanges' then x.exchange_bucket_on else x.bucket_on end as rb
+    from cma.maintenance_bucket_dates_of(p_tenant_id, p_from_month, p_months, p_market, p_model, p_scope, p_today) x
+  ), g as (
+    select b.device_id, b.rb, case when p_view = 'exchanges' and b.rb <> 'infinity' then b.exchange_on end as grp_on,
+           b.connection_id, b.source_id, b.serial, b.model_key, b.market, b.device_status_key,
+           array_agg(b.component_key order by b.component_order, b.component_key) as components,
+           min(b.due_on) as due_on,
+           -- the distinct bases in order (recorded, rule, unknown), as array_agg(distinct basis order by basis) gives them
+           array_remove(array[case when bool_or(b.basis = 'recorded') then 'recorded' end, case when bool_or(b.basis = 'rule') then 'rule' end,
+                              case when bool_or(b.basis = 'unknown') then 'unknown' end], null) as bases,
+           min(b.action_on) as action_on, min(b.exchange_on) as exchange_on
+    from b
+    where case when p_bucket = 'unknown' then b.rb = 'infinity'
+               when p_bucket = 'all' then b.rb is not null and b.rb <> 'infinity'
+               when p_bucket = 'past_due' then b.rb = '-infinity'
+               else b.rb = case when pg_input_is_valid(p_bucket, 'date') then p_bucket::date end end
+    group by b.device_id, b.rb, 3, b.connection_id, b.source_id, b.serial, b.model_key, b.market, b.device_status_key
+  ), r as (
+    select g.*, count(*) over () as total_rows
+    from g
+    order by g.action_on nulls last, coalesce(g.market, 'unknown') = 'unknown', g.market, g.model_key, g.serial nulls last, g.source_id,
+             case when g.grp_on is not null then g.device_id end, g.grp_on
+    limit p_limit
+  )
+  select case r.rb when 'infinity' then 'unknown' when '-infinity' then 'past_due' else to_char(r.rb, 'YYYY-MM-DD') end, r.device_id,
+         r.connection_id, r.source_id, r.serial, coalesce(r.model_key, 'unknown'), md.name, coalesce(r.market, 'unknown'), r.device_status_key,
+         st.name, r.components, r.due_on, r.bases, r.action_on, r.exchange_on, dv.customer_ref, dv.subscription_ref, ct.crm_connection_id,
+         ct.crm_contact_source_id, r.total_rows
+  from r
+  join cma.device dv on dv.tenant_id = p_tenant_id and dv.id = r.device_id
+  left join cma.device_model md on md.tenant_id = p_tenant_id and md.key = r.model_key
+  left join cma.device_status st on st.tenant_id = p_tenant_id and st.key = r.device_status_key
+  left join lateral (
+    select case when count(distinct (cu.crm_connection_id, cu.crm_contact_source_id)) = 1 then (array_agg(cu.crm_connection_id))[1] end as crm_connection_id,
+           case when count(distinct (cu.crm_connection_id, cu.crm_contact_source_id)) = 1 then (array_agg(cu.crm_contact_source_id))[1] end as crm_contact_source_id
+    from cma.commerce_customer cu
+    where cu.tenant_id = p_tenant_id and dv.customer_ref is not null and cu.source_id = dv.customer_ref
+      and cu.source_deleted_at is null and cu.crm_contact_source_id is not null
+  ) ct on true
+  order by r.action_on nulls last, coalesce(r.market, 'unknown') = 'unknown', r.market, r.model_key, r.serial nulls last, r.source_id,
+           case when r.grp_on is not null then r.device_id end, r.grp_on
+$$;
+
+-- ---------------------------------------------------------------------------------------------
+-- 9. Grants: the application only
 -- ---------------------------------------------------------------------------------------------
 do $$
 declare
@@ -771,10 +1170,18 @@ begin
     'cma.device_rows_apply(uuid,cma.device_load_row[],boolean)',
     'cma.device_snapshot_apply(text,uuid,boolean)',
     'cma.ingest_load_device_chunk(uuid,jsonb)',
-    'cma.ingest_mark_devices_missing(uuid,text[])',
+    'cma.ingest_mark_devices_missing(uuid,text[],text,text)',
     'cma.assets_settings_problem(jsonb)',
     'cma.set_connection_settings(uuid,jsonb)',
-    'cma.ingest_sync_run_finish(uuid,text,jsonb,text)'
+    'cma.ingest_sync_run_finish(uuid,text,jsonb,text)',
+    'cma.ingest_record_field_types(uuid,jsonb)',
+    'cma.maintenance_exchange_step(date,date,integer)',
+    'cma.maintenance_exchange_start(date,integer)',
+    'cma.maintenance_items_of(uuid,date)',
+    'cma.maintenance_bucket_dates_of(uuid,date,integer,text,text,text,date)',
+    'cma.maintenance_bucketed_of(uuid,date,integer,text,text,text,date)',
+    'cma.maintenance_page_of(uuid,date,integer,text,text,text,date)',
+    'cma.maintenance_rows_of(uuid,date,integer,text,text,text,text,text,integer,date)'
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
@@ -783,10 +1190,10 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 8. Record the addition
+-- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final cma.ingest_mark_devices_missing; the setting assets_load_chunk (100 to 5,000); cma.ingest_sync_run_finish takes the phase times')
+values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final step in slices cma.ingest_mark_devices_missing(connection, ids, from, before) over the index device_present_source_c_idx; cma.ingest_record_field_types; the setting assets_load_chunk (100 to 5,000), view_id refused on an asset register; cma.ingest_sync_run_finish takes the phase times; the forecast made again for 50,000 devices with 0008zi''s results (cma.maintenance_bucket_dates_of, the aggregate cma.maintenance_exchange_start)')
 on conflict (version) do nothing;
 
 commit;

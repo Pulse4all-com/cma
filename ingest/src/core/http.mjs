@@ -9,6 +9,11 @@
  * body is read: an adapter's client reads the source's usage headers from them (HubSpot's daily limit,
  * CMA-069). It is called with the headers only, never with a body.
  *
+ * errorCodes, when given, maps a source's error types to codes: a failed answer whose body names one of
+ * them ({ "error": { "type": T } } or { "error": T }) fails with its code instead of http_<status>. Only a
+ * type the map names is read from the body; nothing else of it is kept (Airtable's expired paging,
+ * LIST_RECORDS_ITERATOR_NOT_AVAILABLE, is paging_expired).
+ *
  * No redirect is followed (redirect: manual, so a 3xx answer is http_3xx like any other status): the
  * hosts are pinned, and a followed redirect would carry a vendor token to another host. A body is read
  * up to MAX_RESPONSE_BYTES; above that the call fails bad_response instead of filling the instance's
@@ -53,8 +58,21 @@ async function readText(res, maxBytes) {
   return new TextDecoder().decode(Buffer.concat(parts));
 }
 
+/** The code a failed answer's error type maps to (errorCodes), or null: the type only, nothing else of the body. */
+function errorCodeOf(text, errorCodes) {
+  if (!errorCodes || !text) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const type = typeof parsed?.error === "string" ? parsed.error : parsed?.error?.type;
+  return typeof type === "string" && Object.hasOwn(errorCodes, type) ? errorCodes[type] : null;
+}
+
 /** fetch → parsed JSON; throws SourceError. The caller passes the budget's signal. */
-export async function requestJson(url, { method = "GET", headers = {}, body, signal, maxBytes = MAX_RESPONSE_BYTES, onHeaders = null } = {}) {
+export async function requestJson(url, { method = "GET", headers = {}, body, signal, maxBytes = MAX_RESPONSE_BYTES, onHeaders = null, errorCodes = null } = {}) {
   let res;
   try {
     res = await fetch(url, {
@@ -83,7 +101,7 @@ export async function requestJson(url, { method = "GET", headers = {}, body, sig
     throw new SourceError("unreachable");
   }
   // 207 is HubSpot's multi-status for a batch with some ids not found: the body still holds the results
-  if (!res.ok && res.status !== 207) throw new SourceError(`http_${res.status}`, res.status);
+  if (!res.ok && res.status !== 207) throw new SourceError(errorCodeOf(text, errorCodes) ?? `http_${res.status}`, res.status);
   if (!text) return null;
   try {
     return JSON.parse(text);
