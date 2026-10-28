@@ -255,8 +255,9 @@ const locked = await measurePool("poll-subscriptions", () => withJobLock("verify
 const polled = poolRuns().at(-1);
 run = (await runsOf(juo1.id, "subscriptions_poll")).at(-1);
 expect(`D5 the poll under its lock keeps to the jobs' pool of 2: at most 2 connections at once, its work on one, no wait on its own pool (peak ${polled.peak}, work ${polled.work})`,
-  [locked.ran, locked.result?.failed, run.status, run.counts.fetched >= 1, polled.job, polled.peak >= 1 && polled.peak <= 2, polled.work <= 1, polled.selfWaits],
-  [true, 0, "succeeded", true, "poll-subscriptions", true, true, 0], [false, 1, "failed", false, "poll-subscriptions", false, false, 1]);
+  [locked.ran, locked.result?.failed, (await runsOf(juo1.id, "subscriptions_poll")).length, run.status, run.counts.fetched >= 1, polled.job,
+    polled.peak >= 1 && polled.peak <= 2, polled.work <= 1, polled.selfWaits],
+  [true, 0, 3, "succeeded", true, "poll-subscriptions", true, true, 0], [false, 1, 2, "failed", false, "poll-subscriptions", false, false, 1]);
 
 // ---- E. The reconcile: missing marked; an empty read fails ----------------------------------------------------------------------
 const gone = one.subscriptions.pop();
