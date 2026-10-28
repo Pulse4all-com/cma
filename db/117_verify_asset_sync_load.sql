@@ -45,7 +45,7 @@
 --      users; the refusals (the slices' among them); the run's phase times, components_closed and slowest calls and the
 --      settings (view_id refused on an asset register); the mapped fields' types; a kind the register emptied closes
 --      the device's component (no new row, its item due unknown), a kind not staged or with a dropped serial and no
---      expiry is left as it is, a rerun changes nothing, and the kind staged again is inserted
+--      expiry is left as it is, a rerun changes nothing; held again, another serial is inserted and the same one reopened
 --   C  speed at the register's horizon, 50,000 devices (verify.max_ms 3000 ms, a fifth of the ingest's 15-second
 --      statement timeout): a first load of 50,000 new records into an empty connection in 50 chunks of 1,000, with no
 --      statistics read in between (C4, each chunk, its phases at the first and the last); then, the statistics read, one
@@ -463,12 +463,16 @@ $$;
 
 -- The device tables' statistics read, as autovacuum keeps them in a database that holds the devices (before C1, the
 -- register as the mirror holds it after earlier nights; before B8's reads, which would otherwise plan tenant one's
--- 20,000 devices on the statistics of a table that held none of them)
+-- 20,000 devices on the statistics of a table that held none of them). Skipped outside dev and local databases
 create or replace function pg_temp.v0008zk_analyze()
 returns void
 language plpgsql
 as $$
 begin
+  if not current_setting('verify.dev')::boolean then
+    perform pg_temp.v0008zk_log('analyze', null, null, null, 'REFUSED: not dev or a local database; no statistics read');
+    return;
+  end if;
   analyze cma.device;
   analyze cma.device_component;
   perform pg_temp.v0008zk_log('analyze', null, null, null, null);
@@ -1093,10 +1097,13 @@ $$;
 
 -- B8. a kind the register emptied (Decision log, 28 October 2026): three records of tenant one's chunk connection
 --     loaded again in one chunk: rec-000101 with its pads staged empty ({}), rec-000102 with no components staged (the
---     source maps no kind), rec-000104 with a pads serial that is no id and no expiry. The pads of rec-000101 closed
---     (replaced_at, no new row, counted components_closed), its item due unknown in the forecast and among the data
---     quality's component_due_unknown, its battery as it was; the other two as they were. The same chunk again changes
---     nothing; the pads staged again with a serial and an expiry are inserted (a current row, its expiry recorded)
+--     source maps no kind), rec-000104 with a pads serial that is no id and no expiry and its battery staged empty.
+--     The pads of rec-000101 and the battery of rec-000104 closed (replaced_at, no new row, counted
+--     components_closed), rec-000101's pads due unknown in the forecast and among the data quality's
+--     component_due_unknown, its battery as it was; rec-000102 and rec-000104's pads as they were. The same chunk
+--     again changes nothing. Then the register holds both again: rec-000101's pads with another serial, inserted (a
+--     replacement: the closed one stays closed); rec-000104's battery with its own serial, reopened (the same row
+--     current again, so its first sighting and its anchor are kept)
 create or replace function pg_temp.v0008zk_b8_rows(p_variant text)
 returns jsonb
 language sql
@@ -1107,7 +1114,8 @@ as $$
                                               case when p_variant = 'refill' then '{"serial": "P-101-r", "expires_on": "2028-06-30"}'::jsonb
                                                    else '{}'::jsonb end)::text
              when 'rec-000102' then null
-             else jsonb_set(x.components::jsonb, '{pads}', '{"serial": "not an id!"}'::jsonb)::text end)
+             else jsonb_set(jsonb_set(x.components::jsonb, '{pads}', '{"serial": "not an id!"}'::jsonb), '{battery}',
+                            case when p_variant = 'refill' then x.components::jsonb -> 'battery' else '{}'::jsonb end)::text end)
          order by x.source_row)
   from pg_temp.v0008zk_register(101, 104, true) x
   where x.source_id <> 'rec-000103'
@@ -1158,11 +1166,11 @@ begin
      from pg_temp.v0008zk_step s where s.step = 'b8-refill'),
     (select concat_ws(' ', s.answer ->> 'components', s.answer ->> 'items', 'unknown=' || (s.answer ->> 'unknown'))
      from pg_temp.v0008zk_step s where s.step = 'b8-refilled'));
-  perform pg_temp.v0008zk_check(18, 'B8 a kind the register emptied closes the component (no new row, its item due unknown); a kind not staged, or a dropped serial without an expiry, left as it is; a rerun changes nothing; staged again, inserted',
+  perform pg_temp.v0008zk_check(18, 'B8 a kind the register emptied closes the component (no new row, its item due unknown); a kind not staged, or a dropped serial without an expiry, left as it is; a rerun changes nothing; held again: another serial inserted, the same serial reopened',
     v_err is null and v_txt =
-      'closed=1 repl=0 ins=0 drop=1'
+      'closed=2 repl=0 ins=0 drop=1'
       || ' | rec-000101:battery:B-101:2027-01-20:current rec-000101:pads:P-101:2026-12-10:closed rec-000102:battery:B-102:2027-01-20:current '
-      || 'rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:current rec-000104:pads:P-104:2026-12-10:current '
+      || 'rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:closed rec-000104:pads:P-104:2026-12-10:current '
       || 'battery:recorded:2027-01-20 pads:unknown:- unknown=1'
       || ' | closed=0 upd=0 same=3'
       || ' | closed=0 repl=0'

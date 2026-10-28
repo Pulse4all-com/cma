@@ -91,10 +91,12 @@ expect("the fixture covers every data-quality case",
 // whose expiry does not read is left out, so nothing is closed on a date the tool could not read
 const kindMap = { columns: { source_id: "id" }, components: { pads: { serial: "ps", expires_on: "pe" }, battery: { serial: "bs" } }, ignore: [] };
 const kinds = convert("id,ps,pe,bs\nr1,,,B-1\nr2,,31/02/2026,\nr3,P-3,01/01/2027,\n", kindMap, { batch: "b", dateFormat: "dmy" });
-expect("an emptied kind an empty object; a kind whose expiry does not read left out",
-  kinds.rows.map((r) => r[r.length - 2]),
-  ['{"pads":{},"battery":{"serial":"B-1"}}', '{"battery":{}}', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"},"battery":{}}'],
-  ['{"battery":{"serial":"B-1"}}', '', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"}}']);
+const kindsAt = convert("id,ps,pe,bs\nr1,a@b,,B-1\n", kindMap, { batch: "b", dateFormat: "dmy" });
+expect("an emptied kind an empty object; a kind whose expiry does not read left out; an @ in a component cell counted once",
+  [...kinds.rows.map((r) => r[r.length - 2]), kindsAt.rows[0][kindsAt.rows[0].length - 2], kindsAt.counts.values_with_at],
+  ['{"pads":{},"battery":{"serial":"B-1"}}', '{"battery":{}}', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"},"battery":{}}',
+   '{"pads":{"serial":"@"},"battery":{"serial":"B-1"}}', 1],
+  ['{"battery":{"serial":"B-1"}}', '', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"}}', '', 2]);
 
 // ---- dates ---------------------------------------------------------------------------------------------
 expect("the three formats, strictly",

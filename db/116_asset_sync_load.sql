@@ -70,7 +70,8 @@
 --   an emptied kind   0008zi's load left out a component kind whose serial and expiry were both empty, so the device kept
 --                     the component the register no longer holds. The register is the source of truth (Decision log,
 --                     28 October 2026): a kind staged empty closes the current component (replaced_at, no new row), and
---                     its item has no due date (component_due_unknown) until the register holds the kind again
+--                     its item has no due date (component_due_unknown) until the register holds the kind again: the
+--                     same serial (or a missing one) reopens it, its anchor kept; another serial is a replacement
 --
 -- What it adds
 --   the load          cma.device_rows_apply(connection, rows, is_full): 0008zi's load as a handful of set-based
@@ -231,8 +232,9 @@ $$;
 --             present), closed (replaced_at) and a new one inserted; otherwise the current one updated when its serial
 --             or expiry differs. A kind staged empty (an empty object, or serial and expiry both empty: the register
 --             emptied the kind's fields) closes the current one (replaced_at) with no new row, so its item has no due
---             date until the register holds the kind again; a kind the row does not stage is left as it is (the
---             source does not map it). A known device with any of these is updated
+--             date until the register holds the kind again; then the same serial (or a missing one) reopens that
+--             component (its anchor kept) and a different serial is a replacement. A kind the row does not stage is
+--             left as it is (the source does not map it). A known device with any of these is updated
 --   missing   a full snapshot (p_is_full) marks the connection's devices it does not hold
 -- Holder of tenant.configure, or of ingest.write for a connection with a token secret name; one load per connection at
 -- a time (the advisory lock of 0008zj). Answers 0008zi's counts, components_closed, and map_ms, upsert_ms, components_ms
@@ -458,9 +460,14 @@ begin
   v_t := clock_timestamp();
 
   -- the components: each staged kind against the device's current one of that kind, looked up by index from the row;
-  -- a kind staged empty closes the current one, or does nothing when there is none
-  select coalesce(array_agg(row(d.id, e.key, e.value ->> 'serial', (e.value ->> 'expires_on')::date, c.id,
+  -- a kind staged empty closes the current one, or does nothing when there is none. With none current, a kind staged
+  -- again whose serial is the one the register emptied (or either serial missing: 0008zi's rule, a replacement is a
+  -- serial that differs) is that component again: reopened (replaced_at cleared), its first sighting and so its anchor
+  -- kept; a different serial is a replacement, inserted
+  select coalesce(array_agg(row(d.id, e.key, e.value ->> 'serial', (e.value ->> 'expires_on')::date, coalesce(c.id, z.id),
                                 case when e.value = '{}'::jsonb then case when c.id is null then 'none' else 'close' end
+                                     when c.id is null and z.id is not null
+                                          and ((e.value ->> 'serial') is null or z.serial is null or (e.value ->> 'serial') = z.serial) then 'reopen'
                                      when c.id is null then 'insert'
                                      when (e.value ->> 'serial') is not null and c.serial is not null and (e.value ->> 'serial') <> c.serial then 'replace'
                                      when (c.serial, c.expires_on) is distinct from (e.value ->> 'serial', (e.value ->> 'expires_on')::date) then 'update'
@@ -473,7 +480,13 @@ begin
   cross join lateral jsonb_each(m.components) e
   left join lateral (select c.id, c.serial, c.expires_on from cma.device_component c
                      where c.tenant_id = v_tenant and c.device_id = d.id and c.component_key = e.key and c.replaced_at is null
-                     limit 1) c on true;
+                     limit 1) c on true
+  -- with none current and the kind staged with a value: the kind's last closed component
+  left join lateral (select z.id, z.serial from cma.device_component z
+                     where c.id is null and e.value <> '{}'::jsonb
+                       and z.tenant_id = v_tenant and z.device_id = d.id and z.component_key = e.key and z.replaced_at is not null
+                     order by z.replaced_at desc, z.first_seen_at desc, z.id desc
+                     limit 1) z on true;
   -- a replaced one closed, and one whose kind the register emptied, by id
   v_rid := array(select p.current_id from unnest(v_plan) p where p.action = 'replace');
   v_cid := array(select p.current_id from unnest(v_plan) p where p.action = 'close');
@@ -484,12 +497,12 @@ begin
   select v_tenant, p.device_id, p.component_key, p.serial, p.expires_on
   from unnest(v_plan) p
   where p.action in ('insert', 'replace');
-  -- a changed one updated in place, by id, from its staged values
+  -- a changed one updated in place, and a reopened one current again, by id, from its staged values
   select coalesce(jsonb_object_agg(p.current_id::text, jsonb_build_object('serial', p.serial, 'expires_on', p.expires_on)), '{}'::jsonb)
     into v_umap
-  from unnest(v_plan) p where p.action = 'update';
+  from unnest(v_plan) p where p.action in ('update', 'reopen');
   update cma.device_component c
-     set serial = v_umap -> c.id::text ->> 'serial', expires_on = (v_umap -> c.id::text ->> 'expires_on')::date
+     set serial = v_umap -> c.id::text ->> 'serial', expires_on = (v_umap -> c.id::text ->> 'expires_on')::date, replaced_at = null
    where c.tenant_id = v_tenant and c.id = any (array(select k::uuid from jsonb_object_keys(v_umap) k));
   -- a known device counts as updated when its values or any of its components changed
   select count(*) into v_upd

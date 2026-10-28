@@ -305,11 +305,12 @@ expect("E7b chunks of the setting assets_load_chunk (100): three chunks of 100, 
 expect("E7c the run's counts summed over the chunks and slices: the load's, upserted, missing_now from the slices, the phase times",
   [counts.rows, counts.inserted, counts.upserted, counts.missing_now, Object.fromEntries(PHASE_COUNTS.map((k) => [k, counts[k]]))],
   [201, 201, 201, 9, { stage_ms: 3, map_ms: 6, upsert_ms: 9, components_ms: 12, missing_ms: 15, cleanup_ms: 0 }], [0, 0, 0, 0, {}]);
-store = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { chunkMs: [40, 60, 30], sliceMs: [20, 50, 20], closed: 1 });
+// three calls of the same length: the largest is a third of the sum, so a loaded machine's late timers cannot pass for a sum
+store = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { chunkMs: [150, 150, 150], sliceMs: [100, 100, 100], closed: 1 });
 counts = counts0();
 await airtable.reconcile({ connection: CONN, store, budget, object: "device", counts });
 expect("E7f the slowest chunk and the slowest slice kept, not summed (chunk_max_ms, slice_max_ms, as PROD_RUNBOOK 14.7 reads them); components_closed summed",
-  [counts.chunk_max_ms >= 55 && counts.chunk_max_ms < 120, counts.slice_max_ms >= 45 && counts.slice_max_ms < 85,
+  [counts.chunk_max_ms >= 145 && counts.chunk_max_ms < 300, counts.slice_max_ms >= 95 && counts.slice_max_ms < 200,
     Number.isInteger(counts.chunk_max_ms) && Number.isInteger(counts.slice_max_ms), counts.components_closed],
   [true, true, true, 3], [false, false, false, 0]);
 store = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { failChunk: 2 });

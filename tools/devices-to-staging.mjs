@@ -157,8 +157,8 @@ export function convert(text, map, { batch, dateFormat, delimiter }) {
       const c = {};
       if (serial !== "") c.serial = serial;
       if (expires !== "") c.expires_on = expires;
-      // every mapped cell of the kind empty: the register emptied the kind
-      const emptied = [spec.serial, spec.expires_on].filter(Boolean).every((h) => cell(r, h) === "");
+      // every mapped cell of the kind empty: the register emptied the kind (read raw, so an @ is counted once)
+      const emptied = [spec.serial, spec.expires_on].filter(Boolean).every((h) => raw(r, h) === "");
       if (Object.keys(c).length || emptied) components[kind] = c;
     }
     const refs = {};
