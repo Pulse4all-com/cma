@@ -195,11 +195,11 @@ begin
   if v_t is null then
     return 'absent';
   end if;
-  select array_agg(c.relname::text) into v_left
+  select array_agg(c.relname::text order by c.relname) into v_left
   from pg_class c join pg_attribute a on a.attrelid = c.oid and a.attname = 'tenant_id' and not a.attisdropped
   where c.relnamespace = 'cma'::regnamespace and c.relkind in ('r', 'p') and not c.relispartition and c.relname <> 'audit_log';
   while cardinality(v_left) > 0 loop
-    select array_agg(x) into v_free from unnest(v_left) x
+    select array_agg(x order by x) into v_free from unnest(v_left) x
     where not exists (select 1 from pg_constraint k join pg_class ch on ch.oid = k.conrelid join pg_class pa on pa.oid = k.confrelid
                       where k.contype = 'f' and k.connamespace = 'cma'::regnamespace and k.conrelid <> k.confrelid
                         and pa.relname = x and ch.relname = any (v_left));
@@ -207,7 +207,7 @@ begin
       raise exception 'the foreign keys among % form a cycle', v_left;
     end if;
     v_order := v_order || v_free;
-    v_left := array(select x from unnest(v_left) x where x <> all (v_free));
+    v_left := array(select x from unnest(v_left) x where x <> all (v_free) order by x);
   end loop;
   foreach t in array v_order loop
     execute format('delete from cma.%I where tenant_id = $1', t) using v_t;
@@ -343,7 +343,7 @@ as $$
                        from cma.device d where d.connection_id = p_connection_id), '')
              || '#' ||
              coalesce((select string_agg(concat_ws('|', d.source_id, c.component_key, c.serial, c.expires_on, c.replaced_at is null), ','
-                                         order by d.source_id, c.component_key, c.replaced_at is null, c.serial)
+                                         order by d.source_id, c.component_key, c.replaced_at nulls last, c.first_seen_at, c.serial)
                        from cma.device_component c join cma.device d on d.tenant_id = c.tenant_id and d.id = c.device_id
                        where d.connection_id = p_connection_id), ''))
 $$;
@@ -461,6 +461,20 @@ begin
 end
 $$;
 
+-- The device tables' statistics read, as autovacuum keeps them in a database that holds the devices (before C1, the
+-- register as the mirror holds it after earlier nights; before B8's reads, which would otherwise plan tenant one's
+-- 20,000 devices on the statistics of a table that held none of them)
+create or replace function pg_temp.v0008zk_analyze()
+returns void
+language plpgsql
+as $$
+begin
+  analyze cma.device;
+  analyze cma.device_component;
+  perform pg_temp.v0008zk_log('analyze', null, null, null, null);
+end
+$$;
+
 -- -----------------------------------------------------------------------------------------------
 -- The start: what an interrupted run left is removed
 -- -----------------------------------------------------------------------------------------------
@@ -557,7 +571,7 @@ begin
 
   -- A5. the value checks read as 0008zi's helpers read: a JSON object where cma.device_staged_object takes it (null
   --     where it refuses), a date where cma.device_staged_date takes it, a reference as 0008zi's pattern keeps it
-  select string_agg(v.x, ',') into v_bad
+  select string_agg(v.x, ',' order by v.x) into v_bad
   from (select coalesce(t, 'null') || '=' || case when (cma.device_staged_json(t) is null)
                                                     = (pg_temp.v0008zk_code(format('select cma.device_staged_object(%L, 2, ''c'')', t)) <> 'ok')
                                                     and (cma.device_staged_json(t) is null or cma.device_staged_json(t) = cma.device_staged_object(t, 2, 'c'))
@@ -854,8 +868,8 @@ begin
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'ingest');
   v_txt := v_txt || ' | ' || pg_temp.v0008zk_error(format('select cma.ingest_load_device_chunk(%L, %L)', v_parts,
              (select jsonb_agg(case when (e ->> 'source_row')::integer = 501 then e || '{"first_shipped_on": "15/11/2024"}'::jsonb
-                                    else e || '{"subscription_ref": "sub-changed"}'::jsonb end)
-              from jsonb_array_elements(pg_temp.v0008zk_chunk(1, 1000, true)) e)));
+                                    else e || '{"subscription_ref": "sub-changed"}'::jsonb end order by n)
+              from jsonb_array_elements(pg_temp.v0008zk_chunk(1, 1000, true)) with ordinality x(e, n))));
   perform set_config('role', 'cma_owner', true);
   v_txt := v_txt || ' ' || (pg_temp.v0008zk_fingerprint(v_parts) = v_fp)::text;
   perform pg_temp.v0008zk_check(13, 'B3 a run that fails before its final step marks nothing missing; the rerun''s chunks unchanged; a chunk with a bad row loads nothing',
@@ -1038,13 +1052,14 @@ begin
                                                    {"property": "fldVerify0000009", "type": "email"}]')::text;
   v_txt := v_txt || ' ' || cma.ingest_record_field_types(v_parts, '[{"property": "fldVerify0000002", "type": "singleLineText"}]')::text;
   v_txt := v_txt || ' ' || (select string_agg(f.source_property || ':' || coalesce(f.source_type, '-') || ':' || (f.checked_at is not null)::text, ' '
-                                        order by f.source_property)
+                                        order by f.source_property, f.entity, f.field, f.ref_system)
                       from cma.connection_field f where f.connection_id = v_parts);
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
   perform cma.set_connection_field(v_parts, 'device', 'serial', '', 'fldVerify0000003');
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'ingest');
   -- one statement each: a statement's sub-select reads as of its start, so it would not see the function's update
-  v_txt := v_txt || ' | ' || (select string_agg(f.source_property || ':' || coalesce(f.source_type, '-'), ' ' order by f.source_property)
+  v_txt := v_txt || ' | ' || (select string_agg(f.source_property || ':' || coalesce(f.source_type, '-'), ' '
+                                              order by f.source_property, f.entity, f.field, f.ref_system)
                               from cma.connection_field f where f.connection_id = v_parts);
   v_txt := v_txt || ' ' || cma.ingest_record_field_types(v_parts, '[{"property": "fldVerify0000003", "type": "number"}]')::text;
   v_txt := v_txt || ' ' || (select f.source_type from cma.connection_field f where f.connection_id = v_parts and f.source_property = 'fldVerify0000003');
@@ -1098,7 +1113,8 @@ as $$
   where x.source_id <> 'rec-000103'
 $$;
 
--- The three records' components and rec-000101's due items, as a step's answer
+-- The three records' components and rec-000101's due items, as a step's answer: the components by record, kind, the
+-- closed ones before the current one (replaced_at nulls last), then first seen and serial; the items by kind
 create or replace function pg_temp.v0008zk_b8_state(p_step text)
 returns void
 language plpgsql
@@ -1110,7 +1126,7 @@ begin
   perform pg_temp.v0008zk_log(p_step, null, null, jsonb_build_object(
     'components', (select string_agg(concat_ws(':', d.source_id, c.component_key, coalesce(c.serial, '-'), coalesce(c.expires_on::text, '-'),
                                                case when c.replaced_at is null then 'current' else 'closed' end), ' '
-                                     order by d.source_id, c.component_key, c.replaced_at is null, c.serial)
+                                     order by d.source_id, c.component_key, c.replaced_at nulls last, c.first_seen_at, c.serial)
                    from cma.device d join cma.device_component c on c.tenant_id = d.tenant_id and c.device_id = d.id
                    where d.tenant_id = v_t and d.connection_id = v_conn and d.source_id in ('rec-000101', 'rec-000102', 'rec-000104')),
     'items', (select string_agg(i.component_key || ':' || i.basis || ':' || coalesce(i.due_on::text, '-'), ' ' order by i.component_key)
@@ -1258,6 +1274,7 @@ begin; select pg_temp.v0008zk_b6(); commit;
 begin; select pg_temp.v0008zk_b7(); commit;
 -- B8: a kind the register emptied, each load its own transaction
 begin; select pg_temp.v0008zk_load('b8-close', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('close')); commit;
+begin; select pg_temp.v0008zk_analyze(); commit;
 begin; select pg_temp.v0008zk_b8_state('b8-closed'); commit;
 begin; select pg_temp.v0008zk_load('b8-again', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('close')); commit;
 begin; select pg_temp.v0008zk_load('b8-refill', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('refill')); commit;
@@ -1346,18 +1363,6 @@ exception when others then
 end
 $$;
 
--- The register as the mirror holds it after earlier nights: the tables' statistics read (as autovacuum keeps them in a
--- database that holds the devices)
-create or replace function pg_temp.v0008zk_analyze()
-returns void
-language plpgsql
-as $$
-begin
-  analyze cma.device;
-  analyze cma.device_component;
-  perform pg_temp.v0008zk_log('analyze', null, null, null, null);
-end
-$$;
 
 -- C1. one chunk of 1,000 unchanged rows (records 24,001 to 25,000) at 50,000 devices, its phases in the detail
 create or replace function pg_temp.v0008zk_c1()
@@ -1581,7 +1586,7 @@ begin
     nullif((select count(*) from cma.tenant t where t.slug like 'verify-0008zk-%')::text, '0') || ' tenants',
     nullif((select count(*) from cma.audit_log a where a.tenant_id = any (v_ids))::text, '0') || ' audit rows',
     nullif((select count(*) from cma.device d where d.tenant_id = any (v_ids))::text, '0') || ' devices',
-    (select string_agg(s.answer ->> 'slug' || ' ' || coalesce(s.error, s.answer ->> 'result'), '; ') from pg_temp.v0008zk_step s
+    (select string_agg(s.answer ->> 'slug' || ' ' || coalesce(s.error, s.answer ->> 'result'), '; ' order by s.ord) from pg_temp.v0008zk_step s
      where s.step in ('start', 'end') and (s.error is not null or s.answer ->> 'result' not in ('absent', 'removed'))));
   perform pg_temp.v0008zk_check(91, 'Z2 the throwaway tenants removed with their rows and audit rows, at the start and at the end',
     v_left = '' and (select count(*) from pg_temp.v0008zk_step s where s.step = 'end' and s.answer ->> 'result' = 'removed') = 4,
