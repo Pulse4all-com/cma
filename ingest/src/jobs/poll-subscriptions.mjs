@@ -7,7 +7,8 @@
  * connection without a token secret name is not read: one log line (code key_not_set) and no run. One log line per
  * connection carries the counts (events_new, the subscriptions' outcomes, customers_unmatched, reason_dropped), the
  * details (events read, kept and skipped, by Juo's type; subscriptions read) and the requests per endpoint. Never a key
- * or a value.
+ * or a value. Like every job it runs with a pool of 2 (docs/ingest/deploy.sh): its advisory lock and one unit of work at
+ * a time (db.mjs measurePool; verify/juo-flow.mjs D5 and P1).
  */
 import { ADAPTERS } from "../adapters/index.mjs";
 import { servedConnections, contextOf } from "../core/connection.mjs";
@@ -15,8 +16,13 @@ import { storeFor } from "../core/store.mjs";
 import { JobBudget } from "../core/budget.mjs";
 import { info, warn } from "../core/log.mjs";
 import { codeOf, withRun } from "./runner.mjs";
+import { measurePool } from "../core/db.mjs";
 
-export async function runPollSubscriptions({ connectionId = null, adapters = ADAPTERS } = {}) {
+export function runPollSubscriptions(options) {
+  return measurePool("poll-subscriptions", () => pollSubscriptionsJob(options));
+}
+
+async function pollSubscriptionsJob({ connectionId = null, adapters = ADAPTERS } = {}) {
   const started = Date.now();
   const connections = await servedConnections({ connectionId, actorLabel: "ingest:poll-subscriptions" });
   const total = { connections: 0, notServed: 0, notDue: 0, fetched: 0, eventsNew: 0, inserted: 0, updated: 0, unchanged: 0, failed: 0 };

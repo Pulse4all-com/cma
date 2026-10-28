@@ -25,14 +25,15 @@
  * request; a connection without a token secret name skipped (key_not_set, one log line each, no run) and refused by the
  * backfill; 401 wrong tenant (another store's key: key_rejected); 429 paced (held for its Retry-After and sent again: the
  * run succeeds); tenant two's store loads into tenant two only; no personal fixture text in any row of the run's tenants
- * or in a log line; nothing written to another tenant.
+ * or in a log line; nothing written to another tenant; the jobs' pool of 2 (the poll under its lock: at most 2 connections
+ * at once, its work on one, no wait on its own pool; P1 the same for every poll, reconcile and backfill run).
  */
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import pg from "pg";
-import { expect, verdict, writesOutside, PROVOKE } from "./lib.mjs";
+import { expect, verdict, poolCheck, writesOutside, PROVOKE } from "./lib.mjs";
 import { juoStore, startFakeJuo } from "./juo-fake.mjs";
 
 console.log(`verify/juo-flow.mjs${PROVOKE ? "  (--provoke: every check must FAIL)" : ""}\n`);
@@ -74,9 +75,9 @@ const { createIngestServer } = await import("../src/server.mjs");
 const { runPollSubscriptions } = await import("../src/jobs/poll-subscriptions.mjs");
 const { runReconcile } = await import("../src/jobs/reconcile.mjs");
 const { runBackfill } = await import("../src/jobs/backfill.mjs");
-const { UsageError } = await import("../src/jobs/runner.mjs");
+const { UsageError, withJobLock } = await import("../src/jobs/runner.mjs");
 const { clearSecretCache } = await import("../src/core/secrets.mjs");
-const { closeDb } = await import("../src/core/db.mjs");
+const { closeDb, measurePool, poolRuns } = await import("../src/core/db.mjs");
 const service = createIngestServer();
 await new Promise((r) => service.listen(0, "127.0.0.1", r));
 const BASE = `http://127.0.0.1:${service.address().port}`;
@@ -248,6 +249,14 @@ total = await runPollSubscriptions({ connectionId: juo1.id });
 expect("D4 a poll not due (60 minutes): no request, no run", [total.notDue, fake.state.requests.length, (await runsOf(juo1.id, "subscriptions_poll")).length],
   [1, 0, 2], [0, 2, 3]);
 await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [juo1.id, SETTINGS()]));
+// The jobs' pool of 2 (docs/ingest/deploy.sh; Gemini audit of 28 October 2026, FIND-01): the poll measured as main measures
+// it, under its advisory lock (a verify-… lock name, so a dev job of the same name is never held up), reads the overlap again
+const locked = await measurePool("poll-subscriptions", () => withJobLock("verify-poll-subscriptions", () => runPollSubscriptions({ connectionId: juo1.id })));
+const polled = poolRuns().at(-1);
+run = (await runsOf(juo1.id, "subscriptions_poll")).at(-1);
+expect(`D5 the poll under its lock keeps to the jobs' pool of 2: at most 2 connections at once, its work on one, no wait on its own pool (peak ${polled.peak}, work ${polled.work})`,
+  [locked.ran, locked.result?.failed, run.status, run.counts.fetched >= 1, polled.job, polled.peak >= 1 && polled.peak <= 2, polled.work <= 1, polled.selfWaits],
+  [true, 0, "succeeded", true, "poll-subscriptions", true, true, 0], [false, 1, "failed", false, "poll-subscriptions", false, false, 1]);
 
 // ---- E. The reconcile: missing marked; an empty read fails ----------------------------------------------------------------------
 const gone = one.subscriptions.pop();
@@ -335,4 +344,5 @@ await new Promise((r) => service.close(r));
 await fake.close();
 await closeDb();
 rmSync(secretsDir, { recursive: true, force: true });
+await poolCheck();
 verdict();
