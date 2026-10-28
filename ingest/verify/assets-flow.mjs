@@ -15,7 +15,8 @@
  * sync_run assets_poll, stream devices, with the load's counts, its phase times and fetched; no staged row, no run of
  * job assets_import; an address as a customer id never stored; the 20 mapped fields' types recorded); a poll not due
  * writes nothing and asks nothing; the next poll asks for the records changed since its cursor less five minutes and
- * loads only those (a pads serial changed: a replacement; a field emptied in Airtable: written empty), never marking the
+ * loads only those (a pads serial changed: a replacement; a field emptied in Airtable: written empty; a kind emptied in
+ * Airtable: its component closed, its item due unknown), never marking the
  * record the register dropped; the nightly reconcile's full snapshot marks it missing in its final step's slices
  * (sync_run reconcile, stream device); an expired paging fails the reconcile paging_expired, nothing marked, and the next
  * one reads from the start; a connection without a token secret name skipped by the poll and the reconcile (one log
@@ -207,9 +208,10 @@ await asAdmin(T1, () => q("select cma.set_connection_settings($1, $2::jsonb)", [
 const mod1 = (await cursor(reg1.id, "assets:modified")).at;
 const changed = one.records.find((r) => r.id === "recFixture0002aaa");
 Object.assign(changed, { modifiedAt: new Date().toISOString(), fields: { ...changed.fields, pads_sn: "PX-0002-NEW", pads_expiry_date_calculated: "2028-12-10" } });
-// a field emptied in Airtable: the API leaves it out of the record
+// a field emptied in Airtable: the API leaves it out of the record; the same record's battery emptied (both its fields)
 const emptied = one.records.find((r) => r.id === "recFixture0003aaa");
-Object.assign(emptied, { modifiedAt: new Date().toISOString(), fields: { ...emptied.fields, subscription_id: undefined } });
+Object.assign(emptied, { modifiedAt: new Date().toISOString(),
+  fields: { ...emptied.fields, subscription_id: undefined, battery_sn: undefined, battery_expiry_date_calculated: undefined } });
 const dropped = one.records.findIndex((r) => r.id === "recFixture0007aaa");
 one.records.splice(dropped, 1);
 await settle(20);
@@ -226,6 +228,14 @@ expect("C3 only the changed records loaded: updated 2, one's pads replaced; the 
 const sub3 = (await q("select subscription_ref, serial from cma.device where connection_id = $1 and source_id = 'recFixture0003aaa'", [reg1.id]))[0];
 expect("C4 a field emptied in Airtable (left out of the record) is written empty, never kept: the subscription reference null, the serial as it was",
   [sub3?.subscription_ref, sub3?.serial], [null, "FX-TEST-0003"], ["sub-fixture-0003", null]);
+const battery3 = (await q(`select count(*)::int as n, count(*) filter (where c.replaced_at is null)::int as current
+                           from cma.device_component c join cma.device d on d.id = c.device_id
+                           where d.connection_id = $1 and d.source_id = 'recFixture0003aaa' and c.component_key = 'battery'`, [reg1.id]))[0];
+const due3 = await asAdmin(T1, () => q(`select i.basis, i.due_on from cma.maintenance_items_of($1, current_date) i
+                                        where i.source_id = 'recFixture0003aaa' and i.component_key = 'battery'`, [T1.t]));
+expect("C4b a kind emptied in Airtable (both its fields) closes the device's component: replaced_at, no new row, counted; its item due unknown; the run's slowest chunk recorded",
+  [battery3?.n, battery3?.current, runs.at(-1).counts.components_closed, due3.map((d) => [d.basis, d.due_on]), Number.isInteger(runs.at(-1).counts.chunk_max_ms)],
+  [1, 0, 1, [["unknown", null]], true], [2, 1, 0, [], false]);
 
 // ---- D. The nightly reconcile: the full snapshot ------------------------------------------------------------------------
 total = await runReconcile({ connectionId: reg1.id, object: "device" });
@@ -235,6 +245,9 @@ expect("D1 the reconcile: one run (stream device) succeeded, every record read, 
   [total.failed, rec.map((r) => [r.stream, r.status, r.counts.fetched, r.counts.rows, r.counts.missing_now, r.counts.unchanged, r.counts.updated]),
     devices.filter((d) => d.missing).map((d) => d.source_id)],
   [0, [["device", "succeeded", 200, 200, 1, 200, 0]], ["recFixture0007aaa"]], [1, [], []]);
+expect("D1b the reconcile's run records its slowest chunk and its slowest slice (whole milliseconds), components_closed 0 on the rerun",
+  [Number.isInteger(rec.at(-1).counts.chunk_max_ms), Number.isInteger(rec.at(-1).counts.slice_max_ms), rec.at(-1).counts.components_closed],
+  [true, true, 0], [false, false, 1]);
 expect("D2 the run's two pages asked the 20 mapped fields only, by field id, no filter, no view, authorized",
   recordAsks().slice(-2).map((r) => [r.fields.length, r.byId, r.formula, r.view, r.authorized]), [[20, true, null, null, true], [20, true, null, null, true]], []);
 const recLine = lastLog("reconcile: devices");

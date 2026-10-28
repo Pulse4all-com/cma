@@ -13,7 +13,9 @@
  * An allow list: only the mapped fields are asked for and read, so nothing else a record holds reaches a row, a log or
  * the database. The record id is the API's record.id. No mapping means no read (mapping_not_set). A mapped field the
  * API leaves out of a record (Airtable leaves empty fields out) is empty: its column is null in the row, never left
- * out, so the load writes it empty rather than keeping the device's earlier value.
+ * out, so the load writes it empty rather than keeping the device's earlier value. A mapped component kind whose fields
+ * are all empty is sent as an empty object, so the load closes the device's current one (the register emptied it); a
+ * kind with a field that cannot be read is left out, so nothing is closed on a value the adapter could not read.
  *
  * Values as the CSV import's tool writes them (tools/devices-to-staging.mjs), so the database applies 0008zi's rules
  * unchanged (ids, unmapped labels, dropped references): text trimmed, a number or a yes/no as its text, a lookup's list
@@ -141,7 +143,9 @@ export function rowOf(record, mapping, { dateFormat = null } = {}) {
     const expires = spec.expires_on ? date(spec.expires_on) : "";
     if (serial !== "") c.serial = serial;
     if (expires !== "") c.expires_on = expires;
-    if (Object.keys(c).length) components[kind] = c;
+    // every mapped field of the kind empty in the record: the register emptied the kind
+    const emptied = [spec.serial, spec.expires_on].filter(Boolean).every((f) => cellText(fields[f]) === "");
+    if (Object.keys(c).length || emptied) components[kind] = c;
   }
   const refs = {};
   for (const name of Object.keys(mapping.refs).sort()) {

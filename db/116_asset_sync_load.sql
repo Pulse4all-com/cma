@@ -5,7 +5,8 @@
 -- Universal: no customer, tenant or vendor specifics. Runs unchanged in every database, after 114_asset_sync.sql
 -- (0008zj). Rerunnable, forward-only, in one transaction. Run as your own IAM login: dev first, then
 -- 117_verify_asset_sync_load.sql, then 115_verify_asset_sync.sql and 113_verify_assets.sql again (the load and the
--- forecast they prove are the ones this script makes again); then prod, with 117, 115 and 113. The ingest of main reads
+-- forecast they prove are the ones this script makes again); then prod, with 115 and 113 (117 runs in dev and local
+-- databases only: Decision log, 28 October 2026; prod's speed is PROD_RUNBOOK 14.7's first full read). The ingest of main reads
 -- nothing this adds; the ingest of this change needs it (cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing in
 -- slices, cma.ingest_record_field_types, the run's phase times), so in prod the script runs before that ingest is deployed.
 -- Edited in place after its dev run of 27 October 2026 (records/0008zk-dev-2026-10-27): CLAUDE.md forbids editing a
@@ -66,6 +67,10 @@
 --                     en_US.UTF-8): at 50,000 devices (about 106,000 items) the page took 1,567 ms and the list 1,861 ms.
 --                     Made again with the same results: the items as one statement with the bundling as a running
 --                     aggregate, the buckets as dates, text written for the cells and rows answered only: 738 and 817 ms
+--   an emptied kind   0008zi's load left out a component kind whose serial and expiry were both empty, so the device kept
+--                     the component the register no longer holds. The register is the source of truth (Decision log,
+--                     28 October 2026): a kind staged empty closes the current component (replaced_at, no new row), and
+--                     its item has no due date (component_due_unknown) until the register holds the kind again
 --
 -- What it adds
 --   the load          cma.device_rows_apply(connection, rows, is_full): 0008zi's load as a handful of set-based
@@ -74,11 +79,12 @@
 --                     the mapping (each value read once, each catalog label looked up once, not once per row), the
 --                     devices (each row's device looked up by index; the changed ones updated by id, the new ones
 --                     inserted), the components (each row's current ones looked up by index; the replaced ones closed by
---                     id, the new ones inserted, the changed ones updated by id), the missing ones of a full snapshot;
---                     no row lock (the per-connection advisory lock of 0008zj serialises loads) and no subtransaction
---                     (the value checks use pg_input_is_valid). The counts are 0008zi's, plus the phase times in
+--                     id, the new ones inserted, the changed ones updated by id, the current one of a kind staged empty
+--                     closed by id with no new row), the missing ones of a full snapshot; no row lock (the per-connection
+--                     advisory lock of 0008zj serialises loads) and no subtransaction (the value checks use
+--                     pg_input_is_valid). The counts are 0008zi's, plus components_closed and the phase times in
 --                     milliseconds: map_ms (the checks and the mapping), upsert_ms, components_ms, missing_ms. The same
---                     results as 0008zi's load: 113 and 115 pass unchanged
+--                     results as 0008zi's load for every row 0008zi's tools and 113 and 115 stage: they pass unchanged
 --   the file path     cma.device_snapshot_apply(batch, connection, is_full) is made again over it, with 0008zj's
 --                     refusals in their order: the staged batch read into rows (stage_ms), the load, the staged rows
 --                     deleted (cleanup_ms). cma.load_device_snapshot and cma.ingest_load_device_snapshot (0008zj) call it
@@ -109,11 +115,14 @@
 --                     asset register (CMA04): it is read whole, since a view's filter would make every device outside
 --                     it look missing at night; an asset register's stored view_id is removed
 --   runs              cma.ingest_sync_run_finish() takes the phase times (stage_ms, map_ms, upsert_ms, components_ms,
---                     missing_ms, cleanup_ms) among the counts
+--                     missing_ms, cleanup_ms), components_closed and the slowest call of a run (chunk_max_ms, the slowest
+--                     chunk; slice_max_ms, the slowest slice of the final step; milliseconds as the ingest measures
+--                     each call) among the counts
 --   the forecast      cma.maintenance_items_of, cma.maintenance_bucketed_of, cma.maintenance_page_of and
 --                     cma.maintenance_rows_of made again with 0008zi's results (113 passes unchanged), over the new
 --                     cma.maintenance_bucket_dates_of and the aggregate cma.maintenance_exchange_start
---                     (cma.maintenance_exchange_step)
+--                     (cma.maintenance_exchange_step); a kind with a closed component and none current is a due item
+--                     without a due date (basis unknown)
 --
 -- Everything is SECURITY INVOKER and executable by the application only, with its permission checked inside.
 -- SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not permitted.
@@ -220,10 +229,14 @@ $$;
 --   devices   a known device whose values differ (or that was missing) updated; a new one inserted
 --   components per staged kind: none current, inserted; a current one whose serial differs from the staged one (both
 --             present), closed (replaced_at) and a new one inserted; otherwise the current one updated when its serial
---             or expiry differs. A known device with any of these is updated
+--             or expiry differs. A kind staged empty (an empty object, or serial and expiry both empty: the register
+--             emptied the kind's fields) closes the current one (replaced_at) with no new row, so its item has no due
+--             date until the register holds the kind again; a kind the row does not stage is left as it is (the
+--             source does not map it). A known device with any of these is updated
 --   missing   a full snapshot (p_is_full) marks the connection's devices it does not hold
 -- Holder of tenant.configure, or of ingest.write for a connection with a token secret name; one load per connection at
--- a time (the advisory lock of 0008zj). Answers 0008zi's counts and map_ms, upsert_ms, components_ms and missing_ms
+-- a time (the advisory lock of 0008zj). Answers 0008zi's counts, components_closed, and map_ms, upsert_ms, components_ms
+-- and missing_ms
 create or replace function cma.device_rows_apply(p_connection_id uuid, p_rows cma.device_load_row[], p_is_full boolean)
 returns jsonb
 language plpgsql
@@ -245,6 +258,7 @@ declare
   v_ins     integer;
   v_upd     integer;
   v_repl    integer;
+  v_cid     uuid[];
   v_missing integer := 0;
   v_t       timestamptz;
   v_map     numeric;
@@ -361,8 +375,9 @@ begin
                        (count(*) filter (where i.named and i.given and not coalesce(i.ref ~ '^[A-Za-z0-9#][A-Za-z0-9_.#:/-]*$', false))
                         + count(*) filter (where not i.named))::integer as dropped
                 from ref_items i group by i.sid),
-       -- the components as mapped: each kind's serial (an id, else dropped and counted) and expiry; a kind left with
-       -- neither is left out
+       -- the components as mapped: each kind's serial (an id, else dropped and counted) and expiry. A kind staged with
+       -- neither given (emptied in the register) is kept as an empty object for the components, which close its current
+       -- one, and left out of raw; a kind whose serial is given but dropped, with no expiry, is left out
        comp_items as materialized (
          select r.sid, c.key, cma.device_staged_ref(c.value ->> 'serial') as serial,
                 nullif(btrim(coalesce(c.value ->> 'serial', '')), '') is not null as serial_given,
@@ -371,10 +386,12 @@ begin
        comp as (select i.sid,
                        jsonb_object_agg(i.key, jsonb_strip_nulls(jsonb_build_object('serial', i.serial, 'expires_on', i.expires_on)))
                          filter (where i.serial is not null or i.expires_on is not null) as comp,
+                       jsonb_object_agg(i.key, jsonb_strip_nulls(jsonb_build_object('serial', i.serial, 'expires_on', i.expires_on)))
+                         filter (where i.serial is not null or i.expires_on is not null or (not i.serial_given and i.expires_on is null)) as plan,
                        (count(*) filter (where i.serial_given and i.serial is null))::integer as dropped
                 from comp_items i group by i.sid)
   select array_agg(row(r.source_row, r.sid, r.serial, mo.key, mk.code, st.key, r.wh, r.cust, r.cust is null and r.cust_given, r.sub, r.ord,
-                       r.first, r.recv, r.last, r.warr, r.eol, coalesce(rf.refs, '{}'::jsonb), coalesce(cp.comp, '{}'::jsonb),
+                       r.first, r.recv, r.last, r.warr, r.eol, coalesce(rf.refs, '{}'::jsonb), coalesce(cp.plan, '{}'::jsonb),
                        jsonb_strip_nulls(jsonb_build_object(
                          'source_id', r.sid, 'serial', r.serial, 'model', r.model_t, 'status', r.status_t, 'country', r.country,
                          'warehouse_ref', r.wh, 'customer_ref', r.cust, 'subscription_ref', r.sub, 'order_ref', r.ord,
@@ -440,9 +457,11 @@ begin
   v_ups := round(extract(epoch from clock_timestamp() - v_t) * 1000);
   v_t := clock_timestamp();
 
-  -- the components: each staged kind against the device's current one of that kind, looked up by index from the row
+  -- the components: each staged kind against the device's current one of that kind, looked up by index from the row;
+  -- a kind staged empty closes the current one, or does nothing when there is none
   select coalesce(array_agg(row(d.id, e.key, e.value ->> 'serial', (e.value ->> 'expires_on')::date, c.id,
-                                case when c.id is null then 'insert'
+                                case when e.value = '{}'::jsonb then case when c.id is null then 'none' else 'close' end
+                                     when c.id is null then 'insert'
                                      when (e.value ->> 'serial') is not null and c.serial is not null and (e.value ->> 'serial') <> c.serial then 'replace'
                                      when (c.serial, c.expires_on) is distinct from (e.value ->> 'serial', (e.value ->> 'expires_on')::date) then 'update'
                                      else 'same' end)::cma.device_load_component), '{}')
@@ -455,11 +474,12 @@ begin
   left join lateral (select c.id, c.serial, c.expires_on from cma.device_component c
                      where c.tenant_id = v_tenant and c.device_id = d.id and c.component_key = e.key and c.replaced_at is null
                      limit 1) c on true;
-  -- a replaced one closed, by id
+  -- a replaced one closed, and one whose kind the register emptied, by id
   v_rid := array(select p.current_id from unnest(v_plan) p where p.action = 'replace');
+  v_cid := array(select p.current_id from unnest(v_plan) p where p.action = 'close');
   update cma.device_component c set replaced_at = now()
-  where c.tenant_id = v_tenant and c.id = any (v_rid);
-  get diagnostics v_repl = row_count;
+  where c.tenant_id = v_tenant and c.id = any (v_rid || v_cid);
+  v_repl := cardinality(v_rid);
   insert into cma.device_component (tenant_id, device_id, component_key, serial, expires_on)
   select v_tenant, p.device_id, p.component_key, p.serial, p.expires_on
   from unnest(v_plan) p
@@ -475,7 +495,7 @@ begin
   select count(*) into v_upd
   from (select unnest(v_changed)
         union
-        select p.device_id from unnest(v_plan) p where p.action <> 'same'
+        select p.device_id from unnest(v_plan) p where p.action not in ('same', 'none')
         except
         select unnest(v_new)) x;
   v_cmp := round(extract(epoch from clock_timestamp() - v_t) * 1000);
@@ -491,7 +511,7 @@ begin
   end if;
 
   return jsonb_build_object('rows', v_rows, 'inserted', v_ins, 'updated', v_upd, 'unchanged', v_rows - v_ins - v_upd, 'missing_now', v_missing,
-    'components_replaced', v_repl,
+    'components_replaced', v_repl, 'components_closed', cardinality(v_cid),
     'unmapped_model', (select count(*) from unnest(v_m) m where m.model_key is null),
     'unmapped_status', (select count(*) from unnest(v_m) m where m.device_status_key is null),
     'unmapped_market', (select count(*) from unnest(v_m) m where m.market is null),
@@ -828,9 +848,9 @@ begin
   if p_counts is not null and (jsonb_typeof(p_counts) <> 'object'
      or exists (select 1 from jsonb_each(p_counts) e
                 where e.key not in ('fetched', 'upserted', 'stale', 'skipped', 'failed', 'dropped', 'ref_dropped',
-                                    'rows', 'inserted', 'updated', 'unchanged', 'missing_now', 'components_replaced', 'unmapped_model',
-                                    'unmapped_status', 'unmapped_market', 'customer_ref_invalid', 'refs_dropped',
-                                    'stage_ms', 'map_ms', 'upsert_ms', 'components_ms', 'missing_ms', 'cleanup_ms')
+                                    'rows', 'inserted', 'updated', 'unchanged', 'missing_now', 'components_replaced', 'components_closed',
+                                    'unmapped_model', 'unmapped_status', 'unmapped_market', 'customer_ref_invalid', 'refs_dropped',
+                                    'stage_ms', 'map_ms', 'upsert_ms', 'components_ms', 'missing_ms', 'cleanup_ms', 'chunk_max_ms', 'slice_max_ms')
                    or jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}') !~ '^\d+$')) then
     raise exception 'counts are whole numbers for fetched, upserted, stale, skipped, failed, dropped and ref_dropped, a device load''s counts and its phase times'
       using errcode = 'CMA04';
@@ -942,7 +962,8 @@ as $$
     join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_tracked
     where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null
   ), rp as (
-    -- the devices' kinds with a replaced component: their current component is a replacement
+    -- the devices' kinds with a closed component: their current one is a replacement; with none current, the register
+    -- emptied the kind, and the item has no anchor (no due date) until the register holds the kind again
     select distinct p.device_id, p.component_key
     from cma.device_component p
     where p.tenant_id = p_tenant_id and p.replaced_at is not null
@@ -957,11 +978,11 @@ as $$
     join cma.device_component_kind k on k.tenant_id = p_tenant_id and k.status = 'active'
     left join cma.device_component c
       on c.tenant_id = p_tenant_id and c.device_id = d.id and c.component_key = k.key and c.replaced_at is null
-    left join rp on rp.device_id = c.device_id and rp.component_key = c.component_key
+    left join rp on rp.device_id = d.id and rp.component_key = k.key
     left join cma.maintenance_rule ru on ru.tenant_id = p_tenant_id and ru.model_key = d.model_key and ru.component_key = k.key
     cross join lateral (select case when rp.device_id is not null then (c.first_seen_at at time zone s.zone)::date
                                     else d.anchor end as anchor) a
-    where c.id is not null or ru.id is not null or d.model_key is null
+    where c.id is not null or rp.device_id is not null or ru.id is not null or d.model_key is null
     union all
     select d.id, d.connection_id, d.source_id, d.serial, d.model_key, d.market, d.device_status_key, d.is_in_field, d.is_in_stock,
            'device', 2147483647, d.end_of_life_on, null::date, 0
@@ -1201,7 +1222,7 @@ $$;
 -- 10. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged; cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final step in slices cma.ingest_mark_devices_missing(connection, ids, from, before) over the index device_present_source_c_idx; cma.ingest_record_field_types; the setting assets_load_chunk (100 to 5,000), view_id refused on an asset register; cma.ingest_sync_run_finish takes the phase times; the forecast made again for 50,000 devices with 0008zi''s results (cma.maintenance_bucket_dates_of, the aggregate cma.maintenance_exchange_start)')
+values ('0008zk', 'Asset sync load: the device load set-based (cma.device_rows_apply over the types cma.device_load_row, cma.device_load_mapped and cma.device_load_component; each row''s device and components looked up by index, updates by id; no per-row loop, row lock or subtransaction; the phase times map_ms, upsert_ms, components_ms, missing_ms), 0008zi''s results unchanged, and a kind staged empty closes its current component with no new row (components_closed; its item due unknown); cma.device_snapshot_apply made again over it (stage_ms, cleanup_ms); cma.device_staged_ref with * for {0,99} (the same result); the staging trigger calls the JSON helper only for a value with an @; the ingest''s chunks cma.ingest_load_device_chunk (1 to 5,000 rows, the staging''s columns and lengths, no staging) and the final step in slices cma.ingest_mark_devices_missing(connection, ids, from, before) over the index device_present_source_c_idx; cma.ingest_record_field_types; the setting assets_load_chunk (100 to 5,000), view_id refused on an asset register; cma.ingest_sync_run_finish takes the phase times, components_closed, chunk_max_ms and slice_max_ms; the forecast made again for 50,000 devices with 0008zi''s results (cma.maintenance_bucket_dates_of, the aggregate cma.maintenance_exchange_start), a kind with a closed component and none current due unknown')
 on conflict (version) do nothing;
 
 commit;

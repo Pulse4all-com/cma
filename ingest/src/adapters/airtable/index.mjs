@@ -35,9 +35,11 @@
  * anything, and the next run reads from the start.
  *
  * The run's counts are the load's, summed over its chunks and slices as each lands (rows, inserted, updated, unchanged,
- * missing_now, components_replaced, unmapped_model, unmapped_status, unmapped_market, customer_ref_invalid,
- * refs_dropped), its phase times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms, missing_ms; cleanup_ms 0, as
- * chunks stage nothing) and fetched, with upserted (inserted and updated) and skipped (unchanged); the log line adds
+ * missing_now, components_replaced, components_closed, unmapped_model, unmapped_status, unmapped_market,
+ * customer_ref_invalid, refs_dropped), its phase times in milliseconds (stage_ms, map_ms, upsert_ms, components_ms,
+ * missing_ms; cleanup_ms 0, as chunks stage nothing), the slowest call in milliseconds as the ingest measures it
+ * (chunk_max_ms, the slowest chunk; slice_max_ms, the slowest slice of the final step: PROD_RUNBOOK 14.7 reads them
+ * against 3,000 ms) and fetched, with upserted (inserted and updated) and skipped (unchanged); the log line adds
  * mapped, the chunks and slices, the fields, date failures, values with an @, unreadable cells, duplicates and the
  * requests per endpoint. Never a token, a value or a record's content.
  */
@@ -52,10 +54,12 @@ export const CADENCE_STREAM = "assets:cadence";
 export const OVERLAP_MS = 5 * 60_000;
 const SLACK_MS = 2 * 60_000;
 const BASE = /^[A-Za-z0-9_-]{1,64}$/;
-export const LOAD_COUNTS = ["rows", "inserted", "updated", "unchanged", "missing_now", "components_replaced", "unmapped_model",
-  "unmapped_status", "unmapped_market", "customer_ref_invalid", "refs_dropped"];
+export const LOAD_COUNTS = ["rows", "inserted", "updated", "unchanged", "missing_now", "components_replaced", "components_closed",
+  "unmapped_model", "unmapped_status", "unmapped_market", "customer_ref_invalid", "refs_dropped"];
 /** The load's phase times (milliseconds, addition 0008zk), summed over a run's chunks */
 export const PHASE_COUNTS = ["stage_ms", "map_ms", "upsert_ms", "components_ms", "missing_ms", "cleanup_ms"];
+/** The slowest chunk and the slowest slice of a run (milliseconds of the call as the ingest measures it), the largest kept */
+export const MAX_COUNTS = ["chunk_max_ms", "slice_max_ms"];
 
 /** A connection without a token secret name is loaded from files: the jobs skip it (code csv_only). */
 export function skipReason(connection) {
@@ -166,12 +170,21 @@ async function readRows({ connection, prep, formula, counts }) {
 
 /**
  * A chunk's (or a slice's) counts added to the run's: each of the load's and its phase times, upserted (inserted and
- * updated) and skipped (unchanged). Called with nothing, it writes the keys as 0.
+ * updated) and skipped (unchanged); the call's milliseconds kept under its key (chunk_max_ms or slice_max_ms) when
+ * the slowest so far. Called with nothing, it writes the keys as 0.
  */
-function addLoad(counts, loaded = {}) {
+function addLoad(counts, loaded = {}, slowest = null, ms = 0) {
   for (const k of [...LOAD_COUNTS, ...PHASE_COUNTS]) counts[k] = Number(counts[k] ?? 0) + Number(loaded?.[k] ?? 0);
+  for (const k of MAX_COUNTS) counts[k] = Math.max(Number(counts[k] ?? 0), k === slowest ? Math.round(ms) : 0);
   counts.upserted = counts.inserted + counts.updated;
   counts.skipped = counts.unchanged;
+}
+
+/** A store call timed: [its answer, its milliseconds] */
+async function timed(call) {
+  const t0 = performance.now();
+  const answer = await call();
+  return [answer, performance.now() - t0];
 }
 
 /**
@@ -181,7 +194,8 @@ function addLoad(counts, loaded = {}) {
 async function loadInChunks({ store, rows, chunk, counts }) {
   let chunks = 0;
   for (let i = 0; i < rows.length; i += chunk) {
-    addLoad(counts, await store.loadDeviceChunk(rows.slice(i, i + chunk)));
+    const [loaded, ms] = await timed(() => store.loadDeviceChunk(rows.slice(i, i + chunk)));
+    addLoad(counts, loaded, "chunk_max_ms", ms);
     chunks += 1;
   }
   return chunks;
@@ -204,7 +218,10 @@ export function slicesOf(sourceIds, size) {
 
 async function markMissing({ store, rows, size, counts }) {
   const slices = slicesOf(rows.map((r) => r.source_id), size);
-  for (const slice of slices) addLoad(counts, await store.markDevicesMissing(slice.ids, slice.from, slice.before));
+  for (const slice of slices) {
+    const [marked, ms] = await timed(() => store.markDevicesMissing(slice.ids, slice.from, slice.before));
+    addLoad(counts, marked, "slice_max_ms", ms);
+  }
   return slices.length;
 }
 

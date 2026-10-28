@@ -82,7 +82,8 @@ const ZERO = { rows: 0, inserted: 0, updated: 0, unchanged: 0, missing_now: 0, c
   customer_ref_invalid: 0, refs_dropped: 0 };
 // The store as cma.ingest_load_device_chunk, cma.ingest_mark_devices_missing and cma.ingest_record_field_types answer:
 // each chunk's counts (every row inserted) and phase times, each slice's (3 missing); failChunk: the chunk (from 1) that fails
-function memStore(config, { failChunk = 0 } = {}) {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function memStore(config, { failChunk = 0, chunkMs = [], sliceMs = [], closed = 0 } = {}) {
   const cursors = new Map();
   const loads = [];
   const marks = [];
@@ -94,10 +95,12 @@ function memStore(config, { failChunk = 0 } = {}) {
     async setCursor(s, v) { cursors.set(s, v); },
     async loadDeviceChunk(rows) {
       if (loads.length + 1 === failChunk) throw Object.assign(new Error("chunk refused"), { code: "CMA04" });
+      await sleep(chunkMs[loads.length] ?? 0);
       loads.push({ rows: rows.map((r) => ({ ...r })) });
-      return { ...ZERO, rows: rows.length, inserted: rows.length, stage_ms: 1, map_ms: 2, upsert_ms: 3, components_ms: 4, missing_ms: 0 };
+      return { ...ZERO, rows: rows.length, inserted: rows.length, components_closed: closed, stage_ms: 1, map_ms: 2, upsert_ms: 3, components_ms: 4, missing_ms: 0 };
     },
     async markDevicesMissing(ids, from, before) {
+      await sleep(sliceMs[marks.length] ?? 0);
       marks.push({ ids: [...ids], from, before });
       return { missing_now: 3, missing_ms: 5 };
     },
@@ -162,12 +165,16 @@ const isoOnly = rowOf({ id: "recIso", fields: { [idOf("first_shipment_date_to_cu
   mapping, { dateFormat: null });
 expect("B6 ISO dates need no date_format", [isoOnly.row.first_shipped_on, isoOnly.row.warranty_until], ["2024-11-15", "2029-11-15"], [null, null]);
 const sparse = rowOf({ id: "recSparse", fields: { [idOf("aed_sn")]: "FX-SPARSE", [idOf("pads_sn")]: "PX-SPARSE" } }, mapping, { dateFormat: "dmy" });
-expect("B7 a field the API leaves out is empty: every column in the row, null (never left out, so the load writes it empty); a kind with a value kept, the rest out",
+expect("B7 a field the API leaves out is empty: every column in the row, null (never left out, so the load writes it empty); a kind with a value kept, an emptied kind an empty object (the load closes it)",
   [Object.keys(sparse.row).sort(), DEVICE_COLUMNS.filter((c) => c !== "serial").every((c) => Object.hasOwn(sparse.row, c) && sparse.row[c] === null),
     sparse.row.serial, sparse.row.components, sparse.row.external_refs, JSON.stringify(sparse.row).includes("undefined")],
   [["components", "country", "customer_ref", "end_of_life_on", "external_refs", "first_shipped_on", "last_shipped_on", "model", "order_ref", "serial", "source_id",
-    "status", "stock_received_on", "subscription_ref", "warehouse_ref", "warranty_until"].sort(), true, "FX-SPARSE", '{"pads":{"serial":"PX-SPARSE"}}', null, false],
-  [["serial", "source_id"], false, null, null, "{}", true]);
+    "status", "stock_received_on", "subscription_ref", "warehouse_ref", "warranty_until"].sort(), true, "FX-SPARSE", '{"battery":{},"pads":{"serial":"PX-SPARSE"}}', null, false],
+  [["serial", "source_id"], false, null, '{"pads":{"serial":"PX-SPARSE"}}', "{}", true]);
+const unreadKind = rowOf({ id: "recUnread", fields: { [idOf("aed_sn")]: "FX-UNREAD", [idOf("pads_sn")]: { error: "#ERROR!" }, [idOf("battery_sn")]: "" } },
+  mapping, { dateFormat: "dmy" });
+expect("B7b a kind with a field that cannot be read left out (nothing closed on it); a kind whose fields are empty strings an empty object",
+  [unreadKind.row.components, unreadKind.unreadable], ['{"battery":{}}', 1], ['{"battery":{},"pads":{}}', 0]);
 
 // ---- C. Settings, endpoints, the skip -----------------------------------------------------------------------------------
 expect("C1 the settings' defaults: the poll at 2 a second, a full read at 4, 15 minutes, chunks of 1,000, no table or date format, no view",
@@ -298,6 +305,13 @@ expect("E7b chunks of the setting assets_load_chunk (100): three chunks of 100, 
 expect("E7c the run's counts summed over the chunks and slices: the load's, upserted, missing_now from the slices, the phase times",
   [counts.rows, counts.inserted, counts.upserted, counts.missing_now, Object.fromEntries(PHASE_COUNTS.map((k) => [k, counts[k]]))],
   [201, 201, 201, 9, { stage_ms: 3, map_ms: 6, upsert_ms: 9, components_ms: 12, missing_ms: 15, cleanup_ms: 0 }], [0, 0, 0, 0, {}]);
+store = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { chunkMs: [40, 60, 30], sliceMs: [20, 50, 20], closed: 1 });
+counts = counts0();
+await airtable.reconcile({ connection: CONN, store, budget, object: "device", counts });
+expect("E7f the slowest chunk and the slowest slice kept, not summed (chunk_max_ms, slice_max_ms, as PROD_RUNBOOK 14.7 reads them); components_closed summed",
+  [counts.chunk_max_ms >= 55 && counts.chunk_max_ms < 120, counts.slice_max_ms >= 45 && counts.slice_max_ms < 85,
+    Number.isInteger(counts.chunk_max_ms) && Number.isInteger(counts.slice_max_ms), counts.components_closed],
+  [true, true, true, 3], [false, false, false, 0]);
 store = memStore(configOf({ assets_load_chunk: 100 }, typed(FIELDS)), { failChunk: 2 });
 counts = counts0();
 const failed = await codeOf(airtable.reconcile({ connection: CONN, store, budget, object: "device", counts }));

@@ -11,7 +11,8 @@
  * file (the personal columns' synthetic values are absent from it), a mapped cell holding an @ is written as a bare @
  * and counted, and the tool prints no value; every data-quality
  * case of 113 is in the fixture (a missing serial, a duplicate, an unmapped model, status and country, a customer
- * reference that is no id, a device without dates or components, a device in the field without a subscription); the
+ * reference that is no id, a device without dates or components, a device in the field without a subscription); a
+ * mapped kind with every cell empty written as an empty object, one whose expiry does not read left out; the
  * three date formats, each read strictly (a day of 31 in a 30-day month, a two-digit year and the other formats fail)
  * and the failures counted with their line and column, never their value, the cell written empty; the refusals, each
  * without writing a file: a header neither mapped nor ignored, a mapped header the export lacks, a header both mapped
@@ -82,9 +83,18 @@ expect("the fixture covers every data-quality case",
    rows.filter((r) => ["Spain", "Italy"].includes(r[col("country")])).length,
    rows.filter((r) => r[col("customer_ref")] === "@").length,
    rows.filter((r) => r[col("status")] === "In Storage" && r[col("first_shipped_on")] === "" && r[col("last_shipped_on")] === ""
-                      && !lines[rows.indexOf(r) + 1].includes("pads")).length,
+                      && !/""pads"":\{""/.test(lines[rows.indexOf(r) + 1])).length,
    rows.filter((r) => r[col("status")] === "Active/Customer" && r[col("subscription_ref")] === "").length],
   [1, 2, 1, 1, 2, 1, 2, 1], [0, 0, 0, 0, 0, 0, 0, 0]);
+
+// an emptied kind (every mapped cell empty) is an empty object, so the load closes the device's current one; a kind
+// whose expiry does not read is left out, so nothing is closed on a date the tool could not read
+const kindMap = { columns: { source_id: "id" }, components: { pads: { serial: "ps", expires_on: "pe" }, battery: { serial: "bs" } }, ignore: [] };
+const kinds = convert("id,ps,pe,bs\nr1,,,B-1\nr2,,31/02/2026,\nr3,P-3,01/01/2027,\n", kindMap, { batch: "b", dateFormat: "dmy" });
+expect("an emptied kind an empty object; a kind whose expiry does not read left out",
+  kinds.rows.map((r) => r[r.length - 2]),
+  ['{"pads":{},"battery":{"serial":"B-1"}}', '{"battery":{}}', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"},"battery":{}}'],
+  ['{"battery":{"serial":"B-1"}}', '', '{"pads":{"serial":"P-3","expires_on":"2027-01-01"}}']);
 
 // ---- dates ---------------------------------------------------------------------------------------------
 expect("the three formats, strictly",

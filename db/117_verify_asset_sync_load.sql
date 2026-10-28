@@ -2,9 +2,14 @@
 -- 117_verify_asset_sync_load.sql: verifies addition 0008zk, the device load set-based, the ingest's load in chunks and
 -- slices, and the forecast at 50,000 devices
 -- =============================================================================================
--- Universal: no seed is assumed. Every check writes one row, ok or FAIL, and the last row is the verdict (0008zk
--- verified), because Cloud SQL Studio shows no notices. Run as your own IAM login after 116_asset_sync_load.sql, dev
--- first, then prod; then 115_verify_asset_sync.sql and 113_verify_assets.sql again. Adapters, models, statuses, devices,
+-- Dev and local databases only (Decision log, 28 October 2026): it commits throwaway tenants and removes them with
+-- their audit rows, which the 17 October 2026 rule allows in dev and local databases only, and prod's audit log stays
+-- append-only. It refuses a database without the dev seed (no active agent.two@example.com, as the ingest's flow
+-- verifiers refuse one): no tenant is made, none removed, every check reads FAIL and the verdict REFUSED. Prod's speed
+-- is measured by PROD_RUNBOOK 14.7's first full read of the real register (the run's phase times, its slowest chunk
+-- and slice). Every check writes one row, ok or FAIL, and the last row is the verdict (0008zk verified), because Cloud
+-- SQL Studio shows no notices. Run as your own IAM login after 116_asset_sync_load.sql, in dev; then
+-- 115_verify_asset_sync.sql and 113_verify_assets.sql again. Adapters, models, statuses, devices,
 -- serials, customers, people and secret names are invented data values, and no row carries a name of a customer, an
 -- address, an email or a phone number. Edited in place after its dev run of 27 October 2026 (records/0008zk-dev-2026-10-27),
 -- which ran its work in one transaction: it has run in dev only, and CLAUDE.md forbids editing a script that has run in prod.
@@ -14,9 +19,9 @@
 -- (verify-0008zk-…) are committed between steps and removed by a cleanup that runs at the start (what an interrupted run
 -- left) and at the end: every row of theirs table by table (in the order the foreign keys allow), then their audit rows,
 -- then the tenants, as the ingest's flow verifiers remove theirs (ingest/verify/lib.mjs, removeTenants); the audit log is
--- append-only for the application, and only these throwaway tenants' rows go (in prod only as proposed in the Decision
--- log, 28 October 2026, to confirm with Martin: PROD_RUNBOOK 14, the Gate). While the script runs, no ingest job serves their connections (their adapters are none of the ingest's), and a
--- reader without a tenant sees their invented rows until the end. A step never raises: an error is recorded
+-- append-only for the application, and only these throwaway tenants' rows go. While the script runs, no ingest job
+-- serves their connections (their adapters are none of the ingest's), and a reader without a tenant sees their invented
+-- rows until the end. A step never raises: an error is recorded
 -- and its check reads FAIL. Memory stays bounded by a step, so the script runs twice in a row (normal, then provoked) on
 -- a db-g1-small. Every run of either kind writes and then removes some 70,000 devices, 140,000 components and their
 -- audit rows.
@@ -37,8 +42,10 @@
 --      ten slices: the same counts and the same devices and components. Then: a rerun of the same chunks and slices
 --      changes nothing; a run that fails before its final step marks nothing missing, and its chunks already loaded are
 --      unchanged on the rerun; a chunk with a bad row loads nothing; row-level security across the two tenants' Ingest
---      users; the refusals (the slices' among them); the run's phase times and the settings (view_id refused on an asset
---      register); the mapped fields' types
+--      users; the refusals (the slices' among them); the run's phase times, components_closed and slowest calls and the
+--      settings (view_id refused on an asset register); the mapped fields' types; a kind the register emptied closes
+--      the device's component (no new row, its item due unknown), a kind not staged or with a dropped serial and no
+--      expiry is left as it is, a rerun changes nothing, and the kind staged again is inserted
 --   C  speed at the register's horizon, 50,000 devices (verify.max_ms 3000 ms, a fifth of the ingest's 15-second
 --      statement timeout): a first load of 50,000 new records into an empty connection in 50 chunks of 1,000, with no
 --      statistics read in between (C4, each chunk, its phases at the first and the last); then, the statistics read, one
@@ -59,6 +66,8 @@ set role cma_owner;
 select set_config('verify.provoke', 'false', false);           -- 'true' to make every check fail
 select set_config('verify.max_ms', '3000', false);             -- a chunk of 1,000 rows; a slice of the final step; the report at 50,000 devices
 select set_config('verify.max_one_call_ms', '10000', false);   -- 115's C1: 5,000 records staged and loaded in one call
+-- dev or a local database only: the dev seed's agent.two@example.com active, as the ingest's flow verifiers require
+select set_config('verify.dev', (select exists (select 1 from cma.app_user u where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false);
 
 drop table if exists pg_temp.verify_0008zk;
 create temp table verify_0008zk (ord int, check_name text, result text, detail text);
@@ -138,7 +147,8 @@ begin
 end
 $$;
 
--- A throwaway tenant made as the owner: the tenant (with its Ingest user), an admin and an analyst (role analytics)
+-- A throwaway tenant made as the owner: the tenant (with its Ingest user), an admin and an analyst (role analytics).
+-- Refused outside dev and local databases
 create or replace function pg_temp.v0008zk_new_tenant(p_slug text)
 returns uuid
 language plpgsql
@@ -148,6 +158,9 @@ declare
   v_u uuid;
   w text;
 begin
+  if not current_setting('verify.dev')::boolean then
+    raise exception 'REFUSED: not dev or a local database (no active agent.two@example.com); 117 makes no tenant here';
+  end if;
   v_t := cma.create_tenant(p_slug, 'Verify ' || p_slug, 'Europe/Amsterdam');
   foreach w in array array['admin', 'analytics'] loop
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-' || w || '-' || p_slug || '@example.invalid', w) returning id into v_u;
@@ -160,7 +173,7 @@ $$;
 -- Removes a throwaway tenant of this script with every row it holds (removeTenants of ingest/verify/lib.mjs): each
 -- table of cma with a tenant_id but the audit log, in an order where no remaining table still points to the next (the
 -- foreign keys from the catalog), then the audit rows (the deletes' own among them), then the tenant. Answers absent,
--- removed, or the error (and then removes nothing)
+-- removed, or the error (and then removes nothing). Refused outside dev and local databases
 create or replace function pg_temp.v0008zk_cleanup(p_slug text)
 returns text
 language plpgsql
@@ -174,6 +187,9 @@ declare
 begin
   if p_slug !~ '^verify-0008zk-[a-z-]+$' then
     raise exception 'not a throwaway tenant of 117: %', p_slug;
+  end if;
+  if not current_setting('verify.dev')::boolean then
+    raise exception 'REFUSED: not dev or a local database (no active agent.two@example.com); 117 removes nothing here';
   end if;
   v_t := pg_temp.v0008zk_tenant(p_slug);
   if v_t is null then
@@ -959,7 +975,8 @@ exception when others then
 end
 $$;
 
--- B6. the run's counts take the phase times; another key is still refused (CMA04); the setting assets_load_chunk set
+-- B6. the run's counts take the phase times, components_closed, chunk_max_ms and slice_max_ms; another key is still
+--     refused (CMA04); the setting assets_load_chunk set
 --     by form on the register (CMA04 out of it), not checked on a CRM connection; view_id refused on an asset register
 --     (CMA04, its settings as they were), still taken by a CRM connection
 create or replace function pg_temp.v0008zk_b6()
@@ -975,9 +992,10 @@ begin
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'ingest');
   v_run := cma.ingest_sync_run_start(v_parts, 'assets_poll', 'devices', null, null);
   v_txt := pg_temp.v0008zk_code(format('select cma.ingest_sync_run_finish(%L, ''succeeded'', %L)', v_run,
-             '{"fetched": 2, "rows": 2, "inserted": 1, "updated": 1, "unchanged": 0, "missing_now": 0, "stage_ms": 3, "map_ms": 12, '
-             || '"upsert_ms": 4, "components_ms": 5, "missing_ms": 6, "cleanup_ms": 0}'));
-  v_txt := v_txt || ' ' || (select (r.counts ->> 'map_ms') || '/' || (r.counts ->> 'missing_ms') from cma.sync_run r where r.id = v_run)
+             '{"fetched": 2, "rows": 2, "inserted": 1, "updated": 1, "unchanged": 0, "missing_now": 0, "components_closed": 1, "stage_ms": 3, "map_ms": 12, '
+             || '"upsert_ms": 4, "components_ms": 5, "missing_ms": 6, "cleanup_ms": 0, "chunk_max_ms": 140, "slice_max_ms": 7}'));
+  v_txt := v_txt || ' ' || (select concat_ws('/', r.counts ->> 'map_ms', r.counts ->> 'missing_ms', r.counts ->> 'components_closed',
+                                             r.counts ->> 'chunk_max_ms', r.counts ->> 'slice_max_ms') from cma.sync_run r where r.id = v_run)
            || ' ' || pg_temp.v0008zk_code(format('select cma.ingest_sync_run_finish(cma.ingest_sync_run_start(%L, ''assets_poll'', ''devices'', null, null), '
                                                  || '''succeeded'', ''{"fetched": 1, "load_ms": 1}'')', v_parts));
   perform pg_temp.v0008zk_as('verify-0008zk-one', 'admin');
@@ -988,8 +1006,8 @@ begin
     || ' ' || pg_temp.v0008zk_error(format('select cma.set_connection_settings(%L, %L)', v_parts, '{"table_id": "tblVerify0001", "view_id": "viwVerify0001"}'))
     || ' ' || pg_temp.v0008zk_code(format('select cma.set_connection_settings(%L, %L)', v_crm, '{"view_id": "viwVerify0001"}'));
   v_txt := v_txt || ' ' || (select c.settings::text from cma.integration_connection c where c.id = v_parts);
-  perform pg_temp.v0008zk_check(16, 'B6 the run''s counts take the phase times, another key refused; the setting assets_load_chunk by form; view_id refused on an asset register',
-    v_txt = 'ok 12/6 CMA04 ok CMA04 ok CMA04: an asset register is read whole: view_id is no setting of it (a view''s filter would make the devices '
+  perform pg_temp.v0008zk_check(16, 'B6 the run''s counts take the phase times, components_closed and the slowest chunk and slice, another key refused; the setting assets_load_chunk by form; view_id refused on an asset register',
+    v_txt = 'ok 12/6/1/140/7 CMA04 ok CMA04 ok CMA04: an asset register is read whole: view_id is no setting of it (a view''s filter would make the devices '
             || 'outside it look missing) ok {"table_id": "tblVerify0001", "assets_load_chunk": 1000}', v_txt);
 exception when others then
   perform pg_temp.v0008zk_check(16, 'B6 the run''s counts and the settings', false, sqlstate || ': ' || sqlerrm);
@@ -1055,6 +1073,89 @@ begin
             || '- 1 singlelinetext | CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA06 CMA02', v_txt);
 exception when others then
   perform pg_temp.v0008zk_check(17, 'B7 the mapped fields'' types', false, sqlstate || ': ' || sqlerrm);
+end
+$$;
+
+-- B8. a kind the register emptied (Decision log, 28 October 2026): three records of tenant one's chunk connection
+--     loaded again in one chunk: rec-000101 with its pads staged empty ({}), rec-000102 with no components staged (the
+--     source maps no kind), rec-000104 with a pads serial that is no id and no expiry. The pads of rec-000101 closed
+--     (replaced_at, no new row, counted components_closed), its item due unknown in the forecast and among the data
+--     quality's component_due_unknown, its battery as it was; the other two as they were. The same chunk again changes
+--     nothing; the pads staged again with a serial and an expiry are inserted (a current row, its expiry recorded)
+create or replace function pg_temp.v0008zk_b8_rows(p_variant text)
+returns jsonb
+language sql
+as $$
+  select jsonb_agg(to_jsonb(x) || jsonb_build_object('components',
+           case x.source_id
+             when 'rec-000101' then jsonb_set(x.components::jsonb, '{pads}',
+                                              case when p_variant = 'refill' then '{"serial": "P-101-r", "expires_on": "2028-06-30"}'::jsonb
+                                                   else '{}'::jsonb end)::text
+             when 'rec-000102' then null
+             else jsonb_set(x.components::jsonb, '{pads}', '{"serial": "not an id!"}'::jsonb)::text end)
+         order by x.source_row)
+  from pg_temp.v0008zk_register(101, 104, true) x
+  where x.source_id <> 'rec-000103'
+$$;
+
+-- The three records' components and rec-000101's due items, as a step's answer
+create or replace function pg_temp.v0008zk_b8_state(p_step text)
+returns void
+language plpgsql
+as $$
+declare
+  v_t    uuid := pg_temp.v0008zk_tenant('verify-0008zk-one');
+  v_conn uuid := pg_temp.v0008zk_conn('verify-0008zk-one', 'base-chunks');
+begin
+  perform pg_temp.v0008zk_log(p_step, null, null, jsonb_build_object(
+    'components', (select string_agg(concat_ws(':', d.source_id, c.component_key, coalesce(c.serial, '-'), coalesce(c.expires_on::text, '-'),
+                                               case when c.replaced_at is null then 'current' else 'closed' end), ' '
+                                     order by d.source_id, c.component_key, c.replaced_at is null, c.serial)
+                   from cma.device d join cma.device_component c on c.tenant_id = d.tenant_id and c.device_id = d.id
+                   where d.tenant_id = v_t and d.connection_id = v_conn and d.source_id in ('rec-000101', 'rec-000102', 'rec-000104')),
+    'items', (select string_agg(i.component_key || ':' || i.basis || ':' || coalesce(i.due_on::text, '-'), ' ' order by i.component_key)
+              from cma.maintenance_items_of(v_t, '2026-10-28') i where i.connection_id = v_conn and i.source_id = 'rec-000101'),
+    'unknown', (select count(*) from cma.data_quality_of(v_t) q
+                where q.check_key = 'component_due_unknown' and q.connection_id = v_conn and q.object_id = 'rec-000101' and q.value = 'pads')), null);
+exception when others then
+  perform pg_temp.v0008zk_log(p_step, null, null, null, sqlstate || ': ' || sqlerrm);
+end
+$$;
+
+create or replace function pg_temp.v0008zk_b8()
+returns void
+language plpgsql
+as $$
+declare
+  v_txt text;
+  v_err text := pg_temp.v0008zk_failed(array['b8-close', 'b8-closed', 'b8-again', 'b8-refill', 'b8-refilled']);
+begin
+  v_txt := concat_ws(' | ',
+    (select concat_ws(' ', 'closed=' || (s.answer ->> 'components_closed'), 'repl=' || (s.answer ->> 'components_replaced'),
+                      'ins=' || (s.answer ->> 'inserted'), 'drop=' || (s.answer ->> 'refs_dropped'))
+     from pg_temp.v0008zk_step s where s.step = 'b8-close'),
+    (select concat_ws(' ', s.answer ->> 'components', s.answer ->> 'items', 'unknown=' || (s.answer ->> 'unknown'))
+     from pg_temp.v0008zk_step s where s.step = 'b8-closed'),
+    (select concat_ws(' ', 'closed=' || (s.answer ->> 'components_closed'), 'upd=' || (s.answer ->> 'updated'), 'same=' || (s.answer ->> 'unchanged'))
+     from pg_temp.v0008zk_step s where s.step = 'b8-again'),
+    (select concat_ws(' ', 'closed=' || (s.answer ->> 'components_closed'), 'repl=' || (s.answer ->> 'components_replaced'))
+     from pg_temp.v0008zk_step s where s.step = 'b8-refill'),
+    (select concat_ws(' ', s.answer ->> 'components', s.answer ->> 'items', 'unknown=' || (s.answer ->> 'unknown'))
+     from pg_temp.v0008zk_step s where s.step = 'b8-refilled'));
+  perform pg_temp.v0008zk_check(18, 'B8 a kind the register emptied closes the component (no new row, its item due unknown); a kind not staged, or a dropped serial without an expiry, left as it is; a rerun changes nothing; staged again, inserted',
+    v_err is null and v_txt =
+      'closed=1 repl=0 ins=0 drop=1'
+      || ' | rec-000101:battery:B-101:2027-01-20:current rec-000101:pads:P-101:2026-12-10:closed rec-000102:battery:B-102:2027-01-20:current '
+      || 'rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:current rec-000104:pads:P-104:2026-12-10:current '
+      || 'battery:recorded:2027-01-20 pads:unknown:- unknown=1'
+      || ' | closed=0 upd=0 same=3'
+      || ' | closed=0 repl=0'
+      || ' | rec-000101:battery:B-101:2027-01-20:current rec-000101:pads:P-101:2026-12-10:closed rec-000101:pads:P-101-r:2028-06-30:current '
+      || 'rec-000102:battery:B-102:2027-01-20:current rec-000102:pads:P-102:2026-12-10:current rec-000104:battery:B-104:2027-01-20:current '
+      || 'rec-000104:pads:P-104:2026-12-10:current battery:recorded:2027-01-20 pads:recorded:2028-06-30 unknown=0',
+    coalesce(v_err, v_txt));
+exception when others then
+  perform pg_temp.v0008zk_check(18, 'B8 a kind the register emptied', false, sqlstate || ': ' || sqlerrm);
 end
 $$;
 
@@ -1155,6 +1256,13 @@ begin; select pg_temp.v0008zk_b4(); commit;
 begin; select pg_temp.v0008zk_b5(); commit;
 begin; select pg_temp.v0008zk_b6(); commit;
 begin; select pg_temp.v0008zk_b7(); commit;
+-- B8: a kind the register emptied, each load its own transaction
+begin; select pg_temp.v0008zk_load('b8-close', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('close')); commit;
+begin; select pg_temp.v0008zk_b8_state('b8-closed'); commit;
+begin; select pg_temp.v0008zk_load('b8-again', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('close')); commit;
+begin; select pg_temp.v0008zk_load('b8-refill', null, 'verify-0008zk-one', 'base-chunks', pg_temp.v0008zk_b8_rows('refill')); commit;
+begin; select pg_temp.v0008zk_b8_state('b8-refilled'); commit;
+begin; select pg_temp.v0008zk_b8(); commit;
 begin; select pg_temp.v0008zk_clean('end', 'verify-0008zk-one'); commit;
 begin; select pg_temp.v0008zk_clean('end', 'verify-0008zk-two'); commit;
 
@@ -1523,6 +1631,9 @@ drop function if exists pg_temp.v0008zk_b4();
 drop function if exists pg_temp.v0008zk_b5();
 drop function if exists pg_temp.v0008zk_b6();
 drop function if exists pg_temp.v0008zk_b7();
+drop function if exists pg_temp.v0008zk_b8_rows(text);
+drop function if exists pg_temp.v0008zk_b8_state(text);
+drop function if exists pg_temp.v0008zk_b8();
 drop function if exists pg_temp.v0008zk_c_setup();
 drop function if exists pg_temp.v0008zk_c4(integer);
 drop function if exists pg_temp.v0008zk_c2(integer);
@@ -1538,8 +1649,9 @@ select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zk
       union all
       select 99, 'verdict',
-             case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when (select count(*) from verify_0008zk where result = 'ok') = 20
+             case when not current_setting('verify.dev')::boolean then 'REFUSED: not dev or a local database'
+                  when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
+                  when (select count(*) from verify_0008zk where result = 'ok') = 21
                        and not exists (select 1 from verify_0008zk where result <> 'ok') then '0008zk verified'
                   else 'FAIL' end,
              format('117_verify_asset_sync_load: %s ok, %s FAIL', (select count(*) from verify_0008zk where result = 'ok'),
