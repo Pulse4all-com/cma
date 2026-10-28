@@ -895,7 +895,8 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 -- 0008zi's forecast (112) walks every due item of the tenant in a PL/pgSQL loop (RETURN NEXT, one row at a time) to
 -- bundle the exchanges, and its list looks up each row's names and CRM contact before it cuts the page. At 50,000
--- devices (about 100,000 items) the page took 1.1 s and the list 2.0 s locally on a db-g1-small's memory settings.
+-- devices (about 106,000 items) in en_US.UTF-8 the page took 1,567 ms and the list 1,861 ms locally on a db-g1-small's
+-- memory settings; made again, 738 and 817 ms.
 -- Made again with the same rows and results (113 passes unchanged): the items as one statement, the bundling as a
 -- running aggregate over each device's items in the loop's order; the bucketing a plain statement the planner inlines;
 -- the list's page cut first, its names and contacts looked up for the page's rows only.

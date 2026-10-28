@@ -163,7 +163,7 @@
         {
           "name": "device",
           "what": "The asset register's devices per connection, mirrored read-only: record id, serial, model, market and device status from the catalogs (null when unmapped), warehouse, customer, subscription and order references, shipment, stock, warranty and end-of-life dates, named ids of other systems (such as NetSuite's), the row as mapped (raw, key allow-list, never an @); missing from the latest full snapshot as source_deleted_at; never a name, email, phone or address (0008zi)",
-          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, and a full snapshot ends with cma.ingest_mark_devices_missing (0008zk); CSV fallback a person loads in one call with cma.load_device_snapshot"
+          "how": "Airtable API: changed records every 15 minutes, full snapshot nightly (ingest-poll-assets every 5 minutes, each connection on its assets_poll_interval_minutes, default 15; the full snapshot in the nightly reconcile at 03:30), loaded in chunks of assets_load_chunk rows (default 1000) by cma.ingest_load_device_chunk, each chunk its own call and nothing staged, and a full snapshot ends with cma.ingest_mark_devices_missing in slices of assets_load_chunk record ids, each slice its own call (0008zk); the whole table is read, never a view; CSV fallback a person loads in one call with cma.load_device_snapshot"
         },
         {
           "name": "device_component",
@@ -238,8 +238,8 @@
         },
         {
           "name": "connection_field",
-          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb); on an asset register connection the register's fields: a device's staging columns, a component kind's serial and expiry, the named ids (0008zj)",
-          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb); an asset register's fields by cma.set_connection_field in Studio (0008zj)"
+          "what": "Which source property feeds which CMA field; a contact's country, refs and created time in ordered slots; the property's data type as the adapter last read it, which decides whether a reason is stored (0008zb); on an asset register connection the register's fields, each property an Airtable field id (starting fld): a device's staging columns, a component kind's serial and expiry, the named ids, and each field's type as the ingest first read it (0008zj, 0008zk)",
+          "how": "Configuration (the reason property on Configuration, Sources); the data type read by the sweep hourly, or at once while unchecked (0008zb); an asset register's fields by cma.set_connection_field in Studio, from a block generated from the Airtable dry run's field list (docs/ingest/airtable-fields.mjs), the type recorded by the ingest's first read through cma.ingest_record_field_types and a later different type failing the read (0008zj, 0008zk)"
         },
         {
           "name": "connection_reason",

@@ -12,7 +12,9 @@ reads (dev's fixture connection, a business line without an API token), and for 
 the one set-based load (`cma.device_rows_apply`, addition 0008zk), the ingest in chunks and a file in one call through
 `cma.device_snapshot_apply`, so a file loaded into a connection the ingest also reads gives the same devices, and the
 next nightly snapshot holds the register's state again. The map file of step 3 is the same mapping
-the API connection holds as connection fields (14.5); keep the two alike when the register changes.
+the API connection holds as connection fields, there by Airtable field id: `docs/ingest/airtable-fields.mjs` generates
+those fields from this map file's headers and the dry run's field list (PROD_RUNBOOK 14.5); keep the two alike when the
+register changes.
 
 What happens to the export:
 
