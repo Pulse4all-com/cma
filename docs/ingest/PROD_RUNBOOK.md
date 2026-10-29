@@ -1949,7 +1949,7 @@ git add docs/datamap && git commit -m "Data map: snapshot after 0008zl" && git p
 ```
 Expected: the push names `<branch>`; the PR passes `verify:datamap`.
 
-**(c) Prod.** The ingest of this change writes subscriptions and events (`cma.ingest_upsert_subscriptions`, `cma.ingest_upsert_subscription_events`, `cma.ingest_mark_subscriptions_missing`) and finishes runs of job `subscriptions_poll` with its counts, which only `118` provides, so prod runs `118` before the merge, then `115` and `105` (not `119`); `main`'s web and ingest read nothing it adds.
+**(c) Prod.** The ingest of this change writes subscriptions and events (`cma.ingest_upsert_subscriptions`, `cma.ingest_upsert_subscription_events`, `cma.ingest_mark_subscriptions_missing`) and finishes runs of job `subscriptions_poll` with its counts, which only `118` provides, so prod runs `118` before the merge, then `115` (not `119`, and not `105`: both refuse a database without the dev seed); `main`'s web and ingest read nothing it adds.
 
 **Terminal** (point-in-time recovery on, as before every prod migration)
 ```bash
@@ -1969,9 +1969,9 @@ Expected: `0008zj` and `0008zk`. With `0008zl` already there, stop and report it
 
 Expected: no error and no result rows, in a second or two. A second run ends the same.
 
-**Studio (cma-prod-pg):** `db/115_verify_asset_sync.sql`, then `db/105_verify_reviews.sql`, each pasted whole and Run (both work on throwaway tenants inside subtransactions that roll back, so nothing stays).
+**Studio (cma-prod-pg):** `db/115_verify_asset_sync.sql`, pasted whole and Run (it works on throwaway tenants inside subtransactions that roll back, so nothing stays).
 
-Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (its C1 on time as before), then `verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL`.
+Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (its C1 on time as before).
 
 **(d) The merge.** **Browser:** Martin reviews and squash-merges the pull request on GitHub ((a) to (c) done, every verify green). The merge touches `web/` (the kind's label, the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
 
