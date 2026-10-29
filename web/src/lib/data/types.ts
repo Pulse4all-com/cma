@@ -2188,7 +2188,7 @@ export interface DealsPerPerson extends FunnelLists {
  * The kind of source a connection is in the data model's terms (the tables its data lands in), never
  * a vendor: which sections the Sources screen shows and which id a person can hold come from it
  */
-export type SourceKind = "crm" | "telephony" | "commerce" | "automation" | "reviews" | "assets";
+export type SourceKind = "crm" | "telephony" | "commerce" | "automation" | "reviews" | "assets" | "subscriptions";
 
 /** A connection's non-secret settings (cma.integration_connection.settings): a flat object of scalars */
 export type SourceSettingValue = string | number | boolean;

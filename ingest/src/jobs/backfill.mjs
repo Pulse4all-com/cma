@@ -28,8 +28,10 @@
  * An adapter may read an object whole (an asset register's device, addition 0008zj: wholeObjects): the run is a full
  * snapshot, loaded as one (the devices the register no longer holds marked missing), and takes no --from. With
  * --dry-run (an adapter with dryRun) the run reads and counts and writes nothing: no staging, no load, no sync_run row,
- * no cursor; one log line "backfill dry run" with the counts. A connection the adapter does not serve (skipReason: an
- * asset register without a token secret name, loaded from files) is a usage error.
+ * no cursor; one log line "backfill dry run" with the counts. The dry run of an object that is not read whole (a store's
+ * subscription_event, addition 0008zl) reads from the start a real run would take (--from, else the adapter's own or
+ * intake.start_date) to the run's start. A connection the adapter does not serve (skipReason: an asset register without a
+ * token secret name, loaded from files; a subscriptions connection without one) is a usage error.
  *
  *   gcloud run jobs execute ingest-backfill --args='^;^--connection;<id>;--object;<type>[,<type>…];--from;<date>[;--again]'
  *   gcloud run jobs execute ingest-backfill --args='^;^--connection;<id>;--object;device[;--dry-run]'
@@ -63,6 +65,19 @@ export function walkAgain(store) {
       return store.setCursor(stream, value);
     },
   };
+}
+
+/**
+ * A run's start: --from, else the adapter's own default for the object (HubSpot's email objects; all history for an
+ * object read whole or for Trusted Shops' review without reviews.history_start_date), else intake.start_date. Answers
+ * { date, allHistory, fromAt } (fromAt the date's 00:00 in the tenant's zone, null for all history).
+ */
+async function startOf(adapter, object, store, from) {
+  const own = from ? null : await adapter.backfillFrom?.(object, store);
+  const allHistory = own?.allHistory === true;
+  const date = from ?? (allHistory ? null : (own ?? (await store.settings())["intake.start_date"]));
+  if (!date && !allHistory) throw new UsageError("no --from and no intake.start_date setting");
+  return { date: date ?? null, allHistory, fromAt: date ? await store.tenantStartOf(date) : null };
 }
 
 /**
@@ -107,23 +122,20 @@ async function backfillJob({ connectionId, object, from = null, again = false, d
     throw new UsageError(`the ${c.adapter} adapter backfills ${(adapter?.backfillObjects ?? []).join(", ") || "nothing"}`);
   }
   const skip = adapter.skipReason?.(c) ?? null;
-  if (skip) throw new UsageError(`the connection is not read by the ingest (${skip}): it has no token secret name and is loaded from files`);
+  if (skip) throw new UsageError(`the connection is not read by the ingest (${skip}): it has no token secret name`);
   if (from && adapter.wholeObjects?.includes(object)) throw new UsageError(`--object ${object} is read whole: it takes no --from`);
   if (dryRun && !adapter.dryRun) throw new UsageError(`the ${c.adapter} adapter has no dry run`);
   const store = storeFor(contextOf(c), c.connectionId);
   if (dryRun) {
     const budget = new JobBudget(adapter.rates);
-    const counts = await adapter.dryRun({ connection: c, store, budget, object });
+    const start = adapter.wholeObjects?.includes(object) ? { fromAt: null } : await startOf(adapter, object, store, from);
+    const counts = await adapter.dryRun({ connection: c, store, budget, object, fromMs: start.fromAt ? start.fromAt.getTime() : null, untilMs: Date.now() });
     const total = { connection: c.connectionId, object, dryRun: true, ...counts, failed: 0 };
     info("backfill dry run", { ...total, ...budget.usage(), ms: Date.now() - started });
     return total;
   }
   // An adapter may name an object's own default start (HubSpot's email objects: cma.email_start_date_of), or all history
-  const own = from ? null : await adapter.backfillFrom?.(object, store);
-  const allHistory = own?.allHistory === true;
-  const date = from ?? (allHistory ? null : (own ?? (await store.settings())["intake.start_date"]));
-  if (!date && !allHistory) throw new UsageError("no --from and no intake.start_date setting");
-  const fromAt = date ? await store.tenantStartOf(date) : null;
+  const { date, fromAt } = await startOf(adapter, object, store, from);
   const untilMs = Date.now();
   const floorPct = adapter.dailyFloor ? await adapter.dailyFloor({ store, connection: c, job: "backfill" }) : null;
   const budget = given ?? new JobBudget(adapter.rates, undefined, { floorPct });

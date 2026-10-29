@@ -23,6 +23,9 @@
  * (Europe/Amsterdam), its schedule created paused (PROD_RUNBOOK 14.8 resumes it) and an existing one updated without
  * a pause, so a redeploy keeps the state Martin chose.
  *
+ * The subscriptions poll (addition 0008zl, 28 October 2026): the tenth job, ingest-poll-subscriptions, every 5 minutes
+ * (Europe/Amsterdam), its schedule created paused (PROD_RUNBOOK 15.9 resumes it), an existing one updated without a pause.
+ *
  *   node verify/deploy-script.mjs             every check must PASS
  *   node verify/deploy-script.mjs --provoke   every check must FAIL
  */
@@ -123,14 +126,14 @@ expect("prod --jobs --front → refused as before (--front is the service's)", [
 
 // ---- B. What still runs: prod's jobs, dev's service, prod's service with --front ----------------------
 r = await run(["prod", "--jobs"]);
-expect("prod --jobs → exit 0: the nine jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
-  [0, 9, 0], [2, 0, 1]);
+expect("prod --jobs → exit 0: the ten jobs, no service deploy", [r.code, r.calls.filter((c) => c.startsWith("gcloud run jobs deploy ")).length, r.calls.filter((c) => c.startsWith("gcloud run deploy ")).length],
+  [0, 10, 0], [2, 0, 1]);
 // The jobs' pool of 2 (Gemini audit of 28 October 2026, FIND-01): every job its lock and one unit of work; no retries,
 // so Cloud Scheduler's start is the only one (FIND-03)
 const jobDeploys = r.calls.filter((c) => c.startsWith("gcloud run jobs deploy "));
 const poolOf = (c) => ((c.match(/ --set-env-vars=\^\|\^(\S+)/) ?? [])[1] ?? "").split("|").find((kv) => kv.startsWith("CMA_DB_POOL_MAX=")) ?? null;
-expect("…each of the nine with CMA_DB_POOL_MAX=2 and --max-retries=0",
-  [jobDeploys.map(poolOf).filter((v) => v === "CMA_DB_POOL_MAX=2").length, jobDeploys.filter((c) => c.includes(" --max-retries=0 ")).length], [9, 9], [0, 0]);
+expect("…each of the ten with CMA_DB_POOL_MAX=2 and --max-retries=0",
+  [jobDeploys.map(poolOf).filter((v) => v === "CMA_DB_POOL_MAX=2").length, jobDeploys.filter((c) => c.includes(" --max-retries=0 ")).length], [10, 10], [0, 0]);
 const importJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-import-legacy-calls ")) ?? "";
 expect("…the import job (0008zg): node jobs/import-legacy-calls.mjs as cma-ingest, 6 hours, no arguments",
   [importJob.includes("--command=node,jobs/import-legacy-calls.mjs"), importJob.includes("--service-account=cma-ingest@p4a-cma-prod.iam.gserviceaccount.com"),
@@ -201,14 +204,23 @@ expect("…the asset register poll (0008zj): node jobs/poll-assets.mjs, 10 minut
     r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-assets ")).length,
     r.out.includes("schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam), created paused")],
   [true, true, ["*/5 * * * *", "Europe/Amsterdam"], 1, true], [false, false, [], 0, false]);
-expect("…no other schedule paused, the outbox's aside", r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ") && !c.includes("ingest-poll-assets")).length, 0, 1);
+const subsJob = r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-poll-subscriptions ")) ?? "";
+expect("…the subscriptions poll (0008zl): node jobs/poll-subscriptions.mjs, 10 minutes, every 5 minutes, created paused",
+  [subsJob.includes("--command=node,jobs/poll-subscriptions.mjs"), subsJob.includes("--task-timeout=10m"), schedule("ingest-poll-subscriptions"),
+    r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-subscriptions ")).length,
+    r.out.includes("schedule ingest-poll-subscriptions: */5 * * * * (Europe/Amsterdam), created paused")],
+  [true, true, ["*/5 * * * *", "Europe/Amsterdam"], 1, true], [false, false, [], 0, false]);
+expect("…no other schedule paused, the outbox's aside",
+  r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ") && !c.includes("ingest-poll-assets") && !c.includes("ingest-poll-subscriptions")).length, 0, 1);
 writeFileSync(path.join(bin, "scheduler-exists"), "");
 r = await run(["prod", "--jobs"]);
 rmSync(path.join(bin, "scheduler-exists"));
 expect("…an existing schedule updated, never paused again (a redeploy keeps the state)",
   [r.calls.some((c) => c.startsWith("gcloud scheduler jobs update http ingest-poll-assets ")), r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-assets ")).length,
-    r.out.includes("schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam)\n")],
-  [true, 0, true], [false, 1, false]);
+    r.out.includes("schedule ingest-poll-assets: */5 * * * * (Europe/Amsterdam)\n"),
+    r.calls.filter((c) => c.startsWith("gcloud scheduler jobs pause ingest-poll-subscriptions ")).length,
+    r.out.includes("schedule ingest-poll-subscriptions: */5 * * * * (Europe/Amsterdam)\n")],
+  [true, 0, true, 0, true], [false, 1, false, 1, false]);
 r = await run(["dev", "--jobs", "--reconcile-every", "*/2 * * * *", "--reconcile-lookback", "10"]);
 expect("--reconcile-every and --reconcile-lookback still set the polling fallback", [schedule("ingest-reconcile")[0], (r.calls.find((c) => c.startsWith("gcloud run jobs deploy ingest-reconcile ")) ?? "").includes("--args=--lookback-minutes,10")],
   ["*/2 * * * *", true], ["30 3 * * *", false]);

@@ -1891,3 +1891,267 @@ Expected: only the new token listed.
 gcloud secrets versions destroy <old version> --secret=airtable-assets-pulse4all-subscriptions --project=p4a-cma-prod
 ```
 Expected: a `Y/n` prompt; after `Y`, `Destroyed version [<old version>] of the secret [airtable-assets-pulse4all-subscriptions].` The list of the earlier block now shows the old version `destroyed` and the new one `enabled`. The next poll succeeds again (the Studio block above, a run after the revoke). Report the date and the two version numbers; the next rotation is due 180 days from today.
+
+# 15. Juo subscriptions in prod, the GB pilot (addition 0008zl, brief B20)
+
+Written on 28 October 2026 for 0008zl. The ingest reads the subscriptions of the GB store (`pulse4all.myshopify.com`) and the events of its subscriptions from Juo's Admin API into `cma.subscription` and `cma.subscription_event`: the events since the cursor every 5 minutes (`ingest-poll-subscriptions`), with the subscriptions they touched, and every subscription nightly (`ingest-reconcile`); each subscription's payment state follows from both (`docs/ingest/README.md`, section Juo; `docs/architecture/data-model/0008.md`, Data model: subscriptions). Read only: nothing is written to Juo. HubSpot's own Juo events stay as they are. The other 13 stores follow later, one connection and one key each (Open decisions). Order: the migration in dev with its verify, the data map and the migration in prod, all before the merge, then the merge (Before 15.1); then the Gemini audit, the key and its secret, the ingest from `main` (15.1, 15.2), the store and the connection (15.3, 15.4), the dry runs (15.5, 15.6), the backfills (15.7), the checks (15.8) and the schedule (15.9). Do 15.4 to 15.7 in one sitting, before 03:30: from 15.4 on the nightly reconcile reads the store too. The Studio blocks that call a function carry the context block's second part (as 9.6); `<tenant_id>` and `<user_id>` come from its first part. The Terminal blocks run in `~/cma`.
+
+**Data prerequisites:**
+- The GB store's Juo Admin API key (the GB key answered 200 for `pulse4all.myshopify.com` and 401 for `pulse4all-nl.myshopify.com` on 28 October 2026); whether a key can be read-only is an Open decision (15.1).
+- The GB store's commerce store row (phase 9: handle `pulse4all`, its Shopify connection). Without it every read fails `store_not_configured` (15.3).
+- The store's customers in `cma.commerce_customer`: a subscription's customer joins them by id. Phase 9's backfill started at 1 October 2026, so a customer the store has not changed since then is not held, and such subscriptions count as `customers_unmatched` (15.5). Reports that need the customer read it from there; until a backfill of `commerce_customer` from the store's start, many will be unmatched.
+
+## Before 15.1: the migration, the data map, the merge
+
+One addition: 0008zl (`118`; `119` its verify). `119` runs in dev (and local databases) only, as `117` (Decision log, 28 October 2026): its Z1 reads every subscription and event row of the database for an email pattern after the flow verifier's fixtures; it refuses a database without the dev seed. Its block B works on throwaway tenants in a subtransaction that is always rolled back, so nothing stays.
+
+**(a) Dev.** **Studio (cma-dev-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zj' order by 1;
+reset role;
+```
+Expected: `0008zj` and `0008zk`. Without `0008zk`: phase 14's (a) first.
+
+**File:** `db/118_subscriptions.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+
+Expected: no error and no result rows. A second run ends the same and changes nothing.
+
+**File:** `db/119_verify_subscriptions.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
+
+Expected, in a few seconds: rows `A1` to `A7`, `B1` to `B15` and `Z1`, each `PASS`, and `verdict | PASS | 119_verify_subscriptions: 23 PASS, 0 FAIL`. `Z1`'s detail reads `0 of <n> subscriptions, 0 of <m> events` (in dev usually `0 of 0`: no Juo connection there). `verdict | REFUSED` means the database lacks the dev seed: stop and report it. Any `FAIL`: report the row and its detail.
+
+**Studio (cma-dev-pg):** `119` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 119_verify_subscriptions: 0 PASS, 23 FAIL`.
+
+**Studio (cma-dev-pg):** the earlier verifies of what `118` makes again, each pasted whole and Run, unchanged: `115` (the run's counts and a connection's settings), `105` (the kinds), `107` (the run's counts) and `53` (the kinds and the settings).
+
+Expected, each as it passed before this change: `115` `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL`, `105` 27 PASS, `107` 10 PASS, `53` 16 PASS.
+
+**(b) The data map.** Two tables (`cma.subscription`, `cma.subscription_event`) and three reader views are new; `docs/datamap/catalog.json` describes them and `template.html` has the Juo box. Martin refreshes the snapshot from dev on this branch after (a), before merging; until then `verify:datamap` fails on the branch, which is expected.
+
+**Terminal** (in `~/cma`, on this branch)
+```bash
+cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json
+```
+Expected: nothing printed; `docs/datamap/schema.json` holds `"latest_migration" : "0008zl"` (spaces around the colon).
+
+**Terminal** (`~/cma`)
+```bash
+node tools/datamap/build.mjs && node tools/datamap/build.mjs --check
+```
+Expected: `datamap: wrote docs/datamap/index.html (98 tables, 147 views)`, then `datamap: 98 tables, 147 views, all described; index.html current` (two tables and three views more than after 0008zk).
+
+**Terminal** (`~/cma`)
+```bash
+git add docs/datamap && git commit -m "Data map: snapshot after 0008zl" && git push origin HEAD:<branch>
+```
+Expected: the push names `<branch>`; the PR passes `verify:datamap`.
+
+**(c) Prod.** The ingest of this change writes subscriptions and events (`cma.ingest_upsert_subscriptions`, `cma.ingest_upsert_subscription_events`, `cma.ingest_mark_subscriptions_missing`) and finishes runs of job `subscriptions_poll` with its counts, which only `118` provides, so prod runs `118` before the merge, then `115` (not `119`, and not `105`: both refuse a database without the dev seed); `main`'s web and ingest read nothing it adds.
+
+**Terminal** (point-in-time recovery on, as before every prod migration)
+```bash
+gcloud sql instances describe cma-prod-pg --project=p4a-cma-prod --format="value(settings.backupConfiguration.pointInTimeRecoveryEnabled,settings.backupConfiguration.transactionLogRetentionDays)"
+```
+Expected: `True	7`.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select version from cma.schema_migration where version >= '0008zj' order by 1;
+reset role;
+```
+Expected: `0008zj` and `0008zk`. With `0008zl` already there, stop and report it.
+
+**Studio (cma-prod-pg):** `db/118_subscriptions.sql` as one script, as your own login.
+
+Expected: no error and no result rows, in a second or two. A second run ends the same.
+
+**Studio (cma-prod-pg):** `db/115_verify_asset_sync.sql`, pasted whole and Run (it works on throwaway tenants inside subtransactions that roll back, so nothing stays).
+
+Expected: `verdict | 0008zj verified | 115_verify_asset_sync: 14 ok, 0 FAIL` (its C1 on time as before).
+
+**(d) The merge.** **Browser:** Martin reviews and squash-merges the pull request on GitHub ((a) to (c) done, every verify green). The merge touches `web/` (the kind's label, the job's label on System health), so Cloud Build trigger `cma-web-main` builds and deploys the web to prod.
+
+Expected: the build ends `SUCCESS`.
+
+## 15.1 The Gemini audit, then the GB store's key
+
+**Gate:** the Gemini audit of this phase's new secret and IAM binding (the prompt is in the pull request's description) has answered, and every finding is checked as README, How we work, says. Martin runs it before this step.
+
+**Browser:** Juo's admin of the GB store (`pulse4all.myshopify.com`) → Settings → API (Admin API keys): the key the CMA will use, named `CMA ingest prod` when a new one is made; read-only when Juo offers it (Open decisions: whether a store key can be read-only). Keep the page open until 15.2's first block is done.
+
+Expected: the key shown once. It is pasted only at the hidden prompt of 15.2, never into a command, a chat or a file.
+
+## 15.2 The secret, the ingest from `main` and the accessor
+
+`put_secret` must be defined first (Before you start, at the top of this runbook; `type put_secret` prints it).
+
+**Terminal** (on its own line; the value is the key of 15.1)
+```bash
+put_secret p4a-cma-prod ingest-juo-pulse4all-key
+```
+Expected: the hidden prompt; paste, Enter; `stored ingest-juo-pulse4all-key (version added)`. Then close Juo's page.
+
+`--front` goes with the service deploy and never with `--jobs` (as 13.6). The service deploy grants `cma-ingest` the accessor on the new secret (on that secret only) and answers `404` on `/juo/<key>`; the jobs deploy adds `ingest-poll-subscriptions`, its schedule created paused (15.9 resumes it).
+
+**Terminal** (in `~/cma`, on `main` after the merge)
+```bash
+git switch -q main && git pull -q --ff-only && git log -1 --format=%h -- ingest/ && bash docs/ingest/deploy.sh prod --front ingest.pulse4all.app --tenant pulse4all-subscriptions --secret ingest-juo-pulse4all-key && bash docs/ingest/deploy.sh prod --jobs
+```
+Expected: `main`'s ingest tag first (the squash commit's short sha); the image built once under it; `accessor on ingest-juo-pulse4all-key`; `health: {"ok":true,"version":"<that tag>"}` through `https://ingest.pulse4all.app/health` and `run.app: 404 (refused)`; then the jobs on the same image (`no build`): ten job deploys, `schedule ingest-poll-subscriptions: */5 * * * * (Europe/Amsterdam), created paused` next to the others, `ingest-reconcile` at 03:30.
+
+**Terminal** (who may read the secret)
+```bash
+gcloud secrets get-iam-policy ingest-juo-pulse4all-key --project=p4a-cma-prod --flatten='bindings[].members' --format='value(bindings.role,bindings.members)'
+```
+Expected: exactly one line, `roles/secretmanager.secretAccessor	serviceAccount:cma-ingest@p4a-cma-prod.iam.gserviceaccount.com`. Another member: report it and remove it before 15.4.
+
+## 15.3 The GB store in the CMA
+
+The Juo connection's handle, `pulse4all` (its account id up to the first dot), must be the handle of a commerce store of the tenant: that store's Shopify connection holds the customers the subscriptions join.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select s.handle, s.market, s.currency, s.connection_id, c.adapter, c.external_account_id, c.status,
+       (select count(*) from cma.commerce_customer cu where cu.tenant_id = s.tenant_id and cu.connection_id = s.connection_id) as customers
+from cma.commerce_store s join cma.integration_connection c on c.tenant_id = s.tenant_id and c.id = s.connection_id
+where s.handle = 'pulse4all';
+reset role;
+```
+Expected: one row: `pulse4all | GB | GBP | <shop conn> | shopify | pulse4all.myshopify.com | active | <customers>`. No row: stop and report it (phase 9.6 makes the store row).
+
+## 15.4 The connection, its kind and its settings
+
+**Studio (cma-prod-pg)** in one Run (after the context block)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select * from cma.upsert_connection('juo', 'Juo GB', 'pulse4all.myshopify.com', null, 'ingest-juo-pulse4all-key');
+reset role;
+```
+Expected: one row of three values, then one row with `connection_id` (`<juo conn>`) and `key`.
+
+**Studio (cma-prod-pg)** in one Run (the kind first: the settings are checked on a subscriptions connection)
+```sql
+set role cma_app;
+select set_config('app.tenant_id', '<tenant_id>', false),
+       set_config('app.user_id', '<user_id>', false),
+       set_config('app.actor_label', 'studio:martin', false);
+select cma.set_connection_kind('<juo conn>', 'subscriptions');
+select cma.set_connection_settings('<juo conn>', '{"subscriptions_poll_interval_minutes": 5, "subscriptions_max_per_second": 2}'::jsonb);
+select name, adapter, external_account_id, kind, status, signing_secret_name, token_secret_name
+from cma.sources() where connection_id = '<juo conn>';
+select x.handle, x.store_connection_id from cma.subscription_store_connection_of('<tenant_id>', '<juo conn>') x;
+reset role;
+```
+Expected: one row of three values, two empty results, then `Juo GB | juo | pulse4all.myshopify.com | subscriptions | active | | ingest-juo-pulse4all-key`, then `pulse4all | <shop conn>` (15.3's connection). No row in the last result: the handle matches no store; stop and report it. **Browser:** Configuration → Sources lists **Juo GB** with the kind **Subscriptions**.
+
+## 15.5 The dry run of the subscriptions
+
+The first read in prod: every subscription of the store mapped and counted, nothing written (no upsert, no run, no cursor).
+
+**Terminal** (`<juo conn>` from 15.4)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription;--dry-run'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.` within a few minutes (100 subscriptions a page at two a second).
+
+**Terminal** (the dry run's counts; counts and statuses only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run" AND jsonPayload.object="subscription"' --project=p4a-cma-prod --freshness=1h --limit=1 --format='value(jsonPayload.fetched,jsonPayload.mapped,jsonPayload.unreadable,jsonPayload.statuses,jsonPayload.instrumentKnown,jsonPayload.withoutCustomer,jsonPayload.customersUnmatched,jsonPayload.apiCalls)'
+```
+Expected: one line: `fetched` the store's subscriptions (Juo's admin shows the count), `mapped` the same, `unreadable` 0, `statuses` per status (Juo's own figures), `instrumentKnown` close to `mapped` (0 means Juo did not expand the payment method: report it, the instrument's type stays empty), `withoutCustomer` 0, `customersUnmatched` the customers the CMA does not hold (Data prerequisites: expected high while the store's customers are held from 1 October 2026 only), and the requests. A failed execution names its code in the log: `token_unavailable` (the secret or its accessor, 15.2), `key_rejected` (the key is not the GB store's, 15.1), `store_not_configured` (15.3), `tenant_id_invalid` (15.4's account id), `rate_limited` (run it again), `http_<status>` (report it: a path or a query form Juo does not take).
+
+## 15.6 The dry run of the events
+
+**Terminal** (`<from>`: the first day the reports need, as YYYY-MM-DD; Juo holds the store's history since its migration to Juo)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription_event;--from;<from>;--dry-run'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Terminal** (the event types seen, counts only)
+```bash
+gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="ingest-backfill" AND jsonPayload.message="backfill dry run" AND jsonPayload.object="subscription_event"' --project=p4a-cma-prod --freshness=1h --limit=1 --format='value(jsonPayload.from,jsonPayload.fetched,jsonPayload.mapped,jsonPayload.otherType,jsonPayload.unreadable,jsonPayload.eventTypes,jsonPayload.kept,jsonPayload.reasonDropped,jsonPayload.customersUnmatched,jsonPayload.apiCalls)'
+```
+Expected: one line: `from` 00:00 of `<from>` in London's time; `fetched` the events read; `mapped` the ones the CMA keeps; `otherType` the rest; `unreadable` 0; `eventTypes` Juo's types seen with counts (`subscription:renewed`, `subscription:renew-failed`, `subscription:updated`, `subscription:cancelled`, `subscription:paused`, … as `docs/ingest/README.md`, section Juo, names them); `kept` per CMA type (`renewed`, `renew_failed`, `status_changed`, `canceled`, `paused`, `resumed`, `reactivated`); `reasonDropped` the cancellations with a free-text reason (never stored); `customersUnmatched`; the requests. A type in `eventTypes` that the README's table does not name: copy it into the report (a later change may map it).
+
+## 15.7 The backfills: the events, then the subscriptions
+
+The events first: a paused subscription's `paused_at` comes from its pause event, and the events backfill moves the poll's cursor to its own start.
+
+**Terminal** (the same `<from>` as 15.6)
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription_event;--from;<from>'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+**Terminal**
+```bash
+gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-west4 --wait --args='^;^--connection;<juo conn>;--object;subscription'
+```
+Expected: `Execution [ingest-backfill-…] has successfully completed.`
+
+## 15.8 The checks
+
+**Studio (cma-prod-pg)** (read only; counts only, no customer row)
+```sql
+set role cma_owner;
+select job, stream, status, error, counts, started_at, finished_at from cma.sync_run
+where connection_id = '<juo conn>' order by started_at desc limit 3;
+select stream, cursor from cma.sync_cursor where connection_id = '<juo conn>' order by stream;
+select status, count(*) as subscriptions, count(*) filter (where customer_source_id is null) as without_customer,
+       count(*) filter (where payment_instrument_type is null) as instrument_unknown
+from cma.subscription where connection_id = '<juo conn>' and source_deleted_at is null group by 1 order by 1;
+select event_type, count(*) as events, min(occurred_at)::date as first, max(occurred_at)::date as last
+from cma.subscription_event where connection_id = '<juo conn>' group by 1 order by 1;
+select p.payment_state, count(*) from cma.subscription_payment_state_of('<tenant_id>') p
+where p.connection_id = '<juo conn>' group by 1 order by 1;
+select count(*) filter (where to_jsonb(s)::text ~ '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}') as subscriptions_with_an_email
+from cma.subscription s where s.connection_id = '<juo conn>';
+select count(*) filter (where to_jsonb(e)::text ~ '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}') as events_with_an_email
+from cma.subscription_event e where e.connection_id = '<juo conn>';
+reset role;
+```
+Expected:
+- the runs: `backfill | subscription | succeeded` with `fetched` and `inserted` as 15.5's `mapped`, `customers_unmatched` as 15.5's subscriptions without a held customer, `missing_now` 0; below it `backfill | subscription_event | succeeded` with `events_new` as 15.6's `mapped`, `skipped` as its `otherType`, `reason_dropped` as its `reasonDropped`;
+- the cursors: `backfill:subscription_event` with `done` true, `juo:events` with the events backfill's start as `at` (milliseconds);
+- the subscriptions per status as 15.5's `statuses`, `without_customer` 0 and `instrument_unknown` small;
+- the events per type as 15.6's `kept`, the first on or after `<from>`;
+- the payment states: `canceled`, `failed`, `in_retry`, `paid`, `paused` (no row for a state no subscription is in); `paid` and `in_retry` together the active subscriptions;
+- `subscriptions_with_an_email` 0 and `events_with_an_email` 0. Above 0: stop and report it before 15.9.
+
+**Browser:** Juo's admin of the GB store: the active, paused and canceled counts against the statuses above (the same, give or take subscriptions changed since 15.7), and a subscription with a failed renewal now against `in_retry`. Copy the figures into the report.
+
+## 15.9 The schedule, the first run and System health
+
+**Terminal**
+```bash
+gcloud scheduler jobs resume ingest-poll-subscriptions --project=p4a-cma-prod --location=europe-west4 && gcloud scheduler jobs describe ingest-poll-subscriptions --project=p4a-cma-prod --location=europe-west4 --format='value(state,schedule,timeZone)'
+```
+Expected: gcloud's confirmation that the job is resumed, then `ENABLED	*/5 * * * *	Europe/Amsterdam`. A later `deploy.sh prod --jobs` keeps the schedule as it is.
+
+Wait for the next five minutes: the first scheduled run is due at once (it has no cadence yet) and reads the events since the events backfill's start less five minutes.
+
+**Studio (cma-prod-pg)** (read only)
+```sql
+set role cma_owner;
+select job, stream, status, error, counts ->> 'fetched' as fetched, counts ->> 'events_new' as events_new, counts ->> 'updated' as updated,
+       counts ->> 'inserted' as inserted, counts ->> 'customers_unmatched' as customers_unmatched, started_at
+from cma.sync_run where connection_id = '<juo conn>' and job = 'subscriptions_poll' order by started_at desc limit 3;
+select stream, cursor from cma.sync_cursor where connection_id = '<juo conn>' order by stream;
+reset role;
+```
+Expected: one `subscriptions_poll | subscriptions | succeeded` row with the events since 15.7 (`events_new`) and the subscriptions they touched (`updated`, `inserted`); the cursors `juo:cadence` and `juo:events` with that run's start as `at`. Then a run every 5 minutes.
+
+**Browser:** Workspace → Configuration → System health.
+
+Expected: the row **Subscriptions poll** with its last run succeeded, and the connection **Juo GB** OK. After 03:30 the next day: a **Nightly reconcile** run of the connection, stream `subscription`, succeeded, `missing_now` the subscriptions Juo no longer returns (usually 0). System health's counts column shows only counts above 0.
+
+Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<juo conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 288 `subscriptions_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` now and then is fine (the next run carries on). `key_rejected` means the key was revoked or replaced: 15.1 and 15.2 again. `empty_snapshot` on the reconcile means Juo answered no subscription: nothing was marked missing; report it. A failed poll does not move its cadence, so a lasting failure writes one `failed` row every 5 minutes until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 15.2 to 15.9 into `records/0008zl-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).

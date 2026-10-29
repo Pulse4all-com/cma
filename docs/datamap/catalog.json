@@ -198,12 +198,28 @@
       ]
     },
     {
+      "key": "subscriptions",
+      "label": "Subscriptions",
+      "tables": [
+        {
+          "name": "subscription",
+          "what": "A store's subscriptions per subscription connection (one per store), mirrored read-only from the subscription app: its id, the store customer's id (joined to commerce_customer of the store whose handle the connection's account id names), the app's status (active, paused, canceled, expired, failed, merged, never-subscribed), current cycle, next billing time, billing interval and count, amount per cycle and currency, the payment instrument's type only (card, paypal, other), created, paused, canceled and updated times, missing from the latest full read as source_deleted_at, a checked raw (fixed keys, never an @); never a name, email, phone, address or payment detail (0008zl)",
+          "how": "Juo Admin API, polling only (no webhook for a failed renewal): ingest-poll-subscriptions every 5 minutes reads, per connection when due on subscriptions_poll_interval_minutes (default 5), the events since its cursor less five minutes and then every subscription they touched, by id; the nightly reconcile at 03:30 reads every subscription of the store and marks the ones no longer returned missing in slices (cma.ingest_mark_subscriptions_missing), an empty read failing empty_snapshot; backfill --object subscription [--dry-run] by hand; written by cma.ingest_upsert_subscriptions (stale guard on the source's update time)"
+        },
+        {
+          "name": "subscription_event",
+          "what": "The events of a store's subscriptions, append-only, in the CMA's words: renewed, renew_failed, canceled, paused, resumed, reactivated, status_changed; when, the actor's type (and a staff actor's id only), cycle, attempt, error code, a reason only as a code of the adapter's fixed list, the status before and after, a checked raw (Juo's type under raw.type); never a name, message or free-text reason (0008zl)",
+          "how": "Juo Admin API: ingest-poll-subscriptions every 5 minutes (the events after its cursor less five minutes; an event held already left as it is), backfill --object subscription_event --from <date> [--dry-run] by hand; Juo's other event types are read and not stored; written by cma.ingest_upsert_subscription_events, insert only"
+        }
+      ]
+    },
+    {
       "key": "connections",
       "label": "Source settings and catalogs",
       "tables": [
         {
           "name": "integration_connection",
-          "what": "One row per account of a source (portal, Aircall account, store, review platform account, asset register base)",
+          "what": "One row per account of a source (portal, Aircall account, store, review platform account, asset register base, a store's subscription app)",
           "how": "Configuration → Sources"
         },
         {
@@ -546,7 +562,7 @@
         {
           "name": "sync_run",
           "what": "Every job run with counts",
-          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule; since 0008zj the asset register poll (job assets_poll) every 5 minutes, each connection when due, and its full snapshot in the nightly reconcile"
+          "how": "Each sweep, form poll, email poll, reviews poll (hourly, since 0008ze), reconcile and backfill; since 0008r the scheduler's forgotten-day close too, without a connection; since 0008s the follow-up refresh every minute per tenant, without a connection; since 0008zi each device snapshot load (job assets_import), run by a person, no schedule; since 0008zj the asset register poll (job assets_poll) every 5 minutes, each connection when due, and its full snapshot in the nightly reconcile; since 0008zl the subscriptions poll (job subscriptions_poll) every 5 minutes, each connection when due, and a store's full read of its subscriptions in the nightly reconcile"
         },
         {
           "name": "sync_cursor",
@@ -674,6 +690,10 @@
     {
       "name": "maintenance_per_month",
       "what": "Per action month, market and model: due items, component items, devices at end of life, planned exchanges whose first action date falls in the month, past due (0008zi)"
+    },
+    {
+      "name": "subscription_payment_state",
+      "what": "Per subscription the latest full read still returns: its payment state from the two subscription tables only: failed, paused, canceled (canceled or expired), in_retry (active with a failed renewal of a cycle no renewal of that cycle or a later one follows; its cycle, first failure and highest attempt), paid (active otherwise); merged and never-subscribed left out; awaiting payment not built (0008zl)"
     }
   ],
   "flows": {
@@ -735,6 +755,17 @@
       ],
       "doms": [
         "assets",
+        "connections",
+        "plumbing"
+      ]
+    },
+    "juo": {
+      "src": "s-juo",
+      "ways": [
+        "w-jobs"
+      ],
+      "doms": [
+        "subscriptions",
         "connections",
         "plumbing"
       ]

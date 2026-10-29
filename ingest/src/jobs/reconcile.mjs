@@ -10,9 +10,10 @@
  * CMA-069) for every connection, every polled form's of the look-back, through the forms poll's writes.
  * An adapter with webhook subscriptions of its own to look after (Shopify) checks them after its
  * streams, one more sync_run row (job subscriptions_check, stream webhooks), unless --object narrows
- * the run. An asset register's (Airtable, addition 0008zj) one stream is its nightly full snapshot; a
- * connection the adapter does not serve (skipReason: an asset register without a token secret name,
- * loaded from files) gets one log line and no run.
+ * the run. An asset register's (Airtable, addition 0008zj) one stream is its nightly full snapshot, as is a
+ * store's subscriptions (Juo, addition 0008zl: stream subscription, a subscription no longer returned
+ * marked missing); a connection the adapter does not serve (skipReason: an asset register without a
+ * token secret name, loaded from files; a subscriptions connection without one) gets one log line and no run.
  *
  * The daily floor (backlog CMA-069): an adapter that names one (HubSpot: api_daily_floor_pct, default
  * 25) has its streams pause once the source's remaining daily calls fall below it; a paused stream is
