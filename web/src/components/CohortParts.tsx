@@ -4,9 +4,10 @@
  * ordered or lost), the table of cohorts by age and the chart of the share ordered by age. Server components, plain SVG, no
  * chart library; the figures come from the data layer and lib/cohorts arranges them. Pulse4all-Style 7.6 for the table
  * (numbers right-aligned, tabular figures, every header with its hint) and 7.7 for the chart (the series order Deep Blue,
- * Leaf Green, Light Blue, Denim, Soft Rose, Inkt; the seventh and eighth cohort repeat the first two colours dashed, so a
- * line is never told apart by colour alone; gridlines and axis labels in their tokens). A dash where a cohort has not
- * reached an age, with the reason in its title. Counts only: no customer data.
+ * Leaf Green, Light Blue, Denim, Soft Rose, Inkt; the style names six, so the seventh and eighth cohort repeat the first two
+ * colours dashed; gridlines and axis labels in their tokens). Lines 1 to 6 differ by colour only, so every point names its
+ * cohort, age, share and count in a title, the legend names every line, and the table holds the same figures. A dash where a
+ * cohort has not reached an age, with the reason in its title. Counts only: no customer data.
  */
 import Link from "next/link";
 import type { Route } from "next";

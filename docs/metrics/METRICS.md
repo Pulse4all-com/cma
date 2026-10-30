@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-552 figures. Statuses: verified 448 · discrepancy 18 · ambiguous 35 · prerequisite_missing 58 · cadence_unconfirmed 68.
+552 figures. Statuses: verified 448 · discrepancy 18 · ambiguous 35 · prerequisite_missing 66 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -25618,7 +25618,7 @@ Lead cohorts: the lead deals created in the cohort's ISO week or month (within t
 created = count(lead deals of cma.lead_deals_of whose creation business date lies in the cohort's period and in [from, to])
 ```
 
-**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -25674,7 +25674,7 @@ from d where created_date between :from and :to group by 1 order by 1 desc
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
@@ -25695,7 +25695,7 @@ Lead cohorts, measure Attempted: of the cohort's deals, the share whose first at
 attempted(n) = count(deals with first_attempt_at <= created_at + n days) / created; first_attempt_at = the earliest attempt of cma.deal_attempts_of under attempts.source in Attempts per deal's window (cma.sales_deals_of: from created_at - speed_to_lead.pre_window_minutes to the close, the first order or now); null while not every deal is n days old
 ```
 
-**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -25744,8 +25744,10 @@ attempted(n) = count(deals with first_attempt_at <= created_at + n days) / creat
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- Every call linked to a contact and a deal (kpis.md §11): an unassociated CRM call is no attempt (data quality check `crm_call_without_contact`)
+- Aircall–HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap (data quality check `telephony_call_unlinked`)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 
@@ -25765,7 +25767,7 @@ Lead cohorts, measure With a conversation: of the cohort's deals, the share whos
 conversation(n) = count(deals with first_conversation_at <= created_at + n days) / created; first_conversation_at = the earliest attempt with cma.is_conversation (connected, at least calls.conversation_min_talk_seconds, no tag meaning not reached or incorrect data); null while not every deal is n days old
 ```
 
-**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -25818,8 +25820,12 @@ conversation(n) = count(deals with first_conversation_at <= created_at + n days)
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- Every call linked to a contact and a deal (kpis.md §11): an unassociated CRM call is no attempt (data quality check `crm_call_without_contact`)
+- Aircall–HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap (data quality check `telephony_call_unlinked`)
+- A tag that means not reached set on Configuration → Sources, Tags (without one, Conversation counts on talk time alone; the Tags section says so)
+- A tag that means incorrect data set on Configuration → Sources, Tags on the tags agents put on a wrong number or incorrect contact data (without one, such a call counts by its talk time alone)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 
@@ -25839,7 +25845,7 @@ Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts p
 ordered(n) = count(deals with lead_to_order's order_created_at <= created_at + n days) / created; lead to order = the first store order of the deal's contacts, not a test, not cancelled, not deleted, created at or after the deal and within lead_to_order.max_days (cma.lead_to_order_of); null while not every deal is n days old, and at an age above lead_to_order.max_days
 ```
 
-**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -25916,8 +25922,9 @@ where d.created_date between :from and :to group by 1 order by 1 desc
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes (data quality check `commerce_unmatched / commerce_ambiguous`)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 
@@ -25937,7 +25944,7 @@ Lead cohorts, measure Lost: of the cohort's deals, the share closed lost at or b
 lost(n) = count(deals with cma.sales_deals_of outcome = 'lost' and closed_at <= created_at + n days) / created; outcome lost = the stage's outcome lost and no order ended the deal's window first; null while not every deal is n days old
 ```
 
-**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -25981,7 +25988,7 @@ lost(n) = count(deals with cma.sales_deals_of outcome = 'lost' and closed_at <= 
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
@@ -25992,7 +25999,7 @@ null: 'lost' is cma.sales_deals_of's outcome, which compares the close with the 
 
 #### `cohorts.lead.median_days_to_order`
 
-**Days to order** on /reports/lead-cohorts · Median days to order per cohort (Mediane dagen tot bestelling per cohort)
+**Days to store order** on /reports/lead-cohorts · Median days to order per cohort (Mediane dagen tot bestelling per cohort)
 
 Lead cohorts: the median days from creation to the first store order (lead to order), over the cohort's deals that ordered (now).
 
@@ -26002,7 +26009,7 @@ Lead cohorts: the median days from creation to the first store order (lead to or
 median_days_to_order = round(percentile_cont(0.5) over lead_to_order_of.days_to_order of the cohort's ordered deals, 1); days_to_order = (order - creation) / 86400 s, rounded to 2
 ```
 
-**Unit** days · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+**Unit** days · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -26046,14 +26053,15 @@ median_days_to_order = round(percentile_cont(0.5) over lead_to_order_of.days_to_
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes (data quality check `commerce_unmatched / commerce_ambiguous`)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 
 **Notes**
 
-null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days.
+null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days. The header says 'Days to store order' because First orders' 'Days to order' is another figure: the median from the first touch to the attributed first order.
 
 #### `cohorts.lead.not_called_yet`
 
@@ -26067,7 +26075,7 @@ Lead cohorts: the cohort's deals that are open now and have no attempt, as Attem
 not_called_yet = count(deals with cma.sales_deals_of outcome = 'open' and attempts = 0), as of now
 ```
 
-**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source, now · **Status** verified
+**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source, now · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -26114,8 +26122,10 @@ not_called_yet = count(deals with cma.sales_deals_of outcome = 'open' and attemp
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- Every call linked to a contact and a deal (kpis.md §11): an unassociated CRM call is no attempt (data quality check `crm_call_without_contact`)
+- Aircall–HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap (data quality check `telephony_call_unlinked`)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 
@@ -26135,7 +26145,7 @@ Lead cohorts chart: one line per cohort (the newest eight, never split), the sha
 points(cohort) = [(n, ordered(n) / created) for each age n of cohorts.lead_ages_days where the cohort is mature at n and n <= lead_to_order.max_days]; the newest 8 cohorts
 ```
 
-**Unit** share · **Grain** per_iso_week, per_month · **Status** verified
+**Unit** share · **Grain** per_iso_week, per_month · **Status** verified, prerequisite_missing
 
 **Sources**
 
@@ -26212,8 +26222,9 @@ where d.created_date between :from and :to group by 1 order by 1 desc
 **Data prerequisites**
 
 - Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
-- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals
 - Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+- the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes (data quality check `commerce_unmatched / commerce_ambiguous`)
 
 **Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
 

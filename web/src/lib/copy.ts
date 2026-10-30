@@ -1220,7 +1220,7 @@ const en = {
     colChannel: "Review channel",
   },
 
-  /** Maintenance (addition 0008zi): what comes due on the asset register's devices; ids, statuses and links only */
+  /** Lead cohorts (addition 0008zm): the lead deals by the week or month of their creation, followed at fixed ages; counts only */
   leadCohorts: {
     title: "Lead cohorts",
     intro: "The lead deals grouped by the week or the month they were created, and followed over time: of each group, the share attempted, with a conversation, ordered and lost a set number of days after each deal was created. Every lead deal counts, also deals created by hand and test deals. Each deal's day in your organisation's time zone.",
@@ -1243,7 +1243,7 @@ const en = {
     colCreated: "Created deals",
     colAge: "{n} days",
     colAgeOne: "1 day",
-    colMedianDays: "Days to order",
+    colMedianDays: "Days to store order",
     colNotCalled: "Not called yet",
     partial: "Part",
     partialTitle: "Only the deals created within the chosen dates count",
@@ -1260,6 +1260,7 @@ const en = {
     chartEmpty: "No cohort has reached its first age yet",
     ageAxis: "Days after creation",
   },
+  /** Maintenance (addition 0008zi): what comes due on the asset register's devices; ids, statuses and links only */
   maintenance: {
     title: "Maintenance",
     intro: "What comes due on the devices of the asset register, per month, market and model: pads and batteries that reach their due date, and devices that reach their end of life. The register holds the devices; the Workspace reads a snapshot of it and shows ids, statuses and links only.",
@@ -1820,17 +1821,18 @@ const en = {
     cbNoDue: "Callback tasks without a due time, placed in the week they were created and counted apart.",
     cbPerson: "The task's owner, through the owner id linked on People; owner ids without a person are one row.",
     fuOpenLink: "Opens the record in its own system, in a new window. Empty when the connection has no link template.",
-    // Funnel and Cancellations (addition 0008zb)
+    // Lead cohorts (addition 0008zm)
     lcCohort: "The deals created in one week (Monday to Sunday) or one calendar month, by the day each deal was created in your organisation's time zone. Every deal of a counted lead pipeline created on or after the intake start counts.",
     lcCreated: "The lead deals the cohort holds. Deals created by hand and test deals count too, because the customer records do not say yet how a deal was made.",
     lcAge: "A number of days after each deal was created. A cohort shows a figure at an age once every deal in it is that old; until then a dash.",
     lcAttempted: "The share of the cohort's deals with a first attempt by that age: an outbound call placed on the deal or its contacts, as Attempts per deal counts it.",
-    lcConversation: "The share with a conversation by that age: an attempt that was answered, with enough talk time and no tag that says the customer was not reached.",
-    lcOrdered: "The share whose contacts placed a first store order by that age, counted up to the days lead to order allows. Not the credit First orders gives the call center.",
-    lcLost: "The share closed lost by that age. A deal whose customer ordered another way before it closed counts as ordered, not lost.",
+    lcConversation: "The share with a conversation by that age: an attempt that connected, with enough talk time and no tag that means not reached or incorrect data, as Calls counts a conversation.",
+    lcOrdered: "The share whose contacts placed a first store order by that age. Orders count up to a set number of days after a deal is created. Not the credit First orders gives the call center.",
+    lcLost: "The share closed lost by that age. A deal whose customer ordered another way before it closed counts as not lost.",
     lcMedianDays: "The median days from creation to the first store order, over the cohort's deals that ordered.",
     lcNotCalled: "The cohort's open deals without an attempt, now.",
     lcChart: "Each line is a cohort: the share that ordered by each age it has reached. The newest cohorts only.",
+    // Funnel and Cancellations (addition 0008zb)
     fnCreated: "Sales deals created in the period, by the day they were created. Only the lead pipelines count; a pipeline of orders is left out.",
     fnWon: "Sales deals whose current stage counts as won, by the day they closed.",
     fnLost: "Sales deals whose current stage counts as lost, by the day they closed. A lost deal whose customer ordered another way is lost here too.",
@@ -2444,7 +2446,7 @@ const en = {
     cohorts: "Lead cohorts",
     cohortsIntro: "The ages at which Lead cohorts follows each cohort, in days after a deal is created.",
     cohorts_lead_ages_days: "Ages (days after creation)",
-    agesHint: "One to six increasing whole numbers separated by commas, such as 1,7,30,60,90. The largest is at most {max}, the days lead to order counts",
+    agesHint: "One to six increasing whole numbers separated by commas, such as 1,7,30,60,90. The largest is at most {max}: orders count up to {max} days after a deal is created",
     agesProblem: "Check the value: one to six increasing whole numbers, the largest at most {max}",
   },
   configAppLinks: {
@@ -4561,7 +4563,7 @@ const nl: Copy = {
     colCreated: "Aangemaakte deals",
     colAge: "{n} dagen",
     colAgeOne: "1 dag",
-    colMedianDays: "Dagen tot bestelling",
+    colMedianDays: "Dagen tot winkelbestelling",
     colNotCalled: "Nog niet gebeld",
     partial: "Deels",
     partialTitle: "Alleen de deals aangemaakt binnen de gekozen data tellen",
@@ -5141,9 +5143,9 @@ const nl: Copy = {
     lcCreated: "De leaddeals in het cohort. Met de hand aangemaakte deals en testdeals tellen ook mee, omdat de klantregistratie nog niet zegt hoe een deal is gemaakt.",
     lcAge: "Een aantal dagen nadat elke deal is aangemaakt. Een cohort toont een cijfer bij een leeftijd zodra elke deal zo oud is; tot dan een streepje.",
     lcAttempted: "Het deel van de deals van het cohort met een eerste poging op die leeftijd: een uitgaand gesprek met de deal of zijn contacten, zoals Pogingen per deal het telt.",
-    lcConversation: "Het deel met een gevoerd gesprek op die leeftijd: een poging die is aangenomen, met genoeg gesprekstijd en zonder tag die zegt dat de klant niet bereikt is.",
-    lcOrdered: "Het deel waarvan de contacten een eerste bestelling in de winkel deden op die leeftijd, geteld tot het aantal dagen dat lead tot bestelling toestaat. Niet wat Eerste bestellingen aan het callcenter toerekent.",
-    lcLost: "Het deel dat op die leeftijd verloren is. Een deal waarvan de klant op een andere manier bestelde voordat hij sloot, telt als besteld, niet als verloren.",
+    lcConversation: "Het deel met een gevoerd gesprek op die leeftijd: een poging die verbonden is, met genoeg gesprekstijd en zonder tag die 'niet bereikt' of 'onjuiste gegevens' betekent, zoals Gesprekken een gevoerd gesprek telt.",
+    lcOrdered: "Het deel waarvan de contacten een eerste bestelling in de winkel deden op die leeftijd. Bestellingen tellen tot een vast aantal dagen nadat een deal is aangemaakt. Niet wat Eerste bestellingen aan het callcenter toerekent.",
+    lcLost: "Het deel dat op die leeftijd verloren is. Een deal waarvan de klant op een andere manier bestelde voordat hij sloot, telt niet als verloren.",
     lcMedianDays: "De mediaan van de dagen van aanmaak tot de eerste bestelling in de winkel, over de deals van het cohort die besteld hebben.",
     lcNotCalled: "De open deals van het cohort zonder poging, nu.",
     lcChart: "Elke lijn is een cohort: het deel dat besteld heeft bij elke leeftijd die het heeft bereikt. Alleen de nieuwste cohorten.",
@@ -5760,7 +5762,7 @@ const nl: Copy = {
     cohorts: "Leadcohorten",
     cohortsIntro: "De leeftijden waarop Leadcohorten elk cohort volgt, in dagen nadat een deal is aangemaakt.",
     cohorts_lead_ages_days: "Leeftijden (dagen na aanmaak)",
-    agesHint: "Eén tot zes oplopende hele getallen gescheiden door komma's, zoals 1,7,30,60,90. De grootste is hoogstens {max}, het aantal dagen dat lead tot bestelling telt",
+    agesHint: "Eén tot zes oplopende hele getallen gescheiden door komma's, zoals 1,7,30,60,90. De grootste is hoogstens {max}: bestellingen tellen tot {max} dagen nadat een deal is aangemaakt",
     agesProblem: "Controleer de waarde: één tot zes oplopende hele getallen, de grootste hoogstens {max}",
   },
   configAppLinks: {

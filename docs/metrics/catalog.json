@@ -49437,7 +49437,7 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
@@ -49454,7 +49454,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "The created deals of every cohort add up to cma.lead_deals_of's count of the range (121's B4). A pipeline marked both lead and order counts here (lead_deals_of) though it is no sales deal: never attempted, never lost. Funnel's 'Deals created' counts the sales deals only, so it can be lower by those deals."
     },
@@ -49715,12 +49716,20 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
           "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
         }
       ],
       "docs": [
@@ -49732,7 +49741,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. An attempt in the pre-window (before the creation) counts at every age. A deal outside the sales deals (a pipeline marked lead and order) is never attempted."
     },
@@ -50026,11 +50036,27 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "A tag that means not reached set on Configuration \u2192 Sources, Tags (without one, Conversation counts on talk time alone; the Tags section says so)",
+          "check": null
+        },
+        {
+          "item": "A tag that means incorrect data set on Configuration \u2192 Sources, Tags on the tags agents put on a wrong number or incorrect contact data (without one, such a call counts by its talk time alone)",
           "check": null
         }
       ],
@@ -50043,7 +50069,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. A deal has a conversation here exactly when Attempts per deal names a first conversation for it (121's B3)."
     },
@@ -50258,12 +50285,16 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
           "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
         }
       ],
       "docs": [
@@ -50275,7 +50306,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "At the largest age the share equals lead_to_order_of's share ordered within that age (121's B6). An order through a won order deal (Self Serve) is not lead to order and does not count here; Attempts per deal's outcome 'ordered' does count it, so the two can differ. Decision log, 30 Oct 2026: Ordered in a lead cohort is lead to order."
     },
@@ -50499,7 +50531,7 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
@@ -50516,7 +50548,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "null: 'lost' is cma.sales_deals_of's outcome, which compares the close with the first order of the deal's contacts (a won order deal or a store order); no faithful independent query is short enough. Closest check: in Studio, cma_read.lead_cohorts' lost_at against cma_read.attempts_per_deal's outcome = 'lost' and closed_at for the same deals. A lost deal without a closing time counts at no age. A deal lost and later ordered counts in both Lost and Ordered."
     },
@@ -50524,7 +50557,7 @@
       "key": "cohorts.lead.median_days_to_order",
       "surface": "report",
       "page": "/reports/lead-cohorts",
-      "tile": "Days to order",
+      "tile": "Days to store order",
       "title": {
         "en": "Median days to order per cohort",
         "nl": "Mediane dagen tot bestelling per cohort"
@@ -50726,12 +50759,16 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
           "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
         }
       ],
       "docs": [
@@ -50743,9 +50780,10 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
-      "notes": "null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days."
+      "notes": "null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days. The header says 'Days to store order' because First orders' 'Days to order' is another figure: the median from the first touch to the attributed first order."
     },
     {
       "key": "cohorts.lead.not_called_yet",
@@ -50995,12 +51033,20 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
           "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
         }
       ],
       "docs": [
@@ -51012,7 +51058,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. Speed to lead's 'Not called yet' (open, not called) reads the first CRM call instead (definitions.md, Speed to lead, As built), so the two can differ."
     },
@@ -51221,12 +51268,16 @@
           "check": "pipeline_unreviewed"
         },
         {
-          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals",
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
           "check": null
         },
         {
           "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
           "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
         }
       ],
       "docs": [
@@ -51238,7 +51289,8 @@
         "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
       ],
       "status": [
-        "verified"
+        "verified",
+        "prerequisite_missing"
       ],
       "notes": "The same figures as cohorts.lead.ordered for the unsplit cohorts. Colours in the series order of Pulse4all-Style 7.7; the seventh and eighth line repeat the first two, dashed."
     },
