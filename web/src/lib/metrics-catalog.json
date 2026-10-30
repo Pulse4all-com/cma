@@ -49555,7 +49555,7 @@
         "en": "Share ordered by age",
         "nl": "Deel besteld per leeftijd"
       },
-      "definition": "Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (lead to order) at or before n days after creation. Not First orders' attribution.",
+      "definition": "Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (within lead_to_order.max_days after creation) at or before n days after creation. Not First orders' attribution.",
       "formula": "ordered(n) = count(deals with lead_to_order's order_created_at <= created_at + n days) / created; lead to order = the first store order of the deal's contacts, not a test, not cancelled, not deleted, created at or after the deal and within lead_to_order.max_days (cma.lead_to_order_of); null while not every deal is n days old, and at an age above lead_to_order.max_days",
       "unit": "share",
       "grain": [
@@ -50027,10 +50027,10 @@
       "page": "/reports/lead-cohorts",
       "tile": "Days to store order",
       "title": {
-        "en": "Median days to order per cohort",
-        "nl": "Mediane dagen tot bestelling per cohort"
+        "en": "Median days to store order per cohort",
+        "nl": "Mediane dagen tot winkelbestelling per cohort"
       },
-      "definition": "Lead cohorts: the median days from creation to the first store order (lead to order), over the cohort's deals that ordered (now).",
+      "definition": "Lead cohorts: the median days from creation to the first store order of the deal's contacts within lead_to_order.max_days, over the cohort's deals that ordered (now).",
       "formula": "median_days_to_order = round(percentile_cont(0.5) over lead_to_order_of.days_to_order of the cohort's ordered deals, 1); days_to_order = (order - creation) / 86400 s, rounded to 2",
       "unit": "days",
       "grain": [

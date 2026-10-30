@@ -25837,7 +25837,7 @@ null: Attempts per deal's attempts (the telephony link, the counted lines, the w
 
 **{n} days (Ordered)** on /reports/lead-cohorts · Share ordered by age (Deel besteld per leeftijd)
 
-Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (lead to order) at or before n days after creation. Not First orders' attribution.
+Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (within lead_to_order.max_days after creation) at or before n days after creation. Not First orders' attribution.
 
 **Formula as computed**
 
@@ -25999,9 +25999,9 @@ null: 'lost' is cma.sales_deals_of's outcome, which compares the close with the 
 
 #### `cohorts.lead.median_days_to_order`
 
-**Days to store order** on /reports/lead-cohorts · Median days to order per cohort (Mediane dagen tot bestelling per cohort)
+**Days to store order** on /reports/lead-cohorts · Median days to store order per cohort (Mediane dagen tot winkelbestelling per cohort)
 
-Lead cohorts: the median days from creation to the first store order (lead to order), over the cohort's deals that ordered (now).
+Lead cohorts: the median days from creation to the first store order of the deal's contacts within lead_to_order.max_days, over the cohort's deals that ordered (now).
 
 **Formula as computed**
 

@@ -280,7 +280,7 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
               ) : null}
             </span>
             <span className={`font-normal text-caption ${badAges ? "text-p4a-error" : "text-p4a-muted"}`}>
-              {(badAges ? t.agesProblem : t.agesHint).replace("{max}", maxText)}
+              {(badAges ? t.agesProblem : t.agesHint).replaceAll("{max}", maxText)}
             </span>
           </label>
         </div>
