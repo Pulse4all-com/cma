@@ -592,6 +592,10 @@
       "what": "Per lead: the first order it led to and days to order"
     },
     {
+      "name": "lead_cohorts",
+      "what": "Per lead deal: its ISO week and month of creation, age, first attempt and first conversation, outcome and time lost, first store order and days to order, not called yet (lead cohorts)"
+    },
+    {
       "name": "intake_per_day_v",
       "what": "Per day and market: forms, deals, tickets, calls, new customers, orders, renewals"
     },

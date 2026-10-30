@@ -170,6 +170,10 @@ const cases = [
   // device list's twelve headers
   ["manager", "/reports/maintenance", 16, 0],
   ["reader", "/reports/maintenance?view=components&bucket=past_due", 28, 0],
+  // Lead cohorts (addition 0008zm): the table's nine headers (the cohort, created deals, the five ages of the default setting,
+  // days to order, not called yet), by week and by month split per market
+  ["manager", "/reports/lead-cohorts", 9, 0],
+  ["reader", "/reports/lead-cohorts?period=month&split=market&measure=ordered", 9, 0],
 ];
 let headers = 0;
 let tiles = 0;
@@ -257,9 +261,11 @@ let barCards = 0;
 }
 
 // Funnel and Cancellations (addition 0008zb): each card with an intro (per stage, per pipeline, why deals are lost and
-// never a lead; per market and the reasons) names its figure in one described mark at the end of its intro
+// never a lead; per market and the reasons) names its figure in one described mark at the end of its intro; Lead cohorts
+// (addition 0008zm) its table's and its chart's
 let funnelIntros = 0;
-for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2], ["/reports/reviews?range=month", 6]]) {
+for (const [path, want] of [["/reports/funnel?range=month", 4], ["/reports/cancellations?range=month", 2], ["/reports/reviews?range=month", 6],
+  ["/reports/lead-cohorts", 2]]) {
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, extraHTTPHeaders: { "x-cma-mock-subject": "manager" } });
   const p = await ctx.newPage();
   await p.goto(BASE + path);

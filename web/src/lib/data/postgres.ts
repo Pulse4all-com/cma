@@ -21,6 +21,7 @@ import type {
   AttemptBucket, AttemptFigures, AttemptGroupRow, AttemptListRow, AttemptOutcomeRow, AttemptPerson, AttemptSettings, AttemptsPerAgent, AttemptsReport,
   DealAttempt, LineStoredCalls, TagMeaning,
   CancellationFigures, CancellationsReport, ReviewFigures, ReviewLinkLevel, ReviewMarketState, ReviewsReport, DealPerson,
+  CohortAge, LeadCohortRow, LeadCohortsReport,
   MaintenanceBasis, MaintenanceReport, MaintenanceRow, MaintenanceRows, DealPersonFigures, DealsPerPerson, FunnelFigures, FunnelLists, FunnelReport, FunnelStageRow,
   LostFigures, LostGroupRow, LostReasonsReport, ReasonState, RecordKind, RecordKindConfig,
 } from "./types";
@@ -1193,6 +1194,23 @@ type FunnelStageDb = {
   reads_times: boolean; entered: number | null; still_there: number | null; moved_on: number | null; timed: number | null; median_days: number | null;
   reached_won: number | null; won_share: number | null; entered_previous: number | null;
 };
+/** cma.lead_cohorts_report (addition 0008zm): one cohort or one group of it, with its ages */
+type LeadCohortRowDb = {
+  key: string; label: string; start: string; end: string; group: string | null; partial: boolean; created: number; not_called_yet: number;
+  ordered: number; median_days_to_order: number | null; ages: CohortAge[];
+};
+type LeadCohortsDb = FunnelListsDb & {
+  ages: number[]; lead_to_order_days: number; history_start: string | null; cohorts: LeadCohortRowDb[]; rows: LeadCohortRowDb[];
+};
+
+function toLeadCohortRow(r: LeadCohortRowDb): LeadCohortRow {
+  return {
+    key: r.key, label: r.label, start: r.start, end: r.end, group: r.group, partial: r.partial, created: r.created, notCalledYet: r.not_called_yet,
+    ordered: r.ordered, medianDaysToOrder: r.median_days_to_order === null ? null : Number(r.median_days_to_order),
+    ages: r.ages.map((a) => ({ age: a.age, mature: a.mature, attempted: a.attempted, conversation: a.conversation, ordered: a.ordered, lost: a.lost })),
+  };
+}
+
 type FunnelPageDb = FunnelListsDb & {
   stages: FunnelStageDb[];
   by_pipeline: { rows: { key: string; label: string; current: FunnelFiguresDb; previous: FunnelFiguresDb }[];
@@ -2317,6 +2335,20 @@ export const postgresData: CmaData = {
         byChannel: j.channels.map((c) => ({ channel: c.channel, name: c.name, market: c.market, current: toReviewFigures(c.current), previous: toReviewFigures(c.previous) })),
         linkLevels: j.link_levels, inviteEvents: j.invite_events.map((e) => ({ eventType: e.event_type, reviews: e.reviews, previous: e.previous })),
         marketStates: j.market_states, historyStart: j.history_start, negativeMaxRating: j.negative_max_rating, isSetUp: j.is_set_up, markets: j.filter_markets,
+      };
+    });
+  },
+
+  async getLeadCohorts(me, range, period, split, filter): Promise<LeadCohortsReport> {
+    assertReportRange(range);
+    return withTenant(ctx(me), async (q) => {
+      // the function checks the permission, the 92 days, the period, the split and the filters first; one pass of
+      // cma.lead_cohort_rows_of (addition 0008zm)
+      const j = one((await q.query<{ j: LeadCohortsDb }>(`select cma.lead_cohorts_report($1::date, $2::date, $3, $4, $5, $6, $7) as j`,
+        [range.from, range.to, period, filter.market, filter.sourceChannel, split, filter.pipeline])).rows, "lead_cohorts_report").j;
+      return {
+        ...range, period, split, filter, ages: j.ages, leadToOrderDays: j.lead_to_order_days, historyStart: j.history_start,
+        cohorts: j.cohorts.map(toLeadCohortRow), rows: j.rows.map(toLeadCohortRow), ...funnelListsOf(j),
       };
     });
   },

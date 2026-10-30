@@ -195,6 +195,11 @@ const pages = [
   { path: "/reports/maintenance", subject: "manager", tables: true },
   { path: "/reports/maintenance?view=components&bucket=past_due", subject: "reader", tables: true },
   { path: "/reports/maintenance", subject: "invest-analyst" },
+  // Lead cohorts (addition 0008zm): the table by week with its dashes and the chart's lines; by month split per source with the
+  // ordered share; a tenant whose deals are never called
+  { path: "/reports/lead-cohorts", subject: "manager", tables: true },
+  { path: "/reports/lead-cohorts?period=month&split=source&measure=ordered", subject: "reader", tables: true },
+  { path: "/reports/lead-cohorts", subject: "invest-analyst", tables: true },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
   { path: "/campaigns", subject: "manager" },

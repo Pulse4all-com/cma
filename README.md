@@ -76,6 +76,7 @@ References elsewhere of the form `(README, <section>)` mean the section of that 
 | Data model: asset register (addition 0008zi) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: asset sync (addition 0008zj) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Data model: subscriptions (addition 0008zl) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
+| Data model: lead cohorts (addition 0008zm) | [docs/architecture/data-model/0008.md](docs/architecture/data-model/0008.md) |
 | Device import: a snapshot of the asset register's CSV export (addition 0008zi; the fallback since 0008zj) | [docs/import/devices.md](docs/import/devices.md) |
 | API: the web app's data layer (since 5 October 2026) | [docs/architecture/api.md](docs/architecture/api.md) |
 | **Source of truth** | README.md (this file) |
