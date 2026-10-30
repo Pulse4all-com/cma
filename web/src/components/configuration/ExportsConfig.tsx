@@ -5,7 +5,8 @@
  * the chosen format, and the two minute settings (adherence tolerance, the forgotten clock-out
  * grace); since addition 0008j also the seconds of talk time from which an outbound call is connected,
  * which the telephony connection's Sources page links to; since addition 0008l the two invitation settings
- * (how many days a link works, the email domains invitations may go to). Use default resets a value to the catalog's.
+ * (how many days a link works, the email domains invitations may go to); since addition 0008zm the ages at which Reports, Lead
+ * cohorts follows each cohort, at most the days lead to order counts. Use default resets a value to the catalog's.
  * Every value goes through /api/v1/configuration/settings and is validated by the database against
  * its catalog.
  */
@@ -16,6 +17,7 @@ import {
   EXPORT_SETTING_KEYS, EXPORT_SETTING_VALUES, MINUTE_SETTING_KEYS, SECOND_SETTING_KEYS, exportPreview, parseMinutes, settingAnchor,
   type ExportSettingKey, type MinuteSettingKey, type SecondSettingKey,
 } from "@/lib/configuration";
+import { LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, parseLeadAges } from "@/lib/cohorts";
 import { FOLLOW_UP_SETTING_KEYS, parseFollowUpSetting, type FollowUpSettingKey } from "@/lib/follow-up";
 import { normaliseDomains, parseValidDays } from "@/lib/invitations";
 import { Button } from "../primitives";
@@ -41,6 +43,8 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
   const [domains, setDomains] = useState<string | undefined>(undefined);
   // the Follow-up settings (0008o), each saved on blur once it parses, as the minute settings
   const [followUp, setFollowUp] = useState<Partial<Record<FollowUpSettingKey, string>>>({});
+  // the lead cohorts' ages (0008zm), saved on blur once they parse, as the follow-up settings
+  const [ages, setAges] = useState<string | undefined>(undefined);
 
   async function saveFollowUp(key: FollowUpSettingKey) {
     const text = followUp[key];
@@ -98,6 +102,19 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
     await save(() => send("PUT", "/api/v1/configuration/settings", { key: "auth.invitation_email_domains", value: v === "" ? null : v }));
     setDomains(undefined);
   }
+
+  const maxDays = Number(valueOf(LEAD_TO_ORDER_SETTING)?.value ?? NaN);
+  const agesMax = Number.isFinite(maxDays) ? maxDays : null;
+  async function saveAges() {
+    if (ages === undefined) return;
+    const v = parseLeadAges(ages, agesMax);
+    if (v === null) return;
+    if (v !== valueOf(LEAD_AGES_SETTING)?.value) await save(() => send("PUT", "/api/v1/configuration/settings", { key: LEAD_AGES_SETTING, value: v }));
+    setAges(undefined);
+  }
+  const agesSetting = valueOf(LEAD_AGES_SETTING);
+  const badAges = ages !== undefined && parseLeadAges(ages, agesMax) === null;
+  const maxText = agesMax === null ? "" : String(agesMax);
 
   const daysSetting = valueOf("auth.invitation_valid_days");
   const domainsSetting = valueOf("auth.invitation_email_domains");
@@ -240,6 +257,32 @@ export function ExportsConfig({ settings, copy }: { settings: TenantSetting[]; c
               </label>
             );
           })}
+        </div>
+      </section>
+
+      <section data-testid="cohort-settings">
+        <h2 className="mb-1 text-panel font-semibold text-p4a-heading">{t.cohorts}</h2>
+        <p className="mb-4 max-w-3xl text-small text-p4a-muted">{t.cohortsIntro}</p>
+        <div className="grid grid-cols-2 gap-6">
+          <label id={settingAnchor(LEAD_AGES_SETTING)} className={`${label} scroll-mt-24`}>
+            <span>
+              {t.cohorts_lead_ages_days}
+              {agesSetting?.isDefault ? <span className="ml-2 font-normal text-caption text-p4a-muted">({t.isDefault})</span> : null}
+            </span>
+            <span className="flex gap-2">
+              <input className={`${field} w-48 tabular-nums ${badAges ? "border-p4a-error" : ""}`} inputMode="text" maxLength={40}
+                value={ages ?? agesSetting?.value ?? ""} onChange={(e) => setAges(e.target.value)} onBlur={saveAges}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+              {agesSetting && !agesSetting.isDefault ? (
+                <Button variant="text" size="md" onClick={() => save(() => send("PUT", "/api/v1/configuration/settings", { key: LEAD_AGES_SETTING, value: null }))}>
+                  {t.resetToDefault}
+                </Button>
+              ) : null}
+            </span>
+            <span className={`font-normal text-caption ${badAges ? "text-p4a-error" : "text-p4a-muted"}`}>
+              {(badAges ? t.agesProblem : t.agesHint).replace("{max}", maxText)}
+            </span>
+          </label>
         </div>
       </section>
     </div>

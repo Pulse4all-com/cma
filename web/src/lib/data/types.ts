@@ -2079,6 +2079,66 @@ export interface MaintenanceCell {
   exchanges: number;
 }
 
+/** Lead cohorts (addition 0008zm): the lead deals grouped by the ISO week or the month of their creation's business date */
+export type CohortPeriod = "week" | "month";
+/** A cohort's rows within it: none, per market or per source channel */
+export type CohortSplit = "none" | "market" | "source";
+/** The figure the table shows per age */
+export type CohortMeasure = "attempted" | "conversation" | "ordered" | "lost";
+
+/**
+ * One age of a cohort (cohorts.lead_ages_days): mature once every deal of the cohort is that many days old; while it is
+ * not, every figure is null. `ordered` is null too at an age above lead_to_order.max_days
+ */
+export interface CohortAge {
+  age: number;
+  mature: boolean;
+  attempted: number | null;
+  conversation: number | null;
+  ordered: number | null;
+  lost: number | null;
+}
+
+/** One cohort, or one market or source channel of it (cma.lead_cohorts_from); counts only */
+export interface LeadCohortRow {
+  /** The period's first day: the ISO week's Monday or the month's first */
+  key: DateKey;
+  /** The ISO week as IYYY-Www, the month as YYYY-MM */
+  label: string;
+  start: DateKey;
+  end: DateKey;
+  /** The market or source channel of a split row; null without a split, and for the deals without a source channel */
+  group: string | null;
+  /** The range cuts the period: only the deals created in the range count */
+  partial: boolean;
+  created: number;
+  /** Open deals without an attempt, now */
+  notCalledYet: number;
+  /** Deals ordered now (lead to order) */
+  ordered: number;
+  medianDaysToOrder: number | null;
+  ages: CohortAge[];
+}
+
+/** Reports → Lead cohorts (cma.lead_cohorts_report): ids, codes and counts only, no deal list */
+export interface LeadCohortsReport extends FunnelLists {
+  from: DateKey;
+  to: DateKey;
+  period: CohortPeriod;
+  split: CohortSplit;
+  filter: FunnelFilter;
+  /** cohorts.lead_ages_days */
+  ages: number[];
+  /** lead_to_order.max_days: an order counts up to that many days after the creation */
+  leadToOrderDays: number;
+  /** intake.start_date: the lead deals' history starts here */
+  historyStart: DateKey | null;
+  /** Per cohort newest first, never split (the table without a split and the chart) */
+  cohorts: LeadCohortRow[];
+  /** Per cohort and market or source channel, newest first; empty without a split */
+  rows: LeadCohortRow[];
+}
+
 /** Reports → Maintenance (addition 0008zi, cma.maintenance_page): team figures only, never per person; ids, codes and counts only */
 export interface MaintenanceReport {
   filter: MaintenanceFilter;
@@ -3367,6 +3427,9 @@ export interface CmaData {
   getCancellations(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<CancellationsReport>;
   /** Reports → Reviews (cma.reviews_page, addition 0008ze; reports.view or performance.team; at most 92 days) */
   getReviews(me: Principal, range: HoursRange, group: FunnelGroup, market: string | null): Promise<ReviewsReport>;
+  // ---- Lead cohorts (addition 0008zm): the database checks the permission on every call (CMA06); at most 92 days of creation dates
+  /** Reports → Lead cohorts in one read (cma.lead_cohorts_report): reports.view or performance.team, as the funnel */
+  getLeadCohorts(me: Principal, range: HoursRange, period: CohortPeriod, split: CohortSplit, filter: FunnelFilter): Promise<LeadCohortsReport>;
   // ---- Maintenance (addition 0008zi): the database checks the permission on every call (CMA06)
   /** Reports → Maintenance in one read (cma.maintenance_page): reports.view or performance.team; a horizon from the current month or later, 1 to 24 months */
   getMaintenance(me: Principal, filter: MaintenanceFilter): Promise<MaintenanceReport>;

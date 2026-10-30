@@ -2,7 +2,7 @@
 
 Generated from [catalog.json](catalog.json) by `web/scripts/metrics-doc.mjs`; never edited by hand (`verify:metrics` fails when this file is stale). One section per figure the Workspace shows, grouped by surface, page and figure: the definition, the formula as the code computes it, the sources with their cadence, the time rules, the settings, who may see it, an independent verification query and the audit status. The audit's findings are in [AUDIT-2026-10-23.md](AUDIT-2026-10-23.md); the catalog is shown on Configuration → Metrics.
 
-544 figures. Statuses: verified 440 · discrepancy 18 · ambiguous 35 · prerequisite_missing 58 · cadence_unconfirmed 68.
+552 figures. Statuses: verified 448 · discrepancy 18 · ambiguous 35 · prerequisite_missing 58 · cadence_unconfirmed 68.
 
 ## Welcome
 
@@ -25603,6 +25603,623 @@ device.source_id
 **Notes**
 
 A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows).
+
+### /reports/lead-cohorts
+
+#### `cohorts.lead.created`
+
+**Created deals** on /reports/lead-cohorts · Created deals per cohort (Aangemaakte deals per cohort)
+
+Lead cohorts: the lead deals created in the cohort's ISO week or month (within the chosen dates), per cohort and, with a split, per market or source channel.
+
+**Formula as computed**
+
+```
+created = count(lead deals of cma.lead_deals_of whose creation business date lies in the cohort's period and in [from, to])
+```
+
+**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+s as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd),
+d as (
+  select r.id, (r.source_created_at at time zone t.zone)::date as created_date
+  from cma.crm_record r cross join t cross join s
+  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id
+       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id
+  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null
+    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)
+    and r.source_created_at >= (s.sd::timestamp at time zone t.zone))
+select date_trunc('week', created_date)::date as cohort, count(*) as created
+from d where created_date between :from and :to group by 1 order by 1 desc
+```
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+The created deals of every cohort add up to cma.lead_deals_of's count of the range (121's B4). A pipeline marked both lead and order counts here (lead_deals_of) though it is no sales deal: never attempted, never lost. Funnel's 'Deals created' counts the sales deals only, so it can be lower by those deals.
+
+#### `cohorts.lead.attempted`
+
+**{n} days (Attempted)** on /reports/lead-cohorts · Share attempted by age (Deel met een poging per leeftijd)
+
+Lead cohorts, measure Attempted: of the cohort's deals, the share whose first attempt came at or before n days after the deal's creation; the count in the cell's title.
+
+**Formula as computed**
+
+```
+attempted(n) = count(deals with first_attempt_at <= created_at + n days) / created; first_attempt_at = the earliest attempt of cma.deal_attempts_of under attempts.source in Attempts per deal's window (cma.sales_deals_of: from created_at - speed_to_lead.pre_window_minutes to the close, the first order or now); null while not every deal is n days old
+```
+
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.crm_call` | direction, occurred_at, outcome_ref, owner_ref, source_id, source_deleted_at | HubSpot | HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.call_link` | crm_call_id, telephony_call_id, unlinked_at | CMA | Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours | every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours) |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, number_ref, user_ref, source_deleted_at, source_id, connection_id | Aircall | Aircall webhook per call event -> ingest -> call read back | Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand |
+| `cma.telephony_number` | number_ref, is_counted | Aircall | Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts) | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `cohorts.lead_ages_days` | 1,7,30,60,90 | 1,7,30,60,90 (default; seed 02 sets none) |
+| `lead_to_order.max_days` | 90 | 90 (default; seed 02 sets none) |
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+| `attempts.source` | telephony | telephony (default) |
+| `speed_to_lead.pre_window_minutes` | 10 | 10 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `cma.sales_deals_of` (0008z); `cma.deal_attempts_of` (0008zc); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. An attempt in the pre-window (before the creation) counts at every age. A deal outside the sales deals (a pipeline marked lead and order) is never attempted.
+
+#### `cohorts.lead.conversation`
+
+**{n} days (With a conversation)** on /reports/lead-cohorts · Share with a conversation by age (Deel met een gevoerd gesprek per leeftijd)
+
+Lead cohorts, measure With a conversation: of the cohort's deals, the share whose first attempt that is a Conversation came at or before n days after creation.
+
+**Formula as computed**
+
+```
+conversation(n) = count(deals with first_conversation_at <= created_at + n days) / created; first_conversation_at = the earliest attempt with cma.is_conversation (connected, at least calls.conversation_min_talk_seconds, no tag meaning not reached or incorrect data); null while not every deal is n days old
+```
+
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.crm_call` | direction, occurred_at, outcome_ref, owner_ref, source_id, source_deleted_at | HubSpot | HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.call_link` | crm_call_id, telephony_call_id, unlinked_at | CMA | Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours | every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours) |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, number_ref, user_ref, source_deleted_at, source_id, connection_id | Aircall | Aircall webhook per call event -> ingest -> call read back | Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand |
+| `cma.telephony_number` | number_ref, is_counted | Aircall | Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts) | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.telephony_call_tag` | call_source_id, tag_ref, untagged_at | Aircall | with the call's own write (the call's whole current tag set, closed/opened by difference at versionAt): webhook read-back, reconcile and backfill via cma.ingest_upsert_telephony_calls() | event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *') |
+| `cma.telephony_tag` | tag_ref, name, is_counted, meaning | Aircall | GET /v1/tags via ingest-sweep at most hourly per connection; a tag first seen on a call joins the catalog at the call write (counted by default); is_counted and meaning (cma.set_telephony_tag_meaning, 0008zc; configuration only, the ingest never writes it) set on Configuration → Sources, Tags | at most hourly per connection inside ingest-sweep (every minute, docs/ingest/deploy.sh); the meaning on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `cohorts.lead_ages_days` | 1,7,30,60,90 | 1,7,30,60,90 (default; seed 02 sets none) |
+| `lead_to_order.max_days` | 90 | 90 (default; seed 02 sets none) |
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+| `attempts.source` | telephony | telephony (default) |
+| `speed_to_lead.pre_window_minutes` | 10 | 10 (default) |
+| `calls.conversation_min_talk_seconds` | 30 | 30 (default) |
+| `telephony.connected_min_seconds` | 0 | 0 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `cma.sales_deals_of` (0008z); `cma.deal_attempts_of` (0008zc); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. A deal has a conversation here exactly when Attempts per deal names a first conversation for it (121's B3).
+
+#### `cohorts.lead.ordered`
+
+**{n} days (Ordered)** on /reports/lead-cohorts · Share ordered by age (Deel besteld per leeftijd)
+
+Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (lead to order) at or before n days after creation. Not First orders' attribution.
+
+**Formula as computed**
+
+```
+ordered(n) = count(deals with lead_to_order's order_created_at <= created_at + n days) / created; lead to order = the first store order of the deal's contacts, not a test, not cancelled, not deleted, created at or after the deal and within lead_to_order.max_days (cma.lead_to_order_of); null while not every deal is n days old, and at an age above lead_to_order.max_days
+```
+
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.commerce_order` | customer_source_id, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook -> read-back; nightly check; backfill per store | webhook read-back within seconds (docs/datamap/catalog.json) |
+| `cma.crm_contact_ref` | contact_id, system, external_id | HubSpot | With every contact read | with the contact |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `cohorts.lead_ages_days` | 1,7,30,60,90 | 1,7,30,60,90 (default; seed 02 sets none) |
+| `lead_to_order.max_days` | 90 | 90 (default; seed 02 sets none) |
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- :age is one of cohorts.lead_ages_days; the cohort's figure counts only while every deal is :age days old
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+s as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd, cma.setting_of(:tenant_id, 'lead_to_order.max_days')::int as max_days),
+d as (
+  select r.id, r.connection_id, r.source_created_at as created_at, (r.source_created_at at time zone t.zone)::date as created_date,
+         array(select x from (select r.contact_source_id as x where r.contact_source_id is not null
+                              union select a.to_id from cma.crm_association a
+                              where a.tenant_id = r.tenant_id and a.connection_id = r.connection_id and a.from_type = 'deal'
+                                and a.from_id = r.source_id and a.to_type = 'contact' and a.removed_at is null) c) as contacts
+  from cma.crm_record r cross join t cross join s
+  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id
+       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id
+  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null
+    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)
+    and r.source_created_at >= (s.sd::timestamp at time zone t.zone)),
+o as (
+  select d.id, min(co.source_created_at) as ordered_at
+  from d cross join s
+  join cma.crm_contact k on k.tenant_id = :tenant_id and k.connection_id = d.connection_id and k.source_id = any (d.contacts)
+  join cma.crm_contact_ref cr on cr.tenant_id = k.tenant_id and cr.contact_id = k.id
+  join cma.commerce_order co on co.tenant_id = :tenant_id and co.source_system = cr.system and co.customer_source_id = cr.external_id
+  where not co.is_test and co.cancelled_at is null and co.source_deleted_at is null
+    and co.source_created_at >= d.created_at and co.source_created_at <= d.created_at + make_interval(days => s.max_days)
+  group by d.id)
+select date_trunc('week', d.created_date)::date as cohort, count(*) as created,
+       count(*) filter (where o.ordered_at <= d.created_at + make_interval(days => :age)) as ordered_by_age,
+       bool_and(d.created_at + make_interval(days => :age) <= now()) as mature
+from d left join o on o.id = d.id
+where d.created_date between :from and :to group by 1 order by 1 desc
+```
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+At the largest age the share equals lead_to_order_of's share ordered within that age (121's B6). An order through a won order deal (Self Serve) is not lead to order and does not count here; Attempts per deal's outcome 'ordered' does count it, so the two can differ. Decision log, 30 Oct 2026: Ordered in a lead cohort is lead to order.
+
+#### `cohorts.lead.lost`
+
+**{n} days (Lost)** on /reports/lead-cohorts · Share lost by age (Deel verloren per leeftijd)
+
+Lead cohorts, measure Lost: of the cohort's deals, the share closed lost at or before n days after creation.
+
+**Formula as computed**
+
+```
+lost(n) = count(deals with cma.sales_deals_of outcome = 'lost' and closed_at <= created_at + n days) / created; outcome lost = the stage's outcome lost and no order ended the deal's window first; null while not every deal is n days old
+```
+
+**Unit** share · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.connection_stage` | source_stage_id, outcome, is_closed, label, display_order, read_times, status | HubSpot | Stage catalog read by ingest-sweep; outcome from the stage's probability unless set on Sources; read_times a person's choice on Sources (null follows the pipeline's counted flag) | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.commerce_order` | customer_source_id, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook -> read-back; nightly check; backfill per store | webhook read-back within seconds (docs/datamap/catalog.json) |
+| `cma.crm_contact_ref` | contact_id, system, external_id | HubSpot | With every contact read | with the contact |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `cma.sales_deals_of` (0008z); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+null: 'lost' is cma.sales_deals_of's outcome, which compares the close with the first order of the deal's contacts (a won order deal or a store order); no faithful independent query is short enough. Closest check: in Studio, cma_read.lead_cohorts' lost_at against cma_read.attempts_per_deal's outcome = 'lost' and closed_at for the same deals. A lost deal without a closing time counts at no age. A deal lost and later ordered counts in both Lost and Ordered.
+
+#### `cohorts.lead.median_days_to_order`
+
+**Days to order** on /reports/lead-cohorts · Median days to order per cohort (Mediane dagen tot bestelling per cohort)
+
+Lead cohorts: the median days from creation to the first store order (lead to order), over the cohort's deals that ordered (now).
+
+**Formula as computed**
+
+```
+median_days_to_order = round(percentile_cont(0.5) over lead_to_order_of.days_to_order of the cohort's ordered deals, 1); days_to_order = (order - creation) / 86400 s, rounded to 2
+```
+
+**Unit** days · **Grain** per_iso_week, per_month, per_market, per_source · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.commerce_order` | customer_source_id, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook -> read-back; nightly check; backfill per store | webhook read-back within seconds (docs/datamap/catalog.json) |
+| `cma.crm_contact_ref` | contact_id, system, external_id | HubSpot | With every contact read | with the contact |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `lead_to_order.max_days` | 90 | 90 (default; seed 02 sets none) |
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days.
+
+#### `cohorts.lead.not_called_yet`
+
+**Not called yet** on /reports/lead-cohorts · Not called yet per cohort (Nog niet gebeld per cohort)
+
+Lead cohorts: the cohort's deals that are open now and have no attempt, as Attempts per deal's open deals never attempted.
+
+**Formula as computed**
+
+```
+not_called_yet = count(deals with cma.sales_deals_of outcome = 'open' and attempts = 0), as of now
+```
+
+**Unit** count · **Grain** per_iso_week, per_month, per_market, per_source, now · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.crm_call` | direction, occurred_at, outcome_ref, owner_ref, source_id, source_deleted_at | HubSpot | HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.call_link` | crm_call_id, telephony_call_id, unlinked_at | CMA | Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours | every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours) |
+| `cma.telephony_call` | direction, started_at, answered_at, talk_seconds, number_ref, user_ref, source_deleted_at, source_id, connection_id | Aircall | Aircall webhook per call event -> ingest -> call read back | Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand |
+| `cma.telephony_number` | number_ref, is_counted | Aircall | Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts) | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+| `attempts.source` | telephony | telephony (default) |
+| `speed_to_lead.pre_window_minutes` | 10 | 10 (default) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `cma.sales_deals_of` (0008z); `cma.deal_attempts_of` (0008zc); `leadCohortFigures` in src/lib/cohorts.ts; `leadCohortRows` in src/lib/cohorts.ts; `default (LeadCohortsPage)` in src/app/reports/lead-cohorts/page.tsx
+
+**Verification query** none is faithful for this figure; the notes name the closest check
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. Speed to lead's 'Not called yet' (open, not called) reads the first CRM call instead (definitions.md, Speed to lead, As built), so the two can differ.
+
+#### `cohorts.lead.ordered_by_age`
+
+**Ordered by age** on /reports/lead-cohorts · Share ordered by age, per cohort (chart) (Deel besteld per leeftijd, per cohort (grafiek))
+
+Lead cohorts chart: one line per cohort (the newest eight, never split), the share ordered at each age the cohort has reached.
+
+**Formula as computed**
+
+```
+points(cohort) = [(n, ordered(n) / created) for each age n of cohorts.lead_ages_days where the cohort is mature at n and n <= lead_to_order.max_days]; the newest 8 cohorts
+```
+
+**Unit** share · **Grain** per_iso_week, per_month · **Status** verified
+
+**Sources**
+
+| Table | Columns | Owner | Fed by | Cadence |
+|---|---|---|---|---|
+| `cma.crm_record` | record_type, source_created_at, pipeline_id, stage_id, is_closed, closed_at, market, contact_source_id, owner_ref, source_deleted_at, source_channel | HubSpot | HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records() | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.connection_pipeline` | is_counted, is_lead, is_order, label, status | HubSpot | Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources | Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change |
+| `cma.crm_contact` | source_id, country | HubSpot | Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile | on reference; nightly reconcile |
+| `cma.crm_association` | from_type, from_id, to_type, to_id, removed_at | HubSpot | With every HubSpot read-back (deal/call to contact associations) | Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30) |
+| `cma.market` | code, time_zone, currency | CMA | Configuration -> Markets (tenant configuration) | on change |
+| `cma.commerce_order` | customer_source_id, source_created_at, is_test, cancelled_at, source_deleted_at | Shopify | Shopify webhook -> read-back; nightly check; backfill per store | webhook read-back within seconds (docs/datamap/catalog.json) |
+| `cma.crm_contact_ref` | contact_id, system, external_id | HubSpot | With every contact read | with the contact |
+| `cma.tenant_setting` | key, value | CMA | Configuration (cma.set_tenant_setting) | on change |
+
+**Filters**
+
+- tenant: cma.lead_cohorts_report under RLS + current tenant
+- population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)
+- period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only
+- page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters
+
+**Time** Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.
+
+**Settings**
+
+| Setting | Default | Pulse4all |
+|---|---|---|
+| `cohorts.lead_ages_days` | 1,7,30,60,90 | 1,7,30,60,90 (default; seed 02 sets none) |
+| `lead_to_order.max_days` | 90 | 90 (default; seed 02 sets none) |
+| `intake.start_date` | 2026-10-01 | 2026-10-01 (default; seed 02 sets none) |
+
+**Who may see it** `reports.view` or `performance.team`
+
+**Refresh** On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.
+
+**Computed in** `cma.lead_cohorts_report` (0008zm); `cma.lead_cohorts_report_of` (0008zm); `cma.lead_cohort_rows_of` (0008zm); `cma.lead_cohorts_of` (0008zm); `cma.lead_cohorts_from` (0008zm); `cma.lead_cohort_figures_from` (0008zm); `cma.lead_deals_of` (0007d); `cma.lead_to_order_of` (0007d); `cohortChartLines` in src/lib/cohorts.ts; `CohortChart` in src/components/CohortParts.tsx
+
+**Verification query** (Studio, with the tenant id and the period's business dates filled in)
+
+```sql
+-- :age is one of cohorts.lead_ages_days; the cohort's figure counts only while every deal is :age days old
+with t as (select timezone as zone from cma.tenant where id = :tenant_id),
+s as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd, cma.setting_of(:tenant_id, 'lead_to_order.max_days')::int as max_days),
+d as (
+  select r.id, r.connection_id, r.source_created_at as created_at, (r.source_created_at at time zone t.zone)::date as created_date,
+         array(select x from (select r.contact_source_id as x where r.contact_source_id is not null
+                              union select a.to_id from cma.crm_association a
+                              where a.tenant_id = r.tenant_id and a.connection_id = r.connection_id and a.from_type = 'deal'
+                                and a.from_id = r.source_id and a.to_type = 'contact' and a.removed_at is null) c) as contacts
+  from cma.crm_record r cross join t cross join s
+  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id
+       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id
+  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null
+    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)
+    and r.source_created_at >= (s.sd::timestamp at time zone t.zone)),
+o as (
+  select d.id, min(co.source_created_at) as ordered_at
+  from d cross join s
+  join cma.crm_contact k on k.tenant_id = :tenant_id and k.connection_id = d.connection_id and k.source_id = any (d.contacts)
+  join cma.crm_contact_ref cr on cr.tenant_id = k.tenant_id and cr.contact_id = k.id
+  join cma.commerce_order co on co.tenant_id = :tenant_id and co.source_system = cr.system and co.customer_source_id = cr.external_id
+  where not co.is_test and co.cancelled_at is null and co.source_deleted_at is null
+    and co.source_created_at >= d.created_at and co.source_created_at <= d.created_at + make_interval(days => s.max_days)
+  group by d.id)
+select date_trunc('week', d.created_date)::date as cohort, count(*) as created,
+       count(*) filter (where o.ordered_at <= d.created_at + make_interval(days => :age)) as ordered_by_age,
+       bool_and(d.created_at + make_interval(days => :age) <= now()) as mature
+from d left join o on o.id = d.id
+where d.created_date between :from and :to group by 1 order by 1 desc
+```
+
+**Fixture check** Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.
+
+**Data prerequisites**
+
+- Pipelines reviewed on Sources (counted/lead/order flags) (data quality check `pipeline_unreviewed`)
+- Creation source and test flag on deals (HubSpot record source, to map per CRM connection): missing, so cohorts include deals created by hand and test deals
+- Source channel filled on deals (crm_record.source_channel, mapped on Sources)
+
+**Documented in** features.md §5, Reports → Lead cohorts; kpis.md §1 and §12; api.md, GET /api/v1/reports/lead-cohorts; data-model/0008.md, Lead cohorts (0008zm); definitions.md, Cohort terms (Lead cohort, Cohort age, Mature); decisions.md, 30 Oct 2026 (Reports → Lead cohorts; Ordered in a lead cohort is lead to order)
+
+**Notes**
+
+The same figures as cohorts.lead.ordered for the unsplit cohorts. Colours in the series order of Pulse4all-Style 7.7; the seventh and eighth line repeat the first two, dashed.
 
 ### /reports/forms
 

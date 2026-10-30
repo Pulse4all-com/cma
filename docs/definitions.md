@@ -2,7 +2,7 @@
 
 Part of the CMA documentation (README.md, Documentation map).
 
-This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026 and the subscription terms of 28 October 2026 (Proposed); the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
+This file defines every term, data point and metric word the CMA uses, so the UI, the API, the SQL, the metric catalog and the docs say one word for one meaning. It starts with the call terms decided on 24 October 2026 and holds the legacy call terms and the review terms of 25 October 2026, the asset terms of 27 October 2026, the subscription terms of 28 October 2026 (Proposed) and the cohort terms of 30 October 2026; the other domains follow term by term (Domains still to define). The metric catalog (`docs/metrics/catalog.json`) defines figures; this file defines words.
 
 ## Conventions
 
@@ -795,6 +795,67 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
 | Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); no catalog key and no page yet |
 | As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Matches the definition |
+
+## Cohort terms
+
+Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts follows the lead deals of one ISO week or one month over time, at fixed ages. Kira confirms Pulse4all's ages and the period (docs/open-decisions.md, Lead cohort). The other cohorts of KPIs 12 (customers, agents) are defined when they are built.
+
+### Lead cohort
+
+| Field | Value |
+|---|---|
+| Term | Lead cohort (nl: Leadcohort; `nav.leadCohorts` "Lead cohorts", "Leadcohorten") |
+| Key | `lead_cohort`; catalog `cohorts.lead.*`; setting `cohorts.lead_ages_days`; SQL `cma.lead_cohorts_of`, `cma.lead_cohort_deal`, `cma.lead_cohorts_report`, `cma_read.lead_cohorts`; API `cohorts`, `rows`, `period` (`week`, `month`), `split` (`none`, `market`, `source`) |
+| Definition | Every lead deal created in one ISO week (Monday to Sunday) or one calendar month, by its creation's business date in the tenant's time zone, followed at the ages of `cohorts.lead_ages_days`: per age the share attempted, with a conversation, ordered and lost by then. |
+| Source | The deal and its creation from the CRM (HubSpot owns deals; `cma.lead_deals_of`); the attempts and conversations from Aircall through the Call link, as Attempts per deal reads them; the first store order of the deal's contacts from the shop (Shopify), as lead to order reads it; lost from the deal's stage outcome (the CRM); the source channel from the deal's mapped property; the ages from the tenant's setting (CMA) |
+| Counts / does not count | **Deals:** every deal of a counted lead pipeline, not deleted, created on or after `intake.start_date`; a pipeline marked both lead and order counts, its deals never attempted and never lost (they are no sales deals). Deals created by hand and test deals count too: deals carry no creation source and no test flag yet. **Attempted:** the deal's first Attempt at or before the age, in Attempts per deal's window (from the creation less `speed_to_lead.pre_window_minutes` to the close, the first order or now). **With a conversation:** the first of those attempts that is a Conversation. **Ordered:** lead to order, the first store order of the deal's contacts (not a test, not cancelled, not deleted) at or after the creation and within `lead_to_order.max_days`; not First orders' attribution, and a won order deal is no store order. **Lost:** the deal closed lost (the stage's outcome lost, and no order ended its window first) at or before the age; a lost deal without a closing time counts at no age. **Not called yet:** open now and no attempt |
+| Unit and display | Per cohort the created deals; per age a share of the created deals, its count in the cell's title; the median days to order (one decimal) over the deals ordered; the deals not called yet now. A dash at an age the cohort is not Mature at, and for Ordered at an age above `lead_to_order.max_days`. A cohort is labelled `IYYY-Www` or `YYYY-MM` with its first and last day, and "Part" when the chosen dates cut it |
+| Time rule | The creation's business date in the tenant's zone places a deal in its ISO week (Monday) and month, as Day; the figures by Cohort age, as of now |
+| Scope | The tenant's lead pipelines; the filters market, pipeline and source channel, as the Funnel's; a split per market or per source channel within each cohort; at most 92 days of creation dates per read. Team figures only, never per person |
+| Equivalent in the source system | None: a CMA measure joining the CRM's deals, Aircall's calls and the shop's orders |
+| Not to use | "Ordered" for First orders' attributed first order (docs/decisions.md, 30 Oct 2026); "cohort" for a group of a period report (a week of the Funnel is no cohort) |
+| Status | Decided; Pulse4all's ages and period for Kira to confirm (docs/open-decisions.md, Lead cohort) |
+| Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Reports → Lead cohorts (addition 0008zm)", "Ordered in a lead cohort is lead to order" and "Definitions: Lead cohort, Cohort age and Mature" |
+| Used by | `cohorts.lead.created`, `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.median_days_to_order`, `cohorts.lead.not_called_yet`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts; Configuration → Exports, Lead cohorts; `GET /api/v1/reports/lead-cohorts`; `cma_read.lead_cohorts` |
+| As built today | `cma.lead_cohorts_of` (`120`): one row per deal of `cma.lead_to_order_of` (over `cma.lead_deals_of`), its first attempt and first conversation from `cma.deal_attempts_of` under `attempts.source` in `cma.sales_deals_of`'s window (the arguments `cma.attempts_per_deal_of` gives it, so the two pages agree: 121's B3), its outcome and close from `cma.sales_deals_of`, its order and days to order from `cma.lead_to_order_of`, its source channel from `crm_record.source_channel`. `cma.lead_cohorts_report` groups them per ISO week or month (and per market or source channel), newest first, a market unknown and a deal without a source channel last. Deals carry no creation source and no test flag, so neither filter exists (Gaps D24 and I6). Attempts per deal's outcome ordered also counts a won order deal; Ordered here counts store orders only. With the 92-day limit a month view holds at most four cohorts |
+
+### Cohort age
+
+| Field | Value |
+|---|---|
+| Term | Cohort age (nl: Leeftijd; `leadCohorts.colAge` "{n} days", "{n} dagen"; `leadCohorts.ageAxis` "Days after creation", "Dagen na aanmaak") |
+| Key | setting `cohorts.lead_ages_days`; API `ages`, `age`; SQL `age_days` (`cma_read.lead_cohorts`) |
+| Definition | n days after a deal's creation: the moment `created_at` + n days. A fact counts at age n when it happened at or before that moment. A tenant's ages are `cohorts.lead_ages_days`, one to six increasing whole numbers, the largest at most `lead_to_order.max_days`. |
+| Source | The tenant's setting (CMA); the deal's creation time from the CRM |
+| Counts / does not count | Counts calendar days of the creation instant, never business days. An attempt in the pre-window (before the creation) counts at every age |
+| Unit and display | Days; a column per age, "1 day", "7 days" |
+| Time rule | From the creation instant, as `lead_to_order.max_days` counts its days (`created_at + make_interval(days => n)` in the database's session zone, UTC on Cloud SQL) |
+| Scope | Lead cohort |
+| Equivalent in the source system | None |
+| Not to use | business days for a Cohort age |
+| Status | Decided |
+| Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Definitions: Lead cohort, Cohort age and Mature" |
+| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts; Configuration → Exports, Lead cohorts |
+| As built today | `cma.lead_cohort_figures_from` (`120`) compares each fact with `created_at + make_interval(days => n)`; `age_days` in `cma_read.lead_cohorts` is the whole days of 24 hours since the creation. `cma.check_tenant_setting()` takes one to six increasing whole numbers (spaces dropped), the largest at most `lead_to_order.max_days`, and refuses `lead_to_order.max_days` below the largest age; a reset to a default is no write the check sees, so an age above `lead_to_order.max_days` shows Ordered as a dash. Matches the definition |
+
+### Mature
+
+| Field | Value |
+|---|---|
+| Term | Mature (no label of its own; `leadCohorts.immature` "Not every deal is {n} days old yet", "Nog niet elke deal is {n} dagen oud") |
+| Key | API `mature` |
+| Definition | A lead cohort (or one market or source channel of it) is mature at an age once every deal in it is that old. Until then its figures at that age are null and the page shows a dash with the hint. |
+| Source | The deals' creation times (the CRM) and now |
+| Counts / does not count | Each row on its own: a market of a cohort can be mature at an age where the whole cohort is not. A cohort whose week or month is still running can be mature at an age while later deals may still join it |
+| Unit and display | A flag; a dash with "Not every deal is {n} days old yet" |
+| Time rule | As of now (the read's time) |
+| Scope | Lead cohort |
+| Equivalent in the source system | None |
+| Not to use | None yet |
+| Status | Decided |
+| Decided | 30 October 2026 (Martin); docs/decisions.md, 30 Oct 2026, "Definitions: Lead cohort, Cohort age and Mature" |
+| Used by | `cohorts.lead.attempted`, `cohorts.lead.conversation`, `cohorts.lead.ordered`, `cohorts.lead.lost`, `cohorts.lead.ordered_by_age`; Reports → Lead cohorts |
+| As built today | `cma.lead_cohort_figures_from` (`120`): a row with deals whose every `created_at + n days` lies at or before now. Matches the definition |
 
 ## Retired words
 
