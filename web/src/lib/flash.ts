@@ -145,11 +145,54 @@ export function parseFilters(def: FlashOverviewDef, read: (key: string) => strin
   const out: Record<string, string> = {};
   for (const d of def.dims) {
     const v = read(`${FLASH_ADDRESS.filterPrefix}${d}`);
-    if (typeof v === "string" && v.length >= 1 && v.length <= 100) out[d] = v;
+    // a market filter is a market's code or unknown, as the database checks it (CMA04 otherwise): anything else dropped
+    if (typeof v === "string" && v.length >= 1 && v.length <= 100 && (d !== "market" || parseMarket(v) !== null)) out[d] = v;
   }
   const m = read(FLASH_ADDRESS.measure);
   if (typeof m === "string" && def.countMeasures.includes(m)) out.measure = m;
   return out;
+}
+
+/** The filters a breakdown cell opens: the row's dims and, for a count cell, its measure (null: the row's own link) */
+export function cellFilters(dims: Record<string, string>, measure: string | null): Record<string, string> {
+  return { ...dims, ...(measure ? { measure } : {}) };
+}
+
+/**
+ * A past month end's frozen list (cma.flash_id_rows_of) per overview that keeps one: the record kind, the one count
+ * measure it is, and whether it takes a status (the subscription's or the device's; a customer's list is all active)
+ */
+export const FLASH_FROZEN_LIST: Partial<Record<FlashKey, { kind: "customer" | "subscription" | "device"; measure: string; status: boolean }>> = {
+  customers: { kind: "customer", measure: "active_customers", status: false },
+  subscriptions: { kind: "subscription", measure: "active_subscriptions", status: true },
+  installed_base: { kind: "device", measure: "devices", status: true },
+};
+
+/**
+ * A list's filters split for a past month end's frozen list, which takes the market, the status (not for customers) and
+ * its own count measure only, as the database does (CMA04 for anything else): kept, the filters the page and a file send
+ * to it; dropped, those it cannot apply, which the page names in its "not available for this snapshot" notice
+ */
+export function frozenFilters(def: FlashOverviewDef, filters: Record<string, string>): { kept: Record<string, string>; dropped: string[] } {
+  const frozen = FLASH_FROZEN_LIST[def.key];
+  const kept: Record<string, string> = {};
+  const dropped: string[] = [];
+  for (const [k, v] of Object.entries(filters)) {
+    const takes = frozen !== undefined
+      && (k === "market" || (k === "status" && frozen.status) || (k === "measure" && v === frozen.measure));
+    if (takes) kept[k] = v;
+    else dropped.push(k);
+  }
+  return { kept, dropped: dropped.sort() };
+}
+
+/**
+ * Whether a list read's refusal means the records are not available rather than an error: CMA02 (no list kept for the
+ * date, or one the retention removed) and CMA04 (a filter the list cannot apply). The page then shows the overview with
+ * its "not available" notice in place of the list, never an error page
+ */
+export function listUnavailable(sqlState: string | null | undefined): boolean {
+  return sqlState === "CMA02" || sqlState === "CMA04";
 }
 
 /**

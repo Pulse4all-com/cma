@@ -19,7 +19,8 @@ import {
   FLASH_OVERVIEWS, FLASH_ADDRESS, FLASH_PAGE_ROWS, FLASH_FILE_MAX_ROWS, overviewOf, overviewOfShortcut, parseAsOf, parseMarket, parseSort,
   parseFilters, asOfStamp, flashFileName, changeOf, changeArrow, definitionStatus, statusTone, metricKey, sourcesLine, showsFigures, amountsOf,
   sortWithinCurrency, rowsOfSet, breakdownSets, barShare, averageRating, isDate, FLASH_LIST_COLUMNS, FLASH_FROZEN_COLUMNS, breakdownColumns,
-  breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf,
+  breakdownRows, filtersText, FLASH_LINKS_LEFT_OUT, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_FIX_IN, fixInOf, cellFilters, frozenFilters,
+  FLASH_FROZEN_LIST, listUnavailable,
 } from "../src/lib/flash.ts";
 
 const PROVOKE = process.argv.includes("--provoke");
@@ -201,6 +202,104 @@ expect("the breakdown file: the set, every dim, each measure, an amount one colu
 expect("a file's filters column: market, period and the list's filters as key=value, sorted; all without any",
   [filtersText("GB", null, null, { market: "GB", measure: "active_customers" }), filtersText(null, "2026-10-01", "2026-10-31", { sku: "AED-1" }), filtersText(null, null, null, {})],
   ["market=GB; measure=active_customers", "from=2026-10-01; to=2026-10-31; sku=AED-1", "all"], ["", "", ""]);
+
+// ---- A month end's breakdown cells, every one clicked (review of #214, Major 1) ---------------------------------------
+// The frozen list's own rule, read from db/122_flash.sql's cma.flash_id_rows_of: the keys it takes, the kind without a
+// status, the one measure per kind. Every cell of every breakdown set of the three overviews that keep a list is opened
+// as the page opens it (its link's address, parsed as the page parses it, the page's market, frozenFilters): what the
+// page sends must be what the database takes, and the mock (which refuses as the database does) must answer it
+const idBody = sql.slice(sql.indexOf("create or replace function cma.flash_id_rows_of"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.flash_id_rows_of") + 80));
+const sqlKeys = [...(idBody.match(/where k not in \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+const noStatusKind = idBody.match(/k = 'status' and v_kind = '([a-z]+)'/)?.[1] ?? null;
+const mc = idBody.match(/case v_kind when 'customer' then '([a-z_]+)'\s*when 'subscription' then '([a-z_]+)' else '([a-z_]+)' end/);
+const sqlMeasure = mc ? { customer: mc[1], subscription: mc[2], device: mc[3] } : {};
+const sqlTakes = (kind, f) => Object.entries(f).every(([k, v]) => sqlKeys.includes(k) && !(k === "status" && kind === noStatusKind)
+  && (k !== "measure" || v === sqlMeasure[kind]));
+const { mockFlashRows, mockRecordFlashFile } = await import("../src/lib/data/mock-flash.ts");
+const { CmaDbError } = await import("../src/lib/data/errors.ts");
+const reader = { tenantId: "00000000-0000-7000-8000-000000000001", userId: "00000000-0000-7000-8000-0000000000aa", permissions: ["reports.view"],
+  timeZone: "Europe/Amsterdam", locale: "en" };
+const lastMonthEnd = (() => { const d = new Date(); d.setUTCDate(0); return d.toISOString().slice(0, 10); })();
+const codeOfCall = (fn) => { try { fn(); return "ok"; } catch (e) { return e instanceof CmaDbError ? e.sqlState : String(e?.message ?? e); } };
+let clicked = 0;
+const notTaken = [];
+const mockRefusedKept = [];
+const mockTookDropped = [];
+for (const key of Object.keys(FLASH_FROZEN_LIST)) {
+  const def = overviewOf(key);
+  const kind = FLASH_FROZEN_LIST[key].kind;
+  for (const set of [["market"], ...breakdownSets(def)]) {
+    const dims = Object.fromEntries(set.map((d) => [d, d === "market" ? "GB" : `${d}-1`]));
+    for (const m of [null, ...def.countMeasures]) {
+      clicked += 1;
+      // the cell's link (FlashParts' cellLink) as an address, read back as the page reads it, with its market (K)
+      const address = Object.fromEntries(Object.entries(cellFilters(dims, m)).map(([k, v]) => [k === "measure" ? k : `f_${k}`, v]));
+      const filters = parseFilters(def, (k) => address[k]);
+      filters.market = "GB";
+      const { kept, dropped } = frozenFilters(def, filters);
+      if (!sqlTakes(kind, kept) || (dropped.length === 0) !== sqlTakes(kind, filters)) notTaken.push(`${key}:${set.join("+")}:${m ?? "row"}`);
+      const req = (f) => ({ overview: key, filters: f, asOf: lastMonthEnd, from: null, to: null, sort: null, descending: false, limit: 500, offset: 0 });
+      // the mock answers what the page sends (rows, or CMA02 when its fixture holds no list for that date), never CMA04
+      if (codeOfCall(() => mockFlashRows(reader, req(kept))) === "CMA04") mockRefusedKept.push(`${key}:${set.join("+")}:${m ?? "row"}`);
+      if (dropped.length > 0 && codeOfCall(() => mockFlashRows(reader, req(filters))) !== "CMA04") mockTookDropped.push(`${key}:${set.join("+")}:${m ?? "row"}`);
+    }
+  }
+}
+expect("db/122's frozen list takes market, status (not a customer's) and its own measure (read from cma.flash_id_rows_of)",
+  [sqlKeys, noStatusKind, sqlMeasure], [["market", "status", "measure"], "customer", { customer: "active_customers", subscription: "active_subscriptions", device: "devices" }],
+  [[], null, {}]);
+expect(`a month end: every breakdown cell of customers, subscriptions and the installed base (${clicked}) sends only what the frozen list takes`,
+  [clicked > 30, PROVOKE ? ["provoked"] : notTaken], [true, []], [false, []]);
+expect("the mock refuses as the database does: never what the page sends, always a filter the list cannot apply (CMA04)",
+  [PROVOKE ? ["provoked"] : mockRefusedKept, PROVOKE ? ["provoked"] : mockTookDropped], [[], []], [["x"], ["x"]]);
+expect("a list's refusal is the page's not-available state (CMA02, CMA04), any other an error",
+  [listUnavailable("CMA02"), listUnavailable("CMA04"), listUnavailable("CMA06"), listUnavailable(null)], [true, true, false, false], [false, false, true, true]);
+const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
+expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
+  [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(rowFilters\)/.test(pageSrc),
+    /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters")],
+  [true, true, true, true, true], [false, false, false, false, false]);
+expect("a market filter that is no market code is dropped from the address, as the database would refuse it",
+  [parseFilters(overviewOf("customers"), (k) => ({ f_market: "gb" })[k]), parseFilters(overviewOf("customers"), (k) => ({ f_market: "NL" })[k])],
+  [{}, { market: "NL" }], [{ market: "gb" }, {}]);
+
+// ---- Every bulk read of records is in the audit log (review of #214, Major 2; decision 7) -----------------------------
+const routeSrc = (p) => readFileSync(path.join(here, "..", "src", "app", "api", "v1", "reports", ...p, "route.ts"), "utf8");
+const recordsBeforeOk = (src) => src.indexOf("recordFlashFile(") > 0 && src.indexOf("recordFlashFile(") < src.lastIndexOf("return ok(");
+const dqAdmin = { ...reader, permissions: ["tenant.configure"] };
+const fileRead = (o) => ({ overview: "customers", part: "rows", filters: {}, market: null, asOf: null, from: null, to: null, rows: 1, ...o });
+expect("the JSON rows routes write the file route's audit record before they answer: /flash/rows, /data-quality/rows",
+  [recordsBeforeOk(routeSrc(["flash", "rows"])), recordsBeforeOk(routeSrc(["data-quality", "rows"])), routeSrc(["flash", "file"]).includes("recordFlashFile(")],
+  [true, true, true], [false, false, false]);
+expect("the record is checked as cma.flash_file_record checks it: data quality's with tenant.configure; no @, no other key, no date not ended",
+  [codeOfCall(() => mockRecordFlashFile(dqAdmin, fileRead({ overview: "data_quality", filters: { check: "device_serial_missing" } }))),
+    codeOfCall(() => mockRecordFlashFile(dqAdmin, fileRead({}))),
+    codeOfCall(() => mockRecordFlashFile(reader, fileRead({ filters: { store: "a@b" } }))),
+    codeOfCall(() => mockRecordFlashFile(reader, fileRead({ filters: { email: "x" } }))),
+    codeOfCall(() => mockRecordFlashFile(reader, fileRead({ asOf: "2999-12-31" })))],
+  ["ok", "CMA06", "CMA04", "CMA04", "CMA04"], ["CMA06", "ok", "ok", "ok", "ok"]);
+
+// ---- The routes' and files' own checks (review of #214, Minors 3 to 6) ------------------------------------------------
+const apiSrc = readFileSync(path.join(here, "..", "src", "lib", "api", "flash.ts"), "utf8");
+const fileSrc = routeSrc(["flash", "file"]);
+expect("market wins over f_market; an unknown part is a 400; a file names its market, says when it is cut, refuses a source not set up",
+  [/if \(q\.market\) filters\.market = q\.market;/.test(apiSrc), /invalid_part/.test(routeSrc(["flash"])),
+    /const market = q\.market \?\? q\.filters\.market/.test(fileSrc), /rows \$\{list\.rows\.length\} of \$\{list\.total\}/.test(fileSrc),
+    (fileSrc.match(/not_set_up/g) ?? []).length >= 2, /zone = list\.timeZone/.test(fileSrc)],
+  [true, true, true, true, true, true], [false, false, false, false, false, false]);
+
+// ---- The labels against docs/definitions.md (review of #214, Major 3 and Minor 8) -------------------------------------
+const { copy: copyAll } = await import("../src/lib/copy.ts");
+const en = copyAll.en.flash;
+const nl = copyAll.nl.flash;
+expect("Dutch: past-due maintenance items are achterstallig, never te laat (a task's overdue alone is Te laat)",
+  [/achterstallig/i.test(nl.h_installed_base), /te laat/i.test(nl.h_installed_base), nl.m_overdue, /te laat/i.test(nl.m_components_past_due ?? "")],
+  [true, false, "Te laat", false], [false, true, "", true]);
+expect("labels: Financial status, Link level (Koppelniveau), Dag, Assetregister, cyclus and Volgende verlenging; no invoice word in Flash's Dutch",
+  [en.c_financial_status, en.c_link_level, nl.c_link_level, nl.c_business_date, nl.source_assets, nl.m_amount_per_cycle, nl.c_next_billing_at,
+    Object.values(nl).filter((v) => typeof v === "string" && /factu/i.test(v)).length],
+  ["Financial status", "Link level", "Koppelniveau", "Dag", "Assetregister", "Bedrag per cyclus", "Volgende verlenging", 0],
+  ["", "", "", "", "", "", "", 1]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

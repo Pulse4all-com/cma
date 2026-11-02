@@ -3158,6 +3158,9 @@ export interface FlashPageView {
   watch: FlashWatchItem[];
   firstSnapshotDate: string | null;
   lastSnapshotDate: string | null;
+  /** The tenant's business date today and its time zone: As of is a date before it, whatever the reader's zone */
+  today: string;
+  timeZone: string;
 }
 
 /** A grouping set's row: its dims ({} for the totals) and measures (a number, or an amount as currency codes to sums) */
@@ -3196,9 +3199,13 @@ export interface FlashDocumentView {
     requiredDeviceRefs: string[];
     requiredContactRefs: string[];
     activeSubscriptionStatuses: string[];
+    endedSubscriptionStatuses: string[];
   };
   definitionVersion: string;
   firstSnapshotDate: string | null;
+  /** The tenant's business date today and its time zone */
+  today: string;
+  timeZone: string;
   /** A flow read from snapshots: the dates covered and those without a snapshot */
   days: { covered: number; missing: string[] } | null;
   /** Churn: the active subscriptions at the period's end, null when unknown */
@@ -3220,6 +3227,10 @@ export interface FlashRowsView {
   offset: number;
   filters: Record<string, string>;
   total: number;
+  /** Whether the overview's source is set up: an empty list of a source not set up is no zero */
+  setUp: boolean;
+  /** The tenant's time zone: a file's instants and its name follow it */
+  timeZone: string;
   /** Each record as the API answers it: ids, statuses, codes, amounts with their currency, links */
   rows: Record<string, unknown>[];
 }
@@ -3240,7 +3251,8 @@ export interface FlashHeadlineView {
 export interface FlashSnapshotsView {
   from: string;
   to: string;
-  dates: { date: string; status: "succeeded" | "failed"; missedBefore: number; finishedAt: string; error: string | null }[];
+  /** Every run of the period: succeeded, failed (its error code), or missed (a date never taken; no figures) */
+  dates: { date: string; status: "succeeded" | "failed" | "missed"; missedBefore: number; finishedAt: string; error: string | null }[];
   firstSnapshotDate: string | null;
   lastSnapshotDate: string | null;
   watch: FlashWatchItem[];

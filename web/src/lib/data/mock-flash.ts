@@ -9,7 +9,7 @@
  */
 import type { Principal } from "@/lib/auth/identity";
 import { CmaDbError } from "@/lib/data/errors";
-import { FLASH_OVERVIEWS, overviewOf, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
+import { FLASH_FROZEN_LIST, FLASH_OVERVIEWS, frozenFilters, overviewOf, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
 import { addDays, dateKeyInZone } from "@/lib/time";
 import type {
   DataQualityRowsView, FlashCardView, FlashDocRowView, FlashDocumentView, FlashFileRead, FlashHeadlineView, FlashPageView, FlashRowsRequest,
@@ -26,6 +26,8 @@ const CONN = {
   reviews: "00000000-0000-7000-8000-00000000f007",
 };
 const CRM_URL = "https://crm.example/record";
+/** The ended statuses (flash.ended_subscription_statuses, its default): churn and field_device_on_ended_subscription */
+const ENDED = ["canceled", "expired"];
 
 type Rec = Record<string, unknown> & { id: string; market: string; since: string };
 
@@ -115,7 +117,7 @@ function fixtureOf(me: Principal, today: string): Fixture {
       past_due_items: i % 9 === 0 ? 1 : 0, items_due_3m: i % 5 === 0 ? 1 : 0, next_due_on: addDays(today, (i * 23) % 400 - 30),
     });
   }
-  const churn: Rec[] = subscriptions.filter((s) => s.status === "canceled" || s.status === "expired").map((s, k) => {
+  const churn: Rec[] = subscriptions.filter((s) => ENDED.includes(String(s.status))).map((s, k) => {
     const d = day((k * 3) % 40);
     return { id: String(s.subscription_id), subscription_id: s.subscription_id, store: s.store, market: s.market, customer_id: s.customer_id,
       churned_at: stamp(d, k), business_date: d, since: d, reason: ["too-expensive", "moving", "none", "no-longer-needed"][k % 4], cycles: 3 + (k % 20) };
@@ -186,7 +188,7 @@ function fixtureOf(me: Principal, today: string): Fixture {
     if ((d.missing_refs as string[]).length) finding("device_required_ref_missing", "device", String(d.device_id), "ns_internal_id", d.market, "assets", "airtable");
     if (d.link === "not_found") finding("device_subscription_ref_unknown", "device", String(d.device_id), null, d.market, "assets", "airtable",
       { type: "subscription", id: String(d.subscription_id), url: null });
-    if (d.link === "linked" && ["canceled", "expired", "failed"].includes(String(d.subscription_status))) {
+    if (d.link === "linked" && ENDED.includes(String(d.subscription_status))) {
       finding("field_device_on_ended_subscription", "device", String(d.device_id), String(d.subscription_status), d.market, "assets", "airtable",
         { type: "subscription", id: String(d.subscription_id), url: null });
     }
@@ -225,7 +227,7 @@ function measuresOf(def: FlashOverviewDef, rs: readonly Rec[]): Measures {
       paused_customers: n((r) => Number(r.active_subscriptions) === 0 && Number(r.paused_subscriptions) > 0), linked_to_contact: n((r) => r.contact_id !== null),
       with_required_refs: n((r) => r.contact_id !== null && r.contact_held === true && (r.missing_refs as string[]).length === 0) };
     case "subscriptions": return { subscriptions: rs.length, active_subscriptions: n((r) => r.is_active === true), paused_subscriptions: n((r) => r.status === "paused"),
-      amount_per_cycle: per("amount_per_cycle") };
+      amount_per_cycle: per("amount_per_cycle", (r) => r.is_active === true) };
     case "installed_base": return { devices: rs.length, in_field: n((r) => r.in_field === true), in_stock: n((r) => r.in_stock === true),
       components_past_due: sum("past_due_items"), items_due_3m: sum("items_due_3m") };
     case "churn": return { churned: rs.length };
@@ -334,7 +336,7 @@ function labelsOf(def: FlashOverviewDef): Record<string, Record<string, string>>
       subscription_customer_unmatched: "Subscriptions whose customer id no customer of their store holds",
       active_subscription_without_device: "Active subscriptions no device in the register names",
       device_subscription_ref_unknown: "Devices in the field whose subscription reference names no subscription the Workspace holds",
-      field_device_on_ended_subscription: "Devices in the field linked to a canceled, expired or failed subscription",
+      field_device_on_ended_subscription: "Devices in the field linked to a subscription in an ended status (flash.ended_subscription_statuses), with its status",
       deal_without_contact: "Lead deals without any contact",
       device_serial_missing: "Devices without a serial number",
     },
@@ -353,7 +355,8 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
   const last = dates[dates.length - 1] ?? null;
   if (asOf && !dates.includes(asOf)) {
     return { mode: "snapshot", asOf, market, from: null, to: null, snapshotMissing: true, nearestBefore: [...dates].reverse().find((d) => d < asOf) ?? null,
-      nearestAfter: dates.find((d) => d > asOf) ?? null, sources: {}, overviews: [], markets: [], watch: [], firstSnapshotDate: first, lastSnapshotDate: last };
+      nearestAfter: dates.find((d) => d > asOf) ?? null, sources: {}, overviews: [], markets: [], watch: [], firstSnapshotDate: first, lastSnapshotDate: last,
+      today, timeZone: me.timeZone };
   }
   const f = from ?? asOf ?? today;
   const t = to ?? asOf ?? today;
@@ -383,7 +386,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
   return {
     mode: asOf ? "snapshot" : "live", asOf: asOf ?? new Date().toISOString(), market, from: f, to: t, snapshotMissing: false, nearestBefore: null, nearestAfter: null,
     sources: sourcesOf(me, today), overviews, markets: [{ code: "GB", name: "United Kingdom" }, { code: "NL", name: "Netherlands" }], watch: watchOf(me, today),
-    firstSnapshotDate: first, lastSnapshotDate: last,
+    firstSnapshotDate: first, lastSnapshotDate: last, today, timeZone: me.timeZone,
   };
 }
 
@@ -433,8 +436,9 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
     source: def.source, sources, dims: [...def.dims], sets: def.sets.map((s) => [...s]), measures: [...def.measures], countMeasures: [...def.countMeasures],
     headline: def.headline, sorts: [...def.sorts], totals: market ? own ?? zero(total) : total,
     rows: all.filter((r) => Object.keys(r.dims).length > 0 && (!market || r.dims.market === market)), labels: labelsOf(def),
-    settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: ["ns_internal_id"], requiredContactRefs: ["netsuite"], activeSubscriptionStatuses: ["active"] },
-    definitionVersion: "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history,
+    settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: ["ns_internal_id"], requiredContactRefs: ["netsuite"], activeSubscriptionStatuses: ["active"],
+      endedSubscriptionStatuses: ENDED },
+    definitionVersion: "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history, today, timeZone: me.timeZone,
   };
 }
 
@@ -464,17 +468,22 @@ export function mockFlashRows(me: Principal, request: FlashRowsRequest): FlashRo
   for (const k of Object.keys(request.filters)) if (k !== "measure" && !def.dims.includes(k)) throw new CmaDbError("CMA04", "filters are the overview's dims");
   if (request.sort && !def.sorts.includes(request.sort) && !request.asOf) throw new CmaDbError("CMA04", "a sort key of the overview");
   const base = { overview: def.key, from: def.kind === "flow" ? request.from ?? today : null, to: def.kind === "flow" ? request.to ?? today : null,
-    sort: request.sort, descending: request.descending, limit: request.limit, offset: request.offset, filters: request.filters };
+    sort: request.sort, descending: request.descending, limit: request.limit, offset: request.offset, filters: request.filters,
+    setUp: setUp(me, today, def), timeZone: me.timeZone };
   if (request.asOf) {
-    // a past month end's frozen list only
-    const kind = def.key === "customers" || def.key === "subscriptions" || def.key === "installed_base";
+    // a past month end's frozen list only, filtered as cma.flash_id_rows_of filters it: market, status (not for
+    // customers) and the list's own measure, CMA04 for any other filter
+    const frozen = FLASH_FROZEN_LIST[def.key];
+    if (!frozen) throw new CmaDbError("CMA02", "a list of a past date exists for customers, subscriptions and installed_base, at a month end");
+    if (frozenFilters(def, request.filters).dropped.length > 0) throw new CmaDbError("CMA04", "a past month end's list is filtered by market and status only");
     const monthEnd = addDays(request.asOf, 1).slice(8, 10) === "01";
-    if (!kind || !monthEnd || !snapshotDates(me, today).includes(request.asOf)) throw new CmaDbError("CMA02", "no frozen list for this date: lists are kept for month ends");
+    if (!monthEnd || !snapshotDates(me, today).includes(request.asOf)) throw new CmaDbError("CMA02", "no frozen list for this date: lists are kept for month ends");
     const rs = recordsOf(me, today, def, request.asOf, null, null)
       .filter((r) => def.key !== "customers" || Number(r.active_subscriptions) > 0)
       .filter((r) => def.key !== "subscriptions" || r.is_active === true)
       .filter((r) => !request.filters.market || r.market === request.filters.market)
-      .map((r) => ({ source_id: String(r.customer_id ?? r.subscription_id ?? r.device_id), market: r.market, state: String(r.status ?? "active"), snapshot_date: request.asOf }));
+      .map((r) => ({ source_id: String(r.customer_id ?? r.subscription_id ?? r.device_id), market: r.market, state: String(r.status ?? "active"), snapshot_date: request.asOf }))
+      .filter((r) => !request.filters.status || r.state === request.filters.status);
     rs.sort((a, b) => compare(a.source_id, b.source_id));
     return { ...base, mode: "snapshot", asOf: request.asOf, total: rs.length, rows: rs.slice(request.offset, request.offset + request.limit) };
   }
@@ -531,10 +540,15 @@ export function mockFlashSnapshots(me: Principal, from: string | null, to: strin
   const f = from ?? addDays(t, -90);
   if (f > t) throw new CmaDbError("CMA04", "a period runs forward");
   const dates = snapshotDates(me, today);
+  // the date the job missed has a run row of its own (status missed, no figures), as the take records it
+  const missed = me.tenantId === MOCK_TENANT_2 ? null : addDays(today, -SNAPSHOT_MISSING);
+  const runs = [...dates.map((d, i, all) => ({ date: d, status: "succeeded" as "succeeded" | "missed",
+      missedBefore: i > 0 && addDays(all[i - 1]!, 1) !== d ? 1 : 0, finishedAt: `${addDays(d, 1)}T00:31:${String(10 + (i % 40)).padStart(2, "0")}Z`, error: null })),
+    ...(missed ? [{ date: missed, status: "missed" as const, missedBefore: 0, finishedAt: `${addDays(missed, 2)}T00:31:00Z`, error: null }] : [])]
+    .sort((a, b) => compare(a.date, b.date));
   return {
     from: f, to: t, firstSnapshotDate: dates[0] ?? null, lastSnapshotDate: dates[dates.length - 1] ?? null, watch: watchOf(me, today),
-    dates: dates.filter((d) => d >= f && d <= t).map((d, i, all) => ({ date: d, status: "succeeded" as const,
-      missedBefore: i > 0 && addDays(all[i - 1]!, 1) !== d ? 1 : 0, finishedAt: `${addDays(d, 1)}T00:31:${String(10 + (i % 40)).padStart(2, "0")}Z`, error: null })),
+    dates: runs.filter((r) => r.date >= f && r.date <= t),
   };
 }
 
@@ -549,10 +563,21 @@ export function mockDataQualityRows(me: Principal, request: { check: string; mar
     rows: rs.slice(request.offset, request.offset + request.limit).map((r) => ({ ...publicOf(r), connection_id: CONN.crm })) };
 }
 
-/** The file read: checked as the database checks it; nothing to keep in mock mode */
+/**
+ * The file read or bulk read of records: checked as cma.flash_file_record checks it (data quality's readers with
+ * tenant.configure too; the filters the overview's dims and measure, each 1 to 100 characters without an @; the dates
+ * ended); nothing to keep in mock mode
+ */
 export function mockRecordFlashFile(me: Principal, read: FlashFileRead): void {
-  assertAny(me, REPORT);
-  if (!overviewOf(read.overview) || (read.part !== "rows" && read.part !== "breakdown") || read.rows < 0) throw new CmaDbError("CMA04", "an invalid file read");
+  const def = overviewOf(read.overview);
+  assertAny(me, def?.key === "data_quality" ? [...REPORT, "tenant.configure"] : REPORT);
+  if (!def || (read.part !== "rows" && read.part !== "breakdown") || read.rows < 0) throw new CmaDbError("CMA04", "an invalid file read");
+  for (const [k, v] of Object.entries(read.filters)) {
+    if ((k !== "measure" && !def.dims.includes(k)) || (k === "measure" && !def.countMeasures.includes(v)) || v.length < 1 || v.length > 100 || v.includes("@")) {
+      throw new CmaDbError("CMA04", "a file record's filters are the overview's dims and measure");
+    }
+  }
+  assertParams(todayOf(me), read.market, read.asOf, read.from, read.to);
 }
 
 export type { FlashKey };
