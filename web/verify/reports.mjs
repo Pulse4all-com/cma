@@ -81,6 +81,12 @@
  * (enumeration only), the kinds' rules by pipeline and category, the cancellation requests per market and week with the
  * kind unset and archived, deals per person with the amounts per currency never summed, nothing personal in an answer;
  * and, from their source, the routes and the Sources writes.
+ * Since addition 0008zm also Lead cohorts (src/lib/cohorts.ts), on 121's own deals with the facts 121 proves for them, so
+ * the figures are the ones 121 proves in the database: the period, split and measure parsed and cycled, the ages setting
+ * as the database checks it, ISO weeks and month ends, the figures per cohort and age (null at an age not reached, the
+ * ordered figure null above lead_to_order.max_days), the range cutting a cohort, the splits, the filters and their lists,
+ * the created deals adding up, the chart's lines and the table's rows; and, from their source, the route, the read and
+ * nothing personal in the type, the mirror, the parts or the page.
  */
 import {
   ANSWERED_CLASS, applyConnections, barShares, cellOf, fillHint, filterMarket, fmtAnswerSeconds, fmtBusinessMinutes, fmtCount, fmtPct, groupDisplay,
@@ -99,6 +105,10 @@ import {
   addMonths as mtAddMonths, bucketProblem, cellTitle, cellValue, fmtMonth, fromMonthChoices, maintenanceGrid, maintenanceItems, maintenanceQuery,
   maintenanceReport, maintenanceRows, nextView, parseBucket, parseMaintenanceFilter,
 } from "../src/lib/maintenance.ts";
+import {
+  cohortChartLines, cohortEnd, cohortKey, cohortShare, cohortTableRows, isoWeekLabel, leadAgesOf, leadCohortsReport, nextCohortMeasure, nextCohortPeriod,
+  nextCohortSplit, parseCohortMeasure, parseCohortPeriod, parseCohortSplit, parseLeadAges,
+} from "../src/lib/cohorts.ts";
 import { readFileSync } from "node:fs";
 import { addDays, dateKeyInZone } from "../src/lib/time.ts";
 import { WITHDRAW_PERMISSION } from "../src/lib/messages.ts";
@@ -1740,6 +1750,120 @@ expect("maintenance: no customer's name, email, phone or address in the type, th
   // comments are left out: they say what is never there
   Object.entries(mtNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
   [], ["lib/maintenance.ts"]);
+
+// ---- Lead cohorts (addition 0008zm): 121's deals with the facts 121 proves for them (its B2), as of its instant -----------
+const LC_NOW = "2026-10-30T12:00:00.000Z";
+const lcDeal = (dealId, createdAt, date, market, sourceChannel, o = {}) => ({
+  dealId, connectionId: "00000000-0000-7000-8000-000000000001", pipelineId: "sales", pipelineLabel: "Sales", market, sourceChannel, createdAt, date,
+  firstAttemptAt: null, firstConversationAt: null, orderCreatedAt: null, daysToOrder: null, lostAt: null, notCalledYet: false, ...o,
+});
+const LC_DEALS = [
+  lcDeal("dA1", "2026-07-06T08:00:00Z", "2026-07-06", "NL", "Facebook", { firstAttemptAt: "2026-07-06T08:59:50Z", firstConversationAt: "2026-07-06T08:59:50Z",
+    orderCreatedAt: "2026-07-08T10:00:00Z", daysToOrder: 2.08 }),
+  lcDeal("dA2", "2026-07-07T08:00:00Z", "2026-07-07", "NL", "Google", { firstAttemptAt: "2026-07-09T08:59:50Z", firstConversationAt: "2026-07-20T08:59:50Z",
+    orderCreatedAt: "2026-08-21T08:00:00Z", daysToOrder: 45 }),
+  lcDeal("dA3", "2026-07-08T08:00:00Z", "2026-07-08", "GB", "Facebook", { lostAt: "2026-07-20T08:00:00Z" }),
+  lcDeal("dA4", "2026-07-12T22:30:00Z", "2026-07-13", "GB", null, { notCalledYet: true }),
+  lcDeal("dB1", "2026-10-12T08:00:00Z", "2026-10-12", "NL", "Facebook", { firstAttemptAt: "2026-10-12T08:04:50Z", firstConversationAt: "2026-10-12T08:04:50Z" }),
+  lcDeal("dB2", "2026-10-16T10:00:00Z", "2026-10-16", "NL", "Google", { firstAttemptAt: "2026-10-16T09:54:50Z" }),
+  lcDeal("dOrd", "2026-10-13T09:00:00Z", "2026-10-13", "NL", null, { pipelineId: "selfserve", pipelineLabel: "Self Serve" }),
+  lcDeal("dC1", "2026-10-29T08:00:00Z", "2026-10-29", "NL", "Facebook", { firstAttemptAt: "2026-10-29T08:29:50Z", firstConversationAt: "2026-10-29T08:29:50Z" }),
+  lcDeal("dC2", "2026-10-30T09:00:00Z", "2026-10-30", "GB", "Facebook", { notCalledYet: true }),
+];
+const LC_NO_FILTER = { market: null, pipeline: null, sourceChannel: null };
+const lcReport = (from, to, period, split = "none", o = {}) => leadCohortsReport(LC_DEALS.filter((d) => d.date >= from && d.date <= to),
+  { from, to, period, split, filter: LC_NO_FILTER, ages: [1, 7, 30, 60, 90], maxDays: 90, historyStart: "2026-06-01", now: LC_NOW, ...o });
+// one cohort as 121's helper writes it: label[/group][*] created/not called yet/ordered/median, then age:attempted/conversation/ordered/lost
+const lcText = (c) => `${c.label}${c.group === null ? "" : `/${c.group}`}${c.partial ? "*" : ""} ${c.created}/${c.notCalledYet}/${c.ordered}/${c.medianDaysToOrder ?? "-"} `
+  + c.ages.map((a) => `${a.age}:${a.attempted ?? "-"}/${a.conversation ?? "-"}/${a.ordered ?? "-"}/${a.lost ?? "-"}`).join(" ");
+const lcRows = (rows) => rows.map(lcText).join(" | ");
+
+expect("cohorts: period, split and measure parse and cycle; anything else refused",
+  [["week", "month", "day", null].map(parseCohortPeriod), ["none", "market", "source", "owner"].map(parseCohortSplit),
+   ["attempted", "conversation", "ordered", "lost", "won"].map(parseCohortMeasure), nextCohortPeriod("month"), nextCohortSplit("source"), nextCohortMeasure("lost")],
+  [["week", "month", null, null], ["none", "market", "source", null], ["attempted", "conversation", "ordered", "lost", null], "week", "none", "attempted"],
+  [["week", "month", "day", null], ["none", "market", "source", null], ["attempted", "conversation", "ordered", "lost", null], "week", "none", "attempted"]);
+expect("cohorts: the ages setting as the database checks it (spaces, order, count, the largest at most lead to order's days), as 121's B11",
+  [[" 1, 7 ,30 ", "7,1", "", "1,2,3,4,5,6,7", "1,a", "1,7,91", "1,7,90", "0,7"].map((v) => parseLeadAges(v, 90)), leadAgesOf("1,7,30,60,90"), leadAgesOf("x")],
+  [["1,7,30", null, null, null, null, null, "1,7,90", null], [1, 7, 30, 60, 90], []],
+  [["1, 7 ,30", null, null, null, null, null, "1,7,90", null], [1, 7, 30, 60, 90], []]);
+expect("cohorts: ISO weeks across the years, the periods' keys and last days (a leap February)",
+  [isoWeekLabel("2026-07-06"), isoWeekLabel("2026-12-28"), isoWeekLabel("2027-01-04"), isoWeekLabel("2024-12-30"), cohortKey("2026-07-13", "week"),
+   cohortKey("2026-07-13", "month"), cohortEnd("2026-10-26", "week"), cohortEnd("2024-02-01", "month"), cohortEnd("2026-12-01", "month")],
+  ["2026-W28", "2026-W53", "2027-W01", "2025-W01", "2026-07-13", "2026-07-01", "2026-11-01", "2024-02-29", "2026-12-31"],
+  ["2026-W28", "2026-W52", "2027-W01", "2025-W01", "2026-07-13", "2026-07-01", "2026-11-01", "2024-02-29", "2026-12-31"]);
+expect("cohorts: the figures per week and age, newest first, as 121's B5",
+  lcRows(lcReport("2026-07-01", "2026-07-31", "week").cohorts) + " || " + lcRows(lcReport("2026-10-01", "2026-10-30", "week").cohorts),
+  "2026-W29 1/1/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/0 60:0/0/0/0 90:0/0/0/0 | 2026-W28 3/0/2/23.5 1:1/1/0/0 7:2/1/1/0 30:2/2/1/1 60:2/2/2/1 90:2/2/2/1 || "
+    + "2026-W44* 2/1/0/- 1:-/-/-/- 7:-/-/-/- 30:-/-/-/- 60:-/-/-/- 90:-/-/-/- | 2026-W42 3/0/0/- 1:2/1/0/0 7:2/1/0/0 30:-/-/-/- 60:-/-/-/- 90:-/-/-/-",
+  "");
+const lcJuly = lcReport("2026-07-01", "2026-07-31", "month");
+const lcJuly30 = lcReport("2026-07-01", "2026-07-31", "month", "none", { ages: [1, 7, 30] });
+const lcWithin = (age) => LC_DEALS.filter((d) => d.date.startsWith("2026-07") && d.orderCreatedAt !== null
+  && Date.parse(d.orderCreatedAt) <= Date.parse(d.createdAt) + age * 86_400_000).length;
+expect("cohorts: the ordered share at the largest age equals lead to order's share within it, as 121's B6",
+  [`${lcJuly.cohorts[0].ages.at(-1).ordered}/${lcJuly.cohorts[0].created}`, lcWithin(90), `${lcJuly30.cohorts[0].ages.at(-1).ordered}/${lcJuly30.cohorts[0].created}`, lcWithin(30),
+   cohortShare(lcJuly.cohorts[0].ages.at(-1).ordered, lcJuly.cohorts[0].created)],
+  ["2/4", 2, "1/4", 1, 0.5], ["2/4", 2, "1/4", 2, 0.5]);
+expect("cohorts: an age not reached is null with mature false; a reached one counted, as 121's B7",
+  [lcReport("2026-10-01", "2026-10-30", "month").cohorts[0].ages.map((a) => `${a.age}:${a.mature}:${a.attempted}`).join(" "),
+   lcReport("2026-10-01", "2026-10-30", "week").cohorts[1].ages.map((a) => `${a.age}:${a.mature}:${a.ordered}`).join(" ")],
+  ["1:false:null 7:false:null 30:false:null 60:false:null 90:false:null", "1:true:0 7:true:0 30:false:null 60:false:null 90:false:null"],
+  ["1:false:null 7:false:null 30:false:null 60:false:null 90:false:null", "1:true:0 7:true:0 30:true:0 60:false:null 90:false:null"]);
+const lcCut = lcReport("2026-10-14", "2026-10-30", "week");
+expect("cohorts: a range that cuts a cohort marks it partial and counts its deals in the range only, as 121's B8",
+  [lcCut.cohorts.map((c) => `${c.key}:${c.start}..${c.end}:${c.partial}:${c.created}`).join(" "), lcCut.historyStart, lcCut.ages, lcCut.leadToOrderDays,
+   lcJuly.cohorts.map((c) => `${c.label}:${c.start}..${c.end}:${c.partial}`).join(" ")],
+  ["2026-10-26:2026-10-26..2026-11-01:true:2 2026-10-12:2026-10-12..2026-10-18:true:1", "2026-06-01", [1, 7, 30, 60, 90], 90, "2026-07:2026-07-01..2026-07-31:false"],
+  ["2026-10-26:2026-10-26..2026-11-01:false:2 2026-10-12:2026-10-12..2026-10-18:true:1", "2026-06-01", [1, 7, 30, 60, 90], 90, "2026-07:2026-07-01..2026-07-31:false"]);
+const lcMarket = lcReport("2026-07-01", "2026-07-31", "week", "market");
+const lcSource = lcReport("2026-07-01", "2026-07-31", "week", "source");
+expect("cohorts: the splits per market and per source channel within each cohort, the cohorts unsplit, as 121's B9",
+  [lcRows(lcMarket.rows), lcMarket.cohorts.length, lcSource.rows.map((c) => `${c.label}/${c.group ?? "none"}:${c.created}`).join(" ")],
+  ["2026-W29/GB 1/1/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/0 60:0/0/0/0 90:0/0/0/0 | 2026-W28/GB 1/0/0/- 1:0/0/0/0 7:0/0/0/0 30:0/0/0/1 60:0/0/0/1 90:0/0/0/1 | "
+    + "2026-W28/NL 2/0/2/23.5 1:1/1/0/0 7:2/1/1/0 30:2/2/1/0 60:2/2/2/0 90:2/2/2/0", 2, "2026-W29/none:1 2026-W28/Facebook:2 2026-W28/Google:1"],
+  ["", 2, "2026-W29/none:1 2026-W28/Facebook:2 2026-W28/Google:1"]);
+const lcFiltered = (from, to, filter) => lcReport(from, to, "month", "none", { filter: { ...LC_NO_FILTER, ...filter } });
+const lcOct = lcFiltered("2026-10-01", "2026-10-30", { market: "unknown" });
+expect("cohorts: the market, source channel and pipeline filters, the lists of the deals without them, as 121's B10",
+  [lcFiltered("2026-07-01", "2026-07-31", { market: "NL" }).cohorts[0].created, lcFiltered("2026-07-01", "2026-07-31", { sourceChannel: "Facebook" }).cohorts[0].created,
+   lcFiltered("2026-10-01", "2026-10-30", { pipeline: "00000000-0000-7000-8000-000000000001:sales" }).cohorts[0].created, lcOct.cohorts.length,
+   lcOct.markets, lcOct.pipelines.map((p) => p.label), lcOct.sourceChannels],
+  [2, 2, 4, 0, ["GB", "NL"], ["Sales", "Self Serve"], ["Facebook", "Google"]], [2, 2, 5, 0, ["GB", "NL"], ["Sales", "Self Serve"], ["Facebook", "Google"]]);
+expect("cohorts: per range, period and split the created deals add up to the deals of the range, as 121's B4",
+  [["2026-07-01", "2026-07-31"], ["2026-10-01", "2026-10-30"], ["2026-10-14", "2026-10-30"], ["2026-08-01", "2026-08-31"]].map(([f, to]) =>
+    [LC_DEALS.filter((d) => d.date >= f && d.date <= to).length,
+     ...["week", "month"].flatMap((p) => ["market", "source"].map((s) => { const r = lcReport(f, to, p, s);
+       return `${r.cohorts.reduce((n, c) => n + c.created, 0)}+${r.rows.reduce((n, c) => n + c.created, 0)}`; }))].join("/")),
+  ["4/4+4/4+4/4+4/4+4", "5/5+5/5+5/5+5/5+5", "3/3+3/3+3/3+3/3+3", "0/0+0/0+0/0+0/0+0"], []);
+expect("cohorts: an age above lead to order's days counted without its ordered figure, as 121's B12",
+  lcText(lcReport("2026-07-01", "2026-07-31", "month", "none", { ages: [1, 7, 100] }).cohorts[0]),
+  "2026-07 4/1/2/23.5 1:1/1/0/0 7:2/1/1/0 100:2/2/-/1", "2026-07 4/1/2/23.5 1:1/1/0/0 7:2/1/1/0 100:2/2/2/1");
+const lcLines = cohortChartLines([...lcReport("2026-10-01", "2026-10-30", "week").cohorts, ...lcReport("2026-07-01", "2026-07-31", "week").cohorts,
+  ...Array.from({ length: 6 }, (_, i) => ({ ...lcJuly.cohorts[0], key: `2026-0${i + 1}-01`, label: `x${i}` }))]);
+const lcTable = cohortTableRows(lcMarket);
+expect("cohorts: the chart's newest eight lines with the reached ages only; the table's cohorts with their groups",
+  [lcLines.length, lcLines.map((l) => l.points.map((p) => `${p.age}:${p.share}:${p.count}`).join(",")).slice(0, 4),
+   lcTable.map((r) => `${r.cohort.label}:${r.groups.map((g) => g.group).join(",")}`), cohortTableRows(lcJuly).map((r) => r.groups.length)],
+  [8, ["", "1:0:0,7:0:0", "1:0:0,7:0:0,30:0:0,60:0:0,90:0:0", "1:0:0,7:0.3333333333333333:1,30:0.3333333333333333:1,60:0.6666666666666666:2,90:0.6666666666666666:2"],
+   ["2026-W29:GB", "2026-W28:GB,NL"], [0]],
+  [9, ["", "1:0:0,7:0:0", "1:0:0,7:0:0,30:0:0,60:0:0,90:0:0", "1:0:0,7:0.3333333333333333:1,30:0.3333333333333333:1,60:0.6666666666666666:2,90:0.6666666666666666:2"],
+   ["2026-W29:GB", "2026-W28:GB,NL"], [0]]);
+// the route and the data layer, from their source: the report's permissions, the read with its parameters, the period and split
+// refused with a 400; no name, email, phone or address in the type, the mirror, the parts or the page
+const lcRoute = src("../src/app/api/v1/reports/lead-cohorts/route.ts");
+const lcApi = src("../src/lib/api/cohorts.ts");
+const lcPage = src("../src/app/reports/lead-cohorts/page.tsx");
+expect("lead cohorts route: reports.view or performance.team, the period and split refused with a 400, the read with its parameters",
+  [lcRoute.includes("requireAnyPermission(me, REPORT_PERMISSIONS);"), /throw new ApiError\(400, "invalid_period"/.test(lcApi), /throw new ApiError\(400, "invalid_split"/.test(lcApi),
+   pgLayer.includes("cma.lead_cohorts_report($1::date, $2::date, $3, $4, $5, $6, $7)") && pgLayer.includes("[range.from, range.to, period, filter.market, filter.sourceChannel, split, filter.pipeline]"),
+   lcPage.includes("holdsAny(me, REPORT_PERMISSIONS)")],
+  [true, true, true, true, true], [false, true, true, true, true]);
+const lcNoPersonal = { "lib/cohorts.ts": src("../src/lib/cohorts.ts"), "components/CohortParts.tsx": src("../src/components/CohortParts.tsx"), "app/reports/lead-cohorts/page.tsx": lcPage,
+  "lib/data/types.ts (LeadCohortRow)": (src("../src/lib/data/types.ts").split("export interface LeadCohortRow {")[1] ?? "").split("\n}\n")[0] ?? "" };
+expect("lead cohorts: no customer's name, email, phone or address in the type, the mirror, the parts or the page",
+  Object.entries(lcNoPersonal).filter(([, text]) => MT_PERSONAL.test(text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""))).map(([f]) => f),
+  [], ["lib/cohorts.ts"]);
 
 const passed = results.filter(Boolean).length;
 const n = results.length;

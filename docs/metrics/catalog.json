@@ -49261,6 +49261,2040 @@
       "notes": "A column of the device list; verify_sql null: a column of one row, read with the row (cma.maintenance_rows)."
     },
     {
+      "key": "cohorts.lead.created",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "Created deals",
+      "title": {
+        "en": "Created deals per cohort",
+        "nl": "Aangemaakte deals per cohort"
+      },
+      "definition": "Lead cohorts: the lead deals created in the cohort's ISO week or month (within the chosen dates), per cohort and, with a split, per market or source channel.",
+      "formula": "created = count(lead deals of cma.lead_deals_of whose creation business date lies in the cohort's period and in [from, to])",
+      "unit": "count",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": "with t as (select timezone as zone from cma.tenant where id = :tenant_id),\ns as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd),\nd as (\n  select r.id, (r.source_created_at at time zone t.zone)::date as created_date\n  from cma.crm_record r cross join t cross join s\n  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id\n       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id\n  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and r.source_created_at >= (s.sd::timestamp at time zone t.zone))\nselect date_trunc('week', created_date)::date as cohort, count(*) as created\nfrom d where created_date between :from and :to group by 1 order by 1 desc",
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "The created deals of every cohort add up to cma.lead_deals_of's count of the range (121's B4). A pipeline marked both lead and order counts here (lead_deals_of) though it is no sales deal: never attempted, never lost. Funnel's 'Deals created' counts the sales deals only, so it can be lower by those deals."
+    },
+    {
+      "key": "cohorts.lead.attempted",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "{n} days (Attempted)",
+      "title": {
+        "en": "Share attempted by age",
+        "nl": "Deel met een poging per leeftijd"
+      },
+      "definition": "Lead cohorts, measure Attempted: of the cohort's deals, the share whose first attempt came at or before n days after the deal's creation; the count in the cell's title.",
+      "formula": "attempted(n) = count(deals with first_attempt_at <= created_at + n days) / created; first_attempt_at = the earliest attempt of cma.deal_attempts_of under attempts.source in Attempts per deal's window (cma.sales_deals_of: from created_at - speed_to_lead.pre_window_minutes to the close, the first order or now); null while not every deal is n days old",
+      "unit": "share",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id",
+            "source_deleted_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours",
+          "cadence": "every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours)"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "direction",
+            "started_at",
+            "answered_at",
+            "talk_seconds",
+            "number_ref",
+            "user_ref",
+            "source_deleted_at",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook per call event -> ingest -> call read back",
+          "cadence": "Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand"
+        },
+        {
+          "table": "cma.telephony_number",
+          "columns": [
+            "number_ref",
+            "is_counted"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts)",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "cohorts.lead_ages_days",
+          "default": "1,7,30,60,90",
+          "pulse4all": "1,7,30,60,90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "lead_to_order.max_days",
+          "default": "90",
+          "pulse4all": "90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        },
+        {
+          "key": "attempts.source",
+          "default": "telephony",
+          "pulse4all": "telephony (default)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "10",
+          "pulse4all": "10 (default)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.sales_deals_of",
+            "migration": "0008z"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. An attempt in the pre-window (before the creation) counts at every age. A deal outside the sales deals (a pipeline marked lead and order) is never attempted."
+    },
+    {
+      "key": "cohorts.lead.conversation",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "{n} days (With a conversation)",
+      "title": {
+        "en": "Share with a conversation by age",
+        "nl": "Deel met een gevoerd gesprek per leeftijd"
+      },
+      "definition": "Lead cohorts, measure With a conversation: of the cohort's deals, the share whose first attempt that is a Conversation came at or before n days after creation.",
+      "formula": "conversation(n) = count(deals with first_conversation_at <= created_at + n days) / created; first_conversation_at = the earliest attempt with cma.is_conversation (connected, at least calls.conversation_min_talk_seconds, no tag meaning not reached or incorrect data); null while not every deal is n days old",
+      "unit": "share",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id",
+            "source_deleted_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours",
+          "cadence": "every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours)"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "direction",
+            "started_at",
+            "answered_at",
+            "talk_seconds",
+            "number_ref",
+            "user_ref",
+            "source_deleted_at",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook per call event -> ingest -> call read back",
+          "cadence": "Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand"
+        },
+        {
+          "table": "cma.telephony_number",
+          "columns": [
+            "number_ref",
+            "is_counted"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts)",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.telephony_call_tag",
+          "columns": [
+            "call_source_id",
+            "tag_ref",
+            "untagged_at"
+          ],
+          "owner": "Aircall",
+          "fed_by": "with the call's own write (the call's whole current tag set, closed/opened by difference at versionAt): webhook read-back, reconcile and backfill via cma.ingest_upsert_telephony_calls()",
+          "cadence": "event-driven; the webhook subscription is configured outside the repo: the Aircall dashboard (ingest-reconcile checks it each run), to confirm; reconcile 03:30 Europe/Amsterdam with a 26 h look-back (docs/ingest/deploy.sh, default '30 3 * * *')"
+        },
+        {
+          "table": "cma.telephony_tag",
+          "columns": [
+            "tag_ref",
+            "name",
+            "is_counted",
+            "meaning"
+          ],
+          "owner": "Aircall",
+          "fed_by": "GET /v1/tags via ingest-sweep at most hourly per connection; a tag first seen on a call joins the catalog at the call write (counted by default); is_counted and meaning (cma.set_telephony_tag_meaning, 0008zc; configuration only, the ingest never writes it) set on Configuration \u2192 Sources, Tags",
+          "cadence": "at most hourly per connection inside ingest-sweep (every minute, docs/ingest/deploy.sh); the meaning on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "cohorts.lead_ages_days",
+          "default": "1,7,30,60,90",
+          "pulse4all": "1,7,30,60,90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "lead_to_order.max_days",
+          "default": "90",
+          "pulse4all": "90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        },
+        {
+          "key": "attempts.source",
+          "default": "telephony",
+          "pulse4all": "telephony (default)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "10",
+          "pulse4all": "10 (default)"
+        },
+        {
+          "key": "calls.conversation_min_talk_seconds",
+          "default": "30",
+          "pulse4all": "30 (default)"
+        },
+        {
+          "key": "telephony.connected_min_seconds",
+          "default": "0",
+          "pulse4all": "0 (default)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.sales_deals_of",
+            "migration": "0008z"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
+        },
+        {
+          "item": "A tag that means not reached set on Configuration \u2192 Sources, Tags (without one, Conversation counts on talk time alone; the Tags section says so)",
+          "check": null
+        },
+        {
+          "item": "A tag that means incorrect data set on Configuration \u2192 Sources, Tags on the tags agents put on a wrong number or incorrect contact data (without one, such a call counts by its talk time alone)",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. A deal has a conversation here exactly when Attempts per deal names a first conversation for it (121's B3)."
+    },
+    {
+      "key": "cohorts.lead.ordered",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "{n} days (Ordered)",
+      "title": {
+        "en": "Share ordered by age",
+        "nl": "Deel besteld per leeftijd"
+      },
+      "definition": "Lead cohorts, measure Ordered: of the cohort's deals, the share whose contacts placed a first store order (within lead_to_order.max_days after creation) at or before n days after creation. Not First orders' attribution.",
+      "formula": "ordered(n) = count(deals with lead_to_order's order_created_at <= created_at + n days) / created; lead to order = the first store order of the deal's contacts, not a test, not cancelled, not deleted, created at or after the deal and within lead_to_order.max_days (cma.lead_to_order_of); null while not every deal is n days old, and at an age above lead_to_order.max_days",
+      "unit": "share",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.commerce_order",
+          "columns": [
+            "customer_source_id",
+            "source_created_at",
+            "is_test",
+            "cancelled_at",
+            "source_deleted_at"
+          ],
+          "owner": "Shopify",
+          "fed_by": "Shopify webhook -> read-back; nightly check; backfill per store",
+          "cadence": "webhook read-back within seconds (docs/datamap/catalog.json)"
+        },
+        {
+          "table": "cma.crm_contact_ref",
+          "columns": [
+            "contact_id",
+            "system",
+            "external_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every contact read",
+          "cadence": "with the contact"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "cohorts.lead_ages_days",
+          "default": "1,7,30,60,90",
+          "pulse4all": "1,7,30,60,90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "lead_to_order.max_days",
+          "default": "90",
+          "pulse4all": "90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": "-- :age is one of cohorts.lead_ages_days; the cohort's figure counts only while every deal is :age days old\nwith t as (select timezone as zone from cma.tenant where id = :tenant_id),\ns as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd, cma.setting_of(:tenant_id, 'lead_to_order.max_days')::int as max_days),\nd as (\n  select r.id, r.connection_id, r.source_created_at as created_at, (r.source_created_at at time zone t.zone)::date as created_date,\n         array(select x from (select r.contact_source_id as x where r.contact_source_id is not null\n                              union select a.to_id from cma.crm_association a\n                              where a.tenant_id = r.tenant_id and a.connection_id = r.connection_id and a.from_type = 'deal'\n                                and a.from_id = r.source_id and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record r cross join t cross join s\n  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id\n       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id\n  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and r.source_created_at >= (s.sd::timestamp at time zone t.zone)),\no as (\n  select d.id, min(co.source_created_at) as ordered_at\n  from d cross join s\n  join cma.crm_contact k on k.tenant_id = :tenant_id and k.connection_id = d.connection_id and k.source_id = any (d.contacts)\n  join cma.crm_contact_ref cr on cr.tenant_id = k.tenant_id and cr.contact_id = k.id\n  join cma.commerce_order co on co.tenant_id = :tenant_id and co.source_system = cr.system and co.customer_source_id = cr.external_id\n  where not co.is_test and co.cancelled_at is null and co.source_deleted_at is null\n    and co.source_created_at >= d.created_at and co.source_created_at <= d.created_at + make_interval(days => s.max_days)\n  group by d.id)\nselect date_trunc('week', d.created_date)::date as cohort, count(*) as created,\n       count(*) filter (where o.ordered_at <= d.created_at + make_interval(days => :age)) as ordered_by_age,\n       bool_and(d.created_at + make_interval(days => :age) <= now()) as mature\nfrom d left join o on o.id = d.id\nwhere d.created_date between :from and :to group by 1 order by 1 desc",
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "At the largest age the share equals lead_to_order_of's share ordered within that age (121's B6). An order through a won order deal (Self Serve) is not lead to order and does not count here; Attempts per deal's outcome 'ordered' does count it, so the two can differ. Decision log, 30 Oct 2026: Ordered in a lead cohort is lead to order."
+    },
+    {
+      "key": "cohorts.lead.lost",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "{n} days (Lost)",
+      "title": {
+        "en": "Share lost by age",
+        "nl": "Deel verloren per leeftijd"
+      },
+      "definition": "Lead cohorts, measure Lost: of the cohort's deals, the share closed lost at or before n days after creation.",
+      "formula": "lost(n) = count(deals with cma.sales_deals_of outcome = 'lost' and closed_at <= created_at + n days) / created; outcome lost = the stage's outcome lost and no order ended the deal's window first; null while not every deal is n days old",
+      "unit": "share",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.connection_stage",
+          "columns": [
+            "source_stage_id",
+            "outcome",
+            "is_closed",
+            "label",
+            "display_order",
+            "read_times",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Stage catalog read by ingest-sweep; outcome from the stage's probability unless set on Sources; read_times a person's choice on Sources (null follows the pipeline's counted flag)",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.commerce_order",
+          "columns": [
+            "customer_source_id",
+            "source_created_at",
+            "is_test",
+            "cancelled_at",
+            "source_deleted_at"
+          ],
+          "owner": "Shopify",
+          "fed_by": "Shopify webhook -> read-back; nightly check; backfill per store",
+          "cadence": "webhook read-back within seconds (docs/datamap/catalog.json)"
+        },
+        {
+          "table": "cma.crm_contact_ref",
+          "columns": [
+            "contact_id",
+            "system",
+            "external_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every contact read",
+          "cadence": "with the contact"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.sales_deals_of",
+            "migration": "0008z"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "null: 'lost' is cma.sales_deals_of's outcome, which compares the close with the first order of the deal's contacts (a won order deal or a store order); no faithful independent query is short enough. Closest check: in Studio, cma_read.lead_cohorts' lost_at against cma_read.attempts_per_deal's outcome = 'lost' and closed_at for the same deals. A lost deal without a closing time counts at no age. A deal lost and later ordered counts in both Lost and Ordered."
+    },
+    {
+      "key": "cohorts.lead.median_days_to_order",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "Days to store order",
+      "title": {
+        "en": "Median days to store order per cohort",
+        "nl": "Mediane dagen tot winkelbestelling per cohort"
+      },
+      "definition": "Lead cohorts: the median days from creation to the first store order of the deal's contacts within lead_to_order.max_days, over the cohort's deals that ordered (now).",
+      "formula": "median_days_to_order = round(percentile_cont(0.5) over lead_to_order_of.days_to_order of the cohort's ordered deals, 1); days_to_order = (order - creation) / 86400 s, rounded to 2",
+      "unit": "days",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.commerce_order",
+          "columns": [
+            "customer_source_id",
+            "source_created_at",
+            "is_test",
+            "cancelled_at",
+            "source_deleted_at"
+          ],
+          "owner": "Shopify",
+          "fed_by": "Shopify webhook -> read-back; nightly check; backfill per store",
+          "cadence": "webhook read-back within seconds (docs/datamap/catalog.json)"
+        },
+        {
+          "table": "cma.crm_contact_ref",
+          "columns": [
+            "contact_id",
+            "system",
+            "external_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every contact read",
+          "cadence": "with the contact"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "lead_to_order.max_days",
+          "default": "90",
+          "pulse4all": "90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "null: the order is lead to order's, as cohorts.lead.ordered's verify_sql finds it; the closest check is that query's ordered deals with (ordered_at - created_at) and their median in Studio. A dash for a cohort without an ordered deal. Calendar days, not business days. The header says 'Days to store order' because First orders' 'Days to order' is another figure: the median from the first touch to the attributed first order."
+    },
+    {
+      "key": "cohorts.lead.not_called_yet",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "Not called yet",
+      "title": {
+        "en": "Not called yet per cohort",
+        "nl": "Nog niet gebeld per cohort"
+      },
+      "definition": "Lead cohorts: the cohort's deals that are open now and have no attempt, as Attempts per deal's open deals never attempted.",
+      "formula": "not_called_yet = count(deals with cma.sales_deals_of outcome = 'open' and attempts = 0), as of now",
+      "unit": "count",
+      "grain": [
+        "per_iso_week",
+        "per_month",
+        "per_market",
+        "per_source",
+        "now"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.crm_call",
+          "columns": [
+            "direction",
+            "occurred_at",
+            "outcome_ref",
+            "owner_ref",
+            "source_id",
+            "source_deleted_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (call engagement) -> ingest read-back -> crm_call upsert",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.call_link",
+          "columns": [
+            "crm_call_id",
+            "telephony_call_id",
+            "unlinked_at"
+          ],
+          "owner": "CMA",
+          "fed_by": "Cloud Run job ingest-sweep, link_calls: Aircall call matched to its HubSpot call over the last 2 hours",
+          "cadence": "every minute (docs/ingest/deploy.sh: ingest-sweep, link_calls over the last 2 hours)"
+        },
+        {
+          "table": "cma.telephony_call",
+          "columns": [
+            "direction",
+            "started_at",
+            "answered_at",
+            "talk_seconds",
+            "number_ref",
+            "user_ref",
+            "source_deleted_at",
+            "source_id",
+            "connection_id"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Aircall webhook per call event -> ingest -> call read back",
+          "cadence": "Webhook read-back within seconds (configured outside the repo: the Aircall dashboard's webhook subscription, to confirm); nightly check; backfill by hand"
+        },
+        {
+          "table": "cma.telephony_number",
+          "columns": [
+            "number_ref",
+            "is_counted"
+          ],
+          "owner": "Aircall",
+          "fed_by": "Line catalog read by the sweep; is_counted switched on Sources (a line not yet in the catalog counts)",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        },
+        {
+          "key": "attempts.source",
+          "default": "telephony",
+          "pulse4all": "telephony (default)"
+        },
+        {
+          "key": "speed_to_lead.pre_window_minutes",
+          "default": "10",
+          "pulse4all": "10 (default)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.sales_deals_of",
+            "migration": "0008z"
+          },
+          {
+            "object": "cma.deal_attempts_of",
+            "migration": "0008zc"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortFigures"
+          },
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "leadCohortRows"
+          },
+          {
+            "file": "src/app/reports/lead-cohorts/page.tsx",
+            "export": "default (LeadCohortsPage)"
+          }
+        ]
+      },
+      "verify_sql": null,
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "Every call linked to a contact and a deal (kpis.md \u00a711): an unassociated CRM call is no attempt",
+          "check": "crm_call_without_contact"
+        },
+        {
+          "item": "Aircall\u2013HubSpot call link (telephony source counts only linked outbound Aircall calls); the page's 'Calls logged without a telephony call' shows the gap",
+          "check": "telephony_call_unlinked"
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "null: Attempts per deal's attempts (the telephony link, the counted lines, the window that ends at the close or the first order, the pre-window) cannot be recomputed faithfully in one independent query. Closest checks: db/121's B3 (every sales deal's attempts and first attempt equal cma.attempts_per_deal_of's) and, in Studio, cma_read.lead_cohorts' first_attempt_at against cma_read.attempts_per_deal's for the same deals. Speed to lead's 'Not called yet' (open, not called) reads the first CRM call instead (definitions.md, Speed to lead, As built), so the two can differ."
+    },
+    {
+      "key": "cohorts.lead.ordered_by_age",
+      "surface": "report",
+      "page": "/reports/lead-cohorts",
+      "tile": "Ordered by age",
+      "title": {
+        "en": "Share ordered by age, per cohort (chart)",
+        "nl": "Deel besteld per leeftijd, per cohort (grafiek)"
+      },
+      "definition": "Lead cohorts chart: one line per cohort (the newest eight, never split), the share ordered at each age the cohort has reached.",
+      "formula": "points(cohort) = [(n, ordered(n) / created) for each age n of cohorts.lead_ages_days where the cohort is mature at n and n <= lead_to_order.max_days]; the newest 8 cohorts",
+      "unit": "share",
+      "grain": [
+        "per_iso_week",
+        "per_month"
+      ],
+      "sources": [
+        {
+          "table": "cma.crm_record",
+          "columns": [
+            "record_type",
+            "source_created_at",
+            "pipeline_id",
+            "stage_id",
+            "is_closed",
+            "closed_at",
+            "market",
+            "contact_source_id",
+            "owner_ref",
+            "source_deleted_at",
+            "source_channel"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "HubSpot webhook (deal change) -> ingest service /hubspot/<key> -> read-back -> cma.ingest_upsert_records()",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.connection_pipeline",
+          "columns": [
+            "is_counted",
+            "is_lead",
+            "is_order",
+            "label",
+            "status"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Pipeline catalog read by ingest-sweep; is_counted/is_lead/is_order set on Configuration -> Sources",
+          "cadence": "Catalog read by ingest-sweep at most hourly (docs/ingest/deploy.sh); the switches are configuration, written on change"
+        },
+        {
+          "table": "cma.crm_contact",
+          "columns": [
+            "source_id",
+            "country"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "Read when a deal/ticket/email points to it; re-read every 10 min in its first hour; nightly reconcile",
+          "cadence": "on reference; nightly reconcile"
+        },
+        {
+          "table": "cma.crm_association",
+          "columns": [
+            "from_type",
+            "from_id",
+            "to_type",
+            "to_id",
+            "removed_at"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every HubSpot read-back (deal/call to contact associations)",
+          "cadence": "Webhook read-back within seconds (subscription configured outside the repo: the HubSpot app, to confirm); nightly reconcile 03:30 Europe/Amsterdam (docs/ingest/deploy.sh; docs/datamap/catalog.json still says 02:30)"
+        },
+        {
+          "table": "cma.market",
+          "columns": [
+            "code",
+            "time_zone",
+            "currency"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration -> Markets (tenant configuration)",
+          "cadence": "on change"
+        },
+        {
+          "table": "cma.commerce_order",
+          "columns": [
+            "customer_source_id",
+            "source_created_at",
+            "is_test",
+            "cancelled_at",
+            "source_deleted_at"
+          ],
+          "owner": "Shopify",
+          "fed_by": "Shopify webhook -> read-back; nightly check; backfill per store",
+          "cadence": "webhook read-back within seconds (docs/datamap/catalog.json)"
+        },
+        {
+          "table": "cma.crm_contact_ref",
+          "columns": [
+            "contact_id",
+            "system",
+            "external_id"
+          ],
+          "owner": "HubSpot",
+          "fed_by": "With every contact read",
+          "cadence": "with the contact"
+        },
+        {
+          "table": "cma.tenant_setting",
+          "columns": [
+            "key",
+            "value"
+          ],
+          "owner": "CMA",
+          "fed_by": "Configuration (cma.set_tenant_setting)",
+          "cadence": "on change"
+        }
+      ],
+      "filters": [
+        "tenant: cma.lead_cohorts_report under RLS + current tenant",
+        "population: cma.lead_deals_of - deals of counted lead pipelines (a pipeline also marked order included), not deleted, created on or after intake.start_date; no creation-source or test filter exists (deals created by hand and test deals count)",
+        "period: the deals' creation business dates [from, to] in the tenant's zone, at most 92 days (cma.report_range); a cohort the range cuts is marked partial and counts its deals in the range only",
+        "page filters, applied alike to every figure: market (code or unknown), pipeline (connection:pipeline), source channel (crm_record.source_channel, exact match); the filter lists come from the deals without the filters"
+      ],
+      "time": "Cohort: the ISO week (Monday, date_trunc('week')) or the month of the creation's business date in the tenant's zone. Age n: n days after the creation (created_at + make_interval(days => n), as lead_to_order.max_days counts its days). Mature at n: every deal of the cohort (or of the split row) has created_at + n days <= now; before that the figures at n are null. now = now() at read time.",
+      "comparison": null,
+      "settings": [
+        {
+          "key": "cohorts.lead_ages_days",
+          "default": "1,7,30,60,90",
+          "pulse4all": "1,7,30,60,90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "lead_to_order.max_days",
+          "default": "90",
+          "pulse4all": "90 (default; seed 02 sets none)"
+        },
+        {
+          "key": "intake.start_date",
+          "default": "2026-10-01",
+          "pulse4all": "2026-10-01 (default; seed 02 sets none)"
+        }
+      ],
+      "permissions": {
+        "anyOf": [
+          "reports.view",
+          "performance.team"
+        ],
+        "perPerson": null
+      },
+      "refresh": "On page load (server component; one SQL read, cma.lead_cohorts_report, per view). No polling.",
+      "computed_in": {
+        "sql": [
+          {
+            "object": "cma.lead_cohorts_report",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_report_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_rows_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_of",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohorts_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_cohort_figures_from",
+            "migration": "0008zm"
+          },
+          {
+            "object": "cma.lead_deals_of",
+            "migration": "0007d"
+          },
+          {
+            "object": "cma.lead_to_order_of",
+            "migration": "0007d"
+          }
+        ],
+        "ts": [
+          {
+            "file": "src/lib/cohorts.ts",
+            "export": "cohortChartLines"
+          },
+          {
+            "file": "src/components/CohortParts.tsx",
+            "export": "CohortChart"
+          }
+        ]
+      },
+      "verify_sql": "-- :age is one of cohorts.lead_ages_days; the cohort's figure counts only while every deal is :age days old\nwith t as (select timezone as zone from cma.tenant where id = :tenant_id),\ns as (select cma.setting_of(:tenant_id, 'intake.start_date')::date as sd, cma.setting_of(:tenant_id, 'lead_to_order.max_days')::int as max_days),\nd as (\n  select r.id, r.connection_id, r.source_created_at as created_at, (r.source_created_at at time zone t.zone)::date as created_date,\n         array(select x from (select r.contact_source_id as x where r.contact_source_id is not null\n                              union select a.to_id from cma.crm_association a\n                              where a.tenant_id = r.tenant_id and a.connection_id = r.connection_id and a.from_type = 'deal'\n                                and a.from_id = r.source_id and a.to_type = 'contact' and a.removed_at is null) c) as contacts\n  from cma.crm_record r cross join t cross join s\n  left join cma.connection_pipeline p on p.tenant_id = :tenant_id and p.connection_id = r.connection_id\n       and p.record_type = 'deal' and p.source_pipeline_id = r.pipeline_id\n  where r.tenant_id = :tenant_id and r.record_type = 'deal' and r.source_deleted_at is null\n    and coalesce(p.is_counted, true) and coalesce(p.is_lead, true)\n    and r.source_created_at >= (s.sd::timestamp at time zone t.zone)),\no as (\n  select d.id, min(co.source_created_at) as ordered_at\n  from d cross join s\n  join cma.crm_contact k on k.tenant_id = :tenant_id and k.connection_id = d.connection_id and k.source_id = any (d.contacts)\n  join cma.crm_contact_ref cr on cr.tenant_id = k.tenant_id and cr.contact_id = k.id\n  join cma.commerce_order co on co.tenant_id = :tenant_id and co.source_system = cr.system and co.customer_source_id = cr.external_id\n  where not co.is_test and co.cancelled_at is null and co.source_deleted_at is null\n    and co.source_created_at >= d.created_at and co.source_created_at <= d.created_at + make_interval(days => s.max_days)\n  group by d.id)\nselect date_trunc('week', d.created_date)::date as cohort, count(*) as created,\n       count(*) filter (where o.ordered_at <= d.created_at + make_interval(days => :age)) as ordered_by_age,\n       bool_and(d.created_at + make_interval(days => :age) <= now()) as mature\nfrom d left join o on o.id = d.id\nwhere d.created_date between :from and :to group by 1 order by 1 desc",
+      "fixture_check": "Not run here: there is no local copy of dev's data in the build session. db/121_verify_lead_cohorts.sql proves the figure on its own deals (normal and provoked runs passed on a local PostgreSQL 16 with the migrations 00 to 120, 30 October 2026) and verify:reports mirrors 121's figures in src/lib/cohorts.ts; Martin runs verify_sql in Studio (cma-dev-pg) and compares it with the page.",
+      "prerequisites": [
+        {
+          "item": "Pipelines reviewed on Sources (counted/lead/order flags)",
+          "check": "pipeline_unreviewed"
+        },
+        {
+          "item": "Creation source and test flag on deals (HubSpot record source, to map per CRM connection; definitions.md Gaps D24, D25 and I6): missing, so cohorts include deals created by hand and test deals",
+          "check": null
+        },
+        {
+          "item": "Source channel filled on deals (crm_record.source_channel, mapped on Sources)",
+          "check": null
+        },
+        {
+          "item": "the shop's customers linked to CRM contacts (0008h) for the linked order, its amount and the phone hashes",
+          "check": "commerce_unmatched / commerce_ambiguous"
+        }
+      ],
+      "docs": [
+        "features.md \u00a75, Reports \u2192 Lead cohorts",
+        "kpis.md \u00a71 and \u00a712",
+        "api.md, GET /api/v1/reports/lead-cohorts",
+        "data-model/0008.md, Lead cohorts (0008zm)",
+        "definitions.md, Cohort terms (Lead cohort, Cohort age, Mature)",
+        "decisions.md, 30 Oct 2026 (Reports \u2192 Lead cohorts; Ordered in a lead cohort is lead to order)"
+      ],
+      "status": [
+        "verified",
+        "prerequisite_missing"
+      ],
+      "notes": "The same figures as cohorts.lead.ordered for the unsplit cohorts. Colours in the series order of Pulse4all-Style 7.7; the seventh and eighth line repeat the first two, dashed."
+    },
+    {
       "key": "forms.submissions",
       "surface": "report",
       "page": "/reports/forms",

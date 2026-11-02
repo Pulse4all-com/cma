@@ -414,6 +414,16 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "maintenance.list.contact",
     "maintenance.list.register",
   ],
+  "/reports/lead-cohorts": [
+    "cohorts.lead.created",
+    "cohorts.lead.attempted",
+    "cohorts.lead.conversation",
+    "cohorts.lead.ordered",
+    "cohorts.lead.lost",
+    "cohorts.lead.median_days_to_order",
+    "cohorts.lead.not_called_yet",
+    "cohorts.lead.ordered_by_age",
+  ],
   "/reports/forms": [
     "forms.submissions",
     "forms.forms_with_submissions",

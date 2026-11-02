@@ -48,6 +48,8 @@ export type ShellPage =
   | "email" | "email-per-agent"
   /** First orders and Orders per person (addition 0008u, brief N19-A part 2) */
   | "first-orders" | "orders-per-person"
+  /** Lead cohorts (addition 0008zm): the lead deals by the week or month of their creation, followed at fixed ages */
+  | "lead-cohorts"
   /** Attempts per deal and Attempts per agent (addition 0008y, 19 October 2026) */
   | "attempts" | "attempts-per-agent"
   /** Funnel and Cancellations (addition 0008zb): the deals through their stages with the lost reasons, and the cancellation requests */
@@ -72,7 +74,7 @@ export type ShellPage =
 export type NavHref =
   | "/" | "/messages" | "/live/board" | "/team/people" | "/roster/planner" | "/day" | "/hours" | "/schedule" | "/team/hours" | "/reports/dashboard"
   | "/reports/speed-to-lead" | "/reports/attempts" | "/reports/attempts-per-agent" | "/reports/funnel" | "/reports/cancellations" | "/reports/follow-up" | "/reports/intake" | "/reports/inbound" | "/reports/calls" | "/reports/calls-per-agent" | "/reports/forms"
-  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/campaigns"
+  | "/reports/email" | "/reports/email-per-agent" | "/reports/first-orders" | "/reports/orders-per-person" | "/reports/lead-cohorts" | "/reports/reviews" | "/reports/maintenance" | "/reports/data-quality" | "/campaigns"
   | "/configuration/statuses" | "/configuration/teams" | "/configuration/absences" | "/configuration/exports" | "/configuration/app-links"
   | "/configuration/sources" | "/configuration/markets" | "/configuration/alert-rules" | "/configuration/metrics" | "/configuration/health";
 
@@ -213,6 +215,10 @@ export function navEntries(copy: Copy): NavEntry[] {
         // (off for Pulse4all until Yordi confirms it, README Open decisions)
         { page: "first-orders", href: "/reports/first-orders", label: copy.nav.firstOrders, permission: ["reports.view", "performance.team"] },
         { page: "orders-per-person", href: "/reports/orders-per-person", label: copy.nav.ordersPerPerson, permission: "performance.team", perPerson: "orders" },
+        // Lead cohorts (addition 0008zm; KPIs 1 and 12): the lead deals by the week or month of their creation, followed at the ages of
+        // cohorts.lead_ages_days; after First orders and its per-person page, so the pages after it move one key down. Team figures
+        // only, for the funnel's permissions
+        { page: "lead-cohorts", href: "/reports/lead-cohorts", label: copy.nav.leadCohorts, permission: ["reports.view", "performance.team"] },
         // Reviews (addition 0008ze, brief B18; KPI 3): the review platform's reviews per market, channel and week with the
         // average rating, the negative reviews and how they link to an order or a contact; team figures only, as every report
         { page: "reviews", href: "/reports/reviews", label: copy.nav.reviews, permission: ["reports.view", "performance.team"] },

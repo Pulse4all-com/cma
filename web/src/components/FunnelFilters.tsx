@@ -2,7 +2,8 @@
 
 /**
  * The filters of Reports → Funnel (addition 0008zb): market (K), pipeline (P, the lead pipelines only) and source (S, the
- * deal's source channel as the customer records hold it); Reports → Cancellations takes the market alone. The period bar
+ * deal's source channel as the customer records hold it); Reports → Cancellations takes the market alone; Reports → Lead
+ * cohorts (addition 0008zm) all three. The period bar
  * holds Y, T, W, M and C, the grouping G, the rail its digits and the top bar L. Choosing keeps the period and the grouping
  * and loads the page with the filter; the address keys are market, pipeline and source.
  */
@@ -15,7 +16,7 @@ import { Keycap } from "./primitives";
 const select = "h-10 w-44 rounded-input border border-p4a-border bg-white px-3 font-normal text-body text-p4a-body focus:border-p4a-deepblue";
 
 export function FunnelFilters({ pathname, markets, pipelines, sourceChannels, filter, query, copy, marketOnly = false }: {
-  pathname: "/reports/funnel" | "/reports/cancellations" | "/reports/reviews";
+  pathname: "/reports/funnel" | "/reports/cancellations" | "/reports/reviews" | "/reports/lead-cohorts";
   /** Market codes, "unknown" for a record without one */
   markets: string[];
   pipelines: { key: string; label: string }[];

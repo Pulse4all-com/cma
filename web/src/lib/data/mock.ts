@@ -25,7 +25,7 @@ import type {
   Journey, JourneyStatus, CallbackOwner, CallbacksKept, DashboardData,
   AttemptFilter, AttemptGroup, AttemptSettings, AttemptsPerAgent, AttemptsReport, DealAttempt,
   CancellationsReport, DealsPerPerson, FunnelFilter, FunnelGroup, FunnelReport, LostReasonsReport, RecordKind, RecordKindConfig, SourceField, SourceReason,
-  ReviewsReport, MaintenanceFilter, MaintenanceReport, MaintenanceRows, MaintenanceView,
+  ReviewsReport, MaintenanceFilter, MaintenanceReport, MaintenanceRows, MaintenanceView, LeadCohortsReport,
 } from "./types";
 import {
   ATTEMPT_GROUPS, ATTEMPTS_PER_AGENT_KEY, ATTEMPTS_PER_AGENT_PERMISSION, attemptBuckets, attemptFigures, attemptGroups, attemptList, attemptOutcomes,
@@ -64,6 +64,7 @@ import {
   type FunnelDealFixture, type FunnelOptions, type FunnelPipelineFixture, type FunnelReasonOption, type KindRuleFixture,
 } from "@/lib/funnel";
 import { reviewMarketStates, reviewRecords, reviewsReport, type ReviewSource } from "@/lib/reviews";
+import { COHORT_PERIODS, COHORT_SPLITS, LEAD_AGES_SETTING, LEAD_TO_ORDER_SETTING, leadAgesOf, leadCohortsReport, parseLeadAges, type LeadCohortDeal } from "@/lib/cohorts";
 import { addMonths, bucketProblem, maintenanceItems, maintenanceReport, maintenanceRows, monthOf, type MaintenanceCatalog, type MaintenanceDevice } from "@/lib/maintenance";
 
 // ---- Intake reports fixture (B11, 12 October 2026) -------------------------------------------
@@ -909,6 +910,36 @@ function mockFunnelDeals(me: Principal): { deals: FunnelDeal[]; entries: Instant
   };
 }
 
+/**
+ * Lead cohorts (addition 0008zm): the attempt fixture's lead deals created in the range (business dates in the tenant's zone),
+ * each with its facts as cma.lead_cohorts_of reads them: the attempts and the outcome of Attempts per deal's records, the first
+ * conversation from the deal's attempts, the first order within lead_to_order.max_days, the source channel of the funnel's
+ * fixture. A deal of a pipeline marked lead and order is no sales deal: never attempted, never lost
+ */
+function mockLeadCohortDeals(me: Principal, range: HoursRange): LeadCohortDeal[] {
+  const options = mockAttemptOptions(me);
+  const maxDays = Number(mockSetting(LEAD_TO_ORDER_SETTING));
+  const fixtures = mockAttemptDeals(me).filter((d) => d.isCounted && d.isLead && Date.parse(d.createdAt) <= Date.parse(options.now));
+  const records = new Map(attemptRecords(fixtures, options).map((r) => [r.dealId, r]));
+  const channels = new Map(mockFunnelFixtures(me).map((f) => [f.dealId, f.sourceChannel]));
+  return fixtures.flatMap((d): LeadCohortDeal[] => {
+    const date = dateKeyInZone(d.createdAt, MOCK_TENANT_ZONE);
+    if (date < range.from || date > range.to || date < mockStartDate(me)) return [];
+    const r = records.get(d.dealId) ?? null;
+    const t0 = Date.parse(d.createdAt);
+    const order = d.orders.map((o) => o.createdAt).filter((at) => Date.parse(at) >= t0 && Date.parse(at) <= t0 + maxDays * 86_400_000).sort()[0] ?? null;
+    return [{
+      dealId: d.dealId, connectionId: d.connectionId, pipelineId: d.pipelineId, pipelineLabel: d.pipelineLabel, market: d.market,
+      sourceChannel: channels.get(d.dealId) ?? null, createdAt: d.createdAt, date,
+      firstAttemptAt: r?.firstAttemptAt ?? null,
+      firstConversationAt: r ? dealAttempts(d, options, false).find((a) => a.conversation)?.startedAt ?? null : null,
+      orderCreatedAt: order, daysToOrder: order === null ? null : Math.round(((Date.parse(order) - t0) / 86_400_000) * 100) / 100,
+      lostAt: r?.outcome === "lost" ? r.closedAt : null,
+      notCalledYet: r !== null && r.outcome === "open" && r.attempts === 0,
+    }];
+  });
+}
+
 function assertFunnel(me: Principal, range: HoursRange, filter: FunnelFilter, group: FunnelGroup | null, permissions: string[]): void {
   assertAny(me, permissions);
   assertReportRange(range);
@@ -1355,6 +1386,9 @@ const MOCK_SETTINGS: TenantSetting[] = [
   { key: "calls.conversation_min_talk_seconds", value: "30", isDefault: true },
   { key: "attempts.speed_buckets_business_minutes", value: "5,15,60,240,1440", isDefault: true },
   { key: "speed_to_lead.pre_window_minutes", value: "10", isDefault: false },
+  // lead cohorts (addition 0008zm): the ages and the days lead to order counts, at their catalog defaults
+  { key: "cohorts.lead_ages_days", value: "1,7,30,60,90", isDefault: true },
+  { key: "lead_to_order.max_days", value: "90", isDefault: true },
 ];
 
 type Key = `${string}:${string}:${DateKey}`;
@@ -1862,6 +1896,7 @@ const MOCK_SETTING_DEFAULTS: Record<string, string> = {
   "attribution.assisted_levels": "lead_deal,conversation,email,phone_match", "attribution.known_contact_minutes": "60", "attribution.order_match_minutes": "1440",
   "attempts.max_bucket": "5", "attempts.since_last_buckets_business_days": "1,2,5", "attempts.source": "telephony",
   "calls.conversation_min_talk_seconds": "30", "attempts.speed_buckets_business_minutes": "5,15,60,240,1440",
+  "cohorts.lead_ages_days": "1,7,30,60,90", "lead_to_order.max_days": "90",
 };
 
 function assertRosterManage(me: Principal): void {
@@ -3411,6 +3446,16 @@ export const mockData: CmaData = {
     const cur = c.settings.find((x) => x.key === key);
     const fallback = MOCK_SETTING_DEFAULTS[key];
     if (!cur && fallback === undefined) throw new CmaDbError("CMA02", "unknown setting");
+    // as cma.check_tenant_setting (addition 0008zm): the ages one to six increasing whole numbers, spaces dropped, the largest at
+    // most lead to order's days; and lead to order's days no fewer than the largest age
+    if (value !== null && key === LEAD_AGES_SETTING) {
+      const ages = parseLeadAges(value, Number(mockSetting(LEAD_TO_ORDER_SETTING)));
+      if (ages === null) throw new CmaDbError("CMA04", `Setting ${key} takes one to six increasing whole numbers of days, at most ${LEAD_TO_ORDER_SETTING}`);
+      value = ages;
+    }
+    if (value !== null && key === LEAD_TO_ORDER_SETTING && Number(value) < Math.max(0, ...leadAgesOf(mockSetting(LEAD_AGES_SETTING)))) {
+      throw new CmaDbError("CMA04", `Setting ${key} takes at least the largest age of ${LEAD_AGES_SETTING}`);
+    }
     const next: TenantSetting = value === null
       ? { key, value: fallback ?? cur!.value, isDefault: true }
       : { key, value, isDefault: value === fallback };
@@ -4349,6 +4394,16 @@ export const mockData: CmaData = {
       isSetUp: channels.length > 0, markets, marketStates: states,
       filterMarkets: [...new Set(channels.filter((ch) => ch.isCounted).map((ch) => ch.market ?? "unknown"))]
         .sort((a, b) => (a === "unknown" ? 1 : 0) - (b === "unknown" ? 1 : 0) || a.localeCompare(b)) });
+  },
+
+  async getLeadCohorts(me, range, period, split, filter): Promise<LeadCohortsReport> {
+    assertFunnel(me, range, filter, null, ["reports.view", "performance.team"]);
+    if (!COHORT_PERIODS.includes(period)) throw new CmaDbError("CMA04", "period is week or month");
+    if (!COHORT_SPLITS.includes(split)) throw new CmaDbError("CMA04", "split is none, market or source");
+    return leadCohortsReport(mockLeadCohortDeals(me, range), {
+      from: range.from, to: range.to, period, split, filter, ages: leadAgesOf(mockSetting(LEAD_AGES_SETTING)),
+      maxDays: Number(mockSetting(LEAD_TO_ORDER_SETTING)), historyStart: mockStartDate(me), now: new Date().toISOString(),
+    });
   },
 
   async getMaintenance(me, filter): Promise<MaintenanceReport> {
