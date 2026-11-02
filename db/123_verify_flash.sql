@@ -854,11 +854,13 @@ begin
     v_txt := v_txt || ' | ' || (select string_agg(c ->> 'key' || ':' || (c ->> 'set_up') || ':' || coalesce(c ->> 'value', 'null'), ' ' order by c ->> 'key')
                                 from jsonb_array_elements(j -> 'overviews') c where c ->> 'key' in ('customers', 'installed_base', 'data_quality'))
              || ' | ' || (select string_agg(x || ':' || (cma.flash_headline(x) ->> 'set_up') || ':' || coalesce(cma.flash_headline(x) ->> 'value', 'null'), ' ' order by x)
-                          from unnest(array['customers', 'data_quality', 'orders']) x);
-    v_rows := v_rows || array['28', 'B12 not set up: no figures and no rows, never zeros; data quality alone; the landing''s cards and headlines',
+                          from unnest(array['customers', 'data_quality', 'orders']) x)
+             || ' | ' || (cma.flash_rows('customers') ->> 'set_up') || ' ' || (cma.flash_rows('data_quality') ->> 'set_up')
+             || ' ' || ((j ->> 'today')::date = cma.tenant_today_of(v_t2))::text || ' ' || (j ->> 'time_zone');
+    v_rows := v_rows || array['28', 'B12 not set up: no figures and no rows, never zeros; data quality alone; the landing''s cards and headlines; the rows say so; the tenant''s today and zone',
       case when v_txt = 'customers=0 subscriptions=0 installed_base=0 churn=0 orders=0 payments=0 open_deals=0 open_tickets=0 open_tasks=0 reviews=0 data_quality=1 | '
                         || 'false null [] | customers:false:null data_quality:true:null installed_base:false:null | '
-                        || 'customers:false:null data_quality:true:0 orders:false:null'
+                        || 'customers:false:null data_quality:true:0 orders:false:null | false true true Europe/Amsterdam'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B13. tenant isolation: tenant two's admin sees none of tenant one's snapshots, runs, lists or findings, reads none

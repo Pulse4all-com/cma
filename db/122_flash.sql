@@ -2475,11 +2475,13 @@ begin
     'labels', cma.flash_labels_of(p_tenant_id, p_overview),
     'settings', jsonb_build_object(
       'active_subscription_statuses', to_jsonb(cma.flash_active_statuses_of(p_tenant_id)),
+      'ended_subscription_statuses', to_jsonb(cma.flash_ended_statuses_of(p_tenant_id)),
       'required_contact_refs', to_jsonb(cma.flash_list_of(cma.setting_of(p_tenant_id, 'commerce.required_contact_refs'))),
       'required_device_refs', to_jsonb(cma.flash_list_of(cma.setting_of(p_tenant_id, 'assets.required_refs'))),
       'negative_max_rating', cma.setting_of(p_tenant_id, 'reviews.negative_max_rating')::integer,
       'file_max_rows', cma.setting_of(p_tenant_id, 'flash.file_max_rows')::integer),
-    'first_snapshot_date', (select min(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.status = 'succeeded'))
+    'first_snapshot_date', (select min(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.status = 'succeeded'),
+    'today', cma.tenant_today_of(p_tenant_id), 'time_zone', (select t.timezone from cma.tenant t where t.id = p_tenant_id))
     || v_extra;
 end
 $$;
@@ -2810,7 +2812,9 @@ $$;
 -- A list of one overview (reports.view or performance.team): live, the records behind a figure (the filters: the
 -- overview's dims and measure, a count measure), sorted by a whitelisted key (the overview's first when absent),
 -- p_limit rows (1 to flash.file_max_rows) from p_offset, the total before the limit; flows over a period. With p_as_of,
--- a past month end's frozen list (customers, subscriptions, installed_base; CMA02 for another date or overview)
+-- a past month end's frozen list (customers, subscriptions, installed_base; CMA02 for another date or overview). The answer
+-- says whether the overview's source is set up (set_up: an empty list of a source not set up is no zero) and the tenant's
+-- time zone (a file's instants and its name follow the tenant, not the reader)
 create or replace function cma.flash_rows(p_overview text, p_filters jsonb default '{}'::jsonb, p_sort text default null,
                                           p_descending boolean default false, p_limit integer default 500, p_offset integer default 0,
                                           p_as_of date default null, p_from date default null, p_to date default null)
@@ -2855,7 +2859,10 @@ begin
                             'as_of', case when p_as_of is null then to_jsonb(now()) else to_jsonb(p_as_of) end,
                             'from', case when o.kind = 'flow' and p_as_of is null then coalesce(p_from, v_today) end,
                             'to', case when o.kind = 'flow' and p_as_of is null then coalesce(p_to, v_today) end,
-                            'filters', v_filters, 'sort', v_sort, 'descending', coalesce(p_descending, false), 'limit', p_limit, 'offset', p_offset)
+                            'filters', v_filters, 'sort', v_sort, 'descending', coalesce(p_descending, false), 'limit', p_limit, 'offset', p_offset,
+                            'set_up', case when o.source is null then true
+                                           else coalesce((cma.flash_sources_of(v_tenant) -> o.source ->> 'set_up')::boolean, false) end,
+                            'time_zone', (select t.timezone from cma.tenant t where t.id = v_tenant))
          || v_res;
 end
 $$;
@@ -2962,7 +2969,8 @@ begin
         'nearest_after', (select min(r.snapshot_date) from cma.flash_snapshot_run r
                           where r.tenant_id = v_tenant and r.status = 'succeeded' and r.snapshot_date > p_as_of),
         'first_snapshot_date', (select min(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = v_tenant and r.status = 'succeeded'),
-        'overviews', '[]'::jsonb, 'watch', '[]'::jsonb, 'markets', '[]'::jsonb);
+        'overviews', '[]'::jsonb, 'watch', '[]'::jsonb, 'markets', '[]'::jsonb,
+        'today', cma.tenant_today_of(v_tenant), 'time_zone', (select t.timezone from cma.tenant t where t.id = v_tenant));
     end if;
   end if;
   for o in select * from cma.flash_overviews() x order by x.sort_order loop
@@ -3007,7 +3015,8 @@ begin
                                         order by f.snapshot_date desc, f.kind, f.overview, f.dims::text), '[]'::jsonb)
               from cma.flash_watch_finding f where f.tenant_id = v_tenant and f.state = 'open'),
     'first_snapshot_date', (select min(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = v_tenant and r.status = 'succeeded'),
-    'last_snapshot_date', (select max(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = v_tenant and r.status = 'succeeded'));
+    'last_snapshot_date', (select max(r.snapshot_date) from cma.flash_snapshot_run r where r.tenant_id = v_tenant and r.status = 'succeeded'),
+    'today', cma.tenant_today_of(v_tenant), 'time_zone', (select t.timezone from cma.tenant t where t.id = v_tenant));
 end
 $$;
 
