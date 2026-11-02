@@ -4192,8 +4192,9 @@ export const mockData: CmaData = {
       ok("close_forgotten_workdays", null, 25 * 60, 1, { closed: 0 }, 24),
       // the follow-up snapshot (0008s): refreshed every minute
       ok("refresh_follow_up", null, 20, 1, { rows: 27, leads: 5, tickets: 12, tasks: 10, duration_ms: 140, skipped: 0 }, 1440),
-      // the Flash snapshot (0008zn): hourly, the date taken once after the tenant's snapshot time
-      ok("flash_snapshot", null, 40 * 60, 2, { taken: 0, not_due: 0, already: 1, failed: 0, rows: 0, ids: 0, watch_opened: 0, watch_open: 2, missed_before: 0, duration_ms: 0 }, 24),
+      // the Flash snapshot (0008zn): hourly, the latest due date taken once (here an hour after its take: already)
+      ok("flash_snapshot", null, 40 * 60, 2, { taken: 0, not_due: 0, already: 1, missed: 0, failed: 0, late: 0, rows: 0, ids: 0, ids_skipped: 0, watch_opened: 0,
+        watch_open: 2, watch_failed: 0, missed_before: 0, missed_recorded: 0, duration_ms: 0 }, 24),
     ];
     if (tel) rows.push(ok("reconcile", tel, 9.5 * 3600, 40, { fetched: 80, upserted: 3 }, 1));
     if (shop) rows.push(ok("subscriptions_check", shop, 9.5 * 3600, 4, { fetched: 2 }, 1), ok("reconcile", shop, 9.4 * 3600, 60, { fetched: 30, upserted: 1 }, 1));

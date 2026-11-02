@@ -8,7 +8,10 @@
  * Proves: a connection error is retried once on a fresh connection, the broken one dropped, the run row kept (one per
  * tenant), and the run finished as succeeded; a second one fails the tenant and its run row (with the code), the
  * other tenants still served; any other error is never retried; an idle client's error is one warning line and no
- * crash; the run row's finish is retried on its own, never repeating the close. Invented ids only.
+ * crash; the run row's finish is retried on its own, never repeating the close. For the Flash snapshot, a retry reports
+ * what the first attempt did: a take's answer received is kept (the take not sent again), a take whose answer was lost
+ * is this run's when its run started after the tenant's run row (else already), and a finish whose answer was lost
+ * answering CMA03 on the retry is done, not a failure. Invented ids only.
  *
  *   node verify/jobs.mjs             every check must PASS
  *   node verify/jobs.mjs --provoke   every check must FAIL
@@ -33,16 +36,38 @@ const T2 = "01a10651-0000-7000-8000-000000000002";
 const USER = "01a10651-0000-7000-8000-0000000000aa";
 const reset = () => Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
 
+// The database's take (0008zn), per tenant: the first take stores the date and answers taken with its counts; a later
+// one answers reason taken with that run's start and the counts it stored. earlier: tenants whose date a run before
+// this one took
+const DATE = "2026-10-31";
+const STORED = { customers: 3, orders: 4, data_quality: 2, ids_customer: 5, ids_device: 1, ids_expired: 0, watch_opened: 1, watch_resolved: 0, watch_open: 2 };
+function dbTake({ earlier = [] } = {}) {
+  const runs = new Map(earlier.map((t) => [t, { id: `earlier-${t}`, at: "2026-11-01T00:20:00.123456+00:00" }]));
+  return (tenant, { now }) => {
+    const run = runs.get(tenant);
+    if (run) return { taken: false, reason: "taken", date: DATE, run_id: run.id, run_started_at: run.at, stored: STORED };
+    runs.set(tenant, { id: `run-${tenant}`, at: now() });
+    return { taken: true, date: DATE, run_id: `run-${tenant}`, due_at: "2026-11-01T05:00:00+00:00", late: false, missed_before: 0, missed_recorded: 0,
+      duration_ms: 9, ...STORED };
+  };
+}
+
 /**
- * A mocked pg pool. faults: [{ on: regex of the statement, tenant, times, error: () => Error, emit: true }]; a fault
- * with emit sends the error as the client's 'error' event (the server ending the session) and then fails the
- * statement as pg does ("Connection terminated unexpectedly"). connectFaults: errors for the next connects.
+ * A mocked pg pool. faults: [{ on: regex of the statement, tenant, times, error: () => Error, emit: true, after: true }];
+ * a fault with emit sends the error as the client's 'error' event (the server ending the session) and then fails the
+ * statement as pg does ("Connection terminated unexpectedly"); a fault with after lets the statement take effect (its
+ * commit landed) and then loses its answer. connectFaults: errors for the next connects. The database's clock moves one
+ * second each time a run row starts or a take starts; a run row finished twice answers CMA03 as cma.job_run_finish does.
  */
-function mockPool({ faults = [], connectFaults = [], take = () => ({ taken: true, date: "2026-10-31", customers: 3, orders: 4, data_quality: 2, ids_customer: 5,
-  ids_device: 1, watch_opened: 1, watch_open: 2, missed_before: 0, duration_ms: 9, run_id: "r" }) } = {}) {
+function mockPool({ faults = [], connectFaults = [], take = dbTake() } = {}) {
   const pool = new EventEmitter();
   const state = { connects: 0, released: 0, dropped: 0, statements: [], runStarts: [], runFinishes: [] };
   let nextRun = 0;
+  let tick = 0;
+  const clock = () => new Date(Date.UTC(2026, 10, 2, 0, 20, tick++));
+  // a timestamptz as jsonb writes it (microseconds, an offset)
+  const now = () => clock().toISOString().replace(/\.\d{3}Z$/, ".123456+00:00");
+  const finished = new Set();
   pool.state = state;
   pool.connect = async () => {
     state.connects += 1;
@@ -50,6 +75,33 @@ function mockPool({ faults = [], connectFaults = [], take = () => ({ taken: true
     const client = new EventEmitter();
     let tenant = null;
     client.release = (err) => { state.released += 1; if (err) state.dropped += 1; };
+    const respond = (text, values) => {
+      if (/find_tenants_for_identity/.test(text)) return { rows: [{ tenant_id: T1 }, { tenant_id: T2 }], rowCount: 2 };
+      if (/from cma\.app_user_external_id/.test(text)) return { rows: [{ id: USER, slug: tenant === T1 ? "one" : "two" }], rowCount: 1 };
+      if (/cma\.job_run_start|cma\.scheduler_run_start/.test(text)) {
+        nextRun += 1;
+        const id = `00000000-0000-7000-8000-${String(nextRun).padStart(12, "0")}`;
+        state.runStarts.push({ tenant, id });
+        return { rows: [{ id, at: clock() }], rowCount: 1 };
+      }
+      if (/cma\.refresh_follow_up\(\)/.test(text)) return { rows: [{ r: { refreshed: true, rows: 3, leads: 1, tickets: 1, tasks: 1, duration_ms: 7 } }], rowCount: 1 };
+      if (/cma\.flash_snapshot_take\(/.test(text)) return { rows: [{ r: take(tenant, { now }) }], rowCount: 1 };
+      if (/cma\.job_run_finish/.test(text)) {
+        if (finished.has(values[0])) throw Object.assign(new Error(`scheduler run ${values[0]} is already finished`), { code: "CMA03" });
+        finished.add(values[0]);
+        const failed = /'failed'/.test(text);
+        state.runFinishes.push({ tenant, id: values[0], status: failed ? "failed" : "succeeded",
+          detail: failed ? (values.length > 2 ? values[2] : values[1]) : JSON.parse(values[1]).rows,
+          counts: /\$2::jsonb/.test(text) ? JSON.parse(values[1]) : {} });
+        return { rows: [], rowCount: 1 };
+      }
+      if (/cma\.scheduler_run_finish/.test(text)) {
+        state.runFinishes.push({ tenant, id: values[0], status: values[1], detail: values[1] === "failed" ? values[3] : values[2] });
+        return { rows: [], rowCount: 1 };
+      }
+      if (/cma\.close_forgotten_workdays/.test(text)) return { rows: [{ workday_id: "w1", user_id: "u1", business_date: "2026-10-17", ended_at: "2026-10-17T15:00:00Z" }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    };
     client.query = async (text, values = []) => {
       if (/set_config\('app\.tenant_id'/.test(text)) tenant = values[0];
       state.statements.push({ text, tenant });
@@ -60,29 +112,10 @@ function mockPool({ faults = [], connectFaults = [], take = () => ({ taken: true
           client.emit("error", fault.error());
           throw new Error("Connection terminated unexpectedly");
         }
+        if (fault.after) respond(text, values);
         throw fault.error();
       }
-      if (/find_tenants_for_identity/.test(text)) return { rows: [{ tenant_id: T1 }, { tenant_id: T2 }], rowCount: 2 };
-      if (/from cma\.app_user_external_id/.test(text)) return { rows: [{ id: USER, slug: tenant === T1 ? "one" : "two" }], rowCount: 1 };
-      if (/cma\.job_run_start|cma\.scheduler_run_start/.test(text)) {
-        nextRun += 1;
-        const id = `00000000-0000-7000-8000-${String(nextRun).padStart(12, "0")}`;
-        state.runStarts.push({ tenant, id });
-        return { rows: [{ id }], rowCount: 1 };
-      }
-      if (/cma\.refresh_follow_up\(\)/.test(text)) return { rows: [{ r: { refreshed: true, rows: 3, leads: 1, tickets: 1, tasks: 1, duration_ms: 7 } }], rowCount: 1 };
-      if (/cma\.flash_snapshot_take\(/.test(text)) return { rows: [{ r: take(tenant) }], rowCount: 1 };
-      if (/cma\.job_run_finish/.test(text)) {
-        state.runFinishes.push({ tenant, id: values[0], status: /'failed'/.test(text) ? "failed" : "succeeded",
-          detail: /'failed'/.test(text) ? (values.length > 2 ? values[2] : values[1]) : JSON.parse(values[1]).rows });
-        return { rows: [], rowCount: 1 };
-      }
-      if (/cma\.scheduler_run_finish/.test(text)) {
-        state.runFinishes.push({ tenant, id: values[0], status: values[1], detail: values[1] === "failed" ? values[3] : values[2] });
-        return { rows: [], rowCount: 1 };
-      }
-      if (/cma\.close_forgotten_workdays/.test(text)) return { rows: [{ workday_id: "w1", user_id: "u1", business_date: "2026-10-17", ended_at: "2026-10-17T15:00:00Z" }], rowCount: 1 };
-      return { rows: [], rowCount: 0 };
+      return respond(text, values);
     };
     return client;
   };
@@ -221,13 +254,21 @@ expect("idle reset: unheard it throws (the 16:04 crash), heard it is one warning
 }
 
 // ---- snapshot-flash (addition 0008zn) -------------------------------------------------------------------------
-expect("snapshot: the run row's counts from a take's answer (whole numbers only), nothing due, a date taken",
-  [countsOf({ taken: true, customers: 3, orders: 4, ids_customer: 2, ids_subscription: 1, ids_device: 1, watch_opened: 1, duration_ms: 12.4 }),
-    countsOf({ taken: false, reason: "not_due" }).not_due, countsOf({ taken: false, reason: "taken" }).already, countsOf({ taken: false, reason: "failed" }).failed],
-  [{ taken: 1, not_due: 0, already: 0, failed: 0, rows: 7, ids: 4, watch_opened: 1, watch_open: 0, missed_before: 0, duration_ms: 12 }, 1, 1, 1],
-  [{ taken: 0 }, 0, 0, 0]);
-expect("snapshot: a pool of 1 by default, at most 2 (the connection budget); the statement timeout of 121's speed check",
+expect("snapshot: the run row's counts from a take's answer (whole numbers only); already, missed, failed; not_due always 0",
+  [countsOf({ taken: true, late: true, customers: 3, orders: 4, ids_customer: 2, ids_subscription: 1, ids_device: 1, ids_skipped: 2, watch_opened: 1,
+    watch_error: "57014", missed_before: 1, missed_recorded: 1, duration_ms: 12.4 }),
+    countsOf({ taken: false, reason: "taken" }).already, countsOf({ taken: false, reason: "missed" }).missed, countsOf({ taken: false, reason: "failed" }).failed,
+    countsOf({ taken: false, reason: "not_due" }).not_due],
+  [{ taken: 1, not_due: 0, already: 0, missed: 0, failed: 0, late: 1, rows: 7, ids: 4, ids_skipped: 2, watch_opened: 1, watch_open: 0, watch_failed: 1,
+    missed_before: 1, missed_recorded: 1, duration_ms: 12 }, 1, 1, 1, 0],
+  [{ taken: 0 }, 0, 0, 0, 1]);
+expect("snapshot: a pool of 1 by default, at most 2 (the connection budget); the statement timeout of 123's speed check",
   [poolMax(undefined), poolMax("1"), poolMax("5"), poolMax("x"), STATEMENT_TIMEOUT_MS], [1, 1, 2, 1, 240000], [2, 2, 5, 2, 0]);
+const taken = /cma\.flash_snapshot_take/;
+const finish = /cma\.job_run_finish/;
+const countsAt = (pool, tenant) => pool.state.runFinishes.filter((f) => f.tenant === tenant).map((f) => `${f.counts.taken}/${f.counts.already}/${f.counts.rows}/${f.counts.ids}`);
+const tenantLines = (tenant) => lines.filter((l) => l.tenant_id === tenant && l.severity !== "WARNING")
+  .map((l) => `${l.severity}:${l.taken}:${l.reason}:${l.rows}${l.retry ? `:${l.retry}` : ""}`);
 {
   const pool = mockPool();
   lines.length = 0;
@@ -237,28 +278,71 @@ expect("snapshot: a pool of 1 by default, at most 2 (the connection budget); the
     [{ tenants: 2, failed: 0 }, ["t1:succeeded:9", "t2:succeeded:9"], 1, 1, true, [true, true]], [{ tenants: 2, failed: 1 }, [], 2, 2, false, []]);
 }
 {
-  const pool = mockPool({ take: (t) => (t === T1 ? { taken: false, reason: "not_due", date: "2026-10-31" } : { taken: false, reason: "failed", date: "2026-10-31", error: "23514" }) });
+  const pool = mockPool({ take: (t) => (t === T1 ? { taken: false, reason: "missed", date: DATE } : { taken: false, reason: "failed", date: DATE, error: "23514" }) });
   lines.length = 0;
   const r = await snapshotTenants({ connect: pool.connect, log });
-  expect("snapshot: nothing due is a success with nothing stored; a take that failed finishes its row failed with the code",
-    [r, finishes(pool), lines.map((l) => `${l.severity}:${l.reason}`)], [{ tenants: 2, failed: 1 }, ["t1:succeeded:0", "t2:failed:23514"], ["INFO:not_due", "ERROR:failed"]],
-    [{ tenants: 2, failed: 0 }, ["t1:succeeded:9", "t2:succeeded:9"], []]);
+  expect("snapshot: a date recorded as missed is a success with nothing stored; a failed take finishes its row failed with the code",
+    [r, finishes(pool), pool.state.runFinishes[0].counts.missed, lines.map((l) => `${l.severity}:${l.reason}`)],
+    [{ tenants: 2, failed: 1 }, ["t1:succeeded:0", "t2:failed:23514"], 1, ["INFO:missed", "ERROR:failed"]],
+    [{ tenants: 2, failed: 0 }, ["t1:succeeded:9", "t2:succeeded:9"], 0, []]);
 }
 {
-  const pool = mockPool({ faults: [{ on: /cma\.flash_snapshot_take/, tenant: T1, times: 1, error: reset }] });
+  const pool = mockPool({ faults: [{ on: taken, tenant: T1, times: 1, error: reset }] });
   lines.length = 0;
   const r = await snapshotTenants({ connect: pool.connect, log });
   expect("snapshot, a reset in tenant 1's take: retried once on a fresh connection, its run row kept, finished succeeded",
-    [r.failed, count(pool, /cma\.flash_snapshot_take/, T1), starts(pool, T1), finishes(pool)[0], pool.state.dropped], [0, 2, 1, "t1:succeeded:9", 1],
+    [r.failed, count(pool, taken, T1), starts(pool, T1), finishes(pool)[0], pool.state.dropped], [0, 2, 1, "t1:succeeded:9", 1],
     [1, 1, 2, "t1:failed:ECONNRESET", 0]);
 }
 {
-  const pool = mockPool({ faults: [{ on: /cma\.flash_snapshot_take/, tenant: T1, times: 1, error: () => Object.assign(new Error("not permitted"), { code: "CMA06" }) }] });
+  const pool = mockPool({ faults: [{ on: taken, tenant: T1, times: 1, error: () => Object.assign(new Error("not permitted"), { code: "CMA06" }) }] });
   lines.length = 0;
   const r = await snapshotTenants({ connect: pool.connect, log });
   expect("snapshot, a refusal of the database: never retried, the tenant failed with its code, tenant 2 still taken",
-    [r, count(pool, /cma\.flash_snapshot_take/, T1), finishes(pool)], [{ tenants: 2, failed: 1 }, 1, ["t1:failed:CMA06", "t2:succeeded:9"]],
+    [r, count(pool, taken, T1), finishes(pool)], [{ tenants: 2, failed: 1 }, 1, ["t1:failed:CMA06", "t2:succeeded:9"]],
     [{ tenants: 2, failed: 0 }, 2, ["t1:succeeded:9", "t2:succeeded:9"]]);
+}
+{
+  // (a) the take's answer received, the connection lost at the run row's finish (before it ran)
+  const pool = mockPool({ faults: [{ on: finish, tenant: T1, times: 1, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, the take answered then a reset at the finish: the first answer kept, the take not sent again",
+    [r, count(pool, taken, T1), finishes(pool), countsAt(pool, T1), tenantLines(T1)],
+    [{ tenants: 2, failed: 0 }, 1, ["t1:succeeded:9", "t2:succeeded:9"], ["1/0/9/6"], ["INFO:true:null:9"]],
+    [{ tenants: 2, failed: 0 }, 2, ["t1:succeeded:0", "t2:succeeded:9"], ["0/1/0/0"], ["INFO:false:taken:0"]]);
+}
+{
+  // (b) the take committed but its answer lost: tenant 1's date taken by that take; tenant 2's by a run before this one
+  const pool = mockPool({ take: dbTake({ earlier: [T2] }), faults: [{ on: taken, tenant: T1, times: 1, after: true, error: reset },
+    { on: taken, tenant: T2, times: 1, after: true, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a take's answer lost: taken by this run (stored counts) when started after its run row, else already",
+    [r, count(pool, taken, T1), finishes(pool), countsAt(pool, T1), countsAt(pool, T2), tenantLines(T1), tenantLines(T2)],
+    [{ tenants: 2, failed: 0 }, 2, ["t1:succeeded:9", "t2:succeeded:0"], ["1/0/9/6"], ["0/1/0/0"],
+      ["INFO:true:null:9:taken by the first attempt, its answer lost"], ["INFO:false:taken:0"]],
+    [{ tenants: 2, failed: 0 }, 2, ["t1:succeeded:0", "t2:succeeded:0"], ["0/1/0/0"], ["0/1/0/0"], ["INFO:false:taken:0"], ["INFO:false:taken:0"]]);
+}
+{
+  // (c) the run row's finish landed but its answer lost: the retry's finish answers CMA03
+  const pool = mockPool({ faults: [{ on: finish, tenant: T1, times: 1, after: true, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a finish's answer lost: CMA03 on the retry is done, the first counts kept, the tenant not failed",
+    [r, count(pool, taken, T1), count(pool, finish, T1), finishes(pool), countsAt(pool, T1), tenantLines(T1)],
+    [{ tenants: 2, failed: 0 }, 1, 2, ["t1:succeeded:9", "t2:succeeded:9"], ["1/0/9/6"], ["INFO:true:null:9:run row finished by an earlier attempt, its answer lost"]],
+    [{ tenants: 2, failed: 1 }, 2, 3, ["t1:succeeded:9", "t2:succeeded:9"], ["1/0/9/6"], ["ERROR:false:undefined:0", "ERROR:false:undefined:0"]]);
+}
+{
+  // (c) once more, the retry lost as well: the failed finish answers CMA03 at once, so the first attempt's finish stands
+  const pool = mockPool({ faults: [{ on: finish, tenant: T1, times: 1, after: true, error: reset }, { on: finish, tenant: T1, times: 1, error: reset }] });
+  lines.length = 0;
+  const r = await snapshotTenants({ connect: pool.connect, log });
+  expect("snapshot, a finish's answer lost and the retry lost too: still done, one line, no error",
+    [r, count(pool, finish, T1), finishes(pool), lines.filter((l) => l.tenant_id === T1).map((l) => l.severity), tenantLines(T1)],
+    [{ tenants: 2, failed: 0 }, 3, ["t1:succeeded:9", "t2:succeeded:9"], ["WARNING", "INFO"], ["INFO:true:null:9:run row finished by an earlier attempt, its answer lost"]],
+    [{ tenants: 2, failed: 1 }, 3, ["t1:succeeded:9", "t2:succeeded:9"], ["WARNING", "ERROR", "ERROR"], ["ERROR:false:undefined:0", "ERROR:false:undefined:0"]]);
 }
 
 const passed = results.filter(Boolean).length;
