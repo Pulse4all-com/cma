@@ -2240,19 +2240,19 @@ Expected: `<short sha> Data map: schema snapshot from dev after 0008zn`; #213 no
 
 ## 16.3 Dev: the ingest of #213, the HubSpot project, the linked contacts
 
-The ingest of #213 reads a contact a store customer is linked to as a held contact (D2): the HubSpot read-back keeps its references fresh, the sweep's second read takes in new links within the hour, and `ingest-backfill --object linked_contact` takes in once every contact linked before (`docs/ingest/README.md`, section Shopify, The linked contact is held).
+The ingest of #213 reads a contact a store customer is linked to as a held contact (D2): the HubSpot read-back keeps its references fresh, the sweep's second read takes in the last hour's new links (newest first), the nightly reconcile those of its 26-hour look-back the sweep did not reach, and `ingest-backfill --object linked_contact` takes in once every contact linked before (`docs/ingest/README.md`, section Shopify, The linked contact is held).
 
 **Terminal** (in `~/cma`, on #213's branch: dev only, with the branch warning)
 ```bash
 cd ~/cma && git switch -q claude/sharp-newton-pxdg9t && git pull -q --ff-only && bash docs/ingest/deploy.sh dev --allow-branch
 ```
-Expected: `WARNING: deploying dev from branch claude/sharp-newton-pxdg9t, not main (--allow-branch): image tag a583ac5 is a branch commit no review merged`, `== cma-ingest a583ac5 → p4a-cma-dev`, `image tag a583ac5: the last commit under ingest/; HEAD is <16.2's sha>`, the image built once, a new revision and `health: {"ok":true,"version":"a583ac5"}`. The line `note: no --tenant given` is harmless while dev's pepper secret exists. A later ingest commit on the branch changes the tag: the tag is the branch's last commit under `ingest/`.
+Expected: `WARNING: deploying dev from branch claude/sharp-newton-pxdg9t, not main (--allow-branch): image tag dea123f is a branch commit no review merged`, `== cma-ingest dea123f → p4a-cma-dev`, `image tag dea123f: the last commit under ingest/; HEAD is <16.2's sha>`, the image built once, a new revision and `health: {"ok":true,"version":"dea123f"}`. The line `note: no --tenant given` is harmless while dev's pepper secret exists. A later ingest commit on the branch changes the tag: the tag is the branch's last commit under `ingest/`.
 
 **Terminal** (`~/cma`, the same branch)
 ```bash
 bash docs/ingest/deploy.sh dev --jobs --allow-branch
 ```
-Expected: the same warning, `== ingest jobs a583ac5 → p4a-cma-dev`, `image … exists (…); no build`, the job deploys and their schedules as before (#213 adds no ingest job).
+Expected: the same warning, `== ingest jobs dea123f → p4a-cma-dev`, `image … exists (…); no build`, the job deploys and their schedules as before (#213 adds no ingest job).
 
 **The HubSpot project: nothing to upload.** #213 changes nothing under `hubspot/`: `contact_netsuite_id` is among the contact properties the project subscribes to since its first version (11 October 2026; `VENDOR_SETUP.md` §1.3), and the D2 change is on the ingest's side only (its read-back now counts a linked contact as held, so the property's changes are read). An upload would go through CMA-067's workflow, which is not built (`hubspot/README.md`, Render, upload, install). The check:
 
@@ -2417,7 +2417,7 @@ Expected: the app's usual daily count (12.3) plus the take-in's `apiCalls`. Writ
 
 ## 16.6 Prod: the snapshot job, its first run and System health
 
-The job `cma-snapshot-flash` runs on the web image, so it is deployed once the image of #213's merge exists (16.5's build `SUCCESS`): `docs/scheduler/deploy-flash.sh` creates or updates the job (pool of 1, `CMA_DB_POOL_MAX=1`, no task retries) and the Cloud Scheduler job `cma-snapshot-flash-hourly` (`20 * * * *`, UTC). Each run visits every tenant; the database takes a tenant's business date once its local time is past `flash.snapshot_local_time` (00:30), and answers `taken` for a date it holds. The first run takes yesterday at once, with stock figures as of that run; from the next night on the take runs at 01:20 Amsterdam time. Dev first, then prod.
+The job `cma-snapshot-flash` runs on the web image, so it is deployed once the image of #213's merge exists (16.5's build `SUCCESS`): `docs/scheduler/deploy-flash.sh` creates or updates the job (pool of 1, `CMA_DB_POOL_MAX=1`, no task retries) and the Cloud Scheduler job `cma-snapshot-flash-hourly` (`20 * * * *`, UTC). Each run visits every tenant; the database takes a tenant's latest due date (a date is due the day after it at `flash.snapshot_local_time`, 00:30) once, and answers `taken` for a date it holds. The first run takes yesterday at once, marked `late` when it runs more than an hour after yesterday's due time (today 00:30), with the mirrors as they are at that run and its stock figures measured against yesterday; from the next night on the take runs at 01:20 Amsterdam time, on time. A date the job never reaches while it is the latest due one is recorded as `missed` by the next take and never taken. Dev first, then prod.
 
 **Terminal** (in `~/cma`, on `main`; `<merge sha>` from 16.5)
 ```bash
@@ -2446,7 +2446,7 @@ Expected: one line per tenant with a scheduler user: its id, yesterday's date, `
 **Studio (cma-prod-pg)** (read only; counts, codes and dates only)
 ```sql
 set role cma_owner;
-select t.slug, r.snapshot_date, r.status, r.error, r.missed_before, r.finished_at - r.started_at as took, r.counts,
+select t.slug, r.snapshot_date, r.status, r.due_at, r.late, r.error, r.watch_error, r.missed_before, r.finished_at - r.started_at as took, r.counts,
        (select string_agg(k || '=' || (r.sources -> k ->> 'set_up'), ' ' order by k) from jsonb_object_keys(r.sources) k) as set_up,
        r.settings ->> 'timezone' as zone
 from cma.flash_snapshot_run r join cma.tenant t on t.id = r.tenant_id
@@ -2460,13 +2460,13 @@ where f.state = 'open' order by 1, 2;
 reset role;
 ```
 Expected:
-- the runs: per tenant one row with `snapshot_date` yesterday, `status` `succeeded`, no error, `missed_before` 0 (the first take has no earlier one), `took` under a minute, `counts` with the eleven overviews (`churn`, `customers`, `data_quality`, `installed_base`, `open_deals`, `open_tasks`, `open_tickets`, `orders`, `payments`, `reviews`, `subscriptions`; the rows stored for each) and `ids_expired` 0, plus `ids_customer`, `ids_subscription` and `ids_device` when the date is a month's last day; for `pulse4all-subscriptions`, `set_up` `assets=true commerce=true crm=true reviews=true subscriptions=true` (`subscriptions=false` until phase 15's connection exists), every overview of a set-up source at least 1 (its totals row) and `zone` `Europe/Amsterdam`; for a tenant without a source, that source's overviews 0 (a source not set up gives no figures, never zeros);
+- the runs: per tenant one row with `snapshot_date` yesterday, `status` `succeeded`, `due_at` today 00:30 Amsterdam time (23:30 UTC the day before, in winter), `late` true when the run came after 01:30 and false for a scheduled 01:20 run, no error and no `watch_error`, `missed_before` 0 (the first take has no earlier one), `took` under a minute, `counts` with the eleven overviews (`churn`, `customers`, `data_quality`, `installed_base`, `open_deals`, `open_tasks`, `open_tickets`, `orders`, `payments`, `reviews`, `subscriptions`; the rows stored for each) and `ids_expired` 0, plus `ids_customer`, `ids_subscription` and `ids_device` when the date is a month's last day; for `pulse4all-subscriptions`, `set_up` `assets=true commerce=true crm=true reviews=true subscriptions=true` (`subscriptions=false` until phase 15's connection exists), every overview of a set-up source at least 1 (its totals row) and `zone` `Europe/Amsterdam`; for a tenant without a source, that source's overviews 0 (a source not set up gives no figures, never zeros);
 - the job's rows: per tenant `succeeded`, no error, `taken` 1 and `rows` as the run's counts summed;
 - the watch: no row, or a `source_stale` row for a source whose last successful read is older than three of its cadences (report it with its `dims`); `jump`, `flow_zero`, `snapshot_missing` and `dq_rise` need an earlier snapshot and cannot appear on the first take.
 
 **Browser:** Workspace → Configuration → System health.
 
-Expected: the row **Flash snapshot** with its last run succeeded (its counts `taken 1` and the rows); a later hourly run that found its date held shows `already 1`, and one before 00:30 local `not_due 1`, both succeeded. System health's counts column shows only counts above 0. **Records:** the outputs of 16.5 and 16.6 into the report.
+Expected: the row **Flash snapshot** with its last run succeeded (its counts `taken 1` and the rows, `late 1` for a first run after 01:30); a later hourly run that found its date held shows `already 1`, succeeded. System health's counts column shows only counts above 0. **Records:** the outputs of 16.5 and 16.6 into the report.
 
 ## 16.7 Gate, the merge of #214 and the on-screen checks
 
