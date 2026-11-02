@@ -2,7 +2,7 @@ import { ApiError, dateParam } from "@/lib/api/respond";
 import { FLASH_ADDRESS, FLASH_FILE_MAX_ROWS, FLASH_OVERVIEWS, FLASH_PAGE_ROWS, overviewOf, parseMarket, type FlashKey, type FlashOverviewDef } from "@/lib/flash";
 
 /**
- * The query of the Flash routes (addition 0008zm): ?overview (one of the eleven keys), &market (a market code or
+ * The query of the Flash routes (addition 0008zn): ?overview (one of the eleven keys), &market (a market code or
  * unknown), &asOf (a business date with a snapshot, YYYY-MM-DD; now when left out) and, for a flow overview, &from and
  * &to (the period's business dates). Anything the database would refuse for its form is a 400 here first; whether a
  * date has a snapshot, or lies before the tenant's today, the database decides (404 not_found, 400 invalid).

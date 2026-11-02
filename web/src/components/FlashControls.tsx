@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Reports → Flash's controls in the browser (addition 0008zm): As of (A: a business date with a snapshot, or Now), the
+ * Reports → Flash's controls in the browser (addition 0008zn): As of (A: a business date with a snapshot, or Now), the
  * market (K) and a landing card's live headline. Each control keeps the rest of the address; the figure reads its one
  * overview's headline (GET /api/v1/reports/flash?part=headline) after the page has painted, so the landing answers at
  * once from the stored figures whatever the volume. Ids, codes and counts only.

@@ -10,7 +10,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * A Flash file (addition 0008zm; decision 7, the Reports > Maintenance precedent): ?part=rows (the default) the records
+ * A Flash file (addition 0008zn; decision 7, the Reports > Maintenance precedent): ?part=rows (the default) the records
  * behind a figure with the query of /rows, up to the tenant's flash.file_max_rows (50,000 for Pulse4all); ?part=breakdown
  * the overview's figures per grouping set, one column per measure and per currency of an amount. The tenant's export
  * format; the name flash-<overview>-<market|all>-<YYYY-MM-DD or YYYY-MM-DDTHHmm>.csv; the first column as_of, the second

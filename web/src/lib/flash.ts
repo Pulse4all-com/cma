@@ -1,9 +1,9 @@
 /**
- * Reports → Flash (addition 0008zm, brief B21, 1 November 2026): ten overviews and Data quality, one click each, live
+ * Reports → Flash (addition 0008zn, brief B21, 1 November 2026): ten overviews and Data quality, one click each, live
  * from the mirrors or as of a business date with a snapshot, per market, on screen and as a file. The database computes
  * every figure (cma.flash_compute_of, one code path live and in the snapshot); this module holds what the page and the
  * routes decide on their own: the overviews' order and keys, the address keys, the sort whitelist (cma.flash_overviews,
- * which verify:flash compares with db/120_flash.sql), the As of parameter, the file names, the change arrows, a
+ * which verify:flash compares with db/122_flash.sql), the As of parameter, the file names, the change arrows, a
  * definition's badge and the states of a source not set up. Pure: no database, no React.
  */
 
@@ -284,7 +284,7 @@ export type FlashColumnKind = "text" | "number" | "date" | "instant" | "flag" | 
 
 /**
  * Each overview's list columns in their order, as cma.flash_rows answers them (verify:flash compares the keys with
- * db/120_flash.sql's lists), and how a file writes each. The connection's id is left out of the screen and the file: a
+ * db/122_flash.sql's lists), and how a file writes each. The connection's id is left out of the screen and the file: a
  * store, a channel or a pipeline names it. So are the links outside the CRM (FLASH_LINKS_LEFT_OUT): the Workspace links to
  * the CRM and the telephony system only (CLAUDE.md; the register gets no link, as on Maintenance)
  */
@@ -437,7 +437,7 @@ export type FlashFixIn = "crm" | "commerce" | "subscriptions" | "assets" | "cma"
 
 /**
  * Where a check's findings are fixed, as cma.data_quality_fix_in(check, value) answers it for the check's usual value
- * (verify:flash compares the lists with db/120_flash.sql): a finding's own row in the list carries the database's answer,
+ * (verify:flash compares the lists with db/122_flash.sql): a finding's own row in the list carries the database's answer,
  * which for customer_required_ref_missing is the Workspace when the contact is not held
  */
 export const FLASH_FIX_IN: Readonly<Record<Exclude<FlashFixIn, "cma" | "subscriptions">, readonly string[]>> = {

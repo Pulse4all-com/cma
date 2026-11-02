@@ -3103,7 +3103,7 @@ export interface Journey {
   prerequisites: string[];
 }
 
-// ---- Reports → Flash (addition 0008zm) --------------------------------------------------------
+// ---- Reports → Flash (addition 0008zn) --------------------------------------------------------
 
 /** A source's state: set up or not (never "connected"), its active connections' adapters, its last successful read */
 export interface FlashSourceView {
@@ -3656,7 +3656,7 @@ export interface CmaData {
   /** One trivial query under the tenant context, timed, so a slow database shows at a glance */
   probeDatabase(me: Principal): Promise<DatabaseProbe>;
 
-  // ---- Reports → Flash (addition 0008zm): every read checks reports.view or performance.team in the database (CMA06);
+  // ---- Reports → Flash (addition 0008zn): every read checks reports.view or performance.team in the database (CMA06);
   // a date without a snapshot is CMA02, a form or date out of range CMA04
   /** The landing in one read of stored figures (cma.flash_page); a live card's headline is getFlashHeadline */
   getFlashPage(me: Principal, market: string | null, asOf: string | null, from: string | null, to: string | null): Promise<FlashPageView>;

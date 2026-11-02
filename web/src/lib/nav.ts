@@ -58,7 +58,7 @@ export type ShellPage =
   | "reviews"
   /** Maintenance (addition 0008zi): what comes due on the asset register's devices, per month, market and model */
   | "maintenance"
-  /** Flash (addition 0008zm, brief B21): ten overviews and Data quality, one click each, now or as of a snapshot's date */
+  /** Flash (addition 0008zn, brief B21): ten overviews and Data quality, one click each, now or as of a snapshot's date */
   | "flash"
   /** Campaign monitoring (addition 0008v, brief N19-A part 3): the journeys, each with its own page under the rail's item */
   | "campaigns"
@@ -177,7 +177,7 @@ export function navEntries(copy: Copy): NavEntry[] {
       label: copy.nav.reports,
       icon: "chart",
       items: [
-        // Flash (addition 0008zm, brief B21, 1 November 2026): first in Reports, the ten overviews and Data quality in one
+        // Flash (addition 0008zn, brief B21, 1 November 2026): first in Reports, the ten overviews and Data quality in one
         // click each for an auditor, the CFO or the COO; reports.view or performance.team, as every report's team figures
         { page: "flash", href: "/reports/flash", label: copy.nav.flash, permission: ["reports.view", "performance.team"] },
         { page: "dashboard", href: "/reports/dashboard", label: copy.nav.dashboard, permission: "performance.team" },

@@ -83508,7 +83508,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -83533,7 +83533,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -83568,19 +83568,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_customers_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -83595,7 +83595,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The store customers held from each store's start (the commerce customer backfill)",
@@ -83607,8 +83607,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -83685,7 +83685,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -83710,7 +83710,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -83745,19 +83745,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_customers_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -83772,7 +83772,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The store customers held from each store's start (the commerce customer backfill)",
@@ -83784,8 +83784,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -83862,7 +83862,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -83887,7 +83887,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -83922,19 +83922,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_customers_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -83949,7 +83949,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The store customers held from each store's start (the commerce customer backfill)",
@@ -83961,8 +83961,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84039,7 +84039,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -84064,7 +84064,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84099,19 +84099,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_customers_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84126,7 +84126,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The store customers held from each store's start (the commerce customer backfill)",
@@ -84138,8 +84138,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84216,7 +84216,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -84241,7 +84241,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84276,19 +84276,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_customers_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84303,7 +84303,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The store customers held from each store's start (the commerce customer backfill)",
@@ -84315,8 +84315,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84381,7 +84381,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84411,19 +84411,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_subscriptions_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84438,7 +84438,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision)",
@@ -84446,8 +84446,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84512,7 +84512,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84542,19 +84542,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_subscriptions_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84569,7 +84569,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision)",
@@ -84577,8 +84577,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84643,7 +84643,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84673,19 +84673,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_subscriptions_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84700,7 +84700,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision)",
@@ -84708,8 +84708,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84774,7 +84774,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84804,19 +84804,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_subscriptions_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84831,7 +84831,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "A subscriptions connection per store (the GB store first; the other 13 Juo stores are an Open decision)",
@@ -84839,8 +84839,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -84920,7 +84920,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -84950,19 +84950,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_devices_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -84977,7 +84977,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The asset register set up with ns_internal_id mapped",
@@ -84989,8 +84989,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85070,7 +85070,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85100,19 +85100,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_devices_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85127,7 +85127,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The asset register set up with ns_internal_id mapped",
@@ -85139,8 +85139,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85220,7 +85220,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85250,19 +85250,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_devices_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85277,7 +85277,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The asset register set up with ns_internal_id mapped",
@@ -85289,8 +85289,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85370,7 +85370,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85400,19 +85400,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_devices_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85427,7 +85427,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The asset register set up with ns_internal_id mapped",
@@ -85439,8 +85439,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85520,7 +85520,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85550,19 +85550,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_devices_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85577,7 +85577,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The asset register set up with ns_internal_id mapped",
@@ -85589,8 +85589,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85669,7 +85669,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85693,19 +85693,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_churn_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85720,7 +85720,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "A subscriptions connection per store",
@@ -85728,8 +85728,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85810,7 +85810,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85834,19 +85834,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_orders_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -85861,7 +85861,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)",
@@ -85869,8 +85869,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -85951,7 +85951,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -85975,19 +85975,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_orders_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86002,7 +86002,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)",
@@ -86010,8 +86010,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86092,7 +86092,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86116,19 +86116,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_orders_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86143,7 +86143,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Order history before 1 October 2026 is not held (read_all_orders or a one-time import, Open decisions)",
@@ -86151,8 +86151,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86237,7 +86237,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86261,19 +86261,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_payments_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86288,7 +86288,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)",
@@ -86296,8 +86296,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86382,7 +86382,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86406,19 +86406,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_payments_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86433,7 +86433,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)",
@@ -86441,8 +86441,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86527,7 +86527,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86551,19 +86551,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_payments_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86578,7 +86578,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)",
@@ -86586,8 +86586,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86672,7 +86672,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86696,19 +86696,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_payments_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86723,7 +86723,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Awaiting payment (Mollie draft-order renewals) is not read (Open decisions)",
@@ -86731,8 +86731,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86798,7 +86798,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -86811,7 +86811,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86835,19 +86835,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_deals_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -86862,7 +86862,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Test deals carry no flag, so they are not excluded (Gaps D25)",
@@ -86870,8 +86870,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -86937,7 +86937,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -86950,7 +86950,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -86974,19 +86974,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_deals_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87001,7 +87001,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Test deals carry no flag, so they are not excluded (Gaps D25)",
@@ -87009,8 +87009,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87076,7 +87076,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -87089,7 +87089,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87113,19 +87113,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_deals_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87140,7 +87140,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "Test deals carry no flag, so they are not excluded (Gaps D25)",
@@ -87148,8 +87148,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87214,7 +87214,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -87227,7 +87227,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87251,19 +87251,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_tickets_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87278,11 +87278,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87347,7 +87347,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -87360,7 +87360,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87384,19 +87384,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_tickets_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87411,11 +87411,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87480,7 +87480,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -87493,7 +87493,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87517,19 +87517,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_tickets_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87544,11 +87544,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87629,7 +87629,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87653,19 +87653,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_tasks_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87680,7 +87680,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The task status catalog's done statuses set on Configuration \u2192 Sources",
@@ -87688,8 +87688,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87770,7 +87770,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87794,19 +87794,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_tasks_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87821,7 +87821,7 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [
         {
           "item": "The task status catalog's done statuses set on Configuration \u2192 Sources",
@@ -87829,8 +87829,8 @@
         }
       ],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -87893,7 +87893,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -87923,19 +87923,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_reviews_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -87950,11 +87950,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -88017,7 +88017,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -88047,19 +88047,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_reviews_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -88074,11 +88074,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -88141,7 +88141,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -88171,19 +88171,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_reviews_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -88198,11 +88198,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],
@@ -88286,7 +88286,7 @@
             "country"
           ],
           "owner": "HubSpot",
-          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zm also those a store customer is linked to)",
+          "fed_by": "HubSpot webhooks and read-back \u2192 ingest service \u2192 cma.ingest_upsert_contacts (held contacts only; since 0008zn also those a store customer is linked to)",
           "cadence": "seconds (webhooks), the sweep's second read within ten minutes of a link"
         },
         {
@@ -88299,7 +88299,7 @@
             "definition_version"
           ],
           "owner": "CMA",
-          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zm)",
+          "fed_by": "Cloud Scheduler cma-snapshot-flash-hourly \u2192 Cloud Run job cma-snapshot-flash \u2192 cma.flash_snapshot_take (0008zn)",
           "cadence": "daily per tenant after flash.snapshot_local_time; the job runs hourly at minute 20 UTC"
         }
       ],
@@ -88334,19 +88334,19 @@
         "sql": [
           {
             "object": "cma.flash_compute_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_findings_of",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_overview",
-            "migration": "0008zm"
+            "migration": "0008zn"
           },
           {
             "object": "cma.flash_page",
-            "migration": "0008zm"
+            "migration": "0008zn"
           }
         ],
         "ts": [
@@ -88361,11 +88361,11 @@
         ]
       },
       "verify_sql": null,
-      "fixture_check": "Not run as a Studio query here: db/121_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
+      "fixture_check": "Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.",
       "prerequisites": [],
       "docs": [
-        "features.md, Reports \u2192 Flash (addition 0008zm)",
-        "data-model/0008.md, Data model: Flash (addition 0008zm)",
+        "features.md, Reports \u2192 Flash (addition 0008zn)",
+        "data-model/0008.md, Data model: Flash (addition 0008zn)",
         "definitions.md, Flash overview measures",
         "api.md, Reports \u2192 Flash"
       ],

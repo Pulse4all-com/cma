@@ -6,7 +6,7 @@ import { REPORT_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * Reports > Flash (addition 0008zm). Without ?overview the landing (cma.flash_page): per overview its headline as stored
+ * Reports > Flash (addition 0008zn). Without ?overview the landing (cma.flash_page): per overview its headline as stored
  * for &asOf (a business date with a snapshot) or, for now, the figure to compare with (the latest snapshot), the sources'
  * last successful reads, the open watch findings, the markets and the first and latest snapshot dates; a date without a
  * snapshot answers snapshotMissing with the nearest dates. With ?overview the overview's document (cma.flash_overview):

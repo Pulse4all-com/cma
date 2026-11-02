@@ -15,7 +15,7 @@
  *      "./name.ts" (Decision log, 7 October 2026: Node's type stripping resolves no "@/lib" alias).
  *   R4 src/lib/api/*.ts other than respond.ts import only respond, server-only, "@/lib/reports",
  *      "@/lib/sources", "@/lib/email" (addition 0008t), "@/lib/first-orders" (0008u), "@/lib/attempts" (0008y), "@/lib/funnel"
- *      (0008zb), "@/lib/maintenance" (0008zi), "@/lib/cohorts" (0008zm), "@/lib/flash" (0008zn) and types: they validate, they do not read.
+ *      (0008zb), "@/lib/maintenance" (0008zi), "@/lib/cohorts" (0008zn), "@/lib/flash" (0008zn) and types: they validate, they do not read.
  *   R5 src/lib/data/mock.ts imports nothing from @/lib/db/*: the mock must not load the database driver.
  *   R6 no "use server" anywhere: every write goes through a route with the one CSRF guard (respond.ts).
  *   R7 src/proxy.ts deletes IAP's three headers before it passes a request on (the names of IAP_HEADERS).
