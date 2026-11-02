@@ -1,5 +1,5 @@
 #!/bin/bash
-# The Flash snapshot (addition 0008zm; Decision log, 1 November 2026): a Cloud Run job on the web image that takes
+# The Flash snapshot (addition 0008zn; Decision log, 1 November 2026): a Cloud Run job on the web image that takes
 # every tenant's daily Flash snapshot when its date is due (jobs/snapshot-flash.mjs), started by Cloud Scheduler
 # hourly at minute 20 in UTC. The sibling of deploy-follow-up.sh, with the same account, image and variables, and a
 # pool of 1.
@@ -7,7 +7,7 @@
 #   docs/scheduler/deploy-flash.sh dev  <short sha>     creates or updates the job and the schedule in p4a-cma-dev
 #   docs/scheduler/deploy-flash.sh prod <short sha>     the same in p4a-cma-prod
 #
-# Runs from Cloud Shell or your own terminal under your own account, after 120_flash.sql ran in that database, with
+# Runs from Cloud Shell or your own terminal under your own account, after 122_flash.sql ran in that database, with
 # the short sha of an image that holds jobs/snapshot-flash.mjs: the merge that brings it, or any later one
 # (docs/RUNBOOK.md, 7a). Rerunnable: `gcloud run jobs deploy` creates or updates, the schedule is created once and
 # updated after that. The job runs as the service's own account cma-web@<project>.iam (member of cma_app through its

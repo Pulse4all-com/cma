@@ -1,6 +1,6 @@
 /**
  * Verifier (pure: no database, no network): the scheduler jobs through a dropped database connection
- * (jobs/lib/connection.mjs, jobs/refresh-follow-up.mjs, jobs/close-forgotten-workdays.mjs and, since addition 0008zm,
+ * (jobs/lib/connection.mjs, jobs/refresh-follow-up.mjs, jobs/close-forgotten-workdays.mjs and, since addition 0008zn,
  * jobs/snapshot-flash.mjs with its run row's counts and its pool; 18 October 2026, after a
  * reset connection ended a refresh-follow-up execution in prod at 16:04 UTC). Each job runs on a mocked pool whose
  * clients answer the job's statements and can be made to fail: a reset on a given statement for a given tenant
@@ -220,7 +220,7 @@ expect("idle reset: unheard it throws (the 16:04 crash), heard it is one warning
     [r.failed, count(pool, /cma\.close_forgotten_workdays/, T1), finishes(pool)[0]], [1, 1, "t1:failed:CMA06"], [0, 2, "t1:succeeded:1"]);
 }
 
-// ---- snapshot-flash (addition 0008zm) -------------------------------------------------------------------------
+// ---- snapshot-flash (addition 0008zn) -------------------------------------------------------------------------
 expect("snapshot: the run row's counts from a take's answer (whole numbers only), nothing due, a date taken",
   [countsOf({ taken: true, customers: 3, orders: 4, ids_customer: 2, ids_subscription: 1, ids_device: 1, watch_opened: 1, duration_ms: 12.4 }),
     countsOf({ taken: false, reason: "not_due" }).not_due, countsOf({ taken: false, reason: "taken" }).already, countsOf({ taken: false, reason: "failed" }).failed],

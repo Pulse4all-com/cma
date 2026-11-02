@@ -1,14 +1,15 @@
 -- =============================================================================================
--- 120_flash.sql: addition 0008zm, Flash: one-click overviews, daily snapshots, data quality and the watch
+-- 122_flash.sql: addition 0008zn, Flash: one-click overviews, daily snapshots, data quality and the watch
 -- =============================================================================================
 -- Universal: no customer, tenant or vendor specifics: overviews, measures and checks are the CMA's own words, the
 -- statuses that make a subscription active, the references a contact or a device must carry and every threshold are
 -- tenant settings, and a source's system is named by its connection's kind and adapter (data values). Runs unchanged
--- in every database, after 118_subscriptions.sql (0008zl). Rerunnable, forward-only, in one transaction with a lock
--- timeout. Run as your own IAM login: dev first, then 121_verify_flash.sql (dev and prod), then 113_verify_assets.sql,
--- 119_verify_subscriptions.sql, 105_verify_reviews.sql and 81_verify_follow_up_snapshot.sql again (dev; the data-quality
--- redefinition, the settings trigger, the contact upsert and the scheduler's role are made again here, their checks
--- unchanged); then 02_seed_pulse4all.sql again (Pulse4all Subscriptions' Flash settings); then prod, with 121 and 02.
+-- in every database, after 120_lead_cohorts.sql (0008zm). Rerunnable, forward-only, in one transaction with a lock
+-- timeout. Run as your own IAM login: dev first, then 123_verify_flash.sql (dev and prod), then 121_verify_lead_cohorts.sql,
+-- 113_verify_assets.sql, 95_verify_attempts_for_sales.sql, 41_verify_lead_metrics.sql, 119_verify_subscriptions.sql,
+-- 105_verify_reviews.sql and 81_verify_follow_up_snapshot.sql again (dev; the settings trigger as 0008zm with Flash's
+-- settings, the data-quality redefinition, the contact upsert and the scheduler's role are made again here, their checks
+-- unchanged); then 02_seed_pulse4all.sql again (Pulse4all Subscriptions' Flash settings); then prod, with 123, 113 and 02.
 -- The web and the ingest of main read nothing this adds and run unchanged on it. The snapshot job (web image,
 -- jobs/snapshot-flash.mjs) needs it, and the contact hold of the ingest of this change needs it: in prod the script runs
 -- before either is deployed.
@@ -82,7 +83,7 @@
 -- Everything is SECURITY INVOKER and executable by the application only, with its permission checked inside, but
 -- cma.flash_snapshot_ids_expire_of (SECURITY DEFINER, owned by cma_owner, search path pinned, the application's only;
 -- flash.snapshot checked inside); cma.flash_snapshot_take_at checks flash.snapshot too, and a take at an instant other
--- than now is the owner's only (121). SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not
+-- than now is the owner's only (123). SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not
 -- permitted.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
@@ -101,8 +102,8 @@ set role cma_owner;
 
 do $$
 begin
-  if not exists (select 1 from cma.schema_migration where version = '0008zl') then
-    raise exception 'addition 0008zl (118_subscriptions.sql) must run before 0008zm';
+  if not exists (select 1 from cma.schema_migration where version = '0008zm') then
+    raise exception 'addition 0008zm (120_lead_cohorts.sql) must run before 0008zn';
   end if;
 end
 $$;
@@ -152,7 +153,7 @@ as $$
                    and not exists (select 1 from unnest(cma.flash_list_of(p_value)) x where x !~ p_pattern) end
 $$;
 
--- As 0008zi (112), with the eight Flash settings: the active statuses (one to seven of the subscription statuses), the
+-- As 0008zm (120_lead_cohorts.sql), with the eight Flash settings: the active statuses (one to seven of the subscription statuses), the
 -- snapshot time (not 24:00), the retention (1 to 240 months), the watch's share (1 to 1000) and minimum (0 to 1000000),
 -- the rows of a file (1 to 50000), and the two lists of required references (names, each once, or empty)
 create or replace function cma.check_tenant_setting()
@@ -174,7 +175,7 @@ begin
     new.value := btrim(new.value);
   end if;
   if new.key in ('leads.age_buckets_business_days', 'attempts.since_last_buckets_business_days', 'attempts.speed_buckets_business_minutes',
-                 'flash.active_subscription_statuses', 'assets.required_refs', 'commerce.required_contact_refs') then
+                 'cohorts.lead_ages_days', 'flash.active_subscription_statuses', 'assets.required_refs', 'commerce.required_contact_refs') then
     new.value := regexp_replace(new.value, '[[:space:]]+', '', 'g');
   end if;
   if s.value_type = 'boolean' and new.value not in ('true', 'false') then
@@ -315,7 +316,25 @@ begin
   elsif new.key = 'assets.bundle_window_days'
         and (case when length(new.value) > 3 then true else new.value::integer not between 0 and 365 end) then
     raise exception 'Setting % takes a whole number of days from 0 to 365', new.key using errcode = 'CMA04';
-  -- Flash (0008zm)
+  -- lead cohorts (0008zm): one to six increasing ages in days, the largest at most lead_to_order.max_days (an order counts
+  -- up to that many days after the deal's creation), against the other setting's effective value; and lead_to_order.max_days
+  -- no lower than the largest age, so the two never disagree through a change of either (a reset to a default is a delete
+  -- no trigger sees: the report shows an age above lead_to_order.max_days without its ordered figure)
+  elsif new.key = 'cohorts.lead_ages_days' then
+    if not cma.is_bucket_list(new.value, 6) then
+      raise exception 'Setting % takes one to six increasing whole numbers of days, comma-separated, such as 1,7,30,60,90', new.key
+        using errcode = 'CMA04';
+    end if;
+    if (select max(x::integer) from unnest(string_to_array(new.value, ',')) x)
+       > cma.setting_of(new.tenant_id, 'lead_to_order.max_days')::numeric then
+      raise exception 'Setting % takes ages of at most lead_to_order.max_days (%)', new.key, cma.setting_of(new.tenant_id, 'lead_to_order.max_days')
+        using errcode = 'CMA04';
+    end if;
+  elsif new.key = 'lead_to_order.max_days'
+        and new.value::numeric < (select max(x::integer) from unnest(string_to_array(cma.setting_of(new.tenant_id, 'cohorts.lead_ages_days'), ',')) x) then
+    raise exception 'Setting % takes at least the largest age of cohorts.lead_ages_days (%)', new.key, cma.setting_of(new.tenant_id, 'cohorts.lead_ages_days')
+      using errcode = 'CMA04';
+  -- Flash (0008zn)
   elsif new.key = 'flash.active_subscription_statuses'
         and not cma.flash_list_ok(new.value, '^(active|paused|canceled|expired|failed|merged|never-subscribed)$', 7, false) then
     raise exception 'Setting % takes one to seven of active, paused, canceled, expired, failed, merged and never-subscribed, each once, comma-separated without spaces', new.key
@@ -504,7 +523,7 @@ create or replace function cma.flash_definition_version(p_overview text)
 returns text
 language sql immutable
 as $$
-  select case when p_overview in (select o.key from cma.flash_overviews() o) then '0008zm' end
+  select case when p_overview in (select o.key from cma.flash_overviews() o) then '0008zn' end
 $$;
 
 -- An overview's key, or CMA04
@@ -938,7 +957,7 @@ as $$
     ('field_device_on_ended_subscription', 360, 'Devices in the field linked to a subscription that is canceled, expired or failed, with its status')
 $$;
 
--- As 0008zi (112), plus Flash's six checks (0008zm): store customers with an order whose contact lacks a required
+-- As 0008zi (112), plus Flash's six checks (0008zn): store customers with an order whose contact lacks a required
 -- reference, devices lacking a required named id, subscriptions whose customer their store does not hold, active
 -- subscriptions without a device, devices in the field with a subscription reference the CMA does not know (of a market
 -- whose subscriptions it reads) and devices in the field on an ended subscription
@@ -1028,7 +1047,7 @@ begin
                                and g.call_source_id = tc.source_id and g.untagged_at is null))
   union all
   -- commerce customers whose id no contact holds, or several contacts hold
-  -- (since 0008zm the contacts per id counted once by a join, no read per customer; the same rows)
+  -- (since 0008zn the contacts per id counted once by a join, no read per customer; the same rows)
   select case when coalesce(h.contacts, 0) = 0 then 'commerce_unmatched' else 'commerce_ambiguous' end,
          cu.connection_id, 'commerce_customer', cu.source_id, null
   from cma.commerce_customer cu
@@ -1171,7 +1190,7 @@ begin
   where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is null
   union all
   -- store customers with an order linked to a CRM contact that lacks a reference of commerce.required_contact_refs in
-  -- every slot (0008zm); the value the references missing, comma-separated, or contact_not_held while the CMA does not
+  -- every slot (0008zn); the value the references missing, comma-separated, or contact_not_held while the CMA does not
   -- hold the contact (its references are unknown until the contact is read)
   select 'customer_required_ref_missing', cu.connection_id, 'commerce_customer', cu.source_id,
          case when k.id is null then 'contact_not_held'
@@ -1190,7 +1209,7 @@ begin
                     where not exists (select 1 from cma.crm_contact_ref cr
                                       where cr.tenant_id = k.tenant_id and cr.contact_id = k.id and cr.system = x)))
   union all
-  -- devices the register still holds lacking a named id of assets.required_refs (0008zm); the value the ids missing
+  -- devices the register still holds lacking a named id of assets.required_refs (0008zn); the value the ids missing
   select 'device_required_ref_missing', dv.connection_id, 'device', dv.source_id,
          array_to_string(array(select x from unnest(rq.refs) x where not (dv.external_refs ? x)), ',')
   from cma.device dv
@@ -1198,7 +1217,7 @@ begin
   where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and cardinality(rq.refs) > 0
     and exists (select 1 from unnest(rq.refs) x where not (dv.external_refs ? x))
   union all
-  -- subscriptions the latest full read still returns whose customer id no customer of their store holds (0008zm)
+  -- subscriptions the latest full read still returns whose customer id no customer of their store holds (0008zn)
   select 'subscription_customer_unmatched', sb.connection_id, 'subscription', sb.source_id, null::text
   from cma.subscription sb
   -- the mapping fenced (offset 0): inlined, the planner guesses its few rows wrong and probes the customers per row
@@ -1210,7 +1229,7 @@ begin
   where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null and sb.customer_source_id is not null and cu.source_id is null
   union all
   -- active subscriptions (flash.active_subscription_statuses) no device the register still holds names by its
-  -- subscription reference, once the tenant has an asset register set up (0008zm); the value the status
+  -- subscription reference, once the tenant has an asset register set up (0008zn); the value the status
   select 'active_subscription_without_device', sb.connection_id, 'subscription', sb.source_id, sb.status
   from cma.subscription sb
   left join (select distinct d.subscription_ref from cma.device d
@@ -1220,7 +1239,7 @@ begin
     and sb.status = any (cma.flash_active_statuses_of(p_tenant_id)) and cma.assets_set_up_of(p_tenant_id)
   union all
   -- devices in a status in the field, of a market whose store's subscriptions the CMA reads, whose subscription
-  -- reference names no subscription the CMA holds (0008zm)
+  -- reference names no subscription the CMA holds (0008zn)
   select 'device_subscription_ref_unknown', dv.connection_id, 'device', dv.source_id, null::text
   from cma.device dv
   join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field
@@ -1229,7 +1248,7 @@ begin
     and not exists (select 1 from cma.subscription sb
                     where sb.tenant_id = dv.tenant_id and sb.source_id = dv.subscription_ref and sb.source_deleted_at is null)
   union all
-  -- devices in a status in the field linked to a subscription that is canceled, expired or failed (0008zm); the value
+  -- devices in a status in the field linked to a subscription that is canceled, expired or failed (0008zn); the value
   -- the subscription's status
   select 'field_device_on_ended_subscription', dv.connection_id, 'device', dv.source_id, sb.status
   from cma.device dv
@@ -1621,7 +1640,7 @@ create table if not exists cma.flash_snapshot_run (
   check (finished_at >= started_at),
   check ((status = 'failed') = (error is not null))
 );
-comment on table cma.flash_snapshot_run is 'Flash: one row per take of a tenant''s business date, written when the take ends, succeeded or failed (0008zm). Insert only';
+comment on table cma.flash_snapshot_run is 'Flash: one row per take of a tenant''s business date, written when the take ends, succeeded or failed (0008zn). Insert only';
 comment on column cma.flash_snapshot_run.missed_before is 'The business dates between the previous succeeded run and this one without a snapshot; they are never taken afterwards';
 create unique index if not exists flash_snapshot_run_succeeded_idx on cma.flash_snapshot_run (tenant_id, snapshot_date) where status = 'succeeded';
 create index if not exists flash_snapshot_run_date_idx on cma.flash_snapshot_run (tenant_id, snapshot_date);
@@ -1642,7 +1661,7 @@ create table if not exists cma.flash_snapshot (
   check (cma.flash_row_ok(overview, dims, measures)),
   foreign key (tenant_id, run_id) references cma.flash_snapshot_run (tenant_id, id) deferrable initially deferred
 );
-comment on table cma.flash_snapshot is 'Flash: the figures of each overview per business date as cma.flash_compute_of computed them at the take: one row per grouping set, dims and measures held to the overview''s allow-list, no id of a record and no @ (0008zm). Insert only';
+comment on table cma.flash_snapshot is 'Flash: the figures of each overview per business date as cma.flash_compute_of computed them at the take: one row per grouping set, dims and measures held to the overview''s allow-list, no id of a record and no @ (0008zn). Insert only';
 comment on column cma.flash_snapshot.dims is 'The grouping set''s keys and values ({} for the totals): codes such as a market, a store''s handle, a status, a pipeline''s id';
 comment on column cma.flash_snapshot.measures is 'The figures: counts, sums, ages; an amount as an object of currency codes to sums, never summed across currencies';
 create index if not exists flash_snapshot_overview_idx on cma.flash_snapshot (tenant_id, overview, snapshot_date);
@@ -1661,7 +1680,7 @@ create table if not exists cma.flash_snapshot_ids (
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id),
   foreign key (tenant_id, run_id) references cma.flash_snapshot_run (tenant_id, id) deferrable initially deferred
 );
-comment on table cma.flash_snapshot_ids is 'Flash: at each month end the frozen ids of the active customers (state active), the active subscriptions (their status) and every device the register holds (its device status), with connection and market; kept flash.id_list_retention_months (0008zm). Insert only; removed after the retention by cma.flash_snapshot_ids_expire_of';
+comment on table cma.flash_snapshot_ids is 'Flash: at each month end the frozen ids of the active customers (state active), the active subscriptions (their status) and every device the register holds (its device status), with connection and market; kept flash.id_list_retention_months (0008zn). Insert only; removed after the retention by cma.flash_snapshot_ids_expire_of';
 create index if not exists flash_snapshot_ids_market_idx on cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, market);
 
 -- An object of scalar values under the given keys only, no @ anywhere (a watch finding's dims and detail)
@@ -1696,7 +1715,7 @@ create table if not exists cma.flash_watch_finding (
   check ((state = 'resolved') = (resolved_on is not null)),
   check (resolved_on is null or resolved_on >= snapshot_date)
 );
-comment on table cma.flash_watch_finding is 'Flash: the deterministic watch''s findings after each snapshot (jump, flow_zero, source_stale, snapshot_missing, dq_rise): aggregates, codes and counts only, no id of a record (0008zm). Written and resolved by the take only';
+comment on table cma.flash_watch_finding is 'Flash: the deterministic watch''s findings after each snapshot (jump, flow_zero, source_stale, snapshot_missing, dq_rise): aggregates, codes and counts only, no id of a record (0008zn). Written and resolved by the take only';
 create unique index if not exists flash_watch_finding_open_idx
   on cma.flash_watch_finding (tenant_id, kind, coalesce(overview, ''), dims, coalesce(measure, '')) where state = 'open';
 create index if not exists flash_watch_finding_date_idx on cma.flash_watch_finding (tenant_id, snapshot_date);
@@ -3067,7 +3086,7 @@ $$;
 
 -- JIT off for Flash's large reads and the take: PostgreSQL compiles a plan whose estimated cost passes jit_above_cost
 -- (100,000 by default) before running it, and the plans of these reads (cma.data_quality_of's union of some thirty
--- checks above all) are so large that compiling took seconds longer than running them at the volume 121 measures
+-- checks above all) are so large that compiling took seconds longer than running them at the volume 123 measures
 -- (data_quality_of: about 8.6 s with JIT, 1.8 s without, locally). A function's own setting holds for everything it
 -- calls; a user may set jit, so the application's role needs nothing more. The SQL base functions keep being inlined
 do $$
@@ -3139,7 +3158,7 @@ create or replace view cma_read.dq_field_device_on_ended_subscription as
 -- 16. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zm', 'Flash: eleven overviews (customers, subscriptions, installed_base, churn, orders, payments, open_deals, open_tickets, open_tasks, reviews, data_quality) from one base set each, computed by cma.flash_compute_of per grouping set (amounts per currency), live through cma.flash_overview, cma.flash_rows and cma.flash_page and stored once a day per tenant by cma.flash_snapshot_take (flash.snapshot, the scheduler''s only; sync_run job flash_snapshot) into the insert-only cma.flash_snapshot, cma.flash_snapshot_run and, at a month end, cma.flash_snapshot_ids (kept flash.id_list_retention_months); the deterministic watch cma.flash_watch_finding (jump, flow_zero, source_stale, snapshot_missing, dq_rise); six data-quality checks with cma.data_quality_rows; contacts held while a commerce customer is linked to them; the Flash settings; the reader views')
+values ('0008zn', 'Flash: eleven overviews (customers, subscriptions, installed_base, churn, orders, payments, open_deals, open_tickets, open_tasks, reviews, data_quality) from one base set each, computed by cma.flash_compute_of per grouping set (amounts per currency), live through cma.flash_overview, cma.flash_rows and cma.flash_page and stored once a day per tenant by cma.flash_snapshot_take (flash.snapshot, the scheduler''s only; sync_run job flash_snapshot) into the insert-only cma.flash_snapshot, cma.flash_snapshot_run and, at a month end, cma.flash_snapshot_ids (kept flash.id_list_retention_months); the deterministic watch cma.flash_watch_finding (jump, flow_zero, source_stale, snapshot_missing, dq_rise); six data-quality checks with cma.data_quality_rows; contacts held while a commerce customer is linked to them; the Flash settings; the reader views')
 on conflict (version) do nothing;
 
 commit;

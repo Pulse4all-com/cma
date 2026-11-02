@@ -1,5 +1,5 @@
 /**
- * The Flash snapshot (addition 0008zm; Decision log, 1 November 2026): once a day per tenant, the figures of every
+ * The Flash snapshot (addition 0008zn; Decision log, 1 November 2026): once a day per tenant, the figures of every
  * Reports → Flash overview for the business date that just ended, stored immutably (cma.flash_snapshot_take: the live
  * computation's rows, the id lists at a month end, the watch), as each tenant's own Scheduler user (flash.snapshot).
  *
@@ -34,7 +34,7 @@ const LOGIN_SYSTEM = "scheduler";   // the login id of each tenant's system user
 const LOGIN_ID = "scheduler";
 const ACTOR_LABEL = "scheduler";
 const JOB = "flash_snapshot";
-// A take that runs past this is cancelled (57014) and the tenant's row says so; 121_verify_flash.sql reads the same value
+// A take that runs past this is cancelled (57014) and the tenant's row says so; 123_verify_flash.sql reads the same value
 // (verify.job_statement_timeout_ms) and holds a full take at volume under half of it
 export const STATEMENT_TIMEOUT_MS = 240_000;
 

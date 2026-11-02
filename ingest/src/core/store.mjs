@@ -4,8 +4,8 @@
  * Reads (short transactions as the tenant's Ingest user, row-level security applies):
  *   config()                    cma.connection_config(): field mapping, pipelines, settings
  *   heldContacts(ids)           the contacts the CMA holds or a record, an email, an inbox thread or a task
- *                               points to, or since 0008zm a store customer is linked to (0006's rule, widened
- *                               by 0008m, 0008n and 0008zm: the contact base is never
+ *                               points to, or since 0008zn a store customer is linked to (0006's rule, widened
+ *                               by 0008m, 0008n and 0008zn: the contact base is never
  *                               mirrored, so other contacts are not read back)
  *   recordContacts(type, ids)   the contact each record points to now
  *   currentAssociations(type, ids)   the stored, current associations from these objects
@@ -19,10 +19,10 @@
  *   forms(), upsertForms(items), upsertSubmissions(items)   the form catalog and submissions
  *   storedSubmissions(ids)      which of these conversion ids the CMA holds (the forms reconcile, CMA-069)
  *   recordsWithoutContact(maxAge)   cma.ingest_records_without_contact (the sweeper's second read)
- *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill (since 0008zm also
+ *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill (since 0008zn also
  *                               those a store customer is linked to)
  *   linkedContactIds({ after, limit, maxAge })   the contacts a store customer is linked to that the CMA does
- *                               not hold yet (0008zm, D2): the sweep's second read and the linked_contact backfill
+ *                               not hold yet (0008zn, D2): the sweep's second read and the linked_contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
  * For the email poll (addition 0008m, brief B17b), each its own short transaction; writes in parts of
@@ -272,7 +272,7 @@ export function storeFor(ctx, connectionId) {
          ) h where $2::text is null or id > $2::text order by id limit $3`, [connectionId, after, limit])).rows.map((r) => r.id));
     },
     async linkedContactIds({ after = null, limit = 500, maxAge = null } = {}) {
-      // The contacts a store customer is linked to (0008h) that the CMA does not hold yet (addition 0008zm, D2), by id;
+      // The contacts a store customer is linked to (0008h) that the CMA does not hold yet (addition 0008zn, D2), by id;
       // with maxAge only links made within it (the sweep's second read of a new link)
       return withTenant(ctx, async (q) => (await q.query(
         `select distinct cu.crm_contact_source_id as id

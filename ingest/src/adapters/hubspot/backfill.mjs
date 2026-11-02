@@ -11,10 +11,10 @@
  *   task            by hs_createdate, then by hs_timestamp (the due time: a task made before the start and
  *                   due after it; addition 0008n)
  *   contact         the contacts the CMA holds (0006: never the contact base; since 0008m also those an
- *                   email or inbox thread points to, since 0008zm those a store customer is linked to), by id,
+ *                   email or inbox thread points to, since 0008zn those a store customer is linked to), by id,
  *                   read with every mapped country slot
  *   linked_contact  only the contacts a store customer is linked to (0008h) that the CMA does not hold yet
- *                   (addition 0008zm, D2: the one-time take-in), by id, through the same contact read-back:
+ *                   (addition 0008zn, D2: the one-time take-in), by id, through the same contact read-back:
  *                   one batch read per 100 contacts
  *   form_submission every polled form's submissions, filling the answers of stored ones without them (forms.mjs)
  *   crm_email       email engagements by hs_timestamp, written as the email poll writes them (email.mjs)

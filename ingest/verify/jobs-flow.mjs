@@ -16,7 +16,7 @@
  * Proves: the sweep processes due events, respects the backoff, parks an event at
  * ingest.max_attempts and never claims it again, reads a record without a contact again (once per
  * ten minutes) and records link_calls; a contact a store customer was linked to within the hour is taken in by the
- * sweep's second read, once (addition 0008zm, D2), and one linked before by the linked_contact backfill, whose second run
+ * sweep's second read, once (addition 0008zn, D2), and one linked before by the linked_contact backfill, whose second run
  * reads nothing; the sweep's outbox guard (brief A5) reports an outbox action
  * still waiting ten minutes after it fell due (outboxPending, one warning per connection with the count
  * and no ids), not a fresh one, not another tenant's and not a delivered one; the forms poll refreshes the catalog keeping configuration,
@@ -309,7 +309,7 @@ expect("sweep: the contact taken in with its country through the alias", (await 
 expect("sweep: link_calls recorded once per run, succeeded", (await runs("link_calls")).map((r) => r.status), ["succeeded", "succeeded", "succeeded"], ["succeeded"]);
 expect("sweep: the run's totals count the processed event", s1.processed >= 1 && s1.failed === 0, true, false);
 
-// ---- A2. D2 (addition 0008zm): a contact a store customer is linked to is held -----------------------
+// ---- A2. D2 (addition 0008zn): a contact a store customer is linked to is held -----------------------
 // Two store customers of an inactive commerce connection in tenant one, linked to two contacts the CMA does not hold:
 // one linked within the hour (the sweep's second read takes it in), one linked before (the linked_contact backfill does)
 const shop1 = (await q("insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, status) values ($1, 'shopify', 'Shop jobs one', $2, 'commerce', 'inactive') returning id",
@@ -493,7 +493,7 @@ expect("backfill: a form whose kept fields changed is read again and fills empty
   [(await q("select source_id, kept_values from cma.form_submission where connection_id = $1 and source_form_id = $2 order by source_id", [conn1, FORM_C])).map((r) => [r.source_id, r.kept_values]),
     since(n0).filter((r) => r.path.endsWith(FORM_A)).length, (await runs("backfill")).at(-1)?.counts.upserted],
   [[["s-0001", { reason: "Moving" }], ["s-0002", { channel: "phone" }]], 0, 1], [[["s-0001", { reason: "Moving", channel: "web" }], ["s-0002", {}]], 1, 0]);
-// D2 (addition 0008zm): the linked_contact backfill takes in every contact linked before that the CMA does not hold, once
+// D2 (addition 0008zn): the linked_contact backfill takes in every contact linked before that the CMA does not hold, once
 await runBackfill({ connectionId: conn1, object: "linked_contact" });
 const lcCursor = async () => (await q("select cursor from cma.sync_cursor where connection_id = $1 and stream = 'backfill:linked_contact'", [conn1]))[0]?.cursor ?? null;
 expect("D2 backfill: the contact linked before taken in, the stream's cursor done", [await heldContact(4300000502), (await lcCursor())?.done], [true, true], [false, false]);

@@ -1,6 +1,6 @@
 # Flash watch and the AI review (design)
 
-Part of the CMA documentation (README.md, Documentation map). Designed with brief B21 (1 November 2026, addition 0008zm); the deterministic watch is built in 0008zm, the AI review is **designed here and built later (B22)**. Nothing in the second half of this document exists yet.
+Part of the CMA documentation (README.md, Documentation map). Designed with brief B21 (1 November 2026, addition 0008zn); the deterministic watch is built in 0008zn, the AI review is **designed here and built later (B22)**. Nothing in the second half of this document exists yet.
 
 Flash (Reports → Flash, docs/product/features.md) gives ten overviews and Data quality, live and as of any date with a snapshot. After every daily snapshot something has to look at the movements and say what matters. Three reviewers do that, under one rule: **a reviewer advises, a person decides** (Decision log, 1 November 2026: AI review is advisory only).
 
@@ -8,13 +8,13 @@ Flash (Reports → Flash, docs/product/features.md) gives ten overviews and Data
 
 | Reviewer | What it reads | What it writes | Runs |
 |---|---|---|---|
-| (a) The deterministic watch (built, 0008zm) | the day's snapshot and the days before it; `sync_run` | `cma.flash_watch_finding` | inside each snapshot take, no AI |
+| (a) The deterministic watch (built, 0008zn) | the day's snapshot and the days before it; `sync_run` | `cma.flash_watch_finding` | inside each snapshot take, no AI |
 | (b) The Flash review by Claude (B22, designed here) | `cma_read` aggregates only (below) | a digest in `cma.ai_review` | once a day after the snapshots, Cloud Run job `cma-ai-review` |
 | (c) Existing reviewers, unchanged | the Gemini Gem "CMA Google Cloud Auditor": the Google Cloud and Workspace setup; Claude Code's `cma-reviewer`: every code change | the Gemini findings doc; PR reviews | as today |
 
 The watch is the first line and the only one that runs without AI. The Flash review reads what the watch found and explains it; it never replaces it.
 
-### (a) The deterministic watch (0008zm)
+### (a) The deterministic watch (0008zn)
 
 `cma.flash_watch_of(tenant, date, now)` runs at the end of every take (`cma.flash_snapshot_take`), on the figures just stored. Its findings hold aggregates, codes and counts only, no id of a record:
 

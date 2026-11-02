@@ -1,5 +1,5 @@
 -- =============================================================================================
--- 121_verify_flash.sql: verifies addition 0008zm, Flash (overviews, daily snapshots, data quality, the watch)
+-- 123_verify_flash.sql: verifies addition 0008zn, Flash (overviews, daily snapshots, data quality, the watch)
 -- =============================================================================================
 -- Universal: no seed is assumed. Block A checks structure and privileges; blocks B and C work on throwaway tenants
 -- inside subtransactions that are always rolled back, so nothing stays and the script runs in dev and in prod. Adapters,
@@ -7,9 +7,9 @@
 -- an email or a phone number. Flows are read on fixed business dates (28 to 31 October 2026) and the takes run at fixed
 -- instants, so the verdict does not depend on the day it runs; stock figures are as of the run, and the few that depend
 -- on today (a device's end of life within three months) are seeded relative to it. Every check writes one row, ok or
--- FAIL, and the last row is the verdict (0008zm verified), because Cloud SQL Studio shows no notices. Run as your own IAM
--- login after 120_flash.sql, dev first, then prod.
---   A  structure and privileges: the addition row after 0008zl; the four tables' columns; keys and checks (a snapshot
+-- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
+-- login after 122_flash.sql, dev first, then prod.
+--   A  structure and privileges: the addition row after 0008zm; the four tables' columns; keys and checks (a snapshot
 --      row's allow-lists and no @, one succeeded run per date, one open finding per key, a month end's id list, the
 --      settings' types and defaults, the job flash_snapshot without a connection); row-level security with the tenant
 --      policy, the audit trigger (not on the id lists), insert only for the application (a finding's state alone may
@@ -35,7 +35,7 @@
 --      first page of a list by every whitelisted sort key under verify.max_rows_ms (the best of two), as the application
 --      (row-level security on); a full take under half the job's statement timeout (verify.job_statement_timeout_ms, the
 --      value jobs/snapshot-flash.mjs sets); the data-quality overview and its lists under verify.max_dq_ms, a budget of
---      their own: they run every check of cma.data_quality_of live, the 24 that came before 0008zm included. The list and
+--      their own: they run every check of cma.data_quality_of live, the 24 that came before 0008zn included. The list and
 --      data-quality budgets are proposed, looser than the brief's (see the settings below); the timings, and what is over
 --      the brief's figures, are in the rows' detail
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
@@ -53,7 +53,7 @@ select set_config('verify.provoke', 'false', false);                 -- 'true' t
 -- Speed budgets at volume. Brief B21 (4.10) asks every live overview under 1,500 ms and every first page of a list under
 -- 800 ms. Proposed in this build, for Martin to decide (docs/open-decisions.md, Flash speed at volume): lists under
 -- 1,500 ms (README's p95 of a report) and data quality's overview and lists under 2,500 ms (they run every check of
--- cma.data_quality_of live, the 24 before 0008zm included). Every speed row names what is over the brief's figures too
+-- cma.data_quality_of live, the 24 before 0008zn included). Every speed row names what is over the brief's figures too
 select set_config('verify.max_overview_ms', '1500', false);          -- a live overview but data quality, as the application (the brief's)
 select set_config('verify.max_rows_ms', '1500', false);              -- a first page of a list but data quality's (proposed; the brief's is 800)
 select set_config('verify.max_dq_ms', '2500', false);                -- data quality's overview and first pages (proposed; the brief's is 1,500 and 800)
@@ -63,11 +63,11 @@ select set_config('verify.take_max_ms', (current_setting('verify.job_statement_t
 -- block C (speed at volume) runs in dev and local databases only: where the dev seed's agent.two@example.com is active
 select set_config('verify.volume', (select exists (select 1 from cma.app_user u where u.email = 'agent.two@example.com' and u.status = 'active'))::text, false);
 
-drop table if exists pg_temp.verify_0008zm;
-create temp table verify_0008zm (ord int, check_name text, result text, detail text);
+drop table if exists pg_temp.verify_0008zn;
+create temp table verify_0008zn (ord int, check_name text, result text, detail text);
 
 -- The error code a statement raises, or 'ok'
-create or replace function pg_temp.v0008zm_code(p_sql text)
+create or replace function pg_temp.v0008zn_code(p_sql text)
 returns text
 language plpgsql
 as $$
@@ -80,7 +80,7 @@ end
 $$;
 
 -- The fastest of p_runs runs of a read, in milliseconds, every row fetched
-create or replace function pg_temp.v0008zm_best_ms(p_sql text, p_runs integer)
+create or replace function pg_temp.v0008zn_best_ms(p_sql text, p_runs integer)
 returns numeric
 language plpgsql
 as $$
@@ -103,7 +103,7 @@ end
 $$;
 
 -- An overview's figures as one line: each grouping set's dims values and measures, in a fixed order
-create or replace function pg_temp.v0008zm_figs(p_tenant uuid, p_overview text, p_from date, p_to date)
+create or replace function pg_temp.v0008zn_figs(p_tenant uuid, p_overview text, p_from date, p_to date)
 returns text
 language sql
 as $$
@@ -115,7 +115,7 @@ as $$
 $$;
 
 -- The same for stored rows of a snapshot date (or summed dates)
-create or replace function pg_temp.v0008zm_stored(p_tenant uuid, p_overview text, p_dates date[])
+create or replace function pg_temp.v0008zn_stored(p_tenant uuid, p_overview text, p_dates date[])
 returns text
 language sql
 as $$
@@ -134,10 +134,10 @@ declare
   v_fn      text;
   v_t       text;
 begin
-  -- A1. the addition is recorded, after 0008zl
-  insert into verify_0008zm values (1, 'A1 addition 0008zm recorded, after 0008zl',
-    case when exists (select 1 from cma.schema_migration where version = '0008zm')
-              and exists (select 1 from cma.schema_migration where version = '0008zl') and not v_provoke then 'ok' else 'FAIL' end,
+  -- A1. the addition is recorded, after 0008zm
+  insert into verify_0008zn values (1, 'A1 addition 0008zn recorded, after 0008zm',
+    case when exists (select 1 from cma.schema_migration where version = '0008zn')
+              and exists (select 1 from cma.schema_migration where version = '0008zm') and not v_provoke then 'ok' else 'FAIL' end,
     case when v_provoke then 'provoked' else '' end);
 
   -- A2. the four tables: columns with types and nullability
@@ -156,7 +156,7 @@ begin
       v_bad := v_bad || split_part(v_t, '=', 1) || ' columns; ';
     end if;
   end loop;
-  insert into verify_0008zm values (2, 'A2 the four tables'' columns, types and nullability',
+  insert into verify_0008zn values (2, 'A2 the four tables'' columns, types and nullability',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A3. keys and checks: a snapshot row's allow-lists, no @, an amount per currency; one row per date, overview and dims;
@@ -198,7 +198,7 @@ begin
      or cma.flash_keys_ok('{"market": "a@b"}', array['market']) then
     v_bad := v_bad || 'finding keys; ';
   end if;
-  insert into verify_0008zm values (3, 'A3 keys and checks: allow-lists, no @, per currency; one row, one succeeded run, one open finding; month end; job; settings',
+  insert into verify_0008zn values (3, 'A3 keys and checks: allow-lists, no @, per currency; one row, one succeeded run, one open finding; month end; job; settings',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A4. tenant-aware: row-level security with the tenant policy; the audit trigger but on the id lists; insert only for
@@ -221,7 +221,7 @@ begin
      or not exists (select 1 from pg_trigger where tgrelid = 'cma.flash_watch_finding'::regclass and tgname = 'guard_state' and not tgisinternal) then
     v_bad := v_bad || 'the finding''s state; ';
   end if;
-  insert into verify_0008zm values (4, 'A4 row-level security, the audit trigger (not on the id lists), insert only, a finding''s state alone, nothing for readers',
+  insert into verify_0008zn values (4, 'A4 row-level security, the audit trigger (not on the id lists), insert only, a finding''s state alone, nothing for readers',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A5. flash.snapshot: on every tenant's scheduler role, on no assignable role
@@ -238,7 +238,7 @@ begin
   if (select prosrc from pg_proc where oid = 'cma.ensure_scheduler_user(uuid)'::regprocedure) !~ 'workday\.close_forgotten.*follow_up\.refresh.*flash\.snapshot' then
     v_bad := v_bad || 'ensure_scheduler_user; ';
   end if;
-  insert into verify_0008zm values (5, 'A5 flash.snapshot on every scheduler role, on no assignable role; ensure_scheduler_user grants it',
+  insert into verify_0008zn values (5, 'A5 flash.snapshot on every scheduler role, on no assignable role; ensure_scheduler_user grants it',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A6. every function the application's only and in the caller's rights; the expiry definer, the owner's, pinned
@@ -283,7 +283,7 @@ begin
   if exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = 'cma.flash_watch_finding_guard()'::regprocedure and a.grantee = 0) then
     v_bad := v_bad || 'the guard; ';
   end if;
-  insert into verify_0008zm values (6, 'A6 every function the application''s only and invoker; the expiry definer, the owner''s, pinned',
+  insert into verify_0008zn values (6, 'A6 every function the application''s only and invoker; the expiry definer, the owner''s, pinned',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A7. the reporting views' exact columns, readable by the readers; no raw or personal column
@@ -312,7 +312,7 @@ begin
                and column_name ~ '(raw|email|phone|mobile|address|first_name|last_name|full_?name|customer_name|postcode|city)') then
     v_bad := v_bad || 'a personal or raw column; ';
   end if;
-  insert into verify_0008zm values (7, 'A7 the reporting views'' exact columns, readable; no raw or personal column',
+  insert into verify_0008zn values (7, 'A7 the reporting views'' exact columns, readable; no raw or personal column',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A8. the six data-quality checks (310 to 360) in the catalog, nothing twice; the redefinitions carry what came before
@@ -321,7 +321,7 @@ begin
      is distinct from 'customer_required_ref_missing:310,device_required_ref_missing:320,subscription_customer_unmatched:330,'
                       || 'active_subscription_without_device:340,device_subscription_ref_unknown:350,field_device_on_ended_subscription:360'
      or (select count(*) from cma.data_quality_catalog()) <> (select count(distinct check_key) from cma.data_quality_catalog())
-     or (select count(*) from cma.schema_migration where version = '0008zm') <> 1 then
+     or (select count(*) from cma.schema_migration where version = '0008zn') <> 1 then
     v_bad := v_bad || 'the catalog or something twice; ';
   end if;
   if (select prosrc from pg_proc where oid = 'cma.data_quality_of(uuid)'::regprocedure) !~ 'outbound_unanswered_untagged'
@@ -345,7 +345,7 @@ begin
      or (select prosrc from pg_proc where oid = 'cma.ingest_contact_forget(uuid,text)'::regprocedure) ~ 'commerce_customer' then
     v_bad := v_bad || 'contacts held and forgotten; ';
   end if;
-  insert into verify_0008zm values (8, 'A8 the six checks in their order, nothing twice; the redefinitions carry what came before',
+  insert into verify_0008zn values (8, 'A8 the six checks in their order, nothing twice; the redefinitions carry what came before',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 end
 $$;
@@ -371,8 +371,8 @@ declare
 begin
   begin
     -- tenants and people (as the owner); each tenant's Scheduler and Ingest users come with create_tenant
-    v_t1 := cma.create_tenant('verify-0008zm-one', 'Verify 0008zm one', 'Europe/Amsterdam');
-    v_t2 := cma.create_tenant('verify-0008zm-two', 'Verify 0008zm two', 'Europe/Amsterdam');
+    v_t1 := cma.create_tenant('verify-0008zn-one', 'Verify 0008zn one', 'Europe/Amsterdam');
+    v_t2 := cma.create_tenant('verify-0008zn-two', 'Verify 0008zn two', 'Europe/Amsterdam');
     v_today := cma.tenant_today_of(v_t1);
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-analyst1@example.invalid', 'analyst1') returning id into v_analyst1;
@@ -500,17 +500,17 @@ begin
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_admin1::text, true);
-    v_txt := pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,bogus'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,active'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '''')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.snapshot_local_time'', ''24:00'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.id_list_retention_months'', ''0'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.watch_jump_pct'', ''0'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.watch_jump_min'', ''-1'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.file_max_rows'', ''50001'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''assets.required_refs'', ''Bad Key'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''commerce.required_contact_refs'', ''netsuite,netsuite'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '' active , paused '')');
+    v_txt := pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,bogus'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,active'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '''')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.snapshot_local_time'', ''24:00'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.id_list_retention_months'', ''0'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.watch_jump_pct'', ''0'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.watch_jump_min'', ''-1'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.file_max_rows'', ''50001'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''assets.required_refs'', ''Bad Key'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''commerce.required_contact_refs'', ''netsuite,netsuite'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '' active , paused '')');
     v_txt := v_txt || ' ' || cma.setting_of(v_t1, 'flash.active_subscription_statuses');
     perform cma.set_tenant_setting('flash.active_subscription_statuses', 'active');
     perform cma.set_tenant_setting('commerce.required_contact_refs', 'netsuite');
@@ -522,7 +522,7 @@ begin
 
     -- B2. each stock overview's live figures, as the analyst, equal the hand-computed ones
     perform set_config('app.user_id', v_analyst1::text, true);
-    v_txt := pg_temp.v0008zm_figs(v_t1, 'customers', null, null);
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'customers', null, null);
     v_rows := v_rows || array['12', 'B2 customers: held, active, paused, linked, with every required reference, per market and store',
       case when v_txt = '*:active_customers=2,customers_held=6,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
                         || 'GB:active_customers=2,customers_held=5,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
@@ -530,7 +530,7 @@ begin
                         || 'GB/shop-gb:active_customers=2,customers_held=5,linked_to_contact=3,paused_customers=1,with_required_refs=1 '
                         || 'NL/shop-nl:active_customers=0,customers_held=1,linked_to_contact=0,paused_customers=0,with_required_refs=0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
-    v_txt := pg_temp.v0008zm_figs(v_t1, 'subscriptions', null, null);
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'subscriptions', null, null);
     v_rows := v_rows || array['13', 'B2 subscriptions: per market, store, status and payment state; amounts per currency',
       case when v_txt = '*:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 80.00},paused_subscriptions=2,subscriptions=7 '
                         || 'GB:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 80.00},paused_subscriptions=2,subscriptions=7 '
@@ -540,7 +540,7 @@ begin
                         || 'GB/canceled/expired/shop-gb:active_subscriptions=0,amount_per_cycle={"GBP": 5.00},paused_subscriptions=0,subscriptions=1 '
                         || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={"GBP": 20.00},paused_subscriptions=2,subscriptions=2'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
-    v_txt := pg_temp.v0008zm_figs(v_t1, 'installed_base', null, null);
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'installed_base', null, null);
     v_rows := v_rows || array['14', 'B2 installed base: devices, in the field, in stock, past due, due within three months; the subscription link',
       case when v_txt = '*:components_past_due=1,devices=5,in_field=4,in_stock=1,items_due_3m=1 '
                         || 'GB:components_past_due=1,devices=4,in_field=3,in_stock=1,items_due_3m=1 '
@@ -550,8 +550,8 @@ begin
                         || 'not_found/GB/m1/field/none:components_past_due=0,devices=1,in_field=1,in_stock=0,items_due_3m=1 '
                         || 'not_found/NL/m1/field/none:components_past_due=0,devices=1,in_field=1,in_stock=0,items_due_3m=0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
-    v_txt := pg_temp.v0008zm_figs(v_t1, 'open_deals', null, null) || ' | ' || pg_temp.v0008zm_figs(v_t1, 'open_tickets', null, null)
-             || ' | ' || pg_temp.v0008zm_figs(v_t1, 'open_tasks', null, null);
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'open_deals', null, null) || ' | ' || pg_temp.v0008zn_figs(v_t1, 'open_tickets', null, null)
+             || ' | ' || pg_temp.v0008zn_figs(v_t1, 'open_tasks', null, null);
     v_rows := v_rows || array['15', 'B2 open deals (counted pipelines), open tickets and open tasks: counts, ages, overdue',
       case when v_txt = '*:median_age_days=6.0,oldest_age_days=10,open_deals=2 GB:median_age_days=10.0,oldest_age_days=10,open_deals=1 '
                         || 'NL:median_age_days=2.0,oldest_age_days=2,open_deals=1 GB/p1/s1:median_age_days=10.0,oldest_age_days=10,open_deals=1 '
@@ -564,8 +564,8 @@ begin
     -- B3. each flow overview on 30 October: churn (once per subscription and date, the canceled event's reason), orders
     --     (test orders out, total less refunded, per SKU), payments (orders by status, renewals and failed renewals),
     --     reviews (published, counted channel)
-    v_txt := pg_temp.v0008zm_figs(v_t1, 'churn', '2026-10-30', '2026-10-30') || ' | ' || pg_temp.v0008zm_figs(v_t1, 'orders', '2026-10-30', '2026-10-30')
-             || ' | ' || pg_temp.v0008zm_figs(v_t1, 'payments', '2026-10-30', '2026-10-30') || ' | ' || pg_temp.v0008zm_figs(v_t1, 'reviews', '2026-10-30', '2026-10-30');
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'churn', '2026-10-30', '2026-10-30') || ' | ' || pg_temp.v0008zn_figs(v_t1, 'orders', '2026-10-30', '2026-10-30')
+             || ' | ' || pg_temp.v0008zn_figs(v_t1, 'payments', '2026-10-30', '2026-10-30') || ' | ' || pg_temp.v0008zn_figs(v_t1, 'reviews', '2026-10-30', '2026-10-30');
     v_rows := v_rows || array['16', 'B3 flows of 30 October: churn, orders, payments, reviews',
       case when v_txt = '*:churned=1 GB:churned=1 GB/too-expensive/shop-gb:churned=1 | '
                         || '*:amount={"GBP": 65.00},orders=2,units=4 GB:amount={"GBP": 65.00},orders=2,units=4 GB/A:orders=2,units=3 GB/B:orders=1,units=1 '
@@ -603,7 +603,7 @@ begin
              || (j -> 'rows' -> 0 ->> 'related_type') || ':' || (j -> 'rows' -> 0 ->> 'related_id')
              || ' | ' || (select string_agg(d.check_key || '=' || d.total, ' ' order by d.check_key) from cma.data_quality() d
                           where d.check_key in (select c.check_key from cma.data_quality_flash_checks() c))
-             || ' | ' || pg_temp.v0008zm_code('select cma.data_quality_rows(''no_such_check'')');
+             || ' | ' || pg_temp.v0008zn_code('select cma.data_quality_rows(''no_such_check'')');
     v_rows := v_rows || array['18', 'B5 the checks'' rows: market, the system where fixed, links; data_quality() lists the six; an unknown check refused',
       case when v_txt = '2 cu-2/GB/crm/verifycrm/https://crm.example/portal-1/contact/c-2 cu-4/GB/cma/-/https://crm.example/portal-1/contact/c-9 | '
                         || '1 assets/verifyregister/subscription:s-3 | active_subscription_without_device=2 customer_required_ref_missing=2 '
@@ -629,12 +629,12 @@ begin
       insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, started_at, finished_at, status)
       values (uuidv7(), v_t1, date '2026-10-21' + v_n, now(), now(), 'succeeded');
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
-      select v_t1, date '2026-10-21' + v_n, x.key, c.dims, c.measures, '0008zm', now(),
+      select v_t1, date '2026-10-21' + v_n, x.key, c.dims, c.measures, '0008zn', now(),
              (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n)
       from cma.flash_overviews() x
       cross join lateral cma.flash_compute_of(v_t1, x.key, date '2026-10-21' + v_n, date '2026-10-21' + v_n) c;
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
-      values (v_t1, date '2026-10-21' + v_n, 'orders', '{"market": "GB"}', '{"orders": 5, "units": 5, "amount": {"GBP": 50}}', '0008zm', now(),
+      values (v_t1, date '2026-10-21' + v_n, 'orders', '{"market": "GB"}', '{"orders": 5, "units": 5, "amount": {"GBP": 50}}', '0008zn', now(),
               (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n));
     end loop;
     update cma.flash_snapshot s set measures = s.measures || '{"active_customers": 100}'
@@ -676,9 +676,9 @@ begin
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := '';
     for o in select x.key, x.kind from cma.flash_overviews() x order by x.sort_order loop
-      v_a := pg_temp.v0008zm_stored(v_t1, o.key, array[date '2026-10-30']);
-      v_b := case when o.kind = 'stock' then pg_temp.v0008zm_figs(v_t1, o.key, null, null)
-                  else pg_temp.v0008zm_figs(v_t1, o.key, '2026-10-30', '2026-10-30') end;
+      v_a := pg_temp.v0008zn_stored(v_t1, o.key, array[date '2026-10-30']);
+      v_b := case when o.kind = 'stock' then pg_temp.v0008zn_figs(v_t1, o.key, null, null)
+                  else pg_temp.v0008zn_figs(v_t1, o.key, '2026-10-30', '2026-10-30') end;
       if v_a is distinct from v_b or v_a = '-' then
         v_txt := v_txt || o.key || ' differs; ';
       end if;
@@ -686,7 +686,7 @@ begin
     v_txt := v_txt || (select count(distinct s.overview) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30')::text
              || ' ' || (select string_agg(distinct s.definition_version, ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
     v_rows := v_rows || array['24', 'B8 the snapshot equals the live computation, all eleven overviews',
-      case when v_txt = '11 0008zm' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+      case when v_txt = '11 0008zn' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. a second take of the same date writes nothing; no id list on a date that is no month end
     v_n := (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1);
@@ -717,8 +717,8 @@ begin
     -- B11. flows summed over the stored dates equal the live period (30 and 31 October), amounts per currency
     v_txt := '';
     for o in select x.key from cma.flash_overviews() x where x.kind = 'flow' order by x.sort_order loop
-      if pg_temp.v0008zm_stored(v_t1, o.key, array[date '2026-10-30', date '2026-10-31'])
-         is distinct from pg_temp.v0008zm_figs(v_t1, o.key, '2026-10-30', '2026-10-31') then
+      if pg_temp.v0008zn_stored(v_t1, o.key, array[date '2026-10-30', date '2026-10-31'])
+         is distinct from pg_temp.v0008zn_figs(v_t1, o.key, '2026-10-30', '2026-10-31') then
         v_txt := v_txt || o.key || ' differs; ';
       end if;
     end loop;
@@ -752,8 +752,8 @@ begin
              || ' ' || (select count(*) from cma.flash_snapshot_ids)::text || ' ' || (select count(*) from cma.flash_watch_finding)::text
              || ' ' || (select count(*) from cma.flash_compute_of(v_t1, 'customers'))::text
              || ' ' || (cma.flash_rows_of(v_t1, 'customers', '{}', 'lifetime_orders', false, 10, 0, null, null) ->> 'total')
-             || ' ' || pg_temp.v0008zm_code(format('insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id) '
-                                                   || 'values (%L, ''2026-10-01'', ''customers'', ''{}'', ''{}'', ''0008zm'', now(), uuidv7())', v_t1));
+             || ' ' || pg_temp.v0008zn_code(format('insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id) '
+                                                   || 'values (%L, ''2026-10-01'', ''customers'', ''{}'', ''{}'', ''0008zn'', now(), uuidv7())', v_t1));
     v_rows := v_rows || array['29', 'B13 tenant isolation: nothing of tenant one seen, read or written by tenant two',
       case when v_txt = '0 0 0 0 0 0 42501' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
@@ -763,39 +763,39 @@ begin
     --      (CMA06) and reopened by the owner (CMA03)
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_agent1::text, true);
-    v_txt := pg_temp.v0008zm_code('select cma.flash_overview(''customers'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_page()')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_snapshots()')
-             || ' ' || pg_temp.v0008zm_code('select cma.data_quality_rows(''customer_required_ref_missing'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_file_record(''customers'', ''rows'', ''{}'', null, null, null, null, 1)');
+    v_txt := pg_temp.v0008zn_code('select cma.flash_overview(''customers'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_page()')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_snapshots()')
+             || ' ' || pg_temp.v0008zn_code('select cma.data_quality_rows(''customer_required_ref_missing'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_file_record(''customers'', ''rows'', ''{}'', null, null, null, null, 1)');
     perform set_config('app.user_id', v_analyst1::text, true);
-    v_txt := v_txt || ' | ' || pg_temp.v0008zm_code(format('select cma.flash_snapshot_take(%L)', v_t1))
-             || ' ' || pg_temp.v0008zm_code(format('select cma.flash_snapshot_take_at(%L, now() - interval ''1 day'')', v_t1))
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'', ''{"email": "x"}'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'', ''{"measure": "devices"}'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'', ''{}'', ''email'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'', ''{}'', null, false, 50001)')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_overview(''nope'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_overview(''customers'', ''gb'')')
-             || ' ' || pg_temp.v0008zm_code(format('select cma.flash_overview(''customers'', null, %L)', v_today))
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_overview(''orders'', null, null, ''2026-10-31'', ''2026-10-30'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_overview(''orders'', null, null, ''2025-10-01'', ''2026-10-30'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_overview(''customers'', null, ''2026-10-29'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''customers'', ''{}'', null, false, 500, 0, ''2026-10-30'')');
+    v_txt := v_txt || ' | ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_take(%L)', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_take_at(%L, now() - interval ''1 day'')', v_t1))
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{"email": "x"}'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{"measure": "devices"}'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{}'', ''email'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{}'', null, false, 50001)')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''nope'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''customers'', ''gb'')')
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_overview(''customers'', null, %L)', v_today))
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''orders'', null, null, ''2026-10-31'', ''2026-10-30'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''orders'', null, null, ''2025-10-01'', ''2026-10-30'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''customers'', null, ''2026-10-29'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{}'', null, false, 500, 0, ''2026-10-30'')');
     -- an open finding for the moment of the checks, so a person's move from open to resolved is really tried
     perform set_config('role', 'cma_owner', true);
     insert into cma.flash_watch_finding (tenant_id, snapshot_date, kind, overview, dims, measure, value, previous, threshold)
     values (v_t1, '2026-10-31', 'jump', 'subscriptions', '{"market": "NL"}', 'active_subscriptions', 30, 10, 10);
     perform set_config('role', 'cma_app', true);
-    v_txt := v_txt || ' | ' || pg_temp.v0008zm_code('update cma.flash_snapshot set measures = ''{}''')
-             || ' ' || pg_temp.v0008zm_code('delete from cma.flash_snapshot_run')
-             || ' ' || pg_temp.v0008zm_code('delete from cma.flash_snapshot_ids')
-             || ' ' || pg_temp.v0008zm_code('delete from cma.flash_watch_finding')
-             || ' ' || pg_temp.v0008zm_code('update cma.flash_watch_finding set state = ''resolved'', resolved_on = ''2026-11-30'' where state = ''open''')
-             || ' ' || pg_temp.v0008zm_code('update cma.flash_watch_finding set state = ''resolved'', resolved_on = ''2026-11-30''');
+    v_txt := v_txt || ' | ' || pg_temp.v0008zn_code('update cma.flash_snapshot set measures = ''{}''')
+             || ' ' || pg_temp.v0008zn_code('delete from cma.flash_snapshot_run')
+             || ' ' || pg_temp.v0008zn_code('delete from cma.flash_snapshot_ids')
+             || ' ' || pg_temp.v0008zn_code('delete from cma.flash_watch_finding')
+             || ' ' || pg_temp.v0008zn_code('update cma.flash_watch_finding set state = ''resolved'', resolved_on = ''2026-11-30'' where state = ''open''')
+             || ' ' || pg_temp.v0008zn_code('update cma.flash_watch_finding set state = ''resolved'', resolved_on = ''2026-11-30''');
     perform set_config('role', 'cma_owner', true);
-    v_txt := v_txt || ' ' || pg_temp.v0008zm_code(format('update cma.flash_watch_finding set state = ''open'', resolved_on = null where tenant_id = %L', v_t1));
+    v_txt := v_txt || ' ' || pg_temp.v0008zn_code(format('update cma.flash_watch_finding set state = ''open'', resolved_on = null where tenant_id = %L', v_t1));
     delete from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.kind = 'jump' and f.overview = 'subscriptions' and f.state = 'open';
     v_rows := v_rows || array['31', 'B14 the refusals: an agent, a take by a person or at another instant, forms, dates, insert only, a finding''s state',
       case when v_txt = 'CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 | CMA06 CMA06 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA02 CMA02 | '
@@ -821,8 +821,8 @@ begin
     j := cma.flash_rows('subscriptions', '{}', 'subscription_id', true, 500, 0, '2026-10-31');
     v_txt := v_txt || ' | ' || (j ->> 'total') || ' ' || (select string_agg(r ->> 'source_id' || ':' || (r ->> 'state'), ',' order by o2)
                                                          from jsonb_array_elements(j -> 'rows') with ordinality x(r, o2))
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''subscriptions'', ''{}'', null, false, 500, 0, ''2026-10-30'')')
-             || ' ' || pg_temp.v0008zm_code('select cma.flash_rows(''orders'', ''{}'', null, false, 500, 0, ''2026-10-31'')');
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''subscriptions'', ''{}'', null, false, 500, 0, ''2026-10-30'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''orders'', ''{}'', null, false, 500, 0, ''2026-10-31'')');
     v_rows := v_rows || array['32', 'B15 the lists: a measure''s records, sorting within currency, a customer''s row, devices, a SKU, a month end''s frozen list',
       case when v_txt = '2 cu-5,cu-1,cu-4,cu-2,cu-3,cu-6 | {"netsuite": "NS-1"} https://crm.example/portal-1/contact/c-1 ["#1005", "#1001"] 2 ["s-1", "s-3"] 2 | '
                         || '4 SN-4 3 s-1 | 3 s-5:active,s-4:active,s-1:active CMA02 CMA02'
@@ -927,11 +927,11 @@ begin
     when others then
       v_rows := v_rows || array['59', 'B the block ran to the end', 'FAIL', sqlstate || ' ' || sqlerrm];
   end;
-  insert into verify_0008zm (ord, check_name, result, detail)
+  insert into verify_0008zn (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008zm values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008zn values (59, 'B the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
@@ -958,7 +958,7 @@ declare
   j jsonb;
 begin
   if not current_setting('verify.volume')::boolean then
-    insert into verify_0008zm values (61, 'C1 every live overview but data quality, and the landing, under verify.max_overview_ms at volume', 'skip', 'not run: dev and local databases only'),
+    insert into verify_0008zn values (61, 'C1 every live overview but data quality, and the landing, under verify.max_overview_ms at volume', 'skip', 'not run: dev and local databases only'),
                                      (62, 'C2 every first page of a list but data quality''s, by every sort key, under verify.max_rows_ms at volume', 'skip', 'not run: dev and local databases only'),
                                      (63, 'C3 a full take under half the job''s statement timeout at volume', 'skip', 'not run: dev and local databases only'),
                                      (64, 'C4 the data-quality overview and its lists under verify.max_dq_ms at volume', 'skip', 'not run: dev and local databases only');
@@ -979,7 +979,7 @@ begin
     alter table cma.crm_task disable trigger audit;
     alter table cma.review disable trigger audit;
     perform set_config('lock_timeout', '0', true);
-    v_t := cma.create_tenant('verify-0008zm-volume', 'Verify 0008zm volume', 'Europe/Amsterdam');
+    v_t := cma.create_tenant('verify-0008zn-volume', 'Verify 0008zn volume', 'Europe/Amsterdam');
     insert into cma.app_user (tenant_id, email, display_name) values (v_t, 'verify-analyst-volume@example.invalid', 'analyst') returning id into v_analyst;
     insert into cma.user_role (tenant_id, user_id, role_id) select v_t, v_analyst, ar.id from cma.app_role ar where ar.tenant_id = v_t and ar.key = 'analytics';
     select u.id into v_sched from cma.app_user u where u.tenant_id = v_t and u.email = 'scheduler@system.invalid';
@@ -1094,12 +1094,12 @@ begin
     perform set_config('app.tenant_id', v_t::text, true);
     perform set_config('app.user_id', v_analyst::text, true);
     for o in select x.key, x.kind, x.sorts from cma.flash_overviews() x where x.key <> 'data_quality' order by x.sort_order loop
-      v_ms := pg_temp.v0008zm_best_ms(format('select cma.flash_overview(%L, null, null, %L, %L)', o.key,
+      v_ms := pg_temp.v0008zn_best_ms(format('select cma.flash_overview(%L, null, null, %L, %L)', o.key,
                                              case when o.kind = 'flow' then '2026-10-01' end, case when o.kind = 'flow' then '2026-10-31' end), 2);
       v_txt := v_txt || o.key || ' ' || v_ms || ' ms; ';
       if v_ms >= v_max_o then v_bad := v_bad || o.key || '; '; end if;
     end loop;
-    v_ms := pg_temp.v0008zm_best_ms('select cma.flash_page(null, null, ''2026-10-01'', ''2026-10-31'')', 2);
+    v_ms := pg_temp.v0008zn_best_ms('select cma.flash_page(null, null, ''2026-10-01'', ''2026-10-31'')', 2);
     v_txt := v_txt || 'landing ' || v_ms || ' ms';
     if v_ms >= v_max_o then v_bad := v_bad || 'landing; '; end if;
     v_rows := v_rows || array['61', 'C1 every live overview but data quality, and the landing, under verify.max_overview_ms at volume',
@@ -1109,7 +1109,7 @@ begin
     v_txt := ''; v_bad := '';
     for o in select x.key, x.kind, x.sorts from cma.flash_overviews() x where x.key <> 'data_quality' order by x.sort_order loop
       foreach s in array o.sorts loop
-        v_ms := pg_temp.v0008zm_best_ms(format('select cma.flash_rows(%L, ''{}'', %L, true, 500, 0, null, %L, %L)', o.key, s,
+        v_ms := pg_temp.v0008zn_best_ms(format('select cma.flash_rows(%L, ''{}'', %L, true, 500, 0, null, %L, %L)', o.key, s,
                                                case when o.kind = 'flow' then '2026-10-01' end, case when o.kind = 'flow' then '2026-10-31' end), 2);
         v_worst := greatest(v_worst, v_ms);
         v_txt := v_txt || o.key || ':' || s || ' ' || v_ms || '; ';
@@ -1124,12 +1124,12 @@ begin
 
     -- C4. the data-quality overview (the best of two) and every first page of its list (the best of one)
     v_txt := ''; v_bad := ''; v_over := '';
-    v_ms := pg_temp.v0008zm_best_ms('select cma.flash_overview(''data_quality'')', 2);
+    v_ms := pg_temp.v0008zn_best_ms('select cma.flash_overview(''data_quality'')', 2);
     v_txt := 'overview ' || v_ms || ' ms; ';
     if v_ms >= v_max_q then v_bad := 'overview; '; end if;
     if v_ms >= v_max_o then v_over := 'overview; '; end if;
     foreach s in array (select x.sorts from cma.flash_overviews() x where x.key = 'data_quality') loop
-      v_ms := pg_temp.v0008zm_best_ms(format('select cma.flash_rows(''data_quality'', ''{}'', %L, true, 500, 0)', s), 1);
+      v_ms := pg_temp.v0008zn_best_ms(format('select cma.flash_rows(''data_quality'', ''{}'', %L, true, 500, 0)', s), 1);
       v_txt := v_txt || 'list:' || s || ' ' || v_ms || ' ms; ';
       if v_ms >= v_max_q then v_bad := v_bad || 'list:' || s || '; '; end if;
       if v_ms >= v_brief_r then v_over := v_over || 'list:' || s || '; '; end if;
@@ -1155,35 +1155,35 @@ begin
     when others then
       v_rows := v_rows || array['69', 'C the block ran to the end', 'FAIL', sqlstate || ' ' || sqlerrm];
   end;
-  insert into verify_0008zm (ord, check_name, result, detail)
+  insert into verify_0008zn (ord, check_name, result, detail)
   select v_rows[i]::int, v_rows[i + 1], v_rows[i + 2], v_rows[i + 3]
   from generate_series(1, coalesce(array_length(v_rows, 1), 0), 4) as i;
   if cardinality(v_rows) = 0 then
-    insert into verify_0008zm values (69, 'C the block ran to the end', 'FAIL', 'no check ran');
+    insert into verify_0008zn values (69, 'C the block ran to the end', 'FAIL', 'no check ran');
   end if;
 end
 $$;
 
 -- The helpers are dropped first, so the verdict is the last thing the script prints
-drop function if exists pg_temp.v0008zm_code(text);
-drop function if exists pg_temp.v0008zm_best_ms(text, integer);
-drop function if exists pg_temp.v0008zm_figs(uuid, text, date, date);
-drop function if exists pg_temp.v0008zm_stored(uuid, text, date[]);
+drop function if exists pg_temp.v0008zn_code(text);
+drop function if exists pg_temp.v0008zn_best_ms(text, integer);
+drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date);
+drop function if exists pg_temp.v0008zn_stored(uuid, text, date[]);
 
 -- Verdict: one row per check, then the verdict. 35 checks in dev and local databases; in prod block C's four read skip
 -- (its speed is proven in dev) and the 31 others must be ok
 select check_name, result, detail
-from (select ord, check_name, result, detail from verify_0008zm
+from (select ord, check_name, result, detail from verify_0008zn
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
-                  when exists (select 1 from verify_0008zm where result not in ('ok', 'skip')) then 'FAIL'
-                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zm where result = 'ok') = 35 then '0008zm verified'
-                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zm where result = 'ok') = 31
-                       and (select count(*) from verify_0008zm where result = 'skip') = 4 then '0008zm verified'
+                  when exists (select 1 from verify_0008zn where result not in ('ok', 'skip')) then 'FAIL'
+                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 35 then '0008zn verified'
+                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 31
+                       and (select count(*) from verify_0008zn where result = 'skip') = 4 then '0008zn verified'
                   else 'FAIL' end,
-             format('121_verify_flash: %s ok, %s FAIL, %s skip', (select count(*) from verify_0008zm where result = 'ok'),
-                    (select count(*) from verify_0008zm where result not in ('ok', 'skip')),
-                    (select count(*) from verify_0008zm where result = 'skip'))) x
+             format('123_verify_flash: %s ok, %s FAIL, %s skip', (select count(*) from verify_0008zn where result = 'ok'),
+                    (select count(*) from verify_0008zn where result not in ('ok', 'skip')),
+                    (select count(*) from verify_0008zn where result = 'skip'))) x
 order by ord;
 reset role;

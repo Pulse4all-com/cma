@@ -562,7 +562,7 @@ Facts about the review platform's own figures, recorded so nobody mistakes them 
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is mandatory and a missing one is a data issue the CMA flags, addition 0008zm; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is mandatory and a missing one is a data issue the CMA flags, addition 0008zn; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -859,7 +859,7 @@ Decided with addition 0008zm (30 October 2026, Martin): Reports → Lead cohorts
 
 ## Flash terms
 
-Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm. Reports → Flash gives ten overviews and Data quality in one click, live from the mirrors and as of any business date with a snapshot, per market, on screen and as a file. Flash shows ids, statuses, amounts, codes and links only: never a name, email, phone or address. Every figure follows one computation (`cma.flash_compute_of`), live and in the snapshot. "Customer" alone stays under Domains still to define; Active customer below is a store customer with an active subscription.
+Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm. Reports → Flash gives ten overviews and Data quality in one click, live from the mirrors and as of any business date with a snapshot, per market, on screen and as a file. Flash shows ids, statuses, amounts, codes and links only: never a name, email, phone or address. Every figure follows one computation (`cma.flash_compute_of`), live and in the snapshot. "Customer" alone stays under Domains still to define; Active customer below is a store customer with an active subscription.
 
 ### Flash
 
@@ -876,9 +876,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Dashboard" (the Dashboard is a surface of the Workspace); "flash report" for one overview |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn) |
 | Used by | `cma.flash_overviews`, `cma.flash_compute_of`, `cma.flash_overview`, `cma.flash_rows`, `cma.flash_page`; Reports → Flash (B21b) |
-| As built today | `120`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. Matches the definition |
+| As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. Matches the definition |
 
 ### Active customer
 
@@ -895,9 +895,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: the CMA's join of the store's customers and the subscription app's statuses |
 | Not to use | "Customer" alone for it (Domains still to define); "subscriber" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`), the month end's id list (`record_kind` customer) |
-| As built today | `cma.flash_customers_of` (`120`). Matches the definition |
+| As built today | `cma.flash_customers_of` (`122`). Matches the definition |
 
 ### Open deal
 
@@ -914,9 +914,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | HubSpot's deals whose stage is not closed won or closed lost |
 | Not to use | "Lead" for it (Lead is still to define) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_deals_of`, the overview `open_deals` |
-| As built today | `cma.flash_deals_of` (`120`) over `cma.counted_deals_of` (`92`). Matches the definition but for test deals (D25) |
+| As built today | `cma.flash_deals_of` (`122`) over `cma.counted_deals_of` (`92`). Matches the definition but for test deals (D25) |
 
 ### Open ticket
 
@@ -933,9 +933,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | HubSpot's tickets whose stage is not closed |
 | Not to use | "Case" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_tickets_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`) |
-| As built today | `cma.flash_tickets_of` (`120`). Matches the definition |
+| As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
 
 ### Open task
 
@@ -952,9 +952,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | HubSpot's tasks whose status is not completed |
 | Not to use | "Overdue" for anything but a task (Past due is the asset term) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Reports → Follow-up reads the same tasks |
-| As built today | `cma.flash_tasks_of` (`120`). Matches the definition |
+| As built today | `cma.flash_tasks_of` (`122`). Matches the definition |
 
 ### Ticket queue
 
@@ -971,9 +971,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | HubSpot's ticket pipeline |
 | Not to use | "Queue" alone, which names the CMA's work queue (Feature 8, the queue engine); "inbox" for it |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Queue for tickets is the ticket's pipeline (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Queue for tickets is the ticket's pipeline (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | the overview `open_tickets` (dim `queue`) |
-| As built today | `cma.flash_tickets_of` (`120`). Matches the definition |
+| As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
 
 ### Churn (subscription)
 
@@ -990,9 +990,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | Juo's analytics count of canceled subscriptions (not checked against it yet) |
 | Not to use | "Cancellation" for it (another term, still to define); "lost" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_churn_of`, the overview `churn` |
-| As built today | `cma.flash_churn_of` (`120`). Matches the definition |
+| As built today | `cma.flash_churn_of` (`122`). Matches the definition |
 
 ### Flash snapshot
 
@@ -1009,9 +1009,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Backup", "history" for the figures; "snapshot" alone, which also names the follow-up refresh (`cma.follow_up_snapshot`, 0008s) and the asset register's full read (Asset terms) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)", "Month-end id list retention (build choice)" and "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)", "Month-end id list retention (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_snapshot`, `cma.flash_snapshot_run`, `cma.flash_snapshot_ids`, `cma_read.flash_snapshot*`; Flash's As of |
-| As built today | `cma.flash_snapshot_take` (`120`); `121` proves a snapshot equals the live computation for all eleven overviews. Matches the definition |
+| As built today | `cma.flash_snapshot_take` (`122`); `123` proves a snapshot equals the live computation for all eleven overviews. Matches the definition |
 
 ### Watch finding
 
@@ -1028,9 +1028,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Alert" (an alert is a message, Feature 7); "incident" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch |
-| As built today | `cma.flash_watch_of` (`120`); `121` raises and resolves each kind. Matches the definition |
+| As built today | `cma.flash_watch_of` (`122`); `123` raises and resolves each kind. Matches the definition |
 
 ### Flash overview measures
 
@@ -1047,9 +1047,9 @@ Proposed with addition 0008zm (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zm) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zn) |
 | Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records) |
-| As built today | `120`; `121` checks every measure against hand-computed figures (B2, B3). Matches the definition |
+| As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3). Matches the definition |
 
 | Overview | Measure | Meaning |
 |---|---|---|
@@ -1100,13 +1100,13 @@ Status: Retired. A retired word is never introduced again; where it still appear
 Status: Pending for every term below; none is defined yet. Each is added term by term, with a docs/decisions.md row starting "Definitions:".
 
 ### Leads and deals
-Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zm).
+Lead, deal, lead pipeline, order pipeline, created deal, closed won, closed lost, lost reason, test deal, lead source. Open deal is defined under Flash terms (addition 0008zn).
 
 ### Customers and orders
-Contact, customer, new customer, first order, direct order, indirect order, B2B, B2C, cancellation, minimum term. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zm); customer alone stays here.
+Contact, customer, new customer, first order, direct order, indirect order, B2B, B2C, cancellation, minimum term. Subscription, Subscription status, Payment state and Failed renewal are defined under Subscription terms (addition 0008zl); cancellation stays here, apart from Payment state's Canceled and from Churn (subscription). Active customer and Churn (subscription) are defined under Flash terms (addition 0008zn); customer alone stays here.
 
 ### Tickets and tasks
-Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zm).
+Ticket, complaint, vulnerable case, owner, without owner, overdue, response time. Open ticket, Open task (with its overdue) and Ticket queue are defined under Flash terms (addition 0008zn).
 
 ### Email
 Email sent, mailbox, inbox, first reply.
