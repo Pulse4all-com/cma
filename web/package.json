@@ -34,7 +34,7 @@
     "verify:datamap": "node ../tools/datamap/verify.mjs",
     "verify:metrics": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/metrics.mjs",
     "verify:reports": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/reports.mjs",
-    "verify:flash": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/flash.mjs",
+    "verify:flash": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./verify/lib/alias.mjs verify/flash.mjs",
     "verify:signed-out": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/signed-out.mjs",
     "verify:invitations": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/invitations.mjs",
     "verify:preview": "node --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON verify/preview.mjs",

@@ -1335,6 +1335,7 @@ interface FlashPageDb {
   overviews: { key: string; kind: "stock" | "flow"; source: FlashPageView["overviews"][number]["source"]; set_up: boolean; headline: string;
     value: number | string | null; previous: number | string | null; previous_on: string | null; definition_version: string }[];
   markets: { code: string; name: string }[]; watch: FlashWatchDb[]; first_snapshot_date?: string | null; last_snapshot_date?: string | null;
+  today: string; time_zone: string;
 }
 interface FlashDocumentDb {
   overview: string; kind: "stock" | "flow"; mode: "live" | "snapshot"; as_of: string; market: string | null; from: string | null; to: string | null;
@@ -1342,19 +1343,20 @@ interface FlashDocumentDb {
   count_measures: string[]; headline: string; sorts: string[]; totals: FlashDocumentView["totals"]; rows: FlashDocumentView["rows"];
   labels: Record<string, Record<string, string>> | null;
   settings: { file_max_rows: number; negative_max_rating: number | null; required_device_refs: string[] | null; required_contact_refs: string[] | null;
-    active_subscription_statuses: string[] | null };
-  definition_version: string; first_snapshot_date: string | null; days?: { covered: number; missing: string[] }; active_at_end?: number | string | null;
+    active_subscription_statuses: string[] | null; ended_subscription_statuses?: string[] | null };
+  definition_version: string; first_snapshot_date: string | null; today: string; time_zone: string; days?: { covered: number; missing: string[] }; active_at_end?: number | string | null;
   history?: { date: string; check: string; findings: number | string }[];
 }
 interface FlashRowsDb {
   overview: string; mode: "live" | "snapshot"; as_of: string; from: string | null; to: string | null; sort: string | null; descending: boolean;
   limit: number; offset: number; filters: Record<string, string>; total: number | string; rows: Record<string, unknown>[];
+  set_up?: boolean; time_zone?: string;
 }
 interface FlashHeadlineDb {
   overview: string; headline: string; market: string | null; as_of: string; from: string | null; to: string | null; set_up: boolean; value: number | string | null;
 }
 interface FlashSnapshotsDb {
-  from: string; to: string; dates: { date: string; status: "succeeded" | "failed"; missed_before: number | null; finished_at: string; error: string | null }[];
+  from: string; to: string; dates: { date: string; status: "succeeded" | "failed" | "missed"; missed_before: number | null; finished_at: string; error: string | null }[];
   first_snapshot_date: string | null; last_snapshot_date: string | null; watch: FlashWatchDb[];
 }
 interface DataQualityRowsDb {
@@ -1387,6 +1389,7 @@ function toFlashPage(j: FlashPageDb): FlashPageView {
     overviews: j.overviews.map((o) => ({ key: o.key, kind: o.kind, source: o.source, setUp: o.set_up, headline: o.headline, value: flashNumber(o.value),
       previous: flashNumber(o.previous), previousOn: o.previous_on, definitionVersion: o.definition_version })),
     markets: j.markets ?? [], watch: (j.watch ?? []).map(toFlashWatch), firstSnapshotDate: j.first_snapshot_date ?? null, lastSnapshotDate: j.last_snapshot_date ?? null,
+    today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "",
   };
 }
 
@@ -1397,15 +1400,15 @@ function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
     measures: j.measures, countMeasures: j.count_measures, headline: j.headline, sorts: j.sorts, totals: j.totals, rows: j.rows ?? [], labels: j.labels ?? {},
     settings: { fileMaxRows: j.settings?.file_max_rows ?? 50000, negativeMaxRating: j.settings?.negative_max_rating ?? null,
       requiredDeviceRefs: j.settings?.required_device_refs ?? [], requiredContactRefs: j.settings?.required_contact_refs ?? [],
-      activeSubscriptionStatuses: j.settings?.active_subscription_statuses ?? [] },
-    definitionVersion: j.definition_version, firstSnapshotDate: j.first_snapshot_date, days: j.days ?? null, activeAtEnd: flashNumber(j.active_at_end),
+      activeSubscriptionStatuses: j.settings?.active_subscription_statuses ?? [], endedSubscriptionStatuses: j.settings?.ended_subscription_statuses ?? [] },
+    definitionVersion: j.definition_version, firstSnapshotDate: j.first_snapshot_date, today: j.today ? String(j.today).slice(0, 10) : "", timeZone: j.time_zone ?? "", days: j.days ?? null, activeAtEnd: flashNumber(j.active_at_end),
     history: (j.history ?? []).map((h) => ({ date: h.date, check: h.check, findings: flashNumber(h.findings) ?? 0 })),
   };
 }
 
 function toFlashRows(j: FlashRowsDb): FlashRowsView {
   return { overview: j.overview, mode: j.mode, asOf: j.as_of, from: j.from, to: j.to, sort: j.sort, descending: Boolean(j.descending), limit: j.limit,
-    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), rows: j.rows ?? [] };
+    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "UTC", rows: j.rows ?? [] };
 }
 
 export const postgresData: CmaData = {

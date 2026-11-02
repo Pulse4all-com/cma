@@ -14,7 +14,7 @@ import { Badge, Keycap } from "@/components/primitives";
 import type { Copy } from "@/lib/copy";
 import type { FlashDocRowView, FlashDocumentView, FlashRowsView, FlashSourcesView, FlashWatchItem } from "@/lib/data";
 import {
-  amountsOf, averageRating, barShare, changeArrow, changeOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
+  amountsOf, averageRating, barShare, cellFilters, changeArrow, changeOf, dataQualityRowShown, FLASH_DEFINITION_STATUS, FLASH_LINKS_LEFT_OUT, FLASH_LIST_COLUMNS,
   FLASH_FROZEN_COLUMNS, FLASH_OVERVIEWS, FLASH_SOURCES, fixInOf, overviewOf, rowsOfSet, statusTone, type FlashKey, type FlashOverviewDef,
 } from "@/lib/flash";
 import { fmtDate, fmtDateTimeShort, fmtTime } from "@/lib/time";
@@ -209,7 +209,7 @@ export function BreakdownTable({ def, doc, set, query, locale, t }: {
   const measures = set.includes("sku") ? ["orders", "units"] : def.measures;
   const max = Math.max(0, ...rows.map((r) => (typeof r.measures[barMeasure] === "number" ? (r.measures[barMeasure] as number) : 0)));
   const cellLink = (r: FlashDocRowView, m: string | null) => href({
-    ...query, ...Object.fromEntries(Object.entries(r.dims).map(([k, v]) => [`f_${k}`, v])), ...(m ? { measure: m } : {}), page: "1",
+    ...query, ...Object.fromEntries(Object.entries(cellFilters(r.dims, m)).map(([k, v]) => [k === "measure" ? k : `f_${k}`, v])), page: "1",
   });
   return (
     <div className="overflow-x-auto">

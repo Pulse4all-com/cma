@@ -87,7 +87,11 @@ export function flashRowsParams(sp: URLSearchParams, o: { file?: boolean; maxRow
     if (v.length < 1 || v.length > 100) throw new ApiError(400, "invalid_filter", "a filter's value is 1 to 100 characters");
     filters[dim] = v;
   }
-  if (q.market && !filters.market) filters.market = q.market;
+  // market wins over f_market, as on the page: the list, the file's name and its filters column then name one market
+  if (q.market) filters.market = q.market;
+  else if (filters.market !== undefined && !parseMarket(filters.market)) {
+    throw new ApiError(400, "invalid_market", "f_market must be a market code or unknown");
+  }
   const measure = sp.get(FLASH_ADDRESS.measure);
   if (measure !== null && measure !== "") {
     if (!def.countMeasures.includes(measure)) throw new ApiError(400, "invalid_measure", `measure must be one of ${def.countMeasures.join(", ")}`);

@@ -33648,7 +33648,7 @@ count(*) of cma.flash_customers_of(tenant): store customers not deleted, per sto
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33659,7 +33659,7 @@ count(*) of cma.flash_customers_of(tenant): store customers not deleted, per sto
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.active_customers`
 
@@ -33711,7 +33711,7 @@ count(*) where active_subscriptions > 0: at least one subscription of the custom
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33722,7 +33722,7 @@ count(*) where active_subscriptions > 0: at least one subscription of the custom
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.paused_customers`
 
@@ -33774,7 +33774,7 @@ count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping s
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33785,7 +33785,7 @@ count(*) where active_subscriptions = 0 and paused_subscriptions > 0. Grouping s
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.linked_to_contact`
 
@@ -33837,7 +33837,7 @@ count(*) where the customer is linked to a CRM contact (commerce_customer.crm_co
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33848,7 +33848,7 @@ count(*) where the customer is linked to a CRM contact (commerce_customer.crm_co
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.customers.with_required_refs`
 
@@ -33900,7 +33900,7 @@ count(*) where linked, the contact held, and every ref of commerce.required_cont
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33911,7 +33911,7 @@ count(*) where linked, the contact held, and every ref of commerce.required_cont
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_customers_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.subscriptions.subscriptions`
 
@@ -33959,7 +33959,7 @@ count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full re
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -33969,7 +33969,7 @@ count(*) of cma.flash_subscriptions_of(tenant): subscriptions the latest full re
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.subscriptions.active_subscriptions`
 
@@ -34017,7 +34017,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34027,7 +34027,7 @@ count(*) where status = any(flash.active_subscription_statuses). Grouping sets: 
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.subscriptions.paused_subscriptions`
 
@@ -34075,7 +34075,7 @@ count(*) where status = 'paused'. Grouping sets: the totals, per market and the 
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34085,7 +34085,7 @@ count(*) where status = 'paused'. Grouping sets: the totals, per market and the 
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.subscriptions.amount_per_cycle`
 
@@ -34133,7 +34133,7 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34143,7 +34143,7 @@ sum(amount_per_cycle) per currency (an object of currency codes; never summed ac
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_subscriptions_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.installed_base.devices`
 
@@ -34192,7 +34192,7 @@ count(*) of cma.flash_devices_of(tenant, today): devices not deleted, any status
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34203,7 +34203,7 @@ count(*) of cma.flash_devices_of(tenant, today): devices not deleted, any status
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.installed_base.in_field`
 
@@ -34252,7 +34252,7 @@ count(*) where the device status's is_in_field. Grouping sets: the totals, per m
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34263,7 +34263,7 @@ count(*) where the device status's is_in_field. Grouping sets: the totals, per m
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.installed_base.in_stock`
 
@@ -34312,7 +34312,7 @@ count(*) where the device status's is_in_stock. Grouping sets: the totals, per m
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34323,7 +34323,7 @@ count(*) where the device status's is_in_stock. Grouping sets: the totals, per m
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.installed_base.components_past_due`
 
@@ -34372,7 +34372,7 @@ sum(past_due_items): per device the maintenance items of 0008zk's forecast (cma.
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34383,7 +34383,7 @@ sum(past_due_items): per device the maintenance items of 0008zk's forecast (cma.
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.installed_base.items_due_3m`
 
@@ -34432,7 +34432,7 @@ sum(items_due_3m): items not past due whose due date falls within three months o
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34443,7 +34443,7 @@ sum(items_due_3m): items not past due whose due date falls within three months o
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_devices_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.churn.churned`
 
@@ -34486,7 +34486,7 @@ count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscripti
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34496,7 +34496,7 @@ count(*) of cma.flash_churn_of(tenant, from, to): per business date a subscripti
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_churn_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_churn_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.orders.orders`
 
@@ -34539,7 +34539,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34549,7 +34549,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.orders.units`
 
@@ -34592,7 +34592,7 @@ sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows 
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34602,7 +34602,7 @@ sum(quantity) of the orders' lines (commerce_order_line), per set; the SKU rows 
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.orders.amount`
 
@@ -34645,7 +34645,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34655,7 +34655,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_orders_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.payments.orders`
 
@@ -34698,7 +34698,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34708,7 +34708,7 @@ count(*) of cma.flash_orders_of(tenant, from, to): store orders created on the p
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.payments.amount`
 
@@ -34751,7 +34751,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34761,7 +34761,7 @@ sum(total_amount - coalesce(refunded_amount, 0)) per currency (on Payments: kind
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. Amounts are per currency and never summed across currencies. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.payments.renewals`
 
@@ -34804,7 +34804,7 @@ count(*) of subscription events renewed in the period (kind renewal). Grouping s
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34814,7 +34814,7 @@ count(*) of subscription events renewed in the period (kind renewal). Grouping s
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.payments.failed_renewals`
 
@@ -34857,7 +34857,7 @@ count(*) of subscription events renew_failed in the period (kind renewal); never
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34867,7 +34867,7 @@ count(*) of subscription events renew_failed in the period (kind renewal); never
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_payments_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_deals.open_deals`
 
@@ -34910,7 +34910,7 @@ count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_c
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34920,7 +34920,7 @@ count(*) of cma.flash_deals_of(tenant): 0008y's counted deals, not deleted, is_c
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_deals.median_age_days`
 
@@ -34963,7 +34963,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -34973,7 +34973,7 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_deals.oldest_age_days`
 
@@ -35016,7 +35016,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -35026,7 +35026,7 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_deals_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_tickets.open_tickets`
 
@@ -35069,13 +35069,13 @@ count(*) of cma.flash_tickets_of(tenant): 0008o's open tickets of counted pipeli
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_tickets.median_age_days`
 
@@ -35118,13 +35118,13 @@ percentile_cont(0.5) of whole days since creation. Grouping sets: the totals, pe
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_tickets.oldest_age_days`
 
@@ -35167,13 +35167,13 @@ max(whole days since creation). Grouping sets: the totals, per market and the ov
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tickets_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_tasks.open_tasks`
 
@@ -35216,7 +35216,7 @@ count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in t
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -35226,7 +35226,7 @@ count(*) of cma.flash_tasks_of(tenant): 0008o's open tasks (status not done in t
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.open_tasks.overdue`
 
@@ -35269,7 +35269,7 @@ count(*) where the due date in the tenant's zone is before today. Grouping sets:
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Data prerequisites**
 
@@ -35279,7 +35279,7 @@ count(*) where the due date in the tenant's zone is before today. Grouping sets:
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_tasks_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.reviews.reviews`
 
@@ -35327,19 +35327,19 @@ count(*) of cma.flash_reviews_of(tenant, from, to): 0008ze's published reviews o
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.reviews.rating_sum`
 
 **Average rating** on /reports/flash · Average rating (Gemiddelde score)
 
-The sum of their ratings; the average is `rating_sum` / `reviews` (Reviews; docs/definitions.md, Flash overview measures).
+The average rating of the period's reviews, shown as the stored sum of their ratings (`rating_sum`) divided by their count (`reviews`); the snapshot keeps the sum so dates add up (Reviews; docs/definitions.md, Flash overview measures).
 
 **Formula as computed**
 
@@ -35381,13 +35381,13 @@ sum(rating); the page shows rating_sum / reviews as the average rating (two deci
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.reviews.negative`
 
@@ -35435,13 +35435,13 @@ count(*) where the whole star is at most reviews.negative_max_rating. Grouping s
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_reviews_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 #### `flash.data_quality.findings`
 
@@ -35492,13 +35492,13 @@ count(*) of cma.flash_findings_of(tenant): every finding of cma.data_quality_of 
 
 **Verification query** none is faithful for this figure; the notes name the closest check
 
-**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 35 ok locally on PostgreSQL 16, 1 November 2026. Martin runs 121 in dev.
+**Fixture check** Not run as a Studio query here: db/123_verify_flash.sql (B2, B3) compares this measure with hand-computed figures on a throwaway tenant and B8 proves the snapshot equals the live computation; 43 checks, 39 ok and 4 skip on the prod path, locally on PostgreSQL 16, 2 November 2026. Martin runs 123 in dev.
 
 **Documented in** features.md, Reports → Flash (addition 0008zn); data-model/0008.md, Data model: Flash (addition 0008zn); definitions.md, Flash overview measures; api.md, Reports → Flash
 
 **Notes**
 
-Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_findings_of is the one query behind the figure and its list, and 121 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
+Definition status: Proposed (docs/definitions.md, Flash terms and Flash overview measures; for Kira to confirm). No verify_sql: the base set cma.flash_findings_of is the one query behind the figure and its list, and 123 recomputes it from a fixture; a second recomputation in Studio would copy it. A source not set up shows 'not set up' in place of figures, never zero.
 
 ## Configuration
 
