@@ -10,7 +10,7 @@ This file defines every term, data point and metric word the CMA uses, so the UI
 2. **The owning system's word and definition.** Where an external system owns a measure, the CMA uses that system's word and that system's definition. For calls the telephony system is the truth: for the same scope, period and time zone, the Workspace shows the same figure as Aircall Analytics. A difference is a bug, never a choice.
 3. **Each term has these fields:**
    - **Term**: the English label, plus the Dutch label from `web/src/lib/copy.ts` where one exists.
-   - **Key**: snake_case for settings and catalog keys, camelCase for API fields.
+   - **Key**: snake_case for settings and catalog keys, camelCase for API fields. One exception: the JSON rows of `/api/v1/reports/flash/rows` and `/api/v1/reports/data-quality/rows` keep the database's snake_case field names, as the file headers do, so one field has one name in the API and the file (docs/decisions.md, 2 Nov 2026, "Definitions: Flash's rows answer in snake_case").
    - **Definition**: one or two sentences.
    - **Source**: the system and its fields.
    - **Counts / does not count**.
@@ -337,14 +337,14 @@ The Aircall help articles named below (Aircall Help Center, en-gb) were found an
 | Definition | A call belongs to the date of its start in the tenant's time zone (Europe/Amsterdam for Pulse4all), as in Aircall's time zone filter. |
 | Source | Aircall, `started_at`; the tenant's `timezone` (CMA) |
 | Counts / does not count | Every call on one date; the hour and the ISO week follow the same zone |
-| Unit and display | A date |
+| Unit and display | A date; Reports → Flash labels a record's business date (`business_date`, its date in the tenant's zone) Day (nl: Dag) in its lists of Churn, Orders, Payments and Reviews |
 | Time rule | The tenant's time zone |
-| Scope | Every call figure |
+| Scope | Every call figure, and the business date of a record on Reports → Flash |
 | Equivalent in the source system | Aircall Analytics' time zone filter |
 | Not to use | None yet |
 | Status | Decided (R2; the reconciliation of 23 October 2026, in Europe/Amsterdam); as built, Reports → Calls uses each line's market zone, a gap to fix |
-| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure" |
-| Used by | `calls.*`, `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Inbound, Intake |
+| Decided | 24 October 2026; docs/decisions.md, 24 Oct 2026, "Definitions: R2"; evidence: "Definitions: Aircall reconciliation 23 Oct 2026 identical on every General Performance figure"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
+| Used by | `calls.*`, `calls_per_agent.*` (`calls_per_agent.first_last_call` by time of day), `inbound.*`, `intake.calls_in`, `intake.calls_out`; Reports → Calls, Calls per agent, Inbound, Intake; Reports → Flash (the Day column of its Churn, Orders, Payments and Reviews lists) |
 | As built today | `cma.calls_of` and `cma.inbound_calls_of` date (and hour) each call in its line's market zone, else the tenant's, so a GB line's call at 23:30 in London lands a day earlier than in Amsterdam; `cma.telephony_history_start_of` (`64`) does the same. Intake (`cma.intake_per_day`) dates calls in the tenant's zone, which matches. The Calls page's like-for-like label uses the viewer's zone (audit finding MA-004) |
 
 ### Speed to lead
@@ -496,7 +496,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | An average over unpublished reviews or reviews of a channel that is not counted |
 | Status | Decided; which window the review score KPI means is open for Kira (Open decisions), the report uses the page's period |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "Definitions: review, review channel, average rating (review score), negative review, linked review and link level" |
-| Used by | `reviews.average_rating` and the averages of `reviews.by_market`, `reviews.by_period` and `reviews.by_channel`; KPI 3; Reports → Reviews |
+| Used by | `reviews.average_rating` and the averages of `reviews.by_market`, `reviews.by_period` and `reviews.by_channel`; `flash.reviews.rating_sum` (the sum of ratings behind Reports → Flash's Reviews, whose average is `rating_sum` / `reviews`); KPI 3; Reports → Reviews and Reports → Flash (Reviews) |
 | As built today | `cma.review_figures` (`104`): the mean of the ratings of `cma.reviews_of`, rounded to two decimals over the page's period. Matches the definition |
 
 ### Negative review
@@ -515,7 +515,7 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Not to use | A threshold of the alert rule other than its own Ratings that alert: the rule's highest rating can differ and never changes what the report counts as negative |
 | Status | Decided; the threshold (default 2) and the alert audience are for Kira to confirm before the rule is switched on (Open decisions) |
 | Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review counts when the platform has published it" and "Reports → Reviews shows team figures only" |
-| Used by | `reviews.negative`; the alert rule "Negative review" and its highest rating; Reports → Reviews; Configuration → Alert rules |
+| Used by | `reviews.negative`, `flash.reviews.negative`; the alert rule "Negative review" and its highest rating; Reports → Reviews and Reports → Flash (Reviews); Configuration → Alert rules |
 | As built today | `cma.reviews_of` flags `is_negative` against the setting, validated 1 to 4 (`cma.check_tenant_setting`, `104`); seed `02` adds the rule "Negative review" switched off with the setting's value as its highest rating. Matches the definition |
 
 ### Link level
@@ -523,18 +523,18 @@ Decided with addition 0008ze (brief B18, 25 October 2026). The review platform o
 | Field | Value |
 |---|---|
 | Term | Link level (nl: Koppelniveau; `reviews.linkCard` "Koppelniveaus") |
-| Key | `link_level` with the values `order`, `contact` and `none`; `reviews.link_levels`; API `linkLevels` |
+| Key | `link_level` with the values `order`, `contact` and `none`; `reviews.link_levels`; API `linkLevels`; the field `link_level` of Reports → Flash's reviews rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
 | Definition | How a review is tied to the tenant's own records: order (its transaction reference names exactly one of the tenant's orders), contact (no order; the reviewer's email, in memory only, finds exactly one CRM contact) or none. |
 | Source | The review's transaction reference against the orders' name, else their source id (a Klaviyo invite's reference is the Shopify order's id, to confirm with the first real data); the CRM contact search by the reviewer's email, the email never stored. The reference itself is kept only when the connection's `transaction_ref_pattern` accepts it and it holds no @; otherwise it is left out and counted as `ref_dropped` |
 | Counts / does not count | One level per review. The contact search runs only for reviews without an order or contact and respects the CRM connection's `api_daily_floor_pct`. A reference or an email that finds none or more than one links to nothing. A contact's privacy deletion clears a review's contact link; an order link stays |
-| Unit and display | A count per level, as bars: To an order, To a contact, Not linked |
+| Unit and display | A count per level, as bars: To an order, To a contact, Not linked; a column of Reports → Flash's reviews list, Link level (nl: Koppelniveau) |
 | Time rule | Day of the review's submission |
 | Scope | Per tenant: its orders and its CRM contacts |
 | Equivalent in the source system | None: the CMA's own join (Call link is the call terms' join, another term) |
 | Not to use | The reviewer's name, email or the transaction reference as a shown value |
 | Status | Decided |
-| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders" |
-| Used by | `reviews.link_levels`, `reviews.linked`; Reports → Reviews |
+| Decided | 25 October 2026; docs/decisions.md, 25 Oct 2026, "A review links to an order when its transaction reference names exactly one of the tenant's orders"; 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
+| Used by | `reviews.link_levels`, `reviews.linked`; Reports → Reviews; Reports → Flash (Reviews): the `link_level` column of its reviews list (`/api/v1/reports/flash/rows`) and its files |
 | As built today | `cma.review.link_level` (`104`), set by `cma.ingest_upsert_reviews` (the order, through `cma.review_order_of`) and `cma.set_review_contact` (the contact), cleared by `cma.forget_review_contact_links`; check constraints keep an order id only with `order` and a contact only with `contact`. Matches the definition |
 
 ### Linked review
@@ -562,7 +562,7 @@ Facts about the review platform's own figures, recorded so nobody mistakes them 
 
 ## Asset terms
 
-Decided with addition 0008zi (27 October 2026). The tenant's asset register owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
+Decided with addition 0008zi (27 October 2026). The tenant's asset register (nl: Assetregister; docs/decisions.md, 2 Nov 2026, "Definitions: Flash's labels after the second review") owns its devices: for Pulse4all Subscriptions the Airtable base "Airtable 2.0", whose rows carry NetSuite ids (the NetSuite Internal ID, read as the device's `ns_internal_id`, is required once `assets.required_refs` names it, and a missing one is then a data issue the CMA flags, addition 0008zn; for Pulse4all Subscriptions the setting is empty until NetSuite holds its devices, Decision log, 3 Nov 2026; which system owns which other field is an Open decision). The CMA mirrors it read-only through the register's API, read by the ingest (addition 0008zj, 27 October 2026: the records changed every `assets_poll_interval_minutes`, default 15, and a full snapshot nightly), with a snapshot of the register's CSV export (docs/import/devices.md) as the fallback, and forecasts what comes due on Reports → Maintenance. A device holds ids, statuses, dates and codes only, never a customer's name, email, phone or address. A tenant's flag for having an asset register is "set up" (`isSetUp`, `is_set_up`), never "connected", as for reviews.
 
 ### Device
 
@@ -663,7 +663,7 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 
 | Field | Value |
 |---|---|
-| Term | Past due (nl: Achterstallig) |
+| Term | Past due (nl: Achterstallig; Reports → Flash's count of its items: Items achterstallig; "achterstallig" in every Dutch hint) |
 | Key | `past_due`; API bucket `past_due` |
 | Definition | A due item whose action date lies before the first day of the tenant's current month. On Reports → Maintenance the Past due column comes before the months; a planned exchange is past due when its first action date is. |
 | Source | The action date and the tenant's date today in its zone (`cma.tenant_today_of`) |
@@ -674,8 +674,8 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 | Equivalent in the source system | None |
 | Not to use | "Overdue" (undefined: it is still to define for tasks and tickets, Domains still to define); "late" or "expired" for a past-due item |
 | Status | Decided |
-| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Past due" |
-| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); Reports → Maintenance |
+| Decided | 27 October 2026; docs/decisions.md, 27 Oct 2026, "Definitions: Past due"; 2 November 2026, "Definitions: Flash's labels after the second review" (addition 0008zn, #214) |
+| Used by | `maintenance.past_due`, the bucket `past_due` of `/api/v1/reports/maintenance/rows`; `cma_read.maintenance_due`, `cma_read.maintenance_per_month` (`past_due`); `flash.installed_base.components_past_due`; Reports → Maintenance; Reports → Flash (Installed base: `components_past_due` and the list's `past_due_items`) |
 | As built today | `cma.maintenance_items_of` (`112`): `past_due` when the action date is before the month of the tenant's today. Matches the definition |
 
 ### Exchange (planned)
@@ -718,24 +718,24 @@ Decided with addition 0008zi (27 October 2026). The tenant's asset register owns
 
 ## Subscription terms
 
-Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; no page shows them yet. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
+Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant's subscription app owns a store's subscriptions and their events: for Pulse4all Subscriptions that is Juo on each Shopify store, one connection and one key per store, the GB store first. The CMA mirrors them read-only, read by the ingest by polling only (Juo has no webhook topic for a failed renewal), so that it can report churn (KPI 4) and each subscription's payment state; Reports → Flash (Active subscriptions) shows them. A subscription holds ids, statuses, codes, counts, amounts and times only, never a customer's name, email, phone, address, payment detail or free-text reason. Payment state is Juo's renewal state of a subscription, not a payment in NetSuite: payments, days to pay and dunning stages stay NetSuite's (README, Source of truth).
 
 ### Subscription
 
 | Field | Value |
 |---|---|
 | Term | Subscription (no Dutch label for the term in `copy.ts`; the connection kind says "Abonnementen") |
-| Key | `subscription`; SQL `cma.subscription`, `cma_read.subscription`; columns `source_id`, `customer_source_id`, `status`, `current_cycle`, `next_billing_at`, `billing_interval`, `billing_interval_count`, `amount_per_cycle`, `currency`, `payment_instrument_type`; no API field yet |
+| Key | `subscription`; SQL `cma.subscription`, `cma_read.subscription`; columns `source_id`, `customer_source_id`, `status`, `current_cycle`, `next_billing_at`, `billing_interval`, `billing_interval_count`, `amount_per_cycle`, `currency`, `payment_instrument_type`; the fields `status`, `amount_per_cycle`, `currency`, `billing_interval`, `billing_interval_count` and `next_billing_at` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
 | Definition | One subscription of a store's subscription app (Juo), one row per subscription and connection: its store customer's id, status, cycle, next billing time, billing interval, amount per cycle and currency, the type of its payment instrument and its times. A subscription the latest full read no longer returns stays stored and is marked missing (`source_deleted_at`). |
 | Source | The subscription app; for Pulse4all Subscriptions Juo's Admin API (`GET /subscriptions`, the payment method expanded for its instrument's type only), read by `ingest-poll-subscriptions` (the subscriptions the store's events touched, every `subscriptions_poll_interval_minutes`, default 5) and by the nightly full read in `ingest-reconcile` (also `ingest-backfill --object subscription`), written by `cma.ingest_upsert_subscriptions`. The store customer's id joins `cma.commerce_customer.source_id` of the store whose handle is the connection's account id up to its first dot. Only whitelisted fields are read: a name, email, phone, address, payment detail or custom attribute never reaches a row |
 | Counts / does not count | Counts one row per subscription and connection that the latest full read still returns (`source_deleted_at` empty). A subscription missing from the latest full read stays stored and is not counted. The amount per cycle is the sum of the total prices of the items Juo has not canceled, as Juo states them, in the subscription's currency. A subscription whose customer the store's customers do not hold is still counted (the run's `customers_unmatched`) |
-| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); Reports → Flash (Active subscriptions) shows them, and a page shows a subscription by its Juo id and its status, never a customer's name or email |
+| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); Reports → Flash (Active subscriptions) shows them, and a page shows a subscription by its Juo id and its status, never a customer's name or email; Reports → Flash's list labels the next billing Next billing (nl: Volgende verlenging), the billing interval Billing interval (nl: Cyclusinterval) and the amount per cycle Amount per cycle (nl: Bedrag per cyclus), and a billing cycle is "cyclus" in every Dutch label (Cycles: Cycli; Cycle: Cyclus) |
 | Time rule | Instants as Juo writes them (`source_created_at`, `next_billing_at`, `canceled_at`, `source_updated_at`); `paused_at` is when the current pause began (Juo's time, else the latest pause event; empty unless paused). The day a report puts a subscription on is decided with the first report |
 | Scope | The tenant's connections of the kind `subscriptions`, one per store (the GB store is the pilot). The store is the tenant's commerce store whose handle is the connection's account id up to its first dot; a connection whose handle has no store is refused (`store_not_configured`) |
 | Equivalent in the source system | A subscription of Juo's Admin API (`GET /subscriptions`; Juo's admin shows the counts per status). Juo's help article: not checked (juo.dev was out of reach when built) |
 | Not to use | "Subscription" for a webhook subscription (Shopify's `webhookSubscriptions`, Aircall's webhook): say webhook, as System health's label "Shop webhooks check" does (Gaps D33, I7); Pulse4all Subscriptions is a business line's name, not this term |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
 | Used by | `flash.subscriptions.*` (the Active subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
 | As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` `card`, `paypal` or `other`, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Matches the definition |
 
@@ -763,7 +763,7 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Field | Value |
 |---|---|
 | Term | Payment state (nl: Betaalstand) |
-| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`) |
+| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`, snake_case, convention 3's exception) |
 | Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
 | Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
 | Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Reports → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
@@ -771,9 +771,9 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
 | Scope | As Subscription |
 | Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
-| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth); "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
+| Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth), so an order's payment status as the store states it is labelled Financial status (nl: Financiële status) on Reports → Flash; "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
 | Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
 | Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Active subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
 | As built today | `cma.subscription_payment_state_of(tenant)` (`118`): Failed for status failed, Paused for paused, Canceled for canceled or expired, In retry for active with an open failed renewal (also `retry_cycle`, the latest open cycle, `retry_since`, its first failure, and `last_attempt`, its highest attempt), else Paid; `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function. Awaiting payment is not built: no subscription has it. Matches the definition apart from Awaiting payment (Pending) |
 
@@ -866,9 +866,9 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Flash (nl: Flash) |
-| Key | `flash`; settings `flash.*`; SQL `cma.flash_*`, `cma_read.flash_*`; page `/reports/flash`; API `/api/v1/reports/flash` |
+| Key | `flash`; settings `flash.*`; SQL `cma.flash_*`, `cma_read.flash_*`; page `/reports/flash`; API `/api/v1/reports/flash`, whose `/rows` answer (like `/api/v1/reports/data-quality/rows`) keeps the database's snake_case field names, convention 3's exception |
 | Definition | The report of eleven overviews (customers, subscriptions, installed base, churn, orders, payments, open deals, open tickets, open tasks, reviews, data quality), each one click, live or as of a snapshot's business date, per market, on screen and as a file. |
-| Source | The CMA's mirrors (commerce, subscriptions, the asset register, the CRM, reviews) and its own data-quality checks; never a source system directly |
+| Source | The CMA's mirrors (commerce, subscriptions, the asset register, the CRM, reviews) and its own data-quality checks; never a source system directly. The page names a source by its kind, never a vendor: Shop, Subscriptions, Asset register (nl: Assetregister), Customer records and Reviews |
 | Counts / does not count | An overview whose source the tenant has not set up shows that and no figures, never zeros |
 | Unit and display | Per overview: a headline figure, its change against the previous snapshot, its definition's status (Proposed or Decided) |
 | Time rule | Live: as of the instant; a snapshot: its business date in the tenant's zone. Flow overviews take a period of business dates (Flash snapshot) |
@@ -876,9 +876,9 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Dashboard" (the Dashboard is a surface of the Workspace); "flash report" for one overview |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn); 1 November 2026 (#214), "Flash is first in the Reports group of the rail" and "A figure's definition status badge" |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn); 1 November 2026 (#214), "Flash is first in the Reports group of the rail" and "A figure's definition status badge"; 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
 | Used by | `cma.flash_overviews`, `cma.flash_compute_of`, `cma.flash_overview`, `cma.flash_rows`, `cma.flash_page`; Reports → Flash (`/reports/flash`, B21b) and its files (`flash-<overview>-<market|all>-<stamp>[-breakdown].csv`); the metric catalog's `flash.<overview>.<measure>` entries |
-| As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. B21b adds `/reports/flash`, its API routes (`/api/v1/reports/flash`, `/rows`, `/file`, `/snapshots`) and its files. Matches the definition |
+| As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. B21b adds `/reports/flash`, its API routes (`/api/v1/reports/flash`, `/rows`, `/file`, `/snapshots`) and its files; the JSON rows of Flash and of Data quality keep the database's snake_case field names. Matches the definition |
 
 ### Active customer
 
@@ -1037,7 +1037,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Flash overview measures (the figures of each overview; nl as the page shows them) |
-| Key | `cma.flash_overviews()` (`measures`, `count_measures`, `headline`); a figure's key in the metric catalog is `flash.<overview>.<measure>` |
+| Key | `cma.flash_overviews()` (`measures`, `count_measures`, `headline`); a figure's key in the metric catalog is `flash.<overview>.<measure>`; the fields of a record in the JSON rows keep the database's snake_case names (convention 3's exception) |
 | Definition | The figures each Flash overview gives, per grouping set (the totals, per market, the breakdowns), live or as of a snapshot. Every one follows the overview's base set (`cma.flash_<overview>_of`), so a figure and its list hold the same records. See the table below |
 | Source | As each overview's base set (docs/architecture/data-model/0008.md, Data model: Flash) |
 | Counts / does not count | Deleted records and records the latest full read no longer returns never count; a source not set up gives no figure, never a zero; a measure that does not apply (its setting empty: `with_required_refs` while `commerce.required_contact_refs` is empty) is left out, never 0 or all |
@@ -1047,7 +1047,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214); 2 November 2026, "Definitions: Flash's labels after the second review" and "Definitions: Flash's rows answer in snake_case" (addition 0008zn, #214) |
 | Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`); the metric catalog's `flash.<overview>.<measure>` entries; Reports → Flash (`/reports/flash`) and its files |
 | As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
 
@@ -1061,7 +1061,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Active subscriptions (`subscriptions`) | `subscriptions` | Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) |
 | | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` |
 | | `paused_subscriptions` | Of those, status paused |
-| | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval) |
+| | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval; nl: Bedrag per cyclus) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
 | | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
 | | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms; nl: Items achterstallig) |
@@ -1070,7 +1070,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Orders (`orders`) | `orders` | Store orders created in the period, test and deleted orders left out |
 | | `units` | The quantities of their lines |
 | | `amount` | Their totals less refunded, per currency |
-| Payments (`payments`) | `orders` | Kind order: those store orders, each with its financial status as the store states it |
+| Payments (`payments`) | `orders` | Kind order: those store orders, each with its financial status as the store states it (Financial status, nl: Financiële status; never "Payment status", Payment state) |
 | | `amount` | Kind order: their totals less refunded, per currency |
 | | `renewals` | Kind renewal: renewals (renewed) of the subscription app in the period |
 | | `failed_renewals` | Kind renewal: Failed renewal (nl: Mislukte verlengingen) |
