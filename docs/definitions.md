@@ -729,14 +729,14 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Definition | One subscription of a store's subscription app (Juo), one row per subscription and connection: its store customer's id, status, cycle, next billing time, billing interval, amount per cycle and currency, the type of its payment instrument and its times. A subscription the latest full read no longer returns stays stored and is marked missing (`source_deleted_at`). |
 | Source | The subscription app; for Pulse4all Subscriptions Juo's Admin API (`GET /subscriptions`, the payment method expanded for its instrument's type only), read by `ingest-poll-subscriptions` (the subscriptions the store's events touched, every `subscriptions_poll_interval_minutes`, default 5) and by the nightly full read in `ingest-reconcile` (also `ingest-backfill --object subscription`), written by `cma.ingest_upsert_subscriptions`. The store customer's id joins `cma.commerce_customer.source_id` of the store whose handle is the connection's account id up to its first dot. Only whitelisted fields are read: a name, email, phone, address, payment detail or custom attribute never reaches a row |
 | Counts / does not count | Counts one row per subscription and connection that the latest full read still returns (`source_deleted_at` empty). A subscription missing from the latest full read stays stored and is not counted. The amount per cycle is the sum of the total prices of the items Juo has not canceled, as Juo states them, in the subscription's currency. A subscription whose customer the store's customers do not hold is still counted (the run's `customers_unmatched`) |
-| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); no page shows one yet, and a page shows a subscription by its Juo id and its status, never a customer's name or email |
+| Unit and display | A count of subscriptions; an amount in the subscription's currency (two decimals); Reports → Flash (Active subscriptions) shows them, and a page shows a subscription by its Juo id and its status, never a customer's name or email |
 | Time rule | Instants as Juo writes them (`source_created_at`, `next_billing_at`, `canceled_at`, `source_updated_at`); `paused_at` is when the current pause began (Juo's time, else the latest pause event; empty unless paused). The day a report puts a subscription on is decided with the first report |
 | Scope | The tenant's connections of the kind `subscriptions`, one per store (the GB store is the pilot). The store is the tenant's commerce store whose handle is the connection's account id up to its first dot; a connection whose handle has no store is refused (`store_not_configured`) |
 | Equivalent in the source system | A subscription of Juo's Admin API (`GET /subscriptions`; Juo's admin shows the counts per status). Juo's help article: not checked (juo.dev was out of reach when built) |
 | Not to use | "Subscription" for a webhook subscription (Shopify's `webhookSubscriptions`, Aircall's webhook): say webhook, as System health's label "Shop webhooks check" does (Gaps D33, I7); Pulse4all Subscriptions is a business line's name, not this term |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events", "One Juo connection and one Admin API key per store", "The Juo connection's store is the tenant's commerce store", "No personal data and no free-text reason is read from Juo", "Definitions: the System health label of Shopify's webhook check" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
-| Used by | No catalog key and no page yet; `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
+| Used by | `flash.subscriptions.*` (the Active subscriptions overview of Reports → Flash and its files); `cma.subscription`, `cma_read.subscription`, `cma.ingest_upsert_subscriptions`, `cma.ingest_mark_subscriptions_missing`; the job `subscriptions_poll`; the connection kind `subscriptions`; the data map's domain `subscriptions` (`docs/datamap/catalog.json`) |
 | As built today | `cma.subscription` (`118`): one row per `source_id` and connection, unique per tenant; `status` one of the seven of Subscription status; `amount_per_cycle` numeric(14,2); `payment_instrument_type` `card`, `paypal` or `other`, empty when Juo did not expand the payment method; `raw` a fixed set of keys with scalar values and no @ (`cma.subscription_raw_ok`); ids checked by `cma.subscription_id_ok`; the application never deletes a row. `cma.ingest_upsert_subscriptions` takes at most 500 (a stale guard on Juo's update time) and a full read ends with `cma.ingest_mark_subscriptions_missing` in slices. `119`'s Z1 reads every row for an email pattern. Matches the definition |
 
 ### Subscription status
@@ -755,45 +755,45 @@ Proposed with addition 0008zl (28 October 2026), for Kira to confirm. The tenant
 | Not to use | "Cancelled" (Juo's spelling) in a key or a label: the CMA says canceled; Cancellation is another term, still to define (Reports → Cancellations counts cancellation requests, not statuses); "active" for a device's state (Device status) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Juo is read directly by the ingest for a store's subscriptions and their events" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
-| Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; no catalog key and no page yet |
+| Used by | `cma.subscription.status`, `cma.subscription_event.status_from` and `status_to`, `cma_read.subscription`, `cma_read.subscription_event`, `cma.subscription_payment_state_of`; `flash.subscriptions.active_subscriptions`, `flash.subscriptions.paused_subscriptions`; Reports → Flash (Active subscriptions) and its files |
 | As built today | `cma.subscription.status` written by `cma.ingest_upsert_subscriptions`, which refuses a status outside the seven (`CMA04`); the events `canceled`, `paused`, `resumed` and `reactivated` carry `status_from` and `status_to`, a `status_changed` has both (an update without a status, or with the same one, is no event of the CMA). Matches the definition |
 
 ### Payment state
 
 | Field | Value |
 |---|---|
-| Term | Payment state (no Dutch label in `copy.ts`) |
-| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; no API field yet |
+| Term | Payment state (nl: Betaalstand) |
+| Key | `payment_state`; values `paid`, `in_retry`, `failed`, `paused`, `canceled` (`awaiting_payment` reserved); `retry_cycle`, `retry_since`, `last_attempt`; SQL `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the field `payment_state` of Reports → Flash's subscriptions rows (`/api/v1/reports/flash/rows`) |
 | Definition | Per subscription, Juo's renewal state of it, one of six: Paid (status active, no open failed renewal), In retry (status active, with a failed renewal of a cycle that no renewal of that cycle or a later one follows), Failed (status failed), Paused (status paused), Canceled (status canceled or expired) and Awaiting payment (Pending: a renewal by draft order, Mollie, not paid yet; not built). It is Juo's renewal state, not a payment in NetSuite, which still owns payments, days to pay and dunning stages. |
 | Source | `cma.subscription` and `cma.subscription_event` only, computed at read time by `cma.subscription_payment_state_of(tenant)` with no call to Juo: the subscription's status and its `renewed` and `renew_failed` events. Where either event lacks its cycle, a renewal after the failure closes it |
 | Counts / does not count | One state per subscription the latest full read still returns (`source_deleted_at` empty) whose status is active, paused, canceled, expired or failed; a subscription with status merged or never-subscribed has none, and neither has one missing from the latest full read. Canceled covers the statuses canceled and expired and is kept apart from Cancellation: Reports → Cancellations counts cancellation requests, and Cancellation and Minimum term stay under Domains still to define. Paid is not a NetSuite payment: an invoice's payment status, days to pay and dunning stage are NetSuite's (README, Source of truth) |
-| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; no page shows it yet |
+| Unit and display | A count per state; In retry also gives the open failure's cycle, its first failure and its highest attempt; Reports → Flash (Active subscriptions) shows the state per subscription and a count per state (nl: Betaalstand, apart from an order's Betaalstatus) |
 | Time rule | As of now: computed from the stored rows at each read, with no state history (the events are the history). A subscription is as fresh as its last read: every `subscriptions_poll_interval_minutes` (default 5) when an event touched it, else the nightly full read |
 | Scope | As Subscription |
 | Equivalent in the source system | None: the CMA's own derivation from Juo's status and its renewal events |
 | Not to use | "Payment status" and "dunning stage" (NetSuite's words for invoices and payments; README, Source of truth); "paid" for a payment in NetSuite, since Paid here is Juo's renewal state |
 | Status | Proposed (for Kira to confirm); Awaiting payment is Pending: whether a renewal by draft order is a payment state of its own, per store (docs/open-decisions.md), and nothing is built as if settled |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
-| Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; no catalog key and no page yet (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "Each subscription has a payment state, one of six" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zm, #214) |
+| Used by | `cma.subscription_payment_state_of`, `cma_read.subscription_payment_state`; the breakdown by payment state of `flash.subscriptions.*`; Reports → Flash (Active subscriptions) and its files (KPI 4 and the device's subscription status come later: docs/open-decisions.md) |
 | As built today | `cma.subscription_payment_state_of(tenant)` (`118`): Failed for status failed, Paused for paused, Canceled for canceled or expired, In retry for active with an open failed renewal (also `retry_cycle`, the latest open cycle, `retry_since`, its first failure, and `last_attempt`, its highest attempt), else Paid; `cma_read.subscription_payment_state` reads it through a `SECURITY DEFINER` reader function. Awaiting payment is not built: no subscription has it. Matches the definition apart from Awaiting payment (Pending) |
 
 ### Failed renewal
 
 | Field | Value |
 |---|---|
-| Term | Failed renewal (no Dutch label in `copy.ts`) |
+| Term | Failed renewal (nl: Mislukte verlenging) |
 | Key | `renew_failed` (`cma.subscription_event.event_type`); `cycle_index`, `attempt`, `error_code`, `reason_code` |
 | Definition | A renewal attempt of a subscription that Juo reports as failed, with its cycle, its attempt, an error code and a reason code (Juo's event `subscription:renew-failed`, stored as `renew_failed`). The error message is never read. |
 | Source | Juo's event `subscription:renew-failed`, read by the poll (`GET /events` for the category subscription, after its cursor less five minutes) and by `ingest-backfill --object subscription_event`: `cycleIndex`, `attempt`, `errorCode` (upper case, kept as a code), `reason` (kept only as a code of a fixed list, today `billing-attempt-failed`), the event's id and time |
 | Counts / does not count | One row per event, append-only. A failed renewal is open until a renewal of that cycle or a later one follows it, and an open one on an active subscription makes it In retry. On a subscription whose status is not active it changes no payment state: Failed, Paused and Canceled show their status. The error message, a free-text reason and any detail of the payment are not read |
-| Unit and display | A count of events per type and cycle; a code shows as the code, never a message; no page shows it yet |
+| Unit and display | A count of events per type and cycle; a code shows as the code, never a message; Reports → Flash (Payments, kind renewal) counts them as Failed renewals (nl: Mislukte verlengingen) |
 | Time rule | `occurred_at`, the instant Juo reports; the poll reads again from five minutes before its cursor, so the overlap stores nothing twice |
 | Scope | As Subscription |
 | Equivalent in the source system | Juo's event `subscription:renew-failed` (severity problem); HubSpot's copy of Juo's events stays as it is and is not read for this |
 | Not to use | "Failed" alone for it (Failed is the payment state of status failed: a failed renewal on an active subscription is In retry); "failed payment" and "dunning" (NetSuite's words, README, Source of truth) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl) |
-| Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); no catalog key and no page yet |
+| Decided | 28 October 2026 (Proposed); docs/decisions.md, 28 Oct 2026, "The ingest polls Juo and takes no webhooks from it", "No personal data and no free-text reason is read from Juo" and "Definitions: Subscription, Subscription status, Payment state and Failed renewal" (addition 0008zl); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zm, #214) |
+| Used by | `cma.subscription_event` (`event_type` `renew_failed`), `cma_read.subscription_event`, `cma.subscription_payment_state_of` (In retry with `retry_cycle`, `retry_since` and `last_attempt`); `flash.payments.failed_renewals`; Reports → Flash (Payments) and its files |
 | As built today | `cma.subscription_event` (`118`): `event_type` `renew_failed` with `cycle_index`, `attempt`, `error_code` (a code of letters, digits and `_`) and `reason_code` (a lower case code, at most 60), written by `cma.ingest_upsert_subscription_events` (an event already held is left as it is, and the application never updates or deletes one); the adapter reads no error message and counts a reason outside its fixed list as `reason_dropped`. Matches the definition |
 
 ## Cohort terms
@@ -876,9 +876,9 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None |
 | Not to use | "Dashboard" (the Dashboard is a surface of the Workspace); "flash report" for one overview |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn) |
-| Used by | `cma.flash_overviews`, `cma.flash_compute_of`, `cma.flash_overview`, `cma.flash_rows`, `cma.flash_page`; Reports → Flash (B21b) |
-| As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. Matches the definition |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Flash is a new report" and "Definitions: Flash, Active customer, Open deal, Open ticket, Open task, Ticket queue, Churn (subscription), Flash snapshot and Watch finding" (addition 0008zn); 1 November 2026 (#214), "Flash is first in the Reports group of the rail" and "A figure's definition status badge" |
+| Used by | `cma.flash_overviews`, `cma.flash_compute_of`, `cma.flash_overview`, `cma.flash_rows`, `cma.flash_page`; Reports → Flash (`/reports/flash`, B21b) and its files (`flash-<overview>-<market|all>-<stamp>[-breakdown].csv`); the metric catalog's `flash.<overview>.<measure>` entries |
+| As built today | `122`: the eleven overviews in `cma.flash_overviews()`, one base set each, `cma.flash_compute_of` per grouping set. B21b adds `/reports/flash`, its API routes (`/api/v1/reports/flash`, `/rows`, `/file`, `/snapshots`) and its files. Matches the definition |
 
 ### Active customer
 
@@ -889,14 +889,14 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Definition | A store customer the CMA holds (not deleted) with at least one subscription of its store, not missing from the latest full read, whose status is one of `flash.active_subscription_statuses` (default and Pulse4all: `active`; never paused, and never a status of `flash.ended_subscription_statuses`). A customer whose subscriptions are paused and none active is counted apart as paused, not as active. |
 | Source | `cma.commerce_customer` (the store), `cma.subscription` (the subscription app, joined by the store customer's id within the store of the subscription's connection) |
 | Counts / does not count | Counts each store customer once per store. Does not count a customer whose subscriptions are all paused (counted as paused customers), canceled, expired, failed, merged or never-subscribed, nor a subscription whose customer the store does not hold (`subscription_customer_unmatched`) |
-| Unit and display | A count (`flash.customers.active_customers`); the list shows a customer by the store's customer id, its store and market, and its CRM contact's id with its link |
+| Unit and display | A count (`flash.customers.active_customers`); the list shows a customer by the store's customer id, its store and market, and its CRM contact's id with its link; labelled Store customer (nl: Webwinkelklant), never "Customer" alone |
 | Time rule | As of the instant (live) or of the take of the snapshot's business date (a snapshot) |
 | Scope | The tenant's commerce stores and their subscriptions connections; per market (the store's) and store |
 | Equivalent in the source system | None: the CMA's join of the store's customers and the subscription app's statuses |
 | Not to use | "Customer" alone for it (Domains still to define); "subscriber" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn) |
-| Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`), the month end's id list (`record_kind` customer) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`), the month end's id list (`record_kind` customer); the catalog's `flash.customers.active_customers` and `flash.customers.paused_customers`; Reports → Flash (`/reports/flash`) (Active customers) and its files |
 | As built today | `cma.flash_customers_of` (`122`). Matches the definition |
 
 ### Open deal
@@ -915,7 +915,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Lead" for it (Lead is still to define) |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_deals_of`, the overview `open_deals` |
+| Used by | `cma.flash_deals_of`, the overview `open_deals`; `flash.open_deals.open_deals`, `flash.open_deals.median_age_days`, `flash.open_deals.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open deals) and its files |
 | As built today | `cma.flash_deals_of` (`122`) over `cma.counted_deals_of` (`92`). Matches the definition but for test deals (D25) |
 
 ### Open ticket
@@ -934,26 +934,26 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Case" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_tickets_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`) |
+| Used by | `cma.flash_tickets_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`); `flash.open_tickets.open_tickets`, `flash.open_tickets.median_age_days`, `flash.open_tickets.oldest_age_days`; Reports → Flash (`/reports/flash`) (Open tickets) and its files |
 | As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
 
 ### Open task
 
 | Field | Value |
 |---|---|
-| Term | Open task (nl: Open taak) |
+| Term | Open task (nl: Open taak; its overdue: Te laat) |
 | Key | `open_tasks`, `overdue` |
 | Definition | A CRM task, not deleted, whose status is not one of its connection's done statuses (`cma.connection_task_status.is_done`, 0008n) and whose type counts; overdue when due on an earlier business date of the tenant. |
 | Source | `cma.crm_task` through 0008o's `cma.open_tasks_of`; its market from its deal, else its ticket, else its contact, else unknown |
 | Counts / does not count | Counts every open task of a counted type; a status the catalog does not hold is open |
-| Unit and display | A count and the overdue among them |
+| Unit and display | A count and the overdue among them (nl: Te laat) |
 | Time rule | As of the instant; overdue against the tenant's business date, in a snapshot against the snapshot's date |
 | Scope | The tenant's CRM connections; per market, type and status |
 | Equivalent in the source system | HubSpot's tasks whose status is not completed |
-| Not to use | "Overdue" for anything but a task (Past due is the asset term) |
+| Not to use | "Overdue" for anything but a task (Past due is the asset term); its Dutch label "Te laat" is also on the Live board in another sense (copy key `live.late`: a person late for their shift, "Late" in English, not a defined term), so the two uses are known apart: the task's overdue counts open tasks past their due date and never a person, and the Live board's says nothing of tasks |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Reports → Follow-up reads the same tasks |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Reports → Follow-up reads the same tasks; `flash.open_tasks.open_tasks`, `flash.open_tasks.overdue`; Reports → Flash (`/reports/flash`) (Open tasks) and its files |
 | As built today | `cma.flash_tasks_of` (`122`). Matches the definition |
 
 ### Ticket queue
@@ -972,14 +972,14 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Queue" alone, which names the CMA's work queue (Feature 8, the queue engine); "inbox" for it |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Queue for tickets is the ticket's pipeline (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
-| Used by | the overview `open_tickets` (dim `queue`) |
+| Used by | the overview `open_tickets` (dim `queue`); Reports → Flash (`/reports/flash`) (Open tickets, its breakdown by queue) and its files |
 | As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
 
 ### Churn (subscription)
 
 | Field | Value |
 |---|---|
-| Term | Churn (nl: Uitval) |
+| Term | Churn (nl: Uitval; the measure: Uitgevallen) |
 | Key | `churned`; dims `reason` (`none` when absent); setting `flash.ended_subscription_statuses` (default `canceled,expired`) |
 | Definition | A subscription that moved into an ended status (`flash.ended_subscription_statuses`; default and Pulse4all: canceled and expired) on a business date of the period: a `canceled` event (while canceled is an ended status), or a `status_changed` event to an ended status, of that date in the tenant's zone. A subscription counts once per date, with the reason code of its canceled event, else of the other. It is not Cancellation: Reports → Cancellations counts cancellation requests (tickets). |
 | Source | `cma.subscription_event` (the subscription app's events, 0008zl) |
@@ -990,8 +990,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | Juo's analytics count of canceled subscriptions (not checked against it yet) |
 | Not to use | "Cancellation" for it (another term, still to define); "lost" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn) |
-| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting); `flash.churn.churned`; Reports → Flash (`/reports/flash`) (Churn) and its files |
 | As built today | `cma.flash_churn_of` (`122`). Matches the definition |
 
 ### Flash snapshot
@@ -1007,10 +1007,10 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Time rule | The business date in the tenant's zone, due the day after it at `flash.snapshot_local_time` (00:00 to 23:59) |
 | Scope | The tenant |
 | Equivalent in the source system | None |
-| Not to use | "Backup", "history" for the figures; "snapshot" alone, which also names the follow-up refresh (`cma.follow_up_snapshot`, 0008s) and the asset register's full read (Asset terms); "missed" or "late" for anything but a snapshot date's run (Missed inbound call and Past due are other terms) |
+| Not to use | "Backup", "history" for the figures; "snapshot" alone, which also names the follow-up refresh (`cma.follow_up_snapshot`, 0008s) and the asset register's full read (Asset terms), except on Flash's own page, where Flash is the context and the page says "No snapshot for this date" and "Snapshots start on <date>"; "missed" or "late" for anything but a snapshot date's run (Missed inbound call and Past due are other terms) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)" (replaced by "Snapshot timing"), "Month-end id list retention (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Writes only through the take", "Snapshot timing" and "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
-| Used by | `cma.flash_snapshot`, `cma.flash_snapshot_run`, `cma.flash_snapshot_ids`, `cma_read.flash_snapshot*`; Flash's As of |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)" (replaced by "Snapshot timing"), "Month-end id list retention (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Writes only through the take", "Snapshot timing" and "Definitions: a Flash snapshot's stock figures …" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Used by | `cma.flash_snapshot`, `cma.flash_snapshot_run`, `cma.flash_snapshot_ids`, `cma_read.flash_snapshot*`; Flash's As of; Reports → Flash (`/reports/flash`): As of, its empty and history states and the `as_of` column of its files |
 | As built today | `cma.flash_snapshot_take` (`122`); `123` proves a snapshot equals the computation as of its date for all eleven overviews (B8), a month end taken after midnight measures against its own date (B21), and every date is taken once for 00:30, 23:20 and 23:59, a skipped run late, a missed date recorded (B20). Matches the definition |
 
 ### Watch finding
@@ -1029,7 +1029,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Not to use | "Alert" (an alert is a message, Feature 7); "incident" |
 | Status | Proposed (for Kira to confirm) |
 | Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn) |
-| Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch |
+| Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch; Reports → Flash (`/reports/flash`): the watch strip, and `GET /api/v1/reports/flash/snapshots` |
 | As built today | `cma.flash_watch_of` (`122`); `123` raises and resolves each kind. Matches the definition |
 
 ### Flash overview measures
@@ -1047,8 +1047,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn) |
-| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted"; 3 Nov 2026, "Definitions: a Flash measure that does not apply is left out, never 0" (addition 0008zn); 1 November 2026, "Definitions: the Dutch labels of Flash" (addition 0008zn, #214) |
+| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`); the metric catalog's `flash.<overview>.<measure>` entries; Reports → Flash (`/reports/flash`) and its files |
 | As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3) and a measure that does not apply (B27). Matches the definition |
 
 | Overview | Measure | Meaning |
@@ -1064,19 +1064,19 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
 | | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
-| | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms) |
+| | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms; nl: Items achterstallig) |
 | | `items_due_3m` | Their items not past due whose due date falls within three months of today (live) or of the snapshot's date |
-| Churn (`churn`) | `churned` | Churn (subscription) |
+| Churn (`churn`) | `churned` | Churn (subscription) (nl: Uitgevallen) |
 | Orders (`orders`) | `orders` | Store orders created in the period, test and deleted orders left out |
 | | `units` | The quantities of their lines |
 | | `amount` | Their totals less refunded, per currency |
 | Payments (`payments`) | `orders` | Kind order: those store orders, each with its financial status as the store states it |
 | | `amount` | Kind order: their totals less refunded, per currency |
 | | `renewals` | Kind renewal: renewals (renewed) of the subscription app in the period |
-| | `failed_renewals` | Kind renewal: Failed renewal |
+| | `failed_renewals` | Kind renewal: Failed renewal (nl: Mislukte verlengingen) |
 | Open deals, Open tickets (`open_deals`, `open_tickets`) | `open_deals`, `open_tickets` | Open deal, Open ticket |
 | | `median_age_days`, `oldest_age_days` | Their median and highest age in whole days since creation |
-| Open tasks (`open_tasks`) | `open_tasks`, `overdue` | Open task and its overdue |
+| Open tasks (`open_tasks`) | `open_tasks`, `overdue` | Open task and its overdue (nl: Te laat) |
 | Reviews (`reviews`) | `reviews` | Published reviews of counted channels submitted in the period (0008ze) |
 | | `negative` | Of those, negative (`reviews.negative_max_rating`) |
 | | `rating_sum` | The sum of their ratings; the average is `rating_sum` / `reviews` |

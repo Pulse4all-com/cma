@@ -189,29 +189,31 @@ async function expectNavigation() {
     // (reports.view or performance.team) follow Attempts per agent (Attempts per deal for the reader)
     // Since 0008ze Reviews (reports.view or performance.team) follows Orders per person (First orders for the reader); since
     // 0008zi Maintenance (reports.view or performance.team) follows Reviews; since 0008zm Lead cohorts (reports.view or
-    // performance.team) follows Orders per person (First orders for the reader), so the keys after it move one down
-    ["analyst", ["/", "/messages", "/live/board", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
+    // performance.team) follows Orders per person (First orders for the reader), so the keys after it move one down. Since
+    // 0008zn Flash (reports.view or performance.team) is first in Reports, so every Reports key moves by one for everyone who
+    // sees it (brief B21)
+    ["analyst", ["/", "/messages", "/live/board", "/reports/flash", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email",
       "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms",
       "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality",
       "/campaigns"], false],
     // A reports reader (reports.view alone, 0008j): Calls without Calls per agent, no Dashboard; Email without Email per agent;
     // Attempts per deal without Attempts per agent; First orders without Orders per person
-    ["reader", ["/", "/messages", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/funnel",
+    ["reader", ["/", "/messages", "/reports/flash", "/reports/speed-to-lead", "/reports/calls", "/reports/email", "/reports/follow-up", "/reports/attempts", "/reports/funnel",
       "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance",
       "/reports/data-quality", "/campaigns"], false],
     // Since 0005 My schedule (roster.view) follows My hours in the Time group
     ["agent-one", ["/", "/messages", "/day", "/hours", "/schedule"], true],
-    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
+    ["supervisor", ["/", "/messages", "/live/board", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard", "/reports/speed-to-lead", "/reports/calls",
       "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts", "/reports/attempts-per-agent",
       "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders", "/reports/orders-per-person",
       "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/campaigns"], true],
     // Since 0004 the Team group sits between Live and Time for people who manage others (manager, admin);
     // the supervisor and the agent see no Team group, so their keys do not move. The planner (0005) joins it.
-    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
+    ["manager", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
       "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
       "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
-    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/dashboard",
+    ["admin", ["/", "/messages", "/live/board", "/team/people", "/roster/planner", "/day", "/hours", "/schedule", "/team/hours", "/reports/flash", "/reports/dashboard",
       "/reports/speed-to-lead", "/reports/calls", "/reports/calls-per-agent", "/reports/email", "/reports/email-per-agent", "/reports/follow-up", "/reports/attempts",
       "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations", "/reports/forms", "/reports/intake", "/reports/inbound", "/reports/first-orders",
       "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/campaigns"], true],
@@ -371,7 +373,7 @@ async function expectReports() {
   const p = await ctx.newPage();
   for (const path of ["/reports/speed-to-lead", "/reports/follow-up", "/reports/intake", "/reports/inbound", "/reports/calls", "/reports/calls-per-agent", "/reports/forms",
     "/reports/email", "/reports/email-per-agent", "/reports/attempts", "/reports/attempts-per-agent", "/reports/funnel", "/reports/cancellations",
-    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality"]) {
+    "/reports/first-orders", "/reports/orders-per-person", "/reports/lead-cohorts", "/reports/reviews", "/reports/maintenance", "/reports/data-quality", "/reports/flash"]) {
     await p.goto(BASE + path);
     await p.waitForLoadState("networkidle");
     if (await p.locator("main table").count() > 0) problems.push(`agent-one ${path}: a report table is shown to an agent`);
@@ -1625,18 +1627,18 @@ async function expectFrame() {
   });
   for (const [subject, path, labels, hrefs] of [
     ["agent-one", "/messages", ["Welcome", "Messages"], ["/", null]],
-    ["manager", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/dashboard", null]],
-    ["reader", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/speed-to-lead", null]],
+    ["manager", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/flash", null]],
+    ["reader", "/reports/inbound?range=month", ["Welcome", "Reports", "Inbound"], ["/", "/reports/flash", null]],
     ["admin", "/configuration/sources/00000000-0000-7000-8000-00000000c001", ["Welcome", "Configuration", "Sources", null], ["/", "/configuration/teams", "/configuration/sources", null]],
     ["agent-one", "/account", ["Welcome", "My account"], ["/", null]],
     ["supervisor", "/messages/send", ["Welcome", "Messages", "Send a message"], ["/", "/messages", null]],
     // Follow-up and Waiting for you (addition 0008o): a report in its group; the person's own page, no rail item
-    ["manager", "/reports/follow-up", ["Welcome", "Reports", "Follow-up"], ["/", "/reports/dashboard", null]],
+    ["manager", "/reports/follow-up", ["Welcome", "Reports", "Follow-up"], ["/", "/reports/flash", null]],
     ["agent-one", "/me/follow-up", ["Welcome", "Waiting for you"], ["/", null]],
     // Attempts per deal and Attempts per agent (addition 0008y): reports in their group
-    ["manager", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/dashboard", null]],
-    ["reader", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/speed-to-lead", null]],
-    ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Reports", "Attempts per agent"], ["/", "/reports/dashboard", null]],
+    ["manager", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/flash", null]],
+    ["reader", "/reports/attempts?range=month", ["Welcome", "Reports", "Attempts per deal"], ["/", "/reports/flash", null]],
+    ["supervisor", "/reports/attempts-per-agent?range=month", ["Welcome", "Reports", "Attempts per agent"], ["/", "/reports/flash", null]],
   ]) {
     const ctx = await withCookies(subject, {});
     const p = await ctx.newPage();
@@ -1704,8 +1706,8 @@ async function expectFrame() {
   // orders and Orders per person (0008u), Attempts per deal and Attempts per agent (0008y) joined the Reports group and
   // Campaign monitoring (0008v) the Campaigns group (only the first nine with a digit key since the IT audit of 17 October
   // 2026, so the pages are counted by their links); since 0008zb Funnel and Cancellations; since 0008ze Reviews; since 0008zi
-  // Maintenance; since 0008zm Lead cohorts
-  for (const [subject, pages] of [["manager", 30], ["agent-one", 5]]) {
+  // Maintenance; since 0008zm Lead cohorts; since 0008zn Flash, first in Reports, so the Reports crumb links to it
+  for (const [subject, pages] of [["manager", 31], ["agent-one", 5]]) {
     const ctx = await withCookies(subject, { "cma-preview-role": "agent" });
     const p = await ctx.newPage();
     await p.goto(BASE + "/");

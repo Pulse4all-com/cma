@@ -156,6 +156,36 @@
     "rt": 10
   },
   {
+    "path": "/reports/flash",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/flash?o=customers",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/reports/flash?o=data_quality",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/flash?overview=orders&part=headline",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
+    "path": "/api/v1/reports/flash/rows?overview=orders",
+    "subject": "manager",
+    "tx": 2,
+    "rt": 9
+  },
+  {
     "path": "/reports/funnel",
     "subject": "manager",
     "tx": 4,
