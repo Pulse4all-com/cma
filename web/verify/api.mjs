@@ -162,6 +162,7 @@ if (health.status !== 200 || health.body?.auth !== "mock" || !(health.body?.data
 }
 if (ONLY_REPORTS) {
   await reportChecks();
+  await flashChecks();
   verdict();
 }
 if (ONLY_SOURCES) {
@@ -923,6 +924,7 @@ const wstat = (await get(SUPERVISOR, statsPath)).body?.data?.find((x) => x.id ==
 expect("the stats keep it, marked withdrawn at that time", [!!wstat, wstat?.withdrawnAt === w1.body?.data?.withdrawnAt], [true, true], [false, false]);
 
 await reportChecks();
+await flashChecks();
 await inboundChecks();
 await callsChecks();
 await attemptsChecks();
@@ -1325,6 +1327,48 @@ async function reportChecks() {
 // Inbound needs reports.view or performance.team, the Live board's inbound part monitoring.live, each answered
 // 403 by the route and again by the database. Counts, codes and line names only: no number, no name and never
 // the caller's hash in any answer. One missed-reason label of a telephony connection is written and put back.
+// Reports → Flash (addition 0008zm, brief B21): the five routes, their refusals, the forms, the file and the states
+async function flashChecks() {
+  const tz = "Europe/Amsterdam";
+  const day = (offset) => dateKey(new Date(Date.now() + offset * 86_400_000), tz);
+  const routes = ["/api/v1/reports/flash", "/api/v1/reports/flash?overview=customers", "/api/v1/reports/flash/rows?overview=orders&limit=5",
+    "/api/v1/reports/flash/snapshots", "/api/v1/reports/flash/file?overview=open_tasks&limit=5", "/api/v1/reports/data-quality/rows?check=deal_without_contact&limit=5"];
+  const statuses = async (s) => Promise.all(routes.map(async (r) => (await call(s, r)).status));
+  expect("flash: an agent is refused on every route", await statuses(AGENT), [403, 403, 403, 403, 403, 403], [200, 200, 200, 200, 200, 200]);
+  expect("flash: the analyst reads every route", await statuses(ANALYST), [200, 200, 200, 200, 200, 200], [200, 200, 200, 200, 200, 403]);
+  expect("flash: the supervisor (performance.team) reads Flash, not data quality's rows (reports.view or tenant.configure)",
+    await statuses(SUPERVISOR), [200, 200, 200, 200, 200, 403], [200, 200, 200, 200, 200, 200]);
+  const bad = ["/api/v1/reports/flash?overview=nope", "/api/v1/reports/flash/rows?overview=orders&sort=customer_name", "/api/v1/reports/flash/rows?overview=customers&measure=email",
+    "/api/v1/reports/flash/rows?overview=customers&f_email=x", "/api/v1/reports/flash/rows?overview=orders&limit=50001", "/api/v1/reports/flash?overview=customers&market=gb",
+    `/api/v1/reports/flash?overview=customers&asOf=${day(1)}`, "/api/v1/reports/flash/file?overview=orders&part=everything", "/api/v1/reports/data-quality/rows?check=DROP"];
+  expect("flash: every form out of range is a 400 (overview, sort, measure, filter, limit, market, a future As of, part, check)",
+    await Promise.all(bad.map(async (r) => (await call(ANALYST, r)).status)), bad.map(() => 400), bad.map(() => 200));
+  const landing = (await call(ANALYST, "/api/v1/reports/flash")).body?.data;
+  expect("flash: the landing has the eleven overviews in their order, each with its definition version and set_up",
+    [landing?.overviews?.map((o) => o.key), landing?.overviews?.every((o) => o.definitionVersion === "0008zm" && typeof o.setUp === "boolean")],
+    [["customers", "subscriptions", "installed_base", "churn", "orders", "payments", "open_deals", "open_tickets", "open_tasks", "reviews", "data_quality"], true],
+    [[], false]);
+  const head = (await call(ANALYST, "/api/v1/reports/flash?overview=orders&part=headline")).body?.data;
+  expect("flash: a card's live headline: the overview's headline measure, a number when set up",
+    [head?.headline, head?.setUp === false || typeof head?.value === "number"], ["orders", true], ["", false]);
+  const rows = (await call(ANALYST, "/api/v1/reports/flash/rows?overview=subscriptions&sort=amount_per_cycle&dir=desc&limit=50")).body?.data;
+  const cur = (rows?.rows ?? []).map((r) => r.currency);
+  expect("flash: amounts sorted within currency (currency first), the total before the limit",
+    [cur.every((c, i) => i === 0 || (cur[i - 1] ?? "") <= (c ?? "\uffff")), typeof rows?.total === "number" && rows.total >= (rows?.rows?.length ?? 0)], [true, true], [false, false]);
+  const file = await download(ANALYST, "/api/v1/reports/flash/file?overview=customers&market=GB");
+  const name = /filename="([^"]+)"/.exec(file.headers.get("content-disposition") ?? "")?.[1] ?? "";
+  const header = file.text.replace(/^\uFEFF/, "").split(/\r?\n/)[0] ?? "";
+  expect("flash: the file: its name (overview, market, as of), its first columns as_of and filters, no @ anywhere",
+    [file.status, /^flash-customers-GB-\d{4}-\d{2}-\d{2}(T\d{4})?\.csv$/.test(name), /^as_of[,;\t]filters[,;\t]/.test(header), file.text.includes("@")],
+    [200, true, true, false], [200, false, false, true]);
+  const snaps = (await call(ANALYST, `/api/v1/reports/flash/snapshots?from=${day(-30)}&to=${day(0)}`)).body?.data;
+  expect("flash: the snapshots of a period and the open watch findings, no id of a record",
+    [Array.isArray(snaps?.dates), Array.isArray(snaps?.watch), JSON.stringify(snaps?.watch ?? []).includes("@")], [true, true, false], [false, false, true]);
+  const invest = (await call(INVEST, "/api/v1/reports/flash?overview=orders")).body?.data;
+  expect("flash: a source not set up gives no figures, never zeros (Pulse4all Invest's shop)", [invest?.setUp, invest?.totals ?? null, invest?.rows?.length ?? -1],
+    [false, null, 0], [true, {}, 1]);
+}
+
 async function inboundChecks() {
   const tz = (await get(ANALYST, "/api/v1/me")).body?.data?.timeZone ?? "Europe/Amsterdam";
   const day = (n) => dateKey(new Date(Date.now() + n * 86_400_000), tz);

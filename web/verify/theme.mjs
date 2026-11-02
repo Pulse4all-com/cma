@@ -200,6 +200,10 @@ const pages = [
   { path: "/reports/lead-cohorts", subject: "manager", tables: true },
   { path: "/reports/lead-cohorts?period=month&split=source&measure=ordered", subject: "reader", tables: true },
   { path: "/reports/lead-cohorts", subject: "invest-analyst", tables: true },
+  { path: "/reports/flash", subject: "manager" },
+  { path: "/reports/flash?o=subscriptions", subject: "manager", tables: true },
+  { path: "/reports/flash?o=data_quality", subject: "reader", tables: true },
+  { path: "/reports/flash", subject: "invest-analyst" },
   // Campaign monitoring (addition 0008v): the journeys' cards with their status badges and design link, a journey's
   // Muted banner, dashed placeholders and unticked prerequisites; a tenant without journeys
   { path: "/campaigns", subject: "manager" },
