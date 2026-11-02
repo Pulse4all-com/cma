@@ -30,8 +30,9 @@ export async function GET(request: Request) {
     const q = flashRowsParams(sp, { file: true, maxRows });
     const def = overviewOf(q.overview)!;
     const settings = exportSettingsFrom(settingsList);
-    // the market named by the address, or by the list's market filter alone (market wins over f_market: lib/api/flash)
-    const market = q.market ?? q.filters.market ?? null;
+    // the market the file was read for: the address's (market wins over f_market: lib/api/flash), else the records'
+    // market filter; a breakdown is read for the address's market alone, so its name and filters cell say that one
+    const market = part === "breakdown" ? q.market : q.market ?? q.filters.market ?? null;
     let filters = filtersText(market, def.kind === "flow" ? q.from : null, def.kind === "flow" ? q.to : null, part === "rows" ? q.filters : {});
     let text: string;
     let rows: number;
