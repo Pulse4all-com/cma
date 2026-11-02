@@ -51,14 +51,17 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
 
   const sp = await searchParams;
   const one = (k: string): string | undefined => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
-  const today = dateKeyInZone(new Date(), me.timeZone);
+  // the reader's today; the tenant's decides (below: the database's, on a refusal)
+  let today = dateKeyInZone(new Date(), me.timeZone);
   const def = overviewOf(one("o"));
   const market = parseMarket(one("market"));
   const marketProblem = one("market") !== undefined && one("market") !== "" && market === null;
   const parsedAsOf = parseAsOf(one("asOf"), today);
-  // As of is a business date before the tenant's today. The reader's today stands for it until the database answers: a
-  // reader ahead of the tenant's zone can pick the tenant's today, which the database refuses (CMA04); the page then
-  // reads now and says As of was ignored (asOfProblem), never an error page
+  // As of is a business date before the tenant's today, and a flow's period ends that today at the latest. The reader's
+  // today stands for it until the database answers: for a reader ahead of the tenant's zone, As of or the period's end
+  // can be the tenant's today or later, which the database refuses (CMA04). The page then asks the database for the
+  // tenant's today (the snapshots' read, whose period ends there), caps the period at it, drops an As of that is not
+  // before it (asOfProblem: the notice) and reads again: never an error page
   let asOf = parsedAsOf.asOf;
   let asOfProblem = parsedAsOf.problem;
   // the flows' period: the period bar's range (today when none, as every report), never past today, nor past As of
@@ -70,11 +73,14 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
     return { to, from: period.from > to ? to : period.from, base: { ...(market ? { market } : {}), ...(a ? { asOf: a } : {}), ...periodQuery } as Record<string, string> };
   };
   let { from, to, base } = shape(asOf);
-  const asOfRefused = (e: unknown) => e instanceof CmaDbError && e.sqlState === "CMA04" && asOf !== null;
-  const readAsNow = () => {
-    asOf = null;
-    asOfProblem = true;
-    ({ from, to, base } = shape(null));
+  const refused = (e: unknown) => e instanceof CmaDbError && e.sqlState === "CMA04";
+  const adoptTenantToday = async () => {
+    today = (await data().getFlashSnapshots(me, null, null)).to;
+    if (asOf !== null && asOf >= today) {
+      asOf = null;
+      asOfProblem = true;
+    }
+    ({ from, to, base } = shape(asOf));
   };
   const more = (overview: string) => metricsMore(me.permissions, metricKey(overview as FlashOverviewDef["key"], overviewOf(overview)!.headline), t.howComputed);
 
@@ -109,9 +115,9 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
     try {
       page = await data().getFlashPage(me, market, asOf, from, to);
     } catch (e) {
-      if (!asOfRefused(e)) throw e;
-      readAsNow();
-      page = await data().getFlashPage(me, market, null, from, to);
+      if (!refused(e)) throw e;
+      await adoptTenantToday();
+      page = await data().getFlashPage(me, market, asOf, from, to);
     }
     const sourceLabel = (s: string | null) => (s ? String(t[`source_${s}` as keyof typeof t]) : "");
     return (
@@ -199,19 +205,22 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
     got.doc = v.document;
     got.rows = v.rows;
   };
-  // the document's own refusals: no snapshot for the date (CMA02, "missing"); As of on or after the tenant's today
-  // (CMA04): read now, As of ignored ("now")
-  const takeDocument = async (withRows: boolean): Promise<"ok" | "missing" | "now"> => {
+  // the document's own refusals: no snapshot for the date (CMA02, "missing"); As of or the period past the tenant's
+  // today (CMA04): the tenant's today adopted and read again ("again")
+  const retryRefused = async (): Promise<void> => {
+    await adoptTenantToday();
+    plan = rowsPlan();
+    await take(plan.withRows);
+  };
+  const takeDocument = async (withRows: boolean): Promise<"ok" | "missing" | "again"> => {
     try {
       await take(withRows);
       return "ok";
     } catch (e) {
       if (e instanceof CmaDbError && e.sqlState === "CMA02") return "missing";
-      if (!asOfRefused(e)) throw e;
-      readAsNow();
-      plan = rowsPlan();
-      await take(plan.withRows);
-      return "now";
+      if (!refused(e)) throw e;
+      await retryRefused();
+      return "again";
     }
   };
   try {
@@ -220,12 +229,15 @@ export default async function FlashPage({ searchParams }: PageProps<"/reports/fl
     if (!(e instanceof CmaDbError)) throw e;
     if (plan.withRows && listUnavailable(e.sqlState)) {
       // the list refused, or the document did: the document alone tells which
-      const got = await takeDocument(false);
-      missing = got === "missing";
-      rowsUnavailable = got === "ok";
+      const outcome = await takeDocument(false);
+      missing = outcome === "missing";
+      rowsUnavailable = outcome === "ok";
+    } else if (e.sqlState === "CMA02") {
+      missing = true;
+    } else if (refused(e)) {
+      await retryRefused();
     } else {
-      const got = await takeDocument(plan.withRows);
-      missing = got === "missing";
+      throw e;
     }
   }
   const { withRows, rowsAsOf, rowFilters, dropped } = plan;

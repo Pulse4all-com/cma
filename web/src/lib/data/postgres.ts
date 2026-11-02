@@ -1408,7 +1408,7 @@ function toFlashDocument(j: FlashDocumentDb): FlashDocumentView {
 
 function toFlashRows(j: FlashRowsDb): FlashRowsView {
   return { overview: j.overview, mode: j.mode, asOf: j.as_of, from: j.from, to: j.to, sort: j.sort, descending: Boolean(j.descending), limit: j.limit,
-    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "UTC", rows: j.rows ?? [] };
+    offset: j.offset, filters: j.filters ?? {}, total: Number(j.total), setUp: j.set_up ?? true, timeZone: j.time_zone ?? "", rows: j.rows ?? [] };
 }
 
 export const postgresData: CmaData = {

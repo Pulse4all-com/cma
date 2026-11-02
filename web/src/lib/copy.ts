@@ -3507,7 +3507,7 @@ const en = {
     c_items_due_3m: "Due within 3 months",
     c_next_due_on: "Next due",
     c_churned_at: "Churned at",
-    c_business_date: "Business date",
+    c_business_date: "Day",
     c_cycles: "Cycles",
     c_order_number: "Order",
     c_order_id: "Order id",

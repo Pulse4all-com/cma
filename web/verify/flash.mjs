@@ -257,8 +257,10 @@ expect("a list's refusal is the page's not-available state (CMA02, CMA04), any o
 const pageSrc = readFileSync(path.join(here, "..", "src", "app", "reports", "flash", "page.tsx"), "utf8");
 expect("the page reads a frozen list with frozenFilters' kept filters, names the dropped ones, and its file asks the same",
   [/frozenFilters\(def, filters\)/.test(pageSrc), /filters: plan\.rowFilters/.test(pageSrc), /Object\.entries\(rowFilters\)/.test(pageSrc),
-    /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters")],
-  [true, true, true, true, true], [false, false, false, false, false]);
+    /listUnavailable\(e\.sqlState\)/.test(pageSrc), pageSrc.includes("flash-rows-unavailable") && pageSrc.includes("flash-frozen-filters"),
+    // a refused As of or period (a reader ahead of the tenant's zone): the tenant's today from the database, then read again
+    /today = \(await data\(\)\.getFlashSnapshots\(me, null, null\)\)\.to;/.test(pageSrc) && (pageSrc.match(/adoptTenantToday\(\)/g) ?? []).length >= 2],
+  [true, true, true, true, true, true], [false, false, false, false, false, false]);
 expect("a market filter that is no market code is dropped from the address, as the database would refuse it",
   [parseFilters(overviewOf("customers"), (k) => ({ f_market: "gb" })[k]), parseFilters(overviewOf("customers"), (k) => ({ f_market: "NL" })[k])],
   [{}, { market: "NL" }], [{ market: "gb" }, {}]);
@@ -284,7 +286,7 @@ const apiSrc = readFileSync(path.join(here, "..", "src", "lib", "api", "flash.ts
 const fileSrc = routeSrc(["flash", "file"]);
 expect("market wins over f_market; an unknown part is a 400; a file names its market, says when it is cut, refuses a source not set up",
   [/if \(q\.market\) filters\.market = q\.market;/.test(apiSrc), /invalid_part/.test(routeSrc(["flash"])),
-    /const market = q\.market \?\? q\.filters\.market/.test(fileSrc), /rows \$\{list\.rows\.length\} of \$\{list\.total\}/.test(fileSrc),
+    /const market = part === "breakdown" \? q\.market : q\.market \?\? q\.filters\.market/.test(fileSrc), /rows \$\{list\.rows\.length\} of \$\{list\.total\}/.test(fileSrc),
     (fileSrc.match(/not_set_up/g) ?? []).length >= 2, /zone = list\.timeZone/.test(fileSrc)],
   [true, true, true, true, true, true], [false, false, false, false, false, false]);
 
