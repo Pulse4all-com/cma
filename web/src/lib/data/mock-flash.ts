@@ -1,8 +1,8 @@
 /**
- * Mock mode's Reports → Flash (addition 0008zm; brief B21, 5.4): an invented fixture, computed in memory the way
- * db/120_flash.sql computes it, so every state of the page shows without a database. Tenant one (Pulse4all
+ * Mock mode's Reports → Flash (addition 0008zn; brief B21, 5.4): an invented fixture, computed in memory the way
+ * db/122_flash.sql computes it, so every state of the page shows without a database. Tenant one (Pulse4all
  * Subscriptions) holds two stores in two currencies (GB in GBP, NL in EUR), subscriptions, devices, orders, renewals,
- * churn, open deals, tickets and tasks, reviews and every data-quality check of 0008zm with findings; its snapshots run
+ * churn, open deals, tickets and tasks, reviews and every data-quality check of 0008zn with findings; its snapshots run
  * daily from 21 days ago with one date missing (6 days ago), and two watch findings are open. Tenant two (Pulse4all
  * Invest) has a CRM only, so every other overview says its source is not set up, never zero. Ids are invented, links
  * point to example hosts, and no row carries a name, email, phone or address.
@@ -378,7 +378,7 @@ export function mockFlashPage(me: Principal, market: string | null, asOf: string
         }
       }
     }
-    return { key: def.key, kind: def.kind, source: def.source, setUp: up, headline: def.headline, value, previous, previousOn, definitionVersion: "0008zm" };
+    return { key: def.key, kind: def.kind, source: def.source, setUp: up, headline: def.headline, value, previous, previousOn, definitionVersion: "0008zn" };
   });
   return {
     mode: asOf ? "snapshot" : "live", asOf: asOf ?? new Date().toISOString(), market, from: f, to: t, snapshotMissing: false, nearestBefore: null, nearestAfter: null,
@@ -434,7 +434,7 @@ export function mockFlashOverview(me: Principal, overview: string, market: strin
     headline: def.headline, sorts: [...def.sorts], totals: market ? own ?? zero(total) : total,
     rows: all.filter((r) => Object.keys(r.dims).length > 0 && (!market || r.dims.market === market)), labels: labelsOf(def),
     settings: { fileMaxRows: FILE_MAX, negativeMaxRating: 2, requiredDeviceRefs: ["ns_internal_id"], requiredContactRefs: ["netsuite"], activeSubscriptionStatuses: ["active"] },
-    definitionVersion: "0008zm", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history,
+    definitionVersion: "0008zn", firstSnapshotDate: dates[0] ?? null, days, activeAtEnd, history,
   };
 }
 

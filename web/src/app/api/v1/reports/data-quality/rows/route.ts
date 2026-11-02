@@ -6,7 +6,7 @@ import { DATA_QUALITY_PERMISSIONS } from "@/lib/reports";
 export const dynamic = "force-dynamic";
 
 /**
- * A data-quality check's findings (cma.data_quality_rows, addition 0008zm): ?check (any check's key), &market, &limit (1
+ * A data-quality check's findings (cma.data_quality_rows, addition 0008zn): ?check (any check's key), &market, &limit (1
  * to the tenant's flash.file_max_rows; 500 when left out) and &offset. `total` and `rows`: per finding the record's type
  * and id, the value the check found, its market, where it is fixed (the system's kind and adapter, or the CMA), the
  * record's link and the related record (a store customer's CRM contact; a device's subscription). Needs reports.view or

@@ -1,5 +1,5 @@
 /**
- * Reports → Flash's parts (addition 0008zm), rendered on the server: the overviews' strip and cards (keys 1 to 9, 0 and
+ * Reports → Flash's parts (addition 0008zn), rendered on the server: the overviews' strip and cards (keys 1 to 9, 0 and
  * Q), the watch strip, the sources' line, an overview's totals, breakdown with inline bars and per-market bars (7.7),
  * the records with their sortable columns, and the Data quality table with each check's trend. Style 7.3 cards, 7.5
  * badges, 7.6 tables (numbers right-aligned, tabular figures), 7.7 Deep Blue bars on light ground; a change is Muted text

@@ -1,11 +1,11 @@
 /**
- * Verifier (pure: no database, no network): Reports → Flash's own logic (src/lib/flash.ts, addition 0008zm, brief B21).
+ * Verifier (pure: no database, no network): Reports → Flash's own logic (src/lib/flash.ts, addition 0008zn, brief B21).
  *
  *   node --experimental-strip-types verify/flash.mjs             every check must PASS
  *   node --experimental-strip-types verify/flash.mjs --provoke   every check must FAIL
  *
  * Covers: the eleven overviews in their order with the keys 1 to 9, 0 and Q, each as cma.flash_overviews() holds it in
- * db/120_flash.sql (kind, source, dims, grouping sets, measures, count measures, headline, sort whitelist: read from the
+ * db/122_flash.sql (kind, source, dims, grouping sets, measures, count measures, headline, sort whitelist: read from the
  * script, so the page and the database cannot drift); the address keys (market among them); the sort whitelist and its
  * default direction; the list's filters (the overview's dims and a count measure only); As of (now, a past business date,
  * today and a future date refused); the file names (overview, market or all, the date or the instant in the tenant's
@@ -32,8 +32,8 @@ function expect(name, actual, expected, provoked) {
   console.log(`${pass ? "PASS" : "FAIL"}  ${name.padEnd(80)} got ${JSON.stringify(actual).slice(0, 90)}${pass ? "" : `, wanted ${JSON.stringify(want).slice(0, 90)}`}`);
 }
 
-// ---- The overviews, against db/120_flash.sql's cma.flash_overviews() --------------------------------------------------
-const sql = readFileSync(path.join(here, "..", "..", "db", "120_flash.sql"), "utf8");
+// ---- The overviews, against db/122_flash.sql's cma.flash_overviews() --------------------------------------------------
+const sql = readFileSync(path.join(here, "..", "..", "db", "122_flash.sql"), "utf8");
 const body = sql.slice(sql.indexOf("create or replace function cma.flash_overviews()"));
 const values = body.slice(body.indexOf("values") + 6, body.indexOf("$$;"));
 const arr = (s) => (s.trim() === "array[]::text[]" ? [] : [...s.matchAll(/'([a-z0-9_]+)'/g)].map((m) => m[1]));
@@ -43,7 +43,7 @@ const fromSql = tuples.map((t) => ({ key: t[1], kind: t[3], source: t[5] ?? null
   countMeasures: arr(t[9]), headline: t[10], sorts: arr(t[11]) }));
 const fromTs = FLASH_OVERVIEWS.map((o) => ({ key: o.key, kind: o.kind, source: o.source, dims: [...o.dims], sets: o.sets.map((s) => [...s]),
   measures: [...o.measures], countMeasures: [...o.countMeasures], headline: o.headline, sorts: [...o.sorts] }));
-expect("eleven overviews in db/120_flash.sql, read from cma.flash_overviews()", fromSql.length, 11, 0);
+expect("eleven overviews in db/122_flash.sql, read from cma.flash_overviews()", fromSql.length, 11, 0);
 expect("the page's overviews equal the database's: order, kind, source, dims, sets, measures, headline, sorts",
   JSON.stringify(fromTs) === JSON.stringify(fromSql), true, false);
 expect("the keys 1 to 9, 0 and Q in the page's order, each once",
@@ -149,7 +149,7 @@ expect("bars and the average rating (sum over count, two decimals; none without 
   [barShare(5, 10), barShare(0, 10), barShare(3, 0), averageRating(6, 2), averageRating(10.5, 3), averageRating(0, 0)],
   [0.5, 0, 0, 3, 3.5, null], [1, 1, 1, 0, 0, 0]);
 
-// ---- The lists' columns, against db/120_flash.sql's cma.flash_rows_of (and data quality's links) ------------------------
+// ---- The lists' columns, against db/122_flash.sql's cma.flash_rows_of (and data quality's links) ------------------------
 const rowsBody = sql.slice(sql.indexOf("create or replace function cma.flash_rows_of"), sql.indexOf("end case;", sql.indexOf("create or replace function cma.flash_rows_of")));
 const listKeys = {};
 for (const part of rowsBody.split(/\n    when '/).slice(1)) {
@@ -177,7 +177,7 @@ expect("links outside the CRM never shown: the register's and the review platfor
     dataQualityRowShown({ object_type: "commerce_customer", record_url: null, related_type: "contact", related_url: "https://crm.example/c/2" }).related_url],
   [false, false, null, "https://crm.example/c/1", "https://crm.example/c/2"], [true, true, "https://register.example/r/1", null, null]);
 
-// ---- Where a check is fixed, against db/120_flash.sql's cma.data_quality_fix_in ------------------------------------------
+// ---- Where a check is fixed, against db/122_flash.sql's cma.data_quality_fix_in ------------------------------------------
 const fixBody = sql.slice(sql.indexOf("create or replace function cma.data_quality_fix_in"), sql.indexOf("$$;", sql.indexOf("create or replace function cma.data_quality_fix_in") + 80));
 const fixSql = {};
 for (const m of fixBody.matchAll(/when p_check_key (?:= '([a-z_]+)'|in \(([^)]*)\)) then (?:case when [^']*'[^']*' then '([a-z]+)' else '([a-z]+)' end|'([a-z]+)')/g)) {

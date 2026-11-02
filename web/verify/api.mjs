@@ -1327,7 +1327,7 @@ async function reportChecks() {
 // Inbound needs reports.view or performance.team, the Live board's inbound part monitoring.live, each answered
 // 403 by the route and again by the database. Counts, codes and line names only: no number, no name and never
 // the caller's hash in any answer. One missed-reason label of a telephony connection is written and put back.
-// Reports → Flash (addition 0008zm, brief B21): the five routes, their refusals, the forms, the file and the states
+// Reports → Flash (addition 0008zn, brief B21): the five routes, their refusals, the forms, the file and the states
 async function flashChecks() {
   const tz = "Europe/Amsterdam";
   const day = (offset) => dateKey(new Date(Date.now() + offset * 86_400_000), tz);
@@ -1345,7 +1345,7 @@ async function flashChecks() {
     await Promise.all(bad.map(async (r) => (await call(ANALYST, r)).status)), bad.map(() => 400), bad.map(() => 200));
   const landing = (await call(ANALYST, "/api/v1/reports/flash")).body?.data;
   expect("flash: the landing has the eleven overviews in their order, each with its definition version and set_up",
-    [landing?.overviews?.map((o) => o.key), landing?.overviews?.every((o) => o.definitionVersion === "0008zm" && typeof o.setUp === "boolean")],
+    [landing?.overviews?.map((o) => o.key), landing?.overviews?.every((o) => o.definitionVersion === "0008zn" && typeof o.setUp === "boolean")],
     [["customers", "subscriptions", "installed_base", "churn", "orders", "payments", "open_deals", "open_tickets", "open_tasks", "reviews", "data_quality"], true],
     [[], false]);
   const head = (await call(ANALYST, "/api/v1/reports/flash?overview=orders&part=headline")).body?.data;

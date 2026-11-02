@@ -23,7 +23,7 @@ import { addDays, dateKeyInZone, fmtDate } from "@/lib/time";
 import { resolve } from "../../access";
 
 /**
- * Reports → Flash (addition 0008zm; brief B21, decisions of 1 November 2026): ten overviews (Active customers, Active
+ * Reports → Flash (addition 0008zn; brief B21, decisions of 1 November 2026): ten overviews (Active customers, Active
  * subscriptions, Installed base, Churn, Orders, Payments, Open deals, Open tickets, Open tasks, Reviews) and Data quality,
  * one click (or key: 1 to 9, 0, Q) each, now from the sources or as of a business date with a snapshot (A), per market
  * (K), the flows over the period bar, on screen and as a file (X). The landing reads the stored figures in one call

@@ -392,7 +392,7 @@ export const PAGE_METRIC_KEYS: Readonly<Record<string, readonly string[]>> = {
     "reviews.by_channel",
     "reviews.market_states",
   ],
-  // Reports → Flash (addition 0008zm): every overview's measures, headline and breakdown alike
+  // Reports → Flash (addition 0008zn): every overview's measures, headline and breakdown alike
   "/reports/flash": [
     "flash.customers.customers_held",
     "flash.customers.active_customers",

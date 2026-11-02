@@ -1322,7 +1322,7 @@ async function readRules(q: Querier): Promise<AlertRule[]> {
 }
 
 
-// ---- Reports → Flash (addition 0008zm): the database's JSON as the screens' types --------------------------------
+// ---- Reports → Flash (addition 0008zn): the database's JSON as the screens' types --------------------------------
 
 type FlashSourcesDb = Record<string, { set_up: boolean; adapters: string[] | null; last_read_at: string | null }>;
 interface FlashWatchDb {
@@ -3138,7 +3138,7 @@ export const postgresData: CmaData = {
     }
   },
 
-  // ---- Reports → Flash (addition 0008zm): every function checks reports.view or performance.team itself (data
+  // ---- Reports → Flash (addition 0008zn): every function checks reports.view or performance.team itself (data
   // quality's rows reports.view or tenant.configure), the forms and the dates (CMA04), a date without a snapshot (CMA02)
 
   async getFlashPage(me, market, asOf, from, to): Promise<FlashPageView> {
