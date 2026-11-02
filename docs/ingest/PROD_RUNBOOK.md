@@ -2156,12 +2156,12 @@ Expected: the row **Subscriptions poll** with its last run succeeded, and the co
 
 Day one: **Studio (cma-prod-pg)**, after `set role cma_owner;` and then `reset role;`: `select job, status, error, count(*) from cma.sync_run where connection_id = '<juo conn>' and started_at > now() - interval '1 day' group by 1, 2, 3 order by 1, 2;`. Expected: about 288 `subscriptions_poll` `succeeded` and one `reconcile` `succeeded`; a `failed` with `rate_limited` makes the execution exit 1, so the alert `Cloud Run job failed (any job)` fires (OPERATIONS 9); one now and then needs no action (the next run carries on); several a day: report them (Open decisions: Juo's rate limit). `key_rejected` means the key was revoked or replaced: 15.1 and 15.2 again. `empty_snapshot` on the reconcile means Juo answered no subscription: nothing was marked missing; report it. A failed poll does not move its cadence, so a lasting failure writes one `failed` row every 5 minutes until it is fixed: fix it the same day. **Records:** the outputs of (a), (c) and 15.2 to 15.9 into `records/0008zl-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
 
-# Phase 16. Flash in prod (addition 0008zm)
+# Phase 16. Flash in prod (addition 0008zn)
 
-Written on 1 November 2026 for addition 0008zm, before anything ran in dev or prod. Two stacked pull requests carry it: #213 (brief B21a: `db/120_flash.sql` and `db/121_verify_flash.sql`, the snapshot job `cma-snapshot-flash`, the contact hold D2 in the ingest; branch `claude/sharp-newton-pxdg9t`) and #214 (brief B21b: Reports → Flash, its API and files; branch `claude/sharp-newton-pxdg9t-b21b`, stacked on #213, no migration). Flash reads the mirrors the CMA already holds (the stores, Juo, the asset register, HubSpot, the reviews) and stores one snapshot per tenant and business date from the first night on (`docs/architecture/data-model/0008.md`, Data model: Flash (addition 0008zm); `docs/architecture/flash-watch.md`). Read only towards every source: nothing is written to HubSpot, Shopify, Juo, Airtable or Trusted Shops. Order: dev on #213's branch (16.1 to 16.3); prod's migration before #213 is merged (16.4); the merge, the ingest and the take-in of linked contacts (16.5); the snapshot job (16.6); the gate and #214's merge with the on-screen checks (16.7); the coverage checks before the demo (16.8). 16.4 comes before the merge because the snapshot job and the ingest's contact hold need `120`, while `main`'s web and ingest read nothing it adds (120's header). Every Studio block here is read only under `cma_owner` or a whole script run as your own login, so none needs the context block. The Terminal blocks run on your own terminal in `~/cma`.
+Written on 1 November 2026 for addition 0008zn and renumbered on 2 November 2026, after #209 took 0008zm (lead cohorts), before anything of Flash ran in dev or prod. Two stacked pull requests carry it: #213 (brief B21a: `db/122_flash.sql` and `db/123_verify_flash.sql`, the snapshot job `cma-snapshot-flash`, the contact hold D2 in the ingest; branch `claude/sharp-newton-pxdg9t`) and #214 (brief B21b: Reports → Flash, its API and files; branch `claude/sharp-newton-pxdg9t-b21b`, stacked on #213, no migration). Flash reads the mirrors the CMA already holds (the stores, Juo, the asset register, HubSpot, the reviews) and stores one snapshot per tenant and business date from the first night on (`docs/architecture/data-model/0008.md`, Data model: Flash (addition 0008zn); `docs/architecture/flash-watch.md`). Read only towards every source: nothing is written to HubSpot, Shopify, Juo, Airtable or Trusted Shops. Order: dev on #213's branch (16.1 to 16.3); prod's migration before #213 is merged (16.4); the merge, the ingest and the take-in of linked contacts (16.5); the snapshot job (16.6); the gate and #214's merge with the on-screen checks (16.7); the coverage checks before the demo (16.8). 16.4 comes before the merge because the snapshot job and the ingest's contact hold need `122`, while `main`'s web and ingest read nothing it adds (122's header). 0008zm (lead cohorts, #209, `db/120_lead_cohorts.sql`) runs before 0008zn in each database: it ran in dev on 2 November 2026 (its verify `121_verify_lead_cohorts.sql` 22 PASS, then `113`, `95` and `41` again); 16.4 runs it in prod first when prod does not hold it yet. Every Studio block here is read only under `cma_owner` or a whole script run as your own login, so none needs the context block. The Terminal blocks run on your own terminal in `~/cma`.
 
 **Data prerequisites** (each one limits what Flash shows, not whether it runs):
-- Addition 0008zl in the database (phase 15's (a) and (c)): `120` refuses to run without it.
+- Addition 0008zm in the database (lead cohorts, #209; it needs 0008zl, phase 15's (a) and (c)): `122` refuses to run without it (`addition 0008zm (120_lead_cohorts.sql) must run before 0008zn`).
 - The NetSuite Customer ID on the HubSpot contact: the connection maps `contact_netsuite_id` as the contact's `netsuite` reference (7.3), and finance fills it. A store customer with an order whose contact lacks it is a finding of `customer_required_ref_missing` (16.5 checks the mapping, 16.8 counts the gap).
 - The NetSuite Internal ID on the register's record, the device's named id `ns_internal_id` (14.5 maps it). A device without it is a finding of `device_required_ref_missing`.
 - The store customers the CMA holds: phase 9's backfill read the customers changed since 1 October 2026, so Active customers and the NetSuite check are incomplete until each store's backfill from its start (Open decisions; 16.8).
@@ -2176,31 +2176,31 @@ set role cma_owner;
 select version from cma.schema_migration where version >= '0008zk' order by 1;
 reset role;
 ```
-Expected: `0008zk` and `0008zl`. Without `0008zl`: phase 15's (a) first. With `0008zm` already there, carry on: `120` is rerunnable.
+Expected: `0008zk`, `0008zl` and `0008zm` (0008zm ran in dev on 2 November 2026). Without `0008zm`: `db/120_lead_cohorts.sql`, then `db/121_verify_lead_cohorts.sql` (`verdict | OK | 121_verify_lead_cohorts: 22 PASS, 0 FAIL`), then `113`, `95` and `41` again, as its header says, before going on. With `0008zn` already there, carry on: `122` is rerunnable.
 
-**File:** `db/120_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
+**File:** `db/122_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
 
 Expected: no error. A second run ends the same and changes nothing.
 
 **Studio (cma-dev-pg)** (read only)
 ```sql
 set role cma_owner;
-select version from cma.schema_migration where version >= '0008zl' order by 1;
+select version from cma.schema_migration where version >= '0008zm' order by 1;
 reset role;
 ```
-Expected: `0008zl` and `0008zm`.
+Expected: `0008zm` and `0008zn`.
 
-**File:** `db/121_verify_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
+**File:** `db/123_verify_flash.sql`: copy all of it. **Studio (cma-dev-pg):** paste and Run, in a new tab. Open the results dropdown at the verdict table.
 
-Expected, in a few minutes (block C builds a throwaway tenant with 100,000 customers and subscriptions, 50,000 devices and 200,000 orders inside a transaction that is rolled back): rows `A1` to `A8`, `B1` to `B19` and `C1` to `C4`, each `ok`, and `verdict | 0008zm verified | 121_verify_flash: 35 ok, 0 FAIL, 0 skip`. Copy the details of `C1` to `C4` into the report: the timings, and what is over the brief's figures (Open decisions, Flash speed at volume). A `C` row `FAIL` names the overview or list over its budget: report it rather than run it again.
+Expected, in a few minutes (block C builds a throwaway tenant with 100,000 customers and subscriptions, 50,000 devices and 200,000 orders inside a transaction that is rolled back): rows `A1` to `A8`, the `B` rows (`B1` to `B27`) and `C1` to `C4`, 43 rows, each `ok`, and `verdict | 0008zn verified | 123_verify_flash: 43 ok, 0 FAIL, 0 skip`. Copy the details of `C1` to `C4` into the report: the timings, and what is over the brief's figures (Open decisions, Flash speed at volume). A `C` row `FAIL` names the overview or list over its budget: report it rather than run it again.
 
-**Studio (cma-dev-pg):** `121` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
+**Studio (cma-dev-pg):** `123` again in the same tab, provoked: paste the script, press Ctrl+F, search `'verify.provoke', 'false'` and change only that `false` to `true`. Run.
 
-Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 121_verify_flash: 0 ok, 35 FAIL, 0 skip`.
+Expected: every row `FAIL`, `verdict | PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 43 FAIL, 0 skip`.
 
-**Studio (cma-dev-pg):** the earlier verifies of what `120` makes again (the data-quality redefinition, the settings trigger, the contact upsert, the scheduler's role), each pasted whole and Run, unchanged: `113_verify_assets.sql`, `119_verify_subscriptions.sql`, `105_verify_reviews.sql` and `81_verify_follow_up_snapshot.sql`.
+**Studio (cma-dev-pg):** the earlier verifies of what `122` makes again (the settings trigger as 0008zm's with Flash's settings, the data-quality redefinition, the contact upsert, the scheduler's role), each pasted whole and Run, unchanged: `121_verify_lead_cohorts.sql`, `113_verify_assets.sql`, `95_verify_attempts_for_sales.sql`, `41_verify_lead_metrics.sql`, `119_verify_subscriptions.sql`, `105_verify_reviews.sql` and `81_verify_follow_up_snapshot.sql`.
 
-Expected, each as it passed before this change: `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, `verdict | PASS | 119_verify_subscriptions: 23 PASS, 0 FAIL`, `verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL` and `verdict | PASS | 19 PASS, 0 FAIL` (81). Any `FAIL`: report the row and its detail.
+Expected, each as it passed before this change: `verdict | OK | 121_verify_lead_cohorts: 22 PASS, 0 FAIL`, `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, `verdict | PASS | 36 PASS, 0 FAIL` (95), one row per tenant ending `PASS` (41), `verdict | PASS | 119_verify_subscriptions: 23 PASS, 0 FAIL`, `verdict | PASS | 105_verify_reviews: 27 PASS, 0 FAIL` and `verdict | PASS | 19 PASS, 0 FAIL` (81). Any `FAIL`: report the row and its detail.
 
 **File:** `db/02_seed_pulse4all.sql`: copy all of it. **Studio (cma-dev-pg):** paste the whole script and Run, as your own login.
 
@@ -2214,7 +2214,7 @@ where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in (
 order by 1;
 reset role;
 ```
-Expected, eight rows: `assets.required_refs | ns_internal_id`, `commerce.required_contact_refs | netsuite`, `flash.active_subscription_statuses | active`, `flash.file_max_rows | 50000`, `flash.id_list_retention_months | 84`, `flash.snapshot_local_time | 00:30`, `flash.watch_jump_min | 10`, `flash.watch_jump_pct | 20`. A value other than these was set earlier and is kept: report it.
+Expected, nine rows: `assets.required_refs | ns_internal_id`, `commerce.required_contact_refs | netsuite`, `flash.active_subscription_statuses | active`, `flash.ended_subscription_statuses | canceled,expired`, `flash.file_max_rows | 50000`, `flash.id_list_retention_months | 84`, `flash.snapshot_local_time | 00:30`, `flash.watch_jump_min | 10`, `flash.watch_jump_pct | 20`. A value other than these was set earlier and is kept: report it.
 
 ## 16.2 Dev: the data map on #213's branch
 
@@ -2224,19 +2224,19 @@ Four tables (`cma.flash_snapshot_run`, `cma.flash_snapshot`, `cma.flash_snapshot
 ```bash
 cd ~/cma && git fetch -q origin && git switch -q claude/sharp-newton-pxdg9t && git pull -q --ff-only && cma_db dev && psql "$PGCONN" -X -qAt -v ON_ERROR_STOP=1 -f tools/datamap/schema.sql > docs/datamap/schema.json && grep -o '"latest_migration" : "[^"]*"' docs/datamap/schema.json
 ```
-Expected: `connected to cma as <your account>`, then `"latest_migration" : "0008zm"`.
+Expected: `connected to cma as <your account>`, then `"latest_migration" : "0008zn"`.
 
 **Terminal** (`~/cma`)
 ```bash
 node tools/datamap/build.mjs && cd web && npm run verify:datamap; cd ~/cma
 ```
-Expected: `datamap: wrote docs/datamap/index.html (102 tables, 157 views)`, then npm's two header lines and `datamap: PASS (102 tables, 157 views, all described; index.html current)` (four tables and ten views more than after 0008zl).
+Expected: `datamap: wrote docs/datamap/index.html (102 tables, 158 views)`, then npm's two header lines and `datamap: PASS (102 tables, 158 views, all described; index.html current)` (four tables and ten views more than the 98 tables and 148 views after 0008zm).
 
 **Terminal** (`~/cma`)
 ```bash
-git add docs/datamap/schema.json docs/datamap/index.html && git commit -q -m "Data map: schema snapshot from dev after 0008zm" && git push -q origin HEAD:claude/sharp-newton-pxdg9t && git log -1 --format='%h %s'
+git add docs/datamap/schema.json docs/datamap/index.html && git commit -q -m "Data map: schema snapshot from dev after 0008zn" && git push -q origin HEAD:claude/sharp-newton-pxdg9t && git log -1 --format='%h %s'
 ```
-Expected: `<short sha> Data map: schema snapshot from dev after 0008zm`; #213 now passes `verify:datamap`.
+Expected: `<short sha> Data map: schema snapshot from dev after 0008zn`; #213 now passes `verify:datamap`.
 
 ## 16.3 Dev: the ingest of #213, the HubSpot project, the linked contacts
 
@@ -2291,7 +2291,7 @@ Expected: one line: `backfill`, `fetched` `<n>`, `upserted` `<n>` less the conta
 
 ## 16.4 Prod: the migration, its verify, the rerun and the seed (before #213 is merged)
 
-`120` runs in prod before #213's merge: `main`'s web and ingest run unchanged on it, and the merge's snapshot job and ingest need it. Of the reruns, only `113` runs in prod: `119`, `105` and `81` refuse a database without the dev seed (dev only; 16.1 ran them).
+0008zm (lead cohorts) runs in prod before 0008zn, then `122` runs in prod before #213's merge: `main`'s web and ingest run unchanged on it, and the merge's snapshot job and ingest need it. Of the reruns, `113` and `41` run in prod: `121`, `95`, `119`, `105` and `81` refuse a database without the dev seed (dev only; 16.1 ran them).
 
 **Terminal** (point-in-time recovery on, as before every prod migration)
 ```bash
@@ -2305,27 +2305,29 @@ set role cma_owner;
 select version from cma.schema_migration where version >= '0008zk' order by 1;
 reset role;
 ```
-Expected: `0008zk` and `0008zl`. With `0008zm` already there, stop and report it. Without `0008zl`: phase 15's (c) first (`120` stops with `addition 0008zl (118_subscriptions.sql) must run before 0008zm`).
+Expected: `0008zk`, `0008zl` and, when lead cohorts already ran in prod, `0008zm`. With `0008zn` already there, stop and report it. Without `0008zl`: phase 15's (c) first.
 
-**Studio (cma-prod-pg):** `db/120_flash.sql` as one script, as your own login.
+**0008zm first, when the row above lacks it.** **Studio (cma-prod-pg):** `db/120_lead_cohorts.sql` as one script, as your own login. Expected: no error. Its verify `121_verify_lead_cohorts.sql` and the rerun `95` are dev only (22 PASS and 36 PASS in dev on 2 November 2026); in prod `113` and `41` follow it, as below for `122`. Then the same block again: `0008zk`, `0008zl` and `0008zm`. Without `0008zm`, `122` stops with `addition 0008zm (120_lead_cohorts.sql) must run before 0008zn`.
+
+**Studio (cma-prod-pg):** `db/122_flash.sql` as one script, as your own login.
 
 Expected: no error. A second run ends the same.
 
 **Studio (cma-prod-pg)** (read only)
 ```sql
 set role cma_owner;
-select version from cma.schema_migration where version >= '0008zl' order by 1;
+select version from cma.schema_migration where version >= '0008zm' order by 1;
 reset role;
 ```
-Expected: `0008zl` and `0008zm`.
+Expected: `0008zm` and `0008zn`.
 
-**Studio (cma-prod-pg):** `db/121_verify_flash.sql`, pasted whole and Run, unchanged (blocks B and C work on throwaway tenants inside subtransactions that roll back, so nothing stays).
+**Studio (cma-prod-pg):** `db/123_verify_flash.sql`, pasted whole and Run, unchanged (blocks B and C work on throwaway tenants inside subtransactions that roll back, so nothing stays).
 
-Expected: rows `A1` to `A8` and `B1` to `B19` `ok`, `C1` to `C4` `skip` with `not run: dev and local databases only` (the speed at volume is proven in dev, 16.1), and `verdict | 0008zm verified | 121_verify_flash: 31 ok, 0 FAIL, 4 skip`.
+Expected: rows `A1` to `A8` and the `B` rows (`B1` to `B27`) `ok`, `C1` to `C4` `skip` with `not run: dev and local databases only` (the speed at volume is proven in dev, 16.1), and `verdict | 0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip`.
 
-**Studio (cma-prod-pg):** `db/113_verify_assets.sql`, pasted whole and Run, unchanged.
+**Studio (cma-prod-pg):** `db/113_verify_assets.sql`, then `db/41_verify_lead_metrics.sql`, each pasted whole and Run, unchanged.
 
-Expected: `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`. Copy its C1 detail (the page's and the list's milliseconds) into the report.
+Expected: `verdict | 0008zi verified | 113_verify_assets: 25 ok, 0 FAIL`, and for `41` one row per tenant ending `PASS`. Copy `113`'s C1 detail (the page's and the list's milliseconds) into the report.
 
 **Studio (cma-prod-pg):** `db/02_seed_pulse4all.sql` as one script, as your own login.
 
@@ -2339,7 +2341,7 @@ where t.slug = 'pulse4all-subscriptions' and (s.key like 'flash.%' or s.key in (
 order by 1;
 reset role;
 ```
-Expected: the eight rows of 16.1. **Records:** the outputs of 16.1 and 16.4 into the report.
+Expected: the nine rows of 16.1. **Records:** the outputs of 16.1 and 16.4 into the report.
 
 ## 16.5 Prod: the merge of #213, the ingest, the HubSpot project, the linked contacts
 
@@ -2631,4 +2633,4 @@ gcloud run jobs execute ingest-backfill --project=p4a-cma-prod --region=europe-w
 ```
 Expected: `Execution [ingest-backfill-…] has successfully completed.`; 16.5's log line with `fetched` the linked contacts not held yet and `apiCalls` that number/100 rounded up. Then the NetSuite check again.
 
-**Records:** the outputs of 16.1 to 16.8 into `records/0008zm-dev-<date>/` and `records/0008zm-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
+**Records:** the outputs of 16.1 to 16.8 into `records/0008zn-dev-<date>/` and `records/0008zn-prod-<date>/` in a separate pull request, written from your report (ids, counts and times only; no key or personal data).
