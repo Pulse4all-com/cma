@@ -5,7 +5,8 @@
  * fails ingest.max_attempts times is parked as needs_review by the database and never claimed again.
  * Then the second read: records still without a contact, created in the last hour, are read again
  * (the CRM may associate the contact after the record was created), at most once per ten minutes
- * each. An adapter with catalogs of its own (telephony lines and tags) refreshes them, at most hourly
+ * each; and contacts a store customer was linked to in the last hour that the CMA does not hold yet
+ * (addition 0008zm, D2), through the contact read-back, at most once per ten minutes each. An adapter with catalogs of its own (telephony lines and tags) refreshes them, at most hourly
  * per connection by its own cursor; a catalog that cannot be read now is logged and read on a later
  * run. Then, per tenant, cma.link_calls(now() − 2 h) pairs telephony calls with CRM calls, one
  * sync_run row (job link_calls) on the tenant's first CRM connection.
@@ -67,6 +68,13 @@ async function sweepJob({ connectionId = null, adapters = ADAPTERS, maxMs = 45_0
         for (const type of [...new Set(rows.map((r) => r.recordType))]) {
           const items = rows.filter((r) => r.recordType === type).map((r) => ({ id: r.sourceId, version }));
           const counts = await recordAndProcess(adapter, c, type, items, budget, { job: "reread", prefix: "reread" });
+          total.reread += counts.upserted;
+        }
+        // Contacts a store customer was linked to in the last hour that the CMA does not hold yet (addition 0008zm,
+        // D2): read through the same contact read-back, so their references arrive with the next sweep after the link
+        const linked = await store.linkedContactIds({ maxAge: "1 hour", limit: PART });
+        if (linked.length) {
+          const counts = await recordAndProcess(adapter, c, "contact", linked.map((id) => ({ id, version })), budget, { job: "reread", prefix: "reread" });
           total.reread += counts.upserted;
         }
       }

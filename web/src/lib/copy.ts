@@ -3024,6 +3024,7 @@ const en = {
     job_assets_import: "Asset register import",
     job_assets_poll: "Asset register poll",
     job_subscriptions_poll: "Subscriptions poll",
+    job_flash_snapshot: "Flash snapshot",
     tenantWide: "All connections",
     // Outbox
     outboxTitle: "Outbox",
@@ -6335,6 +6336,7 @@ const nl: Copy = {
     job_assets_import: "Import assetregister",
     job_assets_poll: "Assetregister ophalen",
     job_subscriptions_poll: "Abonnementen ophalen",
+    job_flash_snapshot: "Flash-momentopname",
     tenantWide: "Alle koppelingen",
     outboxTitle: "Uitgaand",
     outboxEmpty: "Niets wacht op verzending",

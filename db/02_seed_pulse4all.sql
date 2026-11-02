@@ -4,8 +4,8 @@
 -- Subscriptions work statuses, the export settings, the app links, (after 0008i) the missed-call
 -- reasons and telephony settings, (after 0008j) the connected-call threshold, (after 0008l) the
 -- invitation email domain, (after 0008t) the per-person reports Pulse4all Subscriptions shows,
--- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule and (after
--- 0008zi) its asset register catalogs.
+-- (after 0008v) its journeys of Campaign monitoring, (after 0008ze) its negative-review alert rule, (after
+-- 0008zi) its asset register catalogs and (after 0008zm) its Flash settings.
 -- Another customer gets its own seed file with its own values; the migration stays untouched.
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -508,5 +508,33 @@ begin
                ('italy', 'IT')) as a(alias, code)
   where exists (select 1 from cma.market m where m.tenant_id = v_subs and m.code = a.code)
   on conflict (tenant_id, alias) do nothing;
+end
+$$;
+
+-- Flash for Pulse4all Subscriptions (after addition 0008zm; Martin, 1 November 2026): the references every store
+-- customer's contact and every device must carry (the NetSuite Customer ID, the contact's netsuite ref, mapped to
+-- contact_netsuite_id; the device's NetSuite Internal ID, its named id ns_internal_id), and the Flash settings at their
+-- decided values (active subscriptions: status active; the snapshot after 00:30 in the tenant's zone; month-end id lists
+-- kept 84 months, for Yordi to confirm; the watch at 20 % and 10; files of at most 50,000 rows). Pulse4all Invest keeps
+-- the defaults: no shop and no register, so its overviews show the states of a source not set up. Only values the
+-- tenant does not have yet are added, so a change on Configuration or in Studio survives a rerun.
+do $$
+declare
+  v_subs uuid := (select id from cma.tenant where slug = 'pulse4all-subscriptions');
+begin
+  if not exists (select 1 from cma.setting where key = 'flash.snapshot_local_time') then
+    raise notice 'Flash does not exist yet (addition 0008zm): rerun this seed after 120_flash.sql';
+    return;
+  end if;
+  insert into cma.tenant_setting (tenant_id, key, value) values
+    (v_subs, 'flash.active_subscription_statuses', 'active'),
+    (v_subs, 'flash.snapshot_local_time', '00:30'),
+    (v_subs, 'flash.id_list_retention_months', '84'),
+    (v_subs, 'flash.watch_jump_pct', '20'),
+    (v_subs, 'flash.watch_jump_min', '10'),
+    (v_subs, 'flash.file_max_rows', '50000'),
+    (v_subs, 'assets.required_refs', 'ns_internal_id'),
+    (v_subs, 'commerce.required_contact_refs', 'netsuite')
+  on conflict (tenant_id, key) do nothing;
 end
 $$;

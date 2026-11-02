@@ -4,7 +4,8 @@
  * Reads (short transactions as the tenant's Ingest user, row-level security applies):
  *   config()                    cma.connection_config(): field mapping, pipelines, settings
  *   heldContacts(ids)           the contacts the CMA holds or a record, an email, an inbox thread or a task
- *                               points to (0006's rule, widened by 0008m and 0008n: the contact base is never
+ *                               points to, or since 0008zm a store customer is linked to (0006's rule, widened
+ *                               by 0008m, 0008n and 0008zm: the contact base is never
  *                               mirrored, so other contacts are not read back)
  *   recordContacts(type, ids)   the contact each record points to now
  *   currentAssociations(type, ids)   the stored, current associations from these objects
@@ -18,7 +19,10 @@
  *   forms(), upsertForms(items), upsertSubmissions(items)   the form catalog and submissions
  *   storedSubmissions(ids)      which of these conversion ids the CMA holds (the forms reconcile, CMA-069)
  *   recordsWithoutContact(maxAge)   cma.ingest_records_without_contact (the sweeper's second read)
- *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill
+ *   heldContactIds(after, limit)    the contacts the CMA holds, by id, for the contact backfill (since 0008zm also
+ *                               those a store customer is linked to)
+ *   linkedContactIds({ after, limit, maxAge })   the contacts a store customer is linked to that the CMA does
+ *                               not hold yet (0008zm, D2): the sweep's second read and the linked_contact backfill
  *   linkCalls(since)            cma.link_calls (migration 0007a), tenant-wide
  *
  * For the email poll (addition 0008m, brief B17b), each its own short transaction; writes in parts of
@@ -146,7 +150,10 @@ export function storeFor(ctx, connectionId) {
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
            union
            select contact_source_id from cma.crm_task
-            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])`,
+            where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id = any ($2::text[])
+           union
+           select crm_contact_source_id from cma.commerce_customer
+            where tenant_id = cma.current_tenant_id() and crm_connection_id = $1 and crm_contact_source_id = any ($2::text[])`,
           [connectionId, ids]);
         return new Set(r.rows.map((x) => x.source_id));
       });
@@ -259,7 +266,24 @@ export function storeFor(ctx, connectionId) {
            union
            select contact_source_id from cma.crm_task
             where tenant_id = cma.current_tenant_id() and connection_id = $1 and contact_source_id is not null and source_deleted_at is null
+           union
+           select crm_contact_source_id from cma.commerce_customer
+            where tenant_id = cma.current_tenant_id() and crm_connection_id = $1 and crm_contact_source_id is not null and source_deleted_at is null
          ) h where $2::text is null or id > $2::text order by id limit $3`, [connectionId, after, limit])).rows.map((r) => r.id));
+    },
+    async linkedContactIds({ after = null, limit = 500, maxAge = null } = {}) {
+      // The contacts a store customer is linked to (0008h) that the CMA does not hold yet (addition 0008zm, D2), by id;
+      // with maxAge only links made within it (the sweep's second read of a new link)
+      return withTenant(ctx, async (q) => (await q.query(
+        `select distinct cu.crm_contact_source_id as id
+           from cma.commerce_customer cu
+          where cu.tenant_id = cma.current_tenant_id() and cu.crm_connection_id = $1 and cu.crm_contact_source_id is not null
+            and cu.source_deleted_at is null
+            and ($2::text is null or cu.crm_contact_source_id > $2::text)
+            and ($4::interval is null or cu.matched_at > now() - $4::interval)
+            and not exists (select 1 from cma.crm_contact k
+                            where k.tenant_id = cu.tenant_id and k.connection_id = cu.crm_connection_id and k.source_id = cu.crm_contact_source_id)
+          order by 1 limit $3`, [connectionId, after, limit, maxAge])).rows.map((r) => r.id));
     },
     async emailStartOf() {
       return withTenant(ctx, async (q) => (await q.query("select cma.email_start_date_of(cma.current_tenant_id()) as d")).rows[0]?.d ?? null);
