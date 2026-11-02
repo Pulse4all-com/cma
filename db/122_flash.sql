@@ -1304,18 +1304,23 @@ begin
     on dr.subscription_ref = sb.source_id and dr.market = sm.market
   where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null and dr.subscription_ref is null
     and sb.status = any (cma.flash_active_statuses_of(p_tenant_id)) and cma.assets_set_up_of(p_tenant_id)
-    and exists (select 1 from cma.device d where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.market = sm.market)
+    -- the register's markets, once (a set, never a read per subscription)
+    and sm.market in (select distinct d.market from cma.device d where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.market is not null)
   union all
   -- devices in a status in the field, of a market whose store's subscriptions the CMA reads, whose subscription
   -- reference names no subscription the CMA holds of that market (0008zn)
   select 'device_subscription_ref_unknown', dv.connection_id, 'device', dv.source_id, null::text
   from cma.device dv
   join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field
+  -- the subscriptions the CMA holds per market of their store, once (a set joined, never a read per device)
+  left join (select distinct sm.market, sb.source_id
+             from cma.subscription sb
+             join (select y.connection_id, y.market from cma.flash_subscription_stores_of(p_tenant_id) y offset 0) sm on sm.connection_id = sb.connection_id
+             where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null) held
+    on held.market = dv.market and held.source_id = dv.subscription_ref
   where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is not null
     and dv.market in (select sm.market from cma.flash_subscription_stores_of(p_tenant_id) sm)
-    and not exists (select 1 from cma.subscription sb
-                    join cma.flash_subscription_stores_of(p_tenant_id) sm on sm.connection_id = sb.connection_id and sm.market = dv.market
-                    where sb.tenant_id = dv.tenant_id and sb.source_id = dv.subscription_ref and sb.source_deleted_at is null)
+    and held.source_id is null
   union all
   -- devices in a status in the field linked to a subscription of their market in a status of
   -- flash.ended_subscription_statuses (0008zn); the value the subscription's status (the first by status when two
