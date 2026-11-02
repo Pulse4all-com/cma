@@ -2321,7 +2321,7 @@ reset role;
 ```
 Expected: `0008zm` and `0008zn`.
 
-**Studio (cma-prod-pg):** `db/123_verify_flash.sql`, pasted whole and Run, unchanged (blocks B and C work on throwaway tenants inside subtransactions that roll back, so nothing stays).
+**Studio (cma-prod-pg):** `db/123_verify_flash.sql`, pasted whole and Run, unchanged (blocks B and C work on throwaway tenants inside subtransactions that roll back, so nothing stays). Here the snapshot job does not exist yet. When `123` runs again in prod after 16.6, start it away from minute 20 of the hour, so that it does not overlap the job's hourly take.
 
 Expected: rows `A1` to `A8` and the `B` rows (`B1` to `B27`) `ok`, `C1` to `C4` `skip` with `not run: dev and local databases only` (the speed at volume is proven in dev, 16.1), and `verdict | 0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip`.
 
