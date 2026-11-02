@@ -16,17 +16,17 @@ The watch is the first line and the only one that runs without AI. The Flash rev
 
 ### (a) The deterministic watch (0008zn)
 
-`cma.flash_watch_of(tenant, date, now)` runs at the end of every take (`cma.flash_snapshot_take`), on the figures just stored. Its findings hold aggregates, codes and counts only, no id of a record:
+`cma.flash_watch_of(tenant, date, now)` runs at the end of every take (`cma.flash_snapshot_take`), on the figures just stored, in a subtransaction of its own: a watch that fails leaves its error code on the run (`watch_error`) and the snapshot stored, and the next take runs it again. Its findings hold aggregates, codes and counts only, no id of a record:
 
 | Kind | Raised when | Resolved when |
 |---|---|---|
 | `jump` | a count of a stock overview per market (its [market] row) moved from the day before by more than `flash.watch_jump_min` and more than `flash.watch_jump_pct` percent of the day before (both days with a snapshot; a market without a row is 0) | the first snapshot where that move no longer holds day over day (the new level held, or no day before to compare) |
 | `flow_zero` | a count of a flow overview per market that was above 0 on each of the 7 dates before is 0 or absent | the flow returns, or the 7 dates before are no longer all present |
-| `source_stale` | a set-up source's connection last succeeded more than three cadences ago; the cadence is its poll interval setting (a `*_poll_interval_minutes` setting of the connection), else the median gap between its succeeded runs of the last 7 days (no literal; no finding without either) | a fresh run brings the age under three cadences |
-| `snapshot_missing` | the date before the one taken has no succeeded snapshot while an earlier one has (dates missed are never taken afterwards; the run row's `missed_before` counts them) | the next take, whose date before is present |
+| `source_stale` | a set-up source's connection last succeeded more than three cadences ago; the cadence is its poll interval setting (a `*_poll_interval_minutes` setting of the connection), else the median gap between its succeeded runs of the last 7 days (no literal; no finding without either). One finding per source, adapter and store: two stale connections alike are one finding with the oldest read and their count (`detail.connections`) | a fresh run brings every such connection's age under three cadences |
+| `snapshot_missing` | the date before the one taken has no succeeded snapshot while an earlier one has (a date missed has a run of status `missed`, is never taken afterwards, and the run row's `missed_before` counts them) | the next take, whose date before is present |
 | `dq_rise` | a data-quality check (its [check] row) rose from the day before by more than the jump thresholds | the first snapshot where it no longer rose day over day |
 
-One open finding per kind, overview, dims and measure; a finding moves once from open to resolved, by the take only (`flash.snapshot`; a guard refuses anything else). Flash shows the open ones in its watch strip; `cma_read.flash_watch_finding` gives them to the readers and to the review below. Thresholds are tenant settings (seed `02`: 20 % and 10 for Pulse4all Subscriptions).
+One open finding per kind, overview, dims and measure (a condition that holds twice is one finding, so a take never fails on it); a finding moves once from open to resolved, by the take only (the application holds no write on the findings; a guard refuses any other change). Flash shows the open ones in its watch strip; `cma_read.flash_watch_finding` gives them to the readers and to the review below. Thresholds are tenant settings (seed `02`: 20 % and 10 for Pulse4all Subscriptions).
 
 ### (b) The Flash review (B22)
 

@@ -885,17 +885,17 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Active customer (nl: Actieve klant) |
-| Key | `active_customers`; setting `flash.active_subscription_statuses` |
-| Definition | A store customer the CMA holds (not deleted) with at least one subscription of its store, not missing from the latest full read, whose status is one of `flash.active_subscription_statuses` (default and Pulse4all: `active`). A customer whose subscriptions are paused and none active is counted apart as paused, not as active. |
+| Key | `active_customers`; settings `flash.active_subscription_statuses` and, kept apart from it, `flash.ended_subscription_statuses` |
+| Definition | A store customer the CMA holds (not deleted) with at least one subscription of its store, not missing from the latest full read, whose status is one of `flash.active_subscription_statuses` (default and Pulse4all: `active`; never paused, and never a status of `flash.ended_subscription_statuses`). A customer whose subscriptions are paused and none active is counted apart as paused, not as active. |
 | Source | `cma.commerce_customer` (the store), `cma.subscription` (the subscription app, joined by the store customer's id within the store of the subscription's connection) |
 | Counts / does not count | Counts each store customer once per store. Does not count a customer whose subscriptions are all paused (counted as paused customers), canceled, expired, failed, merged or never-subscribed, nor a subscription whose customer the store does not hold (`subscription_customer_unmatched`) |
 | Unit and display | A count (`flash.customers.active_customers`); the list shows a customer by the store's customer id, its store and market, and its CRM contact's id with its link |
-| Time rule | As of the instant (live) or of the take after the business date ended (a snapshot) |
+| Time rule | As of the instant (live) or of the take of the snapshot's business date (a snapshot) |
 | Scope | The tenant's commerce stores and their subscriptions connections; per market (the store's) and store |
 | Equivalent in the source system | None: the CMA's join of the store's customers and the subscription app's statuses |
 | Not to use | "Customer" alone for it (Domains still to define); "subscriber" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Active customer (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn) |
 | Used by | `cma.flash_customers_of`, the overview `customers` (`active_customers`, `paused_customers`), the month end's id list (`record_kind` customer) |
 | As built today | `cma.flash_customers_of` (`122`). Matches the definition |
 
@@ -909,12 +909,12 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Source | `cma.crm_record` (record type deal) through 0008y's `cma.counted_deals_of`: its pipeline's `is_counted`, its stage's closed flag, its market (the deal's own, else its contact's country, else unknown) |
 | Counts / does not count | Counts every open deal of a counted pipeline, lead and order pipelines alike (the breakdown is per pipeline). Test deals cannot be left out: deals carry no test flag (Gaps, D25) |
 | Unit and display | A count, a median and an oldest age in days |
-| Time rule | As of the instant; ages in whole days |
+| Time rule | As of the instant; ages in whole days (in a snapshot, at the end of the snapshot's date) |
 | Scope | The tenant's CRM connections; per market, pipeline and stage |
 | Equivalent in the source system | HubSpot's deals whose stage is not closed won or closed lost |
 | Not to use | "Lead" for it (Lead is still to define) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
 | Used by | `cma.flash_deals_of`, the overview `open_deals` |
 | As built today | `cma.flash_deals_of` (`122`) over `cma.counted_deals_of` (`92`). Matches the definition but for test deals (D25) |
 
@@ -928,12 +928,12 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Source | `cma.crm_record` (record type ticket) through 0008o's `cma.open_tickets_of` |
 | Counts / does not count | Counts every open ticket of a counted pipeline; a ticket's market is its own, else its contact's country, else unknown |
 | Unit and display | A count, a median and an oldest age in days |
-| Time rule | As of the instant; ages in whole days |
+| Time rule | As of the instant; ages in whole days (in a snapshot, at the end of the snapshot's date) |
 | Scope | The tenant's CRM connections; per market, queue and stage |
 | Equivalent in the source system | HubSpot's tickets whose stage is not closed |
 | Not to use | "Case" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
 | Used by | `cma.flash_tickets_of`, the overview `open_tickets`; Reports → Follow-up reads the same tickets (`cma.open_tickets_of`) |
 | As built today | `cma.flash_tickets_of` (`122`). Matches the definition |
 
@@ -947,12 +947,12 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Source | `cma.crm_task` through 0008o's `cma.open_tasks_of`; its market from its deal, else its ticket, else its contact, else unknown |
 | Counts / does not count | Counts every open task of a counted type; a status the catalog does not hold is open |
 | Unit and display | A count and the overdue among them |
-| Time rule | As of the instant; overdue against the tenant's business date |
+| Time rule | As of the instant; overdue against the tenant's business date, in a snapshot against the snapshot's date |
 | Scope | The tenant's CRM connections; per market, type and status |
 | Equivalent in the source system | HubSpot's tasks whose status is not completed |
 | Not to use | "Overdue" for anything but a task (Past due is the asset term) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Open deal, open ticket, open task (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
 | Used by | `cma.flash_tasks_of`, the overview `open_tasks`; Reports → Follow-up reads the same tasks |
 | As built today | `cma.flash_tasks_of` (`122`). Matches the definition |
 
@@ -980,8 +980,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Field | Value |
 |---|---|
 | Term | Churn (nl: Uitval) |
-| Key | `churned`; dims `reason` (`none` when absent) |
-| Definition | A subscription that moved to canceled or expired on a business date of the period: a `canceled` event, or a `status_changed` event to canceled or expired, of that date in the tenant's zone. A subscription counts once per date, with the reason code of its canceled event, else of the other. It is not Cancellation: Reports → Cancellations counts cancellation requests (tickets). |
+| Key | `churned`; dims `reason` (`none` when absent); setting `flash.ended_subscription_statuses` (default `canceled,expired`) |
+| Definition | A subscription that moved into an ended status (`flash.ended_subscription_statuses`; default and Pulse4all: canceled and expired) on a business date of the period: a `canceled` event (while canceled is an ended status), or a `status_changed` event to an ended status, of that date in the tenant's zone. A subscription counts once per date, with the reason code of its canceled event, else of the other. It is not Cancellation: Reports → Cancellations counts cancellation requests (tickets). |
 | Source | `cma.subscription_event` (the subscription app's events, 0008zl) |
 | Counts / does not count | Counts each subscription once per date it churned (a subscription that churned on two dates of a period counts on each, so a period is the sum of its dates). Does not count a pause or a failed renewal |
 | Unit and display | A count per market, store and reason code; the active subscriptions at the period's end beside it (the subscriptions snapshot of that date, or now for a live period that runs to today) |
@@ -990,8 +990,8 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Equivalent in the source system | Juo's analytics count of canceled subscriptions (not checked against it yet) |
 | Not to use | "Cancellation" for it (another term, still to define); "lost" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
-| Used by | `cma.flash_churn_of`, the overview `churn` |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Churn in Flash (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Definitions: Churn's ended statuses …" (addition 0008zn) |
+| Used by | `cma.flash_churn_of`, the overview `churn`; Data quality's check `field_device_on_ended_subscription` (the same setting) |
 | As built today | `cma.flash_churn_of` (`122`). Matches the definition |
 
 ### Flash snapshot
@@ -1000,18 +1000,18 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 |---|---|
 | Term | Flash snapshot (nl: Flash-momentopname) |
 | Key | `cma.flash_snapshot`, `snapshot_date`; settings `flash.snapshot_local_time`, `flash.id_list_retention_months` |
-| Definition | The figures of every Flash overview for one business date as the live computation gave them at the take, stored once and never changed: stock overviews as of the take (after the date ended, once the tenant's local time is past `flash.snapshot_local_time`), flow overviews for the date's own flow. At a month end also the ids of the active customers, the active subscriptions and every device. |
+| Definition | The figures of every Flash overview for one business date as the live computation gave them at the take, stored once and never changed: stock overviews from the mirrors as they were at the take, measured against the date (past due, due within three months, overdue and ages as of that date), flow overviews for the date's own flow. A date is due on the day after it at `flash.snapshot_local_time` in the tenant's zone, and taken by the first hourly run after that. At a month end also the ids of the active customers, the active subscriptions and every device. |
 | Source | `cma.flash_compute_of` at the take (`cma.flash_snapshot_take`, the job `cma-snapshot-flash`) |
-| Counts / does not count | One succeeded take per tenant and date; a date missed is never taken afterwards (the run row counts it, the page says "No snapshot for this date"). A flow over a period is the sum of its dates' snapshots |
+| Counts / does not count | One succeeded take per tenant and date, written by the take alone (the application reads and holds no write on the snapshot tables). A take more than an hour after the due time is marked late on its run (`late`, a flag of the run, never a status). A date that stops being the latest due one without a succeeded take is recorded as missed (a run row of status `missed`, no figures; a run's other statuses are `succeeded` and `failed`) and never taken afterwards; the page says "No snapshot for this date". A flow over a period is the sum of its dates' snapshots |
 | Unit and display | A business date; "Snapshots start on <date>" before the first |
-| Time rule | The business date in the tenant's zone that ended before the take |
+| Time rule | The business date in the tenant's zone, due the day after it at `flash.snapshot_local_time` (00:00 to 23:59) |
 | Scope | The tenant |
 | Equivalent in the source system | None |
-| Not to use | "Backup", "history" for the figures; "snapshot" alone, which also names the follow-up refresh (`cma.follow_up_snapshot`, 0008s) and the asset register's full read (Asset terms) |
+| Not to use | "Backup", "history" for the figures; "snapshot" alone, which also names the follow-up refresh (`cma.follow_up_snapshot`, 0008s) and the asset register's full read (Asset terms); "missed" or "late" for anything but a snapshot date's run (Missed inbound call and Past due are other terms) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)", "Month-end id list retention (build choice)" and "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Daily snapshots", "Snapshot time (build choice)" (replaced by "Snapshot timing"), "Month-end id list retention (build choice)" and "Definitions: Flash, …"; 2 Nov 2026, "Writes only through the take", "Snapshot timing" and "Definitions: a Flash snapshot's stock figures …" (addition 0008zn) |
 | Used by | `cma.flash_snapshot`, `cma.flash_snapshot_run`, `cma.flash_snapshot_ids`, `cma_read.flash_snapshot*`; Flash's As of |
-| As built today | `cma.flash_snapshot_take` (`122`); `123` proves a snapshot equals the live computation for all eleven overviews. Matches the definition |
+| As built today | `cma.flash_snapshot_take` (`122`); `123` proves a snapshot equals the computation as of its date for all eleven overviews (B8), a month end taken after midnight measures against its own date (B21), and every date is taken once for 00:30, 23:20 and 23:59, a skipped run late, a missed date recorded (B20). Matches the definition |
 
 ### Watch finding
 
@@ -1021,14 +1021,14 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Key | `cma.flash_watch_finding`; kinds `jump`, `flow_zero`, `source_stale`, `snapshot_missing`, `dq_rise`; settings `flash.watch_jump_pct`, `flash.watch_jump_min` |
 | Definition | An unexpected movement the deterministic watch finds after a snapshot (docs/architecture/flash-watch.md): a jump of a stock figure per market, a flow that stopped, a source not read for three cadences, a snapshot missing, a data-quality check that rose. It resolves itself on the first snapshot where its condition no longer holds. |
 | Source | `cma.flash_watch_of` at each take, on the stored figures and `sync_run` |
-| Counts / does not count | One open finding per kind, overview, dims and measure; aggregates and codes only, never a record's id |
+| Counts / does not count | One open finding per kind, overview, dims and measure (two stale connections of one source, adapter and store are one finding with their count); aggregates and codes only, never a record's id. A watch that fails is recorded on the snapshot's run, never in the snapshot's place |
 | Unit and display | A line in Flash's watch strip naming the overview, the market or check, the value and the one before |
 | Time rule | The snapshot's business date; resolved on a later one |
 | Scope | The tenant |
 | Equivalent in the source system | None |
 | Not to use | "Alert" (an alert is a message, Feature 7); "incident" |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zn) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "The watch runs in a subtransaction of its own" (addition 0008zn) |
 | Used by | `cma.flash_watch_finding`, `cma_read.flash_watch_finding`, `cma.flash_page`'s watch |
 | As built today | `cma.flash_watch_of` (`122`); `123` raises and resolves each kind. Matches the definition |
 
@@ -1042,13 +1042,13 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Source | As each overview's base set (docs/architecture/data-model/0008.md, Data model: Flash) |
 | Counts / does not count | Deleted records and records the latest full read no longer returns never count; a source not set up gives no figure, never a zero |
 | Unit and display | A count, a number of days, or an amount per currency (never summed across currencies) |
-| Time rule | Stock overviews as of the instant or the take; flow overviews over the business dates of a period in the tenant's zone |
-| Scope | The tenant; per market (a catalog market's code, or unknown) |
+| Time rule | Stock overviews as of the instant (live) or measured against the snapshot's date (as of a date); flow overviews over the business dates of a period in the tenant's zone |
+| Scope | The tenant; per market (a catalog market's code, or unknown). A breakdown's value a source writes freely (a SKU, a warehouse, a payment status, a pipeline, a stage, a task's type or status) is `other` when it holds an @ or a control character or runs over 100 characters, in the figures and their lists alike |
 | Equivalent in the source system | None: each figure is the CMA's count over its mirror |
 | Not to use | "Failed payment", "dunning" (Payments: Failed renewal); "connected" for a source (a source is set up or not); "customer" alone (Active customer) |
 | Status | Proposed (for Kira to confirm) |
-| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …" (addition 0008zn) |
-| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records) |
+| Decided | 1 November 2026 (Proposed); docs/decisions.md, 1 Nov 2026, "Definitions: Flash, …"; 2 Nov 2026, "Definitions: a Flash snapshot's stock figures …", "The watch runs in a subtransaction of its own" (the value `other`), "Definitions: Churn's ended statuses …" and "Definitions: amount_per_cycle and contact_deleted" (addition 0008zn) |
+| Used by | `cma.flash_compute_of`, `cma.flash_snapshot`, `cma.flash_rows` (a count measure filters the list to its records); `cma.data_quality_of` (the check `field_device_on_ended_subscription` reads `flash.ended_subscription_statuses`) |
 | As built today | `122`; `123` checks every measure against hand-computed figures (B2, B3). Matches the definition |
 
 | Overview | Measure | Meaning |
@@ -1061,11 +1061,11 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Active subscriptions (`subscriptions`) | `subscriptions` | Subscriptions the latest full read returns, merged and never-subscribed included (payment state `none`) |
 | | `active_subscriptions` | Of those, a status in `flash.active_subscription_statuses` |
 | | `paused_subscriptions` | Of those, status paused |
-| | `amount_per_cycle` | The sum of their amounts per billing cycle, per currency |
+| | `amount_per_cycle` | The active subscriptions' amounts, each for its own billing cycle, summed per currency: a store selling monthly and yearly plans adds both, so it is no monthly figure (the list shows each subscription's interval) |
 | Installed base (`installed_base`) | `devices` | Devices the asset register holds, in any status (the installed base) |
 | | `in_field`, `in_stock` | Of those, in a status flagged in the field, or in stock (Device status) |
 | | `components_past_due` | The maintenance items past due of those in a tracked status (Past due, Asset terms) |
-| | `items_due_3m` | Their items not past due whose due date falls within three months of today |
+| | `items_due_3m` | Their items not past due whose due date falls within three months of today (live) or of the snapshot's date |
 | Churn (`churn`) | `churned` | Churn (subscription) |
 | Orders (`orders`) | `orders` | Store orders created in the period, test and deleted orders left out |
 | | `units` | The quantities of their lines |
@@ -1080,7 +1080,7 @@ Proposed with addition 0008zn (1 November 2026, brief B21), for Kira to confirm.
 | Reviews (`reviews`) | `reviews` | Published reviews of counted channels submitted in the period (0008ze) |
 | | `negative` | Of those, negative (`reviews.negative_max_rating`) |
 | | `rating_sum` | The sum of their ratings; the average is `rating_sum` / `reviews` |
-| Data quality (`data_quality`) | `findings` | Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, per check and market ("data quality" itself stays under Domains still to define) |
+| Data quality (`data_quality`) | `findings` | Data-quality findings: the records a check of `cma.data_quality_catalog()` finds, `field_device_on_ended_subscription` flags a device in the field on a subscription in a status of `flash.ended_subscription_statuses`, and `customer_required_ref_missing` says `contact_deleted` for a contact the CRM deleted; per check and market ("data quality" itself stays under Domains still to define) |
 
 ## Retired words
 

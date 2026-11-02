@@ -284,7 +284,7 @@ What stops while each is paused, and how it catches up (`docs/ingest/README.md`,
 | `ingest-reconcile` | the nightly 26-hour catch-up, the Aircall webhook check, the Shopify subscription check | run it by hand once; a gap longer than 26 hours needs a backfill (`ingest-backfill --args=--connection,<id>,--object,<type>,--from,<date>`; PROD_RUNBOOK 7.8, 8.8, 9.8) |
 | `cma-close-forgotten-workdays-hourly` | the hourly close of days left open | idempotent: the next run or a manual execution closes everything overdue |
 | `cma-refresh-follow-up-minutely` | the follow-up snapshot: Reports → Follow-up, the Live board's Follow-up now and Welcome's Waiting for you keep the last one, and "Updated …" turns muted after three minutes | the next run, or `gcloud run jobs execute cma-refresh-follow-up`, refreshes every tenant |
-| `cma-snapshot-flash-hourly` | the Flash snapshot (addition 0008zn): the day's figures of every Flash overview, the month-end id lists and the watch; a date missed is never taken afterwards (the run row counts it and the next take's watch raises `snapshot_missing`) | the next hourly run takes the tenant's date only while it is still the date that just ended; `gcloud run jobs execute cma-snapshot-flash` runs every tenant now |
+| `cma-snapshot-flash-hourly` | the Flash snapshot (addition 0008zn): the day's figures of every Flash overview, the month-end id lists and the watch; a business date D is due at D + 1 at `flash.snapshot_local_time` in the tenant's zone (00:00 to 23:59) and each hourly run takes the latest due date unless a succeeded run holds it, so every allowed time gives one snapshot per date; a take that starts more than an hour after the due time is marked late; a date that stops being the latest due one without a succeeded take is recorded as missed by the next take (one run row of status `missed`, no figures), never taken afterwards (the next take's watch raises `snapshot_missing`) | the next hourly run takes the tenant's latest due date, which stays the latest for a whole local day, so a stop shorter than that loses nothing and a longer one leaves each date missed, never invented; `gcloud run jobs execute cma-snapshot-flash` runs every tenant now |
 
 When to pause:
 
@@ -430,6 +430,12 @@ Expected: INFO rows, `refreshed` True, one per tenant per minute; a WARNING with
 is a skipped overlap, every minute means a refresh longer than a minute.
 Expected: one short line per hourly run, most of them closing nothing.
 
+**Terminal** (the Flash snapshot, since 0008zn; `docs/scheduler/deploy-flash.sh` prints this form)
+```bash
+gcloud logging read 'resource.type=cloud_run_job AND resource.labels.job_name=cma-snapshot-flash AND jsonPayload.message="snapshot-flash"' --project=p4a-cma-prod --freshness=2h --limit=10 --format='table(timestamp, severity, jsonPayload.tenant_id, jsonPayload.date, jsonPayload.taken, jsonPayload.reason, jsonPayload.rows, jsonPayload.duration_ms, jsonPayload.retry, jsonPayload.watch_error)'
+```
+Expected: one line per tenant per hourly run, INFO: `taken` True on the run that takes a date, `reason` `taken` on the runs after it, `reason` `missed` when the date was recorded missed earlier. `retry` is a note only when a retried tenant found its first attempt's take or finish done. A WARNING with `watch_error` is a watch that failed after the figures were stored (the snapshot is kept; the next take runs the watch again), an ERROR a failed take. Configuration → System health shows the job as "Flash snapshot", its counts carrying `taken`, `already`, `missed`, `late` and `watch_failed` (`not_due` no longer occurs).
+
 **Terminal** (status codes of the public ingest endpoint, no URLs; PROD_RUNBOOK 7.9)
 ```bash
 gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="cma-ingest" AND httpRequest.status>0' --project=p4a-cma-prod --freshness=1d --format='value(httpRequest.status)' | sort | uniq -c
@@ -450,7 +456,7 @@ Four policies exist in `p4a-cma-prod` (Console → Monitoring → Alerting → P
 | Policy | Since | Metric and filter | Fires | Documentation text (the first check) |
 |---|---|---|---|---|
 | `cma-ingest 429` | 13 October 2026 (`docs/ingest/alert.sh`; a rerun of `alert.sh prod --email <alert address>` updates it, never duplicates it) | `loadbalancing.googleapis.com/https/request_count`, resource `https_lb_rule`, `backend_target_name = "cma-ingest-backend"`, `response_code = 429` | summed over 5 minutes, above 0; auto-close 30 minutes | whether a source retries or someone floods the endpoint; the limits are set by `docs/ingest/front.sh` |
-| `cma-prod-pg connections above 75 of 93` | 18 October 2026, 14:59 UTC | `cloudsql.googleapis.com/database/postgresql/num_backends` for `p4a-cma-prod:cma-prod-pg`, the mean per minute summed over the instance's databases | above 75 for 2 minutes | the budget's ceiling of 90 of 93 usable (README, Database connection budget); `cma-web`'s scale-out and the jobs' overlap (`cma-refresh-follow-up` runs every minute) |
+| `cma-prod-pg connections above 75 of 93` | 18 October 2026, 14:59 UTC | `cloudsql.googleapis.com/database/postgresql/num_backends` for `p4a-cma-prod:cma-prod-pg`, the mean per minute summed over the instance's databases | above 75 for 2 minutes | the budget's ceiling of 91 of 93 usable (docs/architecture/infrastructure.md, Database connection budget); `cma-web`'s scale-out and the jobs' overlap (`cma-refresh-follow-up` runs every minute) |
 | `cma-web more than 5 server errors in 5 minutes` | 18 October 2026, 14:59 UTC | `run.googleapis.com/request_count`, resource `cloud_run_revision`, `service_name = "cma-web"`, `response_code_class = "5xx"`, the count per 5 minutes summed over the service's revisions | above 5; auto-close 30 minutes | `cma-web`'s log (section 8), the latest revision, the connections alert |
 | `Cloud Run job failed (any job)` | 18 October 2026, 15:00 UTC | `run.googleapis.com/job/completed_execution_count`, resource `cloud_run_job`, `result = "failed"`, the count per 10 minutes summed per `job_name` | above 0: **one failed execution of any job**; auto-close 30 minutes | the job's latest execution and its log; `cma-refresh-follow-up` runs every minute, so a repeat is likely if it is a code or database problem |
 
@@ -531,8 +537,9 @@ log-based distribution metric on it; until that metric exists the backend latenc
    select coalesce(usename, '(background)') as login, coalesce(datname, '') as database, count(*) as connections
    from pg_stat_activity group by 1, 2 order by 3 desc;
    ```
-   Expected: `cma-web@…` at most 20 and `cma-ingest@…` at most 25 (and only while busy), `cma-nocodb@…` at
-   most 6, `cloudsqladmin` a few, your own login, the background processes. A login far above its ceiling is a
+   Expected: `cma-web@…` at most 25 (the service's 20 and the three scheduler jobs on the web image, which log in
+   as `cma-web@` too: `cma-close-forgotten-workdays` 2, `cma-refresh-follow-up` 2, `cma-snapshot-flash` 1) and
+   `cma-ingest@…` at most 25 (and only while busy), `cma-nocodb@…` at most 6, `cloudsqladmin` a few, your own login, the background processes. A login far above its ceiling is a
    leak.
 3. **Terminal:** backups and the instance (**untested here; dry-run first**: the field names are gcloud's
    documented ones, check `--help`).
