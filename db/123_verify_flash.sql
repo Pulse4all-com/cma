@@ -1301,11 +1301,18 @@ begin
     select v_t, case when g % 2 = 0 then v_gb else v_nl end, 'verifyshop', 'cu-' || g, g % 7, (g % 500) + 0.5, case when g % 2 = 0 then 'GBP' else 'EUR' end,
            case when g % 3 = 0 then v_crm end, case when g % 3 = 0 then 'c-' || g end, case when g % 3 = 0 then now() end
     from generate_series(1, 100000) g;
+    -- each bulk insert's table analysed before the next one, inside the transaction (ANALYZE sees its own rows): the next
+    -- insert's foreign-key checks are planned for the rows now there, not for the few the table held before (without it,
+    -- the 300,000 order lines' checks could scan the 200,000 orders each, for hours); after the block the tables are
+    -- analysed again, so their statistics are the database's own once more
+    analyze cma.commerce_customer;
     insert into cma.crm_contact (tenant_id, connection_id, source_system, source_id, country)
     select v_t, v_crm, 'verifycrm', 'c-' || g, case when g % 2 = 0 then 'GB' else 'NL' end from generate_series(6, 100000, 6) g;
+    analyze cma.crm_contact;
     insert into cma.crm_contact_ref (tenant_id, contact_id, system, slot, external_id)
     select v_t, k.id, 'netsuite', 1, 'NS-' || k.source_id from cma.crm_contact k where k.tenant_id = v_t and (substr(k.source_id, 3)::integer % 12) = 0;
     -- 100,000 subscriptions, one per customer, in its store; 230,000 events over 61 days
+    analyze cma.crm_contact_ref;
     insert into cma.subscription (tenant_id, connection_id, source_system, source_id, customer_source_id, status, current_cycle, amount_per_cycle, currency,
                                   billing_interval, billing_interval_count, paused_at)
     select v_t, case when g % 2 = 0 then v_sgb else v_snl end, 'verifysubs', 's-' || g, 'cu-' || g,
@@ -1323,6 +1330,7 @@ begin
     from generate_series(1, 100000) g cross join generate_series(1, 3) k
     where k < 3 or g % 10 in (7, 8);
     -- 50,000 devices with two components each, in the field (with a subscription reference) or in stock
+    analyze cma.subscription, cma.subscription_event;
     insert into cma.device_model (tenant_id, key, name) values (v_t, 'm1', 'M1');
     insert into cma.device_component_kind (tenant_id, key, name, sort_order) values (v_t, 'pads', 'Pads', 10), (v_t, 'battery', 'Battery', 20);
     insert into cma.maintenance_rule (tenant_id, model_key, component_key, interval_months, lead_days) values (v_t, 'm1', 'pads', 24, 60), (v_t, 'm1', 'battery', 54, 60);
@@ -1334,10 +1342,12 @@ begin
            case when g % 5 = 0 then 'stock' else 'field' end, 'WH-' || (g % 4), 'cu-' || g, case when g % 5 <> 0 then 's-' || g end,
            date '2023-01-01' + (g % 1000), case when g % 10 = 0 then '{}'::jsonb else jsonb_build_object('ns_internal_id', (100000 + g)::text) end
     from generate_series(1, 50000) g;
+    analyze cma.device;
     insert into cma.device_component (tenant_id, device_id, component_key, serial, expires_on)
     select d.tenant_id, d.id, k.key, k.key || '-' || d.source_id, case when (hashtext(d.source_id || k.key) % 3) <> 0 then date '2026-06-01' + (abs(hashtext(d.source_id || k.key)) % 1400) end
     from cma.device d cross join (values ('pads'), ('battery')) k(key) where d.tenant_id = v_t;
     -- 200,000 orders over 61 days, one or two lines each
+    analyze cma.device_component;
     insert into cma.commerce_order (tenant_id, connection_id, source_system, source_id, order_name, customer_source_id, source_created_at, is_test, currency,
                                     total_amount, refunded_amount, financial_status, fulfillment_status, order_kind)
     select v_t, case when g % 2 = 0 then v_gb else v_nl end, 'verifyshop', 'o-' || g, '#' || g, 'cu-' || (1 + g % 100000),
@@ -1345,6 +1355,7 @@ begin
            case when g % 2 = 0 then 'GBP' else 'EUR' end, 20 + g % 80, case when g % 50 = 0 then 5 end,
            (array['paid', 'pending', 'refunded', 'partially_refunded'])[1 + g % 4], 'fulfilled', (array['first', 'repeat', 'renewal'])[1 + g % 3]
     from generate_series(1, 200000) g;
+    analyze cma.commerce_order;
     insert into cma.commerce_order_line (tenant_id, connection_id, order_source_id, line_source_id, sku, quantity, unit_price, currency)
     select co.tenant_id, co.connection_id, co.source_id, 'l-' || k || '-' || co.source_id, 'SKU-' || ((hashtext(co.source_id) & 7) + k), k, 10, co.currency
     from cma.commerce_order co cross join generate_series(1, 2) k
@@ -1455,6 +1466,11 @@ begin
   end if;
 end
 $$;
+
+-- Block C analysed its volume inside its transaction; the rollback took the rows and the statistics' details, but a
+-- table's row count is kept outside the transaction: the tables are analysed again, so their statistics are their own
+analyze cma.commerce_customer, cma.crm_contact, cma.crm_contact_ref, cma.subscription, cma.subscription_event, cma.device,
+        cma.device_component, cma.commerce_order, cma.commerce_order_line, cma.crm_record, cma.crm_task, cma.review;
 
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0008zn_code(text);
