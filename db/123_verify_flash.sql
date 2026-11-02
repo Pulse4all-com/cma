@@ -9,14 +9,23 @@
 -- on today (a device's end of life within three months) are seeded relative to it. Every check writes one row, ok or
 -- FAIL, and the last row is the verdict (0008zn verified), because Cloud SQL Studio shows no notices. Run as your own IAM
 -- login after 122_flash.sql, dev first, then prod.
+-- Expected verdict: dev and local databases "0008zn verified | 123_verify_flash: 43 ok, 0 FAIL, 0 skip" (43 checks: A1 to
+-- A8, the B rows, C1 to C4); prod "0008zn verified | 123_verify_flash: 39 ok, 0 FAIL, 4 skip" (block C reads skip);
+-- provoked "PROVOKED, NOT A PASS | 123_verify_flash: 0 ok, 43 FAIL, 0 skip" (39 FAIL and 4 skip in prod).
+-- Reruns after 122 (dev; their objects are made again by 122): 121_verify_lead_cohorts.sql (22 PASS),
+-- 113_verify_assets.sql (25 ok), 95_verify_attempts_for_sales.sql (36 PASS), 41_verify_lead_metrics.sql (every row
+-- PASS), 119_verify_subscriptions.sql (23 PASS), 105_verify_reviews.sql (27 PASS), 81_verify_follow_up_snapshot.sql
+-- (19 PASS); in prod 113 only (the others need the dev seed).
 --   A  structure and privileges: the addition row after 0008zm; the four tables' columns; keys and checks (a snapshot
---      row's allow-lists and no @, one succeeded run per date, one open finding per key, a month end's id list, the
---      settings' types and defaults, the job flash_snapshot without a connection); row-level security with the tenant
---      policy, the audit trigger (not on the id lists), insert only for the application (a finding's state alone may
---      change), nothing for the readers on the tables; flash.snapshot on every scheduler role and no assignable role;
---      every function the application's only and in the caller's rights, the expiry definer, the owner's, pinned; the
---      reader views' exact columns, readable, without a personal column; the six data-quality checks in their order with
---      their views; the redefinitions carry what came before
+--      row's allow-lists and no @, one succeeded or missed run per date, one open finding per key, a month end's id list,
+--      the settings' types and defaults, the job flash_snapshot without a connection, a value a snapshot cannot hold
+--      written as other, the due date for 00:30, 23:20 and 23:59); row-level security with the tenant policy, the audit
+--      trigger (not on the id lists), read only for the application (the take writes with the owner's rights), nothing
+--      for the readers on the tables; flash.snapshot on every scheduler role and no assignable role; every function the
+--      application's only and in the caller's rights, the take definer, the owner's, pinned, its writers the owner's
+--      alone, no expiry with a caller's date; the reader views' exact columns, readable, without a personal column; the
+--      six data-quality checks in their order with their views; the redefinitions carry what came before (0008zm's
+--      settings trigger included)
 --   B  behaviour, on two throwaway tenants (Europe/Amsterdam). Tenant one holds two stores (GB in GBP, NL in EUR), six
 --      store customers, a subscriptions connection for the GB store with seven subscriptions (one in EUR) and their
 --      events, an asset register with six devices, a CRM with contacts, deals, tickets and tasks, a review platform,
@@ -26,9 +35,15 @@
 --      second take of the date writes nothing; the id lists on a month's last day only; flows summed over dates equal
 --      the live period; amounts per currency; not set up: no figures, never zeros; the six checks and their rows with the
 --      system where each is fixed; the watch's five kinds raised and resolved; D2's hold and forget; tenant isolation;
---      the refusals (CMA06 for an agent and for a take as the analyst, CMA04, CMA02, insert only, a finding reopened);
---      the lists (filters, a measure's records, sorting within currency, a month end's frozen list); the file record;
---      no @ in anything stored; the job's own path (a take as the application with the scheduler user, as of now)
+--      the refusals (CMA06 for an agent and for a take as the analyst, CMA04, CMA02, no change by the application, a
+--      finding reopened); the lists (filters, a measure's records, sorting within currency, a month end's frozen list);
+--      the file record; no @ in anything stored; the job's own path (a take as the application with the scheduler user,
+--      as of now). Tenant three (no source) takes the snapshot time's rule: each date once from its due time for 00:30,
+--      23:20 and 23:59, a skipped run taken late, a missed date recorded and never taken (B20); a failing watch keeps the
+--      snapshot (B23); two stale connections alike are one finding (B24). Then: a month end taken after midnight measures
+--      against its own date (B21); a SKU with an @ (B25); writes only through the take (B22); the expiry without a
+--      caller's date (B26); the ended statuses, a deleted contact, a market without devices, a reference in its market,
+--      an expired list, a file record's filters (B27)
 --   C  speed, in dev and local databases only (where the dev seed's agent.two@example.com is active; in prod the four
 --      rows read skip): a throwaway tenant with 100,000 customers, 100,000 subscriptions, 50,000 devices and 200,000
 --      orders: every live overview but data quality under verify.max_overview_ms (the best of two) and the landing; every
@@ -103,7 +118,7 @@ end
 $$;
 
 -- An overview's figures as one line: each grouping set's dims values and measures, in a fixed order
-create or replace function pg_temp.v0008zn_figs(p_tenant uuid, p_overview text, p_from date, p_to date)
+create or replace function pg_temp.v0008zn_figs(p_tenant uuid, p_overview text, p_from date, p_to date, p_on date default null)
 returns text
 language sql
 as $$
@@ -111,7 +126,7 @@ as $$
            coalesce(nullif((select string_agg(d.value #>> '{}', '/' order by d.key) from jsonb_each(c.dims) d), ''), '*') || ':'
            || (select string_agg(m.key || '=' || (m.value #>> '{}'), ',' order by m.key) from jsonb_each(c.measures) m),
            ' ' order by (select count(*) from jsonb_object_keys(c.dims)), c.dims::text), '-')
-  from cma.flash_compute_of(p_tenant, p_overview, p_from, p_to) c
+  from cma.flash_compute_of(p_tenant, p_overview, p_from, p_to, p_on) c
 $$;
 
 -- The same for stored rows of a snapshot date (or summed dates)
@@ -143,8 +158,8 @@ begin
   -- A2. the four tables: columns with types and nullability
   v_bad := '';
   foreach v_t in array array[
-    'flash_snapshot_run=id:uuid:NO,tenant_id:uuid:NO,snapshot_date:date:NO,started_at:timestamptz:NO,finished_at:timestamptz:NO,status:text:NO,'
-      || 'counts:jsonb:NO,sources:jsonb:NO,settings:jsonb:NO,missed_before:int4:NO,error:text:YES',
+    'flash_snapshot_run=id:uuid:NO,tenant_id:uuid:NO,snapshot_date:date:NO,due_at:timestamptz:NO,started_at:timestamptz:NO,finished_at:timestamptz:NO,'
+      || 'status:text:NO,late:bool:NO,counts:jsonb:NO,sources:jsonb:NO,settings:jsonb:NO,missed_before:int4:NO,error:text:YES,watch_error:text:YES',
     'flash_snapshot=id:uuid:NO,tenant_id:uuid:NO,snapshot_date:date:NO,overview:text:NO,dims:jsonb:NO,measures:jsonb:NO,definition_version:text:NO,'
       || 'computed_at:timestamptz:NO,run_id:uuid:NO',
     'flash_snapshot_ids=tenant_id:uuid:NO,snapshot_date:date:NO,record_kind:text:NO,source_id:text:NO,connection_id:uuid:NO,market:text:NO,state:text:NO,run_id:uuid:NO',
@@ -160,8 +175,9 @@ begin
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A3. keys and checks: a snapshot row's allow-lists, no @, an amount per currency; one row per date, overview and dims;
-  --     one succeeded run per date; one open finding per key; a month end's list; the job without a connection; the
-  --     settings' types and defaults
+  --     one succeeded or missed run per date; one open finding per key; a month end's list; the job without a connection;
+  --     the settings' types and defaults; a value a snapshot cannot hold written as other; the due date of every allowed
+  --     snapshot time
   v_bad := '';
   if not cma.flash_row_ok('customers', '{"market": "GB"}', '{"active_customers": 3}')
      or cma.flash_row_ok('customers', '{"customer_id": "c1"}', '{"active_customers": 3}')
@@ -175,7 +191,9 @@ begin
   end if;
   if not exists (select 1 from pg_constraint where conrelid = 'cma.flash_snapshot'::regclass and contype = 'u'
                  and pg_get_constraintdef(oid) = 'UNIQUE (tenant_id, snapshot_date, overview, dims)')
-     or pg_get_indexdef('cma.flash_snapshot_run_succeeded_idx'::regclass) not like '%UNIQUE%(tenant_id, snapshot_date) WHERE (status = ''succeeded''::text)'
+     or to_regclass('cma.flash_snapshot_run_final_idx') is null
+     or pg_get_indexdef(to_regclass('cma.flash_snapshot_run_final_idx')) not like '%UNIQUE%(tenant_id, snapshot_date) WHERE (status = ANY (ARRAY[''succeeded''::text, ''missed''::text]))'
+     or to_regclass('cma.flash_snapshot_run_succeeded_idx') is not null
      or pg_get_indexdef('cma.flash_watch_finding_open_idx'::regclass) not like '%UNIQUE%WHERE (state = ''open''::text)'
      or (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'cma.flash_snapshot_ids'::regclass and conname = 'flash_snapshot_ids_snapshot_date_check')
         not like '%1 mon -1 days%' then
@@ -190,9 +208,24 @@ begin
   if (select string_agg(s.key || ':' || s.value_type || ':' || s.default_value, ',' order by s.key) from cma.setting s
       where s.key like 'flash.%' or s.key in ('assets.required_refs', 'commerce.required_contact_refs'))
      is distinct from 'assets.required_refs:text:,commerce.required_contact_refs:text:,flash.active_subscription_statuses:text:active,'
+                      || 'flash.ended_subscription_statuses:text:canceled,expired,'
                       || 'flash.file_max_rows:integer:50000,flash.id_list_retention_months:integer:84,flash.snapshot_local_time:time:00:30,'
                       || 'flash.watch_jump_min:integer:10,flash.watch_jump_pct:integer:20' then
     v_bad := v_bad || 'settings; ';
+  end if;
+  if cma.flash_dim_of('AED@PRO', 'none') <> 'other' or cma.flash_dim_of(repeat('x', 101), 'none') <> 'other' or cma.flash_dim_of('  ', 'none') <> 'none'
+     or cma.flash_dim_of(null, 'unknown') <> 'unknown' or cma.flash_dim_of(' SKU-1 ', 'none') <> 'SKU-1' then
+    v_bad := v_bad || 'dim values; ';
+  end if;
+  -- the due date: D is due at D + 1 at the snapshot time; the latest due date at an instant, for 00:30, 23:20 and 23:59
+  if cma.flash_due_date_of('Europe/Amsterdam', '00:30', '2026-10-29 01:20 Europe/Amsterdam') <> '2026-10-28'
+     or cma.flash_due_date_of('Europe/Amsterdam', '00:30', '2026-10-29 00:20 Europe/Amsterdam') <> '2026-10-27'
+     or cma.flash_due_date_of('Europe/Amsterdam', '23:20', '2026-10-29 23:20 Europe/Amsterdam') <> '2026-10-28'
+     or cma.flash_due_date_of('Europe/Amsterdam', '23:20', '2026-10-29 22:20 Europe/Amsterdam') <> '2026-10-27'
+     or cma.flash_due_date_of('Europe/Amsterdam', '23:59', '2026-10-30 00:20 Europe/Amsterdam') <> '2026-10-28'
+     or cma.flash_due_date_of('Europe/Amsterdam', '23:59', '2026-10-29 23:20 Europe/Amsterdam') <> '2026-10-27'
+     or cma.flash_due_at_of('Europe/Amsterdam', '23:59', '2026-10-28') <> '2026-10-29 23:59 Europe/Amsterdam'::timestamptz then
+    v_bad := v_bad || 'due dates; ';
   end if;
   if not cma.flash_keys_ok('{"market": "GB"}', array['market']) or cma.flash_keys_ok('{"id": "x"}', array['market'])
      or cma.flash_keys_ok('{"market": "a@b"}', array['market']) then
@@ -201,27 +234,28 @@ begin
   insert into verify_0008zn values (3, 'A3 keys and checks: allow-lists, no @, per currency; one row, one succeeded run, one open finding; month end; job; settings',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
-  -- A4. tenant-aware: row-level security with the tenant policy; the audit trigger but on the id lists; insert only for
-  --     the application (a finding's state and resolved_on alone, guarded); nothing for the readers on the tables
+  -- A4. tenant-aware: row-level security with the tenant policy; the audit trigger but on the id lists; read only for the
+  --     application (no insert, update or delete: the take writes with the owner's rights; a finding's state guarded);
+  --     nothing for the readers on the tables
   v_bad := '';
   foreach v_t in array array['cma.flash_snapshot_run', 'cma.flash_snapshot', 'cma.flash_snapshot_ids', 'cma.flash_watch_finding'] loop
     if not (select relrowsecurity from pg_class where oid = v_t::regclass)
        or not exists (select 1 from pg_policy where polrelid = v_t::regclass and polname = 'tenant_app')
        or exists (select 1 from pg_trigger where tgrelid = v_t::regclass and tgname = 'audit' and not tgisinternal) = (v_t = 'cma.flash_snapshot_ids')
-       or not has_table_privilege('cma_app', v_t, 'select') or not has_table_privilege('cma_app', v_t, 'insert')
+       or not has_table_privilege('cma_app', v_t, 'select') or has_table_privilege('cma_app', v_t, 'insert')
        or has_table_privilege('cma_app', v_t, 'update') or has_table_privilege('cma_app', v_t, 'delete')
        or has_table_privilege('cma_readonly', v_t, 'select') then
       v_bad := v_bad || v_t || '; ';
     end if;
   end loop;
-  if not has_column_privilege('cma_app', 'cma.flash_watch_finding', 'state', 'update')
-     or not has_column_privilege('cma_app', 'cma.flash_watch_finding', 'resolved_on', 'update')
+  if has_column_privilege('cma_app', 'cma.flash_watch_finding', 'state', 'update')
+     or has_column_privilege('cma_app', 'cma.flash_watch_finding', 'resolved_on', 'update')
      or has_column_privilege('cma_app', 'cma.flash_watch_finding', 'value', 'update')
      or has_column_privilege('cma_app', 'cma.flash_snapshot', 'measures', 'update')
      or not exists (select 1 from pg_trigger where tgrelid = 'cma.flash_watch_finding'::regclass and tgname = 'guard_state' and not tgisinternal) then
     v_bad := v_bad || 'the finding''s state; ';
   end if;
-  insert into verify_0008zn values (4, 'A4 row-level security, the audit trigger (not on the id lists), insert only, a finding''s state alone, nothing for readers',
+  insert into verify_0008zn values (4, 'A4 row-level security, the audit trigger (not on the id lists), read only for the application, a finding''s state guarded, nothing for readers',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A5. flash.snapshot: on every tenant's scheduler role, on no assignable role
@@ -241,20 +275,21 @@ begin
   insert into verify_0008zn values (5, 'A5 flash.snapshot on every scheduler role, on no assignable role; ensure_scheduler_user grants it',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
-  -- A6. every function the application's only and in the caller's rights; the expiry definer, the owner's, pinned
+  -- A6. every function the application's only and in the caller's rights; the take definer, the owner's, pinned; its
+  --     writers (the id lists, the expiry, the watch, the take at an instant) the owner's alone
   v_bad := '';
   foreach v_fn in array array[
     'cma.flash_list_of(text)', 'cma.flash_list_ok(text,text,integer,boolean)', 'cma.job_permission_of(text)', 'cma.job_run_start(text)',
     'cma.flash_overviews()', 'cma.flash_definition_version(text)', 'cma.flash_keys_ok(jsonb,text[])', 'cma.assert_flash_overview(text)',
-    'cma.flash_row_ok(text,jsonb,jsonb)', 'cma.flash_active_statuses_of(uuid)', 'cma.flash_subscription_stores_of(uuid)', 'cma.flash_sources_of(uuid)',
+    'cma.flash_row_ok(text,jsonb,jsonb)', 'cma.flash_active_statuses_of(uuid)', 'cma.flash_ended_statuses_of(uuid)', 'cma.flash_dim_of(text,text)',
+    'cma.flash_subscription_stores_of(uuid)', 'cma.flash_sources_of(uuid)',
     'cma.flash_period_of(uuid,date,date)', 'cma.flash_customers_of(uuid)', 'cma.flash_subscriptions_of(uuid)', 'cma.flash_devices_of(uuid,date)',
     'cma.flash_churn_of(uuid,date,date)', 'cma.flash_orders_of(uuid,date,date)', 'cma.flash_order_lines_of(uuid,date,date)',
-    'cma.flash_payments_of(uuid,date,date)', 'cma.flash_deals_of(uuid)', 'cma.flash_tickets_of(uuid)', 'cma.flash_tasks_of(uuid)',
+    'cma.flash_payments_of(uuid,date,date)', 'cma.flash_deals_of(uuid,timestamptz)', 'cma.flash_tickets_of(uuid,timestamptz)', 'cma.flash_tasks_of(uuid,date)',
     'cma.flash_reviews_of(uuid,date,date)', 'cma.data_quality_flash_checks()', 'cma.data_quality_of(uuid)', 'cma.data_quality()',
     'cma.data_quality_catalog()', 'cma.data_quality_fix_in(text,text)', 'cma.flash_findings_of(uuid)', 'cma.flash_finding_links_of(uuid,uuid,text,text)',
-    'cma.flash_compute_of(uuid,text,date,date)',
-    'cma.flash_snapshot_ids_write_of(uuid,date,uuid)', 'cma.flash_watch_of(uuid,date,timestamptz)', 'cma.flash_snapshot_take_at(uuid,timestamptz)',
-    'cma.flash_snapshot_take(uuid)', 'cma.assert_flash_params(text,date,date,date,date)', 'cma.flash_labels_of(uuid,text)',
+    'cma.flash_compute_of(uuid,text,date,date,date)', 'cma.flash_due_date_of(text,time,timestamptz)', 'cma.flash_due_at_of(text,time,date)',
+    'cma.flash_id_ok(text,text,text)', 'cma.assert_flash_params(text,date,date,date,date)', 'cma.flash_labels_of(uuid,text)',
     'cma.flash_snapshot_sum_of(uuid,text,date[])', 'cma.flash_document_of(uuid,text,text,date,date,date)', 'cma.flash_overview(text,text,date,date,date)',
     'cma.flash_order_by(text,text,boolean)', 'cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date)',
     'cma.flash_id_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date)', 'cma.flash_rows(text,jsonb,text,boolean,integer,integer,date,date,date)',
@@ -270,27 +305,42 @@ begin
       v_bad := v_bad || v_fn || '; ';
     end if;
   end loop;
-  v_fn := 'cma.flash_snapshot_ids_expire_of(uuid,date)';
+  v_fn := 'cma.flash_snapshot_take(uuid)';
   if to_regprocedure(v_fn) is null then
     v_bad := v_bad || v_fn || ' missing; ';
   elsif not (select prosecdef from pg_proc where oid = to_regprocedure(v_fn))
         or (select pg_get_userbyid(proowner) from pg_proc where oid = to_regprocedure(v_fn)) <> 'cma_owner'
-        or (select array_to_string(proconfig, ',') from pg_proc where oid = to_regprocedure(v_fn)) is distinct from 'search_path=pg_catalog, cma, pg_temp'
+        or not (select 'search_path=pg_catalog, cma, pg_temp' = any (proconfig) from pg_proc where oid = to_regprocedure(v_fn))
         or not has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
         or exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure(v_fn) and a.grantee = 0) then
     v_bad := v_bad || v_fn || '; ';
   end if;
+  -- the writers: the owner's alone, in the caller's rights (the take's), and no expiry that takes a caller's date
+  foreach v_fn in array array['cma.flash_snapshot_ids_write_of(uuid,date,uuid)', 'cma.flash_snapshot_ids_expire_of(uuid)',
+                              'cma.flash_watch_of(uuid,date,timestamptz)', 'cma.flash_snapshot_take_at(uuid,timestamptz)'] loop
+    if to_regprocedure(v_fn) is null then
+      v_bad := v_bad || v_fn || ' missing; ';
+    elsif has_function_privilege('cma_app', v_fn, 'execute') or has_function_privilege('cma_readonly', v_fn, 'execute')
+          or (select prosecdef from pg_proc where oid = to_regprocedure(v_fn))
+          or (select pg_get_userbyid(proowner) from pg_proc where oid = to_regprocedure(v_fn)) <> 'cma_owner'
+          or exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = to_regprocedure(v_fn) and a.grantee = 0) then
+      v_bad := v_bad || v_fn || '; ';
+    end if;
+  end loop;
+  if to_regprocedure('cma.flash_snapshot_ids_expire_of(uuid,date)') is not null then
+    v_bad := v_bad || 'an expiry with a caller''s date; ';
+  end if;
   if exists (select 1 from pg_proc p, aclexplode(p.proacl) a where p.oid = 'cma.flash_watch_finding_guard()'::regprocedure and a.grantee = 0) then
     v_bad := v_bad || 'the guard; ';
   end if;
-  insert into verify_0008zn values (6, 'A6 every function the application''s only and invoker; the expiry definer, the owner''s, pinned',
+  insert into verify_0008zn values (6, 'A6 every function the application''s only and invoker; the take definer, pinned; its writers the owner''s alone',
     case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end, v_bad);
 
   -- A7. the reporting views' exact columns, readable by the readers; no raw or personal column
   v_bad := '';
   foreach v_t in array array[
     'flash_snapshot=id,tenant_id,snapshot_date,overview,dims,measures,definition_version,computed_at,run_id',
-    'flash_snapshot_run=id,tenant_id,snapshot_date,started_at,finished_at,status,counts,sources,settings,missed_before,error',
+    'flash_snapshot_run=id,tenant_id,snapshot_date,started_at,finished_at,status,counts,sources,settings,missed_before,error,due_at,late,watch_error',
     'flash_snapshot_ids=tenant_id,snapshot_date,record_kind,source_id,connection_id,market,state,run_id',
     'flash_watch_finding=id,tenant_id,snapshot_date,kind,overview,dims,measure,value,previous,threshold,detail,state,resolved_on,created_at',
     'dq_customer_required_ref_missing=tenant_id,connection_id,object_type,object_id,value',
@@ -335,6 +385,9 @@ begin
   end if;
   if (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'assets\.bundle_window_days'
      or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'reviews\.negative_max_rating'
+     or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'cohorts\.lead_ages_days'
+     or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'lead_to_order\.max_days'
+     or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'flash\.ended_subscription_statuses'
      or (select prosrc from pg_proc where oid = 'cma.check_tenant_setting()'::regprocedure) !~ 'flash\.file_max_rows' then
     v_bad := v_bad || 'settings; ';
   end if;
@@ -355,15 +408,16 @@ do $$
 declare
   v_provoke boolean := current_setting('verify.provoke')::boolean;
   v_rows    text[] := '{}';
-  v_t1 uuid; v_t2 uuid;
-  v_admin1 uuid; v_analyst1 uuid; v_agent1 uuid; v_sched1 uuid; v_ingest1 uuid; v_admin2 uuid; v_sched2 uuid;
-  v_crm uuid; v_shop_gb uuid; v_shop_nl uuid; v_subs uuid; v_reg uuid; v_rev uuid; v_chan uuid;
+  v_t1 uuid; v_t2 uuid; v_t3 uuid;
+  v_admin1 uuid; v_analyst1 uuid; v_agent1 uuid; v_sched1 uuid; v_ingest1 uuid; v_admin2 uuid; v_sched2 uuid; v_sched3 uuid;
+  v_crm uuid; v_shop_gb uuid; v_shop_nl uuid; v_subs uuid; v_reg uuid; v_rev uuid; v_chan uuid; v_conn uuid;
   v_txt text; v_a text; v_b text; v_c text;
   v_n integer;
   j jsonb;
   o record;
   v_today date;
-  -- the takes' instants (Europe/Amsterdam): 00:10 is before flash.snapshot_local_time, 01:00 after it
+  -- the takes' instants (Europe/Amsterdam): 00:10 is before flash.snapshot_local_time (00:30), so 28 October is not due
+  -- yet then; 01:00 after it
   v_early   timestamptz := '2026-10-29 00:10:00 Europe/Amsterdam';
   v_take_a  timestamptz := '2026-10-29 01:00:00 Europe/Amsterdam';   -- business date 28 October
   v_take_b  timestamptz := '2026-10-31 01:00:00 Europe/Amsterdam';   -- 30 October (29 October missed)
@@ -373,6 +427,8 @@ begin
     -- tenants and people (as the owner); each tenant's Scheduler and Ingest users come with create_tenant
     v_t1 := cma.create_tenant('verify-0008zn-one', 'Verify 0008zn one', 'Europe/Amsterdam');
     v_t2 := cma.create_tenant('verify-0008zn-two', 'Verify 0008zn two', 'Europe/Amsterdam');
+    -- tenant three: no source, for the snapshot time's rule and the watch's own failures (its takes are quick)
+    v_t3 := cma.create_tenant('verify-0008zn-three', 'Verify 0008zn three', 'Europe/Amsterdam');
     v_today := cma.tenant_today_of(v_t1);
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-admin1@example.invalid', 'admin1') returning id into v_admin1;
     insert into cma.app_user (tenant_id, email, display_name) values (v_t1, 'verify-analyst1@example.invalid', 'analyst1') returning id into v_analyst1;
@@ -384,6 +440,7 @@ begin
     join cma.app_role ar on ar.tenant_id = x.tid and ar.key = x.role_key;
     select u.id into v_sched1 from cma.app_user u where u.tenant_id = v_t1 and u.email = 'scheduler@system.invalid';
     select u.id into v_sched2 from cma.app_user u where u.tenant_id = v_t2 and u.email = 'scheduler@system.invalid';
+    select u.id into v_sched3 from cma.app_user u where u.tenant_id = v_t3 and u.email = 'scheduler@system.invalid';
     select x.user_id into v_ingest1 from cma.app_user_external_id x
     join cma.app_user u on u.tenant_id = x.tenant_id and u.id = x.user_id
     where x.tenant_id = v_t1 and u.kind = 'system' and u.id <> v_sched1 limit 1;
@@ -510,15 +567,20 @@ begin
              || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.file_max_rows'', ''50001'')')
              || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''assets.required_refs'', ''Bad Key'')')
              || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''commerce.required_contact_refs'', ''netsuite,netsuite'')')
-             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '' active , paused '')');
+             -- paused is never active nor ended (its own measure), and no status is both
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,paused'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.ended_subscription_statuses'', ''paused'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.ended_subscription_statuses'', ''canceled,active'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', ''active,expired'')')
+             || ' ' || pg_temp.v0008zn_code('select cma.set_tenant_setting(''flash.active_subscription_statuses'', '' active , failed '')');
     v_txt := v_txt || ' ' || cma.setting_of(v_t1, 'flash.active_subscription_statuses');
     perform cma.set_tenant_setting('flash.active_subscription_statuses', 'active');
     perform cma.set_tenant_setting('commerce.required_contact_refs', 'netsuite');
     perform cma.set_tenant_setting('assets.required_refs', 'ns_internal_id');
     perform cma.set_tenant_setting('flash.watch_jump_min', '1');
     perform cma.set_tenant_setting('intake.start_date', '2026-01-01');
-    v_rows := v_rows || array['11', 'B1 the settings'' refusals; a list without spaces',
-      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok active,paused' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+    v_rows := v_rows || array['11', 'B1 the settings'' refusals (paused neither active nor ended, no status in both); a list without spaces',
+      case when v_txt = 'CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 ok active,failed' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B2. each stock overview's live figures, as the analyst, equal the hand-computed ones
     perform set_config('app.user_id', v_analyst1::text, true);
@@ -531,14 +593,14 @@ begin
                         || 'NL/shop-nl:active_customers=0,customers_held=1,linked_to_contact=0,paused_customers=0,with_required_refs=0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'subscriptions', null, null);
-    v_rows := v_rows || array['13', 'B2 subscriptions: per market, store, status and payment state; amounts per currency',
-      case when v_txt = '*:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 80.00},paused_subscriptions=2,subscriptions=7 '
-                        || 'GB:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 80.00},paused_subscriptions=2,subscriptions=7 '
+    v_rows := v_rows || array['13', 'B2 subscriptions: per market, store, status and payment state; the active subscriptions'' amounts per currency',
+      case when v_txt = '*:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},paused_subscriptions=2,subscriptions=7 '
+                        || 'GB:active_subscriptions=3,amount_per_cycle={"EUR": 30.00, "GBP": 35.00},paused_subscriptions=2,subscriptions=7 '
                         || 'GB/in_retry/active/shop-gb:active_subscriptions=1,amount_per_cycle={"GBP": 20.00},paused_subscriptions=0,subscriptions=1 '
                         || 'GB/paid/active/shop-gb:active_subscriptions=2,amount_per_cycle={"EUR": 30.00, "GBP": 15.00},paused_subscriptions=0,subscriptions=2 '
-                        || 'GB/canceled/canceled/shop-gb:active_subscriptions=0,amount_per_cycle={"GBP": 20.00},paused_subscriptions=0,subscriptions=1 '
-                        || 'GB/canceled/expired/shop-gb:active_subscriptions=0,amount_per_cycle={"GBP": 5.00},paused_subscriptions=0,subscriptions=1 '
-                        || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={"GBP": 20.00},paused_subscriptions=2,subscriptions=2'
+                        || 'GB/canceled/canceled/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=0,subscriptions=1 '
+                        || 'GB/canceled/expired/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=0,subscriptions=1 '
+                        || 'GB/paused/paused/shop-gb:active_subscriptions=0,amount_per_cycle={},paused_subscriptions=2,subscriptions=2'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := pg_temp.v0008zn_figs(v_t1, 'installed_base', null, null);
     v_rows := v_rows || array['14', 'B2 installed base: devices, in the field, in stock, past due, due within three months; the subscription link',
@@ -611,28 +673,18 @@ begin
                         || 'subscription_customer_unmatched=1 | CMA04'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B6. a take before flash.snapshot_local_time writes nothing (as the owner: an instant other than now is the
-    --     owner's alone, so the scheduler user's permissions are read from app.user_id)
     perform set_config('role', 'cma_owner', true);
-    perform set_config('app.user_id', v_sched1::text, true);
-    j := cma.flash_snapshot_take_at(v_t1, v_early);
-    v_txt := (j ->> 'taken') || ' ' || (j ->> 'reason') || ' ' || (j ->> 'date')
-             || ' ' || (select count(*) from cma.flash_snapshot_run r where r.tenant_id = v_t1)
-             || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1);
-    v_rows := v_rows || array['21', 'B6 a take before the snapshot time writes nothing',
-      case when v_txt = 'false not_due 2026-10-28 0 0' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
-
-    -- the history before the first take: 21 to 27 October as succeeded runs (as the owner), the live figures stored for
-    -- each, the GB store's orders 5 a day, and on 27 October 100 active customers in GB and no row for the check
+    -- the history before the first take: 21 to 27 October as succeeded runs (as the owner), the live figures as of each
+    -- date stored for each, the GB store's orders 5 a day, and on 27 October 100 active customers in GB and no row for the check
     -- active_subscription_without_device; the register's runs every 5 minutes until 20:00 on 28 October
     for v_n in 0 .. 6 loop
-      insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, started_at, finished_at, status)
-      values (uuidv7(), v_t1, date '2026-10-21' + v_n, now(), now(), 'succeeded');
+      insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, due_at, started_at, finished_at, status)
+      values (uuidv7(), v_t1, date '2026-10-21' + v_n, cma.flash_due_at_of('Europe/Amsterdam', '00:30', date '2026-10-21' + v_n), now(), now(), 'succeeded');
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
       select v_t1, date '2026-10-21' + v_n, x.key, c.dims, c.measures, '0008zn', now(),
              (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n)
       from cma.flash_overviews() x
-      cross join lateral cma.flash_compute_of(v_t1, x.key, date '2026-10-21' + v_n, date '2026-10-21' + v_n) c;
+      cross join lateral cma.flash_compute_of(v_t1, x.key, date '2026-10-21' + v_n, date '2026-10-21' + v_n, date '2026-10-21' + v_n) c;
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
       values (v_t1, date '2026-10-21' + v_n, 'orders', '{"market": "GB"}', '{"orders": 5, "units": 5, "amount": {"GBP": 50}}', '0008zn', now(),
               (select r.id from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = date '2026-10-21' + v_n));
@@ -644,6 +696,18 @@ begin
     insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status)
     select v_t1, v_reg, 'assets_poll', t - interval '1 minute', t, 'succeeded'
     from generate_series(timestamptz '2026-10-28 18:00 Europe/Amsterdam', timestamptz '2026-10-28 20:00 Europe/Amsterdam', interval '5 minutes') t;
+
+    -- B6. a take before flash.snapshot_local_time on 29 October writes nothing: the latest due date then is 27 October,
+    --     which the history holds (as the owner: an instant other than now is the owner's alone, so the scheduler user's
+    --     permissions are read from app.user_id)
+    perform set_config('app.user_id', v_sched1::text, true);
+    v_n := (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1);
+    j := cma.flash_snapshot_take_at(v_t1, v_early);
+    v_txt := (j ->> 'taken') || ' ' || (j ->> 'reason') || ' ' || (j ->> 'date')
+             || ' ' || (select count(*) from cma.flash_snapshot_run r where r.tenant_id = v_t1)
+             || ' ' || ((select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1) = v_n)::text;
+    v_rows := v_rows || array['21', 'B6 a take before the snapshot time writes nothing: the date before is the latest due one, and it is taken',
+      case when v_txt = 'false taken 2026-10-27 7 true' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B7. take A (28 October): stored; the watch opens a jump (GB's active customers from 100 to 2), a flow_zero (GB's
     --     orders, above 0 on each of the 7 dates before), a dq_rise (active subscriptions without a device from none to
@@ -660,32 +724,35 @@ begin
                         || 'source_stale:-:{"source": "assets", "adapter": "verifyregister"}:-:300:-:15'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B8. take B (30 October; 29 October missed): stored with missed_before 1; snapshot_missing opens, the other four
-    --     resolve (no date before to compare, a fresh run of the register); the stored rows equal the live computation for
-    --     all eleven overviews (stock as of now, flows of 30 October)
+    -- B8. take B (30 October; 29 October missed): 29 October recorded as missed (a run row of its own, no figures), the
+    --     take stored with missed_before 1; snapshot_missing opens, the other four resolve (no date before to compare, a
+    --     fresh run of the register); the stored rows equal the computation as of 30 October for all eleven overviews (stock
+    --     measured against that date, flows of that date): one code path
     insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status)
     values (v_t1, v_reg, 'assets_poll', v_take_b - interval '6 minutes', v_take_b - interval '5 minutes', 'succeeded');
     j := cma.flash_snapshot_take_at(v_t1, v_take_b);
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'missed_before') || ' ' || (j ->> 'watch_opened') || ' ' || (j ->> 'watch_resolved')
+             || ' ' || (j ->> 'missed_recorded') || ' ' || (j ->> 'late')
+             || ' ' || (select string_agg(r.status, ',') from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date = '2026-10-29')
+             || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-29')
              || ' | ' || (select string_agg(f.kind || ':' || f.detail::text, ' ') from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open')
              || ' | ' || (select string_agg(f.kind || ':' || f.resolved_on, ' ' order by f.kind) from cma.flash_watch_finding f
                           where f.tenant_id = v_t1 and f.state = 'resolved');
-    v_rows := v_rows || array['23', 'B8 take B after a missed date: missed_before, snapshot_missing opened, the four resolved',
-      case when v_txt = 'true 2026-10-30 1 1 4 | snapshot_missing:{"days": 1, "missing_to": "2026-10-29", "missing_from": "2026-10-29"} | '
+    v_rows := v_rows || array['23', 'B8 take B after a missed date: the date recorded as missed, missed_before, snapshot_missing opened, the four resolved',
+      case when v_txt = 'true 2026-10-30 1 1 4 1 false missed 0 | snapshot_missing:{"days": 1, "missing_to": "2026-10-29", "missing_from": "2026-10-29"} | '
                         || 'dq_rise:2026-10-30 flow_zero:2026-10-30 jump:2026-10-30 source_stale:2026-10-30'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
     v_txt := '';
     for o in select x.key, x.kind from cma.flash_overviews() x order by x.sort_order loop
       v_a := pg_temp.v0008zn_stored(v_t1, o.key, array[date '2026-10-30']);
-      v_b := case when o.kind = 'stock' then pg_temp.v0008zn_figs(v_t1, o.key, null, null)
-                  else pg_temp.v0008zn_figs(v_t1, o.key, '2026-10-30', '2026-10-30') end;
+      v_b := pg_temp.v0008zn_figs(v_t1, o.key, '2026-10-30', '2026-10-30', '2026-10-30');
       if v_a is distinct from v_b or v_a = '-' then
         v_txt := v_txt || o.key || ' differs; ';
       end if;
     end loop;
     v_txt := v_txt || (select count(distinct s.overview) from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30')::text
              || ' ' || (select string_agg(distinct s.definition_version, ',') from cma.flash_snapshot s where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-30');
-    v_rows := v_rows || array['24', 'B8 the snapshot equals the live computation, all eleven overviews',
+    v_rows := v_rows || array['24', 'B8 the snapshot equals the computation as of its date, all eleven overviews',
       case when v_txt = '11 0008zn' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B9. a second take of the same date writes nothing; no id list on a date that is no month end
@@ -701,6 +768,20 @@ begin
     --      register holds), one audit row per kind; snapshot_missing resolved
     insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status)
     values (v_t1, v_reg, 'assets_poll', v_take_c - interval '6 minutes', v_take_c - interval '5 minutes', 'succeeded');
+    -- for B21 and B25: until after the take, SN-4's end of life on 31 October itself, an open task due on 31 October (k-4,
+    -- an email of deal-1) and an open deal created on 30 October at noon alone in its stage (deal-5, GB, p1, s2); and a
+    -- line of o-5 (31 October) whose SKU holds an @, kept (the flows of B11 read it live and stored alike)
+    update cma.device set end_of_life_on = '2026-10-31' where tenant_id = v_t1 and source_id = 'rec-4';
+    insert into cma.connection_stage (tenant_id, connection_id, record_type, source_pipeline_id, source_stage_id, label, is_closed)
+    values (v_t1, v_crm, 'deal', 'p1', 's2', 'Second stage', false);
+    insert into cma.crm_record (tenant_id, connection_id, source_system, record_type, source_id, pipeline_id, stage_id, owner_ref, contact_source_id, market,
+                                is_closed, source_created_at)
+    values (v_t1, v_crm, 'verifycrm', 'deal', 'deal-5', 'p1', 's2', null, null, 'GB', false, '2026-10-30 12:00 Europe/Amsterdam');
+    insert into cma.crm_task (tenant_id, connection_id, source_system, source_id, owner_ref, status_ref, type_ref, due_at, deal_source_id, ticket_source_id,
+                              source_created_at)
+    values (v_t1, v_crm, 'verifycrm', 'k-4', null, 'NOT_STARTED', 'EMAIL', '2026-10-31 15:00 Europe/Amsterdam', 'deal-1', null, '2026-10-30 09:00 Europe/Amsterdam');
+    insert into cma.commerce_order_line (tenant_id, connection_id, order_source_id, line_source_id, sku, quantity, unit_price, currency)
+    values (v_t1, v_shop_gb, 'o-5', 'l-7', 'AED@PRO', 1, 0.00, 'GBP');
     j := cma.flash_snapshot_take_at(v_t1, v_take_c);
     v_txt := (j ->> 'taken') || ' ' || (j ->> 'ids_customer') || ' ' || (j ->> 'ids_subscription') || ' ' || (j ->> 'ids_device')
              || ' | ' || (select string_agg(x.record_kind || ':' || x.source_id || ':' || x.market || ':' || x.state, ' '
@@ -708,11 +789,45 @@ begin
                           from cma.flash_snapshot_ids x where x.tenant_id = v_t1)
              || ' | ' || (select count(*) from cma.audit_log al where al.tenant_id = v_t1 and al.table_name = 'flash_snapshot_ids')
              || ' ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.state = 'open');
+    v_c := (j ->> 'taken') || ' ' || coalesce(j ->> 'ids_skipped', '-');
     v_rows := v_rows || array['26', 'B10 a month end''s id lists, one audit row per kind; snapshot_missing resolved',
       case when v_txt = 'true 2 3 5 | customer:cu-1:GB:active customer:cu-2:GB:active device:rec-1:GB:field device:rec-2:GB:field '
                         || 'device:rec-3:GB:stock device:rec-4:GB:field device:rec-5:NL:field subscription:s-1:GB:active '
                         || 'subscription:s-4:GB:active subscription:s-5:GB:active | 3 0'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B21. a month end's snapshot taken after midnight (1 November, 01:00) measures its stock figures against 31 October,
+    --      not the day of the take: SN-4's item due on 31 October is due within three months and not past due (past due is
+    --      an action date before the first of the date's month), the task due on 31 October is not overdue, deal-5's age is
+    --      1 day at the end of 31 October; the same figures read today are past due, overdue and older
+    v_txt := (select s.measures ->> 'components_past_due' || '/' || (s.measures ->> 'items_due_3m') from cma.flash_snapshot s
+              where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-31' and s.overview = 'installed_base' and s.dims = '{}')
+             || ' ' || (select c.measures ->> 'components_past_due' || '/' || (c.measures ->> 'items_due_3m') from cma.flash_compute_of(v_t1, 'installed_base') c
+                        where c.dims = '{}')
+             || ' | ' || (select s.measures ->> 'overdue' from cma.flash_snapshot s
+                          where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-31' and s.overview = 'open_tasks'
+                            and s.dims = '{"market": "GB", "type": "EMAIL", "status": "NOT_STARTED"}')
+             || ' ' || (select c.measures ->> 'overdue' from cma.flash_compute_of(v_t1, 'open_tasks') c
+                        where c.dims = '{"market": "GB", "type": "EMAIL", "status": "NOT_STARTED"}')
+             || ' | ' || (select s.measures ->> 'oldest_age_days' from cma.flash_snapshot s
+                          where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-31' and s.overview = 'open_deals'
+                            and s.dims = '{"market": "GB", "pipeline": "p1", "stage": "s2"}')
+             || ' ' || (select ((c.measures ->> 'oldest_age_days')::integer > 1)::text from cma.flash_compute_of(v_t1, 'open_deals') c
+                        where c.dims = '{"market": "GB", "pipeline": "p1", "stage": "s2"}');
+    v_rows := v_rows || array['37', 'B21 a month end''s snapshot taken after midnight measures against its own date: due on the last day is not past due, not overdue; ages of that date',
+      case when v_txt = '1/1 2/0 | 0 1 | 1 true' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B25. a SKU holding an @ is stored as other (a snapshot holds no @), the take succeeds, the list behind the cell
+    --      finds the order by it; no id left out of the lists
+    v_txt := v_c || ' ' || (select string_agg(s.dims ->> 'sku' || '=' || (s.measures ->> 'units'), ',' order by s.dims ->> 'sku') from cma.flash_snapshot s
+                            where s.tenant_id = v_t1 and s.snapshot_date = '2026-10-31' and s.overview = 'orders' and s.dims ? 'sku' and s.dims ->> 'market' = 'GB')
+             || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t1 and strpos(s.dims::text, '@') > 0)
+             || ' ' || (cma.flash_rows_of(v_t1, 'orders', '{"sku": "other"}', 'created_at', false, 10, 0, '2026-10-31', '2026-10-31') -> 'rows' -> 0 ->> 'order_number');
+    v_rows := v_rows || array['41', 'B25 a SKU with an @ is stored as other: the take succeeds and its list finds the order',
+      case when v_txt = 'true 0 A=1,other=1 0 #1005' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+    update cma.device set end_of_life_on = v_today + 30 where tenant_id = v_t1 and source_id = 'rec-4';
+    delete from cma.crm_task where tenant_id = v_t1 and source_id = 'k-4';
+    delete from cma.crm_record where tenant_id = v_t1 and source_id = 'deal-5';
 
     -- B11. flows summed over the stored dates equal the live period (30 and 31 October), amounts per currency
     v_txt := '';
@@ -757,10 +872,10 @@ begin
     v_rows := v_rows || array['29', 'B13 tenant isolation: nothing of tenant one seen, read or written by tenant two',
       case when v_txt = '0 0 0 0 0 0 42501' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B14. the refusals: an agent (CMA06) for every read and the file record; the analyst's take (no flash.snapshot) and a
-    --      take at another instant than now by the application (CMA06); filters, sort, limit, overview, market and dates
-    --      out of form (CMA04); a date without a snapshot (CMA02); insert only (42501); a finding resolved by a person
-    --      (CMA06) and reopened by the owner (CMA03)
+    -- B14. the refusals: an agent (CMA06) for every read and the file record; the analyst's take (no flash.snapshot, CMA06)
+    --      and a take at another instant than now by the application (no execute, 42501); filters, sort, limit, overview,
+    --      market and dates out of form, a period past today (CMA04); a date without a snapshot (CMA02); no change by the
+    --      application (42501), a finding resolved by a person included; reopened by the owner (CMA03)
     perform set_config('app.tenant_id', v_t1::text, true);
     perform set_config('app.user_id', v_agent1::text, true);
     v_txt := pg_temp.v0008zn_code('select cma.flash_overview(''customers'')')
@@ -781,6 +896,7 @@ begin
              || ' ' || pg_temp.v0008zn_code(format('select cma.flash_overview(''customers'', null, %L)', v_today))
              || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''orders'', null, null, ''2026-10-31'', ''2026-10-30'')')
              || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''orders'', null, null, ''2025-10-01'', ''2026-10-30'')')
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_overview(''orders'', null, null, %L, %L)', v_today, v_today + 1))
              || ' ' || pg_temp.v0008zn_code('select cma.flash_overview(''customers'', null, ''2026-10-29'')')
              || ' ' || pg_temp.v0008zn_code('select cma.flash_rows(''customers'', ''{}'', null, false, 500, 0, ''2026-10-30'')');
     -- an open finding for the moment of the checks, so a person's move from open to resolved is really tried
@@ -798,8 +914,8 @@ begin
     v_txt := v_txt || ' ' || pg_temp.v0008zn_code(format('update cma.flash_watch_finding set state = ''open'', resolved_on = null where tenant_id = %L', v_t1));
     delete from cma.flash_watch_finding f where f.tenant_id = v_t1 and f.kind = 'jump' and f.overview = 'subscriptions' and f.state = 'open';
     v_rows := v_rows || array['31', 'B14 the refusals: an agent, a take by a person or at another instant, forms, dates, insert only, a finding''s state',
-      case when v_txt = 'CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 | CMA06 CMA06 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA02 CMA02 | '
-                        || '42501 42501 42501 42501 CMA06 CMA06 CMA03'
+      case when v_txt = 'CMA06 CMA06 CMA06 CMA06 CMA06 CMA06 | CMA06 42501 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA04 CMA02 CMA02 | '
+                        || '42501 42501 42501 42501 42501 42501 CMA03'
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B15. the lists, as the analyst: a measure's records are its figure's; customers by total spent, sorted within
@@ -890,11 +1006,11 @@ begin
     v_rows := v_rows || array['35', 'B18 nothing stored holds an @',
       case when v_txt = '0 0 0 0' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
-    -- B19. the job's own path, as the job runs it: the application (cma_app, row-level security on) with tenant two's
-    --      scheduler user (flash.snapshot) takes yesterday through cma.flash_snapshot_take as of now (snapshot time
-    --      00:00, so it is due): the rows stored, its run succeeded, the audit rows written by the application, the
-    --      expiry (definer) called, an open finding resolved through the column grant and the guard; a second take of
-    --      the date writes nothing
+    -- B19. the job's own path, as the job runs it: the application (cma_app, row-level security on, no write on the Flash
+    --      tables) with tenant two's scheduler user (flash.snapshot) takes yesterday through cma.flash_snapshot_take (the
+    --      definer) as of now (snapshot time 00:00, so it is due): the rows stored, its run succeeded, the audit rows naming
+    --      the scheduler user, an open finding resolved through the guard; a second take of the date writes nothing; none
+    --      of tenant one's records reaches tenant two's snapshot
     perform set_config('role', 'cma_app', true);
     perform set_config('app.tenant_id', v_t2::text, true);
     perform set_config('app.user_id', v_admin2::text, true);
@@ -920,6 +1036,180 @@ begin
                                                                  and a.actor_user_id = v_sched2);
     v_rows := v_rows || array['36', 'B19 the job''s own path: a take as the application with the scheduler user, its rows, run, audit and a finding resolved; a second writes nothing',
       case when v_txt = 'true true 1 1 false:taken | 1 1 resolved:true true true' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B20. the snapshot time's rule (Decision log, 2 November 2026), on tenant three with the job's hourly instants at
+    --      minute 20 (Europe/Amsterdam, as of the owner with its scheduler user): every date taken exactly once, by the
+    --      first run after its due time (the day after it at flash.snapshot_local_time), for 00:30, 23:20 and 23:59; one
+    --      skipped run: the date taken by the next run, marked late; a date that stopped being the latest due one without a
+    --      take (the job down a day): recorded as missed by the next take, never taken afterwards
+    perform set_config('role', 'cma_owner', true);
+    perform set_config('app.tenant_id', v_t3::text, true);
+    perform set_config('app.user_id', v_sched3::text, true);
+    v_txt := '';
+    -- 00:30 (the default): 3 October is due at 4 October 00:30; the 4 October 00:20 run finds 2 October (taken by the 3
+    -- October 01:20 run) the latest due date, the 01:20 run takes 3 October, the 02:20 run finds it taken, and so does the
+    -- 5 October 00:20 run
+    foreach v_a in array array['2026-10-03 01:20', '2026-10-04 00:20', '2026-10-04 01:20', '2026-10-04 02:20', '2026-10-05 00:20', '2026-10-05 01:20',
+                               -- one skipped run: 6 October 01:20 does not run, 02:20 takes 5 October, late
+                               '2026-10-06 02:20'] loop
+      j := cma.flash_snapshot_take_at(v_t3, (v_a || ' Europe/Amsterdam')::timestamptz);
+      v_txt := v_txt || case when (j ->> 'taken')::boolean then 'took' else j ->> 'reason' end || ':' || right(j ->> 'date', 2) || ' ';
+    end loop;
+    -- 23:20: 6 October is due at 7 October 23:20 and taken by that run (on time), not by 22:20
+    insert into cma.tenant_setting (tenant_id, key, value) values (v_t3, 'flash.snapshot_local_time', '23:20');
+    foreach v_a in array array['2026-10-06 23:20', '2026-10-07 22:20', '2026-10-07 23:20'] loop
+      j := cma.flash_snapshot_take_at(v_t3, (v_a || ' Europe/Amsterdam')::timestamptz);
+      v_txt := v_txt || case when (j ->> 'taken')::boolean then 'took' else j ->> 'reason' end || ':' || right(j ->> 'date', 2) || ' ';
+    end loop;
+    -- 23:59: 7 October is due at 8 October 23:59, so the 23:20 run finds 6 October and the next day's 00:20 run takes 7
+    -- October (21 minutes after, on time)
+    update cma.tenant_setting set value = '23:59' where tenant_id = v_t3 and key = 'flash.snapshot_local_time';
+    foreach v_a in array array['2026-10-08 23:20', '2026-10-09 00:20',
+                               -- the job down from 9 October 01:20 to 11 October 00:00: 8 October is never the latest due date
+                               -- at a run, so the 11 October 00:20 run records it missed and takes 9 October
+                               '2026-10-11 00:20'] loop
+      j := cma.flash_snapshot_take_at(v_t3, (v_a || ' Europe/Amsterdam')::timestamptz);
+      v_txt := v_txt || case when (j ->> 'taken')::boolean then 'took' else j ->> 'reason' end || ':' || right(j ->> 'date', 2) || ' ';
+    end loop;
+    -- the missed date is never taken afterwards, whatever the snapshot time
+    update cma.tenant_setting set value = '00:30' where tenant_id = v_t3 and key = 'flash.snapshot_local_time';
+    j := cma.flash_snapshot_take_at(v_t3, '2026-10-09 01:20 Europe/Amsterdam');
+    v_txt := v_txt || case when (j ->> 'taken')::boolean then 'took' else j ->> 'reason' end || ':' || right(j ->> 'date', 2)
+             || ' | ' || (select string_agg(right(r.snapshot_date::text, 2) || ':' || r.status || case when r.late then ':late' else '' end, ' '
+                                            order by r.snapshot_date, r.started_at)
+                          from cma.flash_snapshot_run r where r.tenant_id = v_t3)
+             || ' | ' || (select string_agg(distinct right(s.snapshot_date::text, 2), ',') from cma.flash_snapshot s where s.tenant_id = v_t3)
+             || ' | ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t3 and f.state = 'open' and f.kind = 'snapshot_missing');
+    v_rows := v_rows || array['38', 'B20 the snapshot time: each date once from its due time for 00:30, 23:20 and 23:59; a skipped run taken late; a missed date recorded, never taken',
+      case when v_txt = 'took:02 taken:02 took:03 taken:03 taken:03 took:04 took:05 taken:05 taken:05 took:06 taken:06 took:07 took:09 missed:08 | '
+                        || '02:succeeded 03:succeeded 04:succeeded 05:succeeded:late 06:succeeded 07:succeeded 08:missed 09:succeeded | 02,03,04,05,06,07,09 | 1'
+                and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B23. a watch that fails never costs the snapshot: with every write of a finding refused (a throwaway trigger,
+    --      rolled back with the block), the take of 10 October stores its figures and its run says succeeded with the
+    --      watch's error code; the open finding stays open, and the next take resolves it
+    create function cma.v0008zn_refuse() returns trigger language plpgsql as $f$ begin raise exception 'refused'; end $f$;
+    create trigger v0008zn_refuse before insert or update on cma.flash_watch_finding for each row execute function cma.v0008zn_refuse();
+    update cma.tenant_setting set value = '23:59' where tenant_id = v_t3 and key = 'flash.snapshot_local_time';
+    j := cma.flash_snapshot_take_at(v_t3, '2026-10-12 00:20 Europe/Amsterdam');
+    v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || coalesce(j ->> 'watch_error', '-')
+             || ' ' || (select r.status || ':' || coalesce(r.watch_error, '-') from cma.flash_snapshot_run r where r.tenant_id = v_t3 and r.snapshot_date = '2026-10-10')
+             || ' ' || (select count(*) from cma.flash_snapshot s where s.tenant_id = v_t3 and s.snapshot_date = '2026-10-10')
+             || ' ' || (select f.state from cma.flash_watch_finding f where f.tenant_id = v_t3 and f.kind = 'snapshot_missing');
+    drop trigger v0008zn_refuse on cma.flash_watch_finding;
+    drop function cma.v0008zn_refuse();
+    j := cma.flash_snapshot_take_at(v_t3, '2026-10-13 00:20 Europe/Amsterdam');
+    v_txt := v_txt || ' | ' || (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || coalesce(j ->> 'watch_error', '-')
+             || ' ' || (select f.state || ':' || f.resolved_on from cma.flash_watch_finding f where f.tenant_id = v_t3 and f.kind = 'snapshot_missing');
+    v_rows := v_rows || array['39', 'B23 a watch that fails keeps the snapshot: the run succeeded with the watch''s error, the finding resolved by the next take',
+      case when v_txt = 'true 2026-10-10 P0001 succeeded:P0001 1 open | true 2026-10-11 - resolved:2026-10-11' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B24. two stale connections alike (the same kind and adapter, no store) are one source_stale finding with both
+    --      counted, not a failed take; the next take keeps it open, once
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
+    values (v_t3, 'verifycrm', 'Verify CRM A', 'portal-a', 'crm') returning id into v_conn;
+    insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status)
+    select v_t3, v_conn, 'reconcile', t - interval '1 minute', t, 'succeeded'
+    from generate_series(timestamptz '2026-10-13 06:00 Europe/Amsterdam', timestamptz '2026-10-13 08:00 Europe/Amsterdam', interval '10 minutes') t;
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
+    values (v_t3, 'verifycrm', 'Verify CRM B', 'portal-b', 'crm') returning id into v_conn;
+    insert into cma.sync_run (tenant_id, connection_id, job, started_at, finished_at, status)
+    select v_t3, v_conn, 'reconcile', t - interval '1 minute', t, 'succeeded'
+    from generate_series(timestamptz '2026-10-13 06:00 Europe/Amsterdam', timestamptz '2026-10-13 09:00 Europe/Amsterdam', interval '10 minutes') t;
+    j := cma.flash_snapshot_take_at(v_t3, '2026-10-14 00:20 Europe/Amsterdam');
+    v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'watch_opened')
+             || ' ' || (select string_agg(f.dims::text || ':' || f.value || ':' || (f.detail ->> 'connections'), ' ') from cma.flash_watch_finding f
+                        where f.tenant_id = v_t3 and f.kind = 'source_stale' and f.state = 'open');
+    j := cma.flash_snapshot_take_at(v_t3, '2026-10-15 00:20 Europe/Amsterdam');
+    v_txt := v_txt || ' | ' || (j ->> 'taken') || ' ' || coalesce(j ->> 'watch_error', '-') || ' ' || (j ->> 'watch_opened')
+             || ' ' || (select count(*) from cma.flash_watch_finding f where f.tenant_id = v_t3 and f.kind = 'source_stale');
+    v_rows := v_rows || array['40', 'B24 two stale connections alike are one finding, counted; the take succeeds, and again the next day',
+      case when v_txt = 'true 2026-10-12 1 {"source": "crm", "adapter": "verifycrm"}:980:2 | true - 0 1' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B22. writes only through the take: the application inserts no row into any of the four tables (42501), runs none of
+    --      the take's writers (42501), and a writer run as the owner for a person without flash.snapshot is refused (CMA06)
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_sched1::text, true);
+    v_txt := pg_temp.v0008zn_code(format('insert into cma.flash_snapshot_run (tenant_id, snapshot_date, due_at, started_at, finished_at, status) '
+                                         || 'values (%L, ''2026-10-29'', now(), now(), now(), ''succeeded'')', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id) '
+                                                   || 'values (%L, ''2026-10-29'', ''customers'', ''{}'', ''{}'', ''0008zn'', now(), uuidv7())', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id) '
+                                                   || 'values (%L, ''2026-09-30'', ''customer'', ''cu-1'', %L, ''GB'', ''active'', uuidv7())', v_t1, v_shop_gb))
+             || ' ' || pg_temp.v0008zn_code(format('insert into cma.flash_watch_finding (tenant_id, snapshot_date, kind) values (%L, ''2026-10-29'', ''snapshot_missing'')', v_t1))
+             || ' | ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_ids_write_of(%L, ''2026-09-30'', uuidv7())', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_ids_expire_of(%L)', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_watch_of(%L, ''2026-10-29'', now())', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_take_at(%L, now())', v_t1));
+    perform set_config('role', 'cma_owner', true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    v_txt := v_txt || ' | ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_ids_write_of(%L, ''2026-09-30'', uuidv7())', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_ids_expire_of(%L)', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_watch_of(%L, ''2026-10-29'', now())', v_t1))
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_snapshot_take_at(%L, ''2026-11-02 01:00 Europe/Amsterdam'')', v_t1))
+             || ' ' || (select count(*) from cma.flash_snapshot_run r where r.tenant_id = v_t1 and r.snapshot_date in ('2026-09-30', '2026-11-01'));
+    v_rows := v_rows || array['42', 'B22 writes only through the take: no insert by the application, no writer for it, none for a person without flash.snapshot',
+      case when v_txt = '42501 42501 42501 42501 | 42501 42501 42501 42501 | CMA06 CMA06 CMA06 CMA06 0' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B26. the id lists' expiry takes no caller's date: its cutoff is the tenant's today less flash.id_list_retention_months.
+    --      On tenant two, a take as of 30 December 2999 (the owner's) removes the list of January 2010 and keeps the one of
+    --      September 2026, one audit row for the removal
+    perform set_config('app.tenant_id', v_t2::text, true);
+    perform set_config('app.user_id', v_sched2::text, true);
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
+    values (v_t2, 'verifyphone', 'Verify phone', 'phone-1', 'telephony') returning id into v_conn;
+    insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, due_at, started_at, finished_at, status)
+    select uuidv7(), v_t2, d, cma.flash_due_at_of('Europe/Amsterdam', '00:00', d), now(), now(), 'succeeded'
+    from unnest(array[date '2010-01-31', date '2026-09-30', date '2999-12-28']) d;
+    insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
+    select v_t2, r.snapshot_date, 'device', 'rec-x', v_conn, 'GB', 'field', r.id
+    from cma.flash_snapshot_run r where r.tenant_id = v_t2 and r.snapshot_date in ('2010-01-31', '2026-09-30');
+    j := cma.flash_snapshot_take_at(v_t2, '2999-12-30 12:00 Europe/Amsterdam');
+    v_txt := (j ->> 'taken') || ' ' || (j ->> 'date') || ' ' || (j ->> 'ids_expired')
+             || ' ' || (select string_agg(x.snapshot_date::text, ',' order by x.snapshot_date) from cma.flash_snapshot_ids x where x.tenant_id = v_t2)
+             || ' ' || (select (a.old_row ->> 'before')::date = (cma.tenant_today_of(v_t2) - interval '84 months')::date from cma.audit_log a
+                        where a.tenant_id = v_t2 and a.table_name = 'flash_snapshot_ids' and a.action = 'delete');
+    v_rows := v_rows || array['43', 'B26 a far-future take removes only the lists past the retention from the tenant''s today: the expiry takes no caller''s date',
+      case when v_txt = 'true 2999-12-29 1 2026-09-30 true' and not v_provoke then 'ok' else 'FAIL' end, v_txt];
+
+    -- B27. the statuses and joins from configuration: the ended statuses set to expired alone (churn of 30 October none, of
+    --      31 October one; the device on a canceled subscription no finding); a contact deleted in the CRM is contact_deleted,
+    --      fixed in the CRM; a market the register holds no device of gives no active subscription without a device; a
+    --      device's subscription reference is matched in its own market; a frozen list that expired says so (CMA02); a
+    --      file record's filters are the overview's own and its date has ended (CMA04)
+    perform set_config('app.tenant_id', v_t1::text, true);
+    perform set_config('app.user_id', v_admin1::text, true);
+    perform set_config('role', 'cma_app', true);
+    perform cma.set_tenant_setting('flash.ended_subscription_statuses', 'expired');
+    perform set_config('role', 'cma_owner', true);
+    v_txt := pg_temp.v0008zn_figs(v_t1, 'churn', '2026-10-30', '2026-10-30') || ' ' || pg_temp.v0008zn_figs(v_t1, 'churn', '2026-10-31', '2026-10-31')
+             || ' ' || (select count(*) from cma.data_quality_of(v_t1) q where q.check_key = 'field_device_on_ended_subscription');
+    update cma.crm_contact set source_deleted_at = now() where tenant_id = v_t1 and source_id = 'c-2';
+    v_txt := v_txt || ' | ' || (select q.value || '/' || cma.data_quality_fix_in(q.check_key, q.value) from cma.data_quality_of(v_t1) q
+                                where q.check_key = 'customer_required_ref_missing' and q.object_id = 'cu-2');
+    update cma.crm_contact set source_deleted_at = null where tenant_id = v_t1 and source_id = 'c-2';
+    update cma.device set market = 'NL' where tenant_id = v_t1;
+    v_txt := v_txt || ' | ' || (select count(*) from cma.data_quality_of(v_t1) q where q.check_key = 'active_subscription_without_device')
+             || ' ' || (select string_agg(d.source_id || ':' || d.link, ',' order by d.source_id) from cma.flash_devices_of(v_t1, v_today) d
+                        where d.subscription_ref is not null);
+    update cma.device set market = case when source_id = 'rec-5' then 'NL' else 'GB' end where tenant_id = v_t1;
+    delete from cma.flash_snapshot_ids x where x.tenant_id = v_t1 and x.snapshot_date = '2026-10-31' and x.record_kind = 'subscription';
+    perform set_config('role', 'cma_app', true);
+    perform set_config('app.user_id', v_analyst1::text, true);
+    begin
+      perform cma.flash_rows('subscriptions', '{}', null, false, 500, 0, '2026-10-31');
+      v_txt := v_txt || ' | ok';
+    exception when others then
+      v_txt := v_txt || ' | ' || sqlstate || ':' || (sqlerrm like '%expired%')::text;
+    end;
+    v_txt := v_txt || ' ' || pg_temp.v0008zn_code('select cma.flash_file_record(''customers'', ''rows'', ''{"email": "x"}'', null, null, null, null, 1)')
+             || ' ' || pg_temp.v0008zn_code(format('select cma.flash_file_record(''customers'', ''rows'', ''{}'', null, %L, null, null, 1)', cma.tenant_today_of(v_t1)))
+             || ' ' || pg_temp.v0008zn_code('select cma.flash_file_record(''orders'', ''rows'', ''{"sku": "A", "measure": "orders"}'', null, null, null, null, 1)');
+    v_rows := v_rows || array['44', 'B27 statuses and joins from configuration: ended statuses, contact deleted, a market not in the register, a reference in its market; an expired list; a file record''s filters and date',
+      case when v_txt = '*:churned=0 *:churned=1 GB:churned=1 GB/none/shop-gb:churned=1 0 | contact_deleted/crm | 0 rec-1:not_found,rec-2:not_found,rec-4:not_found,rec-5:not_found | '
+                        || 'CMA02:true CMA04 CMA04 ok'
+                and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     raise exception using errcode = 'CMAOK', message = 'rollback';
   exception
@@ -1167,19 +1457,19 @@ $$;
 -- The helpers are dropped first, so the verdict is the last thing the script prints
 drop function if exists pg_temp.v0008zn_code(text);
 drop function if exists pg_temp.v0008zn_best_ms(text, integer);
-drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date);
+drop function if exists pg_temp.v0008zn_figs(uuid, text, date, date, date);
 drop function if exists pg_temp.v0008zn_stored(uuid, text, date[]);
 
--- Verdict: one row per check, then the verdict. 35 checks in dev and local databases; in prod block C's four read skip
--- (its speed is proven in dev) and the 31 others must be ok
+-- Verdict: one row per check, then the verdict. 43 checks in dev and local databases; in prod block C's four read skip
+-- (its speed is proven in dev) and the 39 others must be ok
 select check_name, result, detail
 from (select ord, check_name, result, detail from verify_0008zn
       union all
       select 99, 'verdict',
              case when current_setting('verify.provoke')::boolean then 'PROVOKED, NOT A PASS'
                   when exists (select 1 from verify_0008zn where result not in ('ok', 'skip')) then 'FAIL'
-                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 35 then '0008zn verified'
-                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 31
+                  when current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 43 then '0008zn verified'
+                  when not current_setting('verify.volume')::boolean and (select count(*) from verify_0008zn where result = 'ok') = 39
                        and (select count(*) from verify_0008zn where result = 'skip') = 4 then '0008zn verified'
                   else 'FAIL' end,
              format('123_verify_flash: %s ok, %s FAIL, %s skip', (select count(*) from verify_0008zn where result = 'ok'),

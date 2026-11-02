@@ -514,8 +514,9 @@ $$;
 -- Flash for Pulse4all Subscriptions (after addition 0008zn; Martin, 1 November 2026): the references every store
 -- customer's contact and every device must carry (the NetSuite Customer ID, the contact's netsuite ref, mapped to
 -- contact_netsuite_id; the device's NetSuite Internal ID, its named id ns_internal_id), and the Flash settings at their
--- decided values (active subscriptions: status active; the snapshot after 00:30 in the tenant's zone; month-end id lists
--- kept 84 months, for Yordi to confirm; the watch at 20 % and 10; files of at most 50,000 rows). Pulse4all Invest keeps
+-- decided values (active subscriptions: status active; ended: canceled and expired; a date due at 00:30 the day after
+-- it in the tenant's zone; month-end id lists kept 84 months, for Yordi to confirm; the watch at 20 % and 10; files of at
+-- most 50,000 rows). Pulse4all Invest keeps
 -- the defaults: no shop and no register, so its overviews show the states of a source not set up. Only values the
 -- tenant does not have yet are added, so a change on Configuration or in Studio survives a rerun.
 do $$
@@ -528,6 +529,7 @@ begin
   end if;
   insert into cma.tenant_setting (tenant_id, key, value) values
     (v_subs, 'flash.active_subscription_statuses', 'active'),
+    (v_subs, 'flash.ended_subscription_statuses', 'canceled,expired'),
     (v_subs, 'flash.snapshot_local_time', '00:30'),
     (v_subs, 'flash.id_list_retention_months', '84'),
     (v_subs, 'flash.watch_jump_pct', '20'),

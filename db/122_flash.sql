@@ -24,8 +24,9 @@
 -- What it adds
 --   settings           flash.active_subscription_statuses (active), flash.snapshot_local_time (00:30),
 --                      flash.id_list_retention_months (84), flash.watch_jump_pct (20), flash.watch_jump_min (10),
---                      flash.file_max_rows (50000), assets.required_refs and commerce.required_contact_refs (empty);
---                      cma.check_tenant_setting() checks each (0008zi's branches unchanged)
+--                      flash.file_max_rows (50000), assets.required_refs and commerce.required_contact_refs (empty),
+--                      flash.ended_subscription_statuses (canceled,expired; paused in neither list, no status in both);
+--                      cma.check_tenant_setting() checks each (0008zm's branches unchanged)
 --   permission         flash.snapshot: the scheduler's system user only (no assignable role), granted to every tenant's
 --                      scheduler role here and by cma.ensure_scheduler_user() from now on
 --   runs               sync_run.job gains flash_snapshot (no connection, as refresh_follow_up); cma.job_run_start() and
@@ -36,30 +37,39 @@
 --                      per overview (cma.flash_customers_of, flash_subscriptions_of, flash_devices_of, flash_churn_of,
 --                      flash_orders_of, flash_order_lines_of, flash_payments_of, flash_deals_of, flash_tickets_of,
 --                      flash_tasks_of, flash_reviews_of, flash_findings_of) feeds both the figures and the rows, so a figure
---                      and its list never disagree; cma.flash_compute_of(tenant, overview, from, to) aggregates it into
---                      one row per grouping set (dims, measures): the totals ({}), per market and the breakdown. Amounts
---                      are summed per currency only, never across currencies. A source the tenant has not set up gives no
---                      rows (cma.flash_sources_of: commerce, subscriptions, assets, crm, reviews, set up or not, the last
---                      successful read from sync_run)
+--                      and its list never disagree; cma.flash_compute_of(tenant, overview, from, to, on) aggregates it
+--                      into one row per grouping set (dims, measures): the totals ({}), per market and the breakdown.
+--                      Stock figures are measured against a business date (on: today live, the snapshot's own date in a
+--                      take): past due, due within three months, overdue and ages. Amounts are summed per currency only,
+--                      never across currencies. A value a source writes freely (a SKU, a warehouse, a pipeline) that a
+--                      snapshot cannot hold (an @, over 100 characters) is the value other (cma.flash_dim_of). A source
+--                      the tenant has not set up gives no rows (cma.flash_sources_of: commerce, subscriptions, assets,
+--                      crm, reviews, set up or not, the last successful read from sync_run)
 --   snapshots          cma.flash_snapshot (tenant, business date, overview, dims, measures, definition_version,
 --                      computed_at, run_id; one row per grouping set; dims and measures held to each overview's allow-list,
 --                      no @), cma.flash_snapshot_ids (month end only: the ids of the active customers, the active
 --                      subscriptions and every device, with connection, market and state) and cma.flash_snapshot_run (per
---                      tenant and date: started, finished, status, counts per overview, the sources' state and the
---                      settings, the dates missed before it, error). Insert only: the application neither updates nor
---                      deletes a row; the id lists' one delete is cma.flash_snapshot_ids_expire_of, owner-level, after
---                      flash.id_list_retention_months, written to the audit log
---   the take           cma.flash_snapshot_take(tenant) (flash.snapshot): once the tenant's local time is past
---                      flash.snapshot_local_time, the business date that just ended, computed through
---                      cma.flash_compute_of and stored; the id lists on a month's last day; the watch; the run row.
---                      Idempotent: a date with a succeeded run is never taken again, and a date missed is never invented
+--                      tenant and date: due, started, finished, status succeeded, failed or missed, late, counts per
+--                      overview, the sources' state and the settings, the dates missed before it, error, the watch's
+--                      error). The application only reads them: every row is written by the take, with the owner's
+--                      rights; the id lists' one delete is cma.flash_snapshot_ids_expire_of, in the take, after
+--                      flash.id_list_retention_months from the tenant's today, written to the audit log
+--   the take           cma.flash_snapshot_take(tenant) (flash.snapshot; SECURITY DEFINER, the application's one way to
+--                      write): the latest due date (date D is due at D + 1 at flash.snapshot_local_time in the tenant's
+--                      zone, so the hourly job takes each date once whatever the time), computed through
+--                      cma.flash_compute_of as of that date and stored; the id lists on a month's last day; the watch
+--                      in a subtransaction of its own (its failure is the run's watch_error, never the snapshot's); the
+--                      run row, late when it starts more than an hour after the due time. A date that stopped being the
+--                      latest due one without a take is recorded as missed by the next take. Idempotent: a date with a
+--                      succeeded or missed run is never taken again, and a date missed is never invented
 --   the watch          cma.flash_watch_finding: jump (a stock figure per market moved day over day by more than
 --                      flash.watch_jump_pct and flash.watch_jump_min), flow_zero (a flow figure of a market that had a flow
 --                      on each of the previous 7 days is zero), source_stale (a set-up source's last successful read is
 --                      older than three times its cadence: its connection's poll interval setting, else the median gap
 --                      of its runs over 7 days), snapshot_missing (the date before the one taken has no snapshot) and
 --                      dq_rise (a data-quality check rose by more than the jump thresholds). A finding resolves itself on
---                      the first snapshot where its condition no longer holds
+--                      the first snapshot where its condition no longer holds; one open finding per kind, overview, dims
+--                      and measure (two stale connections alike are one finding, counted)
 --   reads              cma.flash_overview(overview, market, as_of, from, to), cma.flash_rows(overview, filters, sort,
 --                      descending, limit, offset, as_of, from, to), cma.flash_page(market, as_of, from, to) (the landing:
 --                      stored figures only, so it answers at once at any volume), cma.flash_headline(overview, market, from,
@@ -81,10 +91,11 @@
 --                      cma_read.flash_watch_finding, and a cma_read.dq_ view per new check
 --
 -- Everything is SECURITY INVOKER and executable by the application only, with its permission checked inside, but
--- cma.flash_snapshot_ids_expire_of (SECURITY DEFINER, owned by cma_owner, search path pinned, the application's only;
--- flash.snapshot checked inside); cma.flash_snapshot_take_at checks flash.snapshot too, and a take at an instant other
--- than now is the owner's only (123). SQLSTATEs as before: CMA01 no acting user, CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not
--- permitted.
+-- cma.flash_snapshot_take (SECURITY DEFINER, owned by cma_owner, search path pinned, the application's only; flash.snapshot
+-- and the current tenant checked first) and the take's writers (cma.flash_snapshot_take_at, cma.flash_snapshot_ids_write_of,
+-- cma.flash_snapshot_ids_expire_of, cma.flash_watch_of: the owner's alone, each checking flash.snapshot and the current
+-- tenant too; a take at an instant other than now is the owner's only, 123). SQLSTATEs as before: CMA01 no acting user,
+-- CMA02 not found, CMA03 conflict, CMA04 invalid, CMA06 not permitted.
 --
 -- Guard: scripts run under a personal IAM login so the audit trail names a person. postgres is
 -- for emergencies only; to use it deliberately, run first:  set cma.emergency = 'on';
@@ -113,9 +124,11 @@ $$;
 -- ---------------------------------------------------------------------------------------------
 insert into cma.setting (key, value_type, allowed_values, default_value, description) values
   ('flash.active_subscription_statuses', 'text', null, 'active',
-     'The subscription statuses that make a subscription, and its store customer, active on Reports → Flash: one to seven of active, paused, canceled, expired, failed, merged and never-subscribed, comma-separated without spaces'),
+     'The subscription statuses that make a subscription, and its store customer, active on Reports → Flash: one to six of active, canceled, expired, failed, merged and never-subscribed (paused never: a paused subscription is counted apart), none of flash.ended_subscription_statuses, comma-separated without spaces'),
+  ('flash.ended_subscription_statuses', 'text', null, 'canceled,expired',
+     'The subscription statuses that end a subscription on Reports → Flash: churn counts a move into one of them, and a device in the field on one is the data-quality finding field_device_on_ended_subscription. One to six of active, canceled, expired, failed, merged and never-subscribed (paused never), none of flash.active_subscription_statuses, comma-separated without spaces'),
   ('flash.snapshot_local_time', 'time', null, '00:30',
-     'The time in the tenant''s zone after which the daily Flash snapshot of the business date that just ended is taken (00:00 to 23:59)'),
+     'The time in the tenant''s zone from which a business date''s Flash snapshot is due: a date is due on the day after it at this time, and the hourly snapshot job takes the latest due date once (00:00 to 23:59). The stock figures are the mirrors'' state at the take, measured against the snapshot''s date'),
   ('flash.id_list_retention_months', 'integer', null, '84',
      'Months a month end''s frozen id lists (active customers, active subscriptions, devices) are kept before the snapshot job removes them (1 to 240)'),
   ('flash.watch_jump_pct', 'integer', null, '20',
@@ -153,8 +166,8 @@ as $$
                    and not exists (select 1 from unnest(cma.flash_list_of(p_value)) x where x !~ p_pattern) end
 $$;
 
--- As 0008zm (120_lead_cohorts.sql), with the eight Flash settings: the active statuses (one to seven of the subscription statuses), the
--- snapshot time (not 24:00), the retention (1 to 240 months), the watch's share (1 to 1000) and minimum (0 to 1000000),
+-- As 0008zm (120_lead_cohorts.sql), with the nine Flash settings: the active and the ended statuses (one to six of the
+-- subscription statuses but paused, never one in both lists), the snapshot time (not 24:00), the retention (1 to 240 months), the watch's share (1 to 1000) and minimum (0 to 1000000),
 -- the rows of a file (1 to 50000), and the two lists of required references (names, each once, or empty)
 create or replace function cma.check_tenant_setting()
 returns trigger
@@ -175,7 +188,8 @@ begin
     new.value := btrim(new.value);
   end if;
   if new.key in ('leads.age_buckets_business_days', 'attempts.since_last_buckets_business_days', 'attempts.speed_buckets_business_minutes',
-                 'cohorts.lead_ages_days', 'flash.active_subscription_statuses', 'assets.required_refs', 'commerce.required_contact_refs') then
+                 'cohorts.lead_ages_days', 'flash.active_subscription_statuses', 'flash.ended_subscription_statuses', 'assets.required_refs',
+                 'commerce.required_contact_refs') then
     new.value := regexp_replace(new.value, '[[:space:]]+', '', 'g');
   end if;
   if s.value_type = 'boolean' and new.value not in ('true', 'false') then
@@ -335,10 +349,19 @@ begin
     raise exception 'Setting % takes at least the largest age of cohorts.lead_ages_days (%)', new.key, cma.setting_of(new.tenant_id, 'cohorts.lead_ages_days')
       using errcode = 'CMA04';
   -- Flash (0008zn)
-  elsif new.key = 'flash.active_subscription_statuses'
-        and not cma.flash_list_ok(new.value, '^(active|paused|canceled|expired|failed|merged|never-subscribed)$', 7, false) then
-    raise exception 'Setting % takes one to seven of active, paused, canceled, expired, failed, merged and never-subscribed, each once, comma-separated without spaces', new.key
-      using errcode = 'CMA04';
+  -- the active and the ended statuses: paused never (its own measure), and never one status in both lists, against the
+  -- other setting's effective value
+  elsif new.key in ('flash.active_subscription_statuses', 'flash.ended_subscription_statuses') then
+    if not cma.flash_list_ok(new.value, '^(active|canceled|expired|failed|merged|never-subscribed)$', 6, false) then
+      raise exception 'Setting % takes one to six of active, canceled, expired, failed, merged and never-subscribed (never paused), each once, comma-separated without spaces', new.key
+        using errcode = 'CMA04';
+    end if;
+    if cma.flash_list_of(new.value) && cma.flash_list_of(cma.setting_of(new.tenant_id,
+         case new.key when 'flash.active_subscription_statuses' then 'flash.ended_subscription_statuses' else 'flash.active_subscription_statuses' end)) then
+      raise exception 'Setting % takes no status of %', new.key,
+        case new.key when 'flash.active_subscription_statuses' then 'flash.ended_subscription_statuses' else 'flash.active_subscription_statuses' end
+        using errcode = 'CMA04';
+    end if;
   elsif new.key = 'flash.snapshot_local_time' and new.value = '24:00' then
     raise exception 'Setting % takes a time from 00:00 to 23:59', new.key using errcode = 'CMA04';
   elsif new.key = 'flash.id_list_retention_months'
@@ -570,6 +593,28 @@ as $$
   select cma.flash_list_of(cma.setting_of(p_tenant_id, 'flash.active_subscription_statuses'))
 $$;
 
+-- The statuses that end a subscription (flash.ended_subscription_statuses): churn's and the ended-subscription check's
+create or replace function cma.flash_ended_statuses_of(p_tenant_id uuid)
+returns text[]
+language sql stable
+as $$
+  select cma.flash_list_of(cma.setting_of(p_tenant_id, 'flash.ended_subscription_statuses'))
+$$;
+
+-- A breakdown's value as a snapshot can hold it, for a value a source writes freely (a SKU, a warehouse, a store's
+-- payment status, a pipeline, a stage, a task's type or status): p_none when absent or blank; other when it holds an @
+-- or a control character or is longer than 100 characters (a snapshot holds no @, so no email can land in one); else
+-- the value. The base sets apply it, so a figure, its breakdown cell and the list behind it agree, and one odd value
+-- never fails a take
+create or replace function cma.flash_dim_of(p_value text, p_none text)
+returns text
+language sql immutable
+as $$
+  select case when nullif(btrim(p_value), '') is null then p_none
+              when strpos(p_value, '@') > 0 or p_value ~ '[[:cntrl:]]' or length(btrim(p_value)) > 100 then 'other'
+              else btrim(p_value) end
+$$;
+
 -- Every connection that holds subscriptions (kind subscriptions, or unset while it holds them) with its commerce store
 -- (0008zl's cma.subscription_store_connection_of): the store's connection, handle, market and currency
 create or replace function cma.flash_subscription_stores_of(p_tenant_id uuid)
@@ -634,7 +679,8 @@ $$;
 -- spent as the store states them, the CRM contact it is linked to (0008h) and whether the CMA holds that contact, the
 -- contact's references among commerce.required_contact_refs (each system's first slot) and those it lacks in every slot
 -- (every one when the contact is not held), its subscriptions in the active statuses and paused (of the subscriptions of its store, not missing), and
--- the devices whose customer reference is its id
+-- the devices whose customer reference is its id, of its store's market (the register names no store: a customer id is
+-- matched within a market, so two stores of one market sharing an id would share its devices; docs/architecture/data-model/0008.md)
 create or replace function cma.flash_customers_of(p_tenant_id uuid)
 returns table (customer_id uuid, connection_id uuid, source_id text, store text, market text, lifetime_orders integer, total_spent numeric,
                currency text, crm_connection_id uuid, contact_source_id text, contact_held boolean, refs jsonb, missing_refs text[],
@@ -658,10 +704,10 @@ as $$
     where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null and sb.customer_source_id is not null
     group by 1, 2
   ), dev as materialized (
-    select d.customer_ref, count(*)::integer as n
+    select d.customer_ref, d.market, count(*)::integer as n
     from cma.device d
     where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.customer_ref is not null
-    group by 1
+    group by 1, 2
   ), refs as materialized (
     select x.contact_id, jsonb_object_agg(x.system, x.external_id) as refs
     from (select distinct on (cr.contact_id, cr.system) cr.contact_id, cr.system, cr.external_id
@@ -684,14 +730,14 @@ as $$
    and k.source_deleted_at is null
   left join refs r on r.contact_id = k.id
   left join sub on sub.store_connection_id = cu.connection_id and sub.customer_source_id = cu.source_id
-  left join dev on dev.customer_ref = cu.source_id
+  left join dev on dev.customer_ref = cu.source_id and dev.market = st.market
   where cu.tenant_id = p_tenant_id and cu.source_deleted_at is null
 $$;
 
 -- Subscriptions the latest full read still returns, each with its store and market (its connection's store), its store
 -- customer's CRM contact (0008h), status, payment state (0008zl; none for merged and never-subscribed), whether its status
 -- is an active one, amount per cycle and currency, interval, next billing, the open failed renewal's first failure and
--- highest attempt, and the devices whose subscription reference is its id
+-- highest attempt, and the devices whose subscription reference is its id, of its store's market
 create or replace function cma.flash_subscriptions_of(p_tenant_id uuid)
 returns table (subscription_id uuid, connection_id uuid, source_id text, store text, market text, customer_source_id text,
                crm_connection_id uuid, contact_source_id text, status text, payment_state text, is_active boolean, amount_per_cycle numeric,
@@ -706,10 +752,10 @@ as $$
   ), ps as materialized (
     select p.subscription_id, p.payment_state, p.retry_since, p.last_attempt from cma.subscription_payment_state_of(p_tenant_id) p
   ), dev as materialized (
-    select d.subscription_ref, count(*)::integer as n
+    select d.subscription_ref, d.market, count(*)::integer as n
     from cma.device d
     where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null
-    group by 1
+    group by 1, 2
   )
   select sb.id, sb.connection_id, sb.source_id, coalesce(sm.handle, 'unknown'), coalesce(sm.market, 'unknown'), sb.customer_source_id,
          cu.crm_connection_id, cu.crm_contact_source_id, sb.status, coalesce(ps.payment_state, 'none'), sb.status = any (s.active),
@@ -722,29 +768,35 @@ as $$
   left join cma.commerce_customer cu
     on cu.tenant_id = sb.tenant_id and cu.connection_id = sm.store_connection_id and cu.source_id = sb.customer_source_id
    and cu.source_deleted_at is null
-  left join dev on dev.subscription_ref = sb.source_id
+  left join dev on dev.subscription_ref = sb.source_id and dev.market = sm.market
   where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null
 $$;
 
 -- Devices the asset register still holds (not missing from its latest full snapshot), each with its serial, model,
--- market and device status (unknown when unmapped), the status's flags, its warehouse (none), its named ids among
--- assets.required_refs and those it lacks, its customer and subscription references, the subscription link (linked: a
--- subscription the CMA holds has the reference as its id; not_found; none: no reference) with that subscription's status
--- (its payment state is the list's, cma.flash_rows_of), and from 0008zi's forecast as of p_today its past-due items, its
--- items due within three months (not past due) and its earliest due date
+-- market and device status (unknown when unmapped), the status's flags, its warehouse (none; other for a value a
+-- snapshot cannot hold, cma.flash_dim_of), its named ids among assets.required_refs and those it lacks, its customer and
+-- subscription references, the subscription link (linked: a subscription of a store of the device's market has the
+-- reference as its id; not_found; none: no reference) with that subscription's id and status (its payment state is the
+-- list's, cma.flash_rows_of), and from 0008zi's forecast as of p_today its past-due items, its items due within three
+-- months (not past due) and its earliest due date. p_today is the business date the figures are for: the tenant's today
+-- live, the snapshot's own date in a take (so an item due on a month's last day is not past due in that month end's
+-- snapshot, taken after midnight)
 create or replace function cma.flash_devices_of(p_tenant_id uuid, p_today date)
 returns table (device_id uuid, connection_id uuid, source_id text, serial text, model text, market text, status text, is_in_field boolean,
                is_in_stock boolean, warehouse text, refs jsonb, missing_refs text[], customer_ref text, subscription_ref text, link text,
-               subscription_status text, past_due_items integer, items_due_3m integer, next_due_on date)
+               subscription_id uuid, subscription_status text, past_due_items integer, items_due_3m integer, next_due_on date)
 language sql stable
 as $$
   with s as materialized (
     select cma.flash_list_of(cma.setting_of(p_tenant_id, 'assets.required_refs')) as refs
   ), sub as materialized (
-    select distinct on (x.source_id) x.source_id, x.status
+    -- the subscriptions of the stores' subscriptions connections, with the store's market: the register names no
+    -- connection, so a device's reference is matched within its own market
+    select distinct on (sm.market, x.source_id) sm.market, x.source_id, x.id, x.status
     from cma.subscription x
+    join (select y.connection_id, y.market from cma.flash_subscription_stores_of(p_tenant_id) y offset 0) sm on sm.connection_id = x.connection_id
     where x.tenant_id = p_tenant_id and x.source_deleted_at is null
-    order by x.source_id, x.id
+    order by sm.market, x.source_id, x.id
   ), mi as materialized (
     select i.device_id,
            count(*) filter (where i.past_due)::integer as past_due,
@@ -755,21 +807,22 @@ as $$
   )
   select d.id, d.connection_id, d.source_id, d.serial, coalesce(d.model_key, 'unknown'), coalesce(d.market, 'unknown'),
          coalesce(d.device_status_key, 'unknown'), coalesce(st.is_in_field, false), coalesce(st.is_in_stock, false),
-         coalesce(d.warehouse_ref, 'none'),
+         cma.flash_dim_of(d.warehouse_ref, 'none'),
          coalesce((select jsonb_object_agg(x, d.external_refs ->> x) from unnest(s.refs) x where d.external_refs ? x), '{}'::jsonb),
          array(select x from unnest(s.refs) x where not (d.external_refs ? x)),
          d.customer_ref, d.subscription_ref,
          case when d.subscription_ref is null then 'none' when sub.source_id is not null then 'linked' else 'not_found' end,
-         sub.status, coalesce(mi.past_due, 0), coalesce(mi.due_3m, 0), mi.next_due
+         sub.id, sub.status, coalesce(mi.past_due, 0), coalesce(mi.due_3m, 0), mi.next_due
   from cma.device d
   cross join s
   left join cma.device_status st on st.tenant_id = d.tenant_id and st.key = d.device_status_key
-  left join sub on sub.source_id = d.subscription_ref
+  left join sub on sub.market = d.market and sub.source_id = d.subscription_ref
   left join mi on mi.device_id = d.id
   where d.tenant_id = p_tenant_id and d.source_deleted_at is null
 $$;
 
--- The subscriptions churned per business date of a period: an event canceled, or status_changed to canceled or expired,
+-- The subscriptions churned per business date of a period: a move into a status of flash.ended_subscription_statuses
+-- (default canceled and expired): an event canceled (while canceled is one of them), or status_changed to one of them,
 -- of the date in the tenant's zone; a subscription counts once per date (its first such event), with the reason code of
 -- its canceled event, else of the other (none when absent), its store and market, its store customer and its current
 -- cycle. A period is the sum of its dates
@@ -779,7 +832,7 @@ returns table (subscription_id uuid, connection_id uuid, source_id text, store t
 language sql stable
 as $$
   with z as materialized (
-    select t.timezone as zone, p.from_at, p.to_at
+    select t.timezone as zone, p.from_at, p.to_at, cma.flash_ended_statuses_of(p_tenant_id) as ended
     from cma.tenant t cross join cma.flash_period_of(p_tenant_id, p_from, p_to) p
     where t.id = p_tenant_id
   ), sm as materialized (
@@ -790,7 +843,8 @@ as $$
     from cma.subscription_event ev
     cross join z
     where ev.tenant_id = p_tenant_id and ev.occurred_at >= z.from_at and ev.occurred_at < z.to_at
-      and (ev.event_type = 'canceled' or (ev.event_type = 'status_changed' and ev.status_to in ('canceled', 'expired')))
+      and ((ev.event_type = 'canceled' and 'canceled' = any (z.ended))
+           or (ev.event_type = 'status_changed' and ev.status_to = any (z.ended)))
   ), g as (
     select e.connection_id, e.subscription_source_id, e.d, min(e.occurred_at) as at,
            coalesce((array_agg(e.reason_code order by (e.event_type = 'canceled') desc, e.occurred_at)
@@ -807,7 +861,7 @@ $$;
 
 -- The store orders created on the business dates of a period (the tenant's zone), test orders and deleted ones left out:
 -- store, market, kind, the payment and fulfilment status as the store states them (lower case; unknown when absent), the
--- SKUs (none for a line without one) and units of its lines, the total less refunded in its currency, the customer's id
+-- SKUs (none for a line without one, other for one a snapshot cannot hold: cma.flash_dim_of) and units of its lines, the total less refunded in its currency, the customer's id
 create or replace function cma.flash_orders_of(p_tenant_id uuid, p_from date, p_to date)
 returns table (order_id uuid, connection_id uuid, source_id text, order_number text, store text, market text, business_date date,
                created_at timestamptz, kind text, financial_status text, fulfillment_status text, skus text[], units integer, total numeric,
@@ -828,7 +882,7 @@ as $$
   ), l as (
     -- the lines of those orders, once, by a join (no read per order)
     select ln.connection_id, ln.order_source_id,
-           array_agg(distinct coalesce(nullif(btrim(ln.sku), ''), 'none') order by coalesce(nullif(btrim(ln.sku), ''), 'none')) as skus,
+           array_agg(distinct cma.flash_dim_of(ln.sku, 'none') order by cma.flash_dim_of(ln.sku, 'none')) as skus,
            sum(ln.quantity)::integer as units
     from cma.commerce_order_line ln
     join o on o.connection_id = ln.connection_id and o.source_id = ln.order_source_id
@@ -837,7 +891,7 @@ as $$
   )
   select o.id, o.connection_id, o.source_id, coalesce(o.order_name, o.source_id), coalesce(st.handle, 'unknown'), coalesce(st.market, 'unknown'),
          (o.source_created_at at time zone z.zone)::date, o.source_created_at, o.order_kind,
-         coalesce(lower(nullif(btrim(o.financial_status), '')), 'unknown'), coalesce(lower(nullif(btrim(o.fulfillment_status), '')), 'unknown'),
+         lower(cma.flash_dim_of(o.financial_status, 'unknown')), lower(cma.flash_dim_of(o.fulfillment_status, 'unknown')),
          coalesce(l.skus, '{}'::text[]), coalesce(l.units, 0), o.total_amount - coalesce(o.refunded_amount, 0), o.currency, o.customer_source_id
   from o
   cross join z
@@ -850,7 +904,7 @@ create or replace function cma.flash_order_lines_of(p_tenant_id uuid, p_from dat
 returns table (order_id uuid, store text, market text, kind text, business_date date, sku text, units integer)
 language sql stable
 as $$
-  select o.order_id, o.store, o.market, o.kind, o.business_date, coalesce(nullif(btrim(ln.sku), ''), 'none'), sum(ln.quantity)::integer
+  select o.order_id, o.store, o.market, o.kind, o.business_date, cma.flash_dim_of(ln.sku, 'none'), sum(ln.quantity)::integer
   from cma.flash_orders_of(p_tenant_id, p_from, p_to) o
   join cma.commerce_order_line ln on ln.tenant_id = p_tenant_id and ln.connection_id = o.connection_id and ln.order_source_id = o.source_id
   group by 1, 2, 3, 4, 5, 6
@@ -887,43 +941,50 @@ $$;
 
 -- Open deals: deals of counted pipelines, not deleted, not closed by their stage, created on or after intake.start_date
 -- (0008y's cma.counted_deals_of, never copied: its market rule, the deal's own else its contact's country), with the
--- pipeline, stage, the owner's ref and person, created, and the age in whole days since creation
-create or replace function cma.flash_deals_of(p_tenant_id uuid)
+-- pipeline, stage, the owner's ref and person, created, and the age in whole days since creation as of p_at (now live;
+-- the end of the snapshot's date in a take, so an age is its date's and never the take's)
+create or replace function cma.flash_deals_of(p_tenant_id uuid, p_at timestamptz default now())
 returns table (deal_id uuid, connection_id uuid, source_id text, pipeline text, stage text, market text, owner_ref text, owner_user_id uuid,
                created_at timestamptz, age_days integer)
 language sql stable
 as $$
-  select d.deal_id, d.connection_id, d.source_id, coalesce(d.pipeline_id, 'none'), coalesce(d.stage_id, 'none'), d.market, d.owner_ref,
-         cma.owner_user_of(p_tenant_id, d.source_system, d.owner_ref), d.created_at,
-         greatest(0, floor(extract(epoch from now() - d.created_at) / 86400))::integer
+  select d.deal_id, d.connection_id, d.source_id, cma.flash_dim_of(d.pipeline_id, 'none'), cma.flash_dim_of(d.stage_id, 'none'),
+         coalesce(d.market, 'unknown'), d.owner_ref, cma.owner_user_of(p_tenant_id, d.source_system, d.owner_ref), d.created_at,
+         greatest(0, floor(extract(epoch from coalesce(p_at, now()) - d.created_at) / 86400))::integer
   from cma.counted_deals_of(p_tenant_id, null, null) d
   where not d.is_closed
 $$;
 
 -- Open tickets: 0008o's cma.open_tickets_of (counted pipelines, not closed, not deleted; the ticket's market else its
--- contact's country), the queue its pipeline, with the age in whole days since creation
-create or replace function cma.flash_tickets_of(p_tenant_id uuid)
+-- contact's country), the queue its pipeline, with the age in whole days since creation as of p_at (as open deals)
+create or replace function cma.flash_tickets_of(p_tenant_id uuid, p_at timestamptz default now())
 returns table (ticket_id uuid, connection_id uuid, source_id text, queue text, stage text, market text, owner_ref text, owner_user_id uuid,
                created_at timestamptz, age_days integer)
 language sql stable
 as $$
-  select t.ticket_id, t.connection_id, t.ticket_source_id, coalesce(t.pipeline_id, 'none'), coalesce(t.stage_id, 'none'),
+  select t.ticket_id, t.connection_id, t.ticket_source_id, cma.flash_dim_of(t.pipeline_id, 'none'), cma.flash_dim_of(t.stage_id, 'none'),
          coalesce(t.market, 'unknown'), t.owner_ref, t.owner_user_id, t.created_at,
-         greatest(0, floor(extract(epoch from now() - t.created_at) / 86400))::integer
+         greatest(0, floor(extract(epoch from coalesce(p_at, now()) - t.created_at) / 86400))::integer
   from cma.open_tickets_of(p_tenant_id) t
 $$;
 
 -- Open tasks: 0008o's cma.open_tasks_of (not deleted, status not done by the connection's catalog, type counted), the
--- market from the task's deal, else its ticket, else its contact (unknown otherwise), overdue when due on an earlier
--- business date
-create or replace function cma.flash_tasks_of(p_tenant_id uuid)
+-- market from the task's deal, else its ticket, else its contact (unknown otherwise), overdue when due on a business
+-- date before p_on (the tenant's today live, as 0008o's due state; the snapshot's date in a take, so a task due on that
+-- date is not overdue in its snapshot)
+create or replace function cma.flash_tasks_of(p_tenant_id uuid, p_on date default null)
 returns table (task_id uuid, connection_id uuid, source_id text, type text, status text, market text, owner_ref text, owner_user_id uuid,
                due_at timestamptz, overdue boolean, record_type text, record_source_id text)
 language sql stable
 as $$
-  select k.task_id, k.connection_id, k.task_source_id, coalesce(k.type_ref, 'none'), coalesce(k.status_ref, 'none'), coalesce(k.market, 'unknown'),
-         k.owner_ref, k.owner_user_id, k.due_at, k.due_state = 'overdue', k.record_type, k.record_source_id
+  with z as materialized (
+    select t.timezone as zone, coalesce(p_on, (now() at time zone t.timezone)::date) as on_date from cma.tenant t where t.id = p_tenant_id
+  )
+  select k.task_id, k.connection_id, k.task_source_id, cma.flash_dim_of(k.type_ref, 'none'), cma.flash_dim_of(k.status_ref, 'none'),
+         coalesce(k.market, 'unknown'), k.owner_ref, k.owner_user_id, k.due_at,
+         coalesce((k.due_at at time zone z.zone)::date < z.on_date, false), k.record_type, k.record_source_id
   from cma.open_tasks_of(p_tenant_id) k
+  cross join z
 $$;
 
 -- Published reviews of counted channels (0008ze's cma.reviews_of, never copied) submitted on the business dates of a
@@ -954,13 +1015,15 @@ as $$
     ('subscription_customer_unmatched',    330, 'Subscriptions whose customer id no customer of their store holds'),
     ('active_subscription_without_device', 340, 'Active subscriptions no device''s subscription reference names'),
     ('device_subscription_ref_unknown',    350, 'Devices in the field whose subscription reference names no subscription the CMA holds'),
-    ('field_device_on_ended_subscription', 360, 'Devices in the field linked to a subscription that is canceled, expired or failed, with its status')
+    ('field_device_on_ended_subscription', 360, 'Devices in the field linked to a subscription in an ended status (flash.ended_subscription_statuses), with its status')
 $$;
 
 -- As 0008zi (112), plus Flash's six checks (0008zn): store customers with an order whose contact lacks a required
 -- reference, devices lacking a required named id, subscriptions whose customer their store does not hold, active
--- subscriptions without a device, devices in the field with a subscription reference the CMA does not know (of a market
--- whose subscriptions it reads) and devices in the field on an ended subscription
+-- subscriptions without a device (of a market the register holds devices of), devices in the field with a subscription
+-- reference the CMA does not know (of a market whose subscriptions it reads) and devices in the field on an ended
+-- subscription. A device's subscription reference is matched within the device's market (the register names no
+-- connection)
 create or replace function cma.data_quality_of(p_tenant_id uuid)
 returns table (check_key text, connection_id uuid, object_type text, object_id text, value text)
 language plpgsql stable
@@ -1190,10 +1253,12 @@ begin
   where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is null
   union all
   -- store customers with an order linked to a CRM contact that lacks a reference of commerce.required_contact_refs in
-  -- every slot (0008zn); the value the references missing, comma-separated, or contact_not_held while the CMA does not
-  -- hold the contact (its references are unknown until the contact is read)
+  -- every slot (0008zn); the value the references missing, comma-separated; contact_deleted when the CRM deleted the
+  -- contact the link names (fixed in the CRM: the link or the contact); contact_not_held while the CMA does not hold the
+  -- contact (its references are unknown until the contact is read)
   select 'customer_required_ref_missing', cu.connection_id, 'commerce_customer', cu.source_id,
          case when k.id is null then 'contact_not_held'
+              when k.source_deleted_at is not null then 'contact_deleted'
               else array_to_string(array(select x from unnest(rq.refs) x
                                          where not exists (select 1 from cma.crm_contact_ref cr
                                                            where cr.tenant_id = k.tenant_id and cr.contact_id = k.id and cr.system = x)), ',') end
@@ -1201,10 +1266,9 @@ begin
   cross join (select cma.flash_list_of(cma.setting_of(p_tenant_id, 'commerce.required_contact_refs')) as refs offset 0) rq
   left join cma.crm_contact k
     on k.tenant_id = cu.tenant_id and k.connection_id = cu.crm_connection_id and k.source_id = cu.crm_contact_source_id
-   and k.source_deleted_at is null
   where cu.tenant_id = p_tenant_id and cu.source_deleted_at is null and cu.crm_contact_source_id is not null
     and coalesce(cu.orders_count, 0) >= 1 and cardinality(rq.refs) > 0
-    and (k.id is null
+    and (k.id is null or k.source_deleted_at is not null
          or exists (select 1 from unnest(rq.refs) x
                     where not exists (select 1 from cma.crm_contact_ref cr
                                       where cr.tenant_id = k.tenant_id and cr.contact_id = k.id and cr.system = x)))
@@ -1228,36 +1292,43 @@ begin
     on cu.connection_id = sm.store_connection_id and cu.source_id = sb.customer_source_id
   where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null and sb.customer_source_id is not null and cu.source_id is null
   union all
-  -- active subscriptions (flash.active_subscription_statuses) no device the register still holds names by its
-  -- subscription reference, once the tenant has an asset register set up (0008zn); the value the status
+  -- active subscriptions (flash.active_subscription_statuses) of a store whose market the register holds devices of,
+  -- that no device of that market the register still holds names by its subscription reference, once the tenant has an
+  -- asset register set up (0008zn); the value the status. A market without any device in the register (one it does not
+  -- cover yet) gives no finding
   select 'active_subscription_without_device', sb.connection_id, 'subscription', sb.source_id, sb.status
   from cma.subscription sb
-  left join (select distinct d.subscription_ref from cma.device d
+  join (select x.connection_id, x.market from cma.flash_subscription_stores_of(p_tenant_id) x offset 0) sm on sm.connection_id = sb.connection_id
+  left join (select distinct d.market, d.subscription_ref from cma.device d
              where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.subscription_ref is not null) dr
-    on dr.subscription_ref = sb.source_id
+    on dr.subscription_ref = sb.source_id and dr.market = sm.market
   where sb.tenant_id = p_tenant_id and sb.source_deleted_at is null and dr.subscription_ref is null
     and sb.status = any (cma.flash_active_statuses_of(p_tenant_id)) and cma.assets_set_up_of(p_tenant_id)
+    and exists (select 1 from cma.device d where d.tenant_id = p_tenant_id and d.source_deleted_at is null and d.market = sm.market)
   union all
   -- devices in a status in the field, of a market whose store's subscriptions the CMA reads, whose subscription
-  -- reference names no subscription the CMA holds (0008zn)
+  -- reference names no subscription the CMA holds of that market (0008zn)
   select 'device_subscription_ref_unknown', dv.connection_id, 'device', dv.source_id, null::text
   from cma.device dv
   join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field
   where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is not null
     and dv.market in (select sm.market from cma.flash_subscription_stores_of(p_tenant_id) sm)
     and not exists (select 1 from cma.subscription sb
+                    join cma.flash_subscription_stores_of(p_tenant_id) sm on sm.connection_id = sb.connection_id and sm.market = dv.market
                     where sb.tenant_id = dv.tenant_id and sb.source_id = dv.subscription_ref and sb.source_deleted_at is null)
   union all
-  -- devices in a status in the field linked to a subscription that is canceled, expired or failed (0008zn); the value
-  -- the subscription's status
+  -- devices in a status in the field linked to a subscription of their market in a status of
+  -- flash.ended_subscription_statuses (0008zn); the value the subscription's status (the first by status when two
+  -- subscriptions of the market share the id)
   select 'field_device_on_ended_subscription', dv.connection_id, 'device', dv.source_id, sb.status
   from cma.device dv
   join cma.device_status st on st.tenant_id = dv.tenant_id and st.key = dv.device_status_key and st.is_in_field
-  join (select x.source_id, min(x.status) as status from cma.subscription x
-        where x.tenant_id = p_tenant_id and x.source_deleted_at is null and x.status in ('canceled', 'expired', 'failed')
-        group by x.source_id) sb on sb.source_id = dv.subscription_ref
-  where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is not null
-    and sb.status in ('canceled', 'expired', 'failed');
+  join (select sm.market, x.source_id, min(x.status) as status
+        from cma.subscription x
+        join (select y.connection_id, y.market from cma.flash_subscription_stores_of(p_tenant_id) y offset 0) sm on sm.connection_id = x.connection_id
+        where x.tenant_id = p_tenant_id and x.source_deleted_at is null and x.status = any (cma.flash_ended_statuses_of(p_tenant_id))
+        group by 1, 2) sb on sb.source_id = dv.subscription_ref and sb.market = dv.market
+  where dv.tenant_id = p_tenant_id and dv.source_deleted_at is null and dv.subscription_ref is not null;
 
   -- parked write-backs: the outbox arrives with migration 0007c (DESIGN §4.3a); until then the check
   -- finds nothing. Only the columns every outbox row has by design are read: id, connection, status
@@ -1352,6 +1423,7 @@ returns text
 language sql immutable
 as $$
   select case
+    -- a contact not held yet is the CMA's to read; a deleted contact or a missing reference is the CRM's to fix
     when p_check_key = 'customer_required_ref_missing' then case when p_value = 'contact_not_held' then 'cma' else 'crm' end
     when p_check_key in ('deal_without_contact', 'deal_contact_incomplete', 'crm_call_without_contact', 'commerce_unmatched',
                          'commerce_ambiguous', 'contact_slots_full', 'contact_country_differs', 'contact_country_fallback',
@@ -1445,11 +1517,15 @@ $$;
 -- 8. The figures: one computation, live and in the snapshot
 -- ---------------------------------------------------------------------------------------------
 -- An overview's figures for an explicit tenant: one row per grouping set of the overview (cma.flash_overviews().sets):
--- dims (the set's keys and values: {} for the totals) and measures. Stock overviews are as of now (the period is
--- ignored); flow overviews take the business dates p_from to p_to. Amounts are summed per currency (an object of
--- currency codes); never across currencies. Nothing for an overview whose source the tenant has not set up; the totals
--- row with zeros for a set-up source without records. The snapshot stores exactly these rows (one code path)
-create or replace function cma.flash_compute_of(p_tenant_id uuid, p_overview text, p_from date default null, p_to date default null)
+-- dims (the set's keys and values: {} for the totals) and measures. Stock overviews read the mirrors as they are (the
+-- period is ignored) and measure against p_on, the business date the figures are for: null live (the tenant's today,
+-- ages as of now), the snapshot's date in a take (past due and due within three months against that date, overdue
+-- tasks due before it, ages as of its end), so a snapshot taken after midnight says what its own date said. Flow
+-- overviews take the business dates p_from to p_to. Amounts are summed per currency (an object of currency codes);
+-- never across currencies. Nothing for an overview whose source the tenant has not set up; the totals row with zeros
+-- for a set-up source without records. The snapshot stores exactly these rows (one code path)
+create or replace function cma.flash_compute_of(p_tenant_id uuid, p_overview text, p_from date default null, p_to date default null,
+                                                p_on date default null)
 returns table (dims jsonb, measures jsonb)
 language plpgsql stable
 as $$
@@ -1460,6 +1536,11 @@ declare
   v_today date := cma.tenant_today_of(p_tenant_id);
   v_from  date := coalesce(p_from, v_today);
   v_to    date := coalesce(p_to, p_from, v_today);
+  -- the stock figures' date and instant: today and now live; the snapshot's date and its end (the next day's 00:00 in
+  -- the tenant's zone) in a take
+  v_on    date := coalesce(p_on, v_today);
+  v_at    timestamptz := case when p_on is null then now()
+                              else ((p_on + 1)::timestamp at time zone (select t.timezone from cma.tenant t where t.id = p_tenant_id)) end;
 begin
   perform cma.assert_flash_overview(p_overview);
   if v_src is not null and not coalesce((cma.flash_sources_of(p_tenant_id) -> v_src ->> 'set_up')::boolean, false) then
@@ -1485,7 +1566,8 @@ begin
                     when grouping(b.store) = 1 then jsonb_build_object('market', b.market)
                     else jsonb_build_object('market', b.market, 'store', b.store, 'status', b.status, 'payment_state', b.payment_state) end as dims,
                b.currency, count(*) as n, count(*) filter (where b.is_active) as act, count(*) filter (where b.status = 'paused') as paused,
-               sum(b.amount_per_cycle) as amount
+               -- the active subscriptions' amounts only, each for its own billing cycle (Flash overview measures)
+               sum(b.amount_per_cycle) filter (where b.is_active) as amount
         from cma.flash_subscriptions_of(p_tenant_id) b
         group by grouping sets ((b.currency), (b.market, b.currency), (b.market, b.store, b.status, b.payment_state, b.currency))
       )
@@ -1505,7 +1587,7 @@ begin
              jsonb_build_object('devices', count(*), 'in_field', count(*) filter (where b.is_in_field),
                                 'in_stock', count(*) filter (where b.is_in_stock), 'components_past_due', coalesce(sum(b.past_due_items), 0),
                                 'items_due_3m', coalesce(sum(b.items_due_3m), 0))
-      from cma.flash_devices_of(p_tenant_id, v_today) b
+      from cma.flash_devices_of(p_tenant_id, v_on) b
       group by grouping sets ((), (b.market), (b.market, b.status, b.model, b.warehouse, b.link));
   elsif p_overview = 'churn' then
     return query
@@ -1574,7 +1656,7 @@ begin
              jsonb_strip_nulls(jsonb_build_object('open_deals', count(*),
                                 'median_age_days', round((percentile_cont(0.5) within group (order by b.age_days))::numeric, 1),
                                 'oldest_age_days', max(b.age_days)))
-      from cma.flash_deals_of(p_tenant_id) b
+      from cma.flash_deals_of(p_tenant_id, v_at) b
       group by grouping sets ((), (b.market), (b.market, b.pipeline, b.stage));
   elsif p_overview = 'open_tickets' then
     return query
@@ -1584,7 +1666,7 @@ begin
              jsonb_strip_nulls(jsonb_build_object('open_tickets', count(*),
                                 'median_age_days', round((percentile_cont(0.5) within group (order by b.age_days))::numeric, 1),
                                 'oldest_age_days', max(b.age_days)))
-      from cma.flash_tickets_of(p_tenant_id) b
+      from cma.flash_tickets_of(p_tenant_id, v_at) b
       group by grouping sets ((), (b.market), (b.market, b.queue, b.stage));
   elsif p_overview = 'open_tasks' then
     return query
@@ -1592,7 +1674,7 @@ begin
                   when grouping(b.type) = 1 then jsonb_build_object('market', b.market)
                   else jsonb_build_object('market', b.market, 'type', b.type, 'status', b.status) end,
              jsonb_build_object('open_tasks', count(*), 'overdue', count(*) filter (where b.overdue))
-      from cma.flash_tasks_of(p_tenant_id) b
+      from cma.flash_tasks_of(p_tenant_id, v_on) b
       group by grouping sets ((), (b.market), (b.market, b.type, b.status));
   elsif p_overview = 'reviews' then
     return query
@@ -1617,32 +1699,46 @@ end
 $$;
 
 -- ---------------------------------------------------------------------------------------------
--- 9. The snapshots: runs, figures, the month end's id lists (insert only)
+-- 9. The snapshots: runs, figures, the month end's id lists (written by the take alone)
 -- ---------------------------------------------------------------------------------------------
--- One row per take of a tenant and business date, written once when the take ends: succeeded (its figures stored) or
--- failed (nothing stored, the error's code); one succeeded run per tenant and date. counts: the rows stored per
--- overview, and at a month end the ids per kind; sources: cma.flash_sources_of at the take; settings: the Flash
--- settings the figures followed; missed_before: the business dates between the previous succeeded run and this one
--- that have none (never taken afterwards)
+-- One row per take of a tenant and business date, written once when the take ends: succeeded (its figures stored),
+-- failed (nothing stored, the error's code), or missed: a date that stopped being the latest due date without a
+-- succeeded take, recorded by the next take and never taken afterwards (a date missed is never invented, and never
+-- silently absent). One succeeded or missed run per tenant and date. due_at: when the date became due (the day after it
+-- at flash.snapshot_local_time, in the tenant's zone); late: the take started more than an hour after due_at, so the
+-- hourly job's first run after the due time did not take it (a skipped or failed run); counts: the rows stored per
+-- overview, at a month end the ids per kind, and the watch's counts; sources: cma.flash_sources_of at the take;
+-- settings: the Flash settings the figures followed; missed_before: the business dates between the previous succeeded
+-- run and this one without one; watch_error: the watch's error code when the watch failed (the snapshot is kept, the
+-- watch's findings of that take are not written)
 create table if not exists cma.flash_snapshot_run (
   id             uuid primary key default uuidv7(),
   tenant_id      uuid not null default cma.current_tenant_id() references cma.tenant (id),
   snapshot_date  date not null,
+  due_at         timestamptz not null,
   started_at     timestamptz not null,
   finished_at    timestamptz not null,
-  status         text not null check (status in ('succeeded', 'failed')),
+  status         text not null check (status in ('succeeded', 'failed', 'missed')),
+  late           boolean not null default false,
   counts         jsonb not null default '{}'::jsonb check (jsonb_typeof(counts) = 'object' and strpos(counts::text, '@') = 0),
   sources        jsonb not null default '{}'::jsonb check (jsonb_typeof(sources) = 'object' and strpos(sources::text, '@') = 0),
   settings       jsonb not null default '{}'::jsonb check (jsonb_typeof(settings) = 'object' and strpos(settings::text, '@') = 0),
   missed_before  integer not null default 0 check (missed_before >= 0),
   error          text check (error ~ '^[A-Za-z0-9_ :.-]{1,200}$'),
+  watch_error    text check (watch_error ~ '^[A-Za-z0-9_]{1,20}$'),
   unique (tenant_id, id),
   check (finished_at >= started_at),
-  check ((status = 'failed') = (error is not null))
+  check ((status = 'failed') = (error is not null)),
+  check (watch_error is null or status = 'succeeded'),
+  check (status <> 'missed' or (counts = '{}'::jsonb and not late))
 );
-comment on table cma.flash_snapshot_run is 'Flash: one row per take of a tenant''s business date, written when the take ends, succeeded or failed (0008zn). Insert only';
-comment on column cma.flash_snapshot_run.missed_before is 'The business dates between the previous succeeded run and this one without a snapshot; they are never taken afterwards';
-create unique index if not exists flash_snapshot_run_succeeded_idx on cma.flash_snapshot_run (tenant_id, snapshot_date) where status = 'succeeded';
+comment on table cma.flash_snapshot_run is 'Flash: one row per take of a tenant''s business date, written when the take ends, succeeded or failed, and one per date the take missed (0008zn). Written by the snapshot job''s take only (cma.flash_snapshot_take); never changed';
+comment on column cma.flash_snapshot_run.due_at is 'When the date became due: the day after it at flash.snapshot_local_time in the tenant''s zone';
+comment on column cma.flash_snapshot_run.late is 'The take started more than an hour after due_at: the hourly job''s first run after the due time did not take the date';
+comment on column cma.flash_snapshot_run.missed_before is 'The business dates between the previous succeeded run and this one without a snapshot; each has a missed run, and none is taken afterwards';
+comment on column cma.flash_snapshot_run.watch_error is 'The watch''s error code when the watch failed after the figures were stored: the snapshot is kept, that take''s findings are not written';
+drop index if exists cma.flash_snapshot_run_succeeded_idx;
+create unique index if not exists flash_snapshot_run_final_idx on cma.flash_snapshot_run (tenant_id, snapshot_date) where status in ('succeeded', 'missed');
 create index if not exists flash_snapshot_run_date_idx on cma.flash_snapshot_run (tenant_id, snapshot_date);
 
 -- The figures of a take: one row per overview and grouping set, the live computation's rows as they were
@@ -1661,7 +1757,7 @@ create table if not exists cma.flash_snapshot (
   check (cma.flash_row_ok(overview, dims, measures)),
   foreign key (tenant_id, run_id) references cma.flash_snapshot_run (tenant_id, id) deferrable initially deferred
 );
-comment on table cma.flash_snapshot is 'Flash: the figures of each overview per business date as cma.flash_compute_of computed them at the take: one row per grouping set, dims and measures held to the overview''s allow-list, no id of a record and no @ (0008zn). Insert only';
+comment on table cma.flash_snapshot is 'Flash: the figures of each overview per business date as cma.flash_compute_of computed them at the take, measured against that date: one row per grouping set, dims and measures held to the overview''s allow-list, no id of a record and no @ (0008zn). Written by the take only; never changed';
 comment on column cma.flash_snapshot.dims is 'The grouping set''s keys and values ({} for the totals): codes such as a market, a store''s handle, a status, a pipeline''s id';
 comment on column cma.flash_snapshot.measures is 'The figures: counts, sums, ages; an amount as an object of currency codes to sums, never summed across currencies';
 create index if not exists flash_snapshot_overview_idx on cma.flash_snapshot (tenant_id, overview, snapshot_date);
@@ -1680,7 +1776,7 @@ create table if not exists cma.flash_snapshot_ids (
   foreign key (tenant_id, connection_id) references cma.integration_connection (tenant_id, id),
   foreign key (tenant_id, run_id) references cma.flash_snapshot_run (tenant_id, id) deferrable initially deferred
 );
-comment on table cma.flash_snapshot_ids is 'Flash: at each month end the frozen ids of the active customers (state active), the active subscriptions (their status) and every device the register holds (its device status), with connection and market; kept flash.id_list_retention_months (0008zn). Insert only; removed after the retention by cma.flash_snapshot_ids_expire_of';
+comment on table cma.flash_snapshot_ids is 'Flash: at each month end the frozen ids of the active customers (state active), the active subscriptions (their status) and every device the register holds (its device status), with connection and market; kept flash.id_list_retention_months (0008zn). Written by the take only; removed after the retention by cma.flash_snapshot_ids_expire_of';
 create index if not exists flash_snapshot_ids_market_idx on cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, market);
 
 -- An object of scalar values under the given keys only, no @ anywhere (a watch finding's dims and detail)
@@ -1707,7 +1803,7 @@ create table if not exists cma.flash_watch_finding (
   threshold      numeric,
   detail         jsonb not null default '{}'::jsonb
                  check (cma.flash_keys_ok(detail, array['missing_from', 'missing_to', 'days', 'cadence_minutes', 'cadence_basis', 'age_minutes',
-                                                        'last_read_at', 'jump_pct', 'jump_min', 'previous_days'])),
+                                                        'last_read_at', 'jump_pct', 'jump_min', 'previous_days', 'connections'])),
   state          text not null default 'open' check (state in ('open', 'resolved')),
   resolved_on    date,
   created_at     timestamptz not null default now(),
@@ -1715,7 +1811,7 @@ create table if not exists cma.flash_watch_finding (
   check ((state = 'resolved') = (resolved_on is not null)),
   check (resolved_on is null or resolved_on >= snapshot_date)
 );
-comment on table cma.flash_watch_finding is 'Flash: the deterministic watch''s findings after each snapshot (jump, flow_zero, source_stale, snapshot_missing, dq_rise): aggregates, codes and counts only, no id of a record (0008zn). Written and resolved by the take only';
+comment on table cma.flash_watch_finding is 'Flash: the deterministic watch''s findings after each snapshot (jump, flow_zero, source_stale, snapshot_missing, dq_rise): aggregates, codes and counts only, no id of a record (0008zn). Written and resolved by the take only; one open finding per kind, overview, dims and measure';
 create unique index if not exists flash_watch_finding_open_idx
   on cma.flash_watch_finding (tenant_id, kind, coalesce(overview, ''), dims, coalesce(measure, '')) where state = 'open';
 create index if not exists flash_watch_finding_date_idx on cma.flash_watch_finding (tenant_id, snapshot_date);
@@ -1730,14 +1826,15 @@ select cma.setup_tenant_table('cma.flash_watch_finding');
 -- tables out of the log)
 drop trigger if exists audit on cma.flash_snapshot_ids;
 
--- Insert only for the application, as the audit log: no update, no delete. A finding's state alone may change (open to
--- resolved, by the take, guarded below)
-revoke update, delete on cma.flash_snapshot_run, cma.flash_snapshot, cma.flash_snapshot_ids from cma_app;
-revoke update, delete on cma.flash_watch_finding from cma_app;
-grant update (state, resolved_on) on cma.flash_watch_finding to cma_app;
+-- Read only for the application: no insert, no update, no delete. Every row is written by the take, which runs with the
+-- owner's rights (cma.flash_snapshot_take, SECURITY DEFINER, flash.snapshot checked), so a stored figure is always the
+-- live computation's and a date missed is never invented; the owner's writers check flash.snapshot too. A finding's
+-- state alone ever changes (open to resolved, by the take, guarded below)
+revoke insert, update, delete on cma.flash_snapshot_run, cma.flash_snapshot, cma.flash_snapshot_ids, cma.flash_watch_finding from cma_app;
+revoke update (state, resolved_on) on cma.flash_watch_finding from cma_app;
 
--- A finding moves from open to resolved once, by the take (flash.snapshot) or the owner, and nothing else of it
--- changes. A trigger function: nobody gets execute
+-- A finding moves from open to resolved once, by the take (the owner's rights and flash.snapshot), and nothing else of
+-- it changes. A trigger function: nobody gets execute
 create or replace function cma.flash_watch_finding_guard()
 returns trigger
 language plpgsql
@@ -1761,60 +1858,112 @@ create trigger guard_state before update on cma.flash_watch_finding
   for each row execute function cma.flash_watch_finding_guard();
 
 -- ---------------------------------------------------------------------------------------------
--- 10. The take: the business date that just ended, once
+-- 10. The take: each business date once, from its due time
 -- ---------------------------------------------------------------------------------------------
--- The month end's id lists of a take (in its transaction): the active customers, the active subscriptions (their
--- status) and every device (its device status), from the same base sets as the figures; one audit row per kind with
--- its count. Answers the counts
+-- When a business date is due, and the latest due date at an instant (Decision log, 2 November 2026): date D is due at
+-- D + 1 at flash.snapshot_local_time T in the tenant's zone, and at local time L the latest due date is (L - T)'s date
+-- minus one. Each date is the latest due date for one local day (from its due time to the next date's), so the hourly
+-- job takes every date exactly once, whatever T (00:00 to 23:59), the zone or summer time: T = 00:30 takes D at the
+-- first run after D + 1 00:30, T = 23:59 at the first run after D + 1 23:59 (D + 2 00:20 with the job at minute 20)
+create or replace function cma.flash_due_date_of(p_zone text, p_time time, p_now timestamptz)
+returns date
+language sql stable
+as $$
+  select ((p_now at time zone p_zone) - p_time::interval)::date - 1
+$$;
+
+create or replace function cma.flash_due_at_of(p_zone text, p_time time, p_date date)
+returns timestamptz
+language sql stable
+as $$
+  select ((p_date + 1) + p_time) at time zone p_zone
+$$;
+
+-- An id a month end's list can hold: 1 to 100 characters without a control character or an @, a market code or
+-- unknown, a state code (the table's checks)
+create or replace function cma.flash_id_ok(p_source_id text, p_market text, p_state text)
+returns boolean
+language sql immutable
+as $$
+  select coalesce(length(p_source_id) between 1 and 100 and p_source_id !~ '[[:cntrl:]@]' and p_market ~ '^([A-Z]{2}|unknown)$'
+                  and p_state ~ '^[a-z0-9_-]{1,40}$', false)
+$$;
+
+-- The month end's id lists of a take (in its transaction, with the owner's rights; flash.snapshot and the current
+-- tenant checked here too): the active customers, the active subscriptions (their status) and every device (its device
+-- status), from the same base sets as the figures; an id the list cannot hold (cma.flash_id_ok) is left out and counted
+-- (ids_skipped), never a reason to lose the date; one audit row per kind with its count. Answers the counts
 create or replace function cma.flash_snapshot_ids_write_of(p_tenant_id uuid, p_date date, p_run_id uuid)
 returns jsonb
 language plpgsql
 as $$
 declare
-  v_c integer;
-  v_s integer;
-  v_d integer;
-  v_today date := cma.tenant_today_of(p_tenant_id);
+  v_c  integer;
+  v_s  integer;
+  v_d  integer;
+  v_nc integer;
+  v_ns integer;
+  v_nd integer;
 begin
-  insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
-  select p_tenant_id, p_date, 'customer', c.source_id, c.connection_id, c.market, 'active', p_run_id
-  from cma.flash_customers_of(p_tenant_id) c where c.active_subscriptions > 0;
-  get diagnostics v_c = row_count;
-  insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
-  select p_tenant_id, p_date, 'subscription', s.source_id, s.connection_id, s.market, s.status, p_run_id
-  from cma.flash_subscriptions_of(p_tenant_id) s where s.is_active;
-  get diagnostics v_s = row_count;
-  insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
-  select p_tenant_id, p_date, 'device', d.source_id, d.connection_id, d.market, d.status, p_run_id
-  from cma.flash_devices_of(p_tenant_id, v_today) d;
-  get diagnostics v_d = row_count;
+  perform cma.assert_permission('flash.snapshot');
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() or p_date is null or p_run_id is null then
+    raise exception 'a month end''s id lists are written for the current tenant only' using errcode = 'CMA06';
+  end if;
+  with src as materialized (
+    select c.source_id, c.connection_id, c.market from cma.flash_customers_of(p_tenant_id) c where c.active_subscriptions > 0
+  ), ins as (
+    insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
+    select p_tenant_id, p_date, 'customer', src.source_id, src.connection_id, src.market, 'active', p_run_id
+    from src where cma.flash_id_ok(src.source_id, src.market, 'active')
+    returning 1
+  )
+  select (select count(*) from ins), (select count(*) from src) into v_c, v_nc;
+  with src as materialized (
+    select s.source_id, s.connection_id, s.market, s.status from cma.flash_subscriptions_of(p_tenant_id) s where s.is_active
+  ), ins as (
+    insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
+    select p_tenant_id, p_date, 'subscription', src.source_id, src.connection_id, src.market, src.status, p_run_id
+    from src where cma.flash_id_ok(src.source_id, src.market, src.status)
+    returning 1
+  )
+  select (select count(*) from ins), (select count(*) from src) into v_s, v_ns;
+  with src as materialized (
+    select d.source_id, d.connection_id, d.market, d.status from cma.flash_devices_of(p_tenant_id, p_date) d
+  ), ins as (
+    insert into cma.flash_snapshot_ids (tenant_id, snapshot_date, record_kind, source_id, connection_id, market, state, run_id)
+    select p_tenant_id, p_date, 'device', src.source_id, src.connection_id, src.market, src.status, p_run_id
+    from src where cma.flash_id_ok(src.source_id, src.market, src.status)
+    returning 1
+  )
+  select (select count(*) from ins), (select count(*) from src) into v_d, v_nd;
   insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
   select p_tenant_id, 'flash_snapshot_ids', 'insert', null,
          jsonb_build_object('snapshot_date', p_date, 'record_kind', k.kind, 'rows', k.n, 'run_id', p_run_id),
          cma.current_user_id(), cma.current_actor_label()
   from (values ('customer', v_c), ('subscription', v_s), ('device', v_d)) k(kind, n);
-  return jsonb_build_object('ids_customer', v_c, 'ids_subscription', v_s, 'ids_device', v_d);
+  return jsonb_build_object('ids_customer', v_c, 'ids_subscription', v_s, 'ids_device', v_d,
+                            'ids_skipped', (v_nc - v_c) + (v_ns - v_s) + (v_nd - v_d));
 end
 $$;
 
--- The id lists' one delete: the tenant's lists of month ends more than flash.id_list_retention_months before p_date, for
--- the scheduler (flash.snapshot), the current tenant only; one audit row per removal with its count. SECURITY DEFINER,
--- owned by cma_owner (the application has no delete on the lists), search path pinned. Answers the rows removed
-create or replace function cma.flash_snapshot_ids_expire_of(p_tenant_id uuid, p_date date)
+-- The id lists' one delete (in the take, with the owner's rights; flash.snapshot and the current tenant checked): the
+-- tenant's lists of month ends more than flash.id_list_retention_months before the tenant's today. The cutoff is
+-- computed here from the setting and the tenant's own today alone: no caller passes a date, so no call removes a list
+-- that is still within its retention. One audit row per removal with its count. Answers the rows removed
+create or replace function cma.flash_snapshot_ids_expire_of(p_tenant_id uuid)
 returns integer
 language plpgsql
-security definer
-set search_path = pg_catalog, cma, pg_temp
 as $$
 declare
   v_before date;
   v_n      integer;
 begin
   perform cma.assert_permission('flash.snapshot');
-  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() or p_date is null then
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() then
     raise exception 'the id lists expire for the current tenant only' using errcode = 'CMA06';
   end if;
-  v_before := (p_date - make_interval(months => cma.setting_of(p_tenant_id, 'flash.id_list_retention_months')::integer))::date;
+  v_before := (cma.tenant_today_of(p_tenant_id)
+               - make_interval(months => cma.setting_of(p_tenant_id, 'flash.id_list_retention_months')::integer))::date;
   delete from cma.flash_snapshot_ids x where x.tenant_id = p_tenant_id and x.snapshot_date < v_before;
   get diagnostics v_n = row_count;
   if v_n > 0 then
@@ -1826,8 +1975,10 @@ begin
 end
 $$;
 
--- The watch after a take of p_date (in its transaction), as of p_now: the conditions that hold now, each a finding unless
--- one is open already; every open finding whose condition no longer holds resolved on p_date. Answers the counts
+-- The watch after a take of p_date (in its transaction, in a subtransaction of its own, with the owner's rights;
+-- flash.snapshot and the current tenant checked here too), as of p_now: the conditions that hold now, each a finding
+-- unless one is open already (one per kind, overview, dims and measure: a condition that holds twice is one finding);
+-- every open finding whose condition no longer holds resolved on p_date. Answers the counts
 --   jump              a count measure of a stock overview per market (its [market] row) that moved from p_date - 1 to
 --                     p_date by more than flash.watch_jump_min and more than flash.watch_jump_pct percent of the earlier
 --                     value (both dates with a succeeded snapshot; a market without a row has 0)
@@ -1835,7 +1986,9 @@ $$;
 --                     p_date (each with a succeeded snapshot) and is 0 or absent on p_date
 --   source_stale      an active connection of a source Flash reads whose last succeeded run finished more than three
 --                     cadences before p_now; the cadence its poll interval setting (a setting named *_poll_interval_minutes),
---                     else the median gap between its succeeded runs of the 7 days before p_now (none: no finding)
+--                     else the median gap between its succeeded runs of the 7 days before p_now (none: no finding). One
+--                     finding per source, adapter and store: two stale connections alike are one finding with the
+--                     oldest read, and how many they are (detail connections)
 --   snapshot_missing  the date before p_date has no succeeded snapshot while an earlier one has
 --   dq_rise           a data-quality check (its [check] row) that rose from p_date - 1 to p_date by more than the jump
 --                     thresholds
@@ -1851,6 +2004,10 @@ declare
   v_opened   integer;
   v_resolved integer;
 begin
+  perform cma.assert_permission('flash.snapshot');
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() or p_date is null or p_now is null then
+    raise exception 'the watch runs for the current tenant only' using errcode = 'CMA06';
+  end if;
   v_prev_ok := exists (select 1 from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.snapshot_date = p_date - 1 and r.status = 'succeeded');
   v_flow_ok := (select count(*) from cma.flash_snapshot_run r
                 where r.tenant_id = p_tenant_id and r.status = 'succeeded' and r.snapshot_date between p_date - 7 and p_date - 1) = 7;
@@ -1923,15 +2080,20 @@ begin
       on s.tenant_id = p_tenant_id and s.snapshot_date = p_date and s.overview = prev.overview and s.dims = prev.dims
     where v_flow_ok and coalesce((s.measures ->> prev.measure)::numeric, 0) = 0
     union all
-    -- source_stale
-    select 'source_stale', null::text, jsonb_strip_nulls(jsonb_build_object('source', r.kind, 'adapter', r.adapter, 'store', r.store)), null::text,
-           round(extract(epoch from p_now - r.last_at) / 60), null::numeric, round(3 * coalesce(r.set_minutes, r.seen_minutes)::numeric),
-           jsonb_build_object('cadence_minutes', round(coalesce(r.set_minutes, r.seen_minutes)::numeric, 1),
-                              'cadence_basis', case when r.set_minutes is not null then 'setting' else 'runs' end,
-                              'age_minutes', round(extract(epoch from p_now - r.last_at) / 60), 'last_read_at', r.last_at)
-    from r
-    where r.last_at is not null and coalesce(r.set_minutes, r.seen_minutes) is not null
-      and extract(epoch from p_now - r.last_at) / 60 > 3 * coalesce(r.set_minutes, r.seen_minutes)
+    -- source_stale: per source, adapter and store, the stale connection with the oldest read, and how many are stale
+    select 'source_stale', null::text, z.dims, null::text, z.value, null::numeric, z.threshold,
+           z.detail || jsonb_build_object('connections', z.n)
+    from (select distinct on (st.dims) st.dims, st.value, st.threshold, st.detail, count(*) over (partition by st.dims) as n
+          from (select jsonb_strip_nulls(jsonb_build_object('source', r.kind, 'adapter', r.adapter, 'store', r.store)) as dims,
+                       round(extract(epoch from p_now - r.last_at) / 60) as value, round(3 * coalesce(r.set_minutes, r.seen_minutes)::numeric) as threshold,
+                       jsonb_build_object('cadence_minutes', round(coalesce(r.set_minutes, r.seen_minutes)::numeric, 1),
+                                          'cadence_basis', case when r.set_minutes is not null then 'setting' else 'runs' end,
+                                          'age_minutes', round(extract(epoch from p_now - r.last_at) / 60), 'last_read_at', r.last_at) as detail,
+                       r.last_at
+                from r
+                where r.last_at is not null and coalesce(r.set_minutes, r.seen_minutes) is not null
+                  and extract(epoch from p_now - r.last_at) / 60 > 3 * coalesce(r.set_minutes, r.seen_minutes)) st
+          order by st.dims, st.last_at, st.value desc) z
     union all
     -- snapshot_missing
     select 'snapshot_missing', null::text, '{}'::jsonb, null::text, ((p_date - 1) - x.last_before)::numeric, null::numeric, null::numeric,
@@ -1948,9 +2110,11 @@ begin
                         and coalesce(n.measure, '') = coalesce(f.measure, ''))
     returning 1
   ), ins as (
-    -- every condition that holds without an open finding
+    -- every condition that holds without an open finding, once per key (a condition that holds twice is one finding, so
+    -- a take never fails on the open findings' unique index)
     insert into cma.flash_watch_finding (tenant_id, snapshot_date, kind, overview, dims, measure, value, previous, threshold, detail)
-    select p_tenant_id, p_date, n.kind, n.overview, n.dims, n.measure, n.value, n.previous, n.threshold, n.detail
+    select distinct on (n.kind, coalesce(n.overview, ''), n.dims, coalesce(n.measure, ''))
+           p_tenant_id, p_date, n.kind, n.overview, n.dims, n.measure, n.value, n.previous, n.threshold, n.detail
     from cur n
     where not exists (select 1 from cma.flash_watch_finding f
                       where f.tenant_id = p_tenant_id and f.state = 'open' and f.kind = n.kind
@@ -1964,29 +2128,40 @@ begin
 end
 $$;
 
--- The take at an instant (an instant other than now is the owner's alone, so only the verify takes one): once the
--- tenant's local time at p_now is past flash.snapshot_local_time, the business date before p_now's local date, unless
--- a succeeded run holds it; under a transaction-level advisory lock per tenant. Every overview through
--- cma.flash_compute_of (flows for that date alone), the id lists on a month's last day, the expiry of the old lists,
--- the run row, then the watch; a failure leaves nothing but a failed run row with the error's code. Answers what it did
+-- The take at an instant (an instant other than now is the owner's alone; the application reaches the take through
+-- cma.flash_snapshot_take only, so only the verify takes one at another instant): the latest due date at p_now
+-- (cma.flash_due_date_of), unless a succeeded run holds it; under a transaction-level advisory lock per tenant.
+--   1. every earlier date since the last succeeded or missed one that never got a succeeded take is recorded as missed
+--      (one run row each, kept even when this take fails): never taken afterwards, never silently absent
+--   2. every overview through cma.flash_compute_of (stock figures measured against the date, flows for that date alone),
+--      the id lists on a month's last day, the expiry of the old lists
+--   3. the watch, in a subtransaction of its own: its failure is the run's watch_error, never the snapshot's loss
+--   4. the run row: its due time and whether the take is late (its instant more than an hour after the due time)
+-- A failure in 2 leaves nothing but a failed run row with the error's code; the next hourly run tries the date again
+-- while it is the latest due date. Answers what it did
 create or replace function cma.flash_snapshot_take_at(p_tenant_id uuid, p_now timestamptz)
 returns jsonb
 language plpgsql
 as $$
 declare
   v_zone     text;
-  v_local    timestamp;
+  v_time     time;
   v_date     date;
+  v_due      timestamptz;
+  v_late     boolean;
   v_run      uuid := uuidv7();
   v_started  timestamptz := clock_timestamp();
   v_counts   jsonb := '{}'::jsonb;
   v_sources  jsonb;
   v_settings jsonb;
   v_missed   integer := 0;
+  v_recorded integer := 0;
   v_last     date;
   v_n        integer;
   v_expired  integer := 0;
   v_watch    jsonb := '{}'::jsonb;
+  v_werr     text;
+  r          record;
   o          record;
 begin
   -- the scheduler's own permission first, so a caller without it leaves no run row behind
@@ -1994,68 +2169,106 @@ begin
   if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() then
     raise exception 'a Flash snapshot is taken for the current tenant only' using errcode = 'CMA06';
   end if;
-  -- an instant other than now is the owner's alone (121): the application can never write a date that has not ended
-  if p_now is distinct from now() and current_user <> 'cma_owner' then
+  -- an instant other than now is the owner's alone (123): the application can never write a date that has not ended
+  if p_now is null or (p_now is distinct from now() and current_user <> 'cma_owner') then
     raise exception 'a Flash snapshot is taken as of now' using errcode = 'CMA06';
   end if;
   select t.timezone into v_zone from cma.tenant t where t.id = p_tenant_id;
-  v_local := p_now at time zone v_zone;
-  v_date := v_local::date - 1;
-  if v_local::time < cma.setting_of(p_tenant_id, 'flash.snapshot_local_time')::time then
-    return jsonb_build_object('taken', false, 'reason', 'not_due', 'date', v_date);
-  end if;
+  v_time := cma.setting_of(p_tenant_id, 'flash.snapshot_local_time')::time;
+  v_date := cma.flash_due_date_of(v_zone, v_time, p_now);
+  v_due := cma.flash_due_at_of(v_zone, v_time, v_date);
+  v_late := p_now > v_due + interval '1 hour';
   perform pg_advisory_xact_lock(hashtextextended(p_tenant_id::text || '/flash_snapshot', 0));
-  if exists (select 1 from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.snapshot_date = v_date and r.status = 'succeeded') then
-    return jsonb_build_object('taken', false, 'reason', 'taken', 'date', v_date);
+  select x.id, x.started_at, x.counts into r from cma.flash_snapshot_run x
+  where x.tenant_id = p_tenant_id and x.snapshot_date = v_date and x.status = 'succeeded';
+  if found then
+    -- taken already: the run's own counts come back, so a job whose first answer was lost reports what it stored
+    return jsonb_build_object('taken', false, 'reason', 'taken', 'date', v_date, 'run_id', r.id, 'run_started_at', r.started_at,
+                              'stored', r.counts);
   end if;
-  select max(r.snapshot_date) into v_last from cma.flash_snapshot_run r
-  where r.tenant_id = p_tenant_id and r.status = 'succeeded' and r.snapshot_date < v_date;
+  if exists (select 1 from cma.flash_snapshot_run x where x.tenant_id = p_tenant_id and x.snapshot_date = v_date and x.status = 'missed') then
+    return jsonb_build_object('taken', false, 'reason', 'missed', 'date', v_date);
+  end if;
+  -- 1. the dates missed before it, recorded once
+  select max(x.snapshot_date) into v_last from cma.flash_snapshot_run x
+  where x.tenant_id = p_tenant_id and x.status in ('succeeded', 'missed') and x.snapshot_date < v_date;
+  if v_last is not null and v_last < v_date - 1 then
+    insert into cma.flash_snapshot_run (tenant_id, snapshot_date, due_at, started_at, finished_at, status)
+    select p_tenant_id, g.d, cma.flash_due_at_of(v_zone, v_time, g.d), v_started, v_started, 'missed'
+    from (select x::date as d from generate_series(v_last + 1, v_date - 1, interval '1 day') x) g;
+    get diagnostics v_recorded = row_count;
+  end if;
+  select max(x.snapshot_date) into v_last from cma.flash_snapshot_run x
+  where x.tenant_id = p_tenant_id and x.status = 'succeeded' and x.snapshot_date < v_date;
   v_missed := case when v_last is null then 0 else v_date - v_last - 1 end;
   v_sources := cma.flash_sources_of(p_tenant_id);
   v_settings := jsonb_build_object(
     'flash.active_subscription_statuses', cma.setting_of(p_tenant_id, 'flash.active_subscription_statuses'),
+    'flash.ended_subscription_statuses', cma.setting_of(p_tenant_id, 'flash.ended_subscription_statuses'),
     'commerce.required_contact_refs', cma.setting_of(p_tenant_id, 'commerce.required_contact_refs'),
     'assets.required_refs', cma.setting_of(p_tenant_id, 'assets.required_refs'),
     'flash.watch_jump_pct', cma.setting_of(p_tenant_id, 'flash.watch_jump_pct'),
     'flash.watch_jump_min', cma.setting_of(p_tenant_id, 'flash.watch_jump_min'),
+    'flash.snapshot_local_time', to_char(v_time, 'HH24:MI'),
     'reviews.negative_max_rating', cma.setting_of(p_tenant_id, 'reviews.negative_max_rating'),
     'timezone', v_zone);
   begin
+    -- 2. the figures (stock measured against the date), the id lists, the expiry
     for o in select x.key from cma.flash_overviews() x order by x.sort_order loop
       insert into cma.flash_snapshot (tenant_id, snapshot_date, overview, dims, measures, definition_version, computed_at, run_id)
       select p_tenant_id, v_date, o.key, c.dims, c.measures, cma.flash_definition_version(o.key), now(), v_run
-      from cma.flash_compute_of(p_tenant_id, o.key, v_date, v_date) c;
+      from cma.flash_compute_of(p_tenant_id, o.key, v_date, v_date, v_date) c;
       get diagnostics v_n = row_count;
       v_counts := v_counts || jsonb_build_object(o.key, v_n);
     end loop;
     if v_date = (date_trunc('month', v_date) + interval '1 month - 1 day')::date then
       v_counts := v_counts || cma.flash_snapshot_ids_write_of(p_tenant_id, v_date, v_run);
     end if;
-    v_expired := cma.flash_snapshot_ids_expire_of(p_tenant_id, v_date);
-    insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, started_at, finished_at, status, counts, sources, settings, missed_before)
-    values (v_run, p_tenant_id, v_date, v_started, clock_timestamp(), 'succeeded', v_counts || jsonb_build_object('ids_expired', v_expired),
-            v_sources, v_settings, v_missed);
-    v_watch := cma.flash_watch_of(p_tenant_id, v_date, p_now);
+    v_expired := cma.flash_snapshot_ids_expire_of(p_tenant_id);
+    -- 3. the watch, in a subtransaction of its own: its error is recorded, the figures stay
+    begin
+      v_watch := cma.flash_watch_of(p_tenant_id, v_date, p_now);
+    exception when others then
+      v_werr := sqlstate;
+      v_watch := '{}'::jsonb;
+    end;
+    -- 4. the run row
+    insert into cma.flash_snapshot_run (id, tenant_id, snapshot_date, due_at, started_at, finished_at, status, late, counts, sources, settings,
+                                        missed_before, watch_error)
+    values (v_run, p_tenant_id, v_date, v_due, v_started, clock_timestamp(), 'succeeded', v_late,
+            v_counts || jsonb_build_object('ids_expired', v_expired) || v_watch, v_sources, v_settings, v_missed, v_werr);
   exception when others then
-    -- the subtransaction's rows are gone: the run says failed with the error's code (never its message, which may hold values)
-    insert into cma.flash_snapshot_run (tenant_id, snapshot_date, started_at, finished_at, status, counts, sources, settings, missed_before, error)
-    values (p_tenant_id, v_date, v_started, clock_timestamp(), 'failed', '{}'::jsonb, coalesce(v_sources, '{}'::jsonb),
+    -- the subtransaction's rows are gone (the missed dates of step 1 stay): the run says failed with the error's code
+    -- (never its message, which may hold values)
+    insert into cma.flash_snapshot_run (tenant_id, snapshot_date, due_at, started_at, finished_at, status, late, counts, sources, settings,
+                                        missed_before, error)
+    values (p_tenant_id, v_date, v_due, v_started, clock_timestamp(), 'failed', v_late, '{}'::jsonb, coalesce(v_sources, '{}'::jsonb),
             coalesce(v_settings, '{}'::jsonb), v_missed, sqlstate);
-    return jsonb_build_object('taken', false, 'reason', 'failed', 'date', v_date, 'error', sqlstate);
+    return jsonb_build_object('taken', false, 'reason', 'failed', 'date', v_date, 'due_at', v_due, 'late', v_late, 'error', sqlstate,
+                              'missed_recorded', v_recorded);
   end;
-  return jsonb_build_object('taken', true, 'date', v_date, 'run_id', v_run, 'missed_before', v_missed,
-                            'duration_ms', round(extract(epoch from clock_timestamp() - v_started) * 1000))
-         || v_counts || v_watch || jsonb_build_object('ids_expired', v_expired);
+  return jsonb_build_object('taken', true, 'date', v_date, 'run_id', v_run, 'due_at', v_due, 'late', v_late, 'missed_before', v_missed,
+                            'missed_recorded', v_recorded, 'duration_ms', round(extract(epoch from clock_timestamp() - v_started) * 1000))
+         || v_counts || v_watch || jsonb_build_object('ids_expired', v_expired)
+         || case when v_werr is not null then jsonb_build_object('watch_error', v_werr) else '{}'::jsonb end;
 end
 $$;
 
--- The job's entry (flash.snapshot): the current tenant, as of now
+-- The job's entry (flash.snapshot): the current tenant, as of now. SECURITY DEFINER, owned by cma_owner, search path
+-- pinned, executable by the application only: the application holds no write on the four Flash tables, so this is the
+-- one way a figure, an id list, a run or a finding is ever written, always the live computation's and always for the
+-- latest due date. The permission and the tenant are checked before anything else
 create or replace function cma.flash_snapshot_take(p_tenant_id uuid)
 returns jsonb
 language plpgsql
+security definer
+set search_path = pg_catalog, cma, pg_temp
 as $$
 begin
   perform cma.assert_permission('flash.snapshot');
+  if p_tenant_id is null or p_tenant_id is distinct from cma.current_tenant_id() then
+    raise exception 'a Flash snapshot is taken for the current tenant only' using errcode = 'CMA06';
+  end if;
   return cma.flash_snapshot_take_at(p_tenant_id, now());
 end
 $$;
@@ -2078,6 +2291,9 @@ begin
   end if;
   if (p_from is null) <> (p_to is null) or p_from > p_to or p_to - p_from > 365 then
     raise exception 'a period runs from a date to the same or a later one, at most 366 days' using errcode = 'CMA04';
+  end if;
+  if p_to > p_today then
+    raise exception 'a period ends today (%) at the latest', p_today using errcode = 'CMA04';
   end if;
 end
 $$;
@@ -2439,8 +2655,7 @@ begin
       -- the linked subscription's payment state for the list (0008zl's derivation, once per read): the figures need none
       v_base := '(select d.*, ps.payment_state as subscription_payment_state
                   from cma.flash_devices_of($2, $7) d
-                  left join (select distinct on (p.source_id) p.source_id, p.payment_state from cma.subscription_payment_state_of($2) p
-                             order by p.source_id, p.subscription_id) ps on ps.source_id = d.subscription_ref)';
+                  left join cma.subscription_payment_state_of($2) ps on ps.subscription_id = d.subscription_id)';
       v_where := '($1 ->> ''market'' is null or x.market = $1 ->> ''market'') and ($1 ->> ''status'' is null or x.status = $1 ->> ''status'')
                   and ($1 ->> ''model'' is null or x.model = $1 ->> ''model'') and ($1 ->> ''warehouse'' is null or x.warehouse = $1 ->> ''warehouse'')
                   and ($1 ->> ''link'' is null or x.link = $1 ->> ''link'')
@@ -2533,7 +2748,8 @@ $$;
 -- A past month end's frozen list (customers, subscriptions, installed_base) for an explicit tenant: the ids as frozen,
 -- joined to nothing that could have changed (source id, connection, market, state); filters market and status (the
 -- state; not for customers, all active), measure the list's own; sorted by id, market or status. CMA02 without a list
--- of that kind for that date
+-- of that kind for that date, and CMA02 (expired) for a list its take wrote that flash.id_list_retention_months has
+-- since removed: never an empty list in its place
 create or replace function cma.flash_id_rows_of(p_tenant_id uuid, p_overview text, p_filters jsonb, p_sort text, p_descending boolean,
                                                 p_limit integer, p_offset integer, p_as_of date)
 returns jsonb
@@ -2558,10 +2774,15 @@ begin
   if v_order is null then
     raise exception 'a past month end''s list sorts by its id, market or status' using errcode = 'CMA04';
   end if;
-  if not exists (select 1 from cma.flash_snapshot_ids x where x.tenant_id = p_tenant_id and x.snapshot_date = p_as_of and x.record_kind = v_kind)
-     and not exists (select 1 from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.snapshot_date = p_as_of and r.status = 'succeeded'
-                     and p_as_of = (date_trunc('month', p_as_of) + interval '1 month - 1 day')::date) then
-    raise exception 'no frozen list of % for %: lists are kept for month ends', v_kind, p_as_of using errcode = 'CMA02';
+  if not exists (select 1 from cma.flash_snapshot_ids x where x.tenant_id = p_tenant_id and x.snapshot_date = p_as_of and x.record_kind = v_kind) then
+    if exists (select 1 from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.snapshot_date = p_as_of and r.status = 'succeeded'
+               and coalesce((r.counts ->> ('ids_' || v_kind))::integer, 0) > 0) then
+      raise exception 'the frozen list of % for % has expired (flash.id_list_retention_months)', v_kind, p_as_of using errcode = 'CMA02';
+    end if;
+    if not exists (select 1 from cma.flash_snapshot_run r where r.tenant_id = p_tenant_id and r.snapshot_date = p_as_of and r.status = 'succeeded'
+                   and p_as_of = (date_trunc('month', p_as_of) + interval '1 month - 1 day')::date) then
+      raise exception 'no frozen list of % for %: lists are kept for month ends', v_kind, p_as_of using errcode = 'CMA02';
+    end if;
   end if;
   return (
     with f as materialized (
@@ -2850,21 +3071,34 @@ begin
 end
 $$;
 
--- A Flash file read, in the audit log (who saw what): the overview, the part (rows or breakdown), the filters, the
--- market, the date or period and the rows written; never a row of the file. reports.view or performance.team
+-- A Flash file read or a bulk read of records, in the audit log (who saw what): the overview, the part (rows or
+-- breakdown), the filters (the overview's dims and measure, each a text of 1 to 100 characters without an @; data
+-- quality's check too), the market, the date or period and the rows given; never a row. reports.view or
+-- performance.team, and for data quality tenant.configure too (whoever may read the records is recorded reading them)
 create or replace function cma.flash_file_record(p_overview text, p_part text, p_filters jsonb, p_market text, p_as_of date, p_from date,
                                                  p_to date, p_rows integer)
 returns void
 language plpgsql
 as $$
+declare
+  o record;
 begin
-  perform cma.assert_any_permission(array['reports.view', 'performance.team']);
+  perform cma.assert_any_permission(case when p_overview = 'data_quality' then array['reports.view', 'performance.team', 'tenant.configure']
+                                         else array['reports.view', 'performance.team'] end);
   perform cma.assert_flash_overview(p_overview);
+  select * into o from cma.flash_overviews() x where x.key = p_overview;
   if p_part is null or p_part not in ('rows', 'breakdown') or p_rows is null or p_rows < 0
-     or (p_filters is not null and (jsonb_typeof(p_filters) <> 'object' or strpos(p_filters::text, '@') > 0 or length(p_filters::text) > 2000)) then
-    raise exception 'a file record names its part (rows or breakdown), its filters as an object and its rows' using errcode = 'CMA04';
+     or (p_filters is not null
+         and (jsonb_typeof(p_filters) <> 'object' or strpos(p_filters::text, '@') > 0
+              or exists (select 1 from jsonb_each(p_filters) e
+                         where not (e.key = any (o.dims) or e.key = 'measure') or jsonb_typeof(e.value) <> 'string'
+                            or length(e.value #>> '{}') not between 1 and 100)
+              or (p_filters ? 'measure' and not ((p_filters ->> 'measure') = any (o.count_measures))))) then
+    raise exception 'a file record names its part (rows or breakdown), its filters (the overview''s dims and measure, each a text) and its rows'
+      using errcode = 'CMA04';
   end if;
-  perform cma.assert_flash_params(p_market, null, p_from, p_to, cma.tenant_today_of(cma.current_tenant_id()));
+  perform cma.assert_flash_params(p_market, p_as_of, p_from, p_to, cma.tenant_today_of(cma.current_tenant_id()));
+  perform cma.assert_flash_params(p_filters ->> 'market', null, null, null, cma.tenant_today_of(cma.current_tenant_id()));
   insert into cma.audit_log (tenant_id, table_name, action, old_row, new_row, actor_user_id, actor_label)
   values (cma.current_tenant_id(), 'flash_file', 'insert', null,
           jsonb_strip_nulls(jsonb_build_object('overview', p_overview, 'part', p_part, 'filters', coalesce(p_filters, '{}'::jsonb),
@@ -3048,6 +3282,10 @@ create index if not exists device_subscription_ref_idx on cma.device (tenant_id,
   where source_deleted_at is null and subscription_ref is not null;
 -- the renewals, failed renewals and churn events of a period
 create index if not exists subscription_event_type_occurred_idx on cma.subscription_event (tenant_id, event_type, occurred_at);
+-- the store customers' links to CRM contacts, newest first (the ingest's sweep and nightly reconcile take in the contacts
+-- of recent links, D2)
+create index if not exists commerce_customer_link_matched_idx on cma.commerce_customer (tenant_id, crm_connection_id, matched_at)
+  where crm_contact_source_id is not null and source_deleted_at is null;
 
 -- ---------------------------------------------------------------------------------------------
 -- 14. Grants: the application only
@@ -3060,15 +3298,16 @@ begin
     'cma.flash_list_of(text)', 'cma.flash_list_ok(text,text,integer,boolean)',
     'cma.job_permission_of(text)', 'cma.job_run_start(text)',
     'cma.flash_overviews()', 'cma.flash_definition_version(text)', 'cma.flash_keys_ok(jsonb,text[])', 'cma.assert_flash_overview(text)', 'cma.flash_row_ok(text,jsonb,jsonb)',
-    'cma.flash_active_statuses_of(uuid)', 'cma.flash_subscription_stores_of(uuid)', 'cma.flash_sources_of(uuid)', 'cma.flash_period_of(uuid,date,date)',
+    'cma.flash_active_statuses_of(uuid)', 'cma.flash_ended_statuses_of(uuid)', 'cma.flash_dim_of(text,text)',
+    'cma.flash_subscription_stores_of(uuid)', 'cma.flash_sources_of(uuid)', 'cma.flash_period_of(uuid,date,date)',
     'cma.flash_customers_of(uuid)', 'cma.flash_subscriptions_of(uuid)', 'cma.flash_devices_of(uuid,date)', 'cma.flash_churn_of(uuid,date,date)',
     'cma.flash_orders_of(uuid,date,date)', 'cma.flash_order_lines_of(uuid,date,date)', 'cma.flash_payments_of(uuid,date,date)',
-    'cma.flash_deals_of(uuid)', 'cma.flash_tickets_of(uuid)', 'cma.flash_tasks_of(uuid)', 'cma.flash_reviews_of(uuid,date,date)',
+    'cma.flash_deals_of(uuid,timestamptz)', 'cma.flash_tickets_of(uuid,timestamptz)', 'cma.flash_tasks_of(uuid,date)', 'cma.flash_reviews_of(uuid,date,date)',
     'cma.data_quality_flash_checks()', 'cma.data_quality_of(uuid)', 'cma.data_quality()', 'cma.data_quality_catalog()',
     'cma.data_quality_fix_in(text,text)', 'cma.flash_findings_of(uuid)', 'cma.flash_finding_links_of(uuid,uuid,text,text)',
-    'cma.flash_compute_of(uuid,text,date,date)',
-    'cma.flash_snapshot_ids_write_of(uuid,date,uuid)', 'cma.flash_snapshot_ids_expire_of(uuid,date)', 'cma.flash_watch_of(uuid,date,timestamptz)',
-    'cma.flash_snapshot_take_at(uuid,timestamptz)', 'cma.flash_snapshot_take(uuid)',
+    'cma.flash_compute_of(uuid,text,date,date,date)',
+    'cma.flash_due_date_of(text,time,timestamptz)', 'cma.flash_due_at_of(text,time,date)', 'cma.flash_id_ok(text,text,text)',
+    'cma.flash_snapshot_take(uuid)',
     'cma.assert_flash_params(text,date,date,date,date)', 'cma.flash_labels_of(uuid,text)', 'cma.flash_snapshot_sum_of(uuid,text,date[])',
     'cma.flash_document_of(uuid,text,text,date,date,date)', 'cma.flash_overview(text,text,date,date,date)',
     'cma.flash_order_by(text,text,boolean)', 'cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date)',
@@ -3080,6 +3319,14 @@ begin
   ] loop
     execute format('revoke execute on function %s from public', f);
     execute format('grant execute on function %s to cma_app', f);
+  end loop;
+  -- the take's writers: the owner's alone (the take runs them with the owner's rights); each checks flash.snapshot and
+  -- the current tenant too
+  foreach f in array array[
+    'cma.flash_snapshot_ids_write_of(uuid,date,uuid)', 'cma.flash_snapshot_ids_expire_of(uuid)', 'cma.flash_watch_of(uuid,date,timestamptz)',
+    'cma.flash_snapshot_take_at(uuid,timestamptz)'
+  ] loop
+    execute format('revoke execute on function %s from public, cma_app', f);
   end loop;
 end
 $$;
@@ -3094,10 +3341,10 @@ declare
   f text;
 begin
   foreach f in array array[
-    'cma.data_quality_of(uuid)', 'cma.flash_compute_of(uuid,text,date,date)', 'cma.flash_document_of(uuid,text,text,date,date,date)',
+    'cma.data_quality_of(uuid)', 'cma.flash_compute_of(uuid,text,date,date,date)', 'cma.flash_document_of(uuid,text,text,date,date,date)',
     'cma.flash_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date,date)', 'cma.flash_id_rows_of(uuid,text,jsonb,text,boolean,integer,integer,date)',
     'cma.flash_snapshot_take_at(uuid,timestamptz)', 'cma.flash_snapshot_ids_write_of(uuid,date,uuid)',
-    'cma.flash_watch_of(uuid,date,timestamptz)'
+    'cma.flash_watch_of(uuid,date,timestamptz)', 'cma.flash_snapshot_take(uuid)'
   ] loop
     execute format('alter function %s set jit = off', f);
   end loop;
@@ -3114,7 +3361,7 @@ create or replace view cma_read.flash_snapshot as
   where cma_read.reader_sees(tenant_id);
 
 create or replace view cma_read.flash_snapshot_run as
-  select id, tenant_id, snapshot_date, started_at, finished_at, status, counts, sources, settings, missed_before, error
+  select id, tenant_id, snapshot_date, started_at, finished_at, status, counts, sources, settings, missed_before, error, due_at, late, watch_error
   from cma.flash_snapshot_run
   where cma_read.reader_sees(tenant_id);
 
@@ -3158,7 +3405,7 @@ create or replace view cma_read.dq_field_device_on_ended_subscription as
 -- 16. Record the addition
 -- ---------------------------------------------------------------------------------------------
 insert into cma.schema_migration (version, description)
-values ('0008zn', 'Flash: eleven overviews (customers, subscriptions, installed_base, churn, orders, payments, open_deals, open_tickets, open_tasks, reviews, data_quality) from one base set each, computed by cma.flash_compute_of per grouping set (amounts per currency), live through cma.flash_overview, cma.flash_rows and cma.flash_page and stored once a day per tenant by cma.flash_snapshot_take (flash.snapshot, the scheduler''s only; sync_run job flash_snapshot) into the insert-only cma.flash_snapshot, cma.flash_snapshot_run and, at a month end, cma.flash_snapshot_ids (kept flash.id_list_retention_months); the deterministic watch cma.flash_watch_finding (jump, flow_zero, source_stale, snapshot_missing, dq_rise); six data-quality checks with cma.data_quality_rows; contacts held while a commerce customer is linked to them; the Flash settings; the reader views')
+values ('0008zn', 'Flash: eleven overviews (customers, subscriptions, installed_base, churn, orders, payments, open_deals, open_tickets, open_tasks, reviews, data_quality) from one base set each, computed by cma.flash_compute_of per grouping set (amounts per currency), live through cma.flash_overview, cma.flash_rows and cma.flash_page and stored once per business date and tenant by cma.flash_snapshot_take (flash.snapshot, the scheduler''s only, SECURITY DEFINER: the application holds no write on the four tables; sync_run job flash_snapshot; a date due the day after it at flash.snapshot_local_time, the latest due date taken by the hourly job, a date missed recorded as such) into cma.flash_snapshot (stock figures measured against the date), cma.flash_snapshot_run and, at a month end, cma.flash_snapshot_ids (kept flash.id_list_retention_months from the tenant''s today); the deterministic watch cma.flash_watch_finding (jump, flow_zero, source_stale, snapshot_missing, dq_rise) in a subtransaction of its own; six data-quality checks with cma.data_quality_rows (active and ended statuses from settings, references matched within a market); contacts held while a commerce customer is linked to them; the Flash settings; the reader views')
 on conflict (version) do nothing;
 
 commit;
