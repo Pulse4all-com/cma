@@ -1,13 +1,13 @@
 # Juo subscriptions in prod, the GB pilot, 29 October 2026 (phase 15)
 
-Phase 15 of `docs/ingest/PROD_RUNBOOK.md` (brief B20, addition 0008zl, `Pulse4all-com/cma#207`), run by Martin on
-29 October 2026 in p4a-cma-dev and p4a-cma-prod for Pulse4all Subscriptions, with a spot check and the day-one count
-on 30 October 2026. Written down by Claude Code at Martin's request from his report of the runs; the values below are
+Phase 15 of `docs/ingest/PROD_RUNBOOK.md` (brief B20, addition 0008zl, `Pulse4all-com/cma#207`), run by Martin in
+p4a-cma-dev on 28 October 2026 and in p4a-cma-prod on 29 October 2026 for Pulse4all Subscriptions, with a spot check and
+the day-one count on 30 October 2026. Written down by Claude Code at Martin's request from his report of the runs; the values below are
 his. Ids, counts, dates and times only, as reported: no key, no secret, no customer data and no Juo subscription id.
 
-## (a) Dev, 29 October 2026
+## (a) Dev, 28 October 2026
 
-- `118_subscriptions.sql` ran.
+- `118_subscriptions.sql` ran: dev's `cma.schema_migration.applied_at` for `0008zl` is 28 October 2026, 21:10 UTC.
 - `119_verify_subscriptions.sql`: 23 PASS; provoked 23 FAIL.
 - Again after `118`: `115` 14 ok, `105` 27 PASS, `107` 10 PASS, `53` 16 PASS.
 
@@ -102,3 +102,7 @@ From 2024-01-01; the log's `from` at 23:00Z, midnight in Amsterdam.
 
 Juo's Analytics cards (last 30 days): active 3,070, paused 6, failed 405, cancelled 526. The figures of 26 October
 2026 (836/125/166/4) came from a partial listing.
+
+Corrected on 2 November 2026 from Martin's report: dev applied `0008zl` on 28 October 2026 at 21:10 UTC, as dev's
+`cma.schema_migration.applied_at` shows, not on 29 October. The heading of (a) and the opening paragraph say so now; every
+other date is as first recorded.
