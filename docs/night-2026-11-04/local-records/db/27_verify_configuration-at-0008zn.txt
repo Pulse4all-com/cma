@@ -1,0 +1,16 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:27_verify_configuration.sql:141: ERROR:  FAIL A4: 2 scheduler role(s) with other permissions than workday.close_forgotten
+CONTEXT:  PL/pgSQL function inline_code_block line 59 at RAISE
+DO
+         tenant          | scheduler_users | roles_with_close_forgotten | grace_minutes | active_statuses | active_links | verdict 
+-------------------------+-----------------+----------------------------+---------------+-----------------+--------------+---------
+ pulse4all-invest        |               1 | scheduler                  | 60            |               5 |            2 | PASS
+ pulse4all-subscriptions |               1 | scheduler                  | 60            |               7 |            3 | PASS
+(2 rows)
+

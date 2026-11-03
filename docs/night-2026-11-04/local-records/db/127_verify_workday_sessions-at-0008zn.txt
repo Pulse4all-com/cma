@@ -1,0 +1,105 @@
+DO
+SET
+ set_config 
+------------
+ false
+(1 row)
+
+psql:127_verify_workday_sessions.sql:52: NOTICE:  schema "pg_temp" does not exist, skipping
+DROP TABLE
+CREATE TABLE
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+psql:127_verify_workday_sessions.sql:165: ERROR:  FAIL S1: addition 0008zp not recorded after 0008zn
+CONTEXT:  PL/pgSQL function inline_code_block line 10 at RAISE
+psql:127_verify_workday_sessions.sql:200: ERROR:  function cma.workday_can_clock_in_again(uuid, timestamp with time zone) does not exist
+LINE 1: v_can := cma.workday_can_clock_in_again(w.id, pg_temp.v0008z...
+                 ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  v_can := cma.workday_can_clock_in_again(w.id, pg_temp.v0008zp_at('17:00'))
+CONTEXT:  PL/pgSQL function inline_code_block line 15 at assignment
+psql:127_verify_workday_sessions.sql:301: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 12 at assignment
+psql:127_verify_workday_sessions.sql:344: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 12 at assignment
+psql:127_verify_workday_sessions.sql:459: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 16 at assignment
+psql:127_verify_workday_sessions.sql:554: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 15 at assignment
+psql:127_verify_workday_sessions.sql:630: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 15 at assignment
+psql:127_verify_workday_sessions.sql:685: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 12 at assignment
+psql:127_verify_workday_sessions.sql:717: ERROR:  Unknown setting workday.clock_in_again
+CONTEXT:  PL/pgSQL function cma.check_tenant_setting() line 8 at RAISE
+SQL statement "insert into cma.tenant_setting (tenant_id, key, value)
+  select v_t, s.key, s.value
+  from (values (1, 'workday.window_start', '07:00'), (2, 'workday.window_end', '22:00'), (3, 'workday.auto_close_at', '17:00'),
+               (4, 'workday.auto_close_grace_minutes', '60'), (5, 'workday.clock_in_again', 'true')) as s(ord, key, value)
+  where s.key <> 'workday.clock_in_again' or p_again
+  order by s.ord"
+PL/pgSQL function pg_temp_3.v0008zp_tenant(text,boolean) line 20 at SQL statement
+PL/pgSQL function inline_code_block line 11 at assignment
+ check_name | result |     detail      
+------------+--------+-----------------
+ verdict    | FAIL   | 0 PASS, 31 FAIL
+(1 row)
+
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP FUNCTION
+DROP TABLE
+RESET

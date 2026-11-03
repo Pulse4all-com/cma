@@ -1,0 +1,20 @@
+== 126 as written
+morning: ended
+A 17:14:13.234 open
+A commits 17:14:16.252
+B 17:14:14.236 presses
+B got open
+B answered 17:14:16.307
+effective starts: 2
+day: open, 09:00
+
+== without the re-check under the lock (a scratch copy of open_workday)
+open_workday replaced by a copy without the re-check under the lock
+morning: ended
+A 17:14:18.025 open
+A commits 17:14:21.047
+B 17:14:19.030 presses
+ERROR:  workday 01a1a267-8dfe-749e-b1aa-45513af11fa1 has a clock-in while a session is open: a later session starts only after a clock-out
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+effective starts: 2
+day: open, 09:00

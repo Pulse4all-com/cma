@@ -1,0 +1,19 @@
+1 Welcome before clocking in: badge "Not clocked in"
+2 Clock in: "Clocked in at 20:03 · 0m worked so far"
+  screenshot 01-welcome-clocked-in.png
+3 End workday confirm: "End your workdayYour clock stops now. You can clock in again today until 22:00.End workdayEnterKeep workingEsc"
+  screenshot 02-my-day-end-confirm.png
+4 My day ended: "Log out when you leave. To work another session today, clock in again below."
+  screenshot 03-my-day-ended-clock-in-again.png
+5 Welcome after the end: the card again, button "Clock in againEnter", body "You can clock in again today until 22:00. Your status will be set to Available."
+  screenshot 04-welcome-ended-clock-in-again.png
+6 Clock in again: "Clocked in at 20:03 · 0m worked so far", "Back since 20:03"
+  screenshot 05-welcome-back-since.png
+7 My day: "Started at 20:03Back since 20:03", "Back since 20:03", clock 0:00:01
+  screenshot 06-my-day-back-since.png
+8 Log out page: "Log outThis stops your clock and signs you out of the Workspace. You can clock in again today until 22:00.Your clock stops the moment you log out: clocked in at 20:03, 0m worked so far. The time until you clock in again is not counted.Log outEnterStayS"
+  screenshot 07-logout-page.png
+9 My hours today: marker "2 sessions"
+  screenshot 08-my-hours-two-sessions.png
+10 Team hours as the supervisor: 1 row(s) with "2 sessions"
+  screenshot 09-team-hours-two-sessions.png

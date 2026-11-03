@@ -1,0 +1,5 @@
+SET
+pulse4all-invest false
+pulse4all-subscriptions true
+0008zn Flash: eleven overviews (customers, subscriptions, installed_base, chu
+0008zp Split shifts: the setting workday.clock_in_again (default false); cma.

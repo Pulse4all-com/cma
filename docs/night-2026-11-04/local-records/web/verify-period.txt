@@ -1,0 +1,19 @@
+PASS  yesterday: the day before, across a month end, a year end and 29 February got [{"range":"yesterday","period":{"from":"2026-10-31","to":"2026-10-31"}
+PASS  without a range, or with one it does not know, the period is today got ["today 2026-11-01","today 2026-11-01","today 2026-11-01","today 2026-
+PASS  the other choices unchanged: today, the ISO week, the month, a custom range got [{"from":"2026-11-01","to":"2026-11-01"},{"from":"2026-10-26","to":"20
+PASS  the bar's order: Yesterday first, then Today, week, month, custom got [["yesterday","today","week","month","custom"],"YTWMC"]
+PASS  RANGE_KEYS: one capital letter per choice, no letter twice, every choice on the bar got [[],true,true]
+PASS  the bar labels Yesterday from the copy, in both languages, and binds each letter got ["Yesterday","Gisteren",true,true]
+PASS  all 19 pages with the period bar resolve their period and render the shared bar got [19,19]
+PASS  no page or component branches on a range but custom        got []
+PASS  no other control in the app binds Y                        got []
+PASS  yesterday compares with the whole day before; today with the same point got [{"from":"2026-10-30","to":"2026-10-30","partial":false},{"from":"2026
+PASS  Calls, range=yesterday: "vs the previous period", the day before as the title got ["↑ 25% vs the previous period","30 Oct","↑ 25% t.o.v. de vorige perio
+PASS  Calls, range=yesterday: a late call on the day before counts whatever the time now got [2,1]
+PASS  Forms: every letter of the page's own controls once        got ["acfgkmtwxy",[]]
+PASS  Forms: Category answers to A, with its keycap              got [["k","a","f"],["k","a","f"],true]
+PASS  Forms: the filters, grouping and download clear of the shell's letters got []
+PASS  Forms: the period bar meets the shell only on W and C, which the page wins got ["c","w"]
+
+ALL 16 PASS
+verify:period exit 0
