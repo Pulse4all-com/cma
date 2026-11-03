@@ -1249,8 +1249,10 @@ begin
                 and not v_provoke then 'ok' else 'FAIL' end, v_txt];
 
     -- B28. a source's cadence per job and stream (addition 0008zo, 125_flash_watch_cadence.sql), on tenant four: its CRM
-    --      connection runs a sweep every minute (job link_calls, no stream) and a nightly reconcile of three streams
-    --      within seconds; its store has only a nightly reconcile of three streams within seconds, and two backfills of
+    --      connection runs a sweep every minute (job link_calls, no stream), a nightly reconcile of three streams within
+    --      seconds and a forms poll every 5 minutes with forms_poll_interval_minutes 5 that runs on after the sweep stops
+    --      (the sweep, measured at 1 minute, still governs: the floor makes both 5, the raw cadence decides); its store has
+    --      only a nightly reconcile of three streams within seconds, and two backfills of
     --      one stream ten minutes apart; its register polls every 5 minutes with assets_poll_interval_minutes 60. At
     --      noon none is stale (0008zn's median over all of a connection's runs made the store stale, its cadence a few
     --      seconds); ten minutes later neither (the floor, flash.watch_stale_min_minutes 5, holds the sweep's 1 minute
@@ -1264,8 +1266,8 @@ begin
     v_at := '2026-10-20 12:00 Europe/Amsterdam';
     insert into cma.market (tenant_id, code, name, time_zone, language_code, currency, sort_order)
     values (v_t4, 'NL', 'Netherlands', 'Europe/Amsterdam', 'nl', 'EUR', 10);
-    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
-    values (v_t4, 'verifycrm', 'Verify CRM four', 'portal-4', 'crm') returning id into v_crm4;
+    insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, settings)
+    values (v_t4, 'verifycrm', 'Verify CRM four', 'portal-4', 'crm', '{"forms_poll_interval_minutes": 5}') returning id into v_crm4;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind)
     values (v_t4, 'verifyshop', 'Verify shop four', 'shop-four.shop.example', 'commerce') returning id into v_shop4;
     insert into cma.integration_connection (tenant_id, adapter, name, external_account_id, kind, settings)
@@ -1280,6 +1282,9 @@ begin
     from generate_series(timestamptz '2026-10-14 03:30 Europe/Amsterdam', timestamptz '2026-10-20 03:30 Europe/Amsterdam', interval '1 day') d
     cross join (values (v_crm4, 'contacts', interval '0 seconds'), (v_crm4, 'deals', interval '4 seconds'), (v_crm4, 'tickets', interval '8 seconds'),
                        (v_shop4, 'customers', interval '0 seconds'), (v_shop4, 'orders', interval '5 seconds'), (v_shop4, 'products', interval '10 seconds')) x(conn, stream, off)
+    union all
+    select v_t4, v_crm4, 'forms_poll', 'forms', t - interval '10 seconds', t, 'succeeded'
+    from generate_series(v_at - interval '2 hours', v_at + interval '3 hours', interval '5 minutes') t
     union all
     select v_t4, v_shop4, 'backfill', 'orders', t - interval '1 minute', t, 'succeeded'
     from (values (timestamptz '2026-10-19 10:00 Europe/Amsterdam'), (timestamptz '2026-10-19 10:10 Europe/Amsterdam')) b(t)
@@ -1298,7 +1303,7 @@ begin
                                               || coalesce('.' || (f.detail ->> 'stream'), ''), ' ' order by f.dims ->> 'adapter' collate "C"), 'none')
                    from cma.flash_watch_finding f where f.tenant_id = v_t4 and f.kind = 'source_stale' and f.state = 'open');
     end loop;
-    v_rows := v_rows || array['45', 'B28 a source''s cadence per job and stream (0008zo): bursts of streams, a sweep and a reconcile on one connection, a store with only its reconcile, a poll setting; none stale while fresh, each stale past three of its own cadences',
+    v_rows := v_rows || array['45', 'B28 a source''s cadence per job and stream (0008zo): bursts of streams, a sweep, a reconcile and a forms poll on one connection, a store with only its reconcile, a poll setting; none stale while fresh, each stale past three of its own cadences',
       case when v_txt = 'CMA04 CMA04 5 | 0 none | 0 none | 1 verifycrm:21/15:5.0:runs:link_calls'
                         || ' | 1 verifycrm:21/15:5.0:runs:link_calls verifyregister:185/180:60.0:setting:assets_poll.devices'
                         || ' | 0 verifycrm:21/15:5.0:runs:link_calls verifyregister:185/180:60.0:setting:assets_poll.devices'

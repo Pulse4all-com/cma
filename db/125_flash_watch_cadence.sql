@@ -4,8 +4,9 @@
 -- Universal: no customer, tenant or vendor specifics: a source's cadence is read from its own runs (jobs and streams are
 -- cma.sync_run's own vocabulary) and its floor is a tenant setting. Runs unchanged in every database, after 122_flash.sql
 -- (0008zn). Rerunnable, forward-only, in one transaction with a lock timeout. Run as your own IAM login: dev first, then
--- 123_verify_flash.sql there (its B28 is this addition's check), then prod, then 123 there. The web, the ingest and the
--- snapshot job run unchanged on it; the next take uses it.
+-- 123_verify_flash.sql there (its B28 is this addition's check), then prod, then 123 there, each away from minute 20 (the
+-- hourly snapshot job). The settings trigger is 0008zn's with one branch added, so the verifies 122 listed again need no
+-- rerun. The web, the ingest and the snapshot job run unchanged on it; the next take uses it.
 --
 -- Why (prod, 3 November 2026, the first take, run cma-snapshot-flash-rk8fh; Decision log, 3 November 2026): every
 -- source_stale finding had the threshold 0. 0008zn measured a connection's cadence as the median gap between all its
@@ -22,10 +23,10 @@
 --   cma.flash_watch_of source_stale only, per connection: the cadence of each job and stream is the median gap between its
 --                      succeeded runs of the 7 days before p_now (never a gap between runs of different jobs or streams),
 --                      at least flash.watch_stale_min_minutes; a connection's <job>_interval_minutes setting (a
---                      *_poll_interval_minutes) is that job's cadence instead, as before. A connection is stale only when
---                      its most frequent job and stream (the smallest cadence) last succeeded more than three of its own
---                      cadences before p_now, so a minutely sweep governs a CRM connection and a nightly reconcile alone a
---                      store that has only that. Backfills (started by hand) set no cadence. The finding's detail keeps
+--                      *_poll_interval_minutes above 0) is that job's cadence instead, as before. A connection is stale
+--                      only when its most frequent job and stream (the smallest cadence before the floor; on a tie the
+--                      latest read) last succeeded more than three of its own cadences before p_now, so a minutely sweep
+--                      governs a CRM connection and a nightly reconcile alone a store that has only that. Backfills (started by hand) set no cadence. The finding's detail keeps
 --                      cadence_minutes, cadence_basis (setting or runs), age_minutes, last_read_at and connections, and
 --                      adds the job and stream that set the cadence. jump, flow_zero, snapshot_missing and dq_rise are
 --                      0008zn's, unchanged; the function keeps its privileges (the owner's alone) and jit off
@@ -409,29 +410,32 @@ begin
     from c
     cross join lateral jsonb_each(c.settings) e
     where c.kind in ('commerce', 'subscriptions', 'assets', 'crm', 'reviews')
-      and e.key like '%\_poll\_interval\_minutes' and (e.value #>> '{}') ~ '^[0-9]{1,5}$' and (e.value #>> '{}')::numeric > 0
+      and e.key like '%\_poll\_interval\_minutes'
+      and case when (e.value #>> '{}') ~ '^[0-9]{1,5}$' then (e.value #>> '{}')::numeric > 0 else false end
     group by 1, 2
   ), cand as (
-    -- every job and stream with a cadence: its setting (its age from its last succeeded run of any time, backfills aside),
-    -- else the median gap of its runs of the 7 days, at least flash.watch_stale_min_minutes
-    select s.connection_id, x.job, x.stream, max(x.finished_at) as last_at, s.minutes as cadence, 'setting'::text as basis
+    -- every job and stream with a cadence: its setting (its age from its last succeeded run of any time), else the median
+    -- gap of its runs of the 7 days (raw), at least flash.watch_stale_min_minutes (cadence)
+    select s.connection_id, x.job, x.stream, max(x.finished_at) as last_at, s.minutes as raw, s.minutes as cadence, 'setting'::text as basis
     from sets s
     join cma.sync_run x on x.tenant_id = p_tenant_id and x.connection_id = s.connection_id and x.job = s.job
                        and x.status = 'succeeded' and x.finished_at <= p_now
     group by s.connection_id, x.job, x.stream, s.minutes
     union all
     select w.connection_id, w.job, w.stream, max(w.finished_at),
+           (percentile_cont(0.5) within group (order by w.gap) filter (where w.gap > 0))::numeric,
            greatest((percentile_cont(0.5) within group (order by w.gap) filter (where w.gap > 0))::numeric, v_floor), 'runs'
     from win w
     where not exists (select 1 from sets s where s.connection_id = w.connection_id and s.job = w.job)
     group by w.connection_id, w.job, w.stream
     having count(*) filter (where w.gap > 0) > 0
   ), gov as (
-    -- a connection's most frequent job and stream: the smallest cadence (on a tie the latest read, then the names)
+    -- a connection's most frequent job and stream: the smallest cadence before the floor (on a tie the latest read, then
+    -- the names), so a job measured at 1 minute governs one set at 5 even though the floor makes both 5
     select distinct on (k.connection_id) k.connection_id, k.job, k.stream, k.last_at, k.cadence, k.basis, c.kind, c.adapter, c.store
     from cand k
     join c on c.id = k.connection_id
-    order by k.connection_id, k.cadence, k.last_at desc, k.job collate "C", k.stream collate "C" nulls first
+    order by k.connection_id, k.raw, k.last_at desc, k.job collate "C", k.stream collate "C" nulls first
   ), cur as (
     -- jump and dq_rise
     select case when j.overview = 'data_quality' then 'dq_rise' else 'jump' end as kind, j.overview, j.dims, j.measure, j.v as value,
