@@ -57,9 +57,8 @@
 --      list by every whitelisted sort key under verify.max_rows_ms (the best of two), as the application (row-level
 --      security on); a full take under half the job's statement timeout (verify.job_statement_timeout_ms, the value
 --      jobs/snapshot-flash.mjs sets); the data-quality overview and its lists under verify.max_dq_ms, a budget of their
---      own: they run every check of cma.data_quality_of live, the 24 that came before 0008zn included. The list and
---      data-quality budgets are proposed, looser than the brief's (see the settings below); the timings, and what is
---      over the brief's figures, are in the rows' detail
+--      own: they run every check of cma.data_quality_of live, the 24 that came before 0008zn included. The budgets are
+--      the Decision log's of 3 November 2026 (see the settings below); the timings are in the rows' detail
 -- Provoke: set provoke below to true; every check must then read FAIL, and the verdict says PROVOKED, NOT A PASS.
 -- =============================================================================================
 
@@ -72,14 +71,13 @@ end
 $$;
 set role cma_owner;
 select set_config('verify.provoke', 'false', false);                 -- 'true' to make every check fail
--- Speed budgets at volume. Brief B21 (4.10) asks every live overview under 1,500 ms and every first page of a list under
--- 800 ms. Proposed in this build, for Martin to decide (docs/open-decisions.md, Flash speed at volume): lists under
--- 1,500 ms (README's p95 of a report) and data quality's overview and lists under 2,500 ms (they run every check of
--- cma.data_quality_of live, the 24 before 0008zn included). Every speed row names what is over the brief's figures too
-select set_config('verify.max_overview_ms', '1500', false);          -- a live overview but data quality, as the application (the brief's)
-select set_config('verify.max_rows_ms', '1500', false);              -- a first page of a list but data quality's (proposed; the brief's is 800)
-select set_config('verify.max_dq_ms', '2500', false);                -- data quality's overview and first pages (proposed; the brief's is 1,500 and 800)
-select set_config('verify.brief_rows_ms', '800', false);             -- the brief's budget of a first page, reported in the rows' detail
+-- Speed budgets (Decision log, 3 November 2026; 124_time_flash.sql holds the same): every live overview but data
+-- quality, and the landing, under 1,500 ms; every first page of a list under 800 ms (brief B21, 4.10); data quality's
+-- overview and lists under 2,500 ms, to be met on stored results (backlog CMA-087: until then they run every check of
+-- cma.data_quality_of live, the 24 before 0008zn included)
+select set_config('verify.max_overview_ms', '1500', false);          -- a live overview but data quality, and the landing, as the application
+select set_config('verify.max_rows_ms', '800', false);               -- a first page of a list but data quality's (the brief's)
+select set_config('verify.max_dq_ms', '2500', false);                -- data quality's overview and first pages (on stored results: CMA-087)
 select set_config('verify.job_statement_timeout_ms', '240000', false); -- jobs/snapshot-flash.mjs, STATEMENT_TIMEOUT_MS
 select set_config('verify.take_max_ms', (current_setting('verify.job_statement_timeout_ms')::integer / 2)::text, false);
 -- block C (speed at volume) is off in every database; 'true' only in a local run (dev's shared core cannot carry its
@@ -1271,8 +1269,6 @@ declare
   v_max_r   numeric := current_setting('verify.max_rows_ms')::numeric;
   v_max_t   numeric := current_setting('verify.take_max_ms')::numeric;
   v_max_q   numeric := current_setting('verify.max_dq_ms')::numeric;
-  v_brief_r numeric := current_setting('verify.brief_rows_ms')::numeric;
-  v_over    text := '';
   v_rows    text[] := '{}';
   v_t uuid; v_analyst uuid; v_sched uuid;
   v_crm uuid; v_gb uuid; v_nl uuid; v_sgb uuid; v_snl uuid; v_reg uuid; v_rev uuid; v_chan uuid;
@@ -1449,29 +1445,26 @@ begin
         v_worst := greatest(v_worst, v_ms);
         v_txt := v_txt || o.key || ':' || s || ' ' || v_ms || '; ';
         if v_ms >= v_max_r then v_bad := v_bad || o.key || ':' || s || '; '; end if;
-        if v_ms >= v_brief_r then v_over := v_over || o.key || ':' || s || '; '; end if;
       end loop;
     end loop;
     v_rows := v_rows || array['62', 'C2 every first page of a list but data quality''s, by every sort key, under verify.max_rows_ms at volume',
       case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end,
-      'worst ' || v_worst || ' ms | over the brief''s ' || v_brief_r || ' ms: ' || case when v_over = '' then 'none' else v_over end || ' | ' || v_txt
+      'worst ' || v_worst || ' ms | ' || v_txt
       || case when v_bad <> '' then ' | over: ' || v_bad else '' end];
 
     -- C4. the data-quality overview (the best of two) and every first page of its list (the best of one)
-    v_txt := ''; v_bad := ''; v_over := '';
+    v_txt := ''; v_bad := '';
     v_ms := pg_temp.v0008zn_best_ms('select cma.flash_overview(''data_quality'')', 2);
     v_txt := 'overview ' || v_ms || ' ms; ';
     if v_ms >= v_max_q then v_bad := 'overview; '; end if;
-    if v_ms >= v_max_o then v_over := 'overview; '; end if;
     foreach s in array (select x.sorts from cma.flash_overviews() x where x.key = 'data_quality') loop
       v_ms := pg_temp.v0008zn_best_ms(format('select cma.flash_rows(''data_quality'', ''{}'', %L, true, 500, 0)', s), 1);
       v_txt := v_txt || 'list:' || s || ' ' || v_ms || ' ms; ';
       if v_ms >= v_max_q then v_bad := v_bad || 'list:' || s || '; '; end if;
-      if v_ms >= v_brief_r then v_over := v_over || 'list:' || s || '; '; end if;
     end loop;
     v_rows := v_rows || array['64', 'C4 the data-quality overview and its lists under verify.max_dq_ms at volume',
       case when v_bad = '' and not v_provoke then 'ok' else 'FAIL' end,
-      'over the brief''s ' || v_max_o || ' and ' || v_brief_r || ' ms: ' || case when v_over = '' then 'none' else v_over end || ' | ' || v_txt
+      v_txt
       || case when v_bad <> '' then ' | over: ' || v_bad else '' end];
 
     -- C3. a full take at a month end (every overview, the id lists), as the owner with the scheduler user
